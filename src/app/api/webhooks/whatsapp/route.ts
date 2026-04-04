@@ -4,10 +4,7 @@ import {
   extractTextMessages,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
-import {
-  findWhatsAppIntegrationByPhoneNumberId,
-  isWhatsAppIntegrationActive,
-} from "@/lib/whatsapp/find-integration";
+import { findWhatsAppIntegrationByPhoneNumberId } from "@/lib/whatsapp/find-integration";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
@@ -86,6 +83,16 @@ export async function POST(req: NextRequest) {
 
     const firstMessage = textMessages[0];
 
+    if (!firstMessage) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Nenhuma mensagem válida encontrada",
+        },
+        { status: 400 }
+      );
+    }
+
     const integration = await findWhatsAppIntegrationByPhoneNumberId(
       firstMessage.phoneNumberId
     );
@@ -106,7 +113,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!isWhatsAppIntegrationActive(integration)) {
+    if (integration.status !== "ativa") {
       console.warn(
         "[WEBHOOK WHATSAPP] Integração encontrada, mas inativa:",
         integration.id
@@ -137,9 +144,11 @@ export async function POST(req: NextRequest) {
         integration: {
           id: integration.id,
           empresa_id: integration.empresa_id,
+          nome_conexao: integration.nome_conexao,
           status: integration.status,
           phone_number_id: integration.phone_number_id,
           numero: integration.numero,
+          waba_id: integration.waba_id,
         },
       },
       { status: 200 }
