@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 type UsuarioSistema = {
   id: string;
@@ -85,6 +85,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const statusLead = searchParams.get("status_lead");
   const busca = searchParams.get("busca")?.trim();
+  const supabaseAdmin = getSupabaseAdmin();
 
   let query = supabaseAdmin
     .from("contatos")
@@ -134,7 +135,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const resultado = await getUsuarioLogado();
-
+  const supabaseAdmin = getSupabaseAdmin();
   if ("error" in resultado) {
     return NextResponse.json(
       { ok: false, error: resultado.error },

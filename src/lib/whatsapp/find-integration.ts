@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export type WhatsAppIntegration = {
   id: string;
@@ -21,6 +21,8 @@ export type WhatsAppIntegration = {
 export async function findWhatsAppIntegrationByPhoneNumberId(
   phoneNumberId: string
 ): Promise<WhatsAppIntegration | null> {
+  const supabaseAdmin = getSupabaseAdmin();
+
   const { data, error } = await supabaseAdmin
     .from("integracoes_whatsapp")
     .select(
@@ -56,12 +58,4 @@ export async function findWhatsAppIntegrationByPhoneNumberId(
   }
 
   return data as WhatsAppIntegration;
-}
-
-export function isWhatsAppIntegrationActive(
-  integration: WhatsAppIntegration | null
-): integration is WhatsAppIntegration {
-  if (!integration) return false;
-
-  return integration.status === "ativa";
 }

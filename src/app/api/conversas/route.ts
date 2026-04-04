@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+  const supabaseAdmin = getSupabaseAdmin();
 
 type UsuarioSistema = {
   id: string;
@@ -197,7 +199,6 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-
   const contato_id = body?.contato_id || null;
   const setor_id = body?.setor_id || null;
   const responsavel_id = body?.responsavel_id || null;

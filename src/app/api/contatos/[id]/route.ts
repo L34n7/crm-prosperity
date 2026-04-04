@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+  const supabaseAdmin = getSupabaseAdmin();
+
 
 type UsuarioSistema = {
   id: string;
@@ -68,7 +71,6 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-
   const resultado = await getUsuarioLogado();
 
   if ("error" in resultado) {

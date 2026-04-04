@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+const supabaseAdmin = getSupabaseAdmin();
 
 type UsuarioSistema = {
   perfil: "super_admin" | "admin_empresa" | "supervisor" | "atendente";
