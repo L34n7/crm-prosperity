@@ -5,6 +5,9 @@ import {
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
 import { findWhatsAppIntegrationByPhoneNumberId } from "@/lib/whatsapp/find-integration";
+import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
+import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
+import { saveIncomingWhatsAppMessage } from "@/lib/whatsapp/save-incoming-message";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
@@ -26,7 +29,7 @@ export async function GET(req: NextRequest) {
 
     if (!VERIFY_TOKEN) {
       console.error(
-        "WHATSAPP_WEBHOOK_VERIFY_TOKEN não definido no .env.local"
+        "WHATSAPP_WEBHOOK_VERIFY_TOKEN não definido nas variáveis de ambiente"
       );
       return new NextResponse("Erro interno de configuração", { status: 500 });
     }
@@ -71,85 +74,147 @@ export async function POST(req: NextRequest) {
       JSON.stringify(textMessages, null, 2)
     );
 
+    if (incomingMessages.length === 0) {
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Evento recebido sem mensagens processáveis",
+        },
+        { status: 200 }
+      );
+    }
+
     if (textMessages.length === 0) {
       return NextResponse.json(
         {
           success: true,
-          message: "Evento recebido sem mensagens de texto processáveis",
-        },
-        { status: 200 }
-      );
-    }
-
-    const firstMessage = textMessages[0];
-
-    if (!firstMessage) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Nenhuma mensagem válida encontrada",
-        },
-        { status: 400 }
-      );
-    }
-
-    const integration = await findWhatsAppIntegrationByPhoneNumberId(
-      firstMessage.phoneNumberId
-    );
-
-    if (!integration) {
-      console.warn(
-        "[WEBHOOK WHATSAPP] Integração não encontrada para phoneNumberId:",
-        firstMessage.phoneNumberId
-      );
-
-      return NextResponse.json(
-        {
-          success: true,
           message:
-            "Evento recebido, mas nenhuma integração correspondente foi encontrada",
+            "Evento recebido, mas sem mensagens de texto processáveis por enquanto",
         },
         { status: 200 }
       );
     }
 
-    if (integration.status !== "ativa") {
-      console.warn(
-        "[WEBHOOK WHATSAPP] Integração encontrada, mas inativa:",
-        integration.id
-      );
+    const processedResults: Array<Record<string, unknown>> = [];
 
-      return NextResponse.json(
-        {
+    for (const message of textMessages) {
+      try {
+        const integration = await findWhatsAppIntegrationByPhoneNumberId(
+          message.phoneNumberId
+        );
+
+        if (!integration) {
+          console.warn(
+            "[WEBHOOK WHATSAPP] Integração não encontrada para phoneNumberId:",
+            message.phoneNumberId
+          );
+
+          processedResults.push({
+            messageId: message.messageId,
+            success: false,
+            reason: "integração não encontrada",
+            phoneNumberId: message.phoneNumberId,
+          });
+
+          continue;
+        }
+
+        if (integration.status !== "ativa") {
+          console.warn(
+            "[WEBHOOK WHATSAPP] Integração encontrada, mas inativa:",
+            integration.id
+          );
+
+          processedResults.push({
+            messageId: message.messageId,
+            success: false,
+            reason: "integração inativa",
+            integrationId: integration.id,
+          });
+
+          continue;
+        }
+
+        console.log(
+          "[WEBHOOK WHATSAPP] Integração encontrada:",
+          JSON.stringify(integration, null, 2)
+        );
+
+        const contact = await findOrCreateWhatsAppContact({
+          empresaId: integration.empresa_id,
+          phone: message.from,
+          profileName: message.profileName,
+        });
+
+        console.log(
+          "[WEBHOOK WHATSAPP] Contato localizado/criado:",
+          JSON.stringify(contact, null, 2)
+        );
+
+        const conversation = await findOrCreateWhatsAppConversation({
+          empresaId: integration.empresa_id,
+          contatoId: contact.id,
+          integracaoWhatsappId: integration.id,
+        });
+
+        console.log(
+          "[WEBHOOK WHATSAPP] Conversa localizada/criada:",
+          JSON.stringify(conversation, null, 2)
+        );
+
+        const savedMessage = await saveIncomingWhatsAppMessage({
+          empresaId: integration.empresa_id,
+          conversaId: conversation.id,
+          conteudo: message.text ?? "",
+          tipoMensagem: "texto",
+          statusEnvio: "recebida",
+          mensagemExternaId: message.messageId,
+          timestamp: message.timestamp,
+        });
+
+        console.log(
+          "[WEBHOOK WHATSAPP] Resultado do salvamento da mensagem:",
+          JSON.stringify(savedMessage, null, 2)
+        );
+
+        processedResults.push({
+          messageId: message.messageId,
           success: true,
-          message: "Evento recebido, mas a integração está inativa",
-        },
-        { status: 200 }
-      );
-    }
+          duplicated: savedMessage.duplicated,
+          integrationId: integration.id,
+          contactId: contact.id,
+          conversationId: conversation.id,
+          savedMessageId: savedMessage.messageId,
+        });
+      } catch (messageError) {
+        console.error(
+          "[WEBHOOK WHATSAPP] Erro ao processar mensagem individual:",
+          messageError
+        );
 
-    console.log(
-      "[WEBHOOK WHATSAPP] Integração encontrada:",
-      JSON.stringify(integration, null, 2)
-    );
+        processedResults.push({
+          messageId: message.messageId,
+          success: false,
+          reason:
+            messageError instanceof Error
+              ? messageError.message
+              : "Erro desconhecido ao processar mensagem",
+        });
+      }
+    }
 
     return NextResponse.json(
       {
         success: true,
-        message: "Evento recebido com sucesso",
+        message: "Webhook processado",
         totals: {
           incomingMessages: incomingMessages.length,
           textMessages: textMessages.length,
+          processed: processedResults.length,
+          successCount: processedResults.filter((item) => item.success).length,
+          errorCount: processedResults.filter((item) => !item.success).length,
         },
-        integration: {
-          id: integration.id,
-          empresa_id: integration.empresa_id,
-          nome_conexao: integration.nome_conexao,
-          status: integration.status,
-          phone_number_id: integration.phone_number_id,
-          numero: integration.numero,
-          waba_id: integration.waba_id,
-        },
+        results: processedResults,
       },
       { status: 200 }
     );

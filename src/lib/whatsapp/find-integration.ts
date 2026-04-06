@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type WhatsAppIntegration = {
   id: string;
@@ -6,7 +6,7 @@ export type WhatsAppIntegration = {
   nome_conexao: string | null;
   numero: string | null;
   provider: string | null;
-  status: string | null;
+  status: string;
   business_account_id: string | null;
   phone_number_id: string | null;
   waba_id: string | null;
@@ -14,48 +14,29 @@ export type WhatsAppIntegration = {
   config_json: Record<string, unknown> | null;
   token_ref: string | null;
   ultimo_sync_at: string | null;
-  created_at: string | null;
-  updated_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export async function findWhatsAppIntegrationByPhoneNumberId(
   phoneNumberId: string
 ): Promise<WhatsAppIntegration | null> {
-  const supabaseAdmin = getSupabaseAdmin();
+  if (!phoneNumberId) return null;
 
   const { data, error } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select(
-      `
-        id,
-        empresa_id,
-        nome_conexao,
-        numero,
-        provider,
-        status,
-        business_account_id,
-        phone_number_id,
-        waba_id,
-        webhook_verificado,
-        config_json,
-        token_ref,
-        ultimo_sync_at,
-        created_at,
-        updated_at
-      `
-    )
+    .select("*")
     .eq("phone_number_id", phoneNumberId)
+    .limit(1)
     .maybeSingle();
 
   if (error) {
-    throw new Error(
-      `Erro ao buscar integração do WhatsApp: ${error.message}`
+    console.error(
+      "[WHATSAPP] Erro ao buscar integração por phone_number_id:",
+      error
     );
-  }
-
-  if (!data) {
     return null;
   }
 
-  return data as WhatsAppIntegration;
+  return (data as WhatsAppIntegration | null) ?? null;
 }

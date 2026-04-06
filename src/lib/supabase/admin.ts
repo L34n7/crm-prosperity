@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
-export function getSupabaseAdmin() {
+function createSupabaseAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -19,3 +19,9 @@ export function getSupabaseAdmin() {
     },
   });
 }
+
+export function getSupabaseAdmin() {
+  return createSupabaseAdminClient();
+}
+
+export const supabaseAdmin = createSupabaseAdminClient();
