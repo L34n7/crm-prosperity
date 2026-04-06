@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
           conversaId: conversation.id,
           conteudo: message.text ?? "",
           tipoMensagem: "texto",
-          statusEnvio: "recebida",
+          statusEnvio: "entregue",
           mensagemExternaId: message.messageId,
           timestamp: message.timestamp,
         });

@@ -5,7 +5,7 @@ type SaveIncomingMessageParams = {
   conversaId: string;
   conteudo: string;
   tipoMensagem?: string;
-  statusEnvio?: string;
+  statusEnvio?: "pendente" | "enviada" | "entregue" | "lida" | "falha";
   mensagemExternaId?: string | null;
   timestamp?: string | null;
 };
@@ -15,7 +15,7 @@ export async function saveIncomingWhatsAppMessage({
   conversaId,
   conteudo,
   tipoMensagem = "texto",
-  statusEnvio = "recebida",
+  statusEnvio = "entregue",
   mensagemExternaId = null,
   timestamp = null,
 }: SaveIncomingMessageParams) {
