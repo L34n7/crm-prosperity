@@ -33,7 +33,10 @@ function findOptionByMessage(
   mensagemNormalizada: string,
   opcoes: WhatsAppAutomacaoOpcao[]
 ): WhatsAppAutomacaoOpcao | null {
-  return opcoes.find((opcao) => normalizeText(opcao.opcao) === mensagemNormalizada) ?? null;
+  return (
+    opcoes.find((opcao) => normalizeText(opcao.opcao) === mensagemNormalizada) ??
+    null
+  );
 }
 
 function findKeywordByMessage(
@@ -118,7 +121,6 @@ function buildLimitTentativasDecision(
       menu_aguardando_resposta: false,
       tentativas_invalidas: 0,
       ultima_interacao_bot_em: new Date().toISOString(),
-      status: "fila",
     },
     matchedOption: null,
     matchedKeyword: null,
@@ -155,7 +157,10 @@ function buildDecisionFromAction(params: {
         ultima_interacao_bot_em: nowIso,
         status: "bot",
       },
-      matchedOption: params.origem === "opcao" ? (params.registro as WhatsAppAutomacaoOpcao) : null,
+      matchedOption:
+        params.origem === "opcao"
+          ? (params.registro as WhatsAppAutomacaoOpcao)
+          : null,
       matchedKeyword:
         params.origem === "palavra_chave"
           ? (params.registro as WhatsAppAutomacaoPalavraChave)
@@ -179,10 +184,11 @@ function buildDecisionFromAction(params: {
         ultima_opcao_escolhida: params.valorEscolhido,
         tentativas_invalidas: 0,
         ultima_interacao_bot_em: nowIso,
-        setor_id: params.setorId,
-        status: "fila",
       },
-      matchedOption: params.origem === "opcao" ? (params.registro as WhatsAppAutomacaoOpcao) : null,
+      matchedOption:
+        params.origem === "opcao"
+          ? (params.registro as WhatsAppAutomacaoOpcao)
+          : null,
       matchedKeyword:
         params.origem === "palavra_chave"
           ? (params.registro as WhatsAppAutomacaoPalavraChave)
@@ -206,9 +212,11 @@ function buildDecisionFromAction(params: {
         ultima_opcao_escolhida: params.valorEscolhido,
         tentativas_invalidas: 0,
         ultima_interacao_bot_em: nowIso,
-        status: "fila",
       },
-      matchedOption: params.origem === "opcao" ? (params.registro as WhatsAppAutomacaoOpcao) : null,
+      matchedOption:
+        params.origem === "opcao"
+          ? (params.registro as WhatsAppAutomacaoOpcao)
+          : null,
       matchedKeyword:
         params.origem === "palavra_chave"
           ? (params.registro as WhatsAppAutomacaoPalavraChave)
@@ -234,7 +242,10 @@ function buildDecisionFromAction(params: {
         ultima_interacao_bot_em: nowIso,
         status: "bot",
       },
-      matchedOption: params.origem === "opcao" ? (params.registro as WhatsAppAutomacaoOpcao) : null,
+      matchedOption:
+        params.origem === "opcao"
+          ? (params.registro as WhatsAppAutomacaoOpcao)
+          : null,
       matchedKeyword:
         params.origem === "palavra_chave"
           ? (params.registro as WhatsAppAutomacaoPalavraChave)
@@ -260,7 +271,10 @@ function buildDecisionFromAction(params: {
         ultima_interacao_bot_em: nowIso,
         status: "encerrada",
       },
-      matchedOption: params.origem === "opcao" ? (params.registro as WhatsAppAutomacaoOpcao) : null,
+      matchedOption:
+        params.origem === "opcao"
+          ? (params.registro as WhatsAppAutomacaoOpcao)
+          : null,
       matchedKeyword:
         params.origem === "palavra_chave"
           ? (params.registro as WhatsAppAutomacaoPalavraChave)

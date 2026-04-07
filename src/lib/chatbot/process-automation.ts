@@ -5,6 +5,7 @@ import {
 } from "@/lib/chatbot/conversation-repository";
 import { createMensagem } from "@/lib/chatbot/message-repository";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text";
+import { routeConversationToSector } from "@/lib/chatbot/route-conversation";
 import type { ConversaAutomacaoEstado } from "@/lib/chatbot/types";
 
 type ProcessAutomationParams = {
@@ -42,6 +43,7 @@ export async function processChatbotAutomation(
     return {
       replied: false,
       decision,
+      routed: null,
     };
   }
 
@@ -83,8 +85,45 @@ export async function processChatbotAutomation(
     });
   }
 
+  let routed: {
+    mode: "usuario_auto" | "fila_setor";
+    responsavelId: string | null;
+  } | null = null;
+
+  const needsRouting =
+    decision.action === "transferir_setor" ||
+    decision.action === "transferir_humano" ||
+    decision.action === "limite_tentativas";
+
+  if (needsRouting) {
+    const setorDestinoId =
+      decision.matchedOption?.setor_id ??
+      decision.matchedKeyword?.setor_id ??
+      automacaoCompleta?.automacao?.setor_padrao_id ??
+      null;
+
+    if (!setorDestinoId) {
+      throw new Error(
+        `A ação "${decision.action}" exige um setor de destino, mas nenhum setor foi definido na opção/palavra-chave nem no setor_padrao_id da automação.`
+      );
+    }
+
+    const routeResult = await routeConversationToSector({
+      conversaId: params.conversa.id,
+      empresaId: params.empresaId,
+      setorId: setorDestinoId,
+      preferSingleUserAutoAssign: true,
+    });
+
+    routed = {
+      mode: routeResult.mode,
+      responsavelId: routeResult.responsavelId,
+    };
+  }
+
   return {
     replied: true,
     decision,
+    routed,
   };
 }

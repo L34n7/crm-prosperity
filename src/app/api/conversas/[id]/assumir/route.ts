@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assumeConversation } from "@/lib/chatbot/route-conversation";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -54,50 +55,37 @@ async function getUsuarioLogado() {
   return { usuario };
 }
 
-function usuarioPodeAcessarConversa(
+function usuarioPodeAssumirConversa(
   usuario: UsuarioSistema,
   conversa: {
     empresa_id: string;
     setor_id: string | null;
     responsavel_id: string | null;
-    status?: string | null;
+    status: string | null;
   }
 ) {
-  if (usuario.perfil === "super_admin") return true;
-
   if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
     return false;
   }
 
-  if (usuario.perfil === "admin_empresa") return true;
-
-  if (usuario.perfil === "supervisor") {
-    if (!usuario.setor_id) return false;
-    return conversa.setor_id === usuario.setor_id;
-  }
-
-  if (usuario.perfil === "atendente") {
-    if (conversa.responsavel_id === usuario.id) {
-      return true;
-    }
-
-    if (
-      usuario.setor_id &&
-      conversa.setor_id === usuario.setor_id &&
-      conversa.responsavel_id === null &&
-      conversa.status === "fila"
-    ) {
-      return true;
-    }
-
+  if (!usuario.setor_id || conversa.setor_id !== usuario.setor_id) {
     return false;
   }
+
+  if (conversa.status === "encerrada") {
+    return false;
+  }
+
+  if (usuario.perfil === "super_admin") return true;
+  if (usuario.perfil === "admin_empresa") return true;
+  if (usuario.perfil === "supervisor") return true;
+  if (usuario.perfil === "atendente") return true;
 
   return false;
 }
 
-export async function PUT(
-  request: Request,
+export async function POST(
+  _request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
@@ -113,30 +101,10 @@ export async function PUT(
 
   const { usuario } = resultado;
 
-  const { data: mensagemAtual, error: mensagemAtualError } = await supabaseAdmin
-    .from("mensagens")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (mensagemAtualError) {
-    return NextResponse.json(
-      { ok: false, error: mensagemAtualError.message },
-      { status: 500 }
-    );
-  }
-
-  if (!mensagemAtual) {
-    return NextResponse.json(
-      { ok: false, error: "Mensagem não encontrada" },
-      { status: 404 }
-    );
-  }
-
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
     .select("id, empresa_id, setor_id, responsavel_id, status")
-    .eq("id", mensagemAtual.conversa_id)
+    .eq("id", id)
     .maybeSingle();
 
   if (conversaError) {
@@ -148,47 +116,28 @@ export async function PUT(
 
   if (!conversa) {
     return NextResponse.json(
-      { ok: false, error: "Conversa da mensagem não encontrada" },
+      { ok: false, error: "Conversa não encontrada" },
       { status: 404 }
     );
   }
 
-  if (!usuarioPodeAcessarConversa(usuario, conversa)) {
+  if (!usuarioPodeAssumirConversa(usuario, conversa)) {
     return NextResponse.json(
-      { ok: false, error: "Você não pode editar esta mensagem" },
+      { ok: false, error: "Você não pode assumir esta conversa" },
       { status: 403 }
     );
   }
 
-  const body = await request.json();
-  const conteudo = body?.conteudo?.trim();
-
-  if (!conteudo) {
-    return NextResponse.json(
-      { ok: false, error: "Conteúdo é obrigatório" },
-      { status: 400 }
-    );
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from("mensagens")
-    .update({
-      conteudo,
-    })
-    .eq("id", id)
-    .select("*")
-    .single();
-
-  if (error) {
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 }
-    );
-  }
+  const conversaAtualizada = await assumeConversation({
+    conversaId: conversa.id,
+    usuarioId: usuario.id,
+    empresaId: conversa.empresa_id,
+    setorId: conversa.setor_id,
+  });
 
   return NextResponse.json({
     ok: true,
-    message: "Mensagem atualizada com sucesso",
-    mensagem: data,
+    message: "Conversa assumida com sucesso",
+    conversa: conversaAtualizada,
   });
 }

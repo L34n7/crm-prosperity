@@ -42,7 +42,7 @@ export type WhatsAppAutomacao = {
   setor_padrao_id: string | null;
 
   criado_em: string;
-  atualizado_em: string;
+  updated_at: string;
 };
 
 export type WhatsAppAutomacaoOpcao = {
@@ -57,7 +57,7 @@ export type WhatsAppAutomacaoOpcao = {
   mensagem_resposta: string | null;
   ativa: boolean;
   criado_em: string;
-  atualizado_em: string;
+  updated_at: string;
 };
 
 export type WhatsAppAutomacaoPalavraChave = {
@@ -69,7 +69,7 @@ export type WhatsAppAutomacaoPalavraChave = {
   mensagem_resposta: string | null;
   ativa: boolean;
   criado_em: string;
-  atualizado_em: string;
+  updated_at: string;
 };
 
 export type ConversaAutomacaoEstado = {

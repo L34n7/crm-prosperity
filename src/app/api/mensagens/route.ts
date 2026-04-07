@@ -4,7 +4,6 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-
 type UsuarioSistema = {
   id: string;
   empresa_id: string | null;
@@ -55,9 +54,7 @@ async function getUsuarioLogado() {
   return { usuario };
 }
 
-function podeGerenciarMensagens(
-  perfil: UsuarioSistema["perfil"]
-) {
+function podeGerenciarMensagens(perfil: UsuarioSistema["perfil"]) {
   return ["super_admin", "admin_empresa", "supervisor", "atendente"].includes(
     perfil
   );
@@ -69,6 +66,7 @@ function usuarioPodeAcessarConversa(
     empresa_id: string;
     setor_id: string | null;
     responsavel_id: string | null;
+    status?: string | null;
   }
 ) {
   if (usuario.perfil === "super_admin") return true;
@@ -85,7 +83,20 @@ function usuarioPodeAcessarConversa(
   }
 
   if (usuario.perfil === "atendente") {
-    return conversa.responsavel_id === usuario.id;
+    if (conversa.responsavel_id === usuario.id) {
+      return true;
+    }
+
+    if (
+      usuario.setor_id &&
+      conversa.setor_id === usuario.setor_id &&
+      conversa.responsavel_id === null &&
+      conversa.status === "fila"
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   return false;
@@ -122,7 +133,7 @@ export async function GET(request: Request) {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id")
+    .select("id, empresa_id, setor_id, responsavel_id, status")
     .eq("id", conversaId)
     .maybeSingle();
 
@@ -243,7 +254,7 @@ export async function POST(request: Request) {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id")
+    .select("id, empresa_id, setor_id, responsavel_id, status")
     .eq("id", conversa_id)
     .maybeSingle();
 
