@@ -8,6 +8,7 @@ import { findWhatsAppIntegrationByPhoneNumberId } from "@/lib/whatsapp/find-inte
 import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import { saveIncomingWhatsAppMessage } from "@/lib/whatsapp/save-incoming-message";
+import { processChatbotAutomation } from "@/lib/chatbot/process-automation";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
@@ -62,6 +63,8 @@ export async function POST(req: NextRequest) {
     }
 
     const incomingMessages = extractIncomingMessages(body);
+
+    // Ajuste importante: usar incomingMessages
     const textMessages = extractTextMessages(body);
 
     console.log(
@@ -135,32 +138,17 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        console.log(
-          "[WEBHOOK WHATSAPP] Integração encontrada:",
-          JSON.stringify(integration, null, 2)
-        );
-
         const contact = await findOrCreateWhatsAppContact({
           empresaId: integration.empresa_id,
           phone: message.from,
           profileName: message.profileName,
         });
 
-        console.log(
-          "[WEBHOOK WHATSAPP] Contato localizado/criado:",
-          JSON.stringify(contact, null, 2)
-        );
-
         const conversation = await findOrCreateWhatsAppConversation({
           empresaId: integration.empresa_id,
           contatoId: contact.id,
           integracaoWhatsappId: integration.id,
         });
-
-        console.log(
-          "[WEBHOOK WHATSAPP] Conversa localizada/criada:",
-          JSON.stringify(conversation, null, 2)
-        );
 
         const savedMessage = await saveIncomingWhatsAppMessage({
           empresaId: integration.empresa_id,
@@ -172,10 +160,29 @@ export async function POST(req: NextRequest) {
           timestamp: message.timestamp,
         });
 
-        console.log(
-          "[WEBHOOK WHATSAPP] Resultado do salvamento da mensagem:",
-          JSON.stringify(savedMessage, null, 2)
-        );
+        const automationResult = await processChatbotAutomation({
+          empresaId: integration.empresa_id,
+          integracaoWhatsappId: integration.id,
+          conversa: {
+            id: conversation.id,
+            empresa_id: conversation.empresa_id,
+            bot_ativo: conversation.bot_ativo ?? false,
+            fluxo_etapa: conversation.fluxo_etapa ?? null,
+            menu_aguardando_resposta:
+              conversation.menu_aguardando_resposta ?? false,
+            ultima_opcao_escolhida:
+              conversation.ultima_opcao_escolhida ?? null,
+            tentativas_invalidas: conversation.tentativas_invalidas ?? 0,
+            ultima_interacao_bot_em:
+              conversation.ultima_interacao_bot_em ?? null,
+            automacao_id: conversation.automacao_id ?? null,
+            status: conversation.status ?? null,
+            setor_id: conversation.setor_id ?? null,
+            responsavel_id: conversation.responsavel_id ?? null,
+          },
+          mensagemCliente: message.text ?? "",
+          numeroDestino: message.from,
+        });
 
         processedResults.push({
           messageId: message.messageId,
@@ -185,6 +192,8 @@ export async function POST(req: NextRequest) {
           contactId: contact.id,
           conversationId: conversation.id,
           savedMessageId: savedMessage.messageId,
+          automationReplied: automationResult.replied,
+          automationAction: automationResult.decision.action,
         });
       } catch (messageError) {
         console.error(

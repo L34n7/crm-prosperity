@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import styles from "./mensagens.module.css";
 
 type ConversaOpcao = {
   id: string;
@@ -24,33 +25,138 @@ type Mensagem = {
   created_at: string;
 };
 
+function formatarDataHora(data: string) {
+  return new Date(data).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatarHora(data: string) {
+  return new Date(data).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatarDataSeparador(data: string) {
+  return new Date(data).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function statusLabel(status: Mensagem["status_envio"]) {
+  switch (status) {
+    case "pendente":
+      return "⏳";
+    case "enviada":
+      return "✓";
+    case "entregue":
+      return "✓✓";
+    case "lida":
+      return "✓✓";
+    case "falha":
+      return "!";
+    default:
+      return "";
+  }
+}
+
+function getNomeRemetente(remetenteTipo: Mensagem["remetente_tipo"]) {
+  switch (remetenteTipo) {
+    case "contato":
+      return "Contato";
+    case "usuario":
+      return "Atendente";
+    case "bot":
+      return "Bot";
+    case "ia":
+      return "IA";
+    case "sistema":
+      return "Sistema";
+    default:
+      return remetenteTipo;
+  }
+}
+
 export default function MensagensPage() {
   const [conversas, setConversas] = useState<ConversaOpcao[]>([]);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [conversaId, setConversaId] = useState("");
 
   const [conteudo, setConteudo] = useState("");
-  const [remetenteTipo, setRemetenteTipo] = useState("usuario");
-  const [origem, setOrigem] = useState("enviada");
-  const [statusEnvio, setStatusEnvio] = useState("enviada");
+  const [remetenteTipo, setRemetenteTipo] =
+    useState<Mensagem["remetente_tipo"]>("usuario");
+  const [origem, setOrigem] = useState<Mensagem["origem"]>("enviada");
+  const [statusEnvio, setStatusEnvio] =
+    useState<Mensagem["status_envio"]>("enviada");
 
-  const [loading, setLoading] = useState(false);
+  const [loadingConversas, setLoadingConversas] = useState(false);
+  const [loadingMensagens, setLoadingMensagens] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editConteudo, setEditConteudo] = useState("");
 
+  const [buscaConversa, setBuscaConversa] = useState("");
+  const [mostrarConfigTeste, setMostrarConfigTeste] = useState(false);
+
+  const mensagensContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const conversaSelecionada = useMemo(() => {
+    return conversas.find((c) => c.id === conversaId) || null;
+  }, [conversas, conversaId]);
+
+  const conversasFiltradas = useMemo(() => {
+    const termo = buscaConversa.trim().toLowerCase();
+
+    if (!termo) return conversas;
+
+    return conversas.filter((conversa) => {
+      const nome = conversa.contatos?.nome?.toLowerCase() || "";
+      const telefone = conversa.contatos?.telefone?.toLowerCase() || "";
+      const assunto = conversa.assunto?.toLowerCase() || "";
+
+      return (
+        nome.includes(termo) ||
+        telefone.includes(termo) ||
+        assunto.includes(termo)
+      );
+    });
+  }, [conversas, buscaConversa]);
+
   async function carregarConversas() {
-    const res = await fetch("/api/conversas");
-    const data = await res.json();
+    try {
+      setLoadingConversas(true);
 
-    if (!res.ok) return;
+      const res = await fetch("/api/conversas", {
+        cache: "no-store",
+      });
 
-    setConversas(data.conversas || []);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar conversas");
+        return;
+      }
+
+      setConversas(data.conversas || []);
+    } catch {
+      setErro("Erro ao carregar conversas");
+    } finally {
+      setLoadingConversas(false);
+    }
   }
 
-  async function carregarMensagens(conversaIdAtual?: string) {
+  async function carregarMensagens(conversaIdAtual?: string, silencioso = false) {
     const id = conversaIdAtual || conversaId;
 
     if (!id) {
@@ -58,17 +164,32 @@ export default function MensagensPage() {
       return;
     }
 
-    setErro("");
+    try {
+      if (!silencioso) {
+        setLoadingMensagens(true);
+      }
 
-    const res = await fetch(`/api/mensagens?conversa_id=${id}`);
-    const data = await res.json();
+      setErro("");
 
-    if (!res.ok) {
-      setErro(data.error || "Erro ao carregar mensagens");
-      return;
+      const res = await fetch(`/api/mensagens?conversa_id=${id}`, {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar mensagens");
+        return;
+      }
+
+      setMensagens(data.mensagens || []);
+    } catch {
+      setErro("Erro ao carregar mensagens");
+    } finally {
+      if (!silencioso) {
+        setLoadingMensagens(false);
+      }
     }
-
-    setMensagens(data.mensagens || []);
   }
 
   async function criarMensagem() {
@@ -85,35 +206,41 @@ export default function MensagensPage() {
       return;
     }
 
-    setLoading(true);
+    try {
+      setEnviando(true);
 
-    const res = await fetch("/api/mensagens", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        conversa_id: conversaId,
-        remetente_tipo: remetenteTipo,
-        conteudo,
-        tipo_mensagem: "texto",
-        origem,
-        status_envio: statusEnvio,
-      }),
-    });
+      const res = await fetch("/api/mensagens", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversa_id: conversaId,
+          remetente_tipo: remetenteTipo,
+          conteudo: conteudo.trim(),
+          tipo_mensagem: "texto",
+          origem,
+          status_envio: statusEnvio,
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      setErro(data.error || "Erro ao criar mensagem");
-      setLoading(false);
-      return;
+      if (!res.ok) {
+        setErro(data.error || "Erro ao criar mensagem");
+        return;
+      }
+
+      setMensagem(data.message || "Mensagem criada com sucesso.");
+      setConteudo("");
+
+      await carregarMensagens(conversaId, true);
+      await carregarConversas();
+    } catch {
+      setErro("Erro ao criar mensagem");
+    } finally {
+      setEnviando(false);
     }
-
-    setMensagem(data.message || "Mensagem criada com sucesso.");
-    setConteudo("");
-    setLoading(false);
-    carregarMensagens();
   }
 
   function iniciarEdicao(msg: Mensagem) {
@@ -139,27 +266,66 @@ export default function MensagensPage() {
       return;
     }
 
-    const res = await fetch(`/api/mensagens/${editandoId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        conteudo: editConteudo,
-      }),
-    });
+    try {
+      const res = await fetch(`/api/mensagens/${editandoId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conteudo: editConteudo.trim(),
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      setErro(data.error || "Erro ao atualizar mensagem");
-      return;
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar mensagem");
+        return;
+      }
+
+      setMensagem(data.message || "Mensagem atualizada com sucesso.");
+      cancelarEdicao();
+      await carregarMensagens(conversaId, true);
+    } catch {
+      setErro("Erro ao atualizar mensagem");
+    }
+  }
+
+  function onKeyDownMensagem(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!enviando) {
+        criarMensagem();
+      }
+    }
+  }
+
+  function isMensagemSaida(msg: Mensagem) {
+    return msg.origem === "enviada";
+  }
+
+  const mensagensAgrupadas = useMemo(() => {
+    const grupos: Array<
+      | { tipo: "data"; valor: string }
+      | { tipo: "mensagem"; valor: Mensagem }
+    > = [];
+
+    let ultimaData = "";
+
+    for (const msg of mensagens) {
+      const dataAtual = formatarDataSeparador(msg.created_at);
+
+      if (dataAtual !== ultimaData) {
+        grupos.push({ tipo: "data", valor: dataAtual });
+        ultimaData = dataAtual;
+      }
+
+      grupos.push({ tipo: "mensagem", valor: msg });
     }
 
-    setMensagem(data.message || "Mensagem atualizada com sucesso.");
-    cancelarEdicao();
-    carregarMensagens();
-  }
+    return grupos;
+  }, [mensagens]);
 
   useEffect(() => {
     carregarConversas();
@@ -169,189 +335,416 @@ export default function MensagensPage() {
     carregarMensagens();
   }, [conversaId]);
 
+  useEffect(() => {
+    if (!conversaId) return;
+
+    const interval = setInterval(() => {
+      carregarMensagens(conversaId, true);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [conversaId]);
+
+  useEffect(() => {
+    const el = mensagensContainerRef.current;
+    if (!el) return;
+
+    el.scrollTop = el.scrollHeight;
+  }, [mensagens, editandoId]);
+
   return (
-    <main className="min-h-screen bg-gray-100 p-6">
-      <div className="mx-auto max-w-5xl">
-        <h1 className="mb-6 text-2xl font-bold">Mensagens</h1>
+    <main className={styles.page}>
+      <div className={styles.layout}>
+        <aside className={styles.sidebar}>
+          <div className={styles.sidebarHeader}>
+            <div className={styles.sidebarHeaderTop}>
+              <div>
+                <h1 className={styles.sidebarTitle}>Mensagens</h1>
+                <p className={styles.sidebarSubtitle}>Central de atendimento</p>
+              </div>
 
-        <div className="mb-6 rounded-2xl bg-white p-6 shadow">
-          <h2 className="mb-4 text-lg font-semibold">Selecionar conversa</h2>
-
-          <select
-            className="w-full rounded-lg border px-3 py-2"
-            value={conversaId}
-            onChange={(e) => setConversaId(e.target.value)}
-          >
-            <option value="">Selecione uma conversa</option>
-            {conversas.map((conversa) => (
-              <option key={conversa.id} value={conversa.id}>
-                {(conversa.assunto || "Sem assunto") +
-                  " - " +
-                  (conversa.contatos?.nome || "Sem nome") +
-                  " - " +
-                  (conversa.contatos?.telefone || "")}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="mb-6 rounded-2xl bg-white p-6 shadow">
-          <h2 className="mb-4 text-lg font-semibold">Criar mensagem</h2>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Remetente</label>
-              <select
-                className="w-full rounded-lg border px-3 py-2"
-                value={remetenteTipo}
-                onChange={(e) => setRemetenteTipo(e.target.value)}
-              >
-                <option value="usuario">Usuário</option>
-                <option value="contato">Contato</option>
-                <option value="bot">Bot</option>
-                <option value="ia">IA</option>
-                <option value="sistema">Sistema</option>
-              </select>
+              <button onClick={carregarConversas} className={styles.refreshButton}>
+                Atualizar
+              </button>
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium">Origem</label>
-              <select
-                className="w-full rounded-lg border px-3 py-2"
-                value={origem}
-                onChange={(e) => setOrigem(e.target.value)}
-              >
-                <option value="enviada">Enviada</option>
-                <option value="recebida">Recebida</option>
-                <option value="automatica">Automática</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">Status envio</label>
-              <select
-                className="w-full rounded-lg border px-3 py-2"
-                value={statusEnvio}
-                onChange={(e) => setStatusEnvio(e.target.value)}
-              >
-                <option value="pendente">Pendente</option>
-                <option value="enviada">Enviada</option>
-                <option value="entregue">Entregue</option>
-                <option value="lida">Lida</option>
-                <option value="falha">Falha</option>
-              </select>
+            <div className={styles.searchWrapper}>
+              <input
+                type="text"
+                value={buscaConversa}
+                onChange={(e) => setBuscaConversa(e.target.value)}
+                placeholder="Buscar conversa por nome, telefone ou assunto"
+                className={styles.searchInput}
+              />
             </div>
           </div>
 
-          <div className="mt-4">
-            <label className="mb-1 block text-sm font-medium">Conteúdo</label>
-            <textarea
-              className="w-full rounded-lg border px-3 py-2"
-              rows={4}
-              value={conteudo}
-              onChange={(e) => setConteudo(e.target.value)}
-              placeholder="Digite a mensagem"
-            />
-          </div>
-
-          <button
-            onClick={criarMensagem}
-            disabled={loading}
-            className="mt-4 rounded-lg bg-black px-4 py-2 text-white disabled:opacity-60"
-          >
-            {loading ? "Enviando..." : "Criar mensagem"}
-          </button>
-        </div>
-
-        {mensagem && (
-          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-            {mensagem}
-          </div>
-        )}
-
-        {erro && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {erro}
-          </div>
-        )}
-
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <h2 className="mb-4 text-lg font-semibold">Timeline de mensagens</h2>
-
-          <div className="space-y-4">
-            {!conversaId ? (
-              <p className="text-sm text-gray-500">Selecione uma conversa para ver as mensagens.</p>
-            ) : mensagens.length === 0 ? (
-              <p className="text-sm text-gray-500">Nenhuma mensagem cadastrada ainda.</p>
+          <div className={styles.sidebarList}>
+            {loadingConversas ? (
+              <div className={styles.sidebarMessage}>Carregando conversas...</div>
+            ) : conversasFiltradas.length === 0 ? (
+              <div className={styles.sidebarMessage}>
+                Nenhuma conversa encontrada.
+              </div>
             ) : (
-              mensagens.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`rounded-xl border p-4 ${
-                    msg.origem === "recebida"
-                      ? "bg-gray-50"
-                      : msg.origem === "automatica"
-                      ? "bg-yellow-50"
-                      : "bg-white"
-                  }`}
-                >
-                  {editandoId === msg.id ? (
-                    <div>
-                      <textarea
-                        className="w-full rounded-lg border px-3 py-2"
-                        rows={4}
-                        value={editConteudo}
-                        onChange={(e) => setEditConteudo(e.target.value)}
-                      />
+              conversasFiltradas.map((conversa) => {
+                const selecionada = conversa.id === conversaId;
+                const nome = conversa.contatos?.nome || "Sem nome";
+                const telefone = conversa.contatos?.telefone || "Sem telefone";
+                const assunto = conversa.assunto || "Sem assunto";
 
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          onClick={salvarEdicao}
-                          className="rounded-lg bg-black px-4 py-2 text-white"
-                        >
-                          Salvar
-                        </button>
-
-                        <button
-                          onClick={cancelarEdicao}
-                          className="rounded-lg border px-4 py-2"
-                        >
-                          Cancelar
-                        </button>
+                return (
+                  <button
+                    key={conversa.id}
+                    onClick={() => setConversaId(conversa.id)}
+                    className={`${styles.conversationButton} ${
+                      selecionada ? styles.conversationButtonActive : ""
+                    }`}
+                  >
+                    <div className={styles.conversationRow}>
+                      <div className={styles.conversationContent}>
+                        <p className={styles.conversationName}>{nome}</p>
+                        <p className={styles.conversationPhone}>{telefone}</p>
+                        <p className={styles.conversationSubject}>{assunto}</p>
                       </div>
+
+                      <span
+                        className={`${styles.statusBadge} ${
+                          conversa.status === "aberta"
+                            ? styles.statusBadgeOpen
+                            : styles.statusBadgeDefault
+                        }`}
+                      >
+                        {conversa.status}
+                      </span>
                     </div>
-                  ) : (
-                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold">
-                          {msg.remetente_tipo} • {msg.origem}
-                        </p>
-                        <p className="mt-2 whitespace-pre-wrap text-sm text-gray-800">
-                          {msg.conteudo}
-                        </p>
-                        <p className="mt-2 text-xs text-gray-500">
-                          Status envio: {msg.status_envio}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(msg.created_at).toLocaleString("pt-BR")}
-                        </p>
-                      </div>
-
-                      <div>
-                        <button
-                          onClick={() => iniciarEdicao(msg)}
-                          className="rounded-lg border px-3 py-2 text-sm"
-                        >
-                          Editar
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))
+                  </button>
+                );
+              })
             )}
           </div>
-        </div>
+        </aside>
+
+        <section className={styles.desktopChat}>
+          {conversaSelecionada ? (
+            <>
+              <header className={styles.chatHeader}>
+                <div className={styles.chatHeaderTop}>
+                  <div className={styles.chatHeaderInfo}>
+                    <h2 className={styles.chatHeaderTitle}>
+                      {conversaSelecionada.contatos?.nome || "Sem nome"}
+                    </h2>
+                    <p className={styles.chatHeaderSubtitle}>
+                      {conversaSelecionada.contatos?.telefone || "Sem telefone"} •{" "}
+                      {conversaSelecionada.assunto || "Sem assunto"}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setMostrarConfigTeste((prev) => !prev)}
+                    className={styles.testButton}
+                  >
+                    {mostrarConfigTeste ? "Ocultar ajustes" : "Ajustes de teste"}
+                  </button>
+                </div>
+
+                {mostrarConfigTeste && (
+                  <div className={styles.testPanel}>
+                    <div>
+                      <label className={styles.fieldLabel}>Remetente</label>
+                      <select
+                        className={styles.fieldSelect}
+                        value={remetenteTipo}
+                        onChange={(e) =>
+                          setRemetenteTipo(
+                            e.target.value as Mensagem["remetente_tipo"]
+                          )
+                        }
+                      >
+                        <option value="usuario">Usuário</option>
+                        <option value="contato">Contato</option>
+                        <option value="bot">Bot</option>
+                        <option value="ia">IA</option>
+                        <option value="sistema">Sistema</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={styles.fieldLabel}>Origem</label>
+                      <select
+                        className={styles.fieldSelect}
+                        value={origem}
+                        onChange={(e) =>
+                          setOrigem(e.target.value as Mensagem["origem"])
+                        }
+                      >
+                        <option value="enviada">Enviada</option>
+                        <option value="recebida">Recebida</option>
+                        <option value="automatica">Automática</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={styles.fieldLabel}>Status envio</label>
+                      <select
+                        className={styles.fieldSelect}
+                        value={statusEnvio}
+                        onChange={(e) =>
+                          setStatusEnvio(
+                            e.target.value as Mensagem["status_envio"]
+                          )
+                        }
+                      >
+                        <option value="pendente">Pendente</option>
+                        <option value="enviada">Enviada</option>
+                        <option value="entregue">Entregue</option>
+                        <option value="lida">Lida</option>
+                        <option value="falha">Falha</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </header>
+
+              <div ref={mensagensContainerRef} className={styles.messagesArea}>
+                {loadingMensagens ? (
+                  <div className={styles.messagesInfo}>Carregando mensagens...</div>
+                ) : mensagens.length === 0 ? (
+                  <div className={styles.emptyConversationCard}>
+                    Nenhuma mensagem cadastrada ainda nessa conversa.
+                  </div>
+                ) : (
+                  <div className={styles.messagesStack}>
+                    {mensagensAgrupadas.map((item, index) => {
+                      if (item.tipo === "data") {
+                        return (
+                          <div key={`data-${item.valor}-${index}`} className={styles.dateRow}>
+                            <div className={styles.dateBadge}>{item.valor}</div>
+                          </div>
+                        );
+                      }
+
+                      const msg = item.valor;
+                      const saida = isMensagemSaida(msg);
+
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`${styles.messageRow} ${
+                            saida ? styles.messageRowOutgoing : styles.messageRowIncoming
+                          }`}
+                        >
+                          <div
+                            className={`${styles.messageBubble} ${
+                              saida
+                                ? styles.messageBubbleOutgoing
+                                : msg.origem === "automatica"
+                                ? styles.messageBubbleAutomatic
+                                : styles.messageBubbleIncoming
+                            }`}
+                          >
+                            {editandoId === msg.id ? (
+                              <div>
+                                <textarea
+                                  className={styles.editTextarea}
+                                  rows={4}
+                                  value={editConteudo}
+                                  onChange={(e) => setEditConteudo(e.target.value)}
+                                />
+
+                                <div className={styles.editActions}>
+                                  <button
+                                    onClick={salvarEdicao}
+                                    className={styles.saveButton}
+                                  >
+                                    Salvar
+                                  </button>
+
+                                  <button
+                                    onClick={cancelarEdicao}
+                                    className={styles.cancelButton}
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className={styles.messageMetaTop}>
+                                  <span className={styles.senderLabel}>
+                                    {getNomeRemetente(msg.remetente_tipo)}
+                                  </span>
+
+                                  {msg.origem === "automatica" && (
+                                    <span className={styles.automaticBadge}>
+                                      automática
+                                    </span>
+                                  )}
+                                </div>
+
+                                <p className={styles.messageText}>{msg.conteudo}</p>
+
+                                <div className={styles.messageMetaBottom}>
+                                  <span title={formatarDataHora(msg.created_at)}>
+                                    {formatarHora(msg.created_at)}
+                                  </span>
+
+                                  {saida && (
+                                    <span
+                                      title={`Status: ${msg.status_envio}`}
+                                      className={`${styles.statusIcon} ${
+                                        msg.status_envio === "lida"
+                                          ? styles.statusIconRead
+                                          : msg.status_envio === "falha"
+                                          ? styles.statusIconError
+                                          : styles.statusIconDefault
+                                      }`}
+                                    >
+                                      {statusLabel(msg.status_envio)}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className={styles.messageActions}>
+                                  <button
+                                    onClick={() => iniciarEdicao(msg)}
+                                    className={styles.editButton}
+                                  >
+                                    Editar
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <footer className={styles.chatFooter}>
+                {mensagem && (
+                  <div className={styles.successAlert}>{mensagem}</div>
+                )}
+
+                {erro && <div className={styles.errorAlert}>{erro}</div>}
+
+                <div className={styles.inputRow}>
+                  <textarea
+                    className={styles.messageInput}
+                    rows={2}
+                    value={conteudo}
+                    onChange={(e) => setConteudo(e.target.value)}
+                    onKeyDown={onKeyDownMensagem}
+                    placeholder="Digite uma mensagem"
+                  />
+
+                  <button
+                    onClick={criarMensagem}
+                    disabled={enviando || !conteudo.trim()}
+                    className={styles.sendButton}
+                  >
+                    {enviando ? "Enviando..." : "Enviar"}
+                  </button>
+                </div>
+
+                <p className={styles.footerHint}>
+                  Enter envia a mensagem • Shift + Enter quebra linha
+                </p>
+              </footer>
+            </>
+          ) : (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyStateContent}>
+                <h2 className={styles.emptyStateTitle}>Selecione uma conversa</h2>
+                <p className={styles.emptyStateText}>
+                  Escolha uma conversa na lateral para visualizar o histórico e
+                  enviar novas mensagens.
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className={styles.mobileChat}>
+          {conversaSelecionada ? (
+            <>
+              <header className={styles.mobileHeader}>
+                <h2 className={styles.mobileHeaderTitle}>
+                  {conversaSelecionada.contatos?.nome || "Sem nome"}
+                </h2>
+                <p className={styles.mobileHeaderSubtitle}>
+                  {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                </p>
+              </header>
+
+              <div ref={mensagensContainerRef} className={styles.mobileMessagesArea}>
+                <div className={styles.messagesStack}>
+                  {mensagensAgrupadas.map((item, index) => {
+                    if (item.tipo === "data") {
+                      return (
+                        <div key={`m-data-${item.valor}-${index}`} className={styles.dateRow}>
+                          <div className={styles.dateBadge}>{item.valor}</div>
+                        </div>
+                      );
+                    }
+
+                    const msg = item.valor;
+                    const saida = isMensagemSaida(msg);
+
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`${styles.messageRow} ${
+                          saida ? styles.messageRowOutgoing : styles.messageRowIncoming
+                        }`}
+                      >
+                        <div
+                          className={`${styles.mobileMessageBubble} ${
+                            saida
+                              ? styles.messageBubbleOutgoing
+                              : styles.messageBubbleIncoming
+                          }`}
+                        >
+                          <p className={styles.mobileMessageText}>{msg.conteudo}</p>
+                          <div className={styles.mobileMessageMeta}>
+                            <span>{formatarHora(msg.created_at)}</span>
+                            {saida && <span>{statusLabel(msg.status_envio)}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <footer className={styles.mobileFooter}>
+                <div className={styles.inputRow}>
+                  <textarea
+                    className={styles.messageInput}
+                    rows={2}
+                    value={conteudo}
+                    onChange={(e) => setConteudo(e.target.value)}
+                    onKeyDown={onKeyDownMensagem}
+                    placeholder="Digite uma mensagem"
+                  />
+                  <button
+                    onClick={criarMensagem}
+                    disabled={enviando || !conteudo.trim()}
+                    className={styles.sendButton}
+                  >
+                    {enviando ? "..." : "Enviar"}
+                  </button>
+                </div>
+              </footer>
+            </>
+          ) : (
+            <div className={styles.mobileEmptyState}>
+              Selecione uma conversa.
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
