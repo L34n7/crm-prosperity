@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 type SendWhatsAppTextMessageParams = {
   integracaoId: string;
@@ -6,11 +6,11 @@ type SendWhatsAppTextMessageParams = {
   text: string;
 };
 
-type IntegracaoWhatsApp = {
+type IntegracaoWhatsAppRow = {
   id: string;
-  token_acesso: string | null;
   phone_number_id: string | null;
   status: string | null;
+  token_ref: string | null;
 };
 
 type SendWhatsAppTextMessageResult = {
@@ -22,10 +22,12 @@ type SendWhatsAppTextMessageResult = {
 
 async function getIntegracaoWhatsApp(
   integracaoId: string
-): Promise<IntegracaoWhatsApp | null> {
+): Promise<IntegracaoWhatsAppRow | null> {
+  const supabaseAdmin = getSupabaseAdmin();
+
   const { data, error } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("id, token_acesso, phone_number_id, status")
+    .select("id, phone_number_id, status, token_ref")
     .eq("id", integracaoId)
     .maybeSingle();
 
@@ -33,7 +35,14 @@ async function getIntegracaoWhatsApp(
     throw new Error(`Erro ao buscar integração WhatsApp: ${error.message}`);
   }
 
-  return data;
+  return data as IntegracaoWhatsAppRow | null;
+}
+
+function getAccessTokenFromEnv(tokenRef: string | null): string | null {
+  if (!tokenRef) return null;
+
+  const token = process.env[tokenRef];
+  return token ?? null;
 }
 
 export async function sendWhatsAppTextMessage(
@@ -49,10 +58,20 @@ export async function sendWhatsAppTextMessage(
     };
   }
 
-  if (!integracao.token_acesso || !integracao.phone_number_id) {
+  const token = getAccessTokenFromEnv(integracao.token_ref);
+
+  if (!token) {
     return {
       ok: false,
-      error: "Integração WhatsApp sem token_acesso ou phone_number_id.",
+      error: `Token não encontrado nas variáveis de ambiente para token_ref=${integracao.token_ref}`,
+      mensagemExternaId: null,
+    };
+  }
+
+  if (!integracao.phone_number_id) {
+    return {
+      ok: false,
+      error: "Integração WhatsApp sem phone_number_id.",
       mensagemExternaId: null,
     };
   }
@@ -62,7 +81,7 @@ export async function sendWhatsAppTextMessage(
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${integracao.token_acesso}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
