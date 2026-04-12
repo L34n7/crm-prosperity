@@ -32,9 +32,12 @@ export async function GET(req: NextRequest) {
         body: JSON.stringify({
           messaging_product: "whatsapp",
           to: numero,
-          type: "text",
-          text: {
-            body: "Teste enviado pelo CRM",
+          type: "template",
+          template: {
+            name: "crm_prosperity",
+            language: {
+              code: "pt_BR",
+            },
           },
         }),
       }
