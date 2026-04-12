@@ -1,64 +1,19 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  getUsuarioContexto,
+  type UsuarioContexto,
+} from "@/lib/auth/get-usuario-contexto";
 
-  const supabaseAdmin = getSupabaseAdmin();
+const supabaseAdmin = getSupabaseAdmin();
 
+function podeGerenciarContatos(usuario: UsuarioContexto) {
+  const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
 
-type UsuarioSistema = {
-  id: string;
-  empresa_id: string | null;
-  perfil: "super_admin" | "admin_empresa" | "supervisor" | "atendente";
-  status: "ativo" | "inativo" | "bloqueado";
-};
-
-async function getUsuarioLogado() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { error: "Não autenticado", status: 401 as const };
-  }
-
-  const { data: usuario, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, perfil, status")
-    .eq("auth_user_id", user.id)
-    .maybeSingle<UsuarioSistema>();
-
-  if (usuarioError) {
-    return {
-      error: "Erro ao buscar usuário do sistema",
-      status: 500 as const,
-    };
-  }
-
-  if (!usuario) {
-    return {
-      error: "Usuário não encontrado na tabela usuarios",
-      status: 404 as const,
-    };
-  }
-
-  if (usuario.status !== "ativo") {
-    return {
-      error: "Usuário inativo ou bloqueado",
-      status: 403 as const,
-    };
-  }
-
-  return { usuario };
-}
-
-function podeGerenciarContatos(
-  perfil: UsuarioSistema["perfil"]
-) {
-  return ["super_admin", "admin_empresa", "supervisor", "atendente"].includes(
-    perfil
+  return (
+    nomesPerfis.includes("Administrador") ||
+    nomesPerfis.includes("Supervisor") ||
+    nomesPerfis.includes("Atendente")
   );
 }
 
@@ -71,9 +26,9 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  const resultado = await getUsuarioLogado();
+  const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
+  if (!resultado.ok) {
     return NextResponse.json(
       { ok: false, error: resultado.error },
       { status: resultado.status }
@@ -82,7 +37,7 @@ export async function PUT(
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarContatos(usuario.perfil)) {
+  if (!podeGerenciarContatos(usuario)) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para editar contato" },
       { status: 403 }
@@ -109,10 +64,14 @@ export async function PUT(
     );
   }
 
-  if (
-    usuario.perfil !== "super_admin" &&
-    contatoAtual.empresa_id !== usuario.empresa_id
-  ) {
+  if (!usuario.empresa_id) {
+    return NextResponse.json(
+      { ok: false, error: "Usuário sem empresa vinculada" },
+      { status: 400 }
+    );
+  }
+
+  if (contatoAtual.empresa_id !== usuario.empresa_id) {
     return NextResponse.json(
       { ok: false, error: "Você não pode editar este contato" },
       { status: 403 }
@@ -129,10 +88,7 @@ export async function PUT(
   const campanha = body?.campanha?.trim() || null;
   const status_lead = body?.status_lead;
   const observacoes = body?.observacoes?.trim() || null;
-  const empresa_id =
-    usuario.perfil === "super_admin"
-      ? body?.empresa_id || contatoAtual.empresa_id
-      : contatoAtual.empresa_id;
+  const empresa_id = contatoAtual.empresa_id;
 
   if (!empresa_id) {
     return NextResponse.json(

@@ -1,70 +1,30 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { isAdministrador } from "@/lib/auth/authorization";
+import { registrarLogAuditoria } from "@/lib/auditoria/logs";
 
-async function getUsuarioLogado() {
-  const supabase = await createClient();
+const supabaseAdmin = getSupabaseAdmin();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { supabase, error: "Não autenticado", status: 401 as const };
-  }
-
-  const { data: usuario, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, perfil, status")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-
-  if (usuarioError) {
-    return {
-      supabase,
-      error: "Erro ao buscar usuário do sistema",
-      status: 500 as const,
-    };
-  }
-
-  if (!usuario) {
-    return {
-      supabase,
-      error: "Usuário não encontrado na tabela usuarios",
-      status: 404 as const,
-    };
-  }
-
-  if (usuario.status !== "ativo") {
-    return {
-      supabase,
-      error: "Usuário inativo ou bloqueado",
-      status: 403 as const,
-    };
-  }
-
-  return { supabase, usuario };
-}
+type SetorPayload = {
+  nome?: string;
+  descricao?: string | null;
+  ativo?: boolean;
+};
 
 export async function GET() {
-  const resultado = await getUsuarioLogado();
+  try {
+    const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
-    return NextResponse.json(
-      { ok: false, error: resultado.error },
-      { status: resultado.status }
-    );
-  }
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status }
+      );
+    }
 
-  const { supabase, usuario } = resultado;
+    const { usuario } = resultado;
 
-  let query = supabase
-    .from("setores")
-    .select("*")
-    .order("ordem_exibicao", { ascending: true })
-    .order("created_at", { ascending: true });
-
-  if (usuario.perfil !== "super_admin") {
     if (!usuario.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada" },
@@ -72,98 +32,186 @@ export async function GET() {
       );
     }
 
-    query = query.eq("empresa_id", usuario.empresa_id);
-  }
+    const { data: setores, error } = await supabaseAdmin
+      .from("setores")
+      .select(`
+        id,
+        nome,
+        descricao,
+        ativo,
+        created_at,
+        updated_at,
+        created_by,
+        updated_by,
+        usuarios_setores (
+          id
+        ),
+        criado_por:usuarios!setores_created_by_fkey (
+          id,
+          nome
+        ),
+        atualizado_por:usuarios!setores_updated_by_fkey (
+          id,
+          nome
+        )
+      `)
+      .eq("empresa_id", usuario.empresa_id)
+      .order("nome", { ascending: true });
 
-  const { data, error } = await query;
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
+    }
 
-  if (error) {
+    const setoresFormatados = (setores || []).map((setor: any) => ({
+      id: setor.id,
+      nome: setor.nome,
+      descricao: setor.descricao,
+      ativo: setor.ativo,
+      created_at: setor.created_at,
+      updated_at: setor.updated_at,
+      created_by: setor.created_by,
+      updated_by: setor.updated_by,
+      criado_por: Array.isArray(setor.criado_por)
+        ? setor.criado_por[0] || null
+        : setor.criado_por || null,
+      atualizado_por: Array.isArray(setor.atualizado_por)
+        ? setor.atualizado_por[0] || null
+        : setor.atualizado_por || null,
+      total_usuarios: Array.isArray(setor.usuarios_setores)
+        ? setor.usuarios_setores.length
+        : 0,
+    }));
+
+    return NextResponse.json({
+      ok: true,
+      setores: setoresFormatados,
+    });
+  } catch (error) {
+    console.error("Erro ao listar setores:", error);
+
     return NextResponse.json(
-      { ok: false, error: error.message },
+      { ok: false, error: "Erro interno ao listar setores" },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    ok: true,
-    setores: data ?? [],
-  });
 }
 
 export async function POST(request: Request) {
-  const resultado = await getUsuarioLogado();
+  try {
+    const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
-    return NextResponse.json(
-      { ok: false, error: resultado.error },
-      { status: resultado.status }
-    );
-  }
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status }
+      );
+    }
 
-  const { supabase, usuario } = resultado;
+    const { usuario } = resultado;
 
-  if (!["super_admin", "admin_empresa"].includes(usuario.perfil)) {
-    return NextResponse.json(
-      { ok: false, error: "Sem permissão para criar setor" },
-      { status: 403 }
-    );
-  }
+    if (!isAdministrador(usuario)) {
+      return NextResponse.json(
+        { ok: false, error: "Apenas administradores podem criar setores" },
+        { status: 403 }
+      );
+    }
 
-  const body = await request.json();
-  const nome = body?.nome?.trim();
-  const descricao = body?.descricao?.trim() || null;
+    if (!usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada" },
+        { status: 400 }
+      );
+    }
 
-  if (!nome) {
-    return NextResponse.json(
-      { ok: false, error: "Nome do setor é obrigatório" },
-      { status: 400 }
-    );
-  }
+    const body = (await request.json()) as SetorPayload;
 
-  if (!usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Usuário sem empresa vinculada" },
-      { status: 400 }
-    );
-  }
+    const nome = body?.nome?.trim();
+    const descricao = body?.descricao?.trim() || null;
+    const ativo = body?.ativo ?? true;
 
-  const { data: setorExistente } = await supabase
-    .from("setores")
-    .select("id")
-    .eq("empresa_id", usuario.empresa_id)
-    .ilike("nome", nome)
-    .maybeSingle();
+    if (!nome) {
+      return NextResponse.json(
+        { ok: false, error: "Nome do setor é obrigatório" },
+        { status: 400 }
+      );
+    }
 
-  if (setorExistente) {
-    return NextResponse.json(
-      { ok: false, error: "Já existe um setor com esse nome" },
-      { status: 409 }
-    );
-  }
+    const { data: existente } = await supabaseAdmin
+      .from("setores")
+      .select("id")
+      .eq("empresa_id", usuario.empresa_id)
+      .ilike("nome", nome)
+      .maybeSingle();
 
-  const { data, error } = await supabase
-    .from("setores")
-    .insert([
-      {
-        empresa_id: usuario.empresa_id,
+    if (existente) {
+      return NextResponse.json(
+        { ok: false, error: "Já existe um setor com esse nome" },
+        { status: 409 }
+      );
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("setores")
+      .insert([
+        {
+          empresa_id: usuario.empresa_id,
+          nome,
+          descricao,
+          ativo,
+          created_by: usuario.id,
+          updated_by: usuario.id,
+        },
+      ])
+      .select(`
+        id,
         nome,
         descricao,
-        status: "ativo",
-      },
-    ])
-    .select()
-    .single();
+        ativo,
+        created_at,
+        updated_at,
+        created_by,
+        updated_by
+      `)
+      .single();
 
-  if (error) {
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
+    }
+
+    await registrarLogAuditoria({
+      empresa_id: usuario.empresa_id,
+      entidade: "setor",
+      entidade_id: data.id,
+      acao: "criado",
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      detalhes: {
+        nome: data.nome,
+        descricao: data.descricao,
+        ativo: data.ativo,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Setor criado com sucesso",
+      setor: {
+        ...data,
+        total_usuarios: 0,
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao criar setor:", error);
+
     return NextResponse.json(
-      { ok: false, error: error.message },
+      { ok: false, error: "Erro interno ao criar setor" },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    ok: true,
-    message: "Setor criado com sucesso",
-    setor: data,
-  });
 }

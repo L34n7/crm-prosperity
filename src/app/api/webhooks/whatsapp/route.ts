@@ -235,3 +235,44 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+async function processarWebhookTemplateStatus(
+  supabaseAdmin: any,
+  value: any
+) {
+  const event = value?.message_template_id
+    ? value
+    : value?.message_template_status_update;
+
+  if (!event) return;
+
+  const metaTemplateId = event.message_template_id || null;
+  const eventName = event.event || null;
+  const reason = event.reason || null;
+  const messageTemplateName = event.message_template_name || null;
+
+  const novoStatus =
+    eventName === "APPROVED"
+      ? "APPROVED"
+      : eventName === "REJECTED"
+      ? "REJECTED"
+      : eventName === "PENDING"
+      ? "PENDING"
+      : eventName || "desconhecido";
+
+  let query = supabaseAdmin.from("whatsapp_templates").update({
+    status: novoStatus,
+    rejeicao_motivo: reason,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (metaTemplateId) {
+    query = query.eq("meta_template_id", metaTemplateId);
+  } else if (messageTemplateName) {
+    query = query.eq("nome", messageTemplateName);
+  } else {
+    return;
+  }
+
+  await query;
+}

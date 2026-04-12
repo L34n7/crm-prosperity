@@ -1,186 +1,151 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { usuarioPertenceAoSetor } from "@/lib/usuarios/setores";
+import {
+  getUsuarioContexto,
+  type UsuarioContexto,
+} from "@/lib/auth/get-usuario-contexto";
+import {
+  isAdministrador,
+  podeAtribuirConversas,
+  podeEnviarMensagens,
+  podeVisualizarMensagens,
+} from "@/lib/auth/authorization";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-type UsuarioSistema = {
+type ConversaAcesso = {
   id: string;
-  empresa_id: string | null;
-  perfil: "super_admin" | "admin_empresa" | "supervisor" | "atendente";
-  status: "ativo" | "inativo" | "bloqueado";
-  setor_id?: string | null;
+  empresa_id: string;
+  setor_id: string | null;
+  responsavel_id: string | null;
+  status?: string | null;
 };
 
-async function getUsuarioLogado() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { error: "Não autenticado", status: 401 as const };
-  }
-
-  const { data: usuario, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, perfil, status, setor_id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle<UsuarioSistema>();
-
-  if (usuarioError) {
-    return {
-      error: "Erro ao buscar usuário do sistema",
-      status: 500 as const,
-    };
-  }
-
-  if (!usuario) {
-    return {
-      error: "Usuário não encontrado na tabela usuarios",
-      status: 404 as const,
-    };
-  }
-
-  if (usuario.status !== "ativo") {
-    return {
-      error: "Usuário inativo ou bloqueado",
-      status: 403 as const,
-    };
-  }
-
-  return { usuario };
-}
-
-function podeGerenciarMensagens(perfil: UsuarioSistema["perfil"]) {
-  return ["super_admin", "admin_empresa", "supervisor", "atendente"].includes(
-    perfil
-  );
-}
-
-function usuarioPodeAcessarConversa(
-  usuario: UsuarioSistema,
-  conversa: {
-    empresa_id: string;
-    setor_id: string | null;
-    responsavel_id: string | null;
-    status?: string | null;
-  }
+async function usuarioPodeAcessarConversa(
+  usuario: UsuarioContexto,
+  conversa: ConversaAcesso
 ) {
-  if (usuario.perfil === "super_admin") return true;
-
   if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
     return false;
   }
 
-  if (usuario.perfil === "admin_empresa") return true;
+  if (isAdministrador(usuario)) return true;
 
-  if (usuario.perfil === "supervisor") {
-    if (!usuario.setor_id) return false;
-    return conversa.setor_id === usuario.setor_id;
+  const podeAtribuir = await podeAtribuirConversas(usuario);
+
+  if (podeAtribuir) {
+    return await usuarioPertenceAoSetor(usuario.id, conversa.setor_id);
   }
 
-  if (usuario.perfil === "atendente") {
-    if (conversa.responsavel_id === usuario.id) {
-      return true;
-    }
+  if (conversa.responsavel_id === usuario.id) {
+    return true;
+  }
 
-    if (
-      usuario.setor_id &&
-      conversa.setor_id === usuario.setor_id &&
-      conversa.responsavel_id === null &&
-      conversa.status === "fila"
-    ) {
-      return true;
-    }
+  const pertenceAoSetorDaConversa = await usuarioPertenceAoSetor(
+    usuario.id,
+    conversa.setor_id
+  );
 
-    return false;
+  if (
+    pertenceAoSetorDaConversa &&
+    conversa.responsavel_id === null &&
+    conversa.status === "fila"
+  ) {
+    return true;
   }
 
   return false;
 }
 
 export async function GET(request: Request) {
-  const resultado = await getUsuarioLogado();
+  try {
+    const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status }
+      );
+    }
+
+    const { usuario } = resultado;
+
+    const { searchParams } = new URL(request.url);
+    const conversaId = searchParams.get("conversa_id");
+
+    if (!conversaId) {
+      return NextResponse.json(
+        { ok: false, error: "conversa_id é obrigatório" },
+        { status: 400 }
+      );
+    }
+
+    const { data: conversa, error: conversaError } = await supabaseAdmin
+      .from("conversas")
+      .select("id, empresa_id, setor_id, responsavel_id, status")
+      .eq("id", conversaId)
+      .maybeSingle<ConversaAcesso>();
+
+    if (conversaError) {
+      return NextResponse.json(
+        { ok: false, error: conversaError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!conversa) {
+      return NextResponse.json(
+        { ok: false, error: "Conversa não encontrada" },
+        { status: 404 }
+      );
+    }
+
+    if (!(await podeVisualizarMensagens(usuario))) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão para visualizar mensagens" },
+        { status: 403 }
+      );
+    }
+
+    if (!(await usuarioPodeAcessarConversa(usuario, conversa))) {
+      return NextResponse.json(
+        { ok: false, error: "Você não pode acessar as mensagens desta conversa" },
+        { status: 403 }
+      );
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("mensagens")
+      .select("*")
+      .eq("conversa_id", conversaId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      mensagens: data ?? [],
+    });
+  } catch (error) {
+    console.error("Erro ao carregar mensagens:", error);
+
     return NextResponse.json(
-      { ok: false, error: resultado.error },
-      { status: resultado.status }
-    );
-  }
-
-  const { usuario } = resultado;
-
-  if (!podeGerenciarMensagens(usuario.perfil)) {
-    return NextResponse.json(
-      { ok: false, error: "Sem permissão para listar mensagens" },
-      { status: 403 }
-    );
-  }
-
-  const { searchParams } = new URL(request.url);
-  const conversaId = searchParams.get("conversa_id");
-
-  if (!conversaId) {
-    return NextResponse.json(
-      { ok: false, error: "conversa_id é obrigatório" },
-      { status: 400 }
-    );
-  }
-
-  const { data: conversa, error: conversaError } = await supabaseAdmin
-    .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id, status")
-    .eq("id", conversaId)
-    .maybeSingle();
-
-  if (conversaError) {
-    return NextResponse.json(
-      { ok: false, error: conversaError.message },
+      { ok: false, error: "Erro interno ao carregar mensagens" },
       { status: 500 }
     );
   }
-
-  if (!conversa) {
-    return NextResponse.json(
-      { ok: false, error: "Conversa não encontrada" },
-      { status: 404 }
-    );
-  }
-
-  if (!usuarioPodeAcessarConversa(usuario, conversa)) {
-    return NextResponse.json(
-      { ok: false, error: "Você não pode acessar as mensagens desta conversa" },
-      { status: 403 }
-    );
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from("mensagens")
-    .select("*")
-    .eq("conversa_id", conversaId)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({
-    ok: true,
-    mensagens: data ?? [],
-  });
 }
 
 export async function POST(request: Request) {
-  const resultado = await getUsuarioLogado();
+  const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
+  if (!resultado.ok) {
     return NextResponse.json(
       { ok: false, error: resultado.error },
       { status: resultado.status }
@@ -189,9 +154,9 @@ export async function POST(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarMensagens(usuario.perfil)) {
+  if (!(await podeEnviarMensagens(usuario))) {
     return NextResponse.json(
-      { ok: false, error: "Sem permissão para criar mensagem" },
+      { ok: false, error: "Sem permissão para enviar mensagens" },
       { status: 403 }
     );
   }
@@ -228,9 +193,16 @@ export async function POST(request: Request) {
   }
 
   if (
-    !["texto", "imagem", "audio", "video", "documento", "template", "botao", "lista"].includes(
-      tipo_mensagem
-    )
+    ![
+      "texto",
+      "imagem",
+      "audio",
+      "video",
+      "documento",
+      "template",
+      "botao",
+      "lista",
+    ].includes(tipo_mensagem)
   ) {
     return NextResponse.json(
       { ok: false, error: "tipo_mensagem inválido" },
@@ -256,7 +228,7 @@ export async function POST(request: Request) {
     .from("conversas")
     .select("id, empresa_id, setor_id, responsavel_id, status")
     .eq("id", conversa_id)
-    .maybeSingle();
+    .maybeSingle<ConversaAcesso>();
 
   if (conversaError) {
     return NextResponse.json(
@@ -272,7 +244,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!usuarioPodeAcessarConversa(usuario, conversa)) {
+  if (!(await usuarioPodeAcessarConversa(usuario, conversa))) {
     return NextResponse.json(
       { ok: false, error: "Você não pode enviar mensagem nesta conversa" },
       { status: 403 }

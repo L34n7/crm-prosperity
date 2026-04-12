@@ -29,6 +29,41 @@ function isFirstInteraction(input: ProcessIncomingMessageInput): boolean {
   );
 }
 
+function hasAutomationTimeout(input: ProcessIncomingMessageInput): boolean {
+  const automacao = input.automacaoCompleta?.automacao;
+
+  if (!automacao) {
+    return false;
+  }
+
+  const tempoInatividadeMinutos = automacao.tempo_inatividade_minutos ?? 0;
+
+  if (tempoInatividadeMinutos <= 0) {
+    return false;
+  }
+
+  if (!input.conversa.ultima_interacao_bot_em) {
+    return false;
+  }
+
+  // Se já existe humano responsável, não reinicia automaticamente.
+  if (input.conversa.status === "em_atendimento") {
+    return false;
+  }
+
+  const ultimaInteracao = new Date(input.conversa.ultima_interacao_bot_em).getTime();
+  const agora = Date.now();
+
+  if (Number.isNaN(ultimaInteracao)) {
+    return false;
+  }
+
+  const diffMs = agora - ultimaInteracao;
+  const diffMinutos = diffMs / (1000 * 60);
+
+  return diffMinutos >= tempoInatividadeMinutos;
+}
+
 function findOptionByMessage(
   mensagemNormalizada: string,
   opcoes: WhatsAppAutomacaoOpcao[]
@@ -325,7 +360,8 @@ export function processIncomingChatbotMessage(
     return buildNoReplyDecision();
   }
 
-  const primeiraInteracao = isFirstInteraction(input);
+  const primeiraInteracao =
+    isFirstInteraction(input) || hasAutomationTimeout(input);
 
   if (primeiraInteracao && automacao.iniciar_primeira_mensagem) {
     return buildInitialMenuDecision(

@@ -1,143 +1,209 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { assumeConversation } from "@/lib/chatbot/route-conversation";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { usuarioPertenceAoSetor } from "@/lib/usuarios/setores";
+import {
+  isAdministrador,
+  podeAssumirConversas,
+} from "@/lib/auth/authorization";
+import { getPoliticaAtendimentoDoUsuario } from "@/lib/configuracoes/politicas-atendimento";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-type UsuarioSistema = {
+type ConversaRow = {
   id: string;
-  empresa_id: string | null;
-  perfil: "super_admin" | "admin_empresa" | "supervisor" | "atendente";
-  status: "ativo" | "inativo" | "bloqueado";
-  setor_id?: string | null;
+  empresa_id: string;
+  setor_id: string | null;
+  responsavel_id: string | null;
+  status: string | null;
 };
-
-async function getUsuarioLogado() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { error: "Não autenticado", status: 401 as const };
-  }
-
-  const { data: usuario, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, perfil, status, setor_id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle<UsuarioSistema>();
-
-  if (usuarioError) {
-    return {
-      error: "Erro ao buscar usuário do sistema",
-      status: 500 as const,
-    };
-  }
-
-  if (!usuario) {
-    return {
-      error: "Usuário não encontrado na tabela usuarios",
-      status: 404 as const,
-    };
-  }
-
-  if (usuario.status !== "ativo") {
-    return {
-      error: "Usuário inativo ou bloqueado",
-      status: 403 as const,
-    };
-  }
-
-  return { usuario };
-}
-
-function usuarioPodeAssumirConversa(
-  usuario: UsuarioSistema,
-  conversa: {
-    empresa_id: string;
-    setor_id: string | null;
-    responsavel_id: string | null;
-    status: string | null;
-  }
-) {
-  if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
-    return false;
-  }
-
-  if (!usuario.setor_id || conversa.setor_id !== usuario.setor_id) {
-    return false;
-  }
-
-  if (conversa.status === "encerrada") {
-    return false;
-  }
-
-  if (usuario.perfil === "super_admin") return true;
-  if (usuario.perfil === "admin_empresa") return true;
-  if (usuario.perfil === "supervisor") return true;
-  if (usuario.perfil === "atendente") return true;
-
-  return false;
-}
 
 export async function POST(
   _request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await context.params;
+  try {
+    const { id } = await context.params;
 
-  const resultado = await getUsuarioLogado();
+    const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status }
+      );
+    }
+
+    const { usuario } = resultado;
+
+    if (!(await podeAssumirConversas(usuario))) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão para assumir conversa" },
+        { status: 403 }
+      );
+    }
+
+    if (!usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada" },
+        { status: 400 }
+      );
+    }
+
+    const politica = await getPoliticaAtendimentoDoUsuario(usuario);
+
+    if (!politica.pode_assumir) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "A política atual não permite que este usuário assuma conversas",
+        },
+        { status: 403 }
+      );
+    }
+
+    const { data: conversa, error: conversaError } = await supabaseAdmin
+      .from("conversas")
+      .select("id, empresa_id, setor_id, responsavel_id, status")
+      .eq("id", id)
+      .maybeSingle<ConversaRow>();
+
+    if (conversaError) {
+      return NextResponse.json(
+        { ok: false, error: conversaError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!conversa) {
+      return NextResponse.json(
+        { ok: false, error: "Conversa não encontrada" },
+        { status: 404 }
+      );
+    }
+
+    if (conversa.empresa_id !== usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Você não pode assumir esta conversa" },
+        { status: 403 }
+      );
+    }
+
+    if (!isAdministrador(usuario)) {
+      const pertenceAoSetor = await usuarioPertenceAoSetor(
+        usuario.id,
+        conversa.setor_id
+      );
+
+      if (!pertenceAoSetor) {
+        return NextResponse.json(
+          { ok: false, error: "Você não pertence ao setor desta conversa" },
+          { status: 403 }
+        );
+      }
+    }
+
+    const conversaEstaEmFila = conversa.status === "fila";
+    const conversaSemResponsavel = !conversa.responsavel_id;
+    const conversaJaEhMinha = conversa.responsavel_id === usuario.id;
+    const conversaJaTemOutroResponsavel =
+      !!conversa.responsavel_id && conversa.responsavel_id !== usuario.id;
+
+    if (
+      !politica.permitir_assumir_conversa_em_fila &&
+      conversaEstaEmFila
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "A política atual não permite assumir conversas em fila",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (
+      !politica.permitir_assumir_conversa_sem_responsavel &&
+      conversaSemResponsavel
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "A política atual não permite assumir conversa sem responsável",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (
+      !politica.permitir_assumir_conversa_ja_atribuida &&
+      conversaJaTemOutroResponsavel
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "A política atual não permite assumir conversa já atribuída",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (conversaJaEhMinha) {
+      return NextResponse.json({
+        ok: true,
+        message: "A conversa já está sob sua responsabilidade",
+        conversa,
+        politica_aplicada: politica,
+      });
+    }
+
+    const { data: conversaAtualizada, error: updateError } = await supabaseAdmin
+      .from("conversas")
+      .update({
+        responsavel_id: usuario.id,
+        status: "em_atendimento",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select(`
+        *,
+        contatos (
+          id,
+          nome,
+          telefone,
+          email
+        ),
+        setores (
+          id,
+          nome
+        ),
+        responsavel:usuarios (
+          id,
+          nome,
+          email
+        )
+      `)
+      .single();
+
+    if (updateError) {
+      return NextResponse.json(
+        { ok: false, error: updateError.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: "Conversa assumida com sucesso",
+      conversa: conversaAtualizada,
+      politica_aplicada: politica,
+    });
+  } catch (error) {
+    console.error("Erro ao assumir conversa:", error);
+
     return NextResponse.json(
-      { ok: false, error: resultado.error },
-      { status: resultado.status }
-    );
-  }
-
-  const { usuario } = resultado;
-
-  const { data: conversa, error: conversaError } = await supabaseAdmin
-    .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id, status")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (conversaError) {
-    return NextResponse.json(
-      { ok: false, error: conversaError.message },
+      { ok: false, error: "Erro interno ao assumir conversa" },
       { status: 500 }
     );
   }
-
-  if (!conversa) {
-    return NextResponse.json(
-      { ok: false, error: "Conversa não encontrada" },
-      { status: 404 }
-    );
-  }
-
-  if (!usuarioPodeAssumirConversa(usuario, conversa)) {
-    return NextResponse.json(
-      { ok: false, error: "Você não pode assumir esta conversa" },
-      { status: 403 }
-    );
-  }
-
-  const conversaAtualizada = await assumeConversation({
-    conversaId: conversa.id,
-    usuarioId: usuario.id,
-    empresaId: conversa.empresa_id,
-    setorId: conversa.setor_id,
-  });
-
-  return NextResponse.json({
-    ok: true,
-    message: "Conversa assumida com sucesso",
-    conversa: conversaAtualizada,
-  });
 }

@@ -1,44 +1,29 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-type UsuarioSistema = {
-  perfil: "super_admin" | "admin_empresa" | "supervisor" | "atendente";
-  status: "ativo" | "inativo" | "bloqueado";
-  empresa_id: string | null;
-};
+function ehAdministrador(usuario: {
+  perfis_dinamicos?: Array<{ nome: string }>;
+}) {
+  const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
+  return nomesPerfis.includes("Administrador");
+}
 
 export async function GET() {
-  const supabase = await createClient();
+  const resultado = await getUsuarioContexto();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!resultado.ok) {
     return NextResponse.json(
-      { ok: false, error: "Não autenticado" },
-      { status: 401 }
+      { ok: false, error: resultado.error },
+      { status: resultado.status }
     );
   }
 
-  const { data: usuario } = await supabase
-    .from("usuarios")
-    .select("perfil, status, empresa_id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle<UsuarioSistema>();
+  const { usuario } = resultado;
 
-  if (!usuario || usuario.status !== "ativo") {
-    return NextResponse.json(
-      { ok: false, error: "Usuário inválido" },
-      { status: 403 }
-    );
-  }
-
-  if (usuario.perfil === "super_admin") {
+  if (ehAdministrador(usuario)) {
     const { data, error } = await supabaseAdmin
       .from("empresas")
       .select("id, nome_fantasia")

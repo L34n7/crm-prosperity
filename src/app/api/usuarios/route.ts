@@ -1,66 +1,132 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import {
+  podeCriarUsuarios,
+  podeEditarUsuarios,
+  podeVisualizarUsuarios,
+} from "@/lib/auth/authorization";
+import {
+  buscarSetorPrincipalDoUsuario,
+  definirSetoresDoUsuario,
+  listarIdsSetoresDoUsuario,
+} from "@/lib/usuarios/setores";
+import { definirPerfilDinamicoPorIdDoUsuario } from "@/lib/permissoes/sync-usuarios-perfis";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-type UsuarioSistema = {
-  id: string;
-  empresa_id: string | null;
-  perfil: "super_admin" | "admin_empresa" | "supervisor" | "atendente";
-  status: "ativo" | "inativo" | "bloqueado";
+type UsuarioPayload = {
+  nome?: string;
+  email?: string;
+  perfil_empresa_id?: string | null;
+  nivel?: "basico" | "avancado" | null;
+  setor_ids?: string[] | null;
+  setor_principal_id?: string | null;
+  telefone?: string | null;
 };
 
-async function getUsuarioLogado() {
-  const supabase = await createClient();
+type PerfilDinamicoRow = {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  ativo?: boolean;
+};
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+type UsuarioPerfilRow = {
+  perfil_empresa_id: string;
+  perfis_empresa: PerfilDinamicoRow | PerfilDinamicoRow[] | null;
+};
 
-  if (authError || !user) {
-    return { error: "Não autenticado", status: 401 as const };
+function normalizarSetoresEntrada(body: UsuarioPayload) {
+  const setorIdsBrutos = Array.isArray(body?.setor_ids) ? body.setor_ids : [];
+  const setorPrincipalInformado = body?.setor_principal_id ?? null;
+
+  const setorIds = Array.from(
+    new Set(
+      setorIdsBrutos
+        .filter(Boolean)
+        .map((item) => String(item).trim())
+        .filter(Boolean)
+    )
+  );
+
+  const setorPrincipalId =
+    setorPrincipalInformado && setorIds.includes(setorPrincipalInformado)
+      ? setorPrincipalInformado
+      : setorIds[0] ?? null;
+
+  return {
+    setorIds,
+    setorPrincipalId,
+  };
+}
+
+async function validarSetoresDaEmpresa(empresaId: string, setorIds: string[]) {
+  if (setorIds.length === 0) {
+    return { ok: true as const };
   }
 
-  const { data: usuario, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, perfil, status")
-    .eq("auth_user_id", user.id)
-    .maybeSingle<UsuarioSistema>();
+  const { data, error } = await supabaseAdmin
+    .from("setores")
+    .select("id, empresa_id")
+    .in("id", setorIds);
 
-  if (usuarioError) {
+  if (error) {
     return {
-      error: "Erro ao buscar usuário do sistema",
+      ok: false as const,
+      error: `Erro ao validar setores: ${error.message}`,
       status: 500 as const,
     };
   }
 
-  if (!usuario) {
+  const setores = data ?? [];
+
+  if (setores.length !== setorIds.length) {
     return {
-      error: "Usuário não encontrado na tabela usuarios",
+      ok: false as const,
+      error: "Um ou mais setores não foram encontrados",
       status: 404 as const,
     };
   }
 
-  if (usuario.status !== "ativo") {
+  const existeSetorDeOutraEmpresa = setores.some(
+    (setor) => setor.empresa_id !== empresaId
+  );
+
+  if (existeSetorDeOutraEmpresa) {
     return {
-      error: "Usuário inativo ou bloqueado",
-      status: 403 as const,
+      ok: false as const,
+      error: "Um ou mais setores não pertencem à empresa selecionada",
+      status: 400 as const,
     };
   }
 
-  return { usuario };
+  return { ok: true as const };
 }
 
-function podeGerenciarUsuarios(perfil: UsuarioSistema["perfil"]) {
-  return perfil === "super_admin" || perfil === "admin_empresa";
+function normalizarPerfisDinamicos(rows: UsuarioPerfilRow[] | null | undefined) {
+  return (rows ?? [])
+    .map((item) => {
+      const perfil = Array.isArray(item.perfis_empresa)
+        ? item.perfis_empresa[0]
+        : item.perfis_empresa;
+
+      if (!perfil) return null;
+
+      return {
+        id: perfil.id,
+        nome: perfil.nome,
+        descricao: perfil.descricao ?? null,
+        ativo: perfil.ativo,
+      };
+    })
+    .filter(Boolean);
 }
 
 export async function GET() {
-  const resultado = await getUsuarioLogado();
+  const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
+  if (!resultado.ok) {
     return NextResponse.json(
       { ok: false, error: resultado.error },
       { status: resultado.status }
@@ -68,50 +134,41 @@ export async function GET() {
   }
 
   const { usuario } = resultado;
+  
 
-  if (!podeGerenciarUsuarios(usuario.perfil)) {
+  if (!(await podeVisualizarUsuarios(usuario))) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para listar usuários" },
       { status: 403 }
     );
   }
 
-  let query = supabaseAdmin
+  if (!usuario.empresa_id) {
+    return NextResponse.json(
+      { ok: false, error: "Usuário sem empresa vinculada" },
+      { status: 400 }
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
     .from("usuarios")
     .select(`
       id,
       auth_user_id,
       nome,
       email,
-      perfil,
       nivel,
       status,
       telefone,
       avatar_url,
       ultimo_acesso,
       empresa_id,
-      setor_id,
       created_at,
-      updated_at,
-      setores (
-        id,
-        nome
-      )
+      updated_at
     `)
-    .order("created_at", { ascending: false });
-
-  if (usuario.perfil !== "super_admin") {
-    if (!usuario.empresa_id) {
-      return NextResponse.json(
-        { ok: false, error: "Usuário sem empresa vinculada" },
-        { status: 400 }
-      );
-    }
-
-    query = query.eq("empresa_id", usuario.empresa_id);
-  }
-
-  const { data, error } = await query;
+    .eq("status", "ativo")
+    .eq("empresa_id", usuario.empresa_id)
+    .order("nome", { ascending: true });
 
   if (error) {
     return NextResponse.json(
@@ -120,16 +177,61 @@ export async function GET() {
     );
   }
 
+  const usuariosBase = data ?? [];
+
+  const usuariosEnriquecidos = await Promise.all(
+    usuariosBase.map(async (item) => {
+      const [setoresIds, setorPrincipal, perfisUsuarioResult] = await Promise.all([
+        listarIdsSetoresDoUsuario(item.id),
+        buscarSetorPrincipalDoUsuario(item.id),
+        supabaseAdmin
+          .from("usuarios_perfis")
+          .select(`
+            perfil_empresa_id,
+            perfis_empresa (
+              id,
+              nome,
+              descricao,
+              ativo
+            )
+          `)
+          .eq("usuario_id", item.id),
+      ]);
+
+      const perfis_dinamicos = normalizarPerfisDinamicos(
+        (perfisUsuarioResult.data ?? []) as UsuarioPerfilRow[]
+      );
+
+      return {
+        ...item,
+        setor_principal_id: setorPrincipal?.setor_id ?? null,
+        setor_ids: setoresIds,
+        usuarios_setores: setoresIds.map((setorId) => ({
+          usuario_id: item.id,
+          setor_id: setorId,
+        })),
+        perfis_dinamicos,
+        perfil_dinamico_principal: perfis_dinamicos[0] ?? null,
+      };
+    })
+  );
+
+  const usuarioPodeEditarOutros = await podeEditarUsuarios(usuario);
+
+  const usuariosFiltrados = usuarioPodeEditarOutros
+    ? usuariosEnriquecidos
+    : usuariosEnriquecidos.filter((item) => item.id === usuario.id);
+
   return NextResponse.json({
     ok: true,
-    usuarios: data ?? [],
+    usuarios: usuariosFiltrados,
   });
 }
 
 export async function POST(request: Request) {
-  const resultado = await getUsuarioLogado();
+  const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
+  if (!resultado.ok) {
     return NextResponse.json(
       { ok: false, error: resultado.error },
       { status: resultado.status }
@@ -138,32 +240,27 @@ export async function POST(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarUsuarios(usuario.perfil)) {
+  if (!(await podeCriarUsuarios(usuario))) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para criar usuários" },
       { status: 403 }
     );
   }
 
-  const body = await request.json();
-
-  const nome = body?.nome?.trim();
-  const email = body?.email?.trim()?.toLowerCase();
-  const perfil = body?.perfil;
-  const nivel = body?.nivel || null;
-  const setor_id = body?.setor_id || null;
-  const telefone = body?.telefone?.trim() || null;
-  const empresa_id =
-    usuario.perfil === "super_admin"
-      ? body?.empresa_id || usuario.empresa_id || null
-      : usuario.empresa_id;
-
-  if (usuario.perfil === "super_admin" && !empresa_id) {
+  if (!usuario.empresa_id) {
     return NextResponse.json(
-      { ok: false, error: "Selecione uma empresa" },
+      { ok: false, error: "Usuário sem empresa vinculada" },
       { status: 400 }
     );
   }
+
+  const body = (await request.json()) as UsuarioPayload;
+
+  const nome = body?.nome?.trim();
+  const email = body?.email?.trim()?.toLowerCase();
+  const perfil_empresa_id = body?.perfil_empresa_id || null;
+  const nivel = body?.nivel || null;
+  const telefone = body?.telefone?.trim() || null;
 
   if (!nome) {
     return NextResponse.json(
@@ -179,9 +276,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!["admin_empresa", "supervisor", "atendente"].includes(perfil)) {
+  if (!perfil_empresa_id) {
     return NextResponse.json(
-      { ok: false, error: "Perfil inválido" },
+      { ok: false, error: "Perfil dinâmico é obrigatório" },
       { status: 400 }
     );
   }
@@ -190,20 +287,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { ok: false, error: "Nível inválido" },
       { status: 400 }
-    );
-  }
-
-  if (!empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Empresa é obrigatória para criar usuário" },
-      { status: 400 }
-    );
-  }
-
-  if (usuario.perfil === "admin_empresa" && perfil === "admin_empresa") {
-    return NextResponse.json(
-      { ok: false, error: "Admin da empresa não pode criar outro admin da empresa nesta versão" },
-      { status: 403 }
     );
   }
 
@@ -220,34 +303,10 @@ export async function POST(request: Request) {
     );
   }
 
-  if (setor_id) {
-    const { data: setor } = await supabaseAdmin
-      .from("setores")
-      .select("id, empresa_id")
-      .eq("id", setor_id)
-      .maybeSingle();
-
-    if (!setor) {
-      return NextResponse.json(
-        { ok: false, error: "Setor não encontrado" },
-        { status: 404 }
-      );
-    }
-
-    if (setor.empresa_id !== empresa_id) {
-      return NextResponse.json(
-        { ok: false, error: "O setor não pertence à empresa selecionada" },
-        { status: 400 }
-      );
-    }
-  }
-
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/login`;
-
   const { data: empresa } = await supabaseAdmin
     .from("empresas")
     .select("id")
-    .eq("id", empresa_id)
+    .eq("id", usuario.empresa_id)
     .maybeSingle();
 
   if (!empresa) {
@@ -256,6 +315,22 @@ export async function POST(request: Request) {
       { status: 404 }
     );
   }
+
+  const { setorIds, setorPrincipalId } = normalizarSetoresEntrada(body);
+
+  const validacaoSetores = await validarSetoresDaEmpresa(
+    usuario.empresa_id,
+    setorIds
+  );
+
+  if (!validacaoSetores.ok) {
+    return NextResponse.json(
+      { ok: false, error: validacaoSetores.error },
+      { status: validacaoSetores.status }
+    );
+  }
+
+  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/login`;
 
   const { data: inviteData, error: inviteError } =
     await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
@@ -276,21 +351,24 @@ export async function POST(request: Request) {
 
   if (!authUserId) {
     return NextResponse.json(
-      { ok: false, error: "Convite enviado, mas o auth_user_id não foi retornado" },
+      {
+        ok: false,
+        error: "Convite enviado, mas o auth_user_id não foi retornado",
+      },
       { status: 500 }
     );
   }
 
-  const { data, error } = await supabaseAdmin
+  const setorPrincipalFinal = setorPrincipalId ?? null;
+
+  const { data: novoUsuario, error } = await supabaseAdmin
     .from("usuarios")
     .insert([
       {
-        empresa_id,
-        setor_id,
+        empresa_id: usuario.empresa_id,
         auth_user_id: authUserId,
         nome,
         email,
-        perfil,
         nivel,
         status: "ativo",
         telefone,
@@ -301,12 +379,10 @@ export async function POST(request: Request) {
       auth_user_id,
       nome,
       email,
-      perfil,
       nivel,
       status,
       telefone,
-      empresa_id,
-      setor_id
+      empresa_id
     `)
     .single();
 
@@ -320,9 +396,23 @@ export async function POST(request: Request) {
     );
   }
 
+  await definirSetoresDoUsuario(novoUsuario.id, setorIds, setorPrincipalFinal);
+
+  await definirPerfilDinamicoPorIdDoUsuario({
+    usuarioId: novoUsuario.id,
+    empresaId: usuario.empresa_id,
+    perfilEmpresaId: perfil_empresa_id,
+  });
+
+  const setorIdsSalvos = await listarIdsSetoresDoUsuario(novoUsuario.id);
+
   return NextResponse.json({
     ok: true,
     message: "Usuário convidado com sucesso. O email de convite foi enviado.",
-    usuario: data,
+    usuario: {
+      ...novoUsuario,
+      setor_ids: setorIdsSalvos,
+      setor_principal_id: setorPrincipalFinal,
+    },
   });
 }

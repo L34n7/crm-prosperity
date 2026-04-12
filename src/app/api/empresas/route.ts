@@ -1,53 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { can } from "@/lib/permissoes/can";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-type UsuarioSistema = {
-  id: string;
-  empresa_id: string | null;
-  perfil: "super_admin" | "admin_empresa" | "supervisor" | "atendente";
-  status: "ativo" | "inativo" | "bloqueado";
-};
-
-async function getUsuarioLogado() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { error: "Não autenticado", status: 401 as const };
-  }
-
-  const { data: usuario, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, perfil, status")
-    .eq("auth_user_id", user.id)
-    .maybeSingle<UsuarioSistema>();
-
-  if (usuarioError) {
-    return { error: "Erro ao buscar usuário do sistema", status: 500 as const };
-  }
-
-  if (!usuario) {
-    return { error: "Usuário não encontrado na tabela usuarios", status: 404 as const };
-  }
-
-  if (usuario.status !== "ativo") {
-    return { error: "Usuário inativo ou bloqueado", status: 403 as const };
-  }
-
-  return { usuario };
-}
-
 export async function GET() {
-  const resultado = await getUsuarioLogado();
+  const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
+  if (!resultado.ok) {
     return NextResponse.json(
       { ok: false, error: resultado.error },
       { status: resultado.status }
@@ -56,7 +17,9 @@ export async function GET() {
 
   const { usuario } = resultado;
 
-  if (usuario.perfil !== "super_admin") {
+  const podeVisualizarEmpresas = await can(usuario.id, "empresas.visualizar");
+
+  if (!podeVisualizarEmpresas) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para listar empresas" },
       { status: 403 }
@@ -102,9 +65,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const resultado = await getUsuarioLogado();
+  const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
+  if (!resultado.ok) {
     return NextResponse.json(
       { ok: false, error: resultado.error },
       { status: resultado.status }
@@ -113,7 +76,9 @@ export async function POST(request: Request) {
 
   const { usuario } = resultado;
 
-  if (usuario.perfil !== "super_admin") {
+  const podeCriarEmpresa = await can(usuario.id, "empresas.criar");
+
+  if (!podeCriarEmpresa) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para criar empresa" },
       { status: 403 }

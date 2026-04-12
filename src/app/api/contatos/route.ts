@@ -1,61 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getUsuarioContexto, type UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 
-type UsuarioSistema = {
-  id: string;
-  empresa_id: string | null;
-  perfil: "super_admin" | "admin_empresa" | "supervisor" | "atendente";
-  status: "ativo" | "inativo" | "bloqueado";
-};
+function podeGerenciarContatos(usuario: UsuarioContexto) {
+  const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
 
-async function getUsuarioLogado() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { error: "Não autenticado", status: 401 as const };
-  }
-
-  const { data: usuario, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, perfil, status")
-    .eq("auth_user_id", user.id)
-    .maybeSingle<UsuarioSistema>();
-
-  if (usuarioError) {
-    return {
-      error: "Erro ao buscar usuário do sistema",
-      status: 500 as const,
-    };
-  }
-
-  if (!usuario) {
-    return {
-      error: "Usuário não encontrado na tabela usuarios",
-      status: 404 as const,
-    };
-  }
-
-  if (usuario.status !== "ativo") {
-    return {
-      error: "Usuário inativo ou bloqueado",
-      status: 403 as const,
-    };
-  }
-
-  return { usuario };
-}
-
-function podeGerenciarContatos(
-  perfil: UsuarioSistema["perfil"]
-) {
-  return ["super_admin", "admin_empresa", "supervisor", "atendente"].includes(
-    perfil
+  return (
+    nomesPerfis.includes("Administrador") ||
+    nomesPerfis.includes("Supervisor") ||
+    nomesPerfis.includes("Atendente")
   );
 }
 
@@ -64,9 +17,9 @@ function normalizarTelefone(telefone: string) {
 }
 
 export async function GET(request: Request) {
-  const resultado = await getUsuarioLogado();
+  const resultado = await getUsuarioContexto();
 
-  if ("error" in resultado) {
+  if (!resultado.ok) {
     return NextResponse.json(
       { ok: false, error: resultado.error },
       { status: resultado.status }
@@ -75,10 +28,17 @@ export async function GET(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarContatos(usuario.perfil)) {
+  if (!podeGerenciarContatos(usuario)) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para listar contatos" },
       { status: 403 }
+    );
+  }
+
+  if (!usuario.empresa_id) {
+    return NextResponse.json(
+      { ok: false, error: "Usuário sem empresa vinculada" },
+      { status: 400 }
     );
   }
 
@@ -90,18 +50,8 @@ export async function GET(request: Request) {
   let query = supabaseAdmin
     .from("contatos")
     .select("*")
+    .eq("empresa_id", usuario.empresa_id)
     .order("created_at", { ascending: false });
-
-  if (usuario.perfil !== "super_admin") {
-    if (!usuario.empresa_id) {
-      return NextResponse.json(
-        { ok: false, error: "Usuário sem empresa vinculada" },
-        { status: 400 }
-      );
-    }
-
-    query = query.eq("empresa_id", usuario.empresa_id);
-  }
 
   if (
     statusLead &&
@@ -134,9 +84,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const resultado = await getUsuarioLogado();
+  const resultado = await getUsuarioContexto();
   const supabaseAdmin = getSupabaseAdmin();
-  if ("error" in resultado) {
+
+  if (!resultado.ok) {
     return NextResponse.json(
       { ok: false, error: resultado.error },
       { status: resultado.status }
@@ -145,10 +96,17 @@ export async function POST(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarContatos(usuario.perfil)) {
+  if (!podeGerenciarContatos(usuario)) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para criar contato" },
       { status: 403 }
+    );
+  }
+
+  if (!usuario.empresa_id) {
+    return NextResponse.json(
+      { ok: false, error: "Usuário sem empresa vinculada" },
+      { status: 400 }
     );
   }
 
@@ -162,10 +120,7 @@ export async function POST(request: Request) {
   const campanha = body?.campanha?.trim() || null;
   const status_lead = body?.status_lead || "novo";
   const observacoes = body?.observacoes?.trim() || null;
-  const empresa_id =
-    usuario.perfil === "super_admin"
-      ? body?.empresa_id || usuario.empresa_id || null
-      : usuario.empresa_id;
+  const empresa_id = usuario.empresa_id;
 
   if (!empresa_id) {
     return NextResponse.json(

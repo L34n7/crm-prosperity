@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { usuarioPertenceAoSetor } from "@/lib/usuarios/setores";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -24,7 +25,6 @@ type TransferConversationByUserParams = {
 
 type UsuarioAtivoSetor = {
   id: string;
-  setor_id: string | null;
   status: "ativo" | "inativo" | "bloqueado";
 };
 
@@ -33,18 +33,43 @@ async function getActiveUsersFromSector(params: {
   setorId: string;
 }) {
   const { data, error } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, setor_id, status")
-    .eq("empresa_id", params.empresaId)
+    .from("usuarios_setores")
+    .select(`
+      usuario_id,
+      usuarios!inner (
+        id,
+        status,
+        empresa_id
+      )
+    `)
     .eq("setor_id", params.setorId)
-    .eq("status", "ativo")
-    .order("created_at", { ascending: true });
+    .eq("usuarios.empresa_id", params.empresaId)
+    .eq("usuarios.status", "ativo");
 
   if (error) {
     throw new Error(`Erro ao buscar usuários ativos do setor: ${error.message}`);
   }
 
-  return (data ?? []) as UsuarioAtivoSetor[];
+  const usuariosNormalizados = (data ?? [])
+    .map((item) => {
+      const usuario = Array.isArray(item.usuarios)
+        ? item.usuarios[0]
+        : item.usuarios;
+
+      if (!usuario) return null;
+
+      return {
+        id: usuario.id,
+        status: usuario.status,
+      } as UsuarioAtivoSetor;
+    })
+    .filter(Boolean) as UsuarioAtivoSetor[];
+
+  const usuariosUnicos = Array.from(
+    new Map(usuariosNormalizados.map((usuario) => [usuario.id, usuario])).values()
+  );
+
+  return usuariosUnicos;
 }
 
 async function validateSector(params: {
@@ -166,7 +191,7 @@ export async function assumeConversation({
 
   const { data: usuario, error: usuarioError } = await supabaseAdmin
     .from("usuarios")
-    .select("id, empresa_id, setor_id, status")
+    .select("id, empresa_id, status")
     .eq("id", usuarioId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -183,7 +208,9 @@ export async function assumeConversation({
     throw new Error("Usuário inativo ou bloqueado.");
   }
 
-  if (usuario.setor_id !== setorId) {
+  const pertenceAoSetor = await usuarioPertenceAoSetor(usuario.id, setorId);
+
+  if (!pertenceAoSetor) {
     throw new Error("O usuário não pertence ao setor da conversa.");
   }
 
