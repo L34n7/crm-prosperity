@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function AtualizarSenhaPage() {
+function AtualizarSenhaContent() {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -265,5 +265,31 @@ export default function AtualizarSenhaPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function AtualizarSenhaFallback() {
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        background:
+          "linear-gradient(135deg, #0f172a 0%, #111827 45%, #1e293b 100%)",
+        color: "#fff",
+        padding: "24px",
+      }}
+    >
+      <p>Carregando...</p>
+    </main>
+  );
+}
+
+export default function AtualizarSenhaPage() {
+  return (
+    <Suspense fallback={<AtualizarSenhaFallback />}>
+      <AtualizarSenhaContent />
+    </Suspense>
   );
 }
