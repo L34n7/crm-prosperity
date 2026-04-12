@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { isAdministrador } from "@/lib/auth/authorization";
 
 type DestinatarioEntrada = {
   numero: string;
@@ -18,23 +20,23 @@ type TemplatePayload = {
   components?: TemplateComponent[];
 };
 
+const supabaseAdmin = getSupabaseAdmin();
+
 function limparNumero(valor: string) {
   return String(valor || "").replace(/\D/g, "");
-}
-
-function getUsuarioPerfisNomes(usuario: any) {
-  if (!Array.isArray(usuario?.perfis_dinamicos)) return [];
-  return usuario.perfis_dinamicos.map((item: any) => item.nome);
-}
-
-function usuarioEhAdministrador(usuario: any) {
-  const perfis = getUsuarioPerfisNomes(usuario);
-  return perfis.includes("Administrador");
 }
 
 function usuarioTemPermissao(usuario: any, permissao: string) {
   const permissoes = Array.isArray(usuario?.permissoes) ? usuario.permissoes : [];
   return permissoes.includes(permissao);
+}
+
+function podeRealizarDisparos(usuario: any) {
+  return (
+    isAdministrador(usuario) ||
+    usuarioTemPermissao(usuario, "whatsapp.disparos.enviar") ||
+    usuarioTemPermissao(usuario, "mensagens.enviar")
+  );
 }
 
 function contarVariaveisTemplate(payload: TemplatePayload | null) {
@@ -97,20 +99,29 @@ function montarComponentesTemplate(
 }
 
 export async function POST(req: NextRequest) {
+  console.log("[DISPAROS] ===== INICIO =====");
+
   try {
-    const supabase = await createClient();
+    const resultadoContexto = await getUsuarioContexto();
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    console.log("[DISPAROS] resultadoContexto.ok:", resultadoContexto.ok);
 
-    if (authError || !user) {
+    if (!resultadoContexto.ok) {
+      console.log("[DISPAROS] contexto inválido:", resultadoContexto);
+
       return NextResponse.json(
-        { ok: false, error: "Não autenticado." },
-        { status: 401 }
+        { ok: false, error: resultadoContexto.error },
+        { status: resultadoContexto.status }
       );
     }
+
+    const { usuario } = resultadoContexto;
+
+    console.log("[DISPAROS] usuario.id:", usuario?.id || null);
+    console.log("[DISPAROS] usuario.empresa_id:", usuario?.empresa_id || null);
+    console.log("[DISPAROS] usuario.status:", usuario?.status || null);
+    console.log("[DISPAROS] usuario.permissoes:", usuario?.permissoes || []);
+    console.log("[DISPAROS] usuario.perfis:", usuario?.perfis_dinamicos || []);
 
     const body = await req.json();
 
@@ -119,6 +130,20 @@ export async function POST(req: NextRequest) {
     const destinatarios = Array.isArray(body?.destinatarios)
       ? (body.destinatarios as DestinatarioEntrada[])
       : [];
+
+    console.log("[DISPAROS] integracaoWhatsappId:", integracaoWhatsappId);
+    console.log("[DISPAROS] templateId:", templateId);
+    console.log("[DISPAROS] totalDestinatarios:", destinatarios.length);
+    console.log("[DISPAROS] destinatariosPreview:", destinatarios.slice(0, 5));
+
+    if (!usuario?.empresa_id) {
+      console.log("[DISPAROS] usuário sem empresa vinculada");
+
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada." },
+        { status: 400 }
+      );
+    }
 
     if (!integracaoWhatsappId) {
       return NextResponse.json(
@@ -141,68 +166,63 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { data: usuarioSistema, error: usuarioError } = await supabase
-      .from("usuarios")
-      .select(`
-        id,
-        empresa_id,
-        status,
-        permissoes,
-        perfis_dinamicos (
-          id,
-          nome
-        )
-      `)
-      .eq("auth_user_id", user.id)
-      .single();
+    const permitido = podeRealizarDisparos(usuario);
 
-    if (usuarioError || !usuarioSistema) {
+    console.log("[DISPAROS] podeRealizarDisparos:", permitido);
+
+    if (!permitido) {
       return NextResponse.json(
-        { ok: false, error: "Usuário do sistema não encontrado." },
+        {
+          ok: false,
+          error: "Você não tem permissão para realizar disparos.",
+          debug: {
+            permissoes: usuario?.permissoes || [],
+            perfis: usuario?.perfis_dinamicos || [],
+          },
+        },
         { status: 403 }
       );
     }
 
-    if (usuarioSistema.status && usuarioSistema.status !== "ativo") {
-      return NextResponse.json(
-        { ok: false, error: "Seu usuário está inativo ou bloqueado." },
-        { status: 403 }
-      );
-    }
+    console.log("[DISPAROS] buscando integração...");
 
-    const podeDisparar =
-      usuarioEhAdministrador(usuarioSistema) ||
-      usuarioTemPermissao(usuarioSistema, "whatsapp.disparos.enviar") ||
-      usuarioTemPermissao(usuarioSistema, "mensagens.enviar");
-
-    if (!podeDisparar) {
-      return NextResponse.json(
-        { ok: false, error: "Você não tem permissão para realizar disparos." },
-        { status: 403 }
-      );
-    }
-
-    const { data: integracao, error: integracaoError } = await supabase
+    const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")
       .select("id, empresa_id, status, phone_number_id, token_ref, numero, nome_conexao")
       .eq("id", integracaoWhatsappId)
       .single();
 
+    console.log("[DISPAROS] integracao:", integracao || null);
+    console.log("[DISPAROS] integracaoError:", integracaoError || null);
+
     if (integracaoError || !integracao) {
       return NextResponse.json(
-        { ok: false, error: "Integração WhatsApp não encontrada." },
+        {
+          ok: false,
+          error: "Integração WhatsApp não encontrada.",
+          debug: { integracaoError },
+        },
         { status: 404 }
       );
     }
 
-    if (integracao.empresa_id !== usuarioSistema.empresa_id) {
+    if (integracao.empresa_id !== usuario.empresa_id) {
       return NextResponse.json(
-        { ok: false, error: "Você não pode usar esta integração." },
+        {
+          ok: false,
+          error: "Você não pode usar esta integração.",
+          debug: {
+            integracao_empresa_id: integracao.empresa_id,
+            usuario_empresa_id: usuario.empresa_id,
+          },
+        },
         { status: 403 }
       );
     }
 
-    const { data: template, error: templateError } = await supabase
+    console.log("[DISPAROS] buscando template...");
+
+    const { data: template, error: templateError } = await supabaseAdmin
       .from("whatsapp_templates")
       .select(`
         id,
@@ -216,30 +236,55 @@ export async function POST(req: NextRequest) {
       .eq("id", templateId)
       .single();
 
+    console.log("[DISPAROS] template:", template || null);
+    console.log("[DISPAROS] templateError:", templateError || null);
+
     if (templateError || !template) {
       return NextResponse.json(
-        { ok: false, error: "Template não encontrado." },
+        {
+          ok: false,
+          error: "Template não encontrado.",
+          debug: { templateError },
+        },
         { status: 404 }
       );
     }
 
-    if (template.empresa_id !== usuarioSistema.empresa_id) {
+    if (template.empresa_id !== usuario.empresa_id) {
       return NextResponse.json(
-        { ok: false, error: "Você não pode usar este template." },
+        {
+          ok: false,
+          error: "Você não pode usar este template.",
+          debug: {
+            template_empresa_id: template.empresa_id,
+            usuario_empresa_id: usuario.empresa_id,
+          },
+        },
         { status: 403 }
       );
     }
 
     if (template.integracao_whatsapp_id !== integracaoWhatsappId) {
       return NextResponse.json(
-        { ok: false, error: "O template não pertence à integração selecionada." },
+        {
+          ok: false,
+          error: "O template não pertence à integração selecionada.",
+          debug: {
+            template_integracao_whatsapp_id: template.integracao_whatsapp_id,
+            integracaoWhatsappId,
+          },
+        },
         { status: 400 }
       );
     }
 
     if (String(template.status || "").toUpperCase() !== "APPROVED") {
       return NextResponse.json(
-        { ok: false, error: "Somente templates aprovados podem ser disparados." },
+        {
+          ok: false,
+          error: "Somente templates aprovados podem ser disparados.",
+          debug: { template_status: template.status },
+        },
         { status: 400 }
       );
     }
@@ -253,12 +298,21 @@ export async function POST(req: NextRequest) {
     const phoneNumberId =
       integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
 
+    console.log("[DISPAROS] tokenEnvName:", tokenEnvName);
+    console.log("[DISPAROS] tokenExiste:", !!token);
+    console.log("[DISPAROS] phoneNumberId:", phoneNumberId || null);
+
     if (!token || !phoneNumberId) {
       return NextResponse.json(
         {
           ok: false,
           error:
             "Token ou phone_number_id do WhatsApp não configurado para esta integração.",
+          debug: {
+            tokenEnvName,
+            tokenExiste: !!token,
+            phoneNumberId,
+          },
         },
         { status: 500 }
       );
@@ -266,10 +320,18 @@ export async function POST(req: NextRequest) {
 
     const payloadTemplate = (template.payload || null) as TemplatePayload | null;
 
+    console.log(
+      "[DISPAROS] payloadTemplate:",
+      JSON.stringify(payloadTemplate, null, 2)
+    );
+
     const resultados = await Promise.all(
-      destinatarios.map(async (item) => {
+      destinatarios.map(async (item, index) => {
         const numero = limparNumero(item.numero || "");
         const variaveis = Array.isArray(item.variaveis) ? item.variaveis : [];
+
+        console.log(`[DISPAROS] destinatario #${index + 1} numero:`, numero);
+        console.log(`[DISPAROS] destinatario #${index + 1} variaveis:`, variaveis);
 
         if (!numero || numero.length < 10) {
           return {
@@ -298,6 +360,11 @@ export async function POST(req: NextRequest) {
             bodyMeta.template.components = components;
           }
 
+          console.log(
+            `[DISPAROS] bodyMeta destinatario #${index + 1}:`,
+            JSON.stringify(bodyMeta, null, 2)
+          );
+
           const response = await fetch(
             `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
             {
@@ -311,6 +378,15 @@ export async function POST(req: NextRequest) {
           );
 
           const data = await response.json();
+
+          console.log(
+            `[DISPAROS] meta status destinatario #${index + 1}:`,
+            response.status
+          );
+          console.log(
+            `[DISPAROS] meta resposta destinatario #${index + 1}:`,
+            data
+          );
 
           if (!response.ok) {
             const erroMeta =
@@ -336,6 +412,11 @@ export async function POST(req: NextRequest) {
             erro: null,
           };
         } catch (error: any) {
+          console.error(
+            `[DISPAROS] erro inesperado destinatario #${index + 1}:`,
+            error
+          );
+
           return {
             numero,
             ok: false,
@@ -345,6 +426,9 @@ export async function POST(req: NextRequest) {
       })
     );
 
+    console.log("[DISPAROS] resultados finais:", resultados);
+    console.log("[DISPAROS] ===== FIM OK =====");
+
     return NextResponse.json({
       ok: true,
       total: resultados.length,
@@ -353,6 +437,8 @@ export async function POST(req: NextRequest) {
       resultados,
     });
   } catch (error: any) {
+    console.error("[DISPAROS] ===== FIM ERRO =====", error);
+
     return NextResponse.json(
       { ok: false, error: error?.message || "Erro interno." },
       { status: 500 }
