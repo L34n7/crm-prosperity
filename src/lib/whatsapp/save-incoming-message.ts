@@ -3,21 +3,44 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 type SaveIncomingMessageParams = {
   empresaId: string;
   conversaId: string;
-  conteudo: string;
+  conteudo?: string | null;
   tipoMensagem?: string;
   statusEnvio?: "pendente" | "enviada" | "entregue" | "lida" | "falha";
   mensagemExternaId?: string | null;
   timestamp?: string | null;
+  metadataJson?: Record<string, unknown> | null;
 };
+
+function getConteudoPadraoPorTipo(tipoMensagem: string) {
+  switch (tipoMensagem) {
+    case "imagem":
+      return "📷 Imagem";
+    case "audio":
+      return "🎵 Áudio";
+    case "video":
+      return "🎥 Vídeo";
+    case "documento":
+      return "📄 Documento";
+    case "contato":
+      return "👤 Contato compartilhado";
+    case "botao":
+      return "🔘 Botão";
+    case "lista":
+      return "📋 Interação de lista";
+    default:
+      return "Mensagem recebida";
+  }
+}
 
 export async function saveIncomingWhatsAppMessage({
   empresaId,
   conversaId,
-  conteudo,
+  conteudo = null,
   tipoMensagem = "texto",
   statusEnvio = "entregue",
   mensagemExternaId = null,
   timestamp = null,
+  metadataJson = null,
 }: SaveIncomingMessageParams) {
   const supabaseAdmin = getSupabaseAdmin();
 
@@ -29,11 +52,9 @@ export async function saveIncomingWhatsAppMessage({
     throw new Error("conversaId é obrigatório para salvar mensagem");
   }
 
-  const textoFinal = (conteudo ?? "").trim();
-
-  if (!textoFinal) {
-    throw new Error("Conteúdo da mensagem está vazio");
-  }
+  const textoNormalizado = (conteudo ?? "").trim();
+  const conteudoFinal =
+    textoNormalizado || getConteudoPadraoPorTipo(tipoMensagem);
 
   if (mensagemExternaId) {
     const { data: existingMessage, error: existingError } = await supabaseAdmin
@@ -69,11 +90,12 @@ export async function saveIncomingWhatsAppMessage({
       conversa_id: conversaId,
       remetente_tipo: "contato",
       remetente_id: null,
-      conteudo: textoFinal,
+      conteudo: conteudoFinal,
       tipo_mensagem: tipoMensagem,
       origem: "recebida",
       status_envio: statusEnvio,
       mensagem_externa_id: mensagemExternaId,
+      metadata_json: metadataJson,
       created_at: createdAt,
     })
     .select("id")
@@ -90,7 +112,7 @@ export async function saveIncomingWhatsAppMessage({
   const { error: updateConversationError } = await supabaseAdmin
     .from("conversas")
     .update({
-      last_message_at: new Date().toISOString(),
+      last_message_at: createdAt,
     })
     .eq("id", conversaId);
 

@@ -128,9 +128,37 @@ export async function GET(request: Request) {
       );
     }
 
+    const mensagens = data ?? [];
+
+    const { data: favoritas, error: favoritasError } = await supabaseAdmin
+      .from("mensagens_favoritas")
+      .select("mensagem_id")
+      .in(
+        "mensagem_id",
+        mensagens.length > 0
+          ? mensagens.map((m) => m.id)
+          : ["00000000-0000-0000-0000-000000000000"]
+      );
+
+    if (favoritasError) {
+      return NextResponse.json(
+        { ok: false, error: favoritasError.message },
+        { status: 500 }
+      );
+    }
+
+    const favoritasSet = new Set(
+      (favoritas ?? []).map((item) => item.mensagem_id)
+    );
+
+    const mensagensComFavorita = mensagens.map((msg) => ({
+      ...msg,
+      favorita: favoritasSet.has(msg.id),
+    }));
+
     return NextResponse.json({
       ok: true,
-      mensagens: data ?? [],
+      mensagens: mensagensComFavorita,
     });
   } catch (error) {
     console.error("Erro ao carregar mensagens:", error);
@@ -170,6 +198,7 @@ export async function POST(request: Request) {
   const tipo_mensagem = body?.tipo_mensagem || "texto";
   const origem = body?.origem || "enviada";
   const status_envio = body?.status_envio || "enviada";
+  const metadata_json = body?.metadata_json || null;
 
   if (!conversa_id) {
     return NextResponse.json(
@@ -199,6 +228,7 @@ export async function POST(request: Request) {
       "audio",
       "video",
       "documento",
+      "contato",
       "template",
       "botao",
       "lista",
@@ -263,6 +293,7 @@ export async function POST(request: Request) {
         tipo_mensagem,
         origem,
         status_envio,
+        metadata_json,
       },
     ])
     .select("*")

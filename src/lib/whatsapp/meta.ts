@@ -8,6 +8,115 @@ export type WhatsAppEntry = {
   changes?: WhatsAppChange[];
 };
 
+type WhatsAppContactProfile = {
+  name?: string;
+};
+
+type WhatsAppWebhookContact = {
+  profile?: WhatsAppContactProfile;
+  wa_id?: string;
+};
+
+type WhatsAppTextMessage = {
+  body?: string;
+};
+
+type WhatsAppImageMessage = {
+  id?: string;
+  mime_type?: string;
+  sha256?: string;
+  caption?: string;
+  url?: string;
+};
+
+type WhatsAppAudioMessage = {
+  id?: string;
+  mime_type?: string;
+  sha256?: string;
+  voice?: boolean;
+  url?: string;
+};
+
+type WhatsAppVideoMessage = {
+  id?: string;
+  mime_type?: string;
+  sha256?: string;
+  caption?: string;
+  url?: string;
+};
+
+type WhatsAppDocumentMessage = {
+  id?: string;
+  mime_type?: string;
+  sha256?: string;
+  filename?: string;
+  caption?: string;
+  url?: string;
+};
+
+type WhatsAppSharedContactName = {
+  formatted_name?: string;
+  first_name?: string;
+  last_name?: string;
+};
+
+type WhatsAppSharedContactPhone = {
+  phone?: string;
+  wa_id?: string;
+  type?: string;
+};
+
+type WhatsAppSharedContactEmail = {
+  email?: string;
+  type?: string;
+};
+
+type WhatsAppSharedContactAddress = {
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+  country_code?: string;
+  type?: string;
+};
+
+type WhatsAppSharedContactOrg = {
+  company?: string;
+  department?: string;
+  title?: string;
+};
+
+type WhatsAppSharedContact = {
+  name?: WhatsAppSharedContactName;
+  phones?: WhatsAppSharedContactPhone[];
+  emails?: WhatsAppSharedContactEmail[];
+  addresses?: WhatsAppSharedContactAddress[];
+  org?: WhatsAppSharedContactOrg;
+};
+
+type WhatsAppInteractiveMessage = unknown;
+
+type WhatsAppButtonMessage = {
+  text?: string;
+  payload?: string;
+};
+
+type WhatsAppIncomingRawMessage = {
+  from?: string;
+  id?: string;
+  timestamp?: string;
+  type?: string;
+  text?: WhatsAppTextMessage;
+  image?: WhatsAppImageMessage;
+  audio?: WhatsAppAudioMessage;
+  video?: WhatsAppVideoMessage;
+  document?: WhatsAppDocumentMessage;
+  contacts?: WhatsAppSharedContact[];
+  button?: WhatsAppButtonMessage;
+  interactive?: WhatsAppInteractiveMessage;
+};
+
 export type WhatsAppChange = {
   field?: string;
   value?: {
@@ -16,32 +125,22 @@ export type WhatsAppChange = {
       display_phone_number?: string;
       phone_number_id?: string;
     };
-    contacts?: Array<{
-      profile?: {
-        name?: string;
-      };
-      wa_id?: string;
-    }>;
-    messages?: Array<{
-      from?: string;
-      id?: string;
-      timestamp?: string;
-      type?: string;
-      text?: {
-        body?: string;
-      };
-      image?: unknown;
-      audio?: unknown;
-      video?: unknown;
-      document?: unknown;
-      button?: {
-        text?: string;
-        payload?: string;
-      };
-      interactive?: unknown;
-    }>;
+    contacts?: WhatsAppWebhookContact[];
+    messages?: WhatsAppIncomingRawMessage[];
     statuses?: Array<unknown>;
   };
+};
+
+export type NormalizedMessageMetadata = {
+  tipo_original_whatsapp: string;
+  media_id?: string | null;
+  mime_type?: string | null;
+  sha256?: string | null;
+  caption?: string | null;
+  filename?: string | null;
+  url?: string | null;
+  voice?: boolean | null;
+  contacts?: WhatsAppSharedContact[] | null;
 };
 
 export type ExtractedIncomingMessage = {
@@ -54,8 +153,178 @@ export type ExtractedIncomingMessage = {
   timestamp: string | null;
   type: string;
   text: string | null;
-  rawMessage: unknown;
+  tipoMensagem: string;
+  conteudo: string;
+  metadataJson: NormalizedMessageMetadata;
+  rawMessage: WhatsAppIncomingRawMessage;
 };
+
+function mapWhatsAppTypeToInternalType(type?: string | null): string {
+  switch (type) {
+    case "text":
+      return "texto";
+    case "image":
+      return "imagem";
+    case "audio":
+      return "audio";
+    case "video":
+      return "video";
+    case "document":
+      return "documento";
+    case "contacts":
+      return "contato";
+    case "button":
+      return "botao";
+    case "interactive":
+      return "lista";
+    default:
+      return "texto";
+  }
+}
+
+function buildContactSharedPreview(contacts?: WhatsAppSharedContact[]): string {
+  if (!contacts?.length) return "👤 Contato compartilhado";
+
+  const primeiro = contacts[0];
+  const nome =
+    primeiro.name?.formatted_name ||
+    [primeiro.name?.first_name, primeiro.name?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+  if (!nome) return "👤 Contato compartilhado";
+
+  return `👤 Contato compartilhado: ${nome}`;
+}
+
+function buildConteudo(
+  rawMessage: WhatsAppIncomingRawMessage,
+  tipoMensagem: string
+): string {
+  if (tipoMensagem === "texto") {
+    return rawMessage.text?.body?.trim() || "";
+  }
+
+  if (tipoMensagem === "imagem") {
+    return rawMessage.image?.caption?.trim() || "📷 Imagem";
+  }
+
+  if (tipoMensagem === "audio") {
+    return rawMessage.audio?.voice ? "🎤 Áudio" : "🎵 Áudio";
+  }
+
+  if (tipoMensagem === "video") {
+    return rawMessage.video?.caption?.trim() || "🎥 Vídeo";
+  }
+
+  if (tipoMensagem === "documento") {
+    const nomeArquivo = rawMessage.document?.filename?.trim();
+    return nomeArquivo ? `📄 Documento: ${nomeArquivo}` : "📄 Documento";
+  }
+
+  if (tipoMensagem === "contato") {
+    return buildContactSharedPreview(rawMessage.contacts);
+  }
+
+  if (tipoMensagem === "botao") {
+    return rawMessage.button?.text?.trim() || "🔘 Botão";
+  }
+
+  if (tipoMensagem === "lista") {
+    return "📋 Interação de lista";
+  }
+
+  return "Mensagem recebida";
+}
+
+function buildMetadataJson(
+  rawMessage: WhatsAppIncomingRawMessage
+): NormalizedMessageMetadata {
+  const tipo = rawMessage.type ?? "unknown";
+
+  if (tipo === "image") {
+    return {
+      tipo_original_whatsapp: tipo,
+      media_id: rawMessage.image?.id ?? null,
+      mime_type: rawMessage.image?.mime_type ?? null,
+      sha256: rawMessage.image?.sha256 ?? null,
+      caption: rawMessage.image?.caption ?? null,
+      filename: null,
+      url: rawMessage.image?.url ?? null,
+      voice: null,
+      contacts: null,
+    };
+  }
+
+  if (tipo === "audio") {
+    return {
+      tipo_original_whatsapp: tipo,
+      media_id: rawMessage.audio?.id ?? null,
+      mime_type: rawMessage.audio?.mime_type ?? null,
+      sha256: rawMessage.audio?.sha256 ?? null,
+      caption: null,
+      filename: null,
+      url: rawMessage.audio?.url ?? null,
+      voice: rawMessage.audio?.voice ?? null,
+      contacts: null,
+    };
+  }
+
+  if (tipo === "video") {
+    return {
+      tipo_original_whatsapp: tipo,
+      media_id: rawMessage.video?.id ?? null,
+      mime_type: rawMessage.video?.mime_type ?? null,
+      sha256: rawMessage.video?.sha256 ?? null,
+      caption: rawMessage.video?.caption ?? null,
+      filename: null,
+      url: rawMessage.video?.url ?? null,
+      voice: null,
+      contacts: null,
+    };
+  }
+
+  if (tipo === "document") {
+    return {
+      tipo_original_whatsapp: tipo,
+      media_id: rawMessage.document?.id ?? null,
+      mime_type: rawMessage.document?.mime_type ?? null,
+      sha256: rawMessage.document?.sha256 ?? null,
+      caption: rawMessage.document?.caption ?? null,
+      filename: rawMessage.document?.filename ?? null,
+      url: rawMessage.document?.url ?? null,
+      voice: null,
+      contacts: null,
+    };
+  }
+
+  if (tipo === "contacts") {
+    return {
+      tipo_original_whatsapp: tipo,
+      media_id: null,
+      mime_type: null,
+      sha256: null,
+      caption: null,
+      filename: null,
+      url: null,
+      voice: null,
+      contacts: rawMessage.contacts ?? null,
+    };
+  }
+
+  return {
+    tipo_original_whatsapp: tipo,
+    media_id: null,
+    mime_type: null,
+    sha256: null,
+    caption: null,
+    filename: null,
+    url: null,
+    voice: null,
+    contacts: null,
+  };
+}
 
 export function extractIncomingMessages(
   body: WhatsAppWebhookBody
@@ -83,6 +352,11 @@ export function extractIncomingMessages(
       const messages = value.messages ?? [];
 
       for (const message of messages) {
+        const type = message.type ?? "unknown";
+        const tipoMensagem = mapWhatsAppTypeToInternalType(type);
+        const conteudo = buildConteudo(message, tipoMensagem);
+        const metadataJson = buildMetadataJson(message);
+
         results.push({
           phoneNumberId,
           displayPhoneNumber,
@@ -91,24 +365,25 @@ export function extractIncomingMessages(
           profileName,
           messageId: message.id ?? "",
           timestamp: message.timestamp ?? null,
-          type: message.type ?? "unknown",
+          type,
           text: message.text?.body ?? null,
+          tipoMensagem,
+          conteudo,
+          metadataJson,
           rawMessage: message,
         });
       }
     }
   }
 
-  return results;
+  return results.filter(
+    (message) =>
+      !!message.from && !!message.messageId && !!message.phoneNumberId
+  );
 }
 
 export function extractTextMessages(body: WhatsAppWebhookBody) {
   return extractIncomingMessages(body).filter(
-    (message) =>
-      message.type === "text" &&
-      !!message.text &&
-      !!message.from &&
-      !!message.messageId &&
-      !!message.phoneNumberId
+    (message) => message.type === "text" && !!message.text
   );
 }

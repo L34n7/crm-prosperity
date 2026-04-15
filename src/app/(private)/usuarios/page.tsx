@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { can } from "@/lib/permissoes/frontend";
-import CrmShell from "@/components/CrmShell";
 import Header from "@/components/Header";
 import styles from "./usuarios.module.css";
 
@@ -549,7 +548,7 @@ export default function UsuariosPage() {
 
   if (usuarioLogado && !podeVisualizarUsuarios) {
     return (
-      <CrmShell>
+      <>
         <Header
           title="Usuários"
           subtitle="Gerencie usuários, vínculos, perfis dinâmicos e setores."
@@ -560,12 +559,12 @@ export default function UsuariosPage() {
             Você não tem permissão para visualizar usuários.
           </div>
         </div>
-      </CrmShell>
+      </>
     );
   }
 
   return (
-    <CrmShell>
+    <>
       <Header
         title="Usuários"
         subtitle="Gerencie usuários, vínculos, perfis dinâmicos e setores."
@@ -1038,6 +1037,6 @@ export default function UsuariosPage() {
           )}
         </section>
       </div>
-    </CrmShell>
+    </>
   );
 }

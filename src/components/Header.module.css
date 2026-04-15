@@ -1,65 +1,222 @@
 .header {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 24px;
-  padding: 22px 24px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 24px;
+
+  min-height: 54px;
+  padding: 0 24px;
+  margin: 0 0 0px 0;
+  background: linear-gradient(135deg, #f8fafc 0%, #f8fafc 75%, #ededed 100%);
+  box-sizing: border-box;
 }
 
-.label {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
+.left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
 }
 
 .title {
-  margin: 6px 0 4px;
-  font-size: 34px;
-  line-height: 1.1;
+  margin: 0;
+  font-size: 20px;
   font-weight: 700;
   color: #0f172a;
 }
 
 .subtitle {
-  margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.actions {
+.right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.badge {
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
+.credit {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profileName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* controla o tamanho do círculo */
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* MUITO IMPORTANTE: isso evita a imagem gigante */
+.avatar img,
+.avatarImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* fallback (letra) */
+.avatarFallback {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.profileName {
   font-size: 14px;
   font-weight: 600;
 }
 
-@media (max-width: 900px) {
+.userMenuWrapper {
+  position: relative;
+}
+
+.profileButton {
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 12px;
+  transition: background 0.2s ease;
+}
+
+.profileButton:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.avatarImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatarFallback {
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.profileName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.chevron {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 190px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+  padding: 8px;
+  z-index: 50;
+}
+
+.dropdownItem {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.dropdownItem:hover {
+  background: #f8fafc;
+}
+
+.dropdownDivider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 8px 0;
+}
+
+.dropdownLogout {
+  padding: 2px;
+}
+
+
+@media (max-width: 768px) {
   .header {
+    min-height: auto;
+    padding: 12px 16px;
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .actions {
+  .left {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .right {
     width: 100%;
     justify-content: space-between;
   }
 
-  .title {
-    font-size: 28px;
+  .subtitle {
+    white-space: normal;
   }
 }

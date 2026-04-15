@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import CrmShell from "@/components/CrmShell";
 import Header from "@/components/Header";
 import styles from "./contatos.module.css";
 
@@ -274,7 +273,7 @@ export default function ContatosPage() {
   }, [filtroStatus]);
 
   return (
-    <CrmShell>
+    <>
       <Header
         title="Contatos"
         subtitle="Gerencie contatos, origem dos leads, campanhas e status de atendimento."
@@ -692,6 +691,6 @@ export default function ContatosPage() {
           )}
         </section>
       </div>
-    </CrmShell>
+    </>
   );
 }

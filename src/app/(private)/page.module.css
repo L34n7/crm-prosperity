@@ -1,3 +1,13 @@
+.pageContent {
+  padding: 24px;
+}
+
+@media (max-width: 768px) {
+  .pageContent {
+    padding: 16px;
+  }
+}
+
 .heroGrid {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -237,6 +247,86 @@
   font-weight: 700;
 }
 
+
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 18px 22px;
+  border: 1px solid #e5e7eb;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+}
+
+.topbarLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.topbarPageLabel {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+.topbarTitle {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.topbarCenter {
+  min-height: 1px;
+}
+
+.topbarRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.topbarInfoCard,
+.topbarProfileCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.topbarInfoLabel,
+.topbarProfileLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.topbarInfoValue,
+.topbarProfileName {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+
 @media (max-width: 1200px) {
   .heroGrid {
     grid-template-columns: 1fr;
@@ -263,5 +353,22 @@
 
   .modulesGrid {
     grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .topbarCenter {
+    display: none;
+  }
+
+  .topbarRight {
+    justify-content: flex-start;
+  }
+
+  .topbarTitle {
+    font-size: 26px;
   }
 }

@@ -1,18 +1,31 @@
 import Sidebar from "@/components/Sidebar";
 import styles from "./CrmShell.module.css";
+import {
+  HeaderUserProvider,
+} from "@/components/header-user-context";
 
 type CrmShellProps = {
   children: React.ReactNode;
+  initialCollapsed?: boolean;
+  profileName?: string;
+  avatarUrl?: string;
 };
 
-export default function CrmShell({ children }: CrmShellProps) {
+export default function CrmShell({
+  children,
+  initialCollapsed = false,
+  profileName = "Usuário",
+  avatarUrl = "",
+}: CrmShellProps) {
   return (
-    <div className={styles.shell}>
-      <Sidebar />
+    <HeaderUserProvider value={{ profileName, avatarUrl }}>
+      <div className={styles.shell}>
+        <Sidebar initialCollapsed={initialCollapsed} />
 
-      <div className={styles.contentArea}>
-        <main className={styles.main}>{children}</main>
+        <div className={styles.contentArea}>
+          {children}
+        </div>
       </div>
-    </div>
+    </HeaderUserProvider>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import CrmShell from "@/components/CrmShell";
 import Header from "@/components/Header";
 import styles from "./permissoes.module.css";
 
@@ -304,7 +303,7 @@ export default function PermissoesPage() {
 
   if (loading) {
     return (
-      <CrmShell>
+      <>
         <Header
           title="Permissões"
           subtitle="Configurações de regras de atendimento e exceções por usuário."
@@ -312,13 +311,13 @@ export default function PermissoesPage() {
         <div className={styles.pageContent}>
           <div className={styles.loadingCard}>Carregando configurações...</div>
         </div>
-      </CrmShell>
+      </>
     );
   }
 
   if (!empresa) {
     return (
-      <CrmShell>
+      <>
         <Header
           title="Permissões"
           subtitle="Configurações de regras de atendimento e exceções por usuário."
@@ -328,12 +327,12 @@ export default function PermissoesPage() {
             {erro || "Não foi possível carregar as configurações."}
           </div>
         </div>
-      </CrmShell>
+      </>
     );
   }
 
   return (
-    <CrmShell>
+    <>
       <Header
         title="Permissões e regras"
         subtitle="Configure o padrão da empresa e personalize exceções específicas por usuário."
@@ -733,6 +732,6 @@ export default function PermissoesPage() {
           )}
         </section>
       </div>
-    </CrmShell>
+    </>
   );
 }

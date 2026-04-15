@@ -22,6 +22,7 @@ type ConversaComRelacionamentos = {
   assunto: string | null;
   last_message_at: string | null;
   created_at: string;
+  favorita?: boolean;
   contatos?: {
     id: string;
     nome: string | null;
@@ -42,6 +43,10 @@ type ConversaComRelacionamentos = {
     nome_conexao: string;
     numero: string;
   } | null;
+};
+
+type ConversaFavoritaRow = {
+  conversa_id: string;
 };
 
 function isStatusValido(status: string | null) {
@@ -171,6 +176,28 @@ export async function GET(request: Request) {
 
   let conversas = (data ?? []) as ConversaComRelacionamentos[];
 
+  const { data: favoritos, error: favoritosError } = await supabaseAdmin
+    .from("conversas_favoritas")
+    .select("conversa_id")
+    .eq("usuario_id", usuario.id)
+    .eq("empresa_id", usuario.empresa_id);
+
+  if (favoritosError) {
+    return NextResponse.json(
+      { ok: false, error: favoritosError.message },
+      { status: 500 }
+    );
+  }
+
+  const favoritosSet = new Set(
+    ((favoritos ?? []) as ConversaFavoritaRow[]).map((item) => item.conversa_id)
+  );
+
+  conversas = conversas.map((conversa) => ({
+    ...conversa,
+    favorita: favoritosSet.has(conversa.id),
+  }));
+
   if (isAdministrador(usuario)) {
     return NextResponse.json({
       ok: true,
@@ -180,6 +207,53 @@ export async function GET(request: Request) {
 
   const setoresDoUsuario = usuario.setores_ids ?? [];
   const usuarioPodeAtribuir = await podeAtribuirConversas(usuario);
+  const conversaIds = conversas.map((conversa) => conversa.id);
+
+  let listasPorConversa = new Map<string, { id: string; nome: string }[]>();
+
+  if (conversaIds.length > 0) {
+    const { data: itensListas, error: itensListasError } = await supabaseAdmin
+      .from("conversas_listas_itens")
+      .select(`
+        conversa_id,
+        lista_id,
+        conversas_listas (
+          id,
+          nome
+        )
+      `)
+      .in("conversa_id", conversaIds)
+      .eq("empresa_id", usuario.empresa_id);
+
+    if (itensListasError) {
+      return NextResponse.json(
+        { ok: false, error: itensListasError.message },
+        { status: 500 }
+      );
+    }
+
+    for (const item of itensListas ?? []) {
+      const conversaId = item.conversa_id as string;
+      const lista = Array.isArray(item.conversas_listas)
+        ? item.conversas_listas[0]
+        : item.conversas_listas;
+
+      if (!lista?.id) continue;
+
+      const atuais = listasPorConversa.get(conversaId) ?? [];
+      atuais.push({
+        id: lista.id,
+        nome: lista.nome,
+      });
+      listasPorConversa.set(conversaId, atuais);
+    }
+  }
+
+  conversas = conversas.map((conversa) => ({
+    ...conversa,
+    favorita: favoritosSet.has(conversa.id),
+    listas: listasPorConversa.get(conversa.id) ?? [],
+  }));
 
   if (usuarioPodeAtribuir) {
     if (setoresDoUsuario.length === 0) {

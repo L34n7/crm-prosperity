@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import CrmShell from "@/components/CrmShell";
 import Header from "@/components/Header";
 import styles from "./page.module.css";
 
@@ -94,97 +93,107 @@ export default async function HomePage() {
 
   const statusLabel = getStatusLabel(usuarioSistema.status);
   const statusClass = getStatusClass(usuarioSistema.status);
+  const nomeExibicao = usuarioSistema.nome || "Usuário";
+  const creditoPlataforma = "R$ 0,00";
 
   return (
-    <CrmShell>
+    <>
       <Header
         title="Dashboard"
         subtitle="Visão inicial do sistema com acesso rápido aos principais módulos."
       />
 
-      <section className={styles.heroGrid}>
-        <div className={styles.heroCard}>
-          <p className={styles.heroLabel}>Bem-vindo ao CRM</p>
-          <h2 className={styles.heroTitle}>
-            Plataforma com estrutura mais profissional, limpa e pronta para crescer
-          </h2>
-          <p className={styles.heroText}>
-            Essa área pode evoluir para mostrar métricas, atendimentos em fila,
-            usuários online, alertas operacionais e desempenho dos setores.
-          </p>
 
-          <div className={styles.heroActions}>
-            <Link href="/conversas" className={styles.primaryButton}>
-              Abrir conversas
-            </Link>
+        <div className={styles.pageContent}>
+          <section className={styles.heroGrid}>
+            <div className={styles.heroCard}>
+              <p className={styles.heroLabel}>Bem-vindo ao CRM</p>
+              <h2 className={styles.heroTitle}>
+                Plataforma com estrutura mais profissional, limpa e pronta para crescer
+              </h2>
+              <p className={styles.heroText}>
+                Essa área pode evoluir para mostrar métricas, atendimentos em fila,
+                usuários online, alertas operacionais e desempenho dos setores.
+              </p>
 
-            <Link href="/usuarios" className={styles.secondaryButton}>
-              Gerenciar usuários
-            </Link>
-          </div>
-        </div>
+              <div className={styles.heroActions}>
+                <Link href="/conversas" className={styles.primaryButton}>
+                  Abrir conversas
+                </Link>
 
-        <div className={styles.sessionCard}>
-          <p className={styles.cardLabel}>Usuário autenticado</p>
-          <h3 className={styles.cardTitle}>Informações da sessão</h3>
-
-          <div className={styles.infoList}>
-            <div className={styles.infoItem}>
-              <span className={styles.infoKey}>Nome</span>
-              <span className={styles.infoValue}>
-                {usuarioSistema.nome || "Não informado"}
-              </span>
-            </div>
-
-            <div className={styles.infoItem}>
-              <span className={styles.infoKey}>E-mail</span>
-              <span className={styles.infoValue}>
-                {usuarioSistema.email || "Não informado"}
-              </span>
-            </div>
-
-            <div className={styles.infoItem}>
-              <span className={styles.infoKey}>Empresa vinculada</span>
-              <span className={styles.infoValue}>
-                {usuarioSistema.empresa_id || "Sem empresa vinculada"}
-              </span>
-            </div>
-
-            <div className={styles.infoItem}>
-              <span className={styles.infoKey}>Status</span>
-              <span className={`${styles.statusBadge} ${statusClass}`}>
-                {statusLabel}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.modulesCard}>
-        <div className={styles.modulesHeader}>
-          <div>
-            <p className={styles.cardLabel}>Acesso rápido</p>
-            <h2 className={styles.cardTitle}>Módulos do sistema</h2>
-          </div>
-
-          <p className={styles.modulesDescription}>
-            Navegação mais organizada para o painel administrativo.
-          </p>
-        </div>
-
-        <div className={styles.modulesGrid}>
-          {modulos.map((modulo) => (
-            <Link key={modulo.href} href={modulo.href} className={styles.moduleItem}>
-              <div>
-                <h3 className={styles.moduleTitle}>{modulo.titulo}</h3>
-                <p className={styles.moduleText}>{modulo.descricao}</p>
+                <Link href="/usuarios" className={styles.secondaryButton}>
+                  Gerenciar usuários
+                </Link>
               </div>
+            </div>
 
-              <span className={styles.openTag}>Abrir</span>
-            </Link>
-          ))}
+
+            <div className={styles.sessionCard}>
+              <p className={styles.cardLabel}>Usuário autenticado</p>
+              <h3 className={styles.cardTitle}>Informações da sessão</h3>
+
+              <div className={styles.infoList}>
+                <div className={styles.infoItem}>
+                  <span className={styles.infoKey}>Nome</span>
+                  <span className={styles.infoValue}>
+                    {usuarioSistema.nome || "Não informado"}
+                  </span>
+                </div>
+
+                <div className={styles.infoItem}>
+                  <span className={styles.infoKey}>E-mail</span>
+                  <span className={styles.infoValue}>
+                    {usuarioSistema.email || "Não informado"}
+                  </span>
+                </div>
+
+                <div className={styles.infoItem}>
+                  <span className={styles.infoKey}>Empresa vinculada</span>
+                  <span className={styles.infoValue}>
+                    {usuarioSistema.empresa_id || "Sem empresa vinculada"}
+                  </span>
+                </div>
+
+                <div className={styles.infoItem}>
+                  <span className={styles.infoKey}>Status</span>
+                  <span className={`${styles.statusBadge} ${statusClass}`}>
+                    {statusLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
-    </CrmShell>
+
+        <section className={styles.modulesCard}>
+          <div className={styles.modulesHeader}>
+            <div>
+              <p className={styles.cardLabel}>Acesso rápido</p>
+              <h2 className={styles.cardTitle}>Módulos do sistema</h2>
+            </div>
+
+            <p className={styles.modulesDescription}>
+              Navegação mais organizada para o painel administrativo.
+            </p>
+          </div>
+
+          <div className={styles.modulesGrid}>
+            {modulos.map((modulo) => (
+              <Link
+                key={modulo.href}
+                href={modulo.href}
+                className={styles.moduleItem}
+              >
+                <div>
+                  <h3 className={styles.moduleTitle}>{modulo.titulo}</h3>
+                  <p className={styles.moduleText}>{modulo.descricao}</p>
+                </div>
+
+                <span className={styles.openTag}>Abrir</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+    </>
   );
 }

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import CrmShell from "@/components/CrmShell";
 import Header from "@/components/Header";
 import styles from "./perfis.module.css";
 
@@ -300,7 +299,7 @@ export default function PerfisPage() {
   }
 
   return (
-    <CrmShell>
+    <>
       <Header
         title="Configuração de perfis"
         subtitle="Crie papéis de acesso, organize funções da equipe e acompanhe o histórico de alterações."
@@ -611,6 +610,6 @@ export default function PerfisPage() {
           </div>
         </div>
       )}
-    </CrmShell>
+    </>
   );
 }

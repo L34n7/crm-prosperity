@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import CrmShell from "@/components/CrmShell";
 import Header from "@/components/Header";
 import styles from "./disparos-whatsapp.module.css";
 import { can } from "@/lib/permissoes/frontend";
@@ -461,7 +460,7 @@ export default function DisparosWhatsAppPage() {
   }
 
   return (
-    <CrmShell>
+    <>
       <Header
         title="Disparos WhatsApp"
         subtitle="Selecione a integração, o template aprovado e os contatos salvos para disparar mensagens."
@@ -809,6 +808,6 @@ export default function DisparosWhatsAppPage() {
           </aside>
         </div>
       </div>
-    </CrmShell>
+    </>
   );
 }

@@ -1,14 +1,24 @@
 .shell {
   min-height: 100vh;
   display: flex;
-  background: #f1f5f9;
+  background: #f8fafc;
 }
 
 .contentArea {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .main {
-  padding: 24px;
+  flex: 1;
+  min-width: 0;
+  padding: 0px 24px 24px;
+}
+
+@media (max-width: 768px) {
+  .main {
+    padding: 88px 16px 16px;
+  }
 }

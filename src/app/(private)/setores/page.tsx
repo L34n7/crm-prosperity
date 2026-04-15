@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import CrmShell from "@/components/CrmShell";
 import Header from "@/components/Header";
 import styles from "./setores.module.css";
 
@@ -189,7 +188,7 @@ export default function SetoresPage() {
   }, []);
 
   return (
-    <CrmShell>
+    <>
       <Header
         title="Setores"
         subtitle="Gerencie os setores da empresa com uma visualização mais organizada."
@@ -433,6 +432,6 @@ export default function SetoresPage() {
           )}
         </section>
       </div>
-    </CrmShell>
+    </>
   );
 }

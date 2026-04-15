@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import CrmShell from "@/components/CrmShell";
 import Header from "@/components/Header";
 import styles from "./empresas.module.css";
 
@@ -266,7 +265,7 @@ export default function EmpresasPage() {
   }, []);
 
   return (
-    <CrmShell>
+    <>
       <Header
         title="Empresas"
         subtitle="Gerencie empresas, planos, dados cadastrais e status da operação."
@@ -690,6 +689,6 @@ export default function EmpresasPage() {
           )}
         </section>
       </div>
-    </CrmShell>
+    </>
   );
 }
