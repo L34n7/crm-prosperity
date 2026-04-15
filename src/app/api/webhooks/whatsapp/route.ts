@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   extractIncomingMessages,
-  extractTextMessages,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
 import { findWhatsAppIntegrationByPhoneNumberId } from "@/lib/whatsapp/find-integration";
@@ -64,17 +63,9 @@ export async function POST(req: NextRequest) {
 
     const incomingMessages = extractIncomingMessages(body);
 
-    // Ajuste importante: usar incomingMessages
-    const textMessages = extractTextMessages(body);
-
     console.log(
       "[WEBHOOK WHATSAPP] Mensagens extraídas:",
       JSON.stringify(incomingMessages, null, 2)
-    );
-
-    console.log(
-      "[WEBHOOK WHATSAPP] Mensagens de texto:",
-      JSON.stringify(textMessages, null, 2)
     );
 
     if (incomingMessages.length === 0) {
@@ -87,20 +78,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (textMessages.length === 0) {
-      return NextResponse.json(
-        {
-          success: true,
-          message:
-            "Evento recebido, mas sem mensagens de texto processáveis por enquanto",
-        },
-        { status: 200 }
-      );
-    }
-
     const processedResults: Array<Record<string, unknown>> = [];
 
-    for (const message of textMessages) {
+    for (const message of incomingMessages) {
       try {
         const integration = await findWhatsAppIntegrationByPhoneNumberId(
           message.phoneNumberId
@@ -153,36 +133,49 @@ export async function POST(req: NextRequest) {
         const savedMessage = await saveIncomingWhatsAppMessage({
           empresaId: integration.empresa_id,
           conversaId: conversation.id,
-          conteudo: message.text ?? "",
-          tipoMensagem: "texto",
+          conteudo: message.conteudo,
+          tipoMensagem: message.tipoMensagem,
           statusEnvio: "entregue",
           mensagemExternaId: message.messageId,
           timestamp: message.timestamp,
+          metadataJson: message.metadataJson,
         });
 
-        const automationResult = await processChatbotAutomation({
-          empresaId: integration.empresa_id,
-          integracaoWhatsappId: integration.id,
-          conversa: {
-            id: conversation.id,
-            empresa_id: conversation.empresa_id,
-            bot_ativo: conversation.bot_ativo ?? false,
-            fluxo_etapa: conversation.fluxo_etapa ?? null,
-            menu_aguardando_resposta:
-              conversation.menu_aguardando_resposta ?? false,
-            ultima_opcao_escolhida:
-              conversation.ultima_opcao_escolhida ?? null,
-            tentativas_invalidas: conversation.tentativas_invalidas ?? 0,
-            ultima_interacao_bot_em:
-              conversation.ultima_interacao_bot_em ?? null,
-            automacao_id: conversation.automacao_id ?? null,
-            status: conversation.status ?? null,
-            setor_id: conversation.setor_id ?? null,
-            responsavel_id: conversation.responsavel_id ?? null,
-          },
-          mensagemCliente: message.text ?? "",
-          numeroDestino: message.from,
-        });
+        let automationResult:
+          | {
+              replied: boolean;
+              decision: { action: string };
+            }
+          | null = null;
+
+        const podeRodarAutomacao =
+          message.tipoMensagem === "texto" && !!message.text?.trim();
+
+        if (podeRodarAutomacao) {
+          automationResult = await processChatbotAutomation({
+            empresaId: integration.empresa_id,
+            integracaoWhatsappId: integration.id,
+            conversa: {
+              id: conversation.id,
+              empresa_id: conversation.empresa_id,
+              bot_ativo: conversation.bot_ativo ?? false,
+              fluxo_etapa: conversation.fluxo_etapa ?? null,
+              menu_aguardando_resposta:
+                conversation.menu_aguardando_resposta ?? false,
+              ultima_opcao_escolhida:
+                conversation.ultima_opcao_escolhida ?? null,
+              tentativas_invalidas: conversation.tentativas_invalidas ?? 0,
+              ultima_interacao_bot_em:
+                conversation.ultima_interacao_bot_em ?? null,
+              automacao_id: conversation.automacao_id ?? null,
+              status: conversation.status ?? null,
+              setor_id: conversation.setor_id ?? null,
+              responsavel_id: conversation.responsavel_id ?? null,
+            },
+            mensagemCliente: message.text ?? "",
+            numeroDestino: message.from,
+          });
+        }
 
         processedResults.push({
           messageId: message.messageId,
@@ -192,8 +185,9 @@ export async function POST(req: NextRequest) {
           contactId: contact.id,
           conversationId: conversation.id,
           savedMessageId: savedMessage.messageId,
-          automationReplied: automationResult.replied,
-          automationAction: automationResult.decision.action,
+          tipoMensagem: message.tipoMensagem,
+          automationReplied: automationResult?.replied ?? false,
+          automationAction: automationResult?.decision.action ?? null,
         });
       } catch (messageError) {
         console.error(
@@ -204,6 +198,7 @@ export async function POST(req: NextRequest) {
         processedResults.push({
           messageId: message.messageId,
           success: false,
+          tipoMensagem: message.tipoMensagem,
           reason:
             messageError instanceof Error
               ? messageError.message
@@ -218,7 +213,6 @@ export async function POST(req: NextRequest) {
         message: "Webhook processado",
         totals: {
           incomingMessages: incomingMessages.length,
-          textMessages: textMessages.length,
           processed: processedResults.length,
           successCount: processedResults.filter((item) => item.success).length,
           errorCount: processedResults.filter((item) => !item.success).length,
@@ -234,45 +228,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-async function processarWebhookTemplateStatus(
-  supabaseAdmin: any,
-  value: any
-) {
-  const event = value?.message_template_id
-    ? value
-    : value?.message_template_status_update;
-
-  if (!event) return;
-
-  const metaTemplateId = event.message_template_id || null;
-  const eventName = event.event || null;
-  const reason = event.reason || null;
-  const messageTemplateName = event.message_template_name || null;
-
-  const novoStatus =
-    eventName === "APPROVED"
-      ? "APPROVED"
-      : eventName === "REJECTED"
-      ? "REJECTED"
-      : eventName === "PENDING"
-      ? "PENDING"
-      : eventName || "desconhecido";
-
-  let query = supabaseAdmin.from("whatsapp_templates").update({
-    status: novoStatus,
-    rejeicao_motivo: reason,
-    updated_at: new Date().toISOString(),
-  });
-
-  if (metaTemplateId) {
-    query = query.eq("meta_template_id", metaTemplateId);
-  } else if (messageTemplateName) {
-    query = query.eq("nome", messageTemplateName);
-  } else {
-    return;
-  }
-
-  await query;
 }
