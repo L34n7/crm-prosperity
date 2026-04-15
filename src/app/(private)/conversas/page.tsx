@@ -456,7 +456,8 @@ export default function ConversasPage() {
   const [notaEditandoTexto, setNotaEditandoTexto] = useState("");
 
   function renderizarConteudoMensagem(msg: Mensagem) {
-    const url = msg.metadata_json?.url || null;
+    const mediaId = msg.metadata_json?.media_id || null;
+    const url = mediaId ? `/api/whatsapp/media/${mediaId}` : null;
     const caption = msg.metadata_json?.caption || null;
     const fileName = msg.metadata_json?.filename || "documento";
     const contatoNome = getSharedContactName(msg);
