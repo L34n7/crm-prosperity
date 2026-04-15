@@ -54,6 +54,26 @@ type WhatsAppDocumentMessage = {
   url?: string;
 };
 
+type WhatsAppLocationMessage = {
+  latitude?: number;
+  longitude?: number;
+  name?: string;
+  address?: string;
+};
+
+type WhatsAppUnsupportedMessage = {
+  type?: string;
+};
+
+type WhatsAppMessageError = {
+  code?: number;
+  title?: string;
+  message?: string;
+  error_data?: {
+    details?: string;
+  };
+};
+
 type WhatsAppSharedContactName = {
   formatted_name?: string;
   first_name?: string;
@@ -112,6 +132,9 @@ type WhatsAppIncomingRawMessage = {
   audio?: WhatsAppAudioMessage;
   video?: WhatsAppVideoMessage;
   document?: WhatsAppDocumentMessage;
+  location?: WhatsAppLocationMessage;
+  unsupported?: WhatsAppUnsupportedMessage;
+  errors?: WhatsAppMessageError[];
   contacts?: WhatsAppSharedContact[];
   button?: WhatsAppButtonMessage;
   interactive?: WhatsAppInteractiveMessage;
@@ -141,6 +164,16 @@ export type NormalizedMessageMetadata = {
   url?: string | null;
   voice?: boolean | null;
   contacts?: WhatsAppSharedContact[] | null;
+  location?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    name?: string | null;
+    address?: string | null;
+  } | null;
+  unsupported?: {
+    type?: string | null;
+    details?: string | null;
+  } | null;
 };
 
 export type ExtractedIncomingMessage = {
@@ -173,10 +206,14 @@ function mapWhatsAppTypeToInternalType(type?: string | null): string {
       return "documento";
     case "contacts":
       return "contato";
+    case "location":
+      return "localizacao";
     case "button":
       return "botao";
     case "interactive":
       return "lista";
+    case "unsupported":
+      return "unsupported";
     default:
       return "texto";
   }
@@ -227,12 +264,20 @@ function buildConteudo(
     return buildContactSharedPreview(rawMessage.contacts);
   }
 
+  if (tipoMensagem === "localizacao") {
+    return "📍 Localização compartilhada";
+  }
+
   if (tipoMensagem === "botao") {
     return rawMessage.button?.text?.trim() || "🔘 Botão";
   }
 
   if (tipoMensagem === "lista") {
     return "📋 Interação de lista";
+  }
+
+  if (tipoMensagem === "unsupported") {
+    return "⚠️ Mensagem não suportada pela API do WhatsApp";
   }
 
   return "Mensagem recebida";
@@ -254,6 +299,8 @@ function buildMetadataJson(
       url: rawMessage.image?.url ?? null,
       voice: null,
       contacts: null,
+      location: null,
+      unsupported: null,
     };
   }
 
@@ -268,6 +315,8 @@ function buildMetadataJson(
       url: rawMessage.audio?.url ?? null,
       voice: rawMessage.audio?.voice ?? null,
       contacts: null,
+      location: null,
+      unsupported: null,
     };
   }
 
@@ -282,6 +331,8 @@ function buildMetadataJson(
       url: rawMessage.video?.url ?? null,
       voice: null,
       contacts: null,
+      location: null,
+      unsupported: null,
     };
   }
 
@@ -296,6 +347,8 @@ function buildMetadataJson(
       url: rawMessage.document?.url ?? null,
       voice: null,
       contacts: null,
+      location: null,
+      unsupported: null,
     };
   }
 
@@ -310,6 +363,48 @@ function buildMetadataJson(
       url: null,
       voice: null,
       contacts: rawMessage.contacts ?? null,
+      location: null,
+      unsupported: null,
+    };
+  }
+
+  if (tipo === "location") {
+    return {
+      tipo_original_whatsapp: tipo,
+      media_id: null,
+      mime_type: null,
+      sha256: null,
+      caption: null,
+      filename: null,
+      url: null,
+      voice: null,
+      contacts: null,
+      location: {
+        latitude: rawMessage.location?.latitude ?? null,
+        longitude: rawMessage.location?.longitude ?? null,
+        name: rawMessage.location?.name ?? null,
+        address: rawMessage.location?.address ?? null,
+      },
+      unsupported: null,
+    };
+  }
+
+  if (tipo === "unsupported") {
+    return {
+      tipo_original_whatsapp: tipo,
+      media_id: null,
+      mime_type: null,
+      sha256: null,
+      caption: null,
+      filename: null,
+      url: null,
+      voice: null,
+      contacts: null,
+      location: null,
+      unsupported: {
+        type: rawMessage.unsupported?.type ?? null,
+        details: rawMessage.errors?.[0]?.error_data?.details ?? null,
+      },
     };
   }
 
@@ -323,6 +418,8 @@ function buildMetadataJson(
     url: null,
     voice: null,
     contacts: null,
+    location: null,
+    unsupported: null,
   };
 }
 

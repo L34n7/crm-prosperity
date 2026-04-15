@@ -229,9 +229,11 @@ export async function POST(request: Request) {
       "video",
       "documento",
       "contato",
+      "localizacao",
       "template",
       "botao",
       "lista",
+      "unsupported",
     ].includes(tipo_mensagem)
   ) {
     return NextResponse.json(

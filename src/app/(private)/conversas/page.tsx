@@ -96,6 +96,16 @@ type Mensagem = {
         title?: string;
       };
     }> | null;
+    location?: {
+      latitude?: number | null;
+      longitude?: number | null;
+      name?: string | null;
+      address?: string | null;
+    } | null;
+    unsupported?: {
+      type?: string | null;
+      details?: string | null;
+    } | null;
   } | null;
 };
 
@@ -382,6 +392,307 @@ function getSharedContactEmails(msg: Mensagem) {
   return primeiro?.emails || [];
 }
 
+type AudioMessagePlayerProps = {
+  src: string;
+  isOutgoing?: boolean;
+  isVoice?: boolean;
+  fileName?: string | null;
+};
+
+function formatarTempoAudio(segundos: number) {
+  if (!Number.isFinite(segundos) || segundos < 0) return "00:00";
+
+  const mins = Math.floor(segundos / 60);
+  const secs = Math.floor(segundos % 60);
+
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function AudioMessagePlayer({
+  src,
+  isOutgoing = false,
+  isVoice = false,
+  fileName = null,
+}: AudioMessagePlayerProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const barraRef = useRef<HTMLDivElement | null>(null);
+
+  const [tocando, setTocando] = useState(false);
+  const [tempoAtual, setTempoAtual] = useState(0);
+  const [duracao, setDuracao] = useState(0);
+  const [velocidade, setVelocidade] = useState(1);
+  const [arrastando, setArrastando] = useState(false);
+
+  const barrasWave = useMemo(() => {
+    return Array.from({ length: 40 }, (_, i) => {
+      const base = [8, 14, 22, 12, 18, 10, 24, 11, 16, 20, 12, 26];
+      return base[i % base.length];
+    });
+  }, []);
+
+  const containerClass = isOutgoing
+    ? styles.audioPlayerOutgoing
+    : styles.audioPlayerIncoming;
+
+  const textClass = isOutgoing
+    ? styles.audioPlayerTextOutgoing
+    : styles.audioPlayerTextIncoming;
+
+  const pillClass = isOutgoing
+    ? styles.audioPlayerPillOutgoing
+    : styles.audioPlayerPillIncoming;
+
+  const waveActiveClass = isOutgoing
+    ? styles.audioWaveBarActiveOutgoing
+    : styles.audioWaveBarActiveIncoming;
+
+  const waveInactiveClass = isOutgoing
+    ? styles.audioWaveBarInactiveOutgoing
+    : styles.audioWaveBarInactiveIncoming;
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const atualizarDuracao = () => {
+      const novaDuracao = audio.duration;
+      if (Number.isFinite(novaDuracao) && novaDuracao > 0) {
+        setDuracao(novaDuracao);
+      }
+    };
+
+    const atualizarTempo = () => {
+      if (!arrastando) {
+        setTempoAtual(audio.currentTime || 0);
+      }
+    };
+
+    const aoTerminar = () => {
+      setTocando(false);
+      setTempoAtual(0);
+      audio.currentTime = 0;
+    };
+
+    const aoPause = () => {
+      setTocando(false);
+    };
+
+    const aoPlay = () => {
+      setTocando(true);
+    };
+
+    audio.addEventListener("loadedmetadata", atualizarDuracao);
+    audio.addEventListener("durationchange", atualizarDuracao);
+    audio.addEventListener("canplay", atualizarDuracao);
+    audio.addEventListener("timeupdate", atualizarTempo);
+    audio.addEventListener("ended", aoTerminar);
+    audio.addEventListener("pause", aoPause);
+    audio.addEventListener("play", aoPlay);
+
+    return () => {
+      audio.removeEventListener("loadedmetadata", atualizarDuracao);
+      audio.removeEventListener("durationchange", atualizarDuracao);
+      audio.removeEventListener("canplay", atualizarDuracao);
+      audio.removeEventListener("timeupdate", atualizarTempo);
+      audio.removeEventListener("ended", aoTerminar);
+      audio.removeEventListener("pause", aoPause);
+      audio.removeEventListener("play", aoPlay);
+    };
+  }, [arrastando]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.playbackRate = velocidade;
+  }, [velocidade]);
+
+  async function alternarPlay() {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (tocando) {
+      audio.pause();
+      return;
+    }
+
+    try {
+      await audio.play();
+    } catch {
+      setTocando(false);
+    }
+  }
+
+  function alterarTempo(delta: number) {
+    const audio = audioRef.current;
+    if (!audio || !duracao) return;
+
+    const proximoTempo = Math.min(
+      Math.max((audio.currentTime || 0) + delta, 0),
+      duracao
+    );
+
+    audio.currentTime = proximoTempo;
+    setTempoAtual(proximoTempo);
+  }
+
+  function calcularTempoPelaPosicao(clientX: number) {
+    const barra = barraRef.current;
+    if (!barra || !duracao) return null;
+
+    const rect = barra.getBoundingClientRect();
+    const posicaoX = clientX - rect.left;
+    const porcentagem = Math.min(Math.max(posicaoX / rect.width, 0), 1);
+
+    return porcentagem * duracao;
+  }
+
+  function irParaTempo(clientX: number) {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const novoTempo = calcularTempoPelaPosicao(clientX);
+    if (novoTempo == null) return;
+
+    audio.currentTime = novoTempo;
+    setTempoAtual(novoTempo);
+  }
+
+  function onMouseDownBarra(e: React.MouseEvent<HTMLDivElement>) {
+    setArrastando(true);
+    irParaTempo(e.clientX);
+  }
+
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (!arrastando) return;
+      irParaTempo(e.clientX);
+    }
+
+    function onMouseUp() {
+      if (!arrastando) return;
+      setArrastando(false);
+    }
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [arrastando, duracao]);
+
+  function alternarVelocidade() {
+    setVelocidade((atual) => {
+      if (atual === 1) return 1.5;
+      if (atual === 1.5) return 2;
+      return 1;
+    });
+  }
+
+  const progresso = duracao > 0 ? Math.min((tempoAtual / duracao) * 100, 100) : 0;
+  const barrasAtivas = Math.round((progresso / 100) * barrasWave.length);
+
+  return (
+    <div className={containerClass}>
+      <audio ref={audioRef} preload="metadata">
+        <source src={src} />
+      </audio>
+
+      <div className={styles.audioPlayerTopRow}>
+        <div className={styles.audioPlayerTopLeft}>
+          {isVoice && <span className={pillClass}>Voz</span>}
+
+          {fileName && !isVoice && (
+            <span className={pillClass} title={fileName}>
+              {fileName}
+            </span>
+          )}
+        </div>
+
+        <a
+          href={src}
+          download={fileName || "audio"}
+          className={`${styles.audioDownloadLink} ${textClass}`}
+          title="Baixar áudio"
+        >
+          ⬇ Baixar
+        </a>
+      </div>
+
+      <div className={styles.audioPlayerMainRow}>
+        <button
+          type="button"
+          onClick={alternarPlay}
+          className={styles.audioPlayButton}
+          title={tocando ? "Pausar áudio" : "Reproduzir áudio"}
+        >
+          {tocando ? "❚❚" : "▶"}
+        </button>
+
+        <div
+          ref={barraRef}
+          onMouseDown={onMouseDownBarra}
+          className={styles.audioWave}
+          title="Clique ou arraste para avançar"
+        >
+          {barrasWave.map((altura, index) => {
+            const ativa = index < barrasAtivas;
+            const animando = tocando && ativa;
+
+            return (
+              <div
+                key={index}
+                className={`${styles.audioWaveBar} ${
+                  ativa ? waveActiveClass : waveInactiveClass
+                } ${animando ? styles.audioWaveBarAnimating : ""}`}
+                style={{ height: `${altura}px` }}
+              />
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={alternarVelocidade}
+          className={styles.audioSpeedButton}
+          title="Alterar velocidade"
+        >
+          {velocidade}x
+        </button>
+      </div>
+
+      <div className={styles.audioPlayerBottomRow}>
+        <div className={styles.audioPlayerActions}>
+          <button
+            type="button"
+            onClick={() => alterarTempo(-5)}
+            className={`${styles.audioActionButton} ${textClass}`}
+            title="Voltar 5 segundos"
+          >
+            ⟲ 5s
+          </button>
+
+          <button
+            type="button"
+            onClick={() => alterarTempo(5)}
+            className={`${styles.audioActionButton} ${textClass}`}
+            title="Adiantar 5 segundos"
+          >
+            5s ⟳
+          </button>
+        </div>
+
+        <div className={`${styles.audioTimeInfo} ${textClass}`}>
+          <span>{formatarTempoAudio(tempoAtual)}</span>
+          <span>/</span>
+          <span>{formatarTempoAudio(duracao)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ConversasPage() {
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
   const [politicaAtendimento, setPoliticaAtendimento] =
@@ -455,20 +766,51 @@ export default function ConversasPage() {
   const [notaEditandoId, setNotaEditandoId] = useState<string | null>(null);
   const [notaEditandoTexto, setNotaEditandoTexto] = useState("");
 
-  function renderizarConteudoMensagem(msg: Mensagem) {
+  const [imagemModalUrl, setImagemModalUrl] = useState<string | null>(null);
+  const [imagemModalTitulo, setImagemModalTitulo] = useState<string | null>(null);
+  const [imagemZoom, setImagemZoom] = useState(1);
+
+  const [arquivoPreview, setArquivoPreview] = useState<{
+    url: string;
+    nome: string;
+    mimeType: string;
+  } | null>(null);
+
+    function renderizarConteudoMensagem(msg: Mensagem) {
     const mediaId = msg.metadata_json?.media_id || null;
     const url = mediaId ? `/api/whatsapp/media/${mediaId}` : null;
     const caption = msg.metadata_json?.caption || null;
     const fileName = msg.metadata_json?.filename || "documento";
+    const mimeType = msg.metadata_json?.mime_type || "";
     const contatoNome = getSharedContactName(msg);
     const contatoTelefones = getSharedContactPhones(msg);
     const contatoEmails = getSharedContactEmails(msg);
+
+    const latitude = msg.metadata_json?.location?.latitude;
+    const longitude = msg.metadata_json?.location?.longitude;
+    const mapaUrl =
+      latitude != null && longitude != null
+        ? `https://www.google.com/maps?q=${latitude},${longitude}`
+        : null;
 
     if (msg.tipo_mensagem === "imagem") {
       return (
         <div>
           {url ? (
-            <a href={url} target="_blank" rel="noreferrer">
+            <button
+              type="button"
+              onClick={() => {
+                setImagemModalUrl(url);
+                setImagemModalTitulo(caption || "Imagem");
+                setImagemZoom(1);
+              }}
+              style={{
+                border: "none",
+                padding: 0,
+                background: "transparent",
+                cursor: "pointer",
+              }}
+            >
               <img
                 src={url}
                 alt={caption || "Imagem recebida"}
@@ -480,7 +822,7 @@ export default function ConversasPage() {
                   marginBottom: caption ? "8px" : "0",
                 }}
               />
-            </a>
+            </button>
           ) : (
             <p className={styles.messageText}>{msg.conteudo}</p>
           )}
@@ -494,10 +836,12 @@ export default function ConversasPage() {
       return (
         <div>
           {url ? (
-            <audio controls preload="none" style={{ maxWidth: "260px", width: "100%" }}>
-              <source src={url} type={msg.metadata_json?.mime_type || "audio/mpeg"} />
-              Seu navegador não suporta áudio.
-            </audio>
+            <AudioMessagePlayer
+              src={url}
+              isOutgoing={msg.origem === "enviada"}
+              isVoice={!!msg.metadata_json?.voice}
+              fileName={fileName}
+            />
           ) : (
             <p className={styles.messageText}>{msg.conteudo}</p>
           )}
@@ -520,7 +864,7 @@ export default function ConversasPage() {
                 marginBottom: caption ? "8px" : "0",
               }}
             >
-              <source src={url} type={msg.metadata_json?.mime_type || "video/mp4"} />
+              <source src={url} type={mimeType || "video/mp4"} />
               Seu navegador não suporta vídeo.
             </video>
           ) : (
@@ -533,13 +877,43 @@ export default function ConversasPage() {
     }
 
     if (msg.tipo_mensagem === "documento") {
+      const ehPdf = mimeType.includes("pdf");
+      const ehAudioArquivo = mimeType.startsWith("audio/");
+
       return (
         <div>
           <p className={styles.messageText}>📄 {fileName}</p>
 
           {caption && <p className={styles.messageText}>{caption}</p>}
 
-          {url && (
+          {ehAudioArquivo && url && (
+            <div style={{ marginTop: 8 }}>
+              <AudioMessagePlayer
+                src={url}
+                isOutgoing={msg.origem === "enviada"}
+                isVoice={!!msg.metadata_json?.voice}
+              />
+            </div>
+          )}
+
+          {ehPdf && url && (
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              style={{ marginTop: 8 }}
+              onClick={() =>
+                setArquivoPreview({
+                  url,
+                  nome: fileName,
+                  mimeType,
+                })
+              }
+            >
+              Abrir PDF
+            </button>
+          )}
+
+          {!ehPdf && !ehAudioArquivo && url && (
             <a
               href={url}
               target="_blank"
@@ -550,7 +924,7 @@ export default function ConversasPage() {
                 wordBreak: "break-word",
               }}
             >
-              Abrir documento
+              Baixar arquivo
             </a>
           )}
         </div>
@@ -577,8 +951,62 @@ export default function ConversasPage() {
       );
     }
 
+    if (msg.tipo_mensagem === "localizacao") {
+      return (
+        <div>
+          <p className={styles.messageText}>📍 Localização compartilhada</p>
+
+          {latitude != null && longitude != null && (
+            <p className={styles.messageText}>
+              Lat: {latitude} <br />
+              Lng: {longitude}
+            </p>
+          )}
+
+          {mapaUrl && (
+            <a
+              href={mapaUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                fontSize: "14px",
+                textDecoration: "underline",
+                wordBreak: "break-word",
+              }}
+            >
+              Abrir no Google Maps
+            </a>
+          )}
+        </div>
+      );
+    }
+
+    if (msg.tipo_mensagem === "unsupported") {
+      return (
+        <div>
+          <p className={styles.messageText}>
+            ⚠️ Mensagem não suportada pela API do WhatsApp
+          </p>
+
+          {msg.metadata_json?.unsupported?.type && (
+            <p className={styles.messageText}>
+              Tipo: {msg.metadata_json.unsupported.type}
+            </p>
+          )}
+
+          {msg.metadata_json?.unsupported?.details && (
+            <p className={styles.messageText}>
+              {msg.metadata_json.unsupported.details}
+            </p>
+          )}
+        </div>
+      );
+    }
+
     return <p className={styles.messageText}>{msg.conteudo}</p>;
   }
+
+  
 
   async function carregarUsuarioLogado() {
     try {
@@ -3285,6 +3713,178 @@ export default function ConversasPage() {
           </section>
         </div>
       </div>
+
+      {imagemModalUrl && (
+        <div
+          onClick={() => {
+            setImagemModalUrl(null);
+            setImagemModalTitulo(null);
+            setImagemZoom(1);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.82)",
+            zIndex: 9999,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 980,
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                color: "#fff",
+              }}
+            >
+              <strong>{imagemModalTitulo || "Imagem"}</strong>
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setImagemZoom((z) => Math.max(0.8, Number((z - 0.1).toFixed(2))))}
+                  className={styles.secondaryButton}
+                >
+                  −
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setImagemZoom(1)}
+                  className={styles.secondaryButton}
+                >
+                  100%
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setImagemZoom((z) => Math.min(2.2, Number((z + 0.1).toFixed(2))))}
+                  className={styles.secondaryButton}
+                >
+                  ＋
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImagemModalUrl(null);
+                    setImagemModalTitulo(null);
+                    setImagemZoom(1);
+                  }}
+                  className={styles.dangerButton}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                overflow: "auto",
+                background: "rgba(255,255,255,0.04)",
+                borderRadius: 16,
+                padding: 12,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                maxHeight: "78vh",
+              }}
+            >
+              <img
+                src={imagemModalUrl}
+                alt={imagemModalTitulo || "Imagem"}
+                style={{
+                  width: "auto",
+                  height: "auto",
+                  maxWidth: "82vw",
+                  maxHeight: "72vh",
+                  objectFit: "contain",
+                  transform: `scale(${imagemZoom})`,
+                  transformOrigin: "center center",
+                  transition: "transform 0.18s ease",
+                  borderRadius: "12px",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {arquivoPreview && (
+        <div
+          onClick={() => setArquivoPreview(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.82)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 1100,
+              height: "88vh",
+              background: "#fff",
+              borderRadius: 16,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid #e5e7eb",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <strong>{arquivoPreview.nome}</strong>
+
+              <button
+                type="button"
+                className={styles.dangerButton}
+                onClick={() => setArquivoPreview(null)}
+              >
+                Fechar
+              </button>
+            </div>
+
+            <iframe
+              src={arquivoPreview.url}
+              title={arquivoPreview.nome}
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
     </>
   );
 }

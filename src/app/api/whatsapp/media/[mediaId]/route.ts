@@ -22,22 +22,6 @@ function getFileExtensionFromMimeType(mimeType?: string | null) {
   if (normalized.includes("audio/mp4")) return ".m4a";
   if (normalized.includes("video/mp4")) return ".mp4";
   if (normalized.includes("application/pdf")) return ".pdf";
-  if (normalized.includes("application/msword")) return ".doc";
-  if (
-    normalized.includes(
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
-  ) {
-    return ".docx";
-  }
-  if (normalized.includes("application/vnd.ms-excel")) return ".xls";
-  if (
-    normalized.includes(
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-  ) {
-    return ".xlsx";
-  }
 
   return "";
 }
@@ -48,7 +32,7 @@ function buildSafeFilename(mediaId: string, mimeType?: string | null) {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ mediaId: string }> }
 ) {
   try {
@@ -68,8 +52,7 @@ export async function GET(
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "WHATSAPP_ACCESS_TOKEN não definido nas variáveis de ambiente",
+          error: "WHATSAPP_ACCESS_TOKEN não definido nas variáveis de ambiente",
         },
         { status: 500 }
       );
@@ -88,12 +71,6 @@ export async function GET(
     if (!mediaInfoResponse.ok) {
       const errorText = await mediaInfoResponse.text();
 
-      console.error("[WHATSAPP MEDIA] Erro ao buscar metadados da mídia:", {
-        status: mediaInfoResponse.status,
-        body: errorText,
-        mediaId,
-      });
-
       return NextResponse.json(
         {
           ok: false,
@@ -105,8 +82,7 @@ export async function GET(
       );
     }
 
-    const mediaInfo =
-      (await mediaInfoResponse.json()) as MetaMediaInfoResponse;
+    const mediaInfo = (await mediaInfoResponse.json()) as MetaMediaInfoResponse;
 
     if (!mediaInfo.url) {
       return NextResponse.json(
@@ -118,22 +94,19 @@ export async function GET(
       );
     }
 
+    const rangeHeader = req.headers.get("range");
+
     const mediaDownloadResponse = await fetch(mediaInfo.url, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        ...(rangeHeader ? { Range: rangeHeader } : {}),
       },
       cache: "no-store",
     });
 
     if (!mediaDownloadResponse.ok) {
       const errorText = await mediaDownloadResponse.text();
-
-      console.error("[WHATSAPP MEDIA] Erro ao baixar mídia:", {
-        status: mediaDownloadResponse.status,
-        body: errorText,
-        mediaId,
-      });
 
       return NextResponse.json(
         {
@@ -146,26 +119,35 @@ export async function GET(
       );
     }
 
-    const arrayBuffer = await mediaDownloadResponse.arrayBuffer();
     const contentType =
       mediaDownloadResponse.headers.get("content-type") ||
       mediaInfo.mime_type ||
       "application/octet-stream";
 
-    const contentLength =
-      mediaDownloadResponse.headers.get("content-length") ||
-      (mediaInfo.file_size ? String(mediaInfo.file_size) : null);
-
+    const contentLength = mediaDownloadResponse.headers.get("content-length");
+    const contentRange = mediaDownloadResponse.headers.get("content-range");
     const filename = buildSafeFilename(mediaId, contentType);
 
-    return new NextResponse(arrayBuffer, {
-      status: 200,
-      headers: {
-        "Content-Type": contentType,
-        ...(contentLength ? { "Content-Length": contentLength } : {}),
-        "Content-Disposition": `inline; filename="${filename}"`,
-        "Cache-Control": "private, no-store, max-age=0",
-      },
+    const responseHeaders = new Headers();
+    responseHeaders.set("Content-Type", contentType);
+    responseHeaders.set(
+      "Content-Disposition",
+      `inline; filename="${filename}"`
+    );
+    responseHeaders.set("Cache-Control", "private, no-store, max-age=0");
+    responseHeaders.set("Accept-Ranges", "bytes");
+
+    if (contentLength) {
+      responseHeaders.set("Content-Length", contentLength);
+    }
+
+    if (contentRange) {
+      responseHeaders.set("Content-Range", contentRange);
+    }
+
+    return new NextResponse(mediaDownloadResponse.body, {
+      status: mediaDownloadResponse.status,
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error("[WHATSAPP MEDIA] Erro interno:", error);

@@ -1759,6 +1759,217 @@
   margin: 4px 0 0;
 }
 
+.audioPlayerIncoming {
+  width: 100%;
+  max-width: 390px;
+  min-width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #bfecfadc, #46616e4f);
+  border: 1px solid #e2e8f008;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.audioPlayerOutgoing {
+  width: 100%;
+  max-width: 390px;
+  min-width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.audioPlayerTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.audioPlayerTopLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.audioPlayerTextIncoming {
+  color: #475569;
+}
+
+.audioPlayerTextOutgoing {
+  color: #166534;
+}
+
+.audioPlayerPillIncoming {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #e9ffead4;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.audioPlayerPillOutgoing {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #bbf7d0;
+  color: #14532d;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.audioDownloadLink {
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.audioDownloadLink:hover {
+  text-decoration: underline;
+}
+
+.audioPlayerMainRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.audioPlayButton {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.audioPlayButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
+}
+
+.audioWave {
+  flex: 1;
+  display: flex;
+  align-items: end;
+  gap: 2px;
+  height: 34px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.audioWaveBar {
+  flex: 1;
+  min-width: 3px;
+  border-radius: 999px;
+  transition:
+    background 0.12s ease,
+    opacity 0.12s ease,
+    transform 0.18s ease;
+}
+
+.audioWaveBarAnimating {
+  transform: scaleY(1.06);
+  opacity: 0.95;
+}
+
+.audioWaveBarActiveIncoming {
+  background: #002e6e;
+}
+
+.audioWaveBarInactiveIncoming {
+  background: #ffffff;
+}
+
+.audioWaveBarActiveOutgoing {
+  background: #166534;
+}
+
+.audioWaveBarInactiveOutgoing {
+  background: #86efac;
+}
+
+.audioSpeedButton {
+  border: none;
+  background: #fbfbfb;
+  color: #0f172a;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 42px;
+  height: 30px;
+  border-radius: 999px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.audioSpeedButton:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.audioPlayerBottomRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.audioPlayerActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.audioActionButton {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+}
+
+.audioActionButton:hover {
+  text-decoration: underline;
+}
+
+.audioTimeInfo {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
 @media (max-width: 1400px) {
   .rightPanel {
     width: 320px;
