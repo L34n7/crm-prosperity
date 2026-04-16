@@ -140,6 +140,56 @@ type WhatsAppIncomingRawMessage = {
   interactive?: WhatsAppInteractiveMessage;
 };
 
+type WhatsAppStatusConversation = {
+  id?: string;
+  origin?: {
+    type?: string;
+  };
+  expiration_timestamp?: string;
+};
+
+type WhatsAppStatusPricing = {
+  billable?: boolean;
+  pricing_model?: string;
+  category?: string;
+};
+
+type WhatsAppStatusError = {
+  code?: number;
+  title?: string;
+  message?: string;
+  error_data?: {
+    details?: string;
+  };
+};
+
+type WhatsAppRawStatus = {
+  id?: string;
+  status?: "sent" | "delivered" | "read" | "failed";
+  timestamp?: string;
+  recipient_id?: string;
+  conversation?: WhatsAppStatusConversation;
+  pricing?: WhatsAppStatusPricing;
+  errors?: WhatsAppStatusError[];
+};
+
+export type ExtractedMessageStatus = {
+  phoneNumberId: string;
+  displayPhoneNumber: string | null;
+  mensagemExternaId: string;
+  status: "enviada" | "entregue" | "lida" | "falha";
+  timestamp: string | null;
+  recipientId: string | null;
+  conversationId: string | null;
+  conversationOriginType: string | null;
+  expirationTimestamp: string | null;
+  pricingCategory: string | null;
+  pricingModel: string | null;
+  pricingBillable: boolean | null;
+  errorMessage: string | null;
+  rawStatus: WhatsAppRawStatus;
+};
+
 export type WhatsAppChange = {
   field?: string;
   value?: {
@@ -150,7 +200,7 @@ export type WhatsAppChange = {
     };
     contacts?: WhatsAppWebhookContact[];
     messages?: WhatsAppIncomingRawMessage[];
-    statuses?: Array<unknown>;
+    statuses?: WhatsAppRawStatus[];
   };
 };
 
@@ -483,4 +533,80 @@ export function extractTextMessages(body: WhatsAppWebhookBody) {
   return extractIncomingMessages(body).filter(
     (message) => message.type === "text" && !!message.text
   );
+}
+
+function mapWhatsAppStatusToInternalStatus(
+  status?: string | null
+): "enviada" | "entregue" | "lida" | "falha" | null {
+  switch (status) {
+    case "sent":
+      return "enviada";
+    case "delivered":
+      return "entregue";
+    case "read":
+      return "lida";
+    case "failed":
+      return "falha";
+    default:
+      return null;
+  }
+}
+
+export function extractMessageStatuses(
+  body: WhatsAppWebhookBody
+): ExtractedMessageStatus[] {
+  const results: ExtractedMessageStatus[] = [];
+
+  if (!body?.entry?.length) return results;
+
+  for (const entry of body.entry) {
+    if (!entry?.changes?.length) continue;
+
+    for (const change of entry.changes) {
+      if (change?.field !== "messages") continue;
+
+      const value = change.value;
+      if (!value) continue;
+
+      const phoneNumberId = value.metadata?.phone_number_id ?? "";
+      const displayPhoneNumber = value.metadata?.display_phone_number ?? null;
+      const statuses = value.statuses ?? [];
+
+      for (const statusItem of statuses) {
+        const mappedStatus = mapWhatsAppStatusToInternalStatus(
+          statusItem.status ?? null
+        );
+
+        if (!mappedStatus) continue;
+        if (!statusItem.id) continue;
+        if (!phoneNumberId) continue;
+
+        results.push({
+          phoneNumberId,
+          displayPhoneNumber,
+          mensagemExternaId: statusItem.id,
+          status: mappedStatus,
+          timestamp: statusItem.timestamp ?? null,
+          recipientId: statusItem.recipient_id ?? null,
+          conversationId: statusItem.conversation?.id ?? null,
+          conversationOriginType: statusItem.conversation?.origin?.type ?? null,
+          expirationTimestamp:
+            statusItem.conversation?.expiration_timestamp ?? null,
+          pricingCategory: statusItem.pricing?.category ?? null,
+          pricingModel: statusItem.pricing?.pricing_model ?? null,
+          pricingBillable:
+            typeof statusItem.pricing?.billable === "boolean"
+              ? statusItem.pricing.billable
+              : null,
+          errorMessage:
+            statusItem.errors?.[0]?.message ??
+            statusItem.errors?.[0]?.error_data?.details ??
+            null,
+          rawStatus: statusItem,
+        });
+      }
+    }
+  }
+
+  return results;
 }

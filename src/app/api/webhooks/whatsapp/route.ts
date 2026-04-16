@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   extractIncomingMessages,
+  extractMessageStatuses,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
 import { findWhatsAppIntegrationByPhoneNumberId } from "@/lib/whatsapp/find-integration";
@@ -8,6 +9,7 @@ import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-conta
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import { saveIncomingWhatsAppMessage } from "@/lib/whatsapp/save-incoming-message";
 import { processChatbotAutomation } from "@/lib/chatbot/process-automation";
+import { updateWhatsAppMessageStatus } from "@/lib/whatsapp/update-message-status";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
@@ -62,23 +64,77 @@ export async function POST(req: NextRequest) {
     }
 
     const incomingMessages = extractIncomingMessages(body);
+    const incomingStatuses = extractMessageStatuses(body);
+
+    console.log(
+      "[WEBHOOK WHATSAPP] Status extraídos:",
+      JSON.stringify(incomingStatuses, null, 2)
+    );
 
     console.log(
       "[WEBHOOK WHATSAPP] Mensagens extraídas:",
       JSON.stringify(incomingMessages, null, 2)
     );
 
-    if (incomingMessages.length === 0) {
+    if (incomingMessages.length === 0 && incomingStatuses.length === 0) {
       return NextResponse.json(
         {
           success: true,
-          message: "Evento recebido sem mensagens processáveis",
+          message: "Evento recebido sem mensagens nem status processáveis",
         },
         { status: 200 }
       );
     }
 
     const processedResults: Array<Record<string, unknown>> = [];
+
+    for (const statusItem of incomingStatuses) {
+      try {
+        const updateResult = await updateWhatsAppMessageStatus({
+          mensagemExternaId: statusItem.mensagemExternaId,
+          status: statusItem.status,
+          timestamp: statusItem.timestamp,
+          metadata: {
+            recipient_id: statusItem.recipientId,
+            conversation_id: statusItem.conversationId,
+            conversation_origin_type: statusItem.conversationOriginType,
+            expiration_timestamp: statusItem.expirationTimestamp,
+            pricing_category: statusItem.pricingCategory,
+            pricing_model: statusItem.pricingModel,
+            pricing_billable: statusItem.pricingBillable,
+            error_message: statusItem.errorMessage,
+            raw_status: statusItem.rawStatus,
+          },
+        });
+
+        processedResults.push({
+          type: "status",
+          mensagemExternaId: statusItem.mensagemExternaId,
+          status: statusItem.status,
+          success: true,
+          found: updateResult.found,
+          updated: updateResult.updated,
+          reason: updateResult.reason ?? null,
+          messageIdInterno: updateResult.messageId ?? null,
+        });
+      } catch (statusError) {
+        console.error(
+          "[WEBHOOK WHATSAPP] Erro ao processar status individual:",
+          statusError
+        );
+
+        processedResults.push({
+          type: "status",
+          mensagemExternaId: statusItem.mensagemExternaId,
+          status: statusItem.status,
+          success: false,
+          reason:
+            statusError instanceof Error
+              ? statusError.message
+              : "Erro desconhecido ao processar status",
+        });
+      }
+    }
 
     for (const message of incomingMessages) {
       try {

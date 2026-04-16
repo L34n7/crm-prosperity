@@ -11,6 +11,8 @@ import {
   podeEnviarMensagens,
   podeVisualizarMensagens,
 } from "@/lib/auth/authorization";
+import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
+import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -20,6 +22,8 @@ type ConversaAcesso = {
   setor_id: string | null;
   responsavel_id: string | null;
   status?: string | null;
+  contato_id?: string | null;
+  integracao_whatsapp_id?: string | null;
 };
 
 async function usuarioPodeAcessarConversa(
@@ -83,7 +87,7 @@ export async function GET(request: Request) {
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
-      .select("id, empresa_id, setor_id, responsavel_id, status")
+      .select("id, empresa_id, setor_id, responsavel_id, status, contato_id, integracao_whatsapp_id")
       .eq("id", conversaId)
       .maybeSingle<ConversaAcesso>();
 
@@ -242,6 +246,17 @@ export async function POST(request: Request) {
     );
   }
 
+    if (tipo_mensagem !== "texto") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Neste primeiro passo, o envio manual está liberado apenas para mensagens de texto.",
+      },
+      { status: 400 }
+    );
+  }
+
   if (!["recebida", "enviada", "automatica"].includes(origem)) {
     return NextResponse.json(
       { ok: false, error: "origem inválida" },
@@ -258,7 +273,9 @@ export async function POST(request: Request) {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id, status")
+    .select(
+      "id, empresa_id, setor_id, responsavel_id, status, contato_id, integracao_whatsapp_id"
+    )
     .eq("id", conversa_id)
     .maybeSingle<ConversaAcesso>();
 
@@ -276,12 +293,145 @@ export async function POST(request: Request) {
     );
   }
 
+    console.log("[POST /api/mensagens] conversa carregada:", conversa);
+
   if (!(await usuarioPodeAcessarConversa(usuario, conversa))) {
     return NextResponse.json(
       { ok: false, error: "Você não pode enviar mensagem nesta conversa" },
       { status: 403 }
     );
   }
+
+  if (!conversa.contato_id) {
+    return NextResponse.json(
+      { ok: false, error: "A conversa não possui contato vinculado" },
+      { status: 400 }
+    );
+  }
+
+  if (!conversa.integracao_whatsapp_id) {
+    return NextResponse.json(
+      { ok: false, error: "A conversa não possui integração WhatsApp vinculada" },
+      { status: 400 }
+    );
+  }
+
+  const { data: contato, error: contatoError } = await supabaseAdmin
+    .from("contatos")
+    .select("id, telefone")
+    .eq("id", conversa.contato_id)
+    .maybeSingle();
+
+  if (contatoError) {
+    return NextResponse.json(
+      { ok: false, error: contatoError.message },
+      { status: 500 }
+    );
+  }
+
+  if (!contato?.telefone) {
+    return NextResponse.json(
+      { ok: false, error: "Contato sem telefone válido" },
+      { status: 400 }
+    );
+  }
+
+  console.log("[POST /api/mensagens] contato carregado:", contato);
+
+  const { data: integracao, error: integracaoError } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select("id, status, phone_number_id")
+    .eq("id", conversa.integracao_whatsapp_id)
+    .maybeSingle();
+
+  if (integracaoError) {
+    return NextResponse.json(
+      { ok: false, error: integracaoError.message },
+      { status: 500 }
+    );
+  }
+
+  if (!integracao) {
+    return NextResponse.json(
+      { ok: false, error: "Integração WhatsApp não encontrada" },
+      { status: 404 }
+    );
+  }
+
+  console.log("[POST /api/mensagens] integração carregada:", integracao);
+
+  if (integracao.status !== "ativa") {
+    return NextResponse.json(
+      { ok: false, error: "A integração WhatsApp está inativa" },
+      { status: 400 }
+    );
+  }
+
+  const phoneNumberId =
+    integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+
+  if (!phoneNumberId) {
+    return NextResponse.json(
+      { ok: false, error: "WHATSAPP_PHONE_NUMBER_ID não configurado" },
+      { status: 500 }
+    );
+  }
+
+  if (!accessToken) {
+    return NextResponse.json(
+      { ok: false, error: "WHATSAPP_ACCESS_TOKEN não configurado" },
+      { status: 500 }
+    );
+  }
+
+  const janela24h = await canSendFreeformWhatsAppMessage({
+    conversaId: conversa_id,
+  });
+
+  if (!janela24h.podeEnviarMensagemLivre) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: janela24h.motivoBloqueio,
+        janela_24h: janela24h,
+      },
+      { status: 400 }
+    );
+  }
+
+  const envioWhatsApp = await sendWhatsAppTextMessage({
+    phoneNumberId,
+    accessToken,
+    to: contato.telefone,
+    body: conteudo,
+  });
+
+  if (!envioWhatsApp.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Falha ao enviar mensagem ao WhatsApp",
+        detalhes: envioWhatsApp.error,
+        retorno_meta: envioWhatsApp.raw,
+      },
+      { status: 502 }
+    );
+  }
+
+  const metadataFinal = {
+    ...(metadata_json ?? {}),
+    whatsapp: {
+      phone_number_id: phoneNumberId,
+      destino: contato.telefone,
+      janela_24h: {
+        ultima_mensagem_recebida_em: janela24h.ultimaMensagemRecebidaEm,
+        expira_em: janela24h.janelaExpiraEm,
+      },
+      envio_meta: envioWhatsApp.raw,
+    },
+  };
 
   const { data, error } = await supabaseAdmin
     .from("mensagens")
@@ -293,9 +443,10 @@ export async function POST(request: Request) {
         remetente_id,
         conteudo,
         tipo_mensagem,
-        origem,
-        status_envio,
-        metadata_json,
+        origem: "enviada",
+        status_envio: "enviada",
+        mensagem_externa_id: envioWhatsApp.messageId,
+        metadata_json: metadataFinal,
       },
     ])
     .select("*")

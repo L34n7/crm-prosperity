@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Header from "@/components/Header";
 import styles from "./conversas.module.css";
 import { can } from "@/lib/permissoes/frontend";
@@ -184,7 +184,8 @@ type AbaPainelDireito =
   | "historico"
   | "notas"
   | "mensagens_favoritas"
-  | "listas";
+  | "listas"
+  | "midia_docs_links";
 
 type NotaConversa = {
   id: string;
@@ -200,6 +201,83 @@ type NotaConversa = {
     email: string | null;
   } | null;
 };
+
+type MidiaAgrupadaItem = {
+  id: string;
+  tipo: "midia" | "documento" | "link";
+  subtipo: string;
+  nome: string;
+  url: string;
+  mimeType: string;
+  caption: string | null;
+  createdAt: string;
+  dateLabel: string;
+  isImage: boolean;
+  isVideo: boolean;
+  isAudio: boolean;
+  isPdf: boolean;
+};
+
+type MidiaAgrupadaSecao = {
+  data: string;
+  itens: MidiaAgrupadaItem[];
+};
+
+type AbaMidiaDocsLinks = "midia" | "documentos" | "links";
+
+type StatusLeadContato =
+  | "novo"
+  | "em_atendimento"
+  | "qualificado"
+  | "cliente"
+  | "perdido";
+
+type ContatoCompartilhadoMensagem = {
+  name?: {
+    formatted_name?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  phones?: Array<{
+    phone?: string;
+    wa_id?: string;
+    type?: string;
+  }>;
+  emails?: Array<{
+    email?: string;
+    type?: string;
+  }>;
+  addresses?: Array<{
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+    country_code?: string;
+    type?: string;
+  }>;
+  org?: {
+    company?: string;
+    department?: string;
+    title?: string;
+  };
+};
+
+type ContatoCadastroForm = {
+  nome: string;
+  telefone: string;
+  email: string;
+  origem: string;
+  campanha: string;
+  status_lead: StatusLeadContato;
+  observacoes: string;
+};
+
+function mensagemTemMidiaExpiravel(msg: Mensagem) {
+  if (msg.origem !== "recebida") return false;
+
+  return ["imagem", "audio", "video", "documento"].includes(msg.tipo_mensagem);
+}
 
 function formatarHora(data?: string | null) {
   if (!data) return "";
@@ -390,6 +468,58 @@ function getSharedContactPhones(msg: Mensagem) {
 function getSharedContactEmails(msg: Mensagem) {
   const primeiro = msg.metadata_json?.contacts?.[0];
   return primeiro?.emails || [];
+}
+
+function extrairLinksDoTexto(texto?: string | null) {
+  if (!texto) return [];
+
+  const regex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi;
+  const encontrados = texto.match(regex) || [];
+
+  return Array.from(
+    new Set(
+      encontrados.map((item) =>
+        item.startsWith("http://") || item.startsWith("https://")
+          ? item
+          : `https://${item}`
+      )
+    )
+  );
+}
+
+function getLabelMesAno(dataIso: string) {
+  return new Date(dataIso).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function getNomeContatoCompartilhado(contato: ContatoCompartilhadoMensagem) {
+  return (
+    contato.name?.formatted_name ||
+    [contato.name?.first_name, contato.name?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    "Contato compartilhado"
+  );
+}
+
+function getTelefonePrincipalContatoCompartilhado(
+  contato: ContatoCompartilhadoMensagem
+) {
+  const primeiroTelefone = contato.phones?.[0];
+  return primeiroTelefone?.phone || primeiroTelefone?.wa_id || "";
+}
+
+function getEmailPrincipalContatoCompartilhado(
+  contato: ContatoCompartilhadoMensagem
+) {
+  return contato.emails?.[0]?.email || "";
+}
+
+function getIniciaisContatoCompartilhado(contato: ContatoCompartilhadoMensagem) {
+  return getIniciais(getNomeContatoCompartilhado(contato));
 }
 
 type AudioMessagePlayerProps = {
@@ -728,6 +858,9 @@ export default function ConversasPage() {
   const [abaPainelDireito, setAbaPainelDireito] =
     useState<AbaPainelDireito>("contato");
 
+  const [abaMidiaDocsLinks, setAbaMidiaDocsLinks] =
+    useState<AbaMidiaDocsLinks>("midia");
+
   const [acaoAberta, setAcaoAberta] = useState<
     null | "transferir" | "atribuir" | "encerrar"
   >(null);
@@ -742,6 +875,142 @@ export default function ConversasPage() {
   const mensagensFavoritas = useMemo(() => {
     return mensagens.filter((msg) => msg.favorita);
   }, [mensagens]);
+  const [arquivoEnvio, setArquivoEnvio] = useState<File | null>(null);
+  const [legendaArquivo, setLegendaArquivo] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const midiaDocsLinksAgrupados = useMemo<MidiaAgrupadaSecao[]>(() => {
+    const itens: MidiaAgrupadaItem[] = [];
+
+    for (const msg of mensagens) {
+      const mediaId = msg.metadata_json?.media_id || null;
+      const mimeType = msg.metadata_json?.mime_type || "";
+      const caption = msg.metadata_json?.caption || null;
+      const filename = msg.metadata_json?.filename || null;
+      const urlMidia = mediaId ? `/api/whatsapp/media/${mediaId}` : null;
+
+      const isImage = msg.tipo_mensagem === "imagem";
+      const isVideo = msg.tipo_mensagem === "video";
+      const isDocumento = msg.tipo_mensagem === "documento";
+      const isAudioDocumento =
+        isDocumento && mimeType.toLowerCase().startsWith("audio/");
+      const isPdf = isDocumento && mimeType.toLowerCase().includes("pdf");
+
+      if (urlMidia && (isImage || isVideo || isDocumento)) {
+        itens.push({
+          id: msg.id,
+          tipo: isDocumento ? "documento" : "midia",
+          subtipo: msg.tipo_mensagem,
+          nome:
+            filename ||
+            caption ||
+            (isImage
+              ? "Imagem"
+              : isVideo
+              ? "Vídeo"
+              : isAudioDocumento
+              ? "Áudio"
+              : isPdf
+              ? "PDF"
+              : "Documento"),
+          url: urlMidia,
+          mimeType,
+          caption,
+          createdAt: msg.created_at,
+          dateLabel: formatarDataSeparador(msg.created_at),
+          isImage,
+          isVideo,
+          isAudio: isAudioDocumento,
+          isPdf,
+        });
+      }
+
+      const links = extrairLinksDoTexto(msg.conteudo);
+
+      links.forEach((link, index) => {
+        itens.push({
+          id: `${msg.id}-link-${index}`,
+          tipo: "link",
+          subtipo: "link",
+          nome: link,
+          url: link,
+          mimeType: "text/html",
+          caption: null,
+          createdAt: msg.created_at,
+          dateLabel: formatarDataSeparador(msg.created_at),
+          isImage: false,
+          isVideo: false,
+          isAudio: false,
+          isPdf: false,
+        });
+      });
+    }
+
+    const grupos = itens.reduce<Record<string, MidiaAgrupadaItem[]>>((acc, item) => {
+      if (!acc[item.dateLabel]) {
+        acc[item.dateLabel] = [];
+      }
+
+      acc[item.dateLabel].push(item);
+      return acc;
+    }, {});
+
+    return Object.entries(grupos)
+      .map(([data, itens]) => ({
+        data,
+        itens: itens.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
+      }))
+      .sort((a, b) => {
+        const aTime = new Date(a.itens[0]?.createdAt || 0).getTime();
+        const bTime = new Date(b.itens[0]?.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
+  }, [mensagens]);
+
+  const midiaDocsLinksFiltrados = useMemo(() => {
+    return midiaDocsLinksAgrupados
+      .map((grupo) => ({
+        ...grupo,
+        itens: grupo.itens.filter((item) => {
+          if (abaMidiaDocsLinks === "midia") {
+            return item.tipo === "midia";
+          }
+
+          if (abaMidiaDocsLinks === "documentos") {
+            return item.tipo === "documento";
+          }
+
+          return item.tipo === "link";
+        }),
+      }))
+      .filter((grupo) => grupo.itens.length > 0);
+  }, [midiaDocsLinksAgrupados, abaMidiaDocsLinks]);
+
+  const totalMidias = useMemo(() => {
+    return midiaDocsLinksAgrupados.reduce(
+      (total, grupo) => total + grupo.itens.filter((item) => item.tipo === "midia").length,
+      0
+    );
+  }, [midiaDocsLinksAgrupados]);
+
+  const totalDocumentos = useMemo(() => {
+    return midiaDocsLinksAgrupados.reduce(
+      (total, grupo) =>
+        total + grupo.itens.filter((item) => item.tipo === "documento").length,
+      0
+    );
+  }, [midiaDocsLinksAgrupados]);
+
+  const totalLinks = useMemo(() => {
+    return midiaDocsLinksAgrupados.reduce(
+      (total, grupo) => total + grupo.itens.filter((item) => item.tipo === "link").length,
+      0
+    );
+  }, [midiaDocsLinksAgrupados]);
+
+
   const impedirAutoScrollRef = useRef(false);
 
   const quantidadeMensagensFavoritas = useMemo(() => {
@@ -776,7 +1045,23 @@ export default function ConversasPage() {
     mimeType: string;
   } | null>(null);
 
-    function renderizarConteudoMensagem(msg: Mensagem) {
+
+
+  const [modalAdicionarContatoAberto, setModalAdicionarContatoAberto] = useState(false);
+  const [salvandoContatoCompartilhado, setSalvandoContatoCompartilhado] =
+    useState(false);
+
+  const [contatoCadastroForm, setContatoCadastroForm] = useState<ContatoCadastroForm>({
+    nome: "",
+    telefone: "",
+    email: "",
+    origem: "whatsapp_compartilhado",
+    campanha: "",
+    status_lead: "novo",
+    observacoes: "",
+  });
+
+  function renderizarConteudoMensagem(msg: Mensagem) {
     const mediaId = msg.metadata_json?.media_id || null;
     const url = mediaId ? `/api/whatsapp/media/${mediaId}` : null;
     const caption = msg.metadata_json?.caption || null;
@@ -932,21 +1217,78 @@ export default function ConversasPage() {
     }
 
     if (msg.tipo_mensagem === "contato") {
+      const contatosCompartilhados = msg.metadata_json?.contacts || [];
+
       return (
-        <div>
-          <p className={styles.messageText}>👤 {contatoNome}</p>
+        <div className={styles.sharedContactList}>
+          {contatosCompartilhados.map((contato, contatoIndex) => {
+            const nome = getNomeContatoCompartilhado(contato);
+            const telefones = contato.phones || [];
+            const emails = contato.emails || [];
+            const empresa = contato.org?.company || null;
+            const cargo = contato.org?.title || null;
 
-          {contatoTelefones.map((telefone, index) => (
-            <p key={`tel-${index}`} className={styles.messageText}>
-              {telefone.phone || telefone.wa_id || "Telefone não informado"}
-            </p>
-          ))}
+            return (
+              <div
+                key={`contato-compartilhado-${contatoIndex}`}
+                className={styles.sharedContactCard}
+              >
+                <div className={styles.sharedContactHeader}>
+                  <div className={styles.sharedContactAvatar}>
+                    {getIniciaisContatoCompartilhado(contato)}
+                  </div>
 
-          {contatoEmails.map((email, index) => (
-            <p key={`email-${index}`} className={styles.messageText}>
-              {email.email || "E-mail não informado"}
-            </p>
-          ))}
+                  <div className={styles.sharedContactInfo}>
+                    <p className={styles.sharedContactName}>{nome}</p>
+
+                    {telefones.length > 0 ? (
+                      telefones.map((telefone, telIndex) => (
+                        <p
+                          key={`tel-${contatoIndex}-${telIndex}`}
+                          className={styles.sharedContactMeta}
+                        >
+                          {telefone.phone || telefone.wa_id || "Telefone não informado"}
+                          {telefone.type ? ` • ${telefone.type}` : ""}
+                        </p>
+                      ))
+                    ) : (
+                      <p className={styles.sharedContactMeta}>Telefone não informado</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.sharedContactBody}>
+                  {emails.map((email, emailIndex) => (
+                    <p
+                      key={`email-${contatoIndex}-${emailIndex}`}
+                      className={styles.sharedContactDetail}
+                    >
+                      {email.email || "E-mail não informado"}
+                      {email.type ? ` • ${email.type}` : ""}
+                    </p>
+                  ))}
+
+                  {empresa && (
+                    <p className={styles.sharedContactDetail}>Empresa: {empresa}</p>
+                  )}
+
+                  {cargo && (
+                    <p className={styles.sharedContactDetail}>Cargo: {cargo}</p>
+                  )}
+                </div>
+
+                <div className={styles.sharedContactFooter}>
+                  <button
+                    type="button"
+                    className={styles.sharedContactAddButton}
+                    onClick={() => abrirModalAdicionarContato(contato)}
+                  >
+                    Adicionar contato
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       );
     }
@@ -982,23 +1324,29 @@ export default function ConversasPage() {
     }
 
     if (msg.tipo_mensagem === "unsupported") {
+      const tipoNaoSuportado = msg.metadata_json?.unsupported?.type || "desconhecido";
+
+      let titulo = "⚠️ Mensagem não suportada pela API do WhatsApp";
+
+      if (tipoNaoSuportado === "poll_creation") {
+        titulo = "📊 Enquete enviada pelo contato";
+      }
+
+      if (tipoNaoSuportado === "unknown") {
+        titulo = "📅 Evento ou conteúdo não reconhecido";
+      }
+
       return (
         <div>
+          <p className={styles.messageText}>{titulo}</p>
+
           <p className={styles.messageText}>
-            ⚠️ Mensagem não suportada pela API do WhatsApp
+            Este tipo de conteúdo ainda não é suportado pela API oficial.
           </p>
 
-          {msg.metadata_json?.unsupported?.type && (
-            <p className={styles.messageText}>
-              Tipo: {msg.metadata_json.unsupported.type}
-            </p>
-          )}
-
-          {msg.metadata_json?.unsupported?.details && (
-            <p className={styles.messageText}>
-              {msg.metadata_json.unsupported.details}
-            </p>
-          )}
+          <p className={styles.messageText}>
+            Tipo técnico: {tipoNaoSuportado}
+          </p>
         </div>
       );
     }
@@ -1007,6 +1355,86 @@ export default function ConversasPage() {
   }
 
   
+  function abrirModalAdicionarContato(contato: ContatoCompartilhadoMensagem) {
+    const nome = getNomeContatoCompartilhado(contato);
+    const telefone = getTelefonePrincipalContatoCompartilhado(contato);
+    const email = getEmailPrincipalContatoCompartilhado(contato);
+    const empresa = contato.org?.company || "";
+    const cargo = contato.org?.title || "";
+
+    setErro("");
+    setMensagemSucesso("");
+
+    setContatoCadastroForm({
+      nome,
+      telefone,
+      email,
+      origem: "whatsapp_compartilhado",
+      campanha: "",
+      status_lead: "novo",
+      observacoes:
+        [
+          "Contato adicionado a partir de contato compartilhado no WhatsApp.",
+          empresa ? `Empresa: ${empresa}` : "",
+          cargo ? `Cargo: ${cargo}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+    });
+
+    setModalAdicionarContatoAberto(true);
+  }
+
+  function fecharModalAdicionarContato() {
+    setModalAdicionarContatoAberto(false);
+    setSalvandoContatoCompartilhado(false);
+    setContatoCadastroForm({
+      nome: "",
+      telefone: "",
+      email: "",
+      origem: "whatsapp_compartilhado",
+      campanha: "",
+      status_lead: "novo",
+      observacoes: "",
+    });
+  }
+
+  async function salvarContatoCompartilhado() {
+    if (!contatoCadastroForm.telefone.trim()) {
+      setErro("Telefone é obrigatório.");
+      return;
+    }
+
+    try {
+      setSalvandoContatoCompartilhado(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch("/api/contatos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(contatoCadastroForm),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao criar contato");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Contato criado com sucesso.");
+      fecharModalAdicionarContato();
+    } catch {
+      setErro("Erro ao criar contato");
+    } finally {
+      setSalvandoContatoCompartilhado(false);
+    }
+  }
+
+
 
   async function carregarUsuarioLogado() {
     try {
@@ -1620,6 +2048,63 @@ export default function ConversasPage() {
       await carregarNotasDaConversa();
     } catch {
       setErro("Erro ao excluir nota");
+    }
+  }
+
+  async function enviarMidia(file?: File | null) {
+    const arquivo = file || arquivoEnvio;
+
+    setMensagemSucesso("");
+    setErro("");
+
+    if (!conversaSelecionada?.id) {
+      setErro("Selecione uma conversa.");
+      return;
+    }
+
+    if (!podeEnviarMensagem) {
+      setErro("Você não pode enviar mensagem nesta conversa.");
+      return;
+    }
+
+    if (!arquivo) {
+      setErro("Selecione um arquivo.");
+      return;
+    }
+
+    try {
+      setEnviando(true);
+
+      const formData = new FormData();
+      formData.append("conversa_id", conversaSelecionada.id);
+      formData.append("file", arquivo);
+
+      if (legendaArquivo.trim()) {
+        formData.append("caption", legendaArquivo.trim());
+      }
+
+      const res = await fetch("/api/mensagens/media", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao enviar mídia");
+        return;
+      }
+
+      setArquivoEnvio(null);
+      setLegendaArquivo("");
+      setMensagemSucesso(data.message || "Mídia enviada com sucesso.");
+
+      await carregarMensagens(conversaSelecionada.id, true);
+      await carregarConversas();
+    } catch {
+      setErro("Erro ao enviar mídia");
+    } finally {
+      setEnviando(false);
     }
   }
 
@@ -2737,80 +3222,90 @@ export default function ConversasPage() {
                                   );
                                 }
 
-                                return (
-                                    <div
-                                      id={`mensagem-${msg.id}`}
-                                      key={msg.id}
-                                      className={`${styles.messageRow} ${
-                                        isOutgoing
-                                          ? styles.messageRowOutgoing
-                                          : styles.messageRowIncoming
-                                      }`}
-                                    >
-                                    <div
-                                      className={`${styles.messageBubble} ${
-                                        isOutgoing
-                                          ? styles.messageBubbleOutgoing
-                                          : isAutomatic
-                                          ? styles.messageBubbleAutomatic
-                                          : styles.messageBubbleIncoming
-                                      }`}
-                                    >
-                                      {!isOutgoing &&
-                                        (msg.remetente_tipo === "bot" ||
-                                          msg.remetente_tipo === "ia") && (
-                                          <div className={styles.messageMetaTop}>
-                                            <span className={styles.senderLabel}>
-                                              {getRemetenteLabel(msg.remetente_tipo)}
-                                            </span>
-
-                                            {isAutomatic && (
-                                              <span className={styles.automaticBadge}>
-                                                automática
+                                  return (
+                                    <Fragment key={msg.id}>
+                                      <div
+                                        id={`mensagem-${msg.id}`}
+                                        className={`${styles.messageRow} ${
+                                          isOutgoing ? styles.messageRowOutgoing : styles.messageRowIncoming
+                                        }`}
+                                      >
+                                      <div
+                                        className={`${styles.messageBubble} ${
+                                          isOutgoing
+                                            ? styles.messageBubbleOutgoing
+                                            : isAutomatic
+                                            ? styles.messageBubbleAutomatic
+                                            : styles.messageBubbleIncoming
+                                        }`}
+                                      >
+                                        {!isOutgoing &&
+                                          (msg.remetente_tipo === "bot" || msg.remetente_tipo === "ia") && (
+                                            <div className={styles.messageMetaTop}>
+                                              <span className={styles.senderLabel}>
+                                                {getRemetenteLabel(msg.remetente_tipo)}
                                               </span>
-                                            )}
-                                          </div>
-                                        )}
 
-                                      <div className={styles.messageContentRow}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                          {renderizarConteudoMensagem(msg)}
+                                              {isAutomatic && (
+                                                <span className={styles.automaticBadge}>automática</span>
+                                              )}
+                                            </div>
+                                          )}
+
+                                        <div className={styles.messageContentRow}>
+                                          <div style={{ flex: 1, minWidth: 0 }}>
+                                            {renderizarConteudoMensagem(msg)}
+                                          </div>
+
+                                          {(msg.remetente_tipo === "usuario" ||
+                                            msg.remetente_tipo === "contato") && (
+                                            <button
+                                              type="button"
+                                              className={`${styles.messageFavoriteButton} ${
+                                                msg.favorita ? styles.messageFavoriteButtonActive : ""
+                                              }`}
+                                              onClick={() => alternarMensagemFavorita(msg)}
+                                              title={
+                                                msg.favorita
+                                                  ? "Remover dos favoritos"
+                                                  : "Adicionar aos favoritos"
+                                              }
+                                            >
+                                              ☆
+                                            </button>
+                                          )}
                                         </div>
 
-                                        {(msg.remetente_tipo === "usuario" || msg.remetente_tipo === "contato") && (
-                                          <button
-                                            type="button"
-                                            className={`${styles.messageFavoriteButton} ${
-                                              msg.favorita ? styles.messageFavoriteButtonActive : ""
-                                            }`}
-                                            onClick={() => alternarMensagemFavorita(msg)}
-                                            title={msg.favorita ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-                                          >
-                                            ☆
-                                          </button>
-                                        )}
-                                      </div>
+                                        <div className={styles.messageMetaBottom}>
+                                          <span>{formatarHora(msg.created_at)}</span>
 
-                                      <div className={styles.messageMetaBottom}>
-                                        <span>{formatarHora(msg.created_at)}</span>
-
-                                        {isOutgoing && (
-                                          <span
-                                            className={`${styles.statusIcon} ${
-                                              msg.status_envio === "lida"
-                                                ? styles.statusIconRead
-                                                : msg.status_envio === "falha"
-                                                ? styles.statusIconError
-                                                : styles.statusIconDefault
-                                            }`}
-                                            title={msg.status_envio}
-                                          >
-                                            {getStatusEnvioLabel(msg.status_envio)}
-                                          </span>
-                                        )}
+                                          {isOutgoing && (
+                                            <span
+                                              className={`${styles.statusIcon} ${
+                                                msg.status_envio === "lida"
+                                                  ? styles.statusIconRead
+                                                  : msg.status_envio === "falha"
+                                                  ? styles.statusIconError
+                                                  : styles.statusIconDefault
+                                              }`}
+                                              title={msg.status_envio}
+                                            >
+                                              {getStatusEnvioLabel(msg.status_envio)}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
+
+                                    {mensagemTemMidiaExpiravel(msg) && (
+                                      <div className={styles.expiringMediaNoticeRow}>
+                                        <div className={styles.expiringMediaNoticeBadge}>
+                                          ~ Esta mídia pode expirar em até 7 dias. Para manter o acesso, faça o
+                                          download enquanto estiver disponível.
+                                        </div>
+                                      </div>
+                                    )}
+                                  </Fragment>
                                 );
                               })}
                             </div>
@@ -2843,6 +3338,7 @@ export default function ConversasPage() {
                               type="button"
                               className={styles.toolButton}
                               title="Anexar arquivo"
+                              onClick={() => fileInputRef.current?.click()}
                             >
                               📎
                             </button>
@@ -2869,27 +3365,74 @@ export default function ConversasPage() {
                             </button>
                           </div>
 
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            style={{ display: "none" }}
+                            accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              if (!file) return;
+                              setArquivoEnvio(file);
+                            }}
+                          />
+
+                          {arquivoEnvio && (
+                            <div className={styles.timelineInfoSmall}>
+                              Arquivo selecionado: <strong>{arquivoEnvio.name}</strong>
+                              <button
+                                type="button"
+                                className={styles.textButton}
+                                onClick={() => {
+                                  setArquivoEnvio(null);
+                                  setLegendaArquivo("");
+                                }}
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          )}
+
                           <div className={styles.composerRow}>
                             <textarea
                               className={styles.messageInput}
                               rows={2}
-                              value={conteudo}
-                              onChange={(e) => setConteudo(e.target.value)}
+                              value={arquivoEnvio ? legendaArquivo : conteudo}
+                              onChange={(e) => {
+                                if (arquivoEnvio) {
+                                  setLegendaArquivo(e.target.value);
+                                } else {
+                                  setConteudo(e.target.value);
+                                }
+                              }}
                               onKeyDown={onKeyDownMensagem}
                               placeholder={
-                                podeEnviarMensagem
-                                  ? "Digite uma mensagem"
-                                  : "Você não pode responder esta conversa"
+                                !podeEnviarMensagem
+                                  ? "Você não pode responder esta conversa"
+                                  : arquivoEnvio
+                                  ? "Digite uma legenda opcional"
+                                  : "Digite uma mensagem"
                               }
                               disabled={!podeEnviarMensagem || enviando}
                             />
 
                             <button
-                              onClick={enviarMensagem}
-                              disabled={enviando || !conteudo.trim() || !podeEnviarMensagem}
+                              onClick={() => {
+                                if (arquivoEnvio) {
+                                  enviarMidia();
+                                  return;
+                                }
+
+                                enviarMensagem();
+                              }}
+                              disabled={
+                                enviando ||
+                                !podeEnviarMensagem ||
+                                (!arquivoEnvio && !conteudo.trim())
+                              }
                               className={styles.sendButton}
                             >
-                              {enviando ? "Enviando..." : "Enviar"}
+                              {enviando ? "Enviando..." : arquivoEnvio ? "Enviar arquivo" : "Enviar"}
                             </button>
                           </div>
 
@@ -2917,17 +3460,42 @@ export default function ConversasPage() {
                           </button>
                         )}
 
-                        <h3 className={styles.rightPanelTitle}>
-                          {abaPainelDireito === "contato"
-                            ? "Dados do contato"
-                            : abaPainelDireito === "detalhes"
-                            ? "Detalhes"
-                            : abaPainelDireito === "historico"
-                            ? "Histórico"
-                            : abaPainelDireito === "notas"
-                            ? "Notas"
-                            : "Mensagens favoritas"}
-                        </h3>
+                        <div className={styles.rightPanelTitleWrap}>
+                          <h3 className={styles.rightPanelTitle}>
+                            {abaPainelDireito === "contato"
+                              ? "Dados do contato"
+                              : abaPainelDireito === "detalhes"
+                              ? "Detalhes"
+                              : abaPainelDireito === "historico"
+                              ? "Histórico"
+                              : abaPainelDireito === "notas"
+                              ? "Notas"
+                              : abaPainelDireito === "listas"
+                              ? "Listas"
+                              : abaPainelDireito === "midia_docs_links"
+                              ? "Mídia, links e docs"
+                              : "Mensagens favoritas"}
+                          </h3>
+
+                          {abaPainelDireito === "midia_docs_links" && (
+                            <div className={styles.mediaExpiryInfoWrap}>
+                              <button
+                                type="button"
+                                className={styles.mediaExpiryInfoButton}
+                                title="Informação sobre expiração da mídia"
+                              >
+                                i
+                              </button>
+
+                              <div className={styles.mediaExpiryInfoTooltip}>
+                                As mídias recebidas pelo WhatsApp podem expirar em até 7 dias.
+                                Para continuar acessando imagens, vídeos, áudios e arquivos depois
+                                desse período, faça o download enquanto a mídia ainda estiver
+                                disponível.
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <button
@@ -3081,9 +3649,11 @@ export default function ConversasPage() {
                             <button
                               type="button"
                               className={styles.whatsListActionButton}
-                              onClick={() =>
-                                setMensagemSucesso("Abrir mídia, links e documentos (implementar API)")
-                              }
+                              onClick={() => {
+                                setPainelDireitoAberto(true);
+                                setAbaPainelDireito("midia_docs_links");
+                                setAbaMidiaDocsLinks("midia");
+                              }}
                             >
                               <span className={styles.whatsListActionLeft}>
                                 <span className={styles.whatsListActionIcon}>🖼️</span>
@@ -3091,7 +3661,9 @@ export default function ConversasPage() {
                                   Mídia, links e docs
                                 </span>
                               </span>
-                              <span className={styles.whatsListActionRight}>0</span>
+                              <span className={styles.whatsListActionRight}>
+                                {midiaDocsLinksAgrupados.reduce((total, grupo) => total + grupo.itens.length, 0)}
+                              </span>
                             </button>
 
                             {/* Favoritas */}
@@ -3424,6 +3996,197 @@ export default function ConversasPage() {
                         </div>
                       )}
 
+
+                      {abaPainelDireito === "midia_docs_links" && (
+                        <div className={styles.mediaBrowserPanel}>
+                          <div className={styles.mediaBrowserTabs}>
+                            <button
+                              type="button"
+                              className={`${styles.mediaBrowserTab} ${
+                                abaMidiaDocsLinks === "midia" ? styles.mediaBrowserTabActive : ""
+                              }`}
+                              onClick={() => setAbaMidiaDocsLinks("midia")}
+                            >
+                              Mídia
+                              <span className={styles.mediaBrowserTabCount}>{totalMidias}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`${styles.mediaBrowserTab} ${
+                                abaMidiaDocsLinks === "documentos" ? styles.mediaBrowserTabActive : ""
+                              }`}
+                              onClick={() => setAbaMidiaDocsLinks("documentos")}
+                            >
+                              Documentos
+                              <span className={styles.mediaBrowserTabCount}>{totalDocumentos}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`${styles.mediaBrowserTab} ${
+                                abaMidiaDocsLinks === "links" ? styles.mediaBrowserTabActive : ""
+                              }`}
+                              onClick={() => setAbaMidiaDocsLinks("links")}
+                            >
+                              Links
+                              <span className={styles.mediaBrowserTabCount}>{totalLinks}</span>
+                            </button>
+                          </div>
+
+                          {midiaDocsLinksFiltrados.length === 0 ? (
+                            <div className={styles.infoBoxMuted}>
+                              Nenhuma mídia encontrada nesta conversa.
+                            </div>
+                          ) : (
+                            midiaDocsLinksFiltrados.map((grupo) => (
+                              <div key={grupo.data} className={styles.mediaBrowserSection}>
+                                <div className={styles.mediaBrowserSectionTitle}>{grupo.data}</div>
+
+                                {abaMidiaDocsLinks === "midia" ? (
+                                  <div className={styles.mediaBrowserThumbGrid}>
+                                    {grupo.itens.map((item) => {
+                                      if (item.isImage) {
+                                        return (
+                                          <button
+                                            key={item.id}
+                                            type="button"
+                                            className={styles.mediaThumbCardCompact}
+                                            onClick={() => {
+                                              setImagemModalUrl(item.url);
+                                              setImagemModalTitulo(item.nome);
+                                              setImagemZoom(1);
+                                            }}
+                                          >
+                                            <img
+                                              src={item.url}
+                                              alt={item.nome}
+                                              className={styles.mediaThumbImageCompact}
+                                            />
+                                            <div className={styles.mediaThumbOverlay}>
+                                              <span className={styles.mediaThumbOverlayType}>Imagem</span>
+                                              <span className={styles.mediaThumbOverlayTime}>
+                                                {formatarHora(item.createdAt)}
+                                              </span>
+                                            </div>
+                                          </button>
+                                        );
+                                      }
+
+                                      return (
+                                        <button
+                                          key={item.id}
+                                          type="button"
+                                          className={styles.mediaThumbCardCompact}
+                                          onClick={() =>
+                                            setArquivoPreview({
+                                              url: item.url,
+                                              nome: item.nome,
+                                              mimeType: item.mimeType,
+                                            })
+                                          }
+                                        >
+                                          <div className={styles.mediaThumbPlaceholderCompact}>🎥</div>
+                                          <div className={styles.mediaThumbOverlay}>
+                                            <span className={styles.mediaThumbOverlayType}>Vídeo</span>
+                                            <span className={styles.mediaThumbOverlayTime}>
+                                              {formatarHora(item.createdAt)}
+                                            </span>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : abaMidiaDocsLinks === "documentos" ? (
+                                  <div className={styles.mediaBrowserList}>
+                                    {grupo.itens.map((item) => {
+                                      if (item.isAudio) {
+                                        return (
+                                          <div key={item.id} className={styles.mediaAudioCard}>
+                                            <div className={styles.mediaAudioHeader}>
+                                              <strong className={styles.mediaDocTitle}>{item.nome}</strong>
+                                              <span className={styles.mediaDocMeta}>
+                                                Áudio • {formatarHora(item.createdAt)}
+                                              </span>
+                                            </div>
+
+                                            <AudioMessagePlayer src={item.url} fileName={item.nome} />
+                                          </div>
+                                        );
+                                      }
+
+                                      if (item.isPdf) {
+                                        return (
+                                          <button
+                                            key={item.id}
+                                            type="button"
+                                            className={styles.mediaDocCard}
+                                            onClick={() =>
+                                              setArquivoPreview({
+                                                url: item.url,
+                                                nome: item.nome,
+                                                mimeType: item.mimeType,
+                                              })
+                                            }
+                                          >
+                                            <div className={styles.mediaDocIcon}>📄</div>
+                                            <div className={styles.mediaDocContent}>
+                                              <strong className={styles.mediaDocTitle}>{item.nome}</strong>
+                                              <span className={styles.mediaDocMeta}>
+                                                PDF • {formatarHora(item.createdAt)}
+                                              </span>
+                                            </div>
+                                          </button>
+                                        );
+                                      }
+
+                                      return (
+                                        <a
+                                          key={item.id}
+                                          href={item.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className={styles.mediaDocCard}
+                                        >
+                                          <div className={styles.mediaDocIcon}>📎</div>
+                                          <div className={styles.mediaDocContent}>
+                                            <strong className={styles.mediaDocTitle}>{item.nome}</strong>
+                                            <span className={styles.mediaDocMeta}>
+                                              Documento • {formatarHora(item.createdAt)}
+                                            </span>
+                                          </div>
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className={styles.mediaBrowserList}>
+                                    {grupo.itens.map((item) => (
+                                      <a
+                                        key={item.id}
+                                        href={item.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className={styles.mediaLinkCard}
+                                      >
+                                        <div className={styles.mediaLinkIcon}>🔗</div>
+                                        <div className={styles.mediaLinkContent}>
+                                          <strong className={styles.mediaLinkTitle}>Link</strong>
+                                          <span className={styles.mediaLinkUrl}>{item.url}</span>
+                                          <span className={styles.mediaDocMeta}>
+                                            {formatarHora(item.createdAt)}
+                                          </span>
+                                        </div>
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+
                       {abaPainelDireito === "listas" && (
                         <div className={styles.panelSectionStack}>
                           <div className={styles.noteComposer}>
@@ -3713,6 +4476,170 @@ export default function ConversasPage() {
           </section>
         </div>
       </div>
+
+      {modalAdicionarContatoAberto && (
+        <div
+          className={styles.contactModalOverlay}
+          onClick={fecharModalAdicionarContato}
+        >
+          <div
+            className={styles.contactModalCard}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.contactModalHeader}>
+              <div>
+                <h3 className={styles.contactModalTitle}>Adicionar contato</h3>
+                <p className={styles.contactModalSubtitle}>
+                  Revise e complete os dados antes de salvar.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.textButton}
+                onClick={fecharModalAdicionarContato}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.contactModalBody}>
+              <div className={styles.contactModalGrid}>
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Nome</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.nome}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        nome: e.target.value,
+                      }))
+                    }
+                    placeholder="Nome do contato"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Telefone</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.telefone}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        telefone: e.target.value,
+                      }))
+                    }
+                    placeholder="Telefone"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>E-mail</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.email}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        email: e.target.value,
+                      }))
+                    }
+                    placeholder="E-mail"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Origem</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.origem}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        origem: e.target.value,
+                      }))
+                    }
+                    placeholder="Origem"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Campanha</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.campanha}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        campanha: e.target.value,
+                      }))
+                    }
+                    placeholder="Campanha"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Status do lead</label>
+                  <select
+                    className={styles.actionSelect}
+                    value={contatoCadastroForm.status_lead}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        status_lead: e.target.value as StatusLeadContato,
+                      }))
+                    }
+                  >
+                    <option value="novo">Novo</option>
+                    <option value="em_atendimento">Em atendimento</option>
+                    <option value="qualificado">Qualificado</option>
+                    <option value="cliente">Cliente</option>
+                    <option value="perdido">Perdido</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className={styles.contactModalField}>
+                <label className={styles.actionLabel}>Observações</label>
+                <textarea
+                  className={styles.noteInput}
+                  rows={5}
+                  value={contatoCadastroForm.observacoes}
+                  onChange={(e) =>
+                    setContatoCadastroForm((atual) => ({
+                      ...atual,
+                      observacoes: e.target.value,
+                    }))
+                  }
+                  placeholder="Observações"
+                />
+              </div>
+
+              <div className={styles.actionButtons}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={fecharModalAdicionarContato}
+                  disabled={salvandoContatoCompartilhado}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={salvarContatoCompartilhado}
+                  disabled={salvandoContatoCompartilhado}
+                >
+                  {salvandoContatoCompartilhado ? "Salvando..." : "Salvar contato"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {imagemModalUrl && (
         <div
