@@ -126,16 +126,24 @@
 }
 
 .sendButton {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
   border: none;
-  background: #0f172a;
-  color: #ffffff;
-  padding: 0 18px;
-  min-width: 100px;
-  height: 52px;
+  background: #2563eb;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .sendButton:hover {
   background: #111827;
+}
+
+.sendButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .toolButton {
@@ -916,6 +924,23 @@
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+  letter-spacing: normal;
+  font-family:
+    "Segoe UI",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Apple Color Emoji",
+    "Noto Color Emoji",
+    sans-serif;
+}
+
+.messageText img.emoji,
+.favoriteMessageText img.emoji {
+  width: 1.1em;
+  height: 1.1em;
+  margin: 0 0.04em;
+  vertical-align: -0.18em;
+  display: inline-block;
 }
 
 .messageContentRow {
@@ -977,6 +1002,7 @@
   border-top: 1px solid #dde3ea;
   background: #f0f2f5;
   padding: 12px 18px 14px;
+  position: relative;
 }
 
 .composerTools {
@@ -1023,9 +1049,17 @@
 }
 
 .messageInput {
-  min-height: 52px;
-  max-height: 140px;
+  width: 100%;
   resize: none;
+  border-radius: 20px;
+  padding: 10px 14px;
+  font-family:
+    "Segoe UI",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Apple Color Emoji",
+    "Noto Color Emoji",
+    sans-serif;
 }
 
 .footerHint {
@@ -2668,6 +2702,438 @@
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
+}
+
+.attachmentMenuWrap {
+  position: relative;
+}
+
+.attachmentMenuDropdown {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  min-width: 190px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 30;
+}
+
+.attachmentMenuItem {
+  border: none;
+  background: transparent;
+  color: #f8fafc;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.attachmentMenuItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.attachmentMenuIcon {
+  width: 22px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 16px;
+}
+
+.filePreviewCard {
+  margin-bottom: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  backdrop-filter: blur(8px);
+}
+
+.filePreviewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.filePreviewDocumentCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.toolButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.72);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.toolButton:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(100, 116, 139, 0.28);
+}
+
+
+.composerRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.composerLeft {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.composerCenter {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+.composerRight {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+
+.filePreviewCard {
+  margin-bottom: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  padding: 12px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.filePreviewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filePreviewLabel {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.filePreviewRemoveButton {
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.filePreviewRemoveButton:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: #0f172a;
+}
+
+.audioPreviewCard {
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.audioPreviewTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.audioPreviewBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.audioPreviewFileName {
+  font-size: 13px;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audioPreviewPlayerWrap {
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.audioPreviewPlayer {
+  width: 100%;
+  height: 40px;
+}
+
+.filePreviewFileNameFooter {
+  font-size: 13px;
+  color: #64748b;
+  word-break: break-word;
+}
+
+
+.cameraModal {
+  position: absolute;
+  bottom: 95px;
+  right: 16px;
+  width: min(600px, calc(100vw - 48px));
+  background: #000;
+  border-radius: 18px;
+  overflow: hidden;
+  z-index: 80;
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cameraVideo {
+  width: 100%;
+  height: 600px;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
+.cameraActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(15, 23, 42, 0.96);
+}
+
+.cameraActions button {
+  border: none;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+
+.emojiPicker {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 60;
+  z-index: 90;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.emojiPickerWrap {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+
+.messageEditor {
+  width: 100%;
+  min-height: 44px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  outline: none;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 14px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+  font-family:
+    "Segoe UI",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Apple Color Emoji",
+    "Noto Color Emoji",
+    sans-serif;
+}
+
+.messageEditor:focus {
+  border-color: rgba(37, 99, 235, 0.32);
+  box-shadow:
+    0 0 0 4px rgba(37, 99, 235, 0.08),
+    0 10px 24px rgba(37, 99, 235, 0.08);
+  background: #ffffff;
+}
+
+.messageEditor:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.messageEditor[contenteditable="false"] {
+  background: #f8fafc;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.infoValueRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.editIconButton {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: 0.2s ease;
+}
+
+.editIconButton:hover {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+/* Inputs inline */
+.inlineInput {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 14px;
+  outline: none;
+}
+
+.inlineTextarea {
+  width: 100%;
+  min-height: 60px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 14px;
+  resize: vertical;
+  outline: none;
+}
+
+.infoEditBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.infoEditActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.inlineSaveButton {
+  border: none;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inlineSaveButton:hover {
+  background: #111827;
+}
+
+.inlineCancelButton {
+  border: 1px solid #d9e0e7;
+  background: #ffffff;
+  color: #334155;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inlineCancelButton:hover {
+  background: #f8fafc;
+}
+
+.messageText :global(img.emoji),
+.favoriteMessageText :global(img.emoji) {
+  width: 1.45em !important;
+  height: 2em !important;
+  min-width: 1.6em !important;
+  min-height: 1.15em !important;
+  max-width: none !important;
+  max-height: none !important;
+  display: inline-block !important;
+  vertical-align: -0.16em;
+  margin: 0 0.02em;
+  object-fit: contain;
+}
+
+.messageText :global(span),
+.favoriteMessageText :global(span) {
+  display: inline;
 }
 
 @media (max-width: 640px) {

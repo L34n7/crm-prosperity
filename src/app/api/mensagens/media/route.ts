@@ -13,8 +13,16 @@ import {
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { uploadWhatsAppMedia } from "@/lib/whatsapp/upload-media";
 import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
+import { spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { createRequire } from "node:module";
+
+export const runtime = "nodejs";
 
 const supabaseAdmin = getSupabaseAdmin();
+const require = createRequire(import.meta.url);
 
 type ConversaAcesso = {
   id: string;
@@ -84,6 +92,127 @@ function getConteudoPadrao(tipoMensagem: string, fileName?: string | null) {
   }
 }
 
+function normalizarCaminhoRootPlaceholder(caminho: string) {
+  const cwd = process.cwd();
+
+  if (caminho.startsWith("\\ROOT\\")) {
+    return path.join(cwd, caminho.replace(/^\\ROOT\\/, ""));
+  }
+
+  if (caminho.startsWith("/ROOT/")) {
+    return path.join(cwd, caminho.replace(/^\/ROOT\//, ""));
+  }
+
+  if (caminho.startsWith("ROOT\\")) {
+    return path.join(cwd, caminho.replace(/^ROOT\\/, ""));
+  }
+
+  if (caminho.startsWith("ROOT/")) {
+    return path.join(cwd, caminho.replace(/^ROOT\//, ""));
+  }
+
+  return caminho;
+}
+
+async function getFfmpegBinaryPath() {
+  const resolved = require("ffmpeg-static");
+
+  if (!resolved || typeof resolved !== "string") {
+    throw new Error("Não foi possível localizar o binário do FFmpeg.");
+  }
+
+  const caminhoNormalizado = normalizarCaminhoRootPlaceholder(resolved);
+
+  try {
+    await fs.access(caminhoNormalizado);
+    return caminhoNormalizado;
+  } catch {
+    throw new Error(
+      `Binário do FFmpeg não encontrado no caminho: ${caminhoNormalizado}`
+    );
+  }
+}
+
+async function converterAudioWebmParaM4a(file: File): Promise<File> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crm-audio-"));
+  const inputPath = path.join(tmpDir, "input.webm");
+  const outputPath = path.join(tmpDir, "output.m4a");
+
+  await fs.writeFile(inputPath, buffer);
+
+  await new Promise<void>(async (resolve, reject) => {
+    let ffmpegBinaryPath = "";
+
+    try {
+      ffmpegBinaryPath = await getFfmpegBinaryPath();
+      console.log("[FFMPEG] Caminho resolvido:", ffmpegBinaryPath);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    const ffmpeg = spawn(ffmpegBinaryPath, [
+      "-i",
+      inputPath,
+      "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      "44100",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "128k",
+      "-movflags",
+      "+faststart",
+      "-f",
+      "mp4",
+      "-y",
+      outputPath,
+    ]);
+
+    let stderr = "";
+
+    ffmpeg.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    ffmpeg.on("error", (error) => {
+      reject(error);
+    });
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(
+        new Error(
+          `Falha ao converter áudio com FFmpeg. Código: ${code}. Detalhes: ${stderr}`
+        )
+      );
+    });
+  });
+
+  const convertidoBuffer = await fs.readFile(outputPath);
+  await fs.rm(tmpDir, { recursive: true, force: true });
+
+  return new File([convertidoBuffer], `audio-${Date.now()}.m4a`, {
+    type: "audio/mp4",
+  });
+}
+
+async function prepararArquivoParaUpload(file: File): Promise<File> {
+  if (file.type === "audio/webm" || file.name.toLowerCase().endsWith(".webm")) {
+    return await converterAudioWebmParaM4a(file);
+  }
+
+  return file;
+}
+
 export async function POST(request: Request) {
   const resultado = await getUsuarioContexto();
 
@@ -124,7 +253,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const mimeType = file.type || "application/octet-stream";
+    const arquivoPreparado = await prepararArquivoParaUpload(file);
+
+    console.log("[MEDIA] arquivo original:", {
+      nome: file.name,
+      type: file.type,
+      size: file.size,
+    });
+
+    console.log("[MEDIA] arquivo preparado:", {
+      nome: arquivoPreparado.name,
+      type: arquivoPreparado.type,
+      size: arquivoPreparado.size,
+    });
+
+    const mimeType = arquivoPreparado.type || "application/octet-stream";
     const tipoMensagem = detectarTipoMensagemPorMime(mimeType);
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
@@ -165,7 +308,10 @@ export async function POST(request: Request) {
 
     if (!conversa.integracao_whatsapp_id) {
       return NextResponse.json(
-        { ok: false, error: "A conversa não possui integração WhatsApp vinculada" },
+        {
+          ok: false,
+          error: "A conversa não possui integração WhatsApp vinculada",
+        },
         { status: 400 }
       );
     }
@@ -247,7 +393,7 @@ export async function POST(request: Request) {
     const uploadResult = await uploadWhatsAppMedia({
       phoneNumberId,
       accessToken,
-      file,
+      file: arquivoPreparado,
     });
 
     if (!uploadResult.ok || !uploadResult.mediaId) {
@@ -269,7 +415,7 @@ export async function POST(request: Request) {
       tipoMensagem,
       mediaId: uploadResult.mediaId,
       caption: legenda || null,
-      fileName: file.name || null,
+      fileName: arquivoPreparado.name || null,
     });
 
     if (!sendResult.ok) {
@@ -286,7 +432,7 @@ export async function POST(request: Request) {
 
     const conteudoFinal = legenda?.trim()
       ? legenda.trim()
-      : getConteudoPadrao(tipoMensagem, file.name);
+      : getConteudoPadrao(tipoMensagem, arquivoPreparado.name);
 
     const metadataJson = {
       tipo_original_whatsapp:
@@ -301,7 +447,7 @@ export async function POST(request: Request) {
       mime_type: mimeType,
       sha256: null,
       caption: legenda?.trim() || null,
-      filename: file.name || null,
+      filename: arquivoPreparado.name || null,
       url: null,
       voice: false,
       contacts: null,
@@ -352,6 +498,8 @@ export async function POST(request: Request) {
       mensagem,
     });
   } catch (error) {
+    console.error("[MEDIA] erro ao enviar mídia:", error);
+
     return NextResponse.json(
       {
         ok: false,

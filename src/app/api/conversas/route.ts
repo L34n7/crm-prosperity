@@ -102,7 +102,9 @@ export async function GET(request: Request) {
         id,
         nome,
         telefone,
-        email
+        email,
+        empresa,
+        observacoes
       ),
       setores (
         id,

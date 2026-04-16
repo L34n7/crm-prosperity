@@ -78,24 +78,19 @@ export async function PUT(
     );
   }
 
-  const body = await request.json();
+const body = await request.json();
 
-  const nome = body?.nome?.trim() || null;
-  const telefoneOriginal = body?.telefone?.trim();
+const payload: Record<string, unknown> = {};
+
+// nome
+if (body?.nome !== undefined) {
+  payload.nome = body.nome?.trim() || null;
+}
+
+// telefone
+if (body?.telefone !== undefined) {
+  const telefoneOriginal = body.telefone?.trim();
   const telefone = telefoneOriginal ? normalizarTelefone(telefoneOriginal) : "";
-  const email = body?.email?.trim()?.toLowerCase() || null;
-  const origem = body?.origem?.trim() || null;
-  const campanha = body?.campanha?.trim() || null;
-  const status_lead = body?.status_lead;
-  const observacoes = body?.observacoes?.trim() || null;
-  const empresa_id = contatoAtual.empresa_id;
-
-  if (!empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Empresa é obrigatória" },
-      { status: 400 }
-    );
-  }
 
   if (!telefone) {
     return NextResponse.json(
@@ -104,34 +99,10 @@ export async function PUT(
     );
   }
 
-  if (
-    !["novo", "em_atendimento", "qualificado", "cliente", "perdido"].includes(
-      status_lead
-    )
-  ) {
-    return NextResponse.json(
-      { ok: false, error: "Status do lead inválido" },
-      { status: 400 }
-    );
-  }
-
-  const { data: empresa } = await supabaseAdmin
-    .from("empresas")
-    .select("id")
-    .eq("id", empresa_id)
-    .maybeSingle();
-
-  if (!empresa) {
-    return NextResponse.json(
-      { ok: false, error: "Empresa não encontrada" },
-      { status: 404 }
-    );
-  }
-
   const { data: contatoComMesmoTelefone } = await supabaseAdmin
     .from("contatos")
     .select("id")
-    .eq("empresa_id", empresa_id)
+    .eq("empresa_id", contatoAtual.empresa_id)
     .eq("telefone", telefone)
     .neq("id", id)
     .maybeSingle();
@@ -143,18 +114,60 @@ export async function PUT(
     );
   }
 
+  payload.telefone = telefone;
+}
+
+// email
+if (body?.email !== undefined) {
+  payload.email = body.email?.trim()?.toLowerCase() || null;
+}
+
+// empresa
+if (body?.empresa !== undefined) {
+  payload.empresa = body.empresa?.trim() || null;
+}
+
+// origem
+if (body?.origem !== undefined) {
+  payload.origem = body.origem?.trim() || null;
+}
+
+// campanha
+if (body?.campanha !== undefined) {
+  payload.campanha = body.campanha?.trim() || null;
+}
+
+// status_lead
+if (body?.status_lead !== undefined) {
+  if (
+    !["novo", "em_atendimento", "qualificado", "cliente", "perdido"].includes(
+      body.status_lead
+    )
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Status do lead inválido" },
+      { status: 400 }
+    );
+  }
+
+  payload.status_lead = body.status_lead;
+}
+
+// observacoes
+if (body?.observacoes !== undefined) {
+  payload.observacoes = body.observacoes?.trim() || null;
+}
+
+if (Object.keys(payload).length === 0) {
+  return NextResponse.json(
+    { ok: false, error: "Nenhum campo válido enviado para atualização" },
+    { status: 400 }
+  );
+}
+
   const { data, error } = await supabaseAdmin
     .from("contatos")
-    .update({
-      empresa_id,
-      nome,
-      telefone,
-      email,
-      origem,
-      campanha,
-      status_lead,
-      observacoes,
-    })
+    .update(payload)
     .eq("id", id)
     .select("*")
     .single();

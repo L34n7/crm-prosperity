@@ -1,9 +1,11 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Header from "@/components/Header";
 import styles from "./conversas.module.css";
 import { can } from "@/lib/permissoes/frontend";
+import EmojiPicker from "emoji-picker-react";
+import twemoji from "twemoji";
 
 type Conversa = {
   id: string;
@@ -27,6 +29,7 @@ type Conversa = {
   }[];
 
   contatos: {
+    id?: string;
     nome: string | null;
     telefone: string;
     email?: string | null;
@@ -398,6 +401,7 @@ function getStatusEnvioLabel(status: Mensagem["status_envio"]) {
   }
 }
 
+
 function getIniciais(nome?: string | null) {
   const valor = nome?.trim() || "Contato";
   const partes = valor.split(" ").filter(Boolean);
@@ -521,6 +525,17 @@ function getEmailPrincipalContatoCompartilhado(
 function getIniciaisContatoCompartilhado(contato: ContatoCompartilhadoMensagem) {
   return getIniciais(getNomeContatoCompartilhado(contato));
 }
+
+
+function converterTextoParaEmojiHtml(texto?: string | null) {
+  const valor = texto || "";
+
+  return twemoji.parse(valor, {
+    folder: "svg",
+    ext: ".svg",
+  });
+}
+
 
 type AudioMessagePlayerProps = {
   src: string;
@@ -720,6 +735,7 @@ function AudioMessagePlayer({
     });
   }
 
+
   const progresso = duracao > 0 ? Math.min((tempoAtual / duracao) * 100, 100) : 0;
   const barrasAtivas = Math.round((progresso / 100) * barrasWave.length);
 
@@ -823,6 +839,104 @@ function AudioMessagePlayer({
   );
 }
 
+function CampoContatoEditavel({
+  label,
+  valorInicial,
+  editando,
+  multiline = false,
+  onEditar,
+  onCancelar,
+  onSalvar,
+}: {
+  label: string;
+  valorInicial: string;
+  editando: boolean;
+  multiline?: boolean;
+  onEditar: () => void;
+  onCancelar: () => void;
+  onSalvar: (valor: string) => void;
+}) {
+  const [valor, setValor] = useState(valorInicial);
+
+  useEffect(() => {
+    setValor(valorInicial);
+  }, [valorInicial]);
+
+  return (
+    <div className={styles.whatsInfoRow}>
+      <span className={styles.whatsInfoLabel}>{label}</span>
+
+      {editando ? (
+        <div className={styles.infoEditBlock}>
+          {multiline ? (
+            <textarea
+              className={styles.inlineTextarea}
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              rows={4}
+              autoFocus
+            />
+          ) : (
+            <input
+              className={styles.inlineInput}
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              autoFocus
+            />
+          )}
+
+          <div className={styles.infoEditActions}>
+            <button
+              type="button"
+              className={styles.inlineCancelButton}
+              onClick={() => {
+                setValor(valorInicial);
+                onCancelar();
+              }}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className={styles.inlineSaveButton}
+              onClick={() => onSalvar(valor)}
+            >
+              Salvar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.infoValueRow}>
+          <span className={styles.whatsInfoValue}>
+            {valorInicial || "Não informado"}
+          </span>
+
+          <button
+            type="button"
+            className={styles.editIconButton}
+            onClick={onEditar}
+          >
+            ✎
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TextoComEmoji = React.memo(function TextoComEmoji({
+  texto,
+}: {
+  texto?: string | null;
+}) {
+  const html = useMemo(() => {
+    return converterTextoParaEmojiHtml(texto);
+  }, [texto]);
+
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+});
+
 export default function ConversasPage() {
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
   const [politicaAtendimento, setPoliticaAtendimento] =
@@ -867,17 +981,47 @@ export default function ConversasPage() {
   const [novoSetorId, setNovoSetorId] = useState("");
   const [novoResponsavelId, setNovoResponsavelId] = useState("");
   const [salvandoAcao, setSalvandoAcao] = useState(false);
+  const [abaVisivel, setAbaVisivel] = useState(true);
 
   const mensagensRef = useRef<HTMLDivElement | null>(null);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [menuContatoAberto, setMenuContatoAberto] = useState(false);
   const menuContatoRef = useRef<HTMLDivElement | null>(null);
+  const menuAnexoRef = useRef<HTMLDivElement | null>(null);
+
+  const conteudoRef = useRef("");
+  const legendaArquivoRef = useRef("");
+
   const mensagensFavoritas = useMemo(() => {
     return mensagens.filter((msg) => msg.favorita);
   }, [mensagens]);
   const [arquivoEnvio, setArquivoEnvio] = useState<File | null>(null);
   const [legendaArquivo, setLegendaArquivo] = useState("");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [gravandoAudio, setGravandoAudio] = useState(false);
+  const [duracaoGravacao, setDuracaoGravacao] = useState(0);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const intervaloGravacaoRef = useRef<number | null>(null);
+
+  const [cameraAberta, setCameraAberta] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamCameraRef = useRef<MediaStream | null>(null);
+
+  const [arquivoEnvioPreviewUrl, setArquivoEnvioPreviewUrl] = useState<string | null>(null);
+  const documentoInputRef = useRef<HTMLInputElement | null>(null);
+  const midiaInputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const [menuAnexoAberto, setMenuAnexoAberto] = useState(false);
+
+  const [emojiAberto, setEmojiAberto] = useState(false);
+
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const legendaEditorRef = useRef<HTMLDivElement | null>(null);
+
+  const [editandoCampo, setEditandoCampo] = useState<string | null>(null);
 
   const midiaDocsLinksAgrupados = useMemo<MidiaAgrupadaSecao[]>(() => {
     const itens: MidiaAgrupadaItem[] = [];
@@ -1061,6 +1205,74 @@ export default function ConversasPage() {
     observacoes: "",
   });
 
+  async function abrirCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+
+      streamCameraRef.current = stream;
+      setCameraAberta(true);
+
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch {
+      setErro("Não foi possível acessar a câmera.");
+    }
+  }
+
+
+  function focarEditorNoFinal() {
+    const alvo = arquivoEnvio ? legendaEditorRef.current : editorRef.current;
+    if (!alvo) return;
+
+    alvo.focus();
+
+    const range = document.createRange();
+    range.selectNodeContents(alvo);
+    range.collapse(false);
+
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function inserirEmojiNoEditor(emoji: string) {
+    const alvo = arquivoEnvio ? legendaEditorRef.current : editorRef.current;
+    if (!alvo) return;
+
+    alvo.focus();
+
+    const selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0) {
+      alvo.innerText = (alvo.innerText || "") + emoji;
+    } else {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(document.createTextNode(emoji));
+      range.collapse(false);
+
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    const novoTexto = alvo.innerText || "";
+
+    if (arquivoEnvio) {
+      setLegendaArquivo(novoTexto);
+    } else {
+      setConteudo(novoTexto);
+    }
+
+    focarEditorNoFinal();
+  }
+  
   function renderizarConteudoMensagem(msg: Mensagem) {
     const mediaId = msg.metadata_json?.media_id || null;
     const url = mediaId ? `/api/whatsapp/media/${mediaId}` : null;
@@ -1109,10 +1321,14 @@ export default function ConversasPage() {
               />
             </button>
           ) : (
-            <p className={styles.messageText}>{msg.conteudo}</p>
+            <p className={styles.messageText}><TextoComEmoji texto={msg.conteudo} /></p>
           )}
 
-          {caption && <p className={styles.messageText}>{caption}</p>}
+          {caption && (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto="algum texto" />
+            </p>
+          )}
         </div>
       );
     }
@@ -1128,7 +1344,7 @@ export default function ConversasPage() {
               fileName={fileName}
             />
           ) : (
-            <p className={styles.messageText}>{msg.conteudo}</p>
+            <p className={styles.messageText}><TextoComEmoji texto={msg.conteudo} /></p>
           )}
         </div>
       );
@@ -1153,10 +1369,14 @@ export default function ConversasPage() {
               Seu navegador não suporta vídeo.
             </video>
           ) : (
-            <p className={styles.messageText}>{msg.conteudo}</p>
+            <p className={styles.messageText}><TextoComEmoji texto={msg.conteudo} /></p>
           )}
 
-          {caption && <p className={styles.messageText}>{caption}</p>}
+          {caption && (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={caption} />
+            </p>
+          )}
         </div>
       );
     }
@@ -1167,9 +1387,15 @@ export default function ConversasPage() {
 
       return (
         <div>
-          <p className={styles.messageText}>📄 {fileName}</p>
+          <p className={styles.messageText}>
+            <TextoComEmoji texto={`📄 ${fileName}`} />
+          </p>
 
-          {caption && <p className={styles.messageText}>{caption}</p>}
+          {caption && (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={caption} />
+            </p>
+          )}
 
           {ehAudioArquivo && url && (
             <div style={{ marginTop: 8 }}>
@@ -1296,7 +1522,9 @@ export default function ConversasPage() {
     if (msg.tipo_mensagem === "localizacao") {
       return (
         <div>
-          <p className={styles.messageText}>📍 Localização compartilhada</p>
+          <p className={styles.messageText}>
+            <TextoComEmoji texto="📍 Localização compartilhada" />
+          </p>
 
           {latitude != null && longitude != null && (
             <p className={styles.messageText}>
@@ -1338,23 +1566,171 @@ export default function ConversasPage() {
 
       return (
         <div>
-          <p className={styles.messageText}>{titulo}</p>
-
           <p className={styles.messageText}>
-            Este tipo de conteúdo ainda não é suportado pela API oficial.
+            <TextoComEmoji texto={titulo} />
           </p>
 
           <p className={styles.messageText}>
-            Tipo técnico: {tipoNaoSuportado}
+            <TextoComEmoji texto="Este tipo de conteúdo ainda não é suportado pela API oficial." />
+          </p>
+
+          <p className={styles.messageText}>
+            <TextoComEmoji texto={`Tipo técnico: ${tipoNaoSuportado}`} />
           </p>
         </div>
       );
     }
 
-    return <p className={styles.messageText}>{msg.conteudo}</p>;
+    return (
+      <p className={styles.messageText}>
+        <TextoComEmoji texto={msg.conteudo} />
+      </p>
+    );
   }
 
-  
+
+  function capturarFoto() {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0);
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+
+      const file = new File([blob], `foto-${Date.now()}.jpg`, {
+        type: "image/jpeg",
+      });
+
+      selecionarArquivo(file);
+    }, "image/jpeg");
+
+    fecharCamera();
+  }
+
+
+  function fecharCamera() {
+    if (streamCameraRef.current) {
+      streamCameraRef.current.getTracks().forEach((track) => track.stop());
+      streamCameraRef.current = null;
+    }
+
+    setCameraAberta(false);
+  }
+
+  async function iniciarGravacaoAudio() {
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      if (arquivoEnvioPreviewUrl) {
+        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+      }
+
+      setArquivoEnvio(null);
+      setArquivoEnvioPreviewUrl(null);
+      setLegendaArquivo("");
+      setConteudo("");
+      if (editorRef.current) {
+        editorRef.current.innerHTML = "";
+      }
+
+      if (legendaEditorRef.current) {
+        legendaEditorRef.current.innerHTML = "";
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      let mimeType = "";
+
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        mimeType = "audio/webm;codecs=opus";
+      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+        mimeType = "audio/webm";
+      }
+
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const tipoFinal =
+          mediaRecorder.mimeType || mimeType || "audio/webm";
+
+        const blob = new Blob(audioChunksRef.current, {
+          type: tipoFinal,
+        });
+
+        const arquivo = new File([blob], `audio-${Date.now()}.webm`, {
+          type: tipoFinal,
+        });
+
+        selecionarArquivo(arquivo);
+
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
+
+        audioChunksRef.current = [];
+        mediaRecorderRef.current = null;
+      };
+
+      mediaRecorder.start();
+      setGravandoAudio(true);
+      setDuracaoGravacao(0);
+
+      intervaloGravacaoRef.current = window.setInterval(() => {
+        setDuracaoGravacao((atual) => atual + 1);
+      }, 1000);
+    } catch {
+      setErro("Não foi possível acessar o microfone.");
+      setGravandoAudio(false);
+    }
+  }
+
+  function pararGravacaoAudio() {
+    if (intervaloGravacaoRef.current) {
+      window.clearInterval(intervaloGravacaoRef.current);
+      intervaloGravacaoRef.current = null;
+    }
+
+    setGravandoAudio(false);
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    } else if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+  }
+
+  function formatarDuracaoGravacao(segundos: number) {
+    const mins = Math.floor(segundos / 60);
+    const secs = segundos % 60;
+
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+
   function abrirModalAdicionarContato(contato: ContatoCompartilhadoMensagem) {
     const nome = getNomeContatoCompartilhado(contato);
     const telefone = getTelefonePrincipalContatoCompartilhado(contato);
@@ -1397,6 +1773,36 @@ export default function ConversasPage() {
       status_lead: "novo",
       observacoes: "",
     });
+  }
+
+  function selecionarArquivo(
+    file: File | null,
+    input?: HTMLInputElement | null
+  ) {
+    if (arquivoEnvioPreviewUrl) {
+      URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+    }
+
+    if (!file) {
+      setArquivoEnvio(null);
+      setArquivoEnvioPreviewUrl(null);
+
+      if (input) input.value = "";
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+
+    setArquivoEnvio(file);
+    setArquivoEnvioPreviewUrl(previewUrl);
+    setConteudo("");
+    if (editorRef.current) {
+      editorRef.current.innerHTML = "";
+    }
+
+    if (input) {
+      input.value = "";
+    }
   }
 
   async function salvarContatoCompartilhado() {
@@ -1463,9 +1869,12 @@ export default function ConversasPage() {
     } catch {}
   }
 
-  async function carregarConversas() {
+  async function carregarConversas(silencioso = false) {
     try {
-      setLoadingConversas(true);
+      if (!silencioso) {
+        setLoadingConversas(true);
+      }
+
       setErro("");
 
       const res = await fetch("/api/conversas", {
@@ -1487,12 +1896,30 @@ export default function ConversasPage() {
         if (!atual) return lista[0];
 
         const encontrada = lista.find((c: Conversa) => c.id === atual.id);
-        return encontrada || lista[0];
+
+        if (!encontrada) {
+          return lista[0];
+        }
+
+        const mudouVisualPrincipal =
+          encontrada.id !== atual.id ||
+          encontrada.last_message_at !== atual.last_message_at ||
+          encontrada.status !== atual.status ||
+          encontrada.prioridade !== atual.prioridade ||
+          encontrada.favorita !== atual.favorita ||
+          encontrada.unread_count !== atual.unread_count ||
+          encontrada.assunto !== atual.assunto ||
+          encontrada.responsavel?.id !== atual.responsavel?.id ||
+          encontrada.setores?.id !== atual.setores?.id;
+
+        return mudouVisualPrincipal ? encontrada : atual;
       });
     } catch {
       setErro("Erro ao carregar conversas");
     } finally {
-      setLoadingConversas(false);
+      if (!silencioso) {
+        setLoadingConversas(false);
+      }
     }
   }
 
@@ -1598,7 +2025,9 @@ export default function ConversasPage() {
       return;
     }
 
-    if (!conteudo.trim()) {
+    const textoAtual = conteudoRef.current.trim();
+
+    if (!textoAtual) {
       setErro("Digite uma mensagem.");
       return;
     }
@@ -1613,7 +2042,7 @@ export default function ConversasPage() {
         },
         body: JSON.stringify({
           conversa_id: conversaSelecionada.id,
-          conteudo: conteudo.trim(),
+          conteudo: textoAtual,
           remetente_tipo: "usuario",
           tipo_mensagem: "texto",
           origem: "enviada",
@@ -1628,9 +2057,15 @@ export default function ConversasPage() {
         return;
       }
 
+      conteudoRef.current = "";
       setConteudo("");
+      if (editorRef.current) {
+        editorRef.current.innerHTML = "";
+      }
+
       setMensagemSucesso(data.message || "Mensagem enviada com sucesso.");
 
+      impedirAutoScrollRef.current = false;
       await carregarMensagens(conversaSelecionada.id, true);
       await carregarConversas();
     } catch {
@@ -2079,8 +2514,10 @@ export default function ConversasPage() {
       formData.append("conversa_id", conversaSelecionada.id);
       formData.append("file", arquivo);
 
-      if (legendaArquivo.trim()) {
-        formData.append("caption", legendaArquivo.trim());
+      const legendaAtual = legendaArquivoRef.current.trim();
+
+      if (legendaAtual) {
+        formData.append("caption", legendaAtual);
       }
 
       const res = await fetch("/api/mensagens/media", {
@@ -2095,16 +2532,94 @@ export default function ConversasPage() {
         return;
       }
 
+      if (arquivoEnvioPreviewUrl) {
+        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+      }
+
       setArquivoEnvio(null);
+      setArquivoEnvioPreviewUrl(null);
       setLegendaArquivo("");
+      if (legendaEditorRef.current) {
+        legendaEditorRef.current.innerHTML = "";
+      }
       setMensagemSucesso(data.message || "Mídia enviada com sucesso.");
 
+      impedirAutoScrollRef.current = false;
       await carregarMensagens(conversaSelecionada.id, true);
       await carregarConversas();
     } catch {
       setErro("Erro ao enviar mídia");
     } finally {
       setEnviando(false);
+    }
+  }
+
+  async function salvarContatoCampo(
+    campo: "email" | "empresa" | "observacoes",
+    valor: string
+  ) {
+    if (!conversaSelecionada?.contatos?.id) return;
+
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/contatos/${conversaSelecionada.contatos.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          [campo]: valor,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar contato");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Contato atualizado com sucesso.");
+      setEditandoCampo(null);
+
+      await carregarConversas(true);
+    } catch {
+      setErro("Erro ao atualizar contato");
+    }
+  }
+
+  async function salvarProtocolo(valor: string) {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/conversas/${conversaSelecionada.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          protocolo: valor,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar protocolo");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Protocolo atualizado com sucesso.");
+      setEditandoCampo(null);
+
+      await carregarConversas(true);
+    } catch {
+      setErro("Erro ao atualizar protocolo");
     }
   }
 
@@ -2115,14 +2630,6 @@ export default function ConversasPage() {
     setAcaoAberta("encerrar");
   }
 
-  function onKeyDownMensagem(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (!enviando && podeEnviarMensagem) {
-        enviarMensagem();
-      }
-    }
-  }
 
   function rolarParaFinal() {
     const el = mensagensRef.current;
@@ -2147,6 +2654,38 @@ export default function ConversasPage() {
     window.setTimeout(() => {
       elemento.classList.remove(styles.messageHighlight);
     }, 1800);
+  }
+
+  function getTipoArquivoSelecionado(file: File | null) {
+    if (!file) return "";
+
+    if (file.type.startsWith("image/")) return "Imagem";
+    if (file.type.startsWith("video/")) return "Vídeo";
+    if (file.type.startsWith("audio/")) return "Áudio";
+
+    return "Documento";
+  }
+
+  function arquivoSelecionadoEhImagem(file: File | null) {
+    return !!file && file.type.startsWith("image/");
+  }
+
+  function arquivoSelecionadoEhVideo(file: File | null) {
+    return !!file && file.type.startsWith("video/");
+  }
+
+  function arquivoSelecionadoEhAudio(file: File | null) {
+    return !!file && file.type.startsWith("audio/");
+  }
+
+  function arquivoSelecionadoEhDocumento(file: File | null) {
+    if (!file) return false;
+
+    return (
+      !file.type.startsWith("image/") &&
+      !file.type.startsWith("video/") &&
+      !file.type.startsWith("audio/")
+    );
   }
 
   const conversaSetorId =
@@ -2476,6 +3015,36 @@ export default function ConversasPage() {
   }, [conversaSelecionada?.id]);
 
   useEffect(() => {
+      if (!conversaSelecionada?.id) return;
+      if (!abaVisivel) return;
+      if (enviando) return;
+      if (editandoCampo) return;
+
+    const interval = window.setInterval(() => {
+      impedirAutoScrollRef.current = true;
+      carregarMensagens(conversaSelecionada.id, true);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [conversaSelecionada?.id, abaVisivel, enviando]);
+
+  useEffect(() => {
+      if (!abaVisivel) return;
+      if (enviando) return;
+      if (editandoCampo) return;
+
+    const interval = window.setInterval(() => {
+      carregarConversas(true);
+    }, 10000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [abaVisivel, enviando]);
+
+  useEffect(() => {
     if (impedirAutoScrollRef.current) {
       impedirAutoScrollRef.current = false;
       return;
@@ -2485,24 +3054,93 @@ export default function ConversasPage() {
   }, [mensagens, loadingMensagens]);
 
   useEffect(() => {
-  function handleClickOutside(event: MouseEvent) {
-    if (!menuContatoRef.current) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (!menuContatoRef.current) return;
 
-    const target = event.target as Node;
+      const target = event.target as Node;
 
-    if (!menuContatoRef.current.contains(target)) {
-      setMenuContatoAberto(false);
+      if (!menuContatoRef.current.contains(target)) {
+        setMenuContatoAberto(false);
+      }
     }
-  }
 
-  document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
 
-  return () => {
-    document.removeEventListener("mousedown", handleClickOutside);
-  };
-}, []);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    function atualizarVisibilidade() {
+      setAbaVisivel(document.visibilityState === "visible");
+    }
+
+    atualizarVisibilidade();
+
+    document.addEventListener("visibilitychange", atualizarVisibilidade);
+
+    return () => {
+      document.removeEventListener("visibilitychange", atualizarVisibilidade);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (arquivoEnvioPreviewUrl) {
+        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+      }
+    };
+  }, [arquivoEnvioPreviewUrl]);
+
+  useEffect(() => {
+    function handleClickOutsideMenuAnexo(event: MouseEvent) {
+      if (!menuAnexoRef.current) return;
+
+      const target = event.target as Node;
+
+      if (!menuAnexoRef.current.contains(target)) {
+        setMenuAnexoAberto(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutsideMenuAnexo);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutsideMenuAnexo);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (intervaloGravacaoRef.current) {
+        window.clearInterval(intervaloGravacaoRef.current);
+      }
+
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
 
 
+  useEffect(() => {
+    if (!arquivoEnvio && editorRef.current && editorRef.current.innerText !== conteudo) {
+      editorRef.current.innerText = conteudo;
+    }
+  }, [conteudo, arquivoEnvio]);
+
+  useEffect(() => {
+    if (arquivoEnvio && legendaEditorRef.current && legendaEditorRef.current.innerText !== legendaArquivo) {
+      legendaEditorRef.current.innerText = legendaArquivo;
+    }
+  }, [legendaArquivo, arquivoEnvio]);
+
+  
   return (
     <>
       <Header
@@ -2537,7 +3175,7 @@ export default function ConversasPage() {
 
                   <button
                     type="button"
-                    onClick={carregarConversas}
+                    onClick={() => carregarConversas()}
                     className={styles.iconButton}
                   >
                     Atualizar
@@ -3333,107 +3971,336 @@ export default function ConversasPage() {
                             </div>
                           )}
 
-                          <div className={styles.composerTools}>
-                            <button
-                              type="button"
-                              className={styles.toolButton}
-                              title="Anexar arquivo"
-                              onClick={() => fileInputRef.current?.click()}
-                            >
-                              📎
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.toolButton}
-                              title="Enviar imagem"
-                            >
-                              🖼️
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.toolButton}
-                              title="Gravar áudio"
-                            >
-                              🎤
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.toolButton}
-                              title="Emoji"
-                            >
-                              🙂
-                            </button>
-                          </div>
-
                           <input
-                            ref={fileInputRef}
+                            ref={documentoInputRef}
                             type="file"
                             style={{ display: "none" }}
-                            accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar,.ppt,.pptx"
                             onChange={(e) => {
                               const file = e.target.files?.[0] || null;
-                              if (!file) return;
-                              setArquivoEnvio(file);
+                              selecionarArquivo(file, e.currentTarget);
+                            }}
+                          />
+
+                          <input
+                            ref={midiaInputRef}
+                            type="file"
+                            style={{ display: "none" }}
+                            accept="image/*,video/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              selecionarArquivo(file, e.currentTarget);
+                            }}
+                          />
+
+                          <input
+                            ref={audioInputRef}
+                            type="file"
+                            style={{ display: "none" }}
+                            accept="audio/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              selecionarArquivo(file, e.currentTarget);
                             }}
                           />
 
                           {arquivoEnvio && (
-                            <div className={styles.timelineInfoSmall}>
-                              Arquivo selecionado: <strong>{arquivoEnvio.name}</strong>
+                            <div className={styles.filePreviewCard}
+                              style={{
+                                marginBottom: 10,
+                                border: "1px solid rgba(148, 163, 184, 0.22)",
+                                borderRadius: 14,
+                                padding: 12,
+                                background: "rgba(255,255,255,0.72)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 10,
+                              }}
+                            >
+                            <div className={styles.filePreviewHeader}>
+                              <div className={styles.filePreviewLabel}>
+                                {getTipoArquivoSelecionado(arquivoEnvio)} selecionado
+                              </div>
+
                               <button
                                 type="button"
-                                className={styles.textButton}
+                                className={styles.filePreviewRemoveButton}
                                 onClick={() => {
+                                  if (arquivoEnvioPreviewUrl) {
+                                    URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+                                  }
+
                                   setArquivoEnvio(null);
+                                  setArquivoEnvioPreviewUrl(null);
                                   setLegendaArquivo("");
+                                  if (legendaEditorRef.current) {
+                                    legendaEditorRef.current.innerHTML = "";
+                                  }
                                 }}
                               >
                                 Remover
                               </button>
                             </div>
+
+                              {arquivoSelecionadoEhImagem(arquivoEnvio) && arquivoEnvioPreviewUrl && (
+                                <div>
+                                  <img
+                                    src={arquivoEnvioPreviewUrl}
+                                    alt={arquivoEnvio.name}
+                                    style={{
+                                      maxWidth: "220px",
+                                      maxHeight: "220px",
+                                      width: "auto",
+                                      height: "auto",
+                                      borderRadius: 12,
+                                      display: "block",
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              {arquivoSelecionadoEhVideo(arquivoEnvio) && arquivoEnvioPreviewUrl && (
+                                <div>
+                                  <video
+                                    controls
+                                    style={{
+                                      maxWidth: "260px",
+                                      width: "100%",
+                                      borderRadius: 12,
+                                      display: "block",
+                                    }}
+                                  >
+                                    <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
+                                    Seu navegador não suporta vídeo.
+                                  </video>
+                                </div>
+                              )}
+
+                              {arquivoSelecionadoEhAudio(arquivoEnvio) && arquivoEnvioPreviewUrl && (
+                                <div className={styles.audioPreviewCard}>
+                                  <div className={styles.audioPreviewTop}>
+                                    <div className={styles.audioPreviewBadge}>Áudio</div>
+                                    <span className={styles.audioPreviewFileName}>{arquivoEnvio.name}</span>
+                                  </div>
+
+                                  <div className={styles.audioPreviewPlayerWrap}>
+                                    <audio controls className={styles.audioPreviewPlayer}>
+                                      <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
+                                      Seu navegador não suporta áudio.
+                                    </audio>
+                                  </div>
+                                </div>
+                              )}
+
+                               <div
+                                style={{
+                                  fontSize: 13,
+                                  color: "#64748b",
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {arquivoEnvio.name}
+                              </div>
+                            </div>
+                          )}
+
+                          {cameraAberta && (
+                            <div className={styles.cameraModal}>
+                              <video ref={videoRef} autoPlay playsInline className={styles.cameraVideo} />
+
+                              <div className={styles.cameraActions}>
+                                <button onClick={capturarFoto}>📸 Tirar foto</button>
+                                <button onClick={fecharCamera}>Cancelar</button>
+                              </div>
+
+                              <canvas ref={canvasRef} style={{ display: "none" }} />
+                            </div>
+                          )}
+
+                          {gravandoAudio && (
+                            <div className={styles.timelineInfoSmall}>
+                              Gravando áudio... <strong>{formatarDuracaoGravacao(duracaoGravacao)}</strong>
+                            </div>
                           )}
 
                           <div className={styles.composerRow}>
-                            <textarea
-                              className={styles.messageInput}
-                              rows={2}
-                              value={arquivoEnvio ? legendaArquivo : conteudo}
-                              onChange={(e) => {
-                                if (arquivoEnvio) {
-                                  setLegendaArquivo(e.target.value);
-                                } else {
-                                  setConteudo(e.target.value);
+                            {/* ESQUERDA */}
+                            <div className={styles.composerLeft}>
+                              <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
+                                <button
+                                  type="button"
+                                  className={styles.toolButton}
+                                  onClick={() => setMenuAnexoAberto((prev) => !prev)}
+                                  title="Anexos"
+                                >
+                                  ＋
+                                </button>
+
+                                {menuAnexoAberto && (
+                                  <div className={styles.attachmentMenuDropdown}>
+                                    <button
+                                      type="button"
+                                      className={styles.attachmentMenuItem}
+                                      onClick={() => {
+                                        setMenuAnexoAberto(false);
+                                        documentoInputRef.current?.click();
+                                      }}
+                                    >
+                                      <span className={styles.attachmentMenuIcon}>📎</span>
+                                      <span>Documento</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className={styles.attachmentMenuItem}
+                                      onClick={() => {
+                                        setMenuAnexoAberto(false);
+                                        midiaInputRef.current?.click();
+                                      }}
+                                    >
+                                      <span className={styles.attachmentMenuIcon}>🖼️</span>
+                                      <span>Foto ou vídeo</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className={styles.attachmentMenuItem}
+                                      onClick={() => {
+                                        setMenuAnexoAberto(false);
+                                        audioInputRef.current?.click();
+                                      }}
+                                    >
+                                      <span className={styles.attachmentMenuIcon}>🎵</span>
+                                      <span>Áudio</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className={styles.emojiPickerWrap}>
+                                <button
+                                  type="button"
+                                  className={`${styles.toolButton} ${styles.emojiButton} ${
+                                    emojiAberto ? styles.emojiButtonActive : ""
+                                  }`}
+                                  onClick={() => setEmojiAberto((prev) => !prev)}
+                                  title="Emoji"
+                                  aria-label="Abrir emojis"
+                                >
+                                  <span className={styles.emojiButtonIcon}>😊</span>
+                                </button>
+
+
+                              </div>
+                            </div>
+
+                            {emojiAberto && (
+                              <div className={styles.emojiPicker}>
+                                <EmojiPicker
+                                  onEmojiClick={(emojiData) => {
+                                    inserirEmojiNoEditor(emojiData.emoji);
+                                  }}
+                                />
+                              </div>
+                            )}
+
+                            {/* CAMPO */}
+                            <div className={styles.composerCenter}>
+                              <div
+                                ref={arquivoEnvio ? legendaEditorRef : editorRef}
+                                className={styles.messageEditor}
+                                contentEditable={podeEnviarMensagem && !enviando && !gravandoAudio}
+                                suppressContentEditableWarning
+                                data-placeholder={
+                                  !podeEnviarMensagem
+                                    ? "Você não pode responder esta conversa"
+                                    : arquivoEnvio
+                                    ? "Digite uma legenda..."
+                                    : gravandoAudio
+                                    ? "Gravando áudio..."
+                                    : "Digite uma mensagem"
                                 }
-                              }}
-                              onKeyDown={onKeyDownMensagem}
-                              placeholder={
-                                !podeEnviarMensagem
-                                  ? "Você não pode responder esta conversa"
+                                onInput={(e) => {
+                                  const texto = (e.currentTarget as HTMLDivElement).innerText || "";
+
+                                  if (arquivoEnvio) {
+                                    legendaArquivoRef.current = texto;
+                                  } else {
+                                    conteudoRef.current = texto;
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+
+                                    if (enviando || !podeEnviarMensagem || gravandoAudio) return;
+
+                                    if (arquivoEnvio) {
+                                      enviarMidia();
+                                      return;
+                                    }
+
+                                    enviarMensagem();
+                                  }
+                                }}
+                                role="textbox"
+                                aria-multiline="true"
+                              />
+                            </div>
+
+                            {/* DIREITA */}
+                            <div className={styles.composerRight}>
+
+                              <button
+                                type="button"
+                                onClick={abrirCamera}
+                                className={styles.toolButton}
+                                title="Câmera"
+                              >
+                                📷
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (gravandoAudio) {
+                                    pararGravacaoAudio();
+                                    return;
+                                  }
+
+                                  iniciarGravacaoAudio();
+                                }}
+                                disabled={!podeEnviarMensagem || enviando}
+                                className={styles.toolButton}
+                                title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
+                              >
+                                {gravandoAudio ? "⏹" : "🎤"}
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  if (arquivoEnvio) {
+                                    enviarMidia();
+                                    return;
+                                  }
+
+                                  enviarMensagem();
+                                }}
+                                disabled={
+                                  enviando ||
+                                  !podeEnviarMensagem ||
+                                  gravandoAudio ||
+                                  (!arquivoEnvio && !conteudoRef.current.trim())
+                                }
+                                className={styles.sendButton}
+                              >
+                                {enviando
+                                  ? "Enviando..."
                                   : arquivoEnvio
-                                  ? "Digite uma legenda opcional"
-                                  : "Digite uma mensagem"
-                              }
-                              disabled={!podeEnviarMensagem || enviando}
-                            />
-
-                            <button
-                              onClick={() => {
-                                if (arquivoEnvio) {
-                                  enviarMidia();
-                                  return;
-                                }
-
-                                enviarMensagem();
-                              }}
-                              disabled={
-                                enviando ||
-                                !podeEnviarMensagem ||
-                                (!arquivoEnvio && !conteudo.trim())
-                              }
-                              className={styles.sendButton}
-                            >
-                              {enviando ? "Enviando..." : arquivoEnvio ? "Enviar arquivo" : "Enviar"}
-                            </button>
+                                  ? "Enviar"
+                                  : "Enviar"}
+                              </button>
+                            </div>
                           </div>
 
                           <p className={styles.footerHint}>
@@ -3747,6 +4614,15 @@ export default function ConversasPage() {
                             </div>
 
                             <div className={styles.whatsInfoList}>
+                              <CampoContatoEditavel
+                                label="PROTOCOLO"
+                                valorInicial={conversaSelecionada.protocolo || ""}
+                                editando={editandoCampo === "protocolo"}
+                                onEditar={() => setEditandoCampo("protocolo")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarProtocolo(valor)}
+                              />
+
                               <div className={styles.whatsInfoRow}>
                                 <span className={styles.whatsInfoLabel}>Telefone</span>
                                 <strong className={styles.whatsInfoValue}>
@@ -3754,26 +4630,33 @@ export default function ConversasPage() {
                                 </strong>
                               </div>
 
-                              <div className={styles.whatsInfoRow}>
-                                <span className={styles.whatsInfoLabel}>E-mail</span>
-                                <strong className={styles.whatsInfoValue}>
-                                  {conversaSelecionada.contatos?.email || "Não informado"}
-                                </strong>
-                              </div>
+                              <CampoContatoEditavel
+                                label="E-MAIL"
+                                valorInicial={conversaSelecionada.contatos?.email || ""}
+                                editando={editandoCampo === "email"}
+                                onEditar={() => setEditandoCampo("email")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("email", valor)}
+                              />
 
-                              <div className={styles.whatsInfoRow}>
-                                <span className={styles.whatsInfoLabel}>Empresa</span>
-                                <strong className={styles.whatsInfoValue}>
-                                  {conversaSelecionada.contatos?.empresa || "Não informada"}
-                                </strong>
-                              </div>
+                              <CampoContatoEditavel
+                                label="EMPRESA"
+                                valorInicial={conversaSelecionada.contatos?.empresa || ""}
+                                editando={editandoCampo === "empresa"}
+                                onEditar={() => setEditandoCampo("empresa")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("empresa", valor)}
+                              />
 
-                              <div className={styles.whatsInfoRow}>
-                                <span className={styles.whatsInfoLabel}>Observações</span>
-                                <strong className={styles.whatsInfoValue}>
-                                  {conversaSelecionada.contatos?.observacoes || "Sem observações"}
-                                </strong>
-                              </div>
+                              <CampoContatoEditavel
+                                label="OBSERVAÇÕES"
+                                valorInicial={conversaSelecionada.contatos?.observacoes || ""}
+                                editando={editandoCampo === "observacoes"}
+                                multiline
+                                onEditar={() => setEditandoCampo("observacoes")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}
+                              />
                             </div>
                           </div>
 
@@ -3989,7 +4872,9 @@ export default function ConversasPage() {
                                   </span>
                                 </div>
 
-                                <p className={styles.favoriteMessageText}>{msg.conteudo}</p>
+                                <p className={styles.favoriteMessageText}>
+                                  <TextoComEmoji texto={msg.conteudo} />
+                                </p>
                               </div>
                             ))
                           )}
