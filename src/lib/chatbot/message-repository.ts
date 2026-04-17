@@ -14,9 +14,24 @@ type CreateMensagemParams = {
 };
 
 export async function createMensagem(params: CreateMensagemParams) {
+  const { data: protocoloAtivo, error: protocoloError } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .select("id")
+    .eq("conversa_id", params.conversaId)
+    .eq("ativo", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (protocoloError) {
+    throw new Error(
+      `Erro ao buscar protocolo ativo da conversa: ${protocoloError.message}`
+    );
+  }
+
   const payload = {
     empresa_id: params.empresaId,
     conversa_id: params.conversaId,
+    conversa_protocolo_id: protocoloAtivo?.id ?? null,
     remetente_tipo: params.remetenteTipo,
     remetente_id: params.remetenteId ?? null,
     conteudo: params.conteudo,
