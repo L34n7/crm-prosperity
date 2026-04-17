@@ -10,10 +10,18 @@ type DestinatarioEntrada = {
   variaveis?: string[];
 };
 
+type TemplateButton = {
+  type?: string;
+  text?: string;
+  url?: string;
+  phone_number?: string;
+};
+
 type TemplateComponent = {
   type: string;
   text?: string;
   format?: string;
+  buttons?: TemplateButton[];
 };
 
 type TemplatePayload = {
@@ -100,6 +108,70 @@ function montarComponentesTemplate(
   return componentesMontados;
 }
 
+function substituirVariaveisTexto(texto: string, variaveis: string[]) {
+  if (!texto) return "";
+
+  return texto.replace(/\{\{(\d+)\}\}/g, (_, numero) => {
+    const index = Number(numero) - 1;
+    return variaveis[index] ?? `{{${numero}}}`;
+  });
+}
+
+function montarConteudoTextoTemplate(
+  payload: TemplatePayload | null,
+  variaveis: string[]
+) {
+  if (!payload?.components?.length) {
+    return null;
+  }
+
+  const componentes = payload.components || [];
+
+  const header = componentes.find((item) => item.type === "HEADER");
+  const body = componentes.find((item) => item.type === "BODY");
+  const footer = componentes.find((item) => item.type === "FOOTER");
+  const buttons = componentes.find((item) => item.type === "BUTTONS");
+
+  const partes: string[] = [];
+
+  const headerTexto = substituirVariaveisTexto(header?.text || "", variaveis).trim();
+  const bodyTexto = substituirVariaveisTexto(body?.text || "", variaveis).trim();
+  const footerTexto = substituirVariaveisTexto(footer?.text || "", variaveis).trim();
+
+  if (headerTexto) {
+    partes.push(`Header: ${headerTexto}`);
+  }
+
+  if (bodyTexto) {
+    partes.push(bodyTexto);
+  }
+
+  if (footerTexto) {
+    partes.push(`Footer: ${footerTexto}`);
+  }
+
+  const quickReplies =
+    buttons?.buttons
+      ?.filter((button) => button?.type === "QUICK_REPLY" && button?.text)
+      .map((button) => substituirVariaveisTexto(button.text || "", variaveis).trim())
+      .filter(Boolean) || [];
+
+  if (quickReplies.length > 0) {
+    partes.push(
+      [
+        "Respostas rápidas:",
+        ...quickReplies.map((texto, index) => `${index + 1}. ${texto}`),
+      ].join("\n")
+    );
+  }
+
+  if (partes.length === 0) {
+    return null;
+  }
+
+  return partes.join("\n\n");
+}
+
 async function buscarProtocoloAtivoDaConversa(conversaId: string) {
   const { data, error } = await supabaseAdmin
     .from("conversa_protocolos")
@@ -133,17 +205,22 @@ async function registrarMensagemDeDisparo(params: {
   templateIdioma: string | null;
   numeroDestino: string;
   variaveis: string[];
+  payloadTemplate: TemplatePayload | null;
   mensagemExternaId: string | null;
   metaResponse: any;
 }) {
   const now = new Date().toISOString();
+
+  const conteudoTemplate =
+    montarConteudoTextoTemplate(params.payloadTemplate, params.variaveis) ||
+    `Template enviado: ${params.templateNome}`;
 
   const { error } = await supabaseAdmin.from("mensagens").insert({
     empresa_id: params.empresaId,
     conversa_id: params.conversaId,
     remetente_tipo: "usuario",
     remetente_id: params.usuarioId,
-    conteudo: `Template enviado: ${params.templateNome}`,
+    conteudo: conteudoTemplate,
     tipo_mensagem: "template",
     origem: "enviada",
     status_envio: "enviada",
@@ -155,6 +232,7 @@ async function registrarMensagemDeDisparo(params: {
       template_idioma: params.templateIdioma,
       numero_destino: params.numeroDestino,
       variaveis: params.variaveis,
+      conteudo_renderizado: conteudoTemplate,
       meta_response: params.metaResponse,
     },
     conversa_protocolo_id: params.conversaProtocoloId,
@@ -515,6 +593,7 @@ export async function POST(req: NextRequest) {
             templateIdioma: template.idioma || null,
             numeroDestino: numero,
             variaveis,
+            payloadTemplate,
             mensagemExternaId: messageId,
             metaResponse: data,
           });
