@@ -101,27 +101,36 @@ async function garantirProtocoloAtivo(conversa: WhatsAppConversation) {
   }
 
   if (protocoloAtivo) {
-    return;
+    return protocoloAtivo;
   }
 
+  const now = new Date().toISOString();
   const protocoloGerado = await gerarProtocolo(conversa.empresa_id);
 
-  const { error: insertProtocoloError } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("conversa_protocolos")
     .insert({
       empresa_id: conversa.empresa_id,
       conversa_id: conversa.id,
       protocolo: protocoloGerado,
-      tipo: "reabertura",
+      tipo: "abertura",
       ativo: true,
-      started_at: new Date().toISOString(),
-    });
+      started_at: now,
+      created_at: now,
+      updated_at: now,
+    })
+    .select("id")
+    .single();
 
-  if (insertProtocoloError) {
+  if (error || !data) {
     throw new Error(
-      `Erro ao criar protocolo para conversa existente: ${insertProtocoloError.message}`
+      `Erro ao garantir protocolo ativo da conversa: ${
+        error?.message ?? "sem retorno do banco"
+      }`
     );
   }
+
+  return data;
 }
 
 async function buscarAutomacaoAtiva(
@@ -131,12 +140,13 @@ async function buscarAutomacaoAtiva(
   const supabaseAdmin = getSupabaseAdmin();
 
   const { data, error } = await supabaseAdmin
-    .from("whatsapp_automacoes")
-    .select("id, ativa, setor_padrao_id, criado_em")
+    .from("automacoes")
+    .select("id")
     .eq("empresa_id", empresaId)
     .eq("integracao_whatsapp_id", integracaoWhatsappId)
-    .eq("ativa", true)
-    .order("criado_em", { ascending: false })
+    .eq("ativo", true)
+    .eq("canal", "whatsapp")
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 
@@ -261,6 +271,8 @@ export async function findOrCreateWhatsAppConversation({
     .select("*")
     .eq("empresa_id", empresaId)
     .eq("contato_id", contatoId)
+    .eq("integracao_whatsapp_id", integracaoWhatsappId)
+    .eq("canal", "whatsapp")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -339,6 +351,8 @@ export async function findOrCreateWhatsAppConversation({
       tipo: "abertura",
       ativo: true,
       started_at: now,
+      created_at: now,
+      updated_at: now,
     });
 
   if (insertProtocoloError) {

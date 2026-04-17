@@ -309,6 +309,19 @@ type ContatoCadastroForm = {
   observacoes: string;
 };
 
+type ProtocoloConversa = {
+  id: string;
+  conversa_id: string;
+  empresa_id: string;
+  protocolo: string;
+  tipo: "abertura" | "reabertura";
+  ativo: boolean;
+  started_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 function mensagemTemMidiaExpiravel(msg: Mensagem) {
   if (msg.origem !== "recebida") return false;
 
@@ -1130,6 +1143,11 @@ export default function ConversasPage() {
   const [salvandoEtiqueta, setSalvandoEtiqueta] = useState(false);
 
   const [selecionandoEtiqueta, setSelecionandoEtiqueta] = useState(false);
+
+  const [protocolosConversa, setProtocolosConversa] = useState<ProtocoloConversa[]>([]);
+  const [carregandoProtocolos, setCarregandoProtocolos] = useState(false);
+  const [protocoloSelecionadoId, setProtocoloSelecionadoId] = useState<string | null>(null);
+  const [protocoloSelecionadoNumero, setProtocoloSelecionadoNumero] = useState<string | null>(null);
 
   const [mostrarFormularioEtiqueta, setMostrarFormularioEtiqueta] = useState(false);
   const [etiquetaEditandoId, setEtiquetaEditandoId] = useState<string | null>(null);
@@ -2040,13 +2058,23 @@ export default function ConversasPage() {
     }
   }
 
-  async function carregarMensagens(conversaId: string, silencioso = false) {
+  async function carregarMensagens(
+    conversaId: string,
+    silencioso = false,
+    conversaProtocoloId?: string | null
+  ) {
     try {
       if (!silencioso) {
         setLoadingMensagens(true);
       }
 
-      const res = await fetch(`/api/mensagens?conversa_id=${conversaId}`, {
+      let url = `/api/mensagens?conversa_id=${conversaId}`;
+
+      if (conversaProtocoloId) {
+        url += `&conversa_protocolo_id=${conversaProtocoloId}`;
+      }
+
+      const res = await fetch(url, {
         cache: "no-store",
       });
 
@@ -2897,6 +2925,40 @@ export default function ConversasPage() {
     }
   }
 
+  async function carregarProtocolosDaConversa() {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setCarregandoProtocolos(true);
+
+      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/protocolos`, {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar protocolos");
+        return;
+      }
+
+      setProtocolosConversa(data.protocolos || []);
+    } catch {
+      setErro("Erro ao carregar protocolos");
+    } finally {
+      setCarregandoProtocolos(false);
+    }
+  }
+
+  async function limparFiltroDeProtocolo() {
+    if (!conversaSelecionada?.id) return;
+
+    setProtocoloSelecionadoId(null);
+    setProtocoloSelecionadoNumero(null);
+
+    await carregarMensagens(conversaSelecionada.id, false, null);
+  }
+
   function abrirEncerrar() {
     setErro("");
     setMensagemSucesso("");
@@ -3280,8 +3342,15 @@ export default function ConversasPage() {
     setInfoExpandida(false);
     setAbaPainelDireito("contato");
     setMenuContatoAberto(false);
+
+    setProtocoloSelecionadoId(null);
+    setProtocoloSelecionadoNumero(null);
+    setProtocolosConversa([]);
+
     carregarMensagens(conversaSelecionada.id);
+    carregarProtocolosDaConversa();
     carregarNotasDaConversa();
+
     setNotasConversa([]);
     setNotaInterna("");
     setNotaEditandoId(null);
@@ -3290,21 +3359,31 @@ export default function ConversasPage() {
     setSelecionandoEtiqueta(false);
   }, [conversaSelecionada?.id]);
 
-  useEffect(() => {
+    useEffect(() => {
       if (!conversaSelecionada?.id) return;
       if (!abaVisivel) return;
       if (enviando) return;
       if (editandoCampo) return;
 
-    const interval = window.setInterval(() => {
-      impedirAutoScrollRef.current = true;
-      carregarMensagens(conversaSelecionada.id, true);
-    }, 5000);
+      const interval = window.setInterval(() => {
+        impedirAutoScrollRef.current = true;
+        carregarMensagens(
+          conversaSelecionada.id,
+          true,
+          protocoloSelecionadoId
+        );
+      }, 5000);
 
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [conversaSelecionada?.id, abaVisivel, enviando]);
+      return () => {
+        window.clearInterval(interval);
+      };
+    }, [
+      conversaSelecionada?.id,
+      protocoloSelecionadoId,
+      abaVisivel,
+      enviando,
+      editandoCampo,
+    ]);
 
   useEffect(() => {
       if (!abaVisivel) return;
@@ -3873,10 +3952,11 @@ export default function ConversasPage() {
                                 <button
                                   type="button"
                                   className={styles.headerDropdownItem}
-                                  onClick={() => {
+                                  onClick={async () => {
                                     setAbaPainelDireito("historico");
                                     setPainelDireitoAberto(true);
                                     setMenuContatoAberto(false);
+                                    await carregarProtocolosDaConversa();
                                   }}
                                 >
                                   Histórico
@@ -3987,12 +4067,12 @@ export default function ConversasPage() {
                         <>
                           <div className={styles.actionPanelHeader}>
                             <h3 className={styles.actionPanelTitle}>Transferir conversa</h3>
-                            <button
-                              className={styles.textButton}
-                              onClick={() => setAcaoAberta(null)}
-                            >
-                              ×
-                            </button>
+                              <button
+                                className={styles.textButton}
+                                onClick={() => setAcaoAberta(null)}
+                              >
+                                ×
+                              </button>
                           </div>
 
                           <div className={styles.actionPanelBody}>
@@ -4618,7 +4698,10 @@ export default function ConversasPage() {
                           <button
                             type="button"
                             className={styles.backButton}
-                            onClick={() => setAbaPainelDireito("contato")}
+                            onClick={async () => {
+                              setAbaPainelDireito("contato");
+                              await limparFiltroDeProtocolo();
+                            }}
                             title="Voltar para contatos"
                           >
                             ←
@@ -4667,7 +4750,10 @@ export default function ConversasPage() {
 
                       <button
                         className={styles.textButton}
-                        onClick={() => setPainelDireitoAberto(false)}
+                        onClick={async () => {
+                          setPainelDireitoAberto(false);
+                          await limparFiltroDeProtocolo();
+                        }}
                       >
                         ×
                       </button>
@@ -4837,10 +4923,10 @@ export default function ConversasPage() {
                             <button
                               type="button"
                               className={styles.whatsListActionButton}
-                              onClick={() => {
+                              onClick={async () => {
+                                setAbaPainelDireito("historico");
                                 setPainelDireitoAberto(true);
-                                setAbaPainelDireito("mensagens_favoritas");
-                                setMenuContatoAberto(false);
+                                await carregarProtocolosDaConversa();
                               }}
                             >
                               <span className={styles.whatsListActionLeft}>
@@ -4941,9 +5027,32 @@ export default function ConversasPage() {
                             <div className={styles.whatsInfoList}>
                               <div className={styles.whatsInfoRow}>
                                 <span className={styles.whatsInfoLabel}>PROTOCOLO</span>
-                                <strong className={styles.whatsInfoValue}>
-                                  {conversaSelecionada.protocolo || "Não gerado"}
-                                </strong>
+
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <strong className={styles.whatsInfoValue}>
+                                    {conversaSelecionada.protocolo || "Não gerado"}
+                                  </strong>
+
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      setAbaPainelDireito("historico");
+                                      setPainelDireitoAberto(true);
+                                      await carregarProtocolosDaConversa();
+                                    }}
+                                    style={{
+                                      fontSize: 11,
+                                      padding: "4px 8px",
+                                      borderRadius: 6,
+                                      border: "1px solid rgba(148,163,184,0.4)",
+                                      background: "transparent",
+                                      cursor: "pointer",
+                                      color: "#64748b",
+                                    }}
+                                  >
+                                    Ver outros
+                                  </button>
+                                </div>
                               </div>
 
                               <div className={styles.whatsInfoRow}>
@@ -5049,17 +5158,95 @@ export default function ConversasPage() {
 
                       {abaPainelDireito === "historico" && (
                         <div className={styles.panelSectionStack}>
-                          {historicoExemplo.map((item, index) => (
-                            <div key={index} className={styles.historyCard}>
-                              <h4 className={styles.historyTitle}>{item.titulo}</h4>
-                              <p className={styles.historyText}>{item.descricao}</p>
-                            </div>
-                          ))}
-
                           <div className={styles.infoBoxMuted}>
-                            Este bloco está pronto visualmente. Quando você criar a API de
-                            histórico, basta trocar esses dados de exemplo por dados reais.
+                            {protocoloSelecionadoId
+                              ? `Visualizando apenas as mensagens do protocolo ${protocoloSelecionadoNumero}.`
+                              : "Visualizando todas as mensagens da conversa."}
                           </div>
+
+                          <div className={styles.listaInlineActions}>
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={async () => {
+                                if (!conversaSelecionada?.id) return;
+
+                                setProtocoloSelecionadoId(null);
+                                setProtocoloSelecionadoNumero(null);
+                                await carregarMensagens(conversaSelecionada.id, false, null);
+                              }}
+                            >
+                              Ver conversa completa
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={carregarProtocolosDaConversa}
+                            >
+                              Atualizar protocolos
+                            </button>
+                          </div>
+
+                          {carregandoProtocolos ? (
+                            <div className={styles.infoBoxMuted}>Carregando protocolos...</div>
+                          ) : protocolosConversa.length === 0 ? (
+                            <div className={styles.infoBoxMuted}>
+                              Nenhum protocolo encontrado para esta conversa.
+                            </div>
+                          ) : (
+                            protocolosConversa.map((protocolo) => (
+                              <div key={protocolo.id} className={styles.historyCard}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    gap: 12,
+                                    alignItems: "flex-start",
+                                    marginBottom: 8,
+                                  }}
+                                >
+                                  <div>
+                                    <h4 className={styles.historyTitle}>{protocolo.protocolo}</h4>
+                                    <p className={styles.historyText}>
+                                      {protocolo.tipo === "abertura" ? "Abertura" : "Reabertura"}
+                                      {protocolo.ativo ? " • Ativo" : " • Encerrado"}
+                                    </p>
+                                  </div>
+
+                                  {protocolo.ativo && (
+                                    <span className={styles.statusMiniBadge}>
+                                      Atual
+                                    </span>
+                                  )}
+                                </div>
+
+                                <p className={styles.historyText}>
+                                  Início: {formatarDataCompleta(protocolo.started_at)}
+                                </p>
+
+                                <p className={styles.historyText}>
+                                  Encerramento: {protocolo.closed_at ? formatarDataCompleta(protocolo.closed_at) : "Em aberto"}
+                                </p>
+
+                                <div className={styles.listaInlineActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.primaryButton}
+                                    onClick={async () => {
+                                      if (!conversaSelecionada?.id) return;
+
+                                      setProtocoloSelecionadoId(protocolo.id);
+                                      setProtocoloSelecionadoNumero(protocolo.protocolo);
+                                      await carregarMensagens(conversaSelecionada.id, false, protocolo.id);
+                                    }}
+                                  >
+                                    Ver mensagens deste protocolo
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
                         </div>
                       )}
 

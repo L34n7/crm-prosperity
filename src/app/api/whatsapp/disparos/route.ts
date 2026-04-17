@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { isAdministrador } from "@/lib/auth/authorization";
+import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
+import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 
 type DestinatarioEntrada = {
   numero: string;
@@ -98,6 +100,89 @@ function montarComponentesTemplate(
   return componentesMontados;
 }
 
+async function buscarProtocoloAtivoDaConversa(conversaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .select("id, protocolo, ativo")
+    .eq("conversa_id", conversaId)
+    .eq("ativo", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Erro ao buscar protocolo ativo da conversa: ${error.message}`
+    );
+  }
+
+  if (!data) {
+    throw new Error("Nenhum protocolo ativo encontrado para a conversa.");
+  }
+
+  return data;
+}
+
+async function registrarMensagemDeDisparo(params: {
+  empresaId: string;
+  conversaId: string;
+  conversaProtocoloId: string;
+  usuarioId: string;
+  templateId: string;
+  templateNome: string;
+  templateIdioma: string | null;
+  numeroDestino: string;
+  variaveis: string[];
+  mensagemExternaId: string | null;
+  metaResponse: any;
+}) {
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseAdmin.from("mensagens").insert({
+    empresa_id: params.empresaId,
+    conversa_id: params.conversaId,
+    remetente_tipo: "usuario",
+    remetente_id: params.usuarioId,
+    conteudo: `Template enviado: ${params.templateNome}`,
+    tipo_mensagem: "template",
+    origem: "disparo",
+    status_envio: "enviado",
+    mensagem_externa_id: params.mensagemExternaId,
+    metadata_json: {
+      tipo: "disparo_template",
+      template_id: params.templateId,
+      template_nome: params.templateNome,
+      template_idioma: params.templateIdioma,
+      numero_destino: params.numeroDestino,
+      variaveis: params.variaveis,
+      meta_response: params.metaResponse,
+    },
+    conversa_protocolo_id: params.conversaProtocoloId,
+    created_at: now,
+    updated_at: now,
+  });
+
+  if (error) {
+    throw new Error(`Erro ao registrar mensagem de disparo: ${error.message}`);
+  }
+}
+
+async function atualizarUltimaMensagemConversa(conversaId: string) {
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("conversas")
+    .update({
+      last_message_at: now,
+      updated_at: now,
+    })
+    .eq("id", conversaId);
+
+  if (error) {
+    throw new Error(`Erro ao atualizar conversa: ${error.message}`);
+  }
+}
+
 export async function POST(req: NextRequest) {
   console.log("[DISPAROS] ===== INICIO =====");
 
@@ -144,6 +229,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const empresaId = usuario.empresa_id;
 
     if (!integracaoWhatsappId) {
       return NextResponse.json(
@@ -404,11 +491,43 @@ export async function POST(req: NextRequest) {
 
           const messageId = data?.messages?.[0]?.id || null;
 
+          const contato = await findOrCreateWhatsAppContact({
+            empresaId,
+            phone: numero,
+            profileName: null,
+          });
+
+          const conversa = await findOrCreateWhatsAppConversation({
+            empresaId,
+            contatoId: contato.id,
+            integracaoWhatsappId,
+          });
+
+          const protocoloAtivo = await buscarProtocoloAtivoDaConversa(conversa.id);
+
+          await registrarMensagemDeDisparo({
+            empresaId,
+            conversaId: conversa.id,
+            conversaProtocoloId: protocoloAtivo.id,
+            usuarioId: usuario.id,
+            templateId: template.id,
+            templateNome: template.nome,
+            templateIdioma: template.idioma || null,
+            numeroDestino: numero,
+            variaveis,
+            mensagemExternaId: messageId,
+            metaResponse: data,
+          });
+
+          await atualizarUltimaMensagemConversa(conversa.id);
+
           return {
             numero,
             ok: true,
             status: response.status,
             message_id: messageId,
+            conversa_id: conversa.id,
+            conversa_protocolo_id: protocoloAtivo.id,
             erro: null,
           };
         } catch (error: any) {
