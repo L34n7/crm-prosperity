@@ -145,7 +145,7 @@ async function registrarMensagemDeDisparo(params: {
     remetente_id: params.usuarioId,
     conteudo: `Template enviado: ${params.templateNome}`,
     tipo_mensagem: "template",
-    origem: "disparo",
+    origem: "enviada",
     status_envio: "enviado",
     mensagem_externa_id: params.mensagemExternaId,
     metadata_json: {
