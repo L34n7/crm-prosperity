@@ -3476,6 +3476,55 @@
   transform: translateX(-50%) translateY(0);
 }
 
+.botStopArea {
+  padding-top: 8px;
+}
+
+.botStopCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.92));
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.botStopInfo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.botStopIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(59, 130, 246, 0.10);
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.botStopTitle {
+  display: block;
+  font-size: 14px;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.botStopText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
 .messageText :global(img.emoji),
 .favoriteMessageText :global(img.emoji) {
   width: 1.45em !important;

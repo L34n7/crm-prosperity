@@ -162,6 +162,8 @@ export async function POST(
       .update({
         responsavel_id: usuario.id,
         status: "em_atendimento",
+        bot_ativo: false,
+        origem_atendimento: "manual",
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

@@ -3368,6 +3368,8 @@ export default function ConversasPage() {
     conversaSelecionada?.prioridade === "alta" ||
     conversaSelecionada?.prioridade === "urgente";
 
+  const conversaComBotAtivo = !!conversaSelecionada?.bot_ativo;
+
   const alertaParadaMuitoTempo = useMemo(() => {
     if (!conversaSelecionada?.last_message_at) return false;
 
@@ -3554,7 +3556,27 @@ export default function ConversasPage() {
     }
   }, [legendaArquivo, arquivoEnvio]);
 
-  
+  useEffect(() => {
+  if (!conversaComBotAtivo) return;
+
+  setMenuAnexoAberto(false);
+  setEmojiAberto(false);
+  setArquivoEnvio(null);
+  setLegendaArquivo("");
+  legendaArquivoRef.current = "";
+  setConteudo("");
+  conteudoRef.current = "";
+
+  if (editorRef.current) {
+    editorRef.current.textContent = "";
+  }
+
+  if (legendaEditorRef.current) {
+    legendaEditorRef.current.textContent = "";
+  }
+}, [conversaComBotAtivo]);
+
+
   return (
     <>
       <Header
@@ -4422,364 +4444,214 @@ export default function ConversasPage() {
                           )}
                         </div>
 
-                        <div className={styles.composerArea}>
-                          {mensagemSucesso && (
-                            <div className={styles.successAlert}>{mensagemSucesso}</div>
-                          )}
+                        {conversaComBotAtivo ? (
+                          <div className={styles.botStopArea}>
+                            <div className={styles.botStopCard}>
+                              <div className={styles.botStopInfo}>
+                                <div className={styles.botStopIcon}>🤖</div>
 
-                          {erro && <div className={styles.errorAlert}>{erro}</div>}
+                                <div>
+                                  <strong className={styles.botStopTitle}>
+                                    Automação em andamento
+                                  </strong>
 
-                          {!podeEnviarMensagem &&
-                            conversaSelecionada.status !== "encerrada" && (
-                              <div className={styles.timelineInfoSmall}>
-                                Você só poderá responder quando a conversa estiver sob sua
-                                responsabilidade.
-                              </div>
-                            )}
-
-                          {conversaSelecionada.status === "encerrada" && (
-                            <div className={styles.timelineInfoSmall}>
-                              Esta conversa está encerrada e não aceita novas mensagens.
-                            </div>
-                          )}
-
-                          <input
-                            ref={documentoInputRef}
-                            type="file"
-                            style={{ display: "none" }}
-                            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar,.ppt,.pptx"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null;
-                              selecionarArquivo(file, e.currentTarget);
-                            }}
-                          />
-
-                          <input
-                            ref={midiaInputRef}
-                            type="file"
-                            style={{ display: "none" }}
-                            accept="image/*,video/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null;
-                              selecionarArquivo(file, e.currentTarget);
-                            }}
-                          />
-
-                          <input
-                            ref={audioInputRef}
-                            type="file"
-                            style={{ display: "none" }}
-                            accept="audio/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null;
-                              selecionarArquivo(file, e.currentTarget);
-                            }}
-                          />
-
-                          {arquivoEnvio && (
-                            <div className={styles.filePreviewCard}
-                              style={{
-                                marginBottom: 10,
-                                border: "1px solid rgba(148, 163, 184, 0.22)",
-                                borderRadius: 14,
-                                padding: 12,
-                                background: "rgba(255,255,255,0.72)",
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 10,
-                              }}
-                            >
-                            <div className={styles.filePreviewHeader}>
-                              <div className={styles.filePreviewLabel}>
-                                {getTipoArquivoSelecionado(arquivoEnvio)} selecionado
+                                  <p className={styles.botStopText}>
+                                    Esta conversa está sendo atendida pelo bot. Para responder manualmente,
+                                    clique em "Parar automação".
+                                  </p>
+                                </div>
                               </div>
 
                               <button
                                 type="button"
-                                className={styles.filePreviewRemoveButton}
-                                onClick={() => {
-                                  if (arquivoEnvioPreviewUrl) {
-                                    URL.revokeObjectURL(arquivoEnvioPreviewUrl);
-                                  }
-
-                                  setArquivoEnvio(null);
-                                  setArquivoEnvioPreviewUrl(null);
-                                  setLegendaArquivo("");
-                                  legendaArquivoRef.current = "";
-                                  if (legendaEditorRef.current) {
-                                    legendaEditorRef.current.textContent = "";
-                                  }
-                                }}
+                                className={styles.dangerButton}
+                                onClick={assumirConversa}
+                                disabled={assumindo}
                               >
-                                Remover
+                                {assumindo ? "Parando automação..." : "Parar automação"}
                               </button>
                             </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className={styles.composerRow}>
+                              {/* ESQUERDA */}
+                              <div className={styles.composerLeft}>
+                                <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
+                                  <button
+                                    type="button"
+                                    className={styles.toolButton}
+                                    onClick={() => setMenuAnexoAberto((prev) => !prev)}
+                                    title="Anexos"
+                                  >
+                                    ＋
+                                  </button>
 
-                              {arquivoSelecionadoEhImagem(arquivoEnvio) && arquivoEnvioPreviewUrl && (
-                                <div>
-                                  <img
-                                    src={arquivoEnvioPreviewUrl}
-                                    alt={arquivoEnvio.name}
-                                    style={{
-                                      maxWidth: "220px",
-                                      maxHeight: "220px",
-                                      width: "auto",
-                                      height: "auto",
-                                      borderRadius: 12,
-                                      display: "block",
+                                  {menuAnexoAberto && (
+                                    <div className={styles.attachmentMenuDropdown}>
+                                      <button
+                                        type="button"
+                                        className={styles.attachmentMenuItem}
+                                        onClick={() => {
+                                          setMenuAnexoAberto(false);
+                                          documentoInputRef.current?.click();
+                                        }}
+                                      >
+                                        <span className={styles.attachmentMenuIcon}>📎</span>
+                                        <span>Documento</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className={styles.attachmentMenuItem}
+                                        onClick={() => {
+                                          setMenuAnexoAberto(false);
+                                          midiaInputRef.current?.click();
+                                        }}
+                                      >
+                                        <span className={styles.attachmentMenuIcon}>🖼️</span>
+                                        <span>Foto ou vídeo</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className={styles.attachmentMenuItem}
+                                        onClick={() => {
+                                          setMenuAnexoAberto(false);
+                                          audioInputRef.current?.click();
+                                        }}
+                                      >
+                                        <span className={styles.attachmentMenuIcon}>🎵</span>
+                                        <span>Áudio</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className={styles.emojiPickerWrap}>
+                                  <button
+                                    type="button"
+                                    className={`${styles.toolButton} ${styles.emojiButton} ${
+                                      emojiAberto ? styles.emojiButtonActive : ""
+                                    }`}
+                                    onClick={() => setEmojiAberto((prev) => !prev)}
+                                    title="Emoji"
+                                    aria-label="Abrir emojis"
+                                  >
+                                    <span className={styles.emojiButtonIcon}>😊</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {emojiAberto && (
+                                <div className={styles.emojiPicker}>
+                                  <EmojiPicker
+                                    onEmojiClick={(emojiData) => {
+                                      inserirEmojiNoEditor(emojiData.emoji);
                                     }}
                                   />
                                 </div>
                               )}
 
-                              {arquivoSelecionadoEhVideo(arquivoEnvio) && arquivoEnvioPreviewUrl && (
-                                <div>
-                                  <video
-                                    controls
-                                    style={{
-                                      maxWidth: "260px",
-                                      width: "100%",
-                                      borderRadius: 12,
-                                      display: "block",
-                                    }}
-                                  >
-                                    <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
-                                    Seu navegador não suporta vídeo.
-                                  </video>
-                                </div>
-                              )}
+                              {/* CAMPO */}
+                              <div className={styles.composerCenter}>
+                                <div
+                                  ref={arquivoEnvio ? legendaEditorRef : editorRef}
+                                  className={styles.messageEditor}
+                                  contentEditable={podeEnviarMensagem && !enviando && !gravandoAudio}
+                                  suppressContentEditableWarning
+                                  data-placeholder={
+                                    !podeEnviarMensagem
+                                      ? "Você não pode responder esta conversa"
+                                      : arquivoEnvio
+                                      ? "Digite uma legenda..."
+                                      : gravandoAudio
+                                      ? "Gravando áudio..."
+                                      : "Digite uma mensagem"
+                                  }
+                                  onInput={(e) => {
+                                    const texto = (e.currentTarget as HTMLDivElement).textContent || "";
 
-                              {arquivoSelecionadoEhAudio(arquivoEnvio) && arquivoEnvioPreviewUrl && (
-                                <div className={styles.audioPreviewCard}>
-                                  <div className={styles.audioPreviewTop}>
-                                    <div className={styles.audioPreviewBadge}>Áudio</div>
-                                    <span className={styles.audioPreviewFileName}>{arquivoEnvio.name}</span>
-                                  </div>
-
-                                  <div className={styles.audioPreviewPlayerWrap}>
-                                    <audio controls className={styles.audioPreviewPlayer}>
-                                      <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
-                                      Seu navegador não suporta áudio.
-                                    </audio>
-                                  </div>
-                                </div>
-                              )}
-
-                               <div
-                                style={{
-                                  fontSize: 13,
-                                  color: "#64748b",
-                                  wordBreak: "break-word",
-                                }}
-                              >
-                                {arquivoEnvio.name}
-                              </div>
-                            </div>
-                          )}
-
-                          {cameraAberta && (
-                            <div className={styles.cameraModal}>
-                              <video ref={videoRef} autoPlay playsInline className={styles.cameraVideo} />
-
-                              <div className={styles.cameraActions}>
-                                <button onClick={capturarFoto}>📸 Tirar foto</button>
-                                <button onClick={fecharCamera}>Cancelar</button>
-                              </div>
-
-                              <canvas ref={canvasRef} style={{ display: "none" }} />
-                            </div>
-                          )}
-
-                          {gravandoAudio && (
-                            <div className={styles.timelineInfoSmall}>
-                              Gravando áudio... <strong>{formatarDuracaoGravacao(duracaoGravacao)}</strong>
-                            </div>
-                          )}
-
-                          <div className={styles.composerRow}>
-                            {/* ESQUERDA */}
-                            <div className={styles.composerLeft}>
-                              <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
-                                <button
-                                  type="button"
-                                  className={styles.toolButton}
-                                  onClick={() => setMenuAnexoAberto((prev) => !prev)}
-                                  title="Anexos"
-                                >
-                                  ＋
-                                </button>
-
-                                {menuAnexoAberto && (
-                                  <div className={styles.attachmentMenuDropdown}>
-                                    <button
-                                      type="button"
-                                      className={styles.attachmentMenuItem}
-                                      onClick={() => {
-                                        setMenuAnexoAberto(false);
-                                        documentoInputRef.current?.click();
-                                      }}
-                                    >
-                                      <span className={styles.attachmentMenuIcon}>📎</span>
-                                      <span>Documento</span>
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      className={styles.attachmentMenuItem}
-                                      onClick={() => {
-                                        setMenuAnexoAberto(false);
-                                        midiaInputRef.current?.click();
-                                      }}
-                                    >
-                                      <span className={styles.attachmentMenuIcon}>🖼️</span>
-                                      <span>Foto ou vídeo</span>
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      className={styles.attachmentMenuItem}
-                                      onClick={() => {
-                                        setMenuAnexoAberto(false);
-                                        audioInputRef.current?.click();
-                                      }}
-                                    >
-                                      <span className={styles.attachmentMenuIcon}>🎵</span>
-                                      <span>Áudio</span>
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className={styles.emojiPickerWrap}>
-                                <button
-                                  type="button"
-                                  className={`${styles.toolButton} ${styles.emojiButton} ${
-                                    emojiAberto ? styles.emojiButtonActive : ""
-                                  }`}
-                                  onClick={() => setEmojiAberto((prev) => !prev)}
-                                  title="Emoji"
-                                  aria-label="Abrir emojis"
-                                >
-                                  <span className={styles.emojiButtonIcon}>😊</span>
-                                </button>
-
-
-                              </div>
-                            </div>
-
-                            {emojiAberto && (
-                              <div className={styles.emojiPicker}>
-                                <EmojiPicker
-                                  onEmojiClick={(emojiData) => {
-                                    inserirEmojiNoEditor(emojiData.emoji);
+                                    if (arquivoEnvio) {
+                                      legendaArquivoRef.current = texto;
+                                    } else {
+                                      conteudoRef.current = texto;
+                                    }
                                   }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                      e.preventDefault();
+
+                                      if (enviando || !podeEnviarMensagem || gravandoAudio) return;
+
+                                      if (arquivoEnvio) {
+                                        enviarMidia();
+                                        return;
+                                      }
+
+                                      enviarMensagem();
+                                    }
+                                  }}
+                                  role="textbox"
+                                  aria-multiline="true"
                                 />
                               </div>
-                            )}
 
-                            {/* CAMPO */}
-                            <div className={styles.composerCenter}>
-                              <div
-                                ref={arquivoEnvio ? legendaEditorRef : editorRef}
-                                className={styles.messageEditor}
-                                contentEditable={podeEnviarMensagem && !enviando && !gravandoAudio}
-                                suppressContentEditableWarning
-                                data-placeholder={
-                                  !podeEnviarMensagem
-                                    ? "Você não pode responder esta conversa"
-                                    : arquivoEnvio
-                                    ? "Digite uma legenda..."
-                                    : gravandoAudio
-                                    ? "Gravando áudio..."
-                                    : "Digite uma mensagem"
-                                }
-                                onInput={(e) => {
-                                  const texto = (e.currentTarget as HTMLDivElement).textContent || "";
+                              {/* DIREITA */}
+                              <div className={styles.composerRight}>
+                                <button
+                                  type="button"
+                                  onClick={abrirCamera}
+                                  className={styles.toolButton}
+                                  title="Câmera"
+                                >
+                                  📷
+                                </button>
 
-                                  if (arquivoEnvio) {
-                                    legendaArquivoRef.current = texto;
-                                  } else {
-                                    conteudoRef.current = texto;
-                                  }
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (gravandoAudio) {
+                                      pararGravacaoAudio();
+                                      return;
+                                    }
 
-                                    if (enviando || !podeEnviarMensagem || gravandoAudio) return;
+                                    iniciarGravacaoAudio();
+                                  }}
+                                  disabled={!podeEnviarMensagem || enviando}
+                                  className={styles.toolButton}
+                                  title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
+                                >
+                                  {gravandoAudio ? "⏹" : "🎤"}
+                                </button>
 
+                                <button
+                                  onClick={() => {
                                     if (arquivoEnvio) {
                                       enviarMidia();
                                       return;
                                     }
 
                                     enviarMensagem();
+                                  }}
+                                  disabled={
+                                    enviando ||
+                                    !podeEnviarMensagem ||
+                                    gravandoAudio ||
+                                    (!arquivoEnvio && !conteudoRef.current.trim())
                                   }
-                                }}
-                                role="textbox"
-                                aria-multiline="true"
-                              />
+                                  className={styles.sendButton}
+                                >
+                                  {enviando ? "Enviando..." : "Enviar"}
+                                </button>
+                              </div>
                             </div>
 
-                            {/* DIREITA */}
-                            <div className={styles.composerRight}>
-
-                              <button
-                                type="button"
-                                onClick={abrirCamera}
-                                className={styles.toolButton}
-                                title="Câmera"
-                              >
-                                📷
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (gravandoAudio) {
-                                    pararGravacaoAudio();
-                                    return;
-                                  }
-
-                                  iniciarGravacaoAudio();
-                                }}
-                                disabled={!podeEnviarMensagem || enviando}
-                                className={styles.toolButton}
-                                title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
-                              >
-                                {gravandoAudio ? "⏹" : "🎤"}
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  if (arquivoEnvio) {
-                                    enviarMidia();
-                                    return;
-                                  }
-
-                                  enviarMensagem();
-                                }}
-                                disabled={
-                                  enviando ||
-                                  !podeEnviarMensagem ||
-                                  gravandoAudio ||
-                                  (!arquivoEnvio && !conteudoRef.current.trim())
-                                }
-                                className={styles.sendButton}
-                              >
-                                {enviando
-                                  ? "Enviando..."
-                                  : arquivoEnvio
-                                  ? "Enviar"
-                                  : "Enviar"}
-                              </button>
-                            </div>
-                          </div>
-
-                          <p className={styles.footerHint}>
-                            Enter envia • Shift + Enter quebra linha
-                          </p>
-                        </div>
+                            <p className={styles.footerHint}>
+                              Enter envia • Shift + Enter quebra linha
+                            </p>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
