@@ -11,6 +11,7 @@ type Conversa = {
   id: string;
   assunto: string | null;
   status: string;
+  bot_ativo?: boolean | null;
   prioridade: string | null;
   canal: string | null;
   origem_atendimento?: string | null;
@@ -42,7 +43,6 @@ type Conversa = {
     telefone: string;
     email?: string | null;
     empresa?: string | null;
-    tags?: string[] | null;
     observacoes?: string | null;
   } | null;
 
@@ -1071,7 +1071,7 @@ export default function ConversasPage() {
   const [setorFiltro, setSetorFiltro] = useState("todos");
   const [responsavelFiltro, setResponsavelFiltro] = useState("todos");
   const [chipRapido, setChipRapido] = useState<
-    "Tudo" | "minhas" | "favoritos" | "fila" | "nao_lidas" | "sem_responsavel" | "urgentes"
+    "Tudo" | "minhas" | "favoritos" | "fila" | "nao_lidas" | "sem_responsavel" | "urgentes" | "robo"
   >("Tudo");
 
   const [conteudo, setConteudo] = useState("");
@@ -2554,6 +2554,57 @@ export default function ConversasPage() {
     setSelecionandoEtiqueta(false);
   }
 
+  function baixarConversaPDF() {
+  if (!conversaSelecionada || mensagens.length === 0) {
+    alert("Nenhuma conversa para exportar.");
+    return;
+  }
+
+  const htmlMensagens = mensagens
+    .map((msg) => {
+      const remetente =
+        msg.remetente_tipo === "usuario" ? "Você" : "Cliente";
+
+      const data = new Date(msg.created_at).toLocaleString("pt-BR");
+
+      return `
+        <div style="margin-bottom:12px;">
+          <strong>${remetente}</strong><br/>
+          <span>${msg.conteudo || ""}</span><br/>
+          <small style="color:gray;">${data}</small>
+        </div>
+      `;
+    })
+    .join("");
+
+  const html = `
+    <html>
+      <head>
+        <title>Conversa - ${conversaSelecionada.contatos?.nome || ""}</title>
+      </head>
+      <body style="font-family: Arial; padding:20px;">
+        <h2>Conversa com ${conversaSelecionada.contatos?.nome || "Contato"}</h2>
+        <p><strong>Telefone:</strong> ${conversaSelecionada.contatos?.telefone || ""}</p>
+        <hr/>
+        ${htmlMensagens}
+      </body>
+    </html>
+  `;
+
+  const novaJanela = window.open("", "_blank");
+
+  if (!novaJanela) return;
+
+  novaJanela.document.write(html);
+  novaJanela.document.close();
+
+  novaJanela.focus();
+
+  setTimeout(() => {
+    novaJanela.print(); // abre opção salvar como PDF
+  }, 500);
+}
+
   async function salvarEtiquetaEmpresa() {
     const nome = etiquetaForm.nome.trim();
     const descricao = etiquetaForm.descricao.trim();
@@ -3165,6 +3216,10 @@ export default function ConversasPage() {
     );
   }, [conversas]);
 
+  const totalConversasRobo = useMemo(() => {
+    return conversas.filter((c) => c.bot_ativo === true).length;
+  }, [conversas]);
+
   const conversasFiltradas = useMemo(() => {
     let lista = [...conversas];
 
@@ -3198,6 +3253,10 @@ export default function ConversasPage() {
 
     if (chipRapido === "fila") {
       lista = lista.filter((c) => c.status === "fila");
+    }
+
+    if (chipRapido === "robo") {
+      lista = lista.filter((c) => c.bot_ativo === true);
     }
 
     if (chipRapido === "nao_lidas") {
@@ -3612,13 +3671,13 @@ export default function ConversasPage() {
 
                     <button
                       className={`${styles.quickChip} ${
-                        chipRapido === "sem_responsavel" ? styles.quickChipActive : ""
+                        chipRapido === "nao_lidas" ? styles.quickChipActive : ""
                       }`}
-                      onClick={() => setChipRapido("sem_responsavel")}
+                      onClick={() => setChipRapido("nao_lidas")}
                     >
-                      Sem responsável
-                    </button>
-
+                      Não lidas
+                    </button>    
+                    
                     <button
                       className={`${styles.quickChip} ${
                         chipRapido === "urgentes" ? styles.quickChipActive : ""
@@ -3627,16 +3686,56 @@ export default function ConversasPage() {
                     >
                       Urgentes
                     </button>
+
+                    <button
+                      className={`${styles.quickChip} ${
+                        chipRapido === "favoritos" ? styles.quickChipActive : ""
+                      }`}
+                      onClick={() => setChipRapido("favoritos")}
+                    >
+                      Favoritos
+                    </button>
                   </div>
                 </>
               )}
               
               <div className={styles.quickFilters}>
+
+                <button
+                  className={`${styles.quickChip} ${
+                    chipRapido === "robo" ? styles.quickChipActive : ""
+                  } ${styles.quickChipRobot}`}
+                  onClick={() => {
+                    setChipRapido("robo");
+                    setListaFiltroId(null);
+                  }}
+                  title="Conversas com atendimento do bot"
+                  type="button"
+                >
+                  <span className={styles.quickChipRobotIconWrap}>
+                    <span className={styles.quickChipRobotIcon}>🤖</span>
+
+                    {totalConversasRobo > 0 && (
+                      <>
+                        <span className={styles.quickChipRobotPulse} />
+                        <span className={styles.quickChipRobotBadge}>
+                          {totalConversasRobo}
+                        </span>
+                      </>
+                    )}
+                  </span>
+
+                  <span>Bot</span>
+                </button>
+
                 <button
                   className={`${styles.quickChip} ${
                     chipRapido === "Tudo" ? styles.quickChipActive : ""
                   }`}
-                  onClick={() => setChipRapido("Tudo")}
+                  onClick={() => {
+                    setChipRapido("Tudo");
+                    setListaFiltroId(null);
+                  }}
                 >
                   Tudo
                 </button>
@@ -3652,21 +3751,12 @@ export default function ConversasPage() {
 
                 <button
                   className={`${styles.quickChip} ${
-                    chipRapido === "favoritos" ? styles.quickChipActive : ""
+                    chipRapido === "sem_responsavel" ? styles.quickChipActive : ""
                   }`}
-                  onClick={() => setChipRapido("favoritos")}
+                  onClick={() => setChipRapido("sem_responsavel")}
                 >
-                  Favoritos
+                  Sem atendente
                 </button>
-
-                <button
-                  className={`${styles.quickChip} ${
-                    chipRapido === "nao_lidas" ? styles.quickChipActive : ""
-                  }`}
-                  onClick={() => setChipRapido("nao_lidas")}
-                >
-                  Não lidas
-                </button>     
 
                 {listasEmpresa.map((lista) => (
                   <button
@@ -3752,6 +3842,11 @@ export default function ConversasPage() {
                             }`}
                           >
                             {getStatusLabel(c.status)}
+                          {c.bot_ativo && (
+                            <span className={styles.robotMiniBadge} title="Bot ativo">
+                              🤖
+                            </span>
+                          )}
                           </span>
 
                           {(c.prioridade === "alta" || c.prioridade === "urgente") && (
@@ -4885,17 +4980,103 @@ export default function ConversasPage() {
                             </p>
 
                             <div className={styles.whatsContactActions}>
-                              <button type="button" className={styles.whatsContactActionButton}>
-                                <span className={styles.whatsContactActionIcon}>＋</span>
-                                <span className={styles.whatsContactActionText}>Adicionar</span>
+                              <button
+                                type="button"
+                                className={styles.whatsContactActionButton}
+                                onClick={() => {
+                                  setAbaPainelDireito("detalhes");
+                                  setPainelDireitoAberto(true);
+                                }}
+                              >
+                                <span className={styles.whatsContactActionIcon}>◈</span>
+                                <span className={styles.whatsContactActionText}>Detalhes</span>
                               </button>
 
-                              <button type="button" className={styles.whatsContactActionButton}>
+                              <button 
+                                type="button" 
+                                className={styles.whatsContactActionButton}
+                                onClick={baixarConversaPDF}
+                                >
                                 <span className={styles.whatsContactActionIcon}>↗</span>
                                 <span className={styles.whatsContactActionText}>Compartilhar</span>
                               </button>
                             </div>
                           </div>
+
+                          <div className={styles.whatsContactSection}>
+                            <div className={styles.whatsSectionHeader}>
+                              <span>Informações do contato</span>
+                            </div>
+
+                            <div className={styles.whatsInfoList}>
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>PROTOCOLO</span>
+
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <strong className={styles.whatsInfoValue}>
+                                    {conversaSelecionada.protocolo || "Não gerado"}
+                                  </strong>
+
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      setAbaPainelDireito("historico");
+                                      setPainelDireitoAberto(true);
+                                      await carregarProtocolosDaConversa();
+                                    }}
+                                    style={{
+                                      fontSize: 11,
+                                      padding: "4px 8px",
+                                      borderRadius: 6,
+                                      border: "1px solid rgba(148,163,184,0.4)",
+                                      background: "transparent",
+                                      cursor: "pointer",
+                                      color: "#64748b",
+                                    }}
+                                  >
+                                    Ver outros
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>Telefone</span>
+                                <strong className={styles.whatsInfoValue}>
+                                  {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                                </strong>
+                              </div>
+
+                              <CampoContatoEditavel
+                                label="E-MAIL"
+                                valorInicial={conversaSelecionada.contatos?.email || ""}
+                                editando={editandoCampo === "email"}
+                                onEditar={() => setEditandoCampo("email")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("email", valor)}
+                              />
+
+                              <CampoContatoEditavel
+                                label="EMPRESA"
+                                valorInicial={conversaSelecionada.contatos?.empresa || ""}
+                                editando={editandoCampo === "empresa"}
+                                onEditar={() => setEditandoCampo("empresa")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("empresa", valor)}
+                              />
+
+                              <CampoContatoEditavel
+                                label="OBSERVAÇÕES"
+                                valorInicial={conversaSelecionada.contatos?.observacoes || ""}
+                                editando={editandoCampo === "observacoes"}
+                                multiline
+                                onEditar={() => setEditandoCampo("observacoes")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className={styles.whatsDivider} />
 
                           <div className={styles.whatsLinksSection}>
                             {/* Mídia */}
@@ -5017,101 +5198,6 @@ export default function ConversasPage() {
                             </button>
                           </div>
 
-                          <div className={styles.whatsDivider} />
-
-                          <div className={styles.whatsContactSection}>
-                            <div className={styles.whatsSectionHeader}>
-                              <span>Informações do contato</span>
-                            </div>
-
-                            <div className={styles.whatsInfoList}>
-                              <div className={styles.whatsInfoRow}>
-                                <span className={styles.whatsInfoLabel}>PROTOCOLO</span>
-
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <strong className={styles.whatsInfoValue}>
-                                    {conversaSelecionada.protocolo || "Não gerado"}
-                                  </strong>
-
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      setAbaPainelDireito("historico");
-                                      setPainelDireitoAberto(true);
-                                      await carregarProtocolosDaConversa();
-                                    }}
-                                    style={{
-                                      fontSize: 11,
-                                      padding: "4px 8px",
-                                      borderRadius: 6,
-                                      border: "1px solid rgba(148,163,184,0.4)",
-                                      background: "transparent",
-                                      cursor: "pointer",
-                                      color: "#64748b",
-                                    }}
-                                  >
-                                    Ver outros
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className={styles.whatsInfoRow}>
-                                <span className={styles.whatsInfoLabel}>Telefone</span>
-                                <strong className={styles.whatsInfoValue}>
-                                  {conversaSelecionada.contatos?.telefone || "Sem telefone"}
-                                </strong>
-                              </div>
-
-                              <CampoContatoEditavel
-                                label="E-MAIL"
-                                valorInicial={conversaSelecionada.contatos?.email || ""}
-                                editando={editandoCampo === "email"}
-                                onEditar={() => setEditandoCampo("email")}
-                                onCancelar={() => setEditandoCampo(null)}
-                                onSalvar={(valor) => salvarContatoCampo("email", valor)}
-                              />
-
-                              <CampoContatoEditavel
-                                label="EMPRESA"
-                                valorInicial={conversaSelecionada.contatos?.empresa || ""}
-                                editando={editandoCampo === "empresa"}
-                                onEditar={() => setEditandoCampo("empresa")}
-                                onCancelar={() => setEditandoCampo(null)}
-                                onSalvar={(valor) => salvarContatoCampo("empresa", valor)}
-                              />
-
-                              <CampoContatoEditavel
-                                label="OBSERVAÇÕES"
-                                valorInicial={conversaSelecionada.contatos?.observacoes || ""}
-                                editando={editandoCampo === "observacoes"}
-                                multiline
-                                onEditar={() => setEditandoCampo("observacoes")}
-                                onCancelar={() => setEditandoCampo(null)}
-                                onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}
-                              />
-                            </div>
-                          </div>
-
-                          <div className={styles.whatsContactSection}>
-                            <div className={styles.whatsSectionHeader}>
-                              <span>Tags</span>
-                            </div>
-
-                            <div className={styles.tagsWrap}>
-                              {(conversaSelecionada.contatos?.tags || []).length > 0 ? (
-                                conversaSelecionada.contatos?.tags?.map((tag) => (
-                                  <span key={tag} className={styles.tagBadge}>
-                                    {tag}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className={styles.emptyInlineText}>
-                                  Nenhuma tag cadastrada.
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
                           <div className={styles.whatsContactSection}>
                             <div className={styles.whatsSectionHeader}>
                               <span>Ações</span>
@@ -5144,13 +5230,31 @@ export default function ConversasPage() {
                                 ⊞ Adicionar à lista
                               </button>
 
-                              <button type="button" className={styles.whatsDangerAction}>
-                                ⊖ Limpar conversa
-                              </button>
+                              {podeTransferir && (
+                                <button
+                                  type="button"
+                                  className={styles.whatsSecondaryAction}
+                                  onClick={() => {
+                                    setMenuContatoAberto(false);
+                                    abrirTransferir();
+                                  }}
+                                >
+                                  ⇄ Transferir conversa
+                                </button>
+                              )}
 
-                              <button type="button" className={styles.whatsDangerAction}>
-                                🗑 Apagar conversa
-                              </button>
+                              {podeEncerrar && (
+                                <button
+                                  type="button"
+                                  className={styles.whatsDangerAction}
+                                  onClick={() => {
+                                    setMenuContatoAberto(false);
+                                    abrirEncerrar();
+                                  }}
+                                >
+                                  ⛔ Encerrar conversa
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

@@ -140,13 +140,12 @@ async function buscarAutomacaoAtiva(
   const supabaseAdmin = getSupabaseAdmin();
 
   const { data, error } = await supabaseAdmin
-    .from("automacoes")
-    .select("id")
+    .from("whatsapp_automacoes")
+    .select("id, ativa, setor_padrao_id, criado_em")
     .eq("empresa_id", empresaId)
     .eq("integracao_whatsapp_id", integracaoWhatsappId)
-    .eq("ativo", true)
-    .eq("canal", "whatsapp")
-    .order("created_at", { ascending: true })
+    .eq("ativa", true)
+    .order("criado_em", { ascending: true })
     .limit(1)
     .maybeSingle();
 
