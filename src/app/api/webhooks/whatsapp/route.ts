@@ -10,8 +10,10 @@ import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-
 import { saveIncomingWhatsAppMessage } from "@/lib/whatsapp/save-incoming-message";
 import { processChatbotAutomation } from "@/lib/chatbot/process-automation";
 import { updateWhatsAppMessageStatus } from "@/lib/whatsapp/update-message-status";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+const supabaseAdmin = getSupabaseAdmin();
 
 export async function GET(req: NextRequest) {
   try {
@@ -186,7 +188,21 @@ export async function POST(req: NextRequest) {
           integracaoWhatsappId: integration.id,
         });
 
-        const savedMessage = await saveIncomingWhatsAppMessage({
+        const { data: protocoloAtivo, error: protocoloAtivoError } =
+          await supabaseAdmin
+            .from("conversa_protocolos")
+            .select("id")
+            .eq("conversa_id", conversation.id)
+            .eq("ativo", true)
+            .maybeSingle();
+
+        if (protocoloAtivoError) {
+          throw new Error(
+            `Erro ao buscar protocolo ativo da conversa: ${protocoloAtivoError.message}`
+          );
+        }
+
+        const payloadSalvarMensagem: any = {
           empresaId: integration.empresa_id,
           conversaId: conversation.id,
           conteudo: message.conteudo,
@@ -195,7 +211,12 @@ export async function POST(req: NextRequest) {
           mensagemExternaId: message.messageId,
           timestamp: message.timestamp,
           metadataJson: message.metadataJson,
-        });
+          conversaProtocoloId: protocoloAtivo?.id ?? null,
+        };
+
+        const savedMessage = await saveIncomingWhatsAppMessage(
+          payloadSalvarMensagem
+        );
 
         let automationResult:
           | {
@@ -240,6 +261,7 @@ export async function POST(req: NextRequest) {
           integrationId: integration.id,
           contactId: contact.id,
           conversationId: conversation.id,
+          conversaProtocoloId: protocoloAtivo?.id ?? null,
           savedMessageId: savedMessage.messageId,
           tipoMensagem: message.tipoMensagem,
           automationReplied: automationResult?.replied ?? false,

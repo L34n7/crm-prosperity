@@ -26,6 +26,10 @@ type ConversaAcesso = {
   integracao_whatsapp_id?: string | null;
 };
 
+type ProtocoloAtivo = {
+  id: string;
+};
+
 async function usuarioPodeAcessarConversa(
   usuario: UsuarioContexto,
   conversa: ConversaAcesso
@@ -77,6 +81,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const conversaId = searchParams.get("conversa_id");
+    const conversaProtocoloId = searchParams.get("conversa_protocolo_id");
 
     if (!conversaId) {
       return NextResponse.json(
@@ -87,7 +92,9 @@ export async function GET(request: Request) {
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
-      .select("id, empresa_id, setor_id, responsavel_id, status, contato_id, integracao_whatsapp_id")
+      .select(
+        "id, empresa_id, setor_id, responsavel_id, status, contato_id, integracao_whatsapp_id"
+      )
       .eq("id", conversaId)
       .maybeSingle<ConversaAcesso>();
 
@@ -119,11 +126,21 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    let queryMensagens = supabaseAdmin
       .from("mensagens")
       .select("*")
-      .eq("conversa_id", conversaId)
-      .order("created_at", { ascending: true });
+      .eq("conversa_id", conversaId);
+
+    if (conversaProtocoloId) {
+      queryMensagens = queryMensagens.eq(
+        "conversa_protocolo_id",
+        conversaProtocoloId
+      );
+    }
+
+    const { data, error } = await queryMensagens.order("created_at", {
+      ascending: true,
+    });
 
     if (error) {
       return NextResponse.json(
@@ -246,7 +263,7 @@ export async function POST(request: Request) {
     );
   }
 
-    if (tipo_mensagem !== "texto") {
+  if (tipo_mensagem !== "texto") {
     return NextResponse.json(
       {
         ok: false,
@@ -293,7 +310,7 @@ export async function POST(request: Request) {
     );
   }
 
-    console.log("[POST /api/mensagens] conversa carregada:", conversa);
+  console.log("[POST /api/mensagens] conversa carregada:", conversa);
 
   if (!(await usuarioPodeAcessarConversa(usuario, conversa))) {
     return NextResponse.json(
@@ -312,6 +329,27 @@ export async function POST(request: Request) {
   if (!conversa.integracao_whatsapp_id) {
     return NextResponse.json(
       { ok: false, error: "A conversa não possui integração WhatsApp vinculada" },
+      { status: 400 }
+    );
+  }
+
+  const { data: protocoloAtivo, error: protocoloAtivoError } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .select("id")
+    .eq("conversa_id", conversa_id)
+    .eq("ativo", true)
+    .maybeSingle<ProtocoloAtivo>();
+
+  if (protocoloAtivoError) {
+    return NextResponse.json(
+      { ok: false, error: protocoloAtivoError.message },
+      { status: 500 }
+    );
+  }
+
+  if (!protocoloAtivo) {
+    return NextResponse.json(
+      { ok: false, error: "Nenhum protocolo ativo encontrado para esta conversa" },
       { status: 400 }
     );
   }
@@ -439,6 +477,7 @@ export async function POST(request: Request) {
       {
         empresa_id: conversa.empresa_id,
         conversa_id,
+        conversa_protocolo_id: protocoloAtivo.id,
         remetente_tipo,
         remetente_id,
         conteudo,

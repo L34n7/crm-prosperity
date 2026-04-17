@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 type SaveIncomingMessageParams = {
   empresaId: string;
   conversaId: string;
+  conversaProtocoloId?: string | null;
   conteudo?: string | null;
   tipoMensagem?: string;
   statusEnvio?: "pendente" | "enviada" | "entregue" | "lida" | "falha";
@@ -35,6 +36,7 @@ function getConteudoPadraoPorTipo(tipoMensagem: string) {
 export async function saveIncomingWhatsAppMessage({
   empresaId,
   conversaId,
+  conversaProtocoloId = null,
   conteudo = null,
   tipoMensagem = "texto",
   statusEnvio = "entregue",
@@ -88,6 +90,7 @@ export async function saveIncomingWhatsAppMessage({
     .insert({
       empresa_id: empresaId,
       conversa_id: conversaId,
+      conversa_protocolo_id: conversaProtocoloId,
       remetente_tipo: "contato",
       remetente_id: null,
       conteudo: conteudoFinal,

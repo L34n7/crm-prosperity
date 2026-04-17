@@ -124,7 +124,10 @@ export async function routeConversationToSector({
         status: "em_atendimento",
         origem_atendimento: "manual",
         bot_ativo: false,
+        fluxo_etapa: null,
         menu_aguardando_resposta: false,
+        ultima_opcao_escolhida: null,
+        tentativas_invalidas: 0,
         ultima_interacao_bot_em: now,
         closed_at: null,
       })
@@ -155,7 +158,10 @@ export async function routeConversationToSector({
       responsavel_id: null,
       status: "fila",
       bot_ativo: false,
+      fluxo_etapa: null,
       menu_aguardando_resposta: false,
+      ultima_opcao_escolhida: null,
+      tentativas_invalidas: 0,
       ultima_interacao_bot_em: now,
       closed_at: null,
     })
@@ -221,7 +227,10 @@ export async function assumeConversation({
       status: "em_atendimento",
       origem_atendimento: "manual",
       bot_ativo: false,
+      fluxo_etapa: null,
       menu_aguardando_resposta: false,
+      ultima_opcao_escolhida: null,
+      tentativas_invalidas: 0,
       closed_at: null,
     })
     .eq("id", conversaId)

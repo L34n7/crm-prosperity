@@ -9,7 +9,6 @@ import {
   podeTransferirConversas,
 } from "@/lib/auth/authorization";
 
-
 const supabaseAdmin = getSupabaseAdmin();
 
 type ConversaAtual = {
@@ -24,6 +23,8 @@ type ConversaAtual = {
   origem_atendimento: string;
   prioridade: string | null;
   assunto: string | null;
+  started_at?: string | null;
+  created_at?: string | null;
   closed_at?: string | null;
 };
 
@@ -48,6 +49,106 @@ function isOrigemAtendimentoValida(origem: string) {
 
 function isPrioridadeValida(prioridade: string) {
   return ["baixa", "media", "alta", "urgente"].includes(prioridade);
+}
+
+function formatarDataProtocolo(data: Date) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+
+  return `${ano}${mes}${dia}`;
+}
+
+async function gerarProtocolo(empresaId: string) {
+  const hoje = new Date();
+  const dataBase = formatarDataProtocolo(hoje);
+  const prefixo = `ATD-${dataBase}-`;
+
+  const { data, error } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .select("protocolo")
+    .eq("empresa_id", empresaId)
+    .like("protocolo", `${prefixo}%`)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Erro ao gerar protocolo: ${error.message}`);
+  }
+
+  const ultimoProtocolo = data?.[0]?.protocolo || null;
+
+  let sequencial = 1;
+
+  if (ultimoProtocolo) {
+    const ultimaParte = ultimoProtocolo.split("-").pop() || "0";
+    const ultimoNumero = Number(ultimaParte);
+
+    if (!Number.isNaN(ultimoNumero)) {
+      sequencial = ultimoNumero + 1;
+    }
+  }
+
+  return `${prefixo}${String(sequencial).padStart(6, "0")}`;
+}
+
+async function fecharProtocoloAtivo(conversaId: string, dataFechamento: string) {
+  const { error } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .update({
+      ativo: false,
+      closed_at: dataFechamento,
+      updated_at: dataFechamento,
+    })
+    .eq("conversa_id", conversaId)
+    .eq("ativo", true);
+
+  if (error) {
+    throw new Error(`Erro ao encerrar protocolo ativo: ${error.message}`);
+  }
+}
+
+async function criarNovoProtocolo(
+  empresaId: string,
+  conversaId: string,
+  tipo: "abertura" | "reabertura",
+  startedAt?: string | null
+) {
+  const protocoloGerado = await gerarProtocolo(empresaId);
+  const inicio = startedAt || new Date().toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      protocolo: protocoloGerado,
+      tipo,
+      ativo: true,
+      started_at: inicio,
+      created_at: inicio,
+      updated_at: inicio,
+    });
+
+  if (error) {
+    throw new Error(`Erro ao criar novo protocolo: ${error.message}`);
+  }
+}
+
+async function existeProtocoloAtivo(conversaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .select("id")
+    .eq("conversa_id", conversaId)
+    .eq("ativo", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Erro ao verificar protocolo ativo: ${error.message}`);
+  }
+
+  return !!data;
 }
 
 async function usuarioPodeEditarConversa(
@@ -235,6 +336,8 @@ export async function PUT(
   const mudouResponsavel = responsavel_id !== conversaAtual.responsavel_id;
   const estaEncerrando =
     status === "encerrada" && conversaAtual.status !== "encerrada";
+  const estaReabrindo =
+    status !== "encerrada" && conversaAtual.status === "encerrada";
 
   if (mudouSetor && !(await usuarioPodeTransferir(usuario, conversaAtual))) {
     return NextResponse.json(
@@ -429,14 +532,12 @@ export async function PUT(
   if (mudouSetor) {
     updateData.setor_id = setor_id;
 
-    // Só limpa responsável se política permitir
-    const limparResponsavel = true; // depois vamos ligar com config
+    const limparResponsavel = true;
 
     if (limparResponsavel) {
       updateData.responsavel_id = null;
       updateData.status = "fila";
     } else {
-      // mantém responsável → mantém coerência
       if (conversaAtual.responsavel_id) {
         updateData.status = "em_atendimento";
       }
@@ -453,8 +554,11 @@ export async function PUT(
     }
   }
 
+  let dataFechamento: string | null = null;
+
   if (status === "encerrada" && !conversaAtual.closed_at) {
-    updateData.closed_at = new Date().toISOString();
+    dataFechamento = new Date().toISOString();
+    updateData.closed_at = dataFechamento;
   }
 
   if (status !== "encerrada" && !mudouSetor) {
@@ -488,6 +592,36 @@ export async function PUT(
   if (error) {
     return NextResponse.json(
       { ok: false, error: error.message },
+      { status: 500 }
+    );
+  }
+
+  try {
+    if (estaEncerrando) {
+      await fecharProtocoloAtivo(id, dataFechamento || new Date().toISOString());
+    }
+
+    if (estaReabrindo) {
+      const jaExisteProtocoloAtivo = await existeProtocoloAtivo(id);
+
+      if (!jaExisteProtocoloAtivo) {
+        await criarNovoProtocolo(
+          empresa_id,
+          id,
+          "reabertura",
+          new Date().toISOString()
+        );
+      }
+    }
+  } catch (protocoloError) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          protocoloError instanceof Error
+            ? protocoloError.message
+            : "Erro ao atualizar protocolo da conversa",
+      },
       { status: 500 }
     );
   }

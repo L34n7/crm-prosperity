@@ -23,6 +23,14 @@ type Conversa = {
   setor_id?: string | null;
   responsavel_id?: string | null;
   favorita?: boolean;
+  etiqueta_id?: string | null;
+  etiqueta_cor?: string | null;
+  etiquetas?: {
+    id: string;
+    nome: string;
+    descricao?: string | null;
+    cor: string;
+  } | null;
   listas?: {
     id: string;
     nome: string;
@@ -180,6 +188,30 @@ type ListaEmpresa = {
   nome: string;
 };
 
+type EtiquetaEmpresa = {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  cor: string;
+  ativo?: boolean;
+  ordem?: number;
+};
+
+type EtiquetaForm = {
+  nome: string;
+  descricao: string;
+  cor: string;
+};
+
+const ETIQUETAS_PADRAO = [
+  "#60A5FA",
+  "#4ADE80",
+  "#FACC15",
+  "#FB923C",
+  "#F87171",
+  "#A78BFA",
+];
+
 
 type AbaPainelDireito =
   | "detalhes"
@@ -188,6 +220,7 @@ type AbaPainelDireito =
   | "notas"
   | "mensagens_favoritas"
   | "listas"
+  | "etiquetas"
   | "midia_docs_links";
 
 type NotaConversa = {
@@ -536,6 +569,34 @@ function converterTextoParaEmojiHtml(texto?: string | null) {
   });
 }
 
+
+function hexToRgba(hex: string, alpha: number) {
+  const valor = hex.replace("#", "");
+
+  if (valor.length !== 6) {
+    return `rgba(148, 163, 184, ${alpha})`;
+  }
+
+  const numero = parseInt(valor, 16);
+  const r = (numero >> 16) & 255;
+  const g = (numero >> 8) & 255;
+  const b = numero & 255;
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getTooltipEtiqueta(etiqueta?: {
+  nome?: string | null;
+  descricao?: string | null;
+}) {
+  if (!etiqueta?.nome) return "Etiqueta";
+
+  if (etiqueta.descricao?.trim()) {
+    return `${etiqueta.nome} — ${etiqueta.descricao}`;
+  }
+
+  return etiqueta.nome;
+}
 
 type AudioMessagePlayerProps = {
   src: string;
@@ -937,6 +998,47 @@ const TextoComEmoji = React.memo(function TextoComEmoji({
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
 });
 
+function EtiquetaCor({
+  etiqueta,
+  className = "",
+  mostrarTooltip = true,
+}: {
+  etiqueta?: {
+    nome?: string | null;
+    descricao?: string | null;
+    cor?: string | null;
+  } | null;
+  className?: string;
+  mostrarTooltip?: boolean;
+}) {
+  if (!etiqueta?.cor) return null;
+
+  return (
+    <span className={`${styles.etiquetaTooltipWrap} ${className}`}>
+      <span
+        className={styles.etiquetaTagPremium}
+        style={
+          {
+            "--tag-bg-1": hexToRgba(etiqueta.cor, 0.26),
+            "--tag-bg-2": hexToRgba(etiqueta.cor, 0.48),
+            "--tag-border": hexToRgba(etiqueta.cor, 0.34),
+          } as React.CSSProperties
+        }
+      >
+        <span className={styles.etiquetaTagHolePremium} />
+        <span className={styles.etiquetaTagGlow} />
+      </span>
+
+      {mostrarTooltip && (
+        <span className={styles.etiquetaTooltip}>
+          <strong>{etiqueta.nome || "Etiqueta"}</strong>
+          {etiqueta.descricao ? <small>{etiqueta.descricao}</small> : null}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function ConversasPage() {
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
   const [politicaAtendimento, setPoliticaAtendimento] =
@@ -1022,6 +1124,23 @@ export default function ConversasPage() {
   const legendaEditorRef = useRef<HTMLDivElement | null>(null);
 
   const [editandoCampo, setEditandoCampo] = useState<string | null>(null);
+
+  const [etiquetasEmpresa, setEtiquetasEmpresa] = useState<EtiquetaEmpresa[]>([]);
+  const [carregandoEtiquetas, setCarregandoEtiquetas] = useState(false);
+  const [salvandoEtiqueta, setSalvandoEtiqueta] = useState(false);
+
+  const [selecionandoEtiqueta, setSelecionandoEtiqueta] = useState(false);
+
+  const [mostrarFormularioEtiqueta, setMostrarFormularioEtiqueta] = useState(false);
+  const [etiquetaEditandoId, setEtiquetaEditandoId] = useState<string | null>(null);
+  const [etiquetaConfirmandoExclusaoId, setEtiquetaConfirmandoExclusaoId] =
+    useState<string | null>(null);
+
+  const [etiquetaForm, setEtiquetaForm] = useState<EtiquetaForm>({
+    nome: "",
+    descricao: "",
+    cor: ETIQUETAS_PADRAO[0],
+  });
 
   const midiaDocsLinksAgrupados = useMemo<MidiaAgrupadaSecao[]>(() => {
     const itens: MidiaAgrupadaItem[] = [];
@@ -1231,12 +1350,12 @@ export default function ConversasPage() {
 
     alvo.focus();
 
+    const selection = window.getSelection();
+    if (!selection) return;
+
     const range = document.createRange();
     range.selectNodeContents(alvo);
     range.collapse(false);
-
-    const selection = window.getSelection();
-    if (!selection) return;
 
     selection.removeAllRanges();
     selection.addRange(range);
@@ -1246,31 +1365,22 @@ export default function ConversasPage() {
     const alvo = arquivoEnvio ? legendaEditorRef.current : editorRef.current;
     if (!alvo) return;
 
-    alvo.focus();
+    const textoAtual = alvo.textContent || "";
+    const novoTexto = textoAtual + emoji;
 
-    const selection = window.getSelection();
-
-    if (!selection || selection.rangeCount === 0) {
-      alvo.innerText = (alvo.innerText || "") + emoji;
-    } else {
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      range.insertNode(document.createTextNode(emoji));
-      range.collapse(false);
-
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-
-    const novoTexto = alvo.innerText || "";
+    alvo.textContent = novoTexto;
 
     if (arquivoEnvio) {
+      legendaArquivoRef.current = novoTexto;
       setLegendaArquivo(novoTexto);
     } else {
+      conteudoRef.current = novoTexto;
       setConteudo(novoTexto);
     }
 
-    focarEditorNoFinal();
+    requestAnimationFrame(() => {
+      focarEditorNoFinal();
+    });
   }
   
   function renderizarConteudoMensagem(msg: Mensagem) {
@@ -1326,7 +1436,7 @@ export default function ConversasPage() {
 
           {caption && (
             <p className={styles.messageText}>
-              <TextoComEmoji texto="algum texto" />
+              <TextoComEmoji texto={caption} />
             </p>
           )}
         </div>
@@ -1796,8 +1906,9 @@ export default function ConversasPage() {
     setArquivoEnvio(file);
     setArquivoEnvioPreviewUrl(previewUrl);
     setConteudo("");
+    conteudoRef.current = "";
     if (editorRef.current) {
-      editorRef.current.innerHTML = "";
+      editorRef.current.textContent = "";
     }
 
     if (input) {
@@ -1910,7 +2021,13 @@ export default function ConversasPage() {
           encontrada.unread_count !== atual.unread_count ||
           encontrada.assunto !== atual.assunto ||
           encontrada.responsavel?.id !== atual.responsavel?.id ||
-          encontrada.setores?.id !== atual.setores?.id;
+          encontrada.setores?.id !== atual.setores?.id ||
+          encontrada.etiqueta_id !== atual.etiqueta_id ||
+          encontrada.etiqueta_cor !== atual.etiqueta_cor ||
+          encontrada.etiquetas?.id !== atual.etiquetas?.id ||
+          encontrada.etiquetas?.nome !== atual.etiquetas?.nome ||
+          encontrada.etiquetas?.descricao !== atual.etiquetas?.descricao ||
+          encontrada.etiquetas?.cor !== atual.etiquetas?.cor;
 
         return mudouVisualPrincipal ? encontrada : atual;
       });
@@ -2351,6 +2468,195 @@ export default function ConversasPage() {
     }
   }
 
+
+    async function carregarEtiquetasEmpresa() {
+    try {
+      setCarregandoEtiquetas(true);
+
+      const res = await fetch("/api/conversas/etiquetas", {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar etiquetas");
+        return;
+      }
+
+      setEtiquetasEmpresa(data.etiquetas || []);
+    } catch {
+      setErro("Erro ao carregar etiquetas");
+    } finally {
+      setCarregandoEtiquetas(false);
+    }
+  }
+
+  function resetarFormularioEtiqueta() {
+    setEtiquetaForm({
+      nome: "",
+      descricao: "",
+      cor: ETIQUETAS_PADRAO[0],
+    });
+    setEtiquetaEditandoId(null);
+    setEtiquetaConfirmandoExclusaoId(null);
+    setMostrarFormularioEtiqueta(false);
+  }
+
+  function iniciarCriacaoEtiqueta() {
+    setEtiquetaEditandoId(null);
+    setEtiquetaConfirmandoExclusaoId(null);
+    setEtiquetaForm({
+      nome: "",
+      descricao: "",
+      cor: ETIQUETAS_PADRAO[0],
+    });
+    setMostrarFormularioEtiqueta(true);
+  }
+
+  function iniciarEdicaoEtiqueta(etiqueta: EtiquetaEmpresa) {
+    setEtiquetaConfirmandoExclusaoId(null);
+    setEtiquetaEditandoId(etiqueta.id);
+    setEtiquetaForm({
+      nome: etiqueta.nome || "",
+      descricao: etiqueta.descricao || "",
+      cor: etiqueta.cor || ETIQUETAS_PADRAO[0],
+    });
+    setMostrarFormularioEtiqueta(true);
+    setSelecionandoEtiqueta(false);
+  }
+
+  async function salvarEtiquetaEmpresa() {
+    const nome = etiquetaForm.nome.trim();
+    const descricao = etiquetaForm.descricao.trim();
+
+    if (!nome) {
+      setErro("Digite o nome da etiqueta.");
+      return;
+    }
+
+    if (nome.length > 30) {
+      setErro("O nome da etiqueta pode ter no máximo 30 caracteres.");
+      return;
+    }
+
+    if (descricao.length > 120) {
+      setErro("A descrição da etiqueta pode ter no máximo 120 caracteres.");
+      return;
+    }
+
+    try {
+      setSalvandoEtiqueta(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch("/api/conversas/etiquetas", {
+        method: etiquetaEditandoId ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          etiqueta_id: etiquetaEditandoId,
+          nome,
+          descricao,
+          cor: etiquetaForm.cor,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao salvar etiqueta");
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message ||
+          (etiquetaEditandoId
+            ? "Etiqueta atualizada com sucesso"
+            : "Etiqueta criada com sucesso")
+      );
+
+      await carregarEtiquetasEmpresa();
+      resetarFormularioEtiqueta();
+    } catch {
+      setErro("Erro ao salvar etiqueta");
+    } finally {
+      setSalvandoEtiqueta(false);
+    }
+  }
+
+  async function excluirEtiquetaEmpresa(etiquetaId: string) {
+    try {
+      setSalvandoEtiqueta(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch("/api/conversas/etiquetas", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          etiqueta_id: etiquetaId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao excluir etiqueta");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Etiqueta excluída com sucesso");
+      setEtiquetaConfirmandoExclusaoId(null);
+
+      await carregarEtiquetasEmpresa();
+      await carregarConversas(true);
+    } catch {
+      setErro("Erro ao excluir etiqueta");
+    } finally {
+      setSalvandoEtiqueta(false);
+    }
+  }
+
+  async function definirEtiquetaDaConversa(etiquetaId: string | null) {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setSalvandoEtiqueta(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/etiqueta`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          etiqueta_id: etiquetaId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar etiqueta da conversa");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Etiqueta atualizada com sucesso");
+
+      await carregarConversas(true);
+      await carregarMensagens(conversaSelecionada.id, true);
+    } catch {
+      setErro("Erro ao atualizar etiqueta da conversa");
+    } finally {
+      setSalvandoEtiqueta(false);
+    }
+  }
+
   async function carregarNotasDaConversa() {
     if (!conversaSelecionada?.id) return;
 
@@ -2539,8 +2845,9 @@ export default function ConversasPage() {
       setArquivoEnvio(null);
       setArquivoEnvioPreviewUrl(null);
       setLegendaArquivo("");
+      legendaArquivoRef.current = "";
       if (legendaEditorRef.current) {
-        legendaEditorRef.current.innerHTML = "";
+        legendaEditorRef.current.textContent = "";
       }
       setMensagemSucesso(data.message || "Mídia enviada com sucesso.");
 
@@ -2589,40 +2896,6 @@ export default function ConversasPage() {
       setErro("Erro ao atualizar contato");
     }
   }
-
-  async function salvarProtocolo(valor: string) {
-    if (!conversaSelecionada?.id) return;
-
-    try {
-      setErro("");
-      setMensagemSucesso("");
-
-      const res = await fetch(`/api/conversas/${conversaSelecionada.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          protocolo: valor,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErro(data.error || "Erro ao atualizar protocolo");
-        return;
-      }
-
-      setMensagemSucesso(data.message || "Protocolo atualizado com sucesso.");
-      setEditandoCampo(null);
-
-      await carregarConversas(true);
-    } catch {
-      setErro("Erro ao atualizar protocolo");
-    }
-  }
-
 
   function abrirEncerrar() {
     setErro("");
@@ -2995,6 +3268,7 @@ export default function ConversasPage() {
     carregarConversas();
     carregarSetores();
     carregarListasEmpresa();
+    carregarEtiquetasEmpresa();
   }, []);
 
   useEffect(() => {
@@ -3012,6 +3286,8 @@ export default function ConversasPage() {
     setNotaInterna("");
     setNotaEditandoId(null);
     setNotaEditandoTexto("");
+    resetarFormularioEtiqueta();
+    setSelecionandoEtiqueta(false);
   }, [conversaSelecionada?.id]);
 
   useEffect(() => {
@@ -3129,14 +3405,14 @@ export default function ConversasPage() {
 
 
   useEffect(() => {
-    if (!arquivoEnvio && editorRef.current && editorRef.current.innerText !== conteudo) {
-      editorRef.current.innerText = conteudo;
+    if (!arquivoEnvio && editorRef.current && editorRef.current.textContent !== conteudo) {
+      editorRef.current.textContent = conteudo;
     }
   }, [conteudo, arquivoEnvio]);
 
   useEffect(() => {
-    if (arquivoEnvio && legendaEditorRef.current && legendaEditorRef.current.innerText !== legendaArquivo) {
-      legendaEditorRef.current.innerText = legendaArquivo;
+    if (arquivoEnvio && legendaEditorRef.current && legendaEditorRef.current.textContent !== legendaArquivo) {
+      legendaEditorRef.current.textContent = legendaArquivo;
     }
   }, [legendaArquivo, arquivoEnvio]);
 
@@ -3358,14 +3634,18 @@ export default function ConversasPage() {
 
                       <div className={styles.conversationMain}>
                         <div className={styles.conversationTopLine}>
-                          <p className={styles.contactName}>
-                            {c.favorita && (
-                              <span className={styles.favoriteStarInline} title="Conversa favorita">
-                                ★
-                              </span>
-                            )}
-                            {c.contatos?.nome || "Sem nome"}
-                          </p>
+                          <div className={styles.contactNameRow}>
+                            <p className={styles.contactName}>
+                              {c.favorita && (
+                                <span className={styles.favoriteStarInline} title="Conversa favorita">
+                                  ★
+                                </span>
+                              )}
+                              {c.contatos?.nome || "Sem nome"}
+                            </p>
+
+                            <EtiquetaCor etiqueta={c.etiquetas} />
+                          </div>
 
                           <span className={styles.timeLabel}>
                             {formatarHora(c.last_message_at)}
@@ -3433,14 +3713,18 @@ export default function ConversasPage() {
                             onClick={() => setPainelDireitoAberto((prev) => !prev)}
                           >
                             <div className={styles.chatIdentity}>
-                              <h2 className={styles.chatTitle}>
-                                {conversaSelecionada.favorita && (
-                                  <span className={styles.favoriteStar} title="Conversa favorita">
-                                    ★
-                                  </span>
-                                )}
-                                {conversaSelecionada.contatos?.nome || "Sem nome"}
-                              </h2>
+                              <div className={styles.chatTitleRow}>
+                                <h2 className={styles.chatTitle}>
+                                  {conversaSelecionada.favorita && (
+                                    <span className={styles.favoriteStar} title="Conversa favorita">
+                                      ★
+                                    </span>
+                                  )}
+                                  {conversaSelecionada.contatos?.nome || "Sem nome"}
+                                </h2>
+
+                                <EtiquetaCor etiqueta={conversaSelecionada.etiquetas} />
+                              </div>
                               <p className={styles.chatSubtitle}>
                                 {conversaSelecionada.contatos?.telefone || "Sem telefone"}
                               </p>
@@ -3557,6 +3841,19 @@ export default function ConversasPage() {
                                   }}
                                 >
                                   Adicionar à lista
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={styles.headerDropdownItem}
+                                  onClick={async () => {
+                                    setPainelDireitoAberto(true);
+                                    setAbaPainelDireito("etiquetas");
+                                    setMenuContatoAberto(false);
+                                    await carregarEtiquetasEmpresa();
+                                  }}
+                                >
+                                  Etiquetas
                                 </button>
 
                                 <div className={styles.headerDropdownDivider} />
@@ -4033,8 +4330,9 @@ export default function ConversasPage() {
                                   setArquivoEnvio(null);
                                   setArquivoEnvioPreviewUrl(null);
                                   setLegendaArquivo("");
+                                  legendaArquivoRef.current = "";
                                   if (legendaEditorRef.current) {
-                                    legendaEditorRef.current.innerHTML = "";
+                                    legendaEditorRef.current.textContent = "";
                                   }
                                 }}
                               >
@@ -4221,7 +4519,7 @@ export default function ConversasPage() {
                                     : "Digite uma mensagem"
                                 }
                                 onInput={(e) => {
-                                  const texto = (e.currentTarget as HTMLDivElement).innerText || "";
+                                  const texto = (e.currentTarget as HTMLDivElement).textContent || "";
 
                                   if (arquivoEnvio) {
                                     legendaArquivoRef.current = texto;
@@ -4339,6 +4637,8 @@ export default function ConversasPage() {
                               ? "Notas"
                               : abaPainelDireito === "listas"
                               ? "Listas"
+                              : abaPainelDireito === "etiquetas"
+                              ? "Etiquetas"
                               : abaPainelDireito === "midia_docs_links"
                               ? "Mídia, links e docs"
                               : "Mensagens favoritas"}
@@ -4604,6 +4904,31 @@ export default function ConversasPage() {
                                 </span>
                               )}
                             </button>
+
+                            <button
+                              type="button"
+                              className={styles.whatsListActionButton}
+                              onClick={async () => {
+                                setAbaPainelDireito("etiquetas");
+                                setPainelDireitoAberto(true);
+                                await carregarEtiquetasEmpresa();
+                              }}
+                            >
+                              <span className={styles.whatsListActionLeft}>
+                                <span className={styles.whatsListActionIcon}>🏷️</span>
+                                <span className={styles.whatsListActionLabel}>Etiquetas</span>
+                              </span>
+
+                              {conversaSelecionada.etiquetas ? (
+                                <EtiquetaCor 
+                                  etiqueta={conversaSelecionada.etiquetas} 
+                                  className={styles.etiquetaAtualPreview}
+                                  mostrarTooltip={false}
+                                />
+                              ) : (
+                                <span className={styles.whatsListActionRight}>Sem</span>
+                              )}
+                            </button>
                           </div>
 
                           <div className={styles.whatsDivider} />
@@ -4614,14 +4939,12 @@ export default function ConversasPage() {
                             </div>
 
                             <div className={styles.whatsInfoList}>
-                              <CampoContatoEditavel
-                                label="PROTOCOLO"
-                                valorInicial={conversaSelecionada.protocolo || ""}
-                                editando={editandoCampo === "protocolo"}
-                                onEditar={() => setEditandoCampo("protocolo")}
-                                onCancelar={() => setEditandoCampo(null)}
-                                onSalvar={(valor) => salvarProtocolo(valor)}
-                              />
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>PROTOCOLO</span>
+                                <strong className={styles.whatsInfoValue}>
+                                  {conversaSelecionada.protocolo || "Não gerado"}
+                                </strong>
+                              </div>
 
                               <div className={styles.whatsInfoRow}>
                                 <span className={styles.whatsInfoLabel}>Telefone</span>
@@ -4840,6 +5163,342 @@ export default function ConversasPage() {
                                 )}
                               </div>
                             ))
+                          )}
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "etiquetas" && (
+                        <div className={styles.panelSectionStack}>
+                          <div className={styles.etiquetaAtualCard}>
+                            <div className={styles.etiquetaAtualLabel}>
+                              Etiqueta desta conversa
+                            </div>
+
+                            {conversaSelecionada.etiquetas ? (
+                              <>
+                                <div className={styles.etiquetaAtualInfo}>
+                                  <EtiquetaCor
+                                    etiqueta={conversaSelecionada.etiquetas}
+                                    className={styles.etiquetaAtualPreview}
+                                    mostrarTooltip={false}
+                                  />
+
+                                  <div className={styles.etiquetaAtualTextos}>
+                                    <strong>{conversaSelecionada.etiquetas.nome}</strong>
+
+                                    {conversaSelecionada.etiquetas.descricao && (
+                                      <span>{conversaSelecionada.etiquetas.descricao}</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className={styles.listaInlineActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    disabled={salvandoEtiqueta}
+                                    onClick={() => definirEtiquetaDaConversa(null)}
+                                  >
+                                    Remover etiqueta
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={async () => {
+                                      setSelecionandoEtiqueta(true);
+                                      setMostrarFormularioEtiqueta(false);
+                                      setEtiquetaConfirmandoExclusaoId(null);
+                                      await carregarEtiquetasEmpresa();
+                                    }}
+                                  >
+                                    Alterar etiqueta
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() => {
+                                      if (!conversaSelecionada.etiquetas) return;
+
+                                      iniciarEdicaoEtiqueta(conversaSelecionada.etiquetas);
+                                    }}
+                                  >
+                                    Editar etiqueta
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className={styles.infoBoxMuted}>
+                                  Esta conversa está sem etiqueta.
+                                </div>
+
+                                <div className={styles.listaInlineActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.primaryButton}
+                                    onClick={async () => {
+                                      setSelecionandoEtiqueta(true);
+                                      setMostrarFormularioEtiqueta(false);
+                                      setEtiquetaConfirmandoExclusaoId(null);
+                                      await carregarEtiquetasEmpresa();
+                                    }}
+                                  >
+                                    Adicionar etiqueta
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          {selecionandoEtiqueta && (
+                            <>
+                              <div className={styles.listaCardWrap}>
+                                {carregandoEtiquetas ? (
+                                  <div className={styles.infoBoxMuted}>
+                                    Carregando etiquetas...
+                                  </div>
+                                ) : etiquetasEmpresa.length === 0 ? (
+                                  <div className={styles.infoBoxMuted}>
+                                    Nenhuma etiqueta criada para esta empresa ainda.
+                                  </div>
+                                ) : (
+                                  etiquetasEmpresa.map((etiqueta) => {
+                                    const estaSelecionada =
+                                      conversaSelecionada.etiqueta_id === etiqueta.id;
+
+                                    return (
+                                      <div key={etiqueta.id} className={styles.listaCardWrap}>
+                                        <div className={styles.listaCard}>
+                                          <button
+                                            type="button"
+                                            className={`${styles.listaMainButton} ${
+                                              estaSelecionada ? styles.etiquetaCardAtiva : ""
+                                            }`}
+                                            onClick={async () => {
+                                              await definirEtiquetaDaConversa(etiqueta.id);
+                                              setSelecionandoEtiqueta(false);
+                                            }}
+                                          >
+                                            <div className={styles.listaMainLeft}>
+                                              <EtiquetaCor
+                                                etiqueta={etiqueta}
+                                                className={styles.etiquetaListaPreview}
+                                                mostrarTooltip={false}
+                                              />
+
+                                              <div className={styles.etiquetaListaTextos}>
+                                                <span className={styles.listaNome}>
+                                                  {etiqueta.nome}
+                                                </span>
+
+                                                <span className={styles.etiquetaDescricaoLinha}>
+                                                  {etiqueta.descricao || "Sem descrição"}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </button>
+
+                                          <div className={styles.listaActions}>
+                                            <button
+                                              type="button"
+                                              className={styles.listaIconButton}
+                                              title="Editar etiqueta"
+                                              onClick={() => iniciarEdicaoEtiqueta(etiqueta)}
+                                            >
+                                              ✎
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              className={`${styles.listaIconButton} ${styles.listaIconButtonDanger}`}
+                                              title="Excluir etiqueta"
+                                              onClick={() =>
+                                                setEtiquetaConfirmandoExclusaoId((atual) =>
+                                                  atual === etiqueta.id ? null : etiqueta.id
+                                                )
+                                              }
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        {etiquetaConfirmandoExclusaoId === etiqueta.id && (
+                                          <div className={styles.listaInlinePanelDanger}>
+                                            <p className={styles.listaConfirmText}>
+                                              Deseja excluir a etiqueta{" "}
+                                              <strong>{etiqueta.nome}</strong>?
+                                            </p>
+
+                                            <div className={styles.listaInlineActions}>
+                                              <button
+                                                type="button"
+                                                className={styles.secondaryButton}
+                                                onClick={() =>
+                                                  setEtiquetaConfirmandoExclusaoId(null)
+                                                }
+                                              >
+                                                Cancelar
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                className={styles.dangerButton}
+                                                disabled={salvandoEtiqueta}
+                                                onClick={() => excluirEtiquetaEmpresa(etiqueta.id)}
+                                              >
+                                                {salvandoEtiqueta ? "Excluindo..." : "Excluir"}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+
+                              <div className={styles.listaInlineActions}>
+                                <button
+                                  type="button"
+                                  className={styles.primaryButton}
+                                  onClick={iniciarCriacaoEtiqueta}
+                                >
+                                  Criar nova etiqueta
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={styles.secondaryButton}
+                                  onClick={() => {
+                                    setSelecionandoEtiqueta(false);
+                                    resetarFormularioEtiqueta();
+                                  }}
+                                >
+                                  Fechar
+                                </button>
+                              </div>
+                            </>
+                          )}
+
+                          {mostrarFormularioEtiqueta && (
+                            <div className={styles.listaInlinePanel}>
+                              <div className={styles.noteComposer}>
+                                <label className={styles.actionLabel}>Nome</label>
+                                <input
+                                  className={styles.searchInput}
+                                  value={etiquetaForm.nome}
+                                  maxLength={30}
+                                  onChange={(e) =>
+                                    setEtiquetaForm((atual) => ({
+                                      ...atual,
+                                      nome: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Ex.: Cliente premium"
+                                />
+                                <div className={styles.etiquetaContador}>
+                                  {etiquetaForm.nome.length}/30
+                                </div>
+
+                                <label className={styles.actionLabel}>Descrição</label>
+                                <textarea
+                                  className={styles.noteInput}
+                                  rows={3}
+                                  value={etiquetaForm.descricao}
+                                  maxLength={120}
+                                  onChange={(e) =>
+                                    setEtiquetaForm((atual) => ({
+                                      ...atual,
+                                      descricao: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Descreva o uso dessa etiqueta"
+                                />
+                                <div className={styles.etiquetaContador}>
+                                  {etiquetaForm.descricao.length}/120
+                                </div>
+
+                                <label className={styles.actionLabel}>Cor</label>
+                                <div className={styles.etiquetaCoresGrid}>
+                                  {ETIQUETAS_PADRAO.map((cor) => {
+                                    const ativa = etiquetaForm.cor === cor;
+
+                                    return (
+                                      <button
+                                        key={cor}
+                                        type="button"
+                                        className={`${styles.etiquetaCorOpcao} ${
+                                          ativa ? styles.etiquetaCorOpcaoAtiva : ""
+                                        }`}
+                                        style={{
+                                          background: hexToRgba(cor, 0.26),
+                                          border: `1px solid ${hexToRgba(cor, 0.56)}`,
+                                        }}
+                                        onClick={() =>
+                                          setEtiquetaForm((atual) => ({
+                                            ...atual,
+                                            cor,
+                                          }))
+                                        }
+                                        title={cor}
+                                      />
+                                    );
+                                  })}
+                                </div>
+
+                                <label className={styles.actionLabel}>Cor personalizada</label>
+                                <input
+                                  type="color"
+                                  className={styles.etiquetaColorInput}
+                                  value={etiquetaForm.cor}
+                                  onChange={(e) =>
+                                    setEtiquetaForm((atual) => ({
+                                      ...atual,
+                                      cor: e.target.value.toUpperCase(),
+                                    }))
+                                  }
+                                />
+
+                                <div className={styles.etiquetaPreviewBox}>
+                                  <span>Prévia:</span>
+                                  <EtiquetaCor
+                                    etiqueta={{
+                                      nome: etiquetaForm.nome || "Etiqueta",
+                                      descricao: etiquetaForm.descricao || "",
+                                      cor: etiquetaForm.cor,
+                                    }}
+                                    className={styles.etiquetaAtualPreview}
+                                    mostrarTooltip={false}
+                                  />
+                                </div>
+
+                                <div className={styles.listaInlineActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={resetarFormularioEtiqueta}
+                                  >
+                                    Cancelar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.primaryButton}
+                                    disabled={salvandoEtiqueta}
+                                    onClick={salvarEtiquetaEmpresa}
+                                  >
+                                    {salvandoEtiqueta
+                                      ? "Salvando..."
+                                      : etiquetaEditandoId
+                                      ? "Salvar alterações"
+                                      : "Salvar etiqueta"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           )}
                         </div>
                       )}

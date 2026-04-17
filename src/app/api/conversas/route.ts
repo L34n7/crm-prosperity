@@ -22,12 +22,27 @@ type ConversaComRelacionamentos = {
   assunto: string | null;
   last_message_at: string | null;
   created_at: string;
+  etiqueta_id?: string | null;
+  etiqueta_cor?: string | null;
   favorita?: boolean;
+  protocolo?: string | null;
+  listas?: {
+    id: string;
+    nome: string;
+  }[];
+  etiquetas?: {
+    id: string;
+    nome: string;
+    descricao: string | null;
+    cor: string;
+  } | null;
   contatos?: {
     id: string;
     nome: string | null;
     telefone: string | null;
     email: string | null;
+    empresa?: string | null;
+    observacoes?: string | null;
   } | null;
   setores?: {
     id: string;
@@ -47,6 +62,11 @@ type ConversaComRelacionamentos = {
 
 type ConversaFavoritaRow = {
   conversa_id: string;
+};
+
+type ProtocoloAtivoRow = {
+  conversa_id: string;
+  protocolo: string;
 };
 
 function isStatusValido(status: string | null) {
@@ -119,6 +139,12 @@ export async function GET(request: Request) {
         id,
         nome_conexao,
         numero
+      ),
+      etiquetas (
+        id,
+        nome,
+        descricao,
+        cor
       )
     `)
     .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -195,23 +221,9 @@ export async function GET(request: Request) {
     ((favoritos ?? []) as ConversaFavoritaRow[]).map((item) => item.conversa_id)
   );
 
-  conversas = conversas.map((conversa) => ({
-    ...conversa,
-    favorita: favoritosSet.has(conversa.id),
-  }));
-
-  if (isAdministrador(usuario)) {
-    return NextResponse.json({
-      ok: true,
-      conversas,
-    });
-  }
-
-  const setoresDoUsuario = usuario.setores_ids ?? [];
-  const usuarioPodeAtribuir = await podeAtribuirConversas(usuario);
   const conversaIds = conversas.map((conversa) => conversa.id);
-
   let listasPorConversa = new Map<string, { id: string; nome: string }[]>();
+  let protocolosAtivosPorConversa = new Map<string, string>();
 
   if (conversaIds.length > 0) {
     const { data: itensListas, error: itensListasError } = await supabaseAdmin
@@ -249,13 +261,42 @@ export async function GET(request: Request) {
       });
       listasPorConversa.set(conversaId, atuais);
     }
+
+    const { data: protocolosAtivos, error: protocolosError } = await supabaseAdmin
+      .from("conversa_protocolos")
+      .select("conversa_id, protocolo")
+      .in("conversa_id", conversaIds)
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("ativo", true);
+
+    if (protocolosError) {
+      return NextResponse.json(
+        { ok: false, error: protocolosError.message },
+        { status: 500 }
+      );
+    }
+
+    for (const item of (protocolosAtivos ?? []) as ProtocoloAtivoRow[]) {
+      protocolosAtivosPorConversa.set(item.conversa_id, item.protocolo);
+    }
   }
 
   conversas = conversas.map((conversa) => ({
     ...conversa,
     favorita: favoritosSet.has(conversa.id),
     listas: listasPorConversa.get(conversa.id) ?? [],
+    protocolo: protocolosAtivosPorConversa.get(conversa.id) ?? null,
   }));
+
+  if (isAdministrador(usuario)) {
+    return NextResponse.json({
+      ok: true,
+      conversas,
+    });
+  }
+
+  const setoresDoUsuario = usuario.setores_ids ?? [];
+  const usuarioPodeAtribuir = await podeAtribuirConversas(usuario);
 
   if (usuarioPodeAtribuir) {
     if (setoresDoUsuario.length === 0) {
