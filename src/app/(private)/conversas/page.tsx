@@ -15,6 +15,7 @@ type Conversa = {
   prioridade: string | null;
   canal: string | null;
   origem_atendimento?: string | null;
+  integracao_whatsapp_id?: string | null;
   last_message_at: string | null;
   started_at?: string | null;
   created_at?: string | null;
@@ -1052,6 +1053,47 @@ function EtiquetaCor({
   );
 }
 
+
+function getUltimaMensagemRecebidaDoContato(mensagens: Mensagem[]) {
+  const recebidasDoContato = mensagens
+    .filter(
+      (msg) =>
+        msg.origem === "recebida" && msg.remetente_tipo === "contato"
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+  return recebidasDoContato[0] || null;
+}
+
+function isJanela24hMetaAberta(ultimaMensagem: Mensagem | null) {
+  if (!ultimaMensagem?.created_at) return false;
+
+  const agora = Date.now();
+  const ultimaInteracao = new Date(ultimaMensagem.created_at).getTime();
+  const diffMs = agora - ultimaInteracao;
+
+  return diffMs <= 24 * 60 * 60 * 1000;
+}
+
+function formatarTempoRestanteJanela(createdAt?: string | null) {
+  if (!createdAt) return "encerrada";
+
+  const limite = new Date(createdAt).getTime() + 24 * 60 * 60 * 1000;
+  const diff = limite - Date.now();
+
+  if (diff <= 0) return "encerrada";
+
+  const horas = Math.floor(diff / (1000 * 60 * 60));
+  const minutos = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  return `${horas}h ${minutos}min`;
+}
+
+
+
 export default function ConversasPage() {
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
   const [politicaAtendimento, setPoliticaAtendimento] =
@@ -1148,6 +1190,39 @@ export default function ConversasPage() {
   const [carregandoProtocolos, setCarregandoProtocolos] = useState(false);
   const [protocoloSelecionadoId, setProtocoloSelecionadoId] = useState<string | null>(null);
   const [protocoloSelecionadoNumero, setProtocoloSelecionadoNumero] = useState<string | null>(null);
+
+  const [templateDisparoId, setTemplateDisparoId] = useState("");
+  const [templateDisparoNome, setTemplateDisparoNome] = useState("");
+  const [templateDisparoBody1, setTemplateDisparoBody1] = useState("");
+  const [enviandoDisparoIndividual, setEnviandoDisparoIndividual] = useState(false);
+  const [templatesWhatsapp, setTemplatesWhatsapp] = useState<
+    {
+      id: string;
+      nome: string;
+      idioma?: string | null;
+      status?: string | null;
+      categoria?: string | null;
+      integracao_whatsapp_id?: string | null;
+      payload?: {
+        name?: string;
+        language?: string;
+        components?: Array<{
+          type: string;
+          text?: string;
+          format?: string;
+          buttons?: Array<{
+            type?: string;
+            text?: string;
+            url?: string;
+            phone_number?: string;
+          }>;
+        }>;
+      } | null;
+    }[]
+  >([]);
+
+  const [parametros, setParametros] = useState<string[]>([]);
+  const [carregandoTemplatesWhatsapp, setCarregandoTemplatesWhatsapp] = useState(false);
 
   const [mostrarFormularioEtiqueta, setMostrarFormularioEtiqueta] = useState(false);
   const [etiquetaEditandoId, setEtiquetaEditandoId] = useState<string | null>(null);
@@ -1932,6 +2007,15 @@ export default function ConversasPage() {
     if (input) {
       input.value = "";
     }
+  }
+
+
+  function atualizarParametro(index: number, valor: string) {
+    setParametros((atual) => {
+      const copia = [...atual];
+      copia[index] = valor;
+      return copia;
+    });
   }
 
   async function salvarContatoCompartilhado() {
@@ -3010,6 +3094,90 @@ export default function ConversasPage() {
     await carregarMensagens(conversaSelecionada.id, false, null);
   }
 
+  async function carregarTemplatesWhatsapp() {
+    try {
+      setCarregandoTemplatesWhatsapp(true);
+      setErro("");
+
+      const res = await fetch("/api/whatsapp/templates", {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar templates do WhatsApp");
+        setTemplatesWhatsapp([]);
+        return;
+      }
+
+      const templatesEmpresa = Array.isArray(data.data) ? data.data : [];
+
+      const templatesAprovados = templatesEmpresa.filter(
+        (item: any) => String(item.status || "").toUpperCase() === "APPROVED"
+      );
+
+      const templatesDaIntegracaoAtual = templatesAprovados.filter(
+        (item: any) =>
+          item.integracao_whatsapp_id === conversaSelecionada?.integracao_whatsapp_id
+      );
+
+      setTemplatesWhatsapp(templatesDaIntegracaoAtual);
+    } catch {
+      setErro("Erro ao carregar templates do WhatsApp");
+      setTemplatesWhatsapp([]);
+    } finally {
+      setCarregandoTemplatesWhatsapp(false);
+    }
+  }
+
+  async function enviarDisparoIndividual() {
+    if (!conversaSelecionada?.id) {
+      setErro("Selecione uma conversa.");
+      return;
+    }
+
+    if (!templateDisparoNome.trim()) {
+      setErro("Informe o nome do template.");
+      return;
+    }
+
+    try {
+      setEnviandoDisparoIndividual(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch("/api/whatsapp/disparo-individual", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversa_id: conversaSelecionada.id,
+          template_nome: templateDisparoNome.trim(),
+          body_params: parametros.filter((item) => item.trim() !== ""),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao enviar disparo individual");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Disparo enviado com sucesso.");
+      setTemplateDisparoBody1("");
+
+      await carregarMensagens(conversaSelecionada.id, true);
+      await carregarConversas();
+    } catch {
+      setErro("Erro ao enviar disparo individual");
+    } finally {
+      setEnviandoDisparoIndividual(false);
+    }
+  }
+
   function abrirEncerrar() {
     setErro("");
     setMensagemSucesso("");
@@ -3072,6 +3240,22 @@ export default function ConversasPage() {
       !file.type.startsWith("video/") &&
       !file.type.startsWith("audio/")
     );
+  }
+
+  function contarParametrosDoTemplate(payload?: {
+    components?: Array<{ type: string; text?: string }>;
+  } | null) {
+    if (!payload?.components?.length) return 0;
+
+    const textos = payload.components.map((item) => item.text || "").join(" ");
+    const matches = textos.match(/\{\{\d+\}\}/g) || [];
+
+    const numeros = matches
+      .map((item) => Number(item.replace(/[{}]/g, "")))
+      .filter((n) => !Number.isNaN(n));
+
+    if (numeros.length === 0) return 0;
+    return Math.max(...numeros);
   }
 
   const conversaSetorId =
@@ -3338,36 +3522,13 @@ export default function ConversasPage() {
     return grupos;
   }, [mensagens]);
 
-  const historicoExemplo = useMemo(() => {
-    if (!conversaSelecionada) return [];
-
-    return [
-      {
-        titulo: "Atendimento anterior",
-        descricao:
-          conversaSelecionada.setores?.nome
-            ? `Última passagem registrada no setor ${conversaSelecionada.setores.nome}.`
-            : "Sem setor anterior identificado.",
-      },
-      {
-        titulo: "Último responsável",
-        descricao:
-          conversaSelecionada.responsavel?.nome || "Sem responsável anterior identificado.",
-      },
-      {
-        titulo: "Última atividade",
-        descricao: formatarDataCompleta(conversaSelecionada.last_message_at),
-      },
-    ];
-  }, [conversaSelecionada]);
-
   const alertaSemResponsavel = !!conversaSelecionada && !conversaResponsavelId;
   const alertaClienteAguardando =
     conversaSelecionada?.status === "aguardando_cliente";
   const alertaPrioridadeAlta =
     conversaSelecionada?.prioridade === "alta" ||
     conversaSelecionada?.prioridade === "urgente";
-
+    
   const conversaComBotAtivo = !!conversaSelecionada?.bot_ativo;
 
   const alertaParadaMuitoTempo = useMemo(() => {
@@ -3383,6 +3544,103 @@ export default function ConversasPage() {
 
   const quantidadeNotas = notasConversa.length;
   const conversaTemNotas = quantidadeNotas > 0;
+
+  const ultimaMensagemRecebidaDoContato = useMemo(() => {
+    return getUltimaMensagemRecebidaDoContato(mensagens);
+  }, [mensagens]);
+
+  const janela24hAberta = useMemo(() => {
+    return isJanela24hMetaAberta(ultimaMensagemRecebidaDoContato);
+  }, [ultimaMensagemRecebidaDoContato]);
+
+  const tempoRestanteJanela24h = useMemo(() => {
+    return formatarTempoRestanteJanela(ultimaMensagemRecebidaDoContato?.created_at);
+  }, [ultimaMensagemRecebidaDoContato]);
+
+  const templateSelecionado = useMemo(() => {
+    return (
+      templatesWhatsapp.find((item) => item.id === templateDisparoId) || null
+    );
+  }, [templatesWhatsapp, templateDisparoId]);
+
+  const quantidadeParametrosBody = useMemo(() => {
+    return contarParametrosDoTemplate(templateSelecionado?.payload);
+  }, [templateSelecionado]);
+
+  const previewTemplateSelecionado = useMemo(() => {
+    if (!templateSelecionado?.payload?.components?.length) {
+      return "Selecione um template para visualizar o conteúdo.";
+    }
+
+    const componentes = templateSelecionado.payload.components;
+
+    const header = componentes.find((item) => item.type === "HEADER");
+    const body = componentes.find((item) => item.type === "BODY");
+    const footer = componentes.find((item) => item.type === "FOOTER");
+
+    const partes = [
+      header?.text ? `HEADER:\n${header.text}` : "",
+      body?.text ? `BODY:\n${body.text}` : "",
+      footer?.text ? `FOOTER:\n${footer.text}` : "",
+    ].filter(Boolean);
+
+    return partes.join("\n\n") || "Template sem conteúdo textual.";
+  }, [templateSelecionado]);
+
+
+const templateHeaderTexto = useMemo(() => {
+  const componentes = templateSelecionado?.payload?.components || [];
+  const header = componentes.find((item) => item.type === "HEADER");
+  return header?.text || "";
+}, [templateSelecionado]);
+
+const templateBodyTexto = useMemo(() => {
+  const componentes = templateSelecionado?.payload?.components || [];
+  const body = componentes.find((item) => item.type === "BODY");
+  return body?.text || "";
+}, [templateSelecionado]);
+
+const templateFooterTexto = useMemo(() => {
+  const componentes = templateSelecionado?.payload?.components || [];
+  const footer = componentes.find((item) => item.type === "FOOTER");
+  return footer?.text || "";
+}, [templateSelecionado]);
+
+  const mostrarComposerLivre =
+    !!conversaSelecionada &&
+    !conversaComBotAtivo &&
+    !conversaEncerrada &&
+    janela24hAberta;
+
+  const mostrarDisparoIndividual =
+    !!conversaSelecionada &&
+    !conversaComBotAtivo &&
+    (!janela24hAberta || !!conversaEncerrada);
+
+
+  const mensagemAvisoDisparo = useMemo(() => {
+    if (conversaEncerrada) {
+      return {
+        titulo: "Conversa encerrada",
+        texto:
+          "Esta conversa não aceita mais mensagens livres. Para voltar a falar com este contato, envie um template aprovado.",
+        icone: "⛔",
+        variante: "danger" as const,
+      };
+    }
+
+    if (mostrarDisparoIndividual) {
+      return {
+        titulo: "Janela de 24h encerrada",
+        texto:
+          "A janela de atendimento expirou. Para continuar o contato com este cliente, envie um template aprovado.",
+        icone: "🕒",
+        variante: "warning" as const,
+      };
+    }
+
+    return null;
+  }, [conversaEncerrada, mostrarDisparoIndividual]);
   
 
   useEffect(() => {
@@ -3556,12 +3814,27 @@ export default function ConversasPage() {
     }
   }, [legendaArquivo, arquivoEnvio]);
 
+
   useEffect(() => {
-  if (!conversaComBotAtivo) return;
+  if (!conversaEncerrada) return;
 
   setMenuAnexoAberto(false);
   setEmojiAberto(false);
+
+  if (gravandoAudio) {
+    pararGravacaoAudio();
+  }
+
+  if (cameraAberta) {
+    fecharCamera();
+  }
+
+  if (arquivoEnvioPreviewUrl) {
+    URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+  }
+
   setArquivoEnvio(null);
+  setArquivoEnvioPreviewUrl(null);
   setLegendaArquivo("");
   legendaArquivoRef.current = "";
   setConteudo("");
@@ -3574,9 +3847,20 @@ export default function ConversasPage() {
   if (legendaEditorRef.current) {
     legendaEditorRef.current.textContent = "";
   }
-}, [conversaComBotAtivo]);
+}, [conversaEncerrada]);
 
 
+  useEffect(() => {
+    if (!mostrarDisparoIndividual) return;
+    if (!conversaSelecionada?.integracao_whatsapp_id) return;
+
+    carregarTemplatesWhatsapp();
+  }, [mostrarDisparoIndividual, conversaSelecionada?.integracao_whatsapp_id]);
+
+  useEffect(() => {
+    setParametros([]);
+  }, [templateDisparoNome]);
+  
   return (
     <>
       <Header
@@ -4444,214 +4728,544 @@ export default function ConversasPage() {
                           )}
                         </div>
 
-                        {conversaComBotAtivo ? (
-                          <div className={styles.botStopArea}>
-                            <div className={styles.botStopCard}>
-                              <div className={styles.botStopInfo}>
-                                <div className={styles.botStopIcon}>🤖</div>
+                        <div className={styles.composerArea}>
+                          {mensagemSucesso && (
+                            <div className={styles.successAlert}>{mensagemSucesso}</div>
+                          )}
 
+                          {erro && <div className={styles.errorAlert}>{erro}</div>}
+
+                          {!podeEnviarMensagem &&
+                            conversaSelecionada.status !== "encerrada" &&
+                            !conversaComBotAtivo &&
+                            janela24hAberta && (
+                              <div className={styles.timelineInfoSmall}>
+                                Você só poderá responder quando a conversa estiver sob sua
+                                responsabilidade.
+                              </div>
+                            )}
+
+                          <input
+                            ref={documentoInputRef}
+                            type="file"
+                            style={{ display: "none" }}
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar,.ppt,.pptx"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              selecionarArquivo(file, e.currentTarget);
+                            }}
+                          />
+
+                          <input
+                            ref={midiaInputRef}
+                            type="file"
+                            style={{ display: "none" }}
+                            accept="image/*,video/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              selecionarArquivo(file, e.currentTarget);
+                            }}
+                          />
+
+                          <input
+                            ref={audioInputRef}
+                            type="file"
+                            style={{ display: "none" }}
+                            accept="audio/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              selecionarArquivo(file, e.currentTarget);
+                            }}
+                          />
+
+                          {!conversaEncerrada && arquivoEnvio && (
+                            <div
+                              className={styles.filePreviewCard}
+                              style={{
+                                marginBottom: 10,
+                                border: "1px solid rgba(148, 163, 184, 0.22)",
+                                borderRadius: 14,
+                                padding: 12,
+                                background: "rgba(255,255,255,0.72)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 10,
+                              }}
+                            >
+                              <div className={styles.filePreviewHeader}>
+                                <div className={styles.filePreviewLabel}>
+                                  {getTipoArquivoSelecionado(arquivoEnvio)} selecionado
+                                </div>
+
+                                <button
+                                  type="button"
+                                  className={styles.filePreviewRemoveButton}
+                                  onClick={() => {
+                                    if (arquivoEnvioPreviewUrl) {
+                                      URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+                                    }
+
+                                    setArquivoEnvio(null);
+                                    setArquivoEnvioPreviewUrl(null);
+                                    setLegendaArquivo("");
+                                    legendaArquivoRef.current = "";
+                                    if (legendaEditorRef.current) {
+                                      legendaEditorRef.current.textContent = "";
+                                    }
+                                  }}
+                                >
+                                  Remover
+                                </button>
+                              </div>
+
+                              {arquivoSelecionadoEhImagem(arquivoEnvio) && arquivoEnvioPreviewUrl && (
                                 <div>
-                                  <strong className={styles.botStopTitle}>
-                                    Automação em andamento
-                                  </strong>
-
-                                  <p className={styles.botStopText}>
-                                    Esta conversa está sendo atendida pelo bot. Para responder manualmente,
-                                    clique em "Parar automação".
-                                  </p>
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                className={styles.dangerButton}
-                                onClick={assumirConversa}
-                                disabled={assumindo}
-                              >
-                                {assumindo ? "Parando automação..." : "Parar automação"}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className={styles.composerRow}>
-                              {/* ESQUERDA */}
-                              <div className={styles.composerLeft}>
-                                <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
-                                  <button
-                                    type="button"
-                                    className={styles.toolButton}
-                                    onClick={() => setMenuAnexoAberto((prev) => !prev)}
-                                    title="Anexos"
-                                  >
-                                    ＋
-                                  </button>
-
-                                  {menuAnexoAberto && (
-                                    <div className={styles.attachmentMenuDropdown}>
-                                      <button
-                                        type="button"
-                                        className={styles.attachmentMenuItem}
-                                        onClick={() => {
-                                          setMenuAnexoAberto(false);
-                                          documentoInputRef.current?.click();
-                                        }}
-                                      >
-                                        <span className={styles.attachmentMenuIcon}>📎</span>
-                                        <span>Documento</span>
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        className={styles.attachmentMenuItem}
-                                        onClick={() => {
-                                          setMenuAnexoAberto(false);
-                                          midiaInputRef.current?.click();
-                                        }}
-                                      >
-                                        <span className={styles.attachmentMenuIcon}>🖼️</span>
-                                        <span>Foto ou vídeo</span>
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        className={styles.attachmentMenuItem}
-                                        onClick={() => {
-                                          setMenuAnexoAberto(false);
-                                          audioInputRef.current?.click();
-                                        }}
-                                      >
-                                        <span className={styles.attachmentMenuIcon}>🎵</span>
-                                        <span>Áudio</span>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className={styles.emojiPickerWrap}>
-                                  <button
-                                    type="button"
-                                    className={`${styles.toolButton} ${styles.emojiButton} ${
-                                      emojiAberto ? styles.emojiButtonActive : ""
-                                    }`}
-                                    onClick={() => setEmojiAberto((prev) => !prev)}
-                                    title="Emoji"
-                                    aria-label="Abrir emojis"
-                                  >
-                                    <span className={styles.emojiButtonIcon}>😊</span>
-                                  </button>
-                                </div>
-                              </div>
-
-                              {emojiAberto && (
-                                <div className={styles.emojiPicker}>
-                                  <EmojiPicker
-                                    onEmojiClick={(emojiData) => {
-                                      inserirEmojiNoEditor(emojiData.emoji);
+                                  <img
+                                    src={arquivoEnvioPreviewUrl}
+                                    alt={arquivoEnvio.name}
+                                    style={{
+                                      maxWidth: "220px",
+                                      maxHeight: "220px",
+                                      width: "auto",
+                                      height: "auto",
+                                      borderRadius: 12,
+                                      display: "block",
                                     }}
                                   />
                                 </div>
                               )}
 
-                              {/* CAMPO */}
-                              <div className={styles.composerCenter}>
-                                <div
-                                  ref={arquivoEnvio ? legendaEditorRef : editorRef}
-                                  className={styles.messageEditor}
-                                  contentEditable={podeEnviarMensagem && !enviando && !gravandoAudio}
-                                  suppressContentEditableWarning
-                                  data-placeholder={
-                                    !podeEnviarMensagem
-                                      ? "Você não pode responder esta conversa"
-                                      : arquivoEnvio
-                                      ? "Digite uma legenda..."
-                                      : gravandoAudio
-                                      ? "Gravando áudio..."
-                                      : "Digite uma mensagem"
-                                  }
-                                  onInput={(e) => {
-                                    const texto = (e.currentTarget as HTMLDivElement).textContent || "";
+                              {arquivoSelecionadoEhVideo(arquivoEnvio) && arquivoEnvioPreviewUrl && (
+                                <div>
+                                  <video
+                                    controls
+                                    style={{
+                                      maxWidth: "260px",
+                                      width: "100%",
+                                      borderRadius: 12,
+                                      display: "block",
+                                    }}
+                                  >
+                                    <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
+                                    Seu navegador não suporta vídeo.
+                                  </video>
+                                </div>
+                              )}
 
-                                    if (arquivoEnvio) {
-                                      legendaArquivoRef.current = texto;
-                                    } else {
-                                      conteudoRef.current = texto;
-                                    }
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && !e.shiftKey) {
-                                      e.preventDefault();
+                              {arquivoSelecionadoEhAudio(arquivoEnvio) && arquivoEnvioPreviewUrl && (
+                                <div className={styles.audioPreviewCard}>
+                                  <div className={styles.audioPreviewTop}>
+                                    <div className={styles.audioPreviewBadge}>Áudio</div>
+                                    <span className={styles.audioPreviewFileName}>
+                                      {arquivoEnvio.name}
+                                    </span>
+                                  </div>
 
-                                      if (enviando || !podeEnviarMensagem || gravandoAudio) return;
+                                  <div className={styles.audioPreviewPlayerWrap}>
+                                    <audio controls className={styles.audioPreviewPlayer}>
+                                      <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
+                                      Seu navegador não suporta áudio.
+                                    </audio>
+                                  </div>
+                                </div>
+                              )}
 
-                                      if (arquivoEnvio) {
-                                        enviarMidia();
-                                        return;
-                                      }
-
-                                      enviarMensagem();
-                                    }
-                                  }}
-                                  role="textbox"
-                                  aria-multiline="true"
-                                />
-                              </div>
-
-                              {/* DIREITA */}
-                              <div className={styles.composerRight}>
-                                <button
-                                  type="button"
-                                  onClick={abrirCamera}
-                                  className={styles.toolButton}
-                                  title="Câmera"
-                                >
-                                  📷
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (gravandoAudio) {
-                                      pararGravacaoAudio();
-                                      return;
-                                    }
-
-                                    iniciarGravacaoAudio();
-                                  }}
-                                  disabled={!podeEnviarMensagem || enviando}
-                                  className={styles.toolButton}
-                                  title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
-                                >
-                                  {gravandoAudio ? "⏹" : "🎤"}
-                                </button>
-
-                                <button
-                                  onClick={() => {
-                                    if (arquivoEnvio) {
-                                      enviarMidia();
-                                      return;
-                                    }
-
-                                    enviarMensagem();
-                                  }}
-                                  disabled={
-                                    enviando ||
-                                    !podeEnviarMensagem ||
-                                    gravandoAudio ||
-                                    (!arquivoEnvio && !conteudoRef.current.trim())
-                                  }
-                                  className={styles.sendButton}
-                                >
-                                  {enviando ? "Enviando..." : "Enviar"}
-                                </button>
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  color: "#64748b",
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {arquivoEnvio.name}
                               </div>
                             </div>
+                          )}
 
-                            <p className={styles.footerHint}>
-                              Enter envia • Shift + Enter quebra linha
-                            </p>
-                          </>
-                        )}
+                          {!conversaEncerrada && cameraAberta && (
+                            <div className={styles.cameraModal}>
+                              <video ref={videoRef} autoPlay playsInline className={styles.cameraVideo} />
+
+                              <div className={styles.cameraActions}>
+                                <button onClick={capturarFoto}>📸 Tirar foto</button>
+                                <button onClick={fecharCamera}>Cancelar</button>
+                              </div>
+
+                              <canvas ref={canvasRef} style={{ display: "none" }} />
+                            </div>
+                          )}
+
+                          {!conversaEncerrada && gravandoAudio && (
+                            <div className={styles.timelineInfoSmall}>
+                              Gravando áudio... <strong>{formatarDuracaoGravacao(duracaoGravacao)}</strong>
+                            </div>
+                          )}
+
+{conversaComBotAtivo ? (
+  <div className={styles.botStopArea}>
+    <div className={styles.botStopCard}>
+      <div className={styles.botStopInfo}>
+        <div className={styles.botStopIcon}>🤖</div>
+
+        <div>
+          <strong className={styles.botStopTitle}>
+            Automação em andamento
+          </strong>
+
+          <p className={styles.botStopText}>
+            Esta conversa está com o bot ativo. Para assumir o atendimento
+            manualmente, clique em "Parar automação".
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className={styles.dangerButton}
+        onClick={assumirConversa}
+        disabled={assumindo}
+      >
+        {assumindo ? "Parando automação..." : "Parar automação"}
+      </button>
+    </div>
+  </div>
+) : mostrarDisparoIndividual ? (
+<div className={styles.disparoQuickCard}>
+  <div className={styles.disparoQuickLeft}>
+    {mensagemAvisoDisparo && (
+      <div
+        className={`${styles.disparoQuickAlert} ${
+          mensagemAvisoDisparo.variante === "danger"
+            ? styles.disparoQuickAlertDanger
+            : styles.disparoQuickAlertWarning
+        }`}
+      >
+        <div className={styles.disparoQuickAlertIcon}>
+          {mensagemAvisoDisparo.icone}
+        </div>
+
+        <div className={styles.disparoQuickAlertContent}>
+          <strong className={styles.disparoQuickAlertTitle}>
+            {mensagemAvisoDisparo.titulo}
+          </strong>
+
+          <p className={styles.disparoQuickAlertText}>
+            {mensagemAvisoDisparo.texto}
+          </p>
+        </div>
+      </div>
+    )}
+
+    <div className={styles.disparoQuickTopRow}>
+      <select
+        className={styles.disparoQuickSelect}
+        value={templateDisparoId}
+        onChange={(e) => {
+          const idSelecionado = e.target.value;
+          setTemplateDisparoId(idSelecionado);
+
+          const template = templatesWhatsapp.find((t) => t.id === idSelecionado);
+          setTemplateDisparoNome(template?.nome || "");
+        }}
+      >
+        <option value="">
+          {carregandoTemplatesWhatsapp
+            ? "Carregando templates..."
+            : "Selecionar template"}
+        </option>
+
+        {templatesWhatsapp.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.nome}
+          </option>
+        ))}
+      </select>
+
+      <button
+        type="button"
+        className={styles.disparoQuickNewButton}
+        onClick={() => {
+          window.location.href = "/configuracoes/templates-whatsapp";
+        }}
+      >
+        + Novo
+      </button>
+    </div>
+
+    {quantidadeParametrosBody > 0 && (
+      <div className={styles.disparoParams}>
+        {Array.from({ length: quantidadeParametrosBody }).map((_, i) => (
+          <input
+            key={i}
+            className={styles.disparoInput}
+            placeholder={`Parâmetro ${i + 1}`}
+            value={parametros[i] || ""}
+            onChange={(e) => atualizarParametro(i, e.target.value)}
+          />
+        ))}
+      </div>
+    )}
+
+    <div className={styles.disparoQuickBottomRow}>
+      <div className={styles.disparoQuickTarget}>
+        <span className={styles.disparoQuickTargetLabel}>Destino</span>
+        <strong className={styles.disparoQuickTargetName}>
+          {conversaSelecionada.contatos?.nome || "Contato"}
+        </strong>
+        <span className={styles.disparoQuickTargetPhone}>
+          {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        className={styles.disparoQuickSendButton}
+        onClick={enviarDisparoIndividual}
+        disabled={
+          enviandoDisparoIndividual ||
+          !templateDisparoId.trim() ||
+          !conversaSelecionada?.contatos?.telefone
+        }
+      >
+        {enviandoDisparoIndividual ? "Enviando..." : "Enviar"}
+      </button>
+    </div>
+  </div>
+
+  <div className={styles.disparoTemplatePreviewCard}>
+    <div className={styles.disparoTemplatePreviewHeader}>
+      <div>
+        <h4 className={styles.disparoTemplatePreviewName}>
+          {templateSelecionado?.nome || "Template não selecionado"}
+        </h4>
+
+        <p className={styles.disparoTemplatePreviewMeta}>
+          Categoria:{" "}
+          <strong>
+            {templateSelecionado?.categoria || "Não informada"}
+          </strong>
+          {" • "}
+          Idioma:{" "}
+          <strong>
+            {templateSelecionado?.idioma || templateSelecionado?.payload?.language || "—"}
+          </strong>
+        </p>
+      </div>
+
+      <span className={styles.disparoTemplateStatusBadge}>
+        Aprovado
+      </span>
+    </div>
+
+    <div className={styles.disparoTemplateSection}>
+      <span className={styles.disparoTemplateSectionLabel}>HEADER</span>
+      <div className={styles.disparoTemplateSectionBox}>
+        {templateHeaderTexto || "Sem header"}
+      </div>
+    </div>
+
+    <div className={styles.disparoTemplateSection}>
+      <span className={styles.disparoTemplateSectionLabel}>BODY</span>
+      <div className={styles.disparoTemplateSectionBox}>
+        {templateBodyTexto || "Sem body"}
+      </div>
+    </div>
+
+    <div className={styles.disparoTemplateSection}>
+      <span className={styles.disparoTemplateSectionLabel}>FOOTER</span>
+      <div className={styles.disparoTemplateSectionBox}>
+        {templateFooterTexto || "Sem footer"}
+      </div>
+    </div>
+
+    <div className={styles.disparoTemplateHintBox}>
+      Este template usa <strong>{quantidadeParametrosBody}</strong> variável(is).
+      No modelo atual, se existir variável, o sistema envia os valores preenchidos
+      nos parâmetros acima.
+    </div>
+  </div>
+</div>
+) : (
+  <>
+    <div className={styles.composerRow}>
+      {/* ESQUERDA */}
+      <div className={styles.composerLeft}>
+        <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
+          <button
+            type="button"
+            className={styles.toolButton}
+            onClick={() => setMenuAnexoAberto((prev) => !prev)}
+            title="Anexos"
+          >
+            ＋
+          </button>
+
+          {menuAnexoAberto && (
+            <div className={styles.attachmentMenuDropdown}>
+              <button
+                type="button"
+                className={styles.attachmentMenuItem}
+                onClick={() => {
+                  setMenuAnexoAberto(false);
+                  documentoInputRef.current?.click();
+                }}
+              >
+                <span className={styles.attachmentMenuIcon}>📎</span>
+                <span>Documento</span>
+              </button>
+
+              <button
+                type="button"
+                className={styles.attachmentMenuItem}
+                onClick={() => {
+                  setMenuAnexoAberto(false);
+                  midiaInputRef.current?.click();
+                }}
+              >
+                <span className={styles.attachmentMenuIcon}>🖼️</span>
+                <span>Foto ou vídeo</span>
+              </button>
+
+              <button
+                type="button"
+                className={styles.attachmentMenuItem}
+                onClick={() => {
+                  setMenuAnexoAberto(false);
+                  audioInputRef.current?.click();
+                }}
+              >
+                <span className={styles.attachmentMenuIcon}>🎵</span>
+                <span>Áudio</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className={styles.emojiPickerWrap}>
+          <button
+            type="button"
+            className={`${styles.toolButton} ${styles.emojiButton} ${
+              emojiAberto ? styles.emojiButtonActive : ""
+            }`}
+            onClick={() => setEmojiAberto((prev) => !prev)}
+            title="Emoji"
+            aria-label="Abrir emojis"
+          >
+            <span className={styles.emojiButtonIcon}>😊</span>
+          </button>
+        </div>
+      </div>
+
+      {emojiAberto && (
+        <div className={styles.emojiPicker}>
+          <EmojiPicker
+            onEmojiClick={(emojiData) => {
+              inserirEmojiNoEditor(emojiData.emoji);
+            }}
+          />
+        </div>
+      )}
+
+      {/* CAMPO */}
+      <div className={styles.composerCenter}>
+        <div
+          ref={arquivoEnvio ? legendaEditorRef : editorRef}
+          className={styles.messageEditor}
+          contentEditable={podeEnviarMensagem && !enviando && !gravandoAudio}
+          suppressContentEditableWarning
+          data-placeholder={
+            !podeEnviarMensagem
+              ? "Você não pode responder esta conversa"
+              : arquivoEnvio
+              ? "Digite uma legenda..."
+              : gravandoAudio
+              ? "Gravando áudio..."
+              : "Digite uma mensagem"
+          }
+          onInput={(e) => {
+            const texto = (e.currentTarget as HTMLDivElement).textContent || "";
+
+            if (arquivoEnvio) {
+              legendaArquivoRef.current = texto;
+            } else {
+              conteudoRef.current = texto;
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+
+              if (enviando || !podeEnviarMensagem || gravandoAudio) return;
+
+              if (arquivoEnvio) {
+                enviarMidia();
+                return;
+              }
+
+              enviarMensagem();
+            }
+          }}
+          role="textbox"
+          aria-multiline="true"
+        />
+      </div>
+
+      {/* DIREITA */}
+      <div className={styles.composerRight}>
+        <button
+          type="button"
+          onClick={abrirCamera}
+          className={styles.toolButton}
+          title="Câmera"
+        >
+          📷
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (gravandoAudio) {
+              pararGravacaoAudio();
+              return;
+            }
+
+            iniciarGravacaoAudio();
+          }}
+          disabled={!podeEnviarMensagem || enviando}
+          className={styles.toolButton}
+          title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
+        >
+          {gravandoAudio ? "⏹" : "🎤"}
+        </button>
+
+        <button
+          onClick={() => {
+            if (arquivoEnvio) {
+              enviarMidia();
+              return;
+            }
+
+            enviarMensagem();
+          }}
+          disabled={
+            enviando ||
+            !podeEnviarMensagem ||
+            gravandoAudio ||
+            (!arquivoEnvio && !conteudoRef.current.trim())
+          }
+          className={styles.sendButton}
+        >
+          {enviando ? "Enviando..." : arquivoEnvio ? "Enviar" : "Enviar"}
+        </button>
+      </div>
+    </div>
+
+    <p className={styles.footerHint}>
+      Enter envia • Shift + Enter quebra linha
+    </p>
+  </>
+)}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -4788,52 +5402,7 @@ export default function ConversasPage() {
                               </strong>
                             </div>
                           </div>
-
-                          <div className={styles.botCard}>
-                            <div className={styles.botCardHeader}>
-                              <div>
-                                <h4 className={styles.botCardTitle}>Bot</h4>
-                                <p className={styles.botCardSubtitle}>
-                                  Controle visual preparado para integração.
-                                </p>
-                              </div>
-
-                              <span
-                                className={`${styles.botStatusBadge} ${
-                                  conversaSelecionada.status === "bot"
-                                    ? styles.botStatusActive
-                                    : styles.botStatusPaused
-                                }`}
-                              >
-                                {conversaSelecionada.status === "bot"
-                                  ? "Ativo"
-                                  : "Pausado"}
-                              </span>
-                            </div>
-
-                            <div className={styles.botInfoGrid}>
-                              <div className={styles.botInfoItem}>
-                                <span className={styles.detailLabel}>Etapa atual</span>
-                                <strong className={styles.detailValue}>
-                                  Aguardando integração real
-                                </strong>
-                              </div>
-
-                              <div className={styles.botInfoItem}>
-                                <span className={styles.detailLabel}>Última ação</span>
-                                <strong className={styles.detailValue}>
-                                  Sem evento detalhado
-                                </strong>
-                              </div>
-                            </div>
-
-                            <div className={styles.botActions}>
-                              <button className={styles.secondaryButton}>Pausar bot</button>
-                              <button className={styles.secondaryButton}>Retomar bot</button>
-                              <button className={styles.secondaryButton}>Resetar bot</button>
-                            </div>
-                          </div>
-                        </div>
+                         </div>
                       )}
 
                       {abaPainelDireito === "contato" && (
