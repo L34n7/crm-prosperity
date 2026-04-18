@@ -7,6 +7,7 @@ const supabaseAdmin = getSupabaseAdmin();
 type TemplatePayload = {
   name?: string;
   language?: string;
+  category?: string;
   components?: Array<{
     type: string;
     text?: string;
@@ -20,8 +21,68 @@ type TemplatePayload = {
   }>;
 };
 
+type UsuarioSetorVinculo = {
+  setor_id?: string | null;
+  is_principal?: boolean | null;
+};
+
+type UsuarioContextoMinimo = {
+  id: string;
+  empresa_id?: string | null;
+  setor_principal_id?: string | null;
+  setores_ids?: string[];
+  usuarios_setores?: UsuarioSetorVinculo[];
+};
+
 function limparNumero(numero: string) {
   return String(numero || "").replace(/\D/g, "");
+}
+
+function gerarCodigoAleatorio(tamanho = 6) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let resultado = "";
+
+  for (let i = 0; i < tamanho; i += 1) {
+    resultado += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  return resultado;
+}
+
+function gerarNumeroProtocolo() {
+  const agora = new Date();
+  const ano = agora.getFullYear();
+  const mes = String(agora.getMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getDate()).padStart(2, "0");
+
+  return `RE-${ano}${mes}${dia}-${gerarCodigoAleatorio(6)}`;
+}
+
+function obterSetorPrincipalDoUsuario(usuario: UsuarioContextoMinimo) {
+  if (usuario?.setor_principal_id) {
+    return usuario.setor_principal_id;
+  }
+
+  if (Array.isArray(usuario?.usuarios_setores)) {
+    const principal = usuario.usuarios_setores.find(
+      (item) => item?.is_principal && item?.setor_id
+    );
+
+    if (principal?.setor_id) {
+      return principal.setor_id;
+    }
+
+    const primeiro = usuario.usuarios_setores.find((item) => item?.setor_id);
+    if (primeiro?.setor_id) {
+      return primeiro.setor_id;
+    }
+  }
+
+  if (Array.isArray(usuario?.setores_ids) && usuario.setores_ids[0]) {
+    return usuario.setores_ids[0];
+  }
+
+  return null;
 }
 
 function montarComponentesTemplate(
@@ -56,17 +117,20 @@ function montarConteudoTextoTemplate(
 ) {
   if (!payloadTemplate?.components?.length) return "";
 
-  const header = payloadTemplate.components.find(
-    (item) => String(item.type || "").toUpperCase() === "HEADER"
-  )?.text || "";
+  const header =
+    payloadTemplate.components.find(
+      (item) => String(item.type || "").toUpperCase() === "HEADER"
+    )?.text || "";
 
-  const body = payloadTemplate.components.find(
-    (item) => String(item.type || "").toUpperCase() === "BODY"
-  )?.text || "";
+  const body =
+    payloadTemplate.components.find(
+      (item) => String(item.type || "").toUpperCase() === "BODY"
+    )?.text || "";
 
-  const footer = payloadTemplate.components.find(
-    (item) => String(item.type || "").toUpperCase() === "FOOTER"
-  )?.text || "";
+  const footer =
+    payloadTemplate.components.find(
+      (item) => String(item.type || "").toUpperCase() === "FOOTER"
+    )?.text || "";
 
   const substituir = (texto: string) =>
     texto.replace(/\{\{(\d+)\}\}/g, (_, grupo) => {
@@ -81,6 +145,85 @@ function montarConteudoTextoTemplate(
   ].filter(Boolean);
 
   return partes.join("\n\n").trim();
+}
+
+async function encerrarProtocolosAtivosDaConversa(conversaId: string) {
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .update({
+      ativo: false,
+      closed_at: now,
+      updated_at: now,
+    })
+    .eq("conversa_id", conversaId)
+    .eq("ativo", true);
+
+  if (error) {
+    throw new Error(`Erro ao encerrar protocolos ativos: ${error.message}`);
+  }
+}
+
+async function criarNovoProtocoloDeReabertura(params: {
+  conversaId: string;
+  empresaId: string;
+}) {
+  const now = new Date().toISOString();
+  const protocolo = gerarNumeroProtocolo();
+
+  const { data, error } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .insert({
+      conversa_id: params.conversaId,
+      empresa_id: params.empresaId,
+      protocolo,
+      tipo: "reabertura",
+      ativo: true,
+      started_at: now,
+      closed_at: null,
+      created_at: now,
+      updated_at: now,
+    })
+    .select("id, protocolo")
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Erro ao criar protocolo de reabertura: ${error?.message}`);
+  }
+
+  return data;
+}
+
+async function reabrirConversaAposDisparo(params: {
+  conversaId: string;
+  usuarioId: string;
+  setorId: string | null;
+}) {
+  const now = new Date().toISOString();
+
+  const payload: Record<string, unknown> = {
+    responsavel_id: params.usuarioId,
+    status: "em_atendimento",
+    bot_ativo: false,
+    origem_atendimento: "manual",
+    closed_at: null,
+    started_at: now,
+    updated_at: now,
+  };
+
+  if (params.setorId) {
+    payload.setor_id = params.setorId;
+  }
+
+  const { error } = await supabaseAdmin
+    .from("conversas")
+    .update(payload)
+    .eq("id", params.conversaId);
+
+  if (error) {
+    throw new Error(`Erro ao reabrir conversa: ${error.message}`);
+  }
 }
 
 async function atualizarUltimaMensagemConversa(conversaId: string) {
@@ -105,7 +248,9 @@ export async function POST(request: Request) {
 
     const conversaId = String(body?.conversa_id || "").trim();
     const templateNome = String(body?.template_nome || "").trim();
-    const bodyParams = Array.isArray(body?.body_params) ? body.body_params : [];
+    const bodyParams = Array.isArray(body?.body_params)
+      ? body.body_params.map((item: unknown) => String(item || ""))
+      : [];
 
     if (!conversaId) {
       return NextResponse.json(
@@ -130,11 +275,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const { usuario } = resultado;
+    const { usuario } = resultado as { usuario: UsuarioContextoMinimo };
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada" },
+        { status: 400 }
+      );
+    }
+
+    const setorDoUsuario = obterSetorPrincipalDoUsuario(usuario);
+
+    if (!setorDoUsuario) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem setor vinculado para reabrir a conversa" },
         { status: 400 }
       );
     }
@@ -302,6 +456,19 @@ export async function POST(request: Request) {
       metaData?.messages?.[0]?.message_id ||
       null;
 
+    await encerrarProtocolosAtivosDaConversa(conversa.id);
+
+    await reabrirConversaAposDisparo({
+      conversaId: conversa.id,
+      usuarioId: usuario.id,
+      setorId: setorDoUsuario,
+    });
+
+    const novoProtocolo = await criarNovoProtocoloDeReabertura({
+      conversaId: conversa.id,
+      empresaId: usuario.empresa_id,
+    });
+
     const conteudoRenderizado =
       montarConteudoTextoTemplate(payloadTemplate, bodyParams) ||
       `Template enviado: ${template.nome}`;
@@ -311,6 +478,7 @@ export async function POST(request: Request) {
     const { error: insertError } = await supabaseAdmin.from("mensagens").insert({
       empresa_id: usuario.empresa_id,
       conversa_id: conversa.id,
+      conversa_protocolo_id: novoProtocolo.id,
       remetente_tipo: "usuario",
       remetente_id: usuario.id,
       conteudo: conteudoRenderizado,
@@ -328,6 +496,8 @@ export async function POST(request: Request) {
         variaveis: bodyParams,
         conteudo_renderizado: conteudoRenderizado,
         meta_response: metaData,
+        protocolo_reabertura_id: novoProtocolo.id,
+        protocolo_reabertura_numero: novoProtocolo.protocolo,
       },
       created_at: now,
       updated_at: now,
@@ -351,6 +521,8 @@ export async function POST(request: Request) {
       message: `Disparo individual enviado com sucesso para ${nomeContato}`,
       data: {
         mensagem_externa_id: mensagemExternaId,
+        protocolo_id: novoProtocolo.id,
+        protocolo: novoProtocolo.protocolo,
         meta: metaData,
       },
     });
