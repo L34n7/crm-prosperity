@@ -26,6 +26,8 @@ type ConversaComRelacionamentos = {
   etiqueta_cor?: string | null;
   favorita?: boolean;
   protocolo?: string | null;
+  ultima_mensagem?: string | null;
+  unread_count?: number | null;
   listas?: {
     id: string;
     nome: string;
@@ -69,6 +71,26 @@ type ProtocoloAtivoRow = {
   protocolo: string;
 };
 
+type MensagemListaRow = {
+  id: string;
+  conversa_id: string;
+  conteudo: string | null;
+  tipo_mensagem: string | null;
+  created_at: string;
+  remetente_tipo?: string | null;
+  origem?: string | null;
+  status_envio?: string | null;
+  metadata_json?: {
+    caption?: string | null;
+    filename?: string | null;
+  } | null;
+};
+
+type ConversaLeituraRow = {
+  conversa_id: string;
+  ultima_mensagem_lida_at: string | null;
+};
+
 function isStatusValido(status: string | null) {
   if (!status) return false;
 
@@ -86,6 +108,43 @@ function isPrioridadeValida(prioridade: string | null) {
   if (!prioridade) return false;
 
   return ["baixa", "media", "alta", "urgente"].includes(prioridade);
+}
+
+function getPreviewUltimaMensagem(mensagem?: MensagemListaRow | null) {
+  if (!mensagem) return null;
+
+  const conteudo = mensagem.conteudo?.trim();
+  if (conteudo) return conteudo;
+
+  const caption = mensagem.metadata_json?.caption?.trim();
+  if (caption) return caption;
+
+  switch (mensagem.tipo_mensagem) {
+    case "imagem":
+      return "📷 Imagem";
+    case "audio":
+      return "🎤 Áudio";
+    case "video":
+      return "🎬 Vídeo";
+    case "documento":
+      return mensagem.metadata_json?.filename?.trim()
+        ? `📄 ${mensagem.metadata_json.filename.trim()}`
+        : "📄 Documento";
+    case "contato":
+      return "👤 Contato compartilhado";
+    case "localizacao":
+      return "📍 Localização";
+    case "template":
+      return "📢 Template enviado";
+    case "botao":
+      return "🔘 Resposta por botão";
+    case "lista":
+      return "📋 Resposta por lista";
+    case "unsupported":
+      return "⚠️ Mensagem não suportada";
+    default:
+      return "Mensagem";
+  }
 }
 
 export async function GET(request: Request) {
@@ -113,6 +172,13 @@ export async function GET(request: Request) {
   const contatoId = searchParams.get("contato_id");
   const setorId = searchParams.get("setor_id");
   const responsavelId = searchParams.get("responsavel_id");
+
+  if (!usuario.empresa_id) {
+    return NextResponse.json(
+      { ok: false, error: "Usuário sem empresa vinculada" },
+      { status: 400 }
+    );
+  }
 
   let query = supabaseAdmin
     .from("conversas")
@@ -147,17 +213,9 @@ export async function GET(request: Request) {
         cor
       )
     `)
+    .eq("empresa_id", usuario.empresa_id)
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
-
-  if (!usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Usuário sem empresa vinculada" },
-      { status: 400 }
-    );
-  }
-
-  query = query.eq("empresa_id", usuario.empresa_id);
 
   if (status) {
     if (!isStatusValido(status)) {
@@ -222,8 +280,12 @@ export async function GET(request: Request) {
   );
 
   const conversaIds = conversas.map((conversa) => conversa.id);
+
   let listasPorConversa = new Map<string, { id: string; nome: string }[]>();
   let protocolosAtivosPorConversa = new Map<string, string>();
+  let ultimaMensagemPorConversa = new Map<string, MensagemListaRow>();
+  let unreadCountPorConversa = new Map<string, number>();
+  let leituraPorConversa = new Map<string, string | null>();
 
   if (conversaIds.length > 0) {
     const { data: itensListas, error: itensListasError } = await supabaseAdmin
@@ -279,6 +341,83 @@ export async function GET(request: Request) {
     for (const item of (protocolosAtivos ?? []) as ProtocoloAtivoRow[]) {
       protocolosAtivosPorConversa.set(item.conversa_id, item.protocolo);
     }
+
+    const { data: leituras, error: leiturasError } = await supabaseAdmin
+      .from("conversa_leituras")
+      .select("conversa_id, ultima_mensagem_lida_at")
+      .in("conversa_id", conversaIds)
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("usuario_id", usuario.id);
+
+    if (leiturasError) {
+      return NextResponse.json(
+        { ok: false, error: leiturasError.message },
+        { status: 500 }
+      );
+    }
+
+    for (const leitura of (leituras ?? []) as ConversaLeituraRow[]) {
+      leituraPorConversa.set(
+        leitura.conversa_id,
+        leitura.ultima_mensagem_lida_at ?? null
+      );
+    }
+
+    const { data: mensagensLista, error: mensagensListaError } = await supabaseAdmin
+      .from("mensagens")
+      .select(`
+        id,
+        conversa_id,
+        conteudo,
+        tipo_mensagem,
+        created_at,
+        remetente_tipo,
+        origem,
+        status_envio,
+        metadata_json
+      `)
+      .in("conversa_id", conversaIds)
+      .eq("empresa_id", usuario.empresa_id)
+      .order("created_at", { ascending: false });
+
+    if (mensagensListaError) {
+      return NextResponse.json(
+        { ok: false, error: mensagensListaError.message },
+        { status: 500 }
+      );
+    }
+
+    for (const mensagem of (mensagensLista ?? []) as MensagemListaRow[]) {
+      if (!ultimaMensagemPorConversa.has(mensagem.conversa_id)) {
+        ultimaMensagemPorConversa.set(mensagem.conversa_id, mensagem);
+      }
+
+      const ehRecebida =
+        mensagem.origem === "recebida" ||
+        mensagem.remetente_tipo === "contato";
+
+      if (!ehRecebida) continue;
+
+      const ultimaLeitura = leituraPorConversa.get(mensagem.conversa_id) ?? null;
+
+      if (!ultimaLeitura) {
+        const atual = unreadCountPorConversa.get(mensagem.conversa_id) ?? 0;
+        unreadCountPorConversa.set(mensagem.conversa_id, atual + 1);
+        continue;
+      }
+
+      const mensagemTime = new Date(mensagem.created_at).getTime();
+      const leituraTime = new Date(ultimaLeitura).getTime();
+
+      if (Number.isNaN(mensagemTime) || Number.isNaN(leituraTime)) {
+        continue;
+      }
+
+      if (mensagemTime >= leituraTime + 1) {
+        const atual = unreadCountPorConversa.get(mensagem.conversa_id) ?? 0;
+        unreadCountPorConversa.set(mensagem.conversa_id, atual + 1);
+      }
+    }
   }
 
   conversas = conversas.map((conversa) => ({
@@ -286,6 +425,10 @@ export async function GET(request: Request) {
     favorita: favoritosSet.has(conversa.id),
     listas: listasPorConversa.get(conversa.id) ?? [],
     protocolo: protocolosAtivosPorConversa.get(conversa.id) ?? null,
+    ultima_mensagem: getPreviewUltimaMensagem(
+      ultimaMensagemPorConversa.get(conversa.id) ?? null
+    ),
+    unread_count: unreadCountPorConversa.get(conversa.id) ?? 0,
   }));
 
   if (isAdministrador(usuario)) {

@@ -82,6 +82,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const conversaId = searchParams.get("conversa_id");
     const conversaProtocoloId = searchParams.get("conversa_protocolo_id");
+    const inicio = searchParams.get("inicio");
+    const fim = searchParams.get("fim");
 
     if (!conversaId) {
       return NextResponse.json(
@@ -89,6 +91,10 @@ export async function GET(request: Request) {
         { status: 400 }
       );
     }
+
+    const dataInicioFiltro = inicio || null;
+    const dataFimFiltro = fim || null;
+
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
@@ -138,6 +144,14 @@ export async function GET(request: Request) {
       );
     }
 
+    if (dataInicioFiltro) {
+      queryMensagens = queryMensagens.gte("created_at", dataInicioFiltro);
+    }
+
+    if (dataFimFiltro) {
+      queryMensagens = queryMensagens.lte("created_at", dataFimFiltro);
+    }
+
     const { data, error } = await queryMensagens.order("created_at", {
       ascending: true,
     });
@@ -150,6 +164,34 @@ export async function GET(request: Request) {
     }
 
     const mensagens = data ?? [];
+
+    let temMaisHistorico = false;
+
+    if (dataInicioFiltro) {
+      let queryMaisAntigas = supabaseAdmin
+        .from("mensagens")
+        .select("id", { count: "exact", head: true })
+        .eq("conversa_id", conversaId)
+        .lt("created_at", dataInicioFiltro);
+
+      if (conversaProtocoloId) {
+        queryMaisAntigas = queryMaisAntigas.eq(
+          "conversa_protocolo_id",
+          conversaProtocoloId
+        );
+      }
+
+      const { count, error: maisAntigasError } = await queryMaisAntigas;
+
+      if (maisAntigasError) {
+        return NextResponse.json(
+          { ok: false, error: maisAntigasError.message },
+          { status: 500 }
+        );
+      }
+
+      temMaisHistorico = (count || 0) > 0;
+    }
 
     const { data: favoritas, error: favoritasError } = await supabaseAdmin
       .from("mensagens_favoritas")
@@ -180,6 +222,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       mensagens: mensagensComFavorita,
+      temMaisHistorico,
     });
   } catch (error) {
     console.error("Erro ao carregar mensagens:", error);

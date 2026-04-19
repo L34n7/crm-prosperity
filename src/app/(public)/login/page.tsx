@@ -130,7 +130,28 @@ export default function LoginPage() {
               {loading ? "Entrando..." : "Entrar"}
             </button>
 
-            <div style={{ marginTop: "12px", textAlign: "right" }}>
+            <div
+              style={{
+                marginTop: "12px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "12px",
+                flexWrap: "wrap",
+              }}
+            >
+              <Link
+                href="/cadastro"
+                style={{
+                  fontSize: "14px",
+                  color: "#2563eb",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
+              >
+                Ainda não tenho conta
+              </Link>
+
               <Link
                 href="/recuperar-senha"
                 style={{

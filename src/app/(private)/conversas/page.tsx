@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Header from "@/components/Header";
 import styles from "./conversas.module.css";
 import { can } from "@/lib/permissoes/frontend";
@@ -489,12 +489,15 @@ function getSlaNivel(conversa?: Conversa | null) {
 }
 
 function getPreviewConversa(conversa: Conversa) {
-  return (
-    conversa.ultima_mensagem?.trim() ||
-    conversa.assunto?.trim() ||
-    conversa.contatos?.telefone ||
-    "Sem prévia"
-  );
+  const ultimaMensagem = conversa.ultima_mensagem?.trim();
+  if (ultimaMensagem) return ultimaMensagem;
+
+  const assunto = conversa.assunto?.trim();
+  if (assunto && assunto !== "Atendimento iniciado via WhatsApp") {
+    return assunto;
+  }
+
+  return conversa.contatos?.telefone || "Sem prévia";
 }
 
 function getSharedContactName(msg: Mensagem) {
@@ -1108,18 +1111,24 @@ export default function ConversasPage() {
   const [usuarios, setUsuarios] = useState<UsuarioOpcao[]>([]);
 
   const [busca, setBusca] = useState("");
-  const [statusFiltro, setStatusFiltro] = useState("Tudo");
+  const [statusFiltro, setStatusFiltro] = useState("Todas");
   const [canalFiltro, setCanalFiltro] = useState("todos");
   const [setorFiltro, setSetorFiltro] = useState("todos");
   const [responsavelFiltro, setResponsavelFiltro] = useState("todos");
   const [chipRapido, setChipRapido] = useState<
-    "Tudo" | "minhas" | "favoritos" | "fila" | "nao_lidas" | "sem_responsavel" | "urgentes" | "robo"
-  >("Tudo");
+    "Todas" | "minhas" | "favoritos" | "fila" | "nao_lidas" | "sem_responsavel" | "urgentes" | "robo"
+  >("Todas");
 
   const [conteudo, setConteudo] = useState("");
   const [loadingConversas, setLoadingConversas] = useState(false);
   const [loadingMensagens, setLoadingMensagens] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [inicioJanelaHistorico, setInicioJanelaHistorico] = useState<string | null>(null);
+  const [fimJanelaHistorico, setFimJanelaHistorico] = useState<string | null>(null);
+
+  const [temMaisHistorico, setTemMaisHistorico] = useState(false);
+  const [carregandoMaisHistorico, setCarregandoMaisHistorico] = useState(false);
+
   const [erro, setErro] = useState("");
   const [mensagemSucesso, setMensagemSucesso] = useState("");
   const [assumindo, setAssumindo] = useState(false);
@@ -1178,6 +1187,8 @@ export default function ConversasPage() {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const legendaEditorRef = useRef<HTMLDivElement | null>(null);
 
+  const conversaLidaRef = useRef<string | null>(null);
+
   const [editandoCampo, setEditandoCampo] = useState<string | null>(null);
 
   const [etiquetasEmpresa, setEtiquetasEmpresa] = useState<EtiquetaEmpresa[]>([]);
@@ -1195,6 +1206,7 @@ export default function ConversasPage() {
   const [templateDisparoNome, setTemplateDisparoNome] = useState("");
   const [templateDisparoBody1, setTemplateDisparoBody1] = useState("");
   const [enviandoDisparoIndividual, setEnviandoDisparoIndividual] = useState(false);
+  const [disparoIndividualAberto, setDisparoIndividualAberto] = useState(false);
   const [templatesWhatsapp, setTemplatesWhatsapp] = useState<
     {
       id: string;
@@ -1368,6 +1380,16 @@ export default function ConversasPage() {
 
 
   const impedirAutoScrollRef = useRef(false);
+  const restaurarScrollHistoricoRef = useRef<{
+    scrollTop: number;
+    scrollHeight: number;
+  } | null>(null);
+
+  const forcarScrollParaFinalRef = useRef(false);
+
+  const totalMensagensAnteriorRef = useRef(0);
+  const ultimaMensagemIdAnteriorRef = useRef<string | null>(null);
+  const usuarioEstavaNoFinalRef = useRef(true);
 
   const quantidadeMensagensFavoritas = useMemo(() => {
     return mensagens.filter((msg) => msg.favorita).length;
@@ -2103,6 +2125,7 @@ export default function ConversasPage() {
 
       const lista = data.conversas || [];
       setConversas(lista);
+      return lista;
 
       setConversaSelecionada((atual) => {
         if (!lista.length) return null;
@@ -2135,6 +2158,7 @@ export default function ConversasPage() {
       });
     } catch {
       setErro("Erro ao carregar conversas");
+      return [];
     } finally {
       if (!silencioso) {
         setLoadingConversas(false);
@@ -2145,9 +2169,12 @@ export default function ConversasPage() {
   async function carregarMensagens(
     conversaId: string,
     silencioso = false,
-    conversaProtocoloId?: string | null
+    conversaProtocoloId?: string | null,
+    inicioJanela?: string | null,
+    fimJanela?: string | null
   ) {
     try {
+      usuarioEstavaNoFinalRef.current = verificarSeUsuarioEstaNoFinal();
       if (!silencioso) {
         setLoadingMensagens(true);
       }
@@ -2156,6 +2183,14 @@ export default function ConversasPage() {
 
       if (conversaProtocoloId) {
         url += `&conversa_protocolo_id=${conversaProtocoloId}`;
+      }
+
+      if (inicioJanela) {
+        url += `&inicio=${encodeURIComponent(inicioJanela)}`;
+      }
+
+      if (fimJanela) {
+        url += `&fim=${encodeURIComponent(fimJanela)}`;
       }
 
       const res = await fetch(url, {
@@ -2170,12 +2205,70 @@ export default function ConversasPage() {
       }
 
       setMensagens(data.mensagens || []);
+      setTemMaisHistorico(!!data.temMaisHistorico);
+
+      if (inicioJanela) {
+        setInicioJanelaHistorico(inicioJanela);
+      }
+
+      if (fimJanela) {
+        setFimJanelaHistorico(fimJanela);
+      }
     } catch {
       setErro("Erro ao carregar mensagens");
     } finally {
       if (!silencioso) {
         setLoadingMensagens(false);
       }
+    }
+  }
+
+  async function marcarConversaComoLida(conversaId: string) {
+    try {
+      await fetch(`/api/conversas/${conversaId}/marcar-lida`, {
+        method: "POST",
+      });
+    } catch {}
+  }
+
+  async function carregarMaisHistorico() {
+    if (
+      !conversaSelecionada?.id ||
+      carregandoMaisHistorico ||
+      !inicioJanelaHistorico ||
+      !fimJanelaHistorico
+    ) {
+      return;
+    }
+
+    try {
+      setCarregandoMaisHistorico(true);
+
+      const container = mensagensRef.current;
+      if (container) {
+        restaurarScrollHistoricoRef.current = {
+          scrollTop: container.scrollTop,
+          scrollHeight: container.scrollHeight,
+        };
+      }
+
+      impedirAutoScrollRef.current = true;
+      forcarScrollParaFinalRef.current = false;
+
+      const novoInicio = new Date(inicioJanelaHistorico);
+      novoInicio.setHours(novoInicio.getHours() - 24);
+
+      const novoInicioIso = novoInicio.toISOString();
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        novoInicioIso,
+        fimJanelaHistorico
+      );
+    } finally {
+      setCarregandoMaisHistorico(false);
     }
   }
 
@@ -2232,7 +2325,14 @@ export default function ConversasPage() {
       setAcaoAberta(null);
 
       await carregarConversas();
-      await carregarMensagens(conversaSelecionada.id, true);
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
     } catch {
       setErro("Erro ao assumir conversa");
     } finally {
@@ -2294,9 +2394,25 @@ export default function ConversasPage() {
 
       setMensagemSucesso(data.message || "Mensagem enviada com sucesso.");
 
+      const listaAtualizada = await carregarConversas(true);
+      const conversaAtualizada = listaAtualizada.find(
+        (c: Conversa) => c.id === conversaSelecionada.id
+      );
+
+      const novoFimJanela =
+        atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
+        fimJanelaHistorico;
+
+      forcarScrollParaFinalRef.current = true;
       impedirAutoScrollRef.current = false;
-      await carregarMensagens(conversaSelecionada.id, true);
-      await carregarConversas();
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        novoFimJanela
+      );
     } catch {
       setErro("Erro ao enviar mensagem");
     } finally {
@@ -2336,7 +2452,13 @@ export default function ConversasPage() {
       await carregarConversas();
 
       if (conversaSelecionada?.id) {
-        await carregarMensagens(conversaSelecionada.id, true);
+        await carregarMensagens(
+          conversaSelecionada.id,
+          true,
+          protocoloSelecionadoId,
+          inicioJanelaHistorico,
+          fimJanelaHistorico
+        );
       }
     } catch {
       setErro("Erro ao atualizar conversa");
@@ -2382,7 +2504,14 @@ export default function ConversasPage() {
       setAcaoAberta(null);
 
       await carregarConversas();
-      await carregarMensagens(conversaSelecionada.id, true);
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
     } catch {
       setErro("Erro ao transferir conversa");
     } finally {
@@ -2425,7 +2554,14 @@ export default function ConversasPage() {
       setAcaoAberta(null);
 
       await carregarConversas();
-      await carregarMensagens(conversaSelecionada.id, true);
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
     } catch {
       setErro("Erro ao atribuir responsável");
     } finally {
@@ -2508,7 +2644,13 @@ export default function ConversasPage() {
       await carregarConversas();
 
       if (conversaSelecionada?.id) {
-        await carregarMensagens(conversaSelecionada.id, true);
+        await carregarMensagens(
+          conversaSelecionada.id,
+          true,
+          protocoloSelecionadoId,
+          inicioJanelaHistorico,
+          fimJanelaHistorico
+        );
       }
     } catch {
       setErro("Erro ao atualizar favorito");
@@ -2533,7 +2675,14 @@ export default function ConversasPage() {
 
       if (conversaSelecionada?.id) {
         impedirAutoScrollRef.current = true;
-        await carregarMensagens(conversaSelecionada.id, true);
+
+        await carregarMensagens(
+          conversaSelecionada.id,
+          true,
+          protocoloSelecionadoId,
+          inicioJanelaHistorico,
+          fimJanelaHistorico
+        );
       }
     } catch {
       setErro("Erro ao atualizar favorito da mensagem");
@@ -2812,7 +2961,14 @@ export default function ConversasPage() {
       setMensagemSucesso(data.message || "Etiqueta atualizada com sucesso");
 
       await carregarConversas(true);
-      await carregarMensagens(conversaSelecionada.id, true);
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
     } catch {
       setErro("Erro ao atualizar etiqueta da conversa");
     } finally {
@@ -3014,9 +3170,25 @@ export default function ConversasPage() {
       }
       setMensagemSucesso(data.message || "Mídia enviada com sucesso.");
 
+      const listaAtualizada = await carregarConversas(true);
+      const conversaAtualizada = listaAtualizada.find(
+        (c: Conversa) => c.id === conversaSelecionada.id
+      );
+
+      const novoFimJanela =
+        atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
+        fimJanelaHistorico;
+
+      forcarScrollParaFinalRef.current = true;
       impedirAutoScrollRef.current = false;
-      await carregarMensagens(conversaSelecionada.id, true);
-      await carregarConversas();
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        novoFimJanela
+      );
     } catch {
       setErro("Erro ao enviar mídia");
     } finally {
@@ -3091,7 +3263,17 @@ export default function ConversasPage() {
     setProtocoloSelecionadoId(null);
     setProtocoloSelecionadoNumero(null);
 
-    await carregarMensagens(conversaSelecionada.id, false, null);
+    const janelaInicial = calcularJanelaInicialPorUltimaMensagem(
+      conversaSelecionada.last_message_at
+    );
+
+    await carregarMensagens(
+      conversaSelecionada.id,
+      false,
+      null,
+      janelaInicial.inicio,
+      janelaInicial.fim
+    );
   }
 
   async function carregarTemplatesWhatsapp() {
@@ -3169,8 +3351,15 @@ export default function ConversasPage() {
       setMensagemSucesso(data.message || "Disparo enviado com sucesso.");
       setTemplateDisparoBody1("");
 
-      await carregarMensagens(conversaSelecionada.id, true);
       await carregarConversas();
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
     } catch {
       setErro("Erro ao enviar disparo individual");
     } finally {
@@ -3184,11 +3373,44 @@ export default function ConversasPage() {
     setAcaoAberta("encerrar");
   }
 
-
   function rolarParaFinal() {
     const el = mensagensRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }
+
+  function calcularJanelaInicialPorUltimaMensagem(ultimaMensagemAt?: string | null) {
+    if (!ultimaMensagemAt) {
+      return {
+        inicio: null,
+        fim: null,
+      };
+    }
+
+    const fim = new Date(ultimaMensagemAt);
+    const inicio = new Date(fim);
+    inicio.setHours(inicio.getHours() - 4);
+
+    return {
+      inicio: inicio.toISOString(),
+      fim: fim.toISOString(),
+    };
+  }
+
+  function atualizarFimDaJanelaHistorico(ultimaMensagemAt?: string | null) {
+    if (!ultimaMensagemAt) return null;
+    return new Date(ultimaMensagemAt).toISOString();
+  }
+
+  function verificarSeUsuarioEstaNoFinal() {
+    const el = mensagensRef.current;
+    if (!el) return true;
+
+    const margem = 80;
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - margem;
   }
 
   function scrollParaMensagem(mensagemId: string) {
@@ -3407,7 +3629,7 @@ export default function ConversasPage() {
   const conversasFiltradas = useMemo(() => {
     let lista = [...conversas];
 
-    if (statusFiltro !== "Tudo") {
+    if (statusFiltro !== "Todas") {
       lista = lista.filter((c) => c.status === statusFiltro);
     }
 
@@ -3549,13 +3771,27 @@ export default function ConversasPage() {
     return getUltimaMensagemRecebidaDoContato(mensagens);
   }, [mensagens]);
 
+  const referenciaJanela24hComposer = useMemo(() => {
+    if (protocoloSelecionadoId) {
+      if (!conversaSelecionada?.last_message_at) return null;
+
+      return {
+        created_at: conversaSelecionada.last_message_at,
+      } as Pick<Mensagem, "created_at">;
+    }
+
+    return ultimaMensagemRecebidaDoContato;
+  }, [protocoloSelecionadoId, conversaSelecionada?.last_message_at, ultimaMensagemRecebidaDoContato]);
+
   const janela24hAberta = useMemo(() => {
-    return isJanela24hMetaAberta(ultimaMensagemRecebidaDoContato);
-  }, [ultimaMensagemRecebidaDoContato]);
+    return isJanela24hMetaAberta(
+      referenciaJanela24hComposer as Mensagem | null
+    );
+  }, [referenciaJanela24hComposer]);
 
   const tempoRestanteJanela24h = useMemo(() => {
-    return formatarTempoRestanteJanela(ultimaMensagemRecebidaDoContato?.created_at);
-  }, [ultimaMensagemRecebidaDoContato]);
+    return formatarTempoRestanteJanela(referenciaJanela24hComposer?.created_at);
+  }, [referenciaJanela24hComposer]);
 
   const templateSelecionado = useMemo(() => {
     return (
@@ -3616,7 +3852,9 @@ const templateFooterTexto = useMemo(() => {
     !!conversaSelecionada &&
     !conversaComBotAtivo &&
     (!janela24hAberta || !!conversaEncerrada);
-
+    
+  const composerPronto =
+    !!conversaSelecionada && !loadingMensagens;
 
   const mensagemAvisoDisparo = useMemo(() => {
     if (conversaEncerrada) {
@@ -3633,7 +3871,7 @@ const templateFooterTexto = useMemo(() => {
       return {
         titulo: "Janela de 24h encerrada",
         texto:
-          "A janela de atendimento expirou. Para continuar o contato com este cliente, envie um template aprovado.",
+          "A janela de atendimento expirou. Para voltar a conversar envie um disparo e aguarde a resposta do contato",
         icone: "🕒",
         variante: "warning" as const,
       };
@@ -3658,6 +3896,9 @@ const templateFooterTexto = useMemo(() => {
       return;
     }
 
+    const conversaId = conversaSelecionada.id;
+    const conversaLastMessageAt = conversaSelecionada.last_message_at;
+
     setInfoExpandida(false);
     setAbaPainelDireito("contato");
     setMenuContatoAberto(false);
@@ -3666,9 +3907,15 @@ const templateFooterTexto = useMemo(() => {
     setProtocoloSelecionadoNumero(null);
     setProtocolosConversa([]);
 
-    carregarMensagens(conversaSelecionada.id);
-    carregarProtocolosDaConversa();
-    carregarNotasDaConversa();
+    setInicioJanelaHistorico(null);
+    setFimJanelaHistorico(null);
+    setTemMaisHistorico(false);
+    setCarregandoMaisHistorico(false);
+
+    totalMensagensAnteriorRef.current = 0;
+    ultimaMensagemIdAnteriorRef.current = null;
+    usuarioEstavaNoFinalRef.current = true;
+    forcarScrollParaFinalRef.current = true;
 
     setNotasConversa([]);
     setNotaInterna("");
@@ -3676,7 +3923,33 @@ const templateFooterTexto = useMemo(() => {
     setNotaEditandoTexto("");
     resetarFormularioEtiqueta();
     setSelecionandoEtiqueta(false);
-  }, [conversaSelecionada?.id]);
+    setDisparoIndividualAberto(false);
+
+    async function iniciarConversaSelecionada() {
+      const janelaInicial = calcularJanelaInicialPorUltimaMensagem(
+        conversaLastMessageAt
+      );
+
+      await carregarMensagens(
+        conversaId,
+        false,
+        null,
+        janelaInicial.inicio,
+        janelaInicial.fim
+      );
+
+      if (conversaLidaRef.current !== conversaId) {
+        await marcarConversaComoLida(conversaId);
+        conversaLidaRef.current = conversaId;
+        await carregarConversas(true);
+      }
+
+      await carregarProtocolosDaConversa();
+      await carregarNotasDaConversa();
+    }
+
+    iniciarConversaSelecionada();
+    }, [conversaSelecionada?.id, conversaSelecionada?.last_message_at]);
 
     useEffect(() => {
       if (!conversaSelecionada?.id) return;
@@ -3684,14 +3957,43 @@ const templateFooterTexto = useMemo(() => {
       if (enviando) return;
       if (editandoCampo) return;
 
-      const interval = window.setInterval(() => {
+    const interval = window.setInterval(async () => {
+      const estavaNoFinal = verificarSeUsuarioEstaNoFinal();
+
+      if (estavaNoFinal) {
+        forcarScrollParaFinalRef.current = true;
+        impedirAutoScrollRef.current = false;
+      } else {
         impedirAutoScrollRef.current = true;
-        carregarMensagens(
+      }
+
+      const listaAtualizada = await carregarConversas(true);
+      const conversaAtualizada = listaAtualizada.find(
+        (c: Conversa) => c.id === conversaSelecionada.id
+      );
+
+      const novoFimJanela =
+        atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
+        fimJanelaHistorico;
+
+      if (protocoloSelecionadoId) {
+        await carregarMensagens(
           conversaSelecionada.id,
           true,
-          protocoloSelecionadoId
+          protocoloSelecionadoId,
+          null,
+          null
         );
-      }, 5000);
+      } else {
+        await carregarMensagens(
+          conversaSelecionada.id,
+          true,
+          null,
+          inicioJanelaHistorico,
+          novoFimJanela
+        );
+      }
+    }, 5000);
 
       return () => {
         window.clearInterval(interval);
@@ -3702,6 +4004,8 @@ const templateFooterTexto = useMemo(() => {
       abaVisivel,
       enviando,
       editandoCampo,
+      inicioJanelaHistorico,
+      fimJanelaHistorico,
     ]);
 
   useEffect(() => {
@@ -3711,7 +4015,7 @@ const templateFooterTexto = useMemo(() => {
 
     const interval = window.setInterval(() => {
       carregarConversas(true);
-    }, 10000);
+    }, 5000);
 
     return () => {
       window.clearInterval(interval);
@@ -3719,13 +4023,21 @@ const templateFooterTexto = useMemo(() => {
   }, [abaVisivel, enviando]);
 
   useEffect(() => {
+    if (restaurarScrollHistoricoRef.current) {
+      return;
+    }
+
+    if (forcarScrollParaFinalRef.current) {
+      forcarScrollParaFinalRef.current = false;
+      rolarParaFinal();
+      return;
+    }
+
     if (impedirAutoScrollRef.current) {
       impedirAutoScrollRef.current = false;
       return;
     }
-
-    rolarParaFinal();
-  }, [mensagens, loadingMensagens]);
+  }, [mensagens]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -3816,38 +4128,38 @@ const templateFooterTexto = useMemo(() => {
 
 
   useEffect(() => {
-  if (!conversaEncerrada) return;
+    if (!conversaEncerrada) return;
 
-  setMenuAnexoAberto(false);
-  setEmojiAberto(false);
+    setMenuAnexoAberto(false);
+    setEmojiAberto(false);
 
-  if (gravandoAudio) {
-    pararGravacaoAudio();
-  }
+    if (gravandoAudio) {
+      pararGravacaoAudio();
+    }
 
-  if (cameraAberta) {
-    fecharCamera();
-  }
+    if (cameraAberta) {
+      fecharCamera();
+    }
 
-  if (arquivoEnvioPreviewUrl) {
-    URL.revokeObjectURL(arquivoEnvioPreviewUrl);
-  }
+    if (arquivoEnvioPreviewUrl) {
+      URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+    }
 
-  setArquivoEnvio(null);
-  setArquivoEnvioPreviewUrl(null);
-  setLegendaArquivo("");
-  legendaArquivoRef.current = "";
-  setConteudo("");
-  conteudoRef.current = "";
+    setArquivoEnvio(null);
+    setArquivoEnvioPreviewUrl(null);
+    setLegendaArquivo("");
+    legendaArquivoRef.current = "";
+    setConteudo("");
+    conteudoRef.current = "";
 
-  if (editorRef.current) {
-    editorRef.current.textContent = "";
-  }
+    if (editorRef.current) {
+      editorRef.current.textContent = "";
+    }
 
-  if (legendaEditorRef.current) {
-    legendaEditorRef.current.textContent = "";
-  }
-}, [conversaEncerrada]);
+    if (legendaEditorRef.current) {
+      legendaEditorRef.current.textContent = "";
+    }
+  }, [conversaEncerrada]);
 
 
   useEffect(() => {
@@ -3860,6 +4172,20 @@ const templateFooterTexto = useMemo(() => {
   useEffect(() => {
     setParametros([]);
   }, [templateDisparoNome]);
+
+  useLayoutEffect(() => {
+    const container = mensagensRef.current;
+    const scrollSalvo = restaurarScrollHistoricoRef.current;
+
+    if (!container || !scrollSalvo) {
+      return;
+    }
+
+    const diferencaAltura = container.scrollHeight - scrollSalvo.scrollHeight;
+    container.scrollTop = scrollSalvo.scrollTop + diferencaAltura;
+
+    restaurarScrollHistoricoRef.current = null;
+  }, [mensagens]);
   
   return (
     <>
@@ -3918,7 +4244,7 @@ const templateFooterTexto = useMemo(() => {
                       onChange={(e) => setStatusFiltro(e.target.value)}
                       className={styles.filterSelect}
                     >
-                      <option value="Tudo">Tudo</option>
+                      <option value="Todas">Todas</option>
                       <option value="aberta">Abertas</option>
                       <option value="fila">Fila</option>
                       <option value="bot">Bot</option>
@@ -4036,14 +4362,14 @@ const templateFooterTexto = useMemo(() => {
 
                 <button
                   className={`${styles.quickChip} ${
-                    chipRapido === "Tudo" ? styles.quickChipActive : ""
+                    chipRapido === "Todas" ? styles.quickChipActive : ""
                   }`}
                   onClick={() => {
-                    setChipRapido("Tudo");
+                    setChipRapido("Todas");
                     setListaFiltroId(null);
                   }}
                 >
-                  Tudo
+                  Todas
                 </button>
 
                 <button
@@ -4072,7 +4398,7 @@ const templateFooterTexto = useMemo(() => {
                     }`}
                     onClick={() => {
                       setListaFiltroId((atual) => (atual === lista.id ? null : lista.id));
-                      setChipRapido("Tudo");
+                      setChipRapido("Todas");
                     }}
                   >
                     {lista.nome}
@@ -4130,9 +4456,11 @@ const templateFooterTexto = useMemo(() => {
                         <div className={styles.conversationPreviewRow}>
                           <p className={styles.previewLine}>{getPreviewConversa(c)}</p>
 
-                          {unreadCount > 0 && (
-                            <span className={styles.unreadBadge}>{unreadCount}</span>
-                          )}
+                          <div className={styles.unreadSlot}>
+                            {unreadCount > 0 && (
+                              <span className={styles.unreadBadge}>{unreadCount}</span>
+                            )}
+                          </div>
                         </div>
 
                         <div className={styles.conversationBottomLine}>
@@ -4601,6 +4929,24 @@ const templateFooterTexto = useMemo(() => {
                     <div className={styles.chatCenter}>
                       <div className={styles.timelineWrapper}>
                         <div ref={mensagensRef} className={styles.timelineArea}>
+                          {!loadingMensagens && temMaisHistorico && (
+                            <div className={styles.timelineInfoHis} style={{ textAlign: "center", marginBottom: 12 }}>
+                              <button
+                                type="button"
+                                className={styles.secondaryButton}
+                                onClick={carregarMaisHistorico}
+                                disabled={carregandoMaisHistorico}
+                                style={{
+                                  padding: "6px 12px",
+                                  fontSize: 12,
+                                  borderRadius: 999,
+                                  opacity: 0.9,
+                                }}
+                              >
+                                {carregandoMaisHistorico ? "Carregando..." : "Ver mais"}
+                              </button>
+                            </div>
+                          )}
                           {loadingMensagens ? (
                             <div className={styles.timelineInfo}>
                               Carregando mensagens...
@@ -4901,370 +5247,408 @@ const templateFooterTexto = useMemo(() => {
                             </div>
                           )}
 
-{conversaComBotAtivo ? (
-  <div className={styles.botStopArea}>
-    <div className={styles.botStopCard}>
-      <div className={styles.botStopInfo}>
-        <div className={styles.botStopIcon}>🤖</div>
 
-        <div>
-          <strong className={styles.botStopTitle}>
-            Automação em andamento
-          </strong>
+                        {!composerPronto ? (
+                          <div className={styles.timelineInfoSmall}>
+                            Carregando informações da conversa...
+                          </div>
+                          ) : conversaComBotAtivo ? (
+                            <div className={styles.botStopArea}>
+                              <div className={styles.botStopCard}>
+                                <div className={styles.botStopInfo}>
+                                  <div className={styles.botStopIcon}>🤖</div>
 
-          <p className={styles.botStopText}>
-            Esta conversa está com o bot ativo. Para assumir o atendimento
-            manualmente, clique em "Parar automação".
-          </p>
-        </div>
-      </div>
+                                  <div>
+                                    <strong className={styles.botStopTitle}>
+                                      Automação em andamento
+                                    </strong>
 
-      <button
-        type="button"
-        className={styles.dangerButton}
-        onClick={assumirConversa}
-        disabled={assumindo}
-      >
-        {assumindo ? "Parando automação..." : "Parar automação"}
-      </button>
-    </div>
-  </div>
-) : mostrarDisparoIndividual ? (
-<div className={styles.disparoQuickCard}>
-  <div className={styles.disparoQuickLeft}>
-    {mensagemAvisoDisparo && (
-      <div
-        className={`${styles.disparoQuickAlert} ${
-          mensagemAvisoDisparo.variante === "danger"
-            ? styles.disparoQuickAlertDanger
-            : styles.disparoQuickAlertWarning
-        }`}
-      >
-        <div className={styles.disparoQuickAlertIcon}>
-          {mensagemAvisoDisparo.icone}
-        </div>
+                                    <p className={styles.botStopText}>
+                                      Esta conversa está com o bot ativo. Para assumir o atendimento
+                                      manualmente, clique em "Parar automação".
+                                    </p>
+                                  </div>
+                                </div>
 
-        <div className={styles.disparoQuickAlertContent}>
-          <strong className={styles.disparoQuickAlertTitle}>
-            {mensagemAvisoDisparo.titulo}
-          </strong>
+                                <button
+                                  type="button"
+                                  className={styles.dangerButton}
+                                  onClick={assumirConversa}
+                                  disabled={assumindo}
+                                >
+                                  {assumindo ? "Parando automação..." : "Parar automação"}
+                                </button>
+                              </div>
+                            </div>
+                          ) : mostrarDisparoIndividual ? (
+                            <div className={styles.disparoCard}>
+                              <div className={styles.disparoCardResumo}>
+                                <div className={styles.disparoCardResumoLeft}>
+                                  {mensagemAvisoDisparo && (
+                                    <div
+                                      className={`${styles.disparoAlertCompact} ${
+                                        mensagemAvisoDisparo.variante === "danger"
+                                          ? styles.disparoAlertCompactDanger
+                                          : styles.disparoAlertCompactWarning
+                                      }`}
+                                    >
+                                      <div className={styles.disparoAlertCompactIcon}>
+                                        {mensagemAvisoDisparo.icone}
+                                      </div>
 
-          <p className={styles.disparoQuickAlertText}>
-            {mensagemAvisoDisparo.texto}
-          </p>
-        </div>
-      </div>
-    )}
+                                      <div className={styles.disparoAlertCompactContent}>
+                                        <strong className={styles.disparoAlertCompactTitle}>
+                                          {mensagemAvisoDisparo.titulo}
+                                        </strong>
 
-    <div className={styles.disparoQuickTopRow}>
-      <select
-        className={styles.disparoQuickSelect}
-        value={templateDisparoId}
-        onChange={(e) => {
-          const idSelecionado = e.target.value;
-          setTemplateDisparoId(idSelecionado);
+                                        <p className={styles.disparoAlertCompactText}>
+                                          {mensagemAvisoDisparo.texto}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
 
-          const template = templatesWhatsapp.find((t) => t.id === idSelecionado);
-          setTemplateDisparoNome(template?.nome || "");
-        }}
-      >
-        <option value="">
-          {carregandoTemplatesWhatsapp
-            ? "Carregando templates..."
-            : "Selecionar template"}
-        </option>
+                                <div className={styles.disparoCardResumoRight}>
+                                  <button
+                                    type="button"
+                                    className={styles.disparoExpandButton}
+                                    onClick={() => setDisparoIndividualAberto((prev) => !prev)}
+                                  >
+                                    {disparoIndividualAberto
+                                      ? "Ocultar disparo individual"
+                                      : "Fazer disparo individual"}
+                                  </button>
+                                </div>
+                              </div>
 
-        {templatesWhatsapp.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.nome}
-          </option>
-        ))}
-      </select>
+                              {disparoIndividualAberto && (
+                                <div className={styles.disparoCardExpandido}>
+                                  <div className={styles.disparoFormCard}>
+                                    <div className={styles.disparoFormHeader}>
+                                      <div>
+                                        <h4 className={styles.disparoFormTitle}>Disparo individual</h4>
+                                        <p className={styles.disparoFormSubtitle}>
+                                          Selecione um template aprovado e envie para este contato.
+                                        </p>
+                                      </div>
+                                    </div>
 
-      <button
-        type="button"
-        className={styles.disparoQuickNewButton}
-        onClick={() => {
-          window.location.href = "/configuracoes/templates-whatsapp";
-        }}
-      >
-        + Novo
-      </button>
-    </div>
+                                    <div className={styles.disparoQuickTopRow}>
+                                      <select
+                                        className={styles.disparoQuickSelect}
+                                        value={templateDisparoId}
+                                        onChange={(e) => {
+                                          const idSelecionado = e.target.value;
+                                          setTemplateDisparoId(idSelecionado);
 
-    {quantidadeParametrosBody > 0 && (
-      <div className={styles.disparoParams}>
-        {Array.from({ length: quantidadeParametrosBody }).map((_, i) => (
-          <input
-            key={i}
-            className={styles.disparoInput}
-            placeholder={`Parâmetro ${i + 1}`}
-            value={parametros[i] || ""}
-            onChange={(e) => atualizarParametro(i, e.target.value)}
-          />
-        ))}
-      </div>
-    )}
+                                          const template = templatesWhatsapp.find(
+                                            (t) => t.id === idSelecionado
+                                          );
+                                          setTemplateDisparoNome(template?.nome || "");
+                                        }}
+                                      >
+                                        <option value="">
+                                          {carregandoTemplatesWhatsapp
+                                            ? "Carregando templates..."
+                                            : "Selecionar template"}
+                                        </option>
 
-    <div className={styles.disparoQuickBottomRow}>
-      <div className={styles.disparoQuickTarget}>
-        <span className={styles.disparoQuickTargetLabel}>Destino</span>
-        <strong className={styles.disparoQuickTargetName}>
-          {conversaSelecionada.contatos?.nome || "Contato"}
-        </strong>
-        <span className={styles.disparoQuickTargetPhone}>
-          {conversaSelecionada.contatos?.telefone || "Sem telefone"}
-        </span>
-      </div>
+                                        {templatesWhatsapp.map((t) => (
+                                          <option key={t.id} value={t.id}>
+                                            {t.nome}
+                                          </option>
+                                        ))}
+                                      </select>
 
-      <button
-        type="button"
-        className={styles.disparoQuickSendButton}
-        onClick={enviarDisparoIndividual}
-        disabled={
-          enviandoDisparoIndividual ||
-          !templateDisparoId.trim() ||
-          !conversaSelecionada?.contatos?.telefone
-        }
-      >
-        {enviandoDisparoIndividual ? "Enviando..." : "Enviar"}
-      </button>
-    </div>
-  </div>
+                                      <button
+                                        type="button"
+                                        className={styles.disparoQuickNewButton}
+                                        onClick={() => {
+                                          window.location.href = "/configuracoes/templates-whatsapp";
+                                        }}
+                                      >
+                                        + Novo
+                                      </button>
+                                    </div>
 
-  <div className={styles.disparoTemplatePreviewCard}>
-    <div className={styles.disparoTemplatePreviewHeader}>
-      <div>
-        <h4 className={styles.disparoTemplatePreviewName}>
-          {templateSelecionado?.nome || "Template não selecionado"}
-        </h4>
+                                    {quantidadeParametrosBody > 0 && (
+                                      <div className={styles.disparoParams}>
+                                        {Array.from({ length: quantidadeParametrosBody }).map((_, i) => (
+                                          <input
+                                            key={i}
+                                            className={styles.disparoInput}
+                                            placeholder={`Parâmetro ${i + 1}`}
+                                            value={parametros[i] || ""}
+                                            onChange={(e) => atualizarParametro(i, e.target.value)}
+                                          />
+                                        ))}
+                                      </div>
+                                    )}
 
-        <p className={styles.disparoTemplatePreviewMeta}>
-          Categoria:{" "}
-          <strong>
-            {templateSelecionado?.categoria || "Não informada"}
-          </strong>
-          {" • "}
-          Idioma:{" "}
-          <strong>
-            {templateSelecionado?.idioma || templateSelecionado?.payload?.language || "—"}
-          </strong>
-        </p>
-      </div>
+                                    <div className={styles.disparoQuickBottomRow}>
+                                      <div className={styles.disparoQuickTarget}>
+                                        <span className={styles.disparoQuickTargetLabel}>Destino</span>
+                                        <strong className={styles.disparoQuickTargetName}>
+                                          {conversaSelecionada.contatos?.nome || "Contato"}
+                                        </strong>
+                                        <span className={styles.disparoQuickTargetPhone}>
+                                          {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                                        </span>
+                                      </div>
 
-      <span className={styles.disparoTemplateStatusBadge}>
-        Aprovado
-      </span>
-    </div>
+                                      <button
+                                        type="button"
+                                        className={styles.disparoQuickSendButton}
+                                        onClick={enviarDisparoIndividual}
+                                        disabled={
+                                          enviandoDisparoIndividual ||
+                                          !templateDisparoId.trim() ||
+                                          !conversaSelecionada?.contatos?.telefone
+                                        }
+                                      >
+                                        {enviandoDisparoIndividual ? "Enviando..." : "Enviar"}
+                                      </button>
+                                    </div>
+                                  </div>
 
-    <div className={styles.disparoTemplateSection}>
-      <span className={styles.disparoTemplateSectionLabel}>HEADER</span>
-      <div className={styles.disparoTemplateSectionBox}>
-        {templateHeaderTexto || "Sem header"}
-      </div>
-    </div>
+                                  <div className={styles.disparoTemplatePreviewCard}>
+                                    <div className={styles.disparoTemplatePreviewHeader}>
+                                      <div>
+                                        <h4 className={styles.disparoTemplatePreviewName}>
+                                          {templateSelecionado?.nome || "Template não selecionado"}
+                                        </h4>
 
-    <div className={styles.disparoTemplateSection}>
-      <span className={styles.disparoTemplateSectionLabel}>BODY</span>
-      <div className={styles.disparoTemplateSectionBox}>
-        {templateBodyTexto || "Sem body"}
-      </div>
-    </div>
+                                        <p className={styles.disparoTemplatePreviewMeta}>
+                                          Categoria:{" "}
+                                          <strong>
+                                            {templateSelecionado?.categoria || "Não informada"}
+                                          </strong>
+                                          {" • "}
+                                          Idioma:{" "}
+                                          <strong>
+                                            {templateSelecionado?.idioma ||
+                                              templateSelecionado?.payload?.language ||
+                                              "—"}
+                                          </strong>
+                                        </p>
+                                      </div>
 
-    <div className={styles.disparoTemplateSection}>
-      <span className={styles.disparoTemplateSectionLabel}>FOOTER</span>
-      <div className={styles.disparoTemplateSectionBox}>
-        {templateFooterTexto || "Sem footer"}
-      </div>
-    </div>
+                                      <span className={styles.disparoTemplateStatusBadge}>
+                                        Aprovado
+                                      </span>
+                                    </div>
 
-    <div className={styles.disparoTemplateHintBox}>
-      Este template usa <strong>{quantidadeParametrosBody}</strong> variável(is).
-      No modelo atual, se existir variável, o sistema envia os valores preenchidos
-      nos parâmetros acima.
-    </div>
-  </div>
-</div>
-) : (
-  <>
-    <div className={styles.composerRow}>
-      {/* ESQUERDA */}
-      <div className={styles.composerLeft}>
-        <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
-          <button
-            type="button"
-            className={styles.toolButton}
-            onClick={() => setMenuAnexoAberto((prev) => !prev)}
-            title="Anexos"
-          >
-            ＋
-          </button>
+                                    <div className={styles.disparoTemplateSection}>
+                                      <span className={styles.disparoTemplateSectionLabel}>HEADER</span>
+                                      <div className={styles.disparoTemplateSectionBox}>
+                                        {templateHeaderTexto || "Sem header"}
+                                      </div>
+                                    </div>
 
-          {menuAnexoAberto && (
-            <div className={styles.attachmentMenuDropdown}>
-              <button
-                type="button"
-                className={styles.attachmentMenuItem}
-                onClick={() => {
-                  setMenuAnexoAberto(false);
-                  documentoInputRef.current?.click();
-                }}
-              >
-                <span className={styles.attachmentMenuIcon}>📎</span>
-                <span>Documento</span>
-              </button>
+                                    <div className={styles.disparoTemplateSection}>
+                                      <span className={styles.disparoTemplateSectionLabel}>BODY</span>
+                                      <div className={styles.disparoTemplateSectionBox}>
+                                        {templateBodyTexto || "Sem body"}
+                                      </div>
+                                    </div>
 
-              <button
-                type="button"
-                className={styles.attachmentMenuItem}
-                onClick={() => {
-                  setMenuAnexoAberto(false);
-                  midiaInputRef.current?.click();
-                }}
-              >
-                <span className={styles.attachmentMenuIcon}>🖼️</span>
-                <span>Foto ou vídeo</span>
-              </button>
+                                    <div className={styles.disparoTemplateSection}>
+                                      <span className={styles.disparoTemplateSectionLabel}>FOOTER</span>
+                                      <div className={styles.disparoTemplateSectionBox}>
+                                        {templateFooterTexto || "Sem footer"}
+                                      </div>
+                                    </div>
 
-              <button
-                type="button"
-                className={styles.attachmentMenuItem}
-                onClick={() => {
-                  setMenuAnexoAberto(false);
-                  audioInputRef.current?.click();
-                }}
-              >
-                <span className={styles.attachmentMenuIcon}>🎵</span>
-                <span>Áudio</span>
-              </button>
-            </div>
-          )}
-        </div>
+                                    <div className={styles.disparoTemplateHintBox}>
+                                      Este template usa <strong>{quantidadeParametrosBody}</strong> variável(is).
+                                      No modelo atual, se existir variável, o sistema envia os valores preenchidos
+                                      nos parâmetros acima.
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <>
+                              <div className={styles.composerRow}>
+                                {/* ESQUERDA */}
+                                <div className={styles.composerLeft}>
+                                  <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
+                                    <button
+                                      type="button"
+                                      className={styles.toolButton}
+                                      onClick={() => setMenuAnexoAberto((prev) => !prev)}
+                                      title="Anexos"
+                                    >
+                                      ＋
+                                    </button>
 
-        <div className={styles.emojiPickerWrap}>
-          <button
-            type="button"
-            className={`${styles.toolButton} ${styles.emojiButton} ${
-              emojiAberto ? styles.emojiButtonActive : ""
-            }`}
-            onClick={() => setEmojiAberto((prev) => !prev)}
-            title="Emoji"
-            aria-label="Abrir emojis"
-          >
-            <span className={styles.emojiButtonIcon}>😊</span>
-          </button>
-        </div>
-      </div>
+                                    {menuAnexoAberto && (
+                                      <div className={styles.attachmentMenuDropdown}>
+                                        <button
+                                          type="button"
+                                          className={styles.attachmentMenuItem}
+                                          onClick={() => {
+                                            setMenuAnexoAberto(false);
+                                            documentoInputRef.current?.click();
+                                          }}
+                                        >
+                                          <span className={styles.attachmentMenuIcon}>📎</span>
+                                          <span>Documento</span>
+                                        </button>
 
-      {emojiAberto && (
-        <div className={styles.emojiPicker}>
-          <EmojiPicker
-            onEmojiClick={(emojiData) => {
-              inserirEmojiNoEditor(emojiData.emoji);
-            }}
-          />
-        </div>
-      )}
+                                        <button
+                                          type="button"
+                                          className={styles.attachmentMenuItem}
+                                          onClick={() => {
+                                            setMenuAnexoAberto(false);
+                                            midiaInputRef.current?.click();
+                                          }}
+                                        >
+                                          <span className={styles.attachmentMenuIcon}>🖼️</span>
+                                          <span>Foto ou vídeo</span>
+                                        </button>
 
-      {/* CAMPO */}
-      <div className={styles.composerCenter}>
-        <div
-          ref={arquivoEnvio ? legendaEditorRef : editorRef}
-          className={styles.messageEditor}
-          contentEditable={podeEnviarMensagem && !enviando && !gravandoAudio}
-          suppressContentEditableWarning
-          data-placeholder={
-            !podeEnviarMensagem
-              ? "Você não pode responder esta conversa"
-              : arquivoEnvio
-              ? "Digite uma legenda..."
-              : gravandoAudio
-              ? "Gravando áudio..."
-              : "Digite uma mensagem"
-          }
-          onInput={(e) => {
-            const texto = (e.currentTarget as HTMLDivElement).textContent || "";
+                                        <button
+                                          type="button"
+                                          className={styles.attachmentMenuItem}
+                                          onClick={() => {
+                                            setMenuAnexoAberto(false);
+                                            audioInputRef.current?.click();
+                                          }}
+                                        >
+                                          <span className={styles.attachmentMenuIcon}>🎵</span>
+                                          <span>Áudio</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
 
-            if (arquivoEnvio) {
-              legendaArquivoRef.current = texto;
-            } else {
-              conteudoRef.current = texto;
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
+                                  <div className={styles.emojiPickerWrap}>
+                                    <button
+                                      type="button"
+                                      className={`${styles.toolButton} ${styles.emojiButton} ${
+                                        emojiAberto ? styles.emojiButtonActive : ""
+                                      }`}
+                                      onClick={() => setEmojiAberto((prev) => !prev)}
+                                      title="Emoji"
+                                      aria-label="Abrir emojis"
+                                    >
+                                      <span className={styles.emojiButtonIcon}>😊</span>
+                                    </button>
+                                  </div>
+                                </div>
 
-              if (enviando || !podeEnviarMensagem || gravandoAudio) return;
+                                {emojiAberto && (
+                                  <div className={styles.emojiPicker}>
+                                    <EmojiPicker
+                                      onEmojiClick={(emojiData) => {
+                                        inserirEmojiNoEditor(emojiData.emoji);
+                                      }}
+                                    />
+                                  </div>
+                                )}
 
-              if (arquivoEnvio) {
-                enviarMidia();
-                return;
-              }
+                                {/* CAMPO */}
+                                <div className={styles.composerCenter}>
+                                  <div
+                                    ref={arquivoEnvio ? legendaEditorRef : editorRef}
+                                    className={styles.messageEditor}
+                                    contentEditable={podeEnviarMensagem && !enviando && !gravandoAudio}
+                                    suppressContentEditableWarning
+                                    data-placeholder={
+                                      !podeEnviarMensagem
+                                        ? "Você não pode responder esta conversa"
+                                        : arquivoEnvio
+                                        ? "Digite uma legenda..."
+                                        : gravandoAudio
+                                        ? "Gravando áudio..."
+                                        : "Digite uma mensagem"
+                                    }
+                                    onInput={(e) => {
+                                      const texto = (e.currentTarget as HTMLDivElement).textContent || "";
 
-              enviarMensagem();
-            }
-          }}
-          role="textbox"
-          aria-multiline="true"
-        />
-      </div>
+                                      if (arquivoEnvio) {
+                                        legendaArquivoRef.current = texto;
+                                      } else {
+                                        conteudoRef.current = texto;
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
 
-      {/* DIREITA */}
-      <div className={styles.composerRight}>
-        <button
-          type="button"
-          onClick={abrirCamera}
-          className={styles.toolButton}
-          title="Câmera"
-        >
-          📷
-        </button>
+                                        if (enviando || !podeEnviarMensagem || gravandoAudio) return;
 
-        <button
-          type="button"
-          onClick={() => {
-            if (gravandoAudio) {
-              pararGravacaoAudio();
-              return;
-            }
+                                        if (arquivoEnvio) {
+                                          enviarMidia();
+                                          return;
+                                        }
 
-            iniciarGravacaoAudio();
-          }}
-          disabled={!podeEnviarMensagem || enviando}
-          className={styles.toolButton}
-          title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
-        >
-          {gravandoAudio ? "⏹" : "🎤"}
-        </button>
+                                        enviarMensagem();
+                                      }
+                                    }}
+                                    role="textbox"
+                                    aria-multiline="true"
+                                  />
+                                </div>
 
-        <button
-          onClick={() => {
-            if (arquivoEnvio) {
-              enviarMidia();
-              return;
-            }
+                                {/* DIREITA */}
+                                <div className={styles.composerRight}>
+                                  <button
+                                    type="button"
+                                    onClick={abrirCamera}
+                                    className={styles.toolButton}
+                                    title="Câmera"
+                                  >
+                                    📷
+                                  </button>
 
-            enviarMensagem();
-          }}
-          disabled={
-            enviando ||
-            !podeEnviarMensagem ||
-            gravandoAudio ||
-            (!arquivoEnvio && !conteudoRef.current.trim())
-          }
-          className={styles.sendButton}
-        >
-          {enviando ? "Enviando..." : arquivoEnvio ? "Enviar" : "Enviar"}
-        </button>
-      </div>
-    </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (gravandoAudio) {
+                                        pararGravacaoAudio();
+                                        return;
+                                      }
 
-    <p className={styles.footerHint}>
-      Enter envia • Shift + Enter quebra linha
-    </p>
-  </>
-)}
+                                      iniciarGravacaoAudio();
+                                    }}
+                                    disabled={!podeEnviarMensagem || enviando}
+                                    className={styles.toolButton}
+                                    title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
+                                  >
+                                    {gravandoAudio ? "⏹" : "🎤"}
+                                  </button>
+
+                                  <button
+                                    onClick={() => {
+                                      if (arquivoEnvio) {
+                                        enviarMidia();
+                                        return;
+                                      }
+
+                                      enviarMensagem();
+                                    }}
+                                    disabled={
+                                      enviando ||
+                                      !podeEnviarMensagem ||
+                                      gravandoAudio ||
+                                      (!arquivoEnvio && !conteudoRef.current.trim())
+                                    }
+                                    className={styles.sendButton}
+                                  >
+                                    {enviando ? "Enviando..." : arquivoEnvio ? "Enviar" : "Enviar"}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <p className={styles.footerHint}>
+                                Enter envia • Shift + Enter quebra linha
+                              </p>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -5718,7 +6102,17 @@ const templateFooterTexto = useMemo(() => {
 
                                 setProtocoloSelecionadoId(null);
                                 setProtocoloSelecionadoNumero(null);
-                                await carregarMensagens(conversaSelecionada.id, false, null);
+                                const janelaInicial = calcularJanelaInicialPorUltimaMensagem(
+                                  conversaSelecionada.last_message_at
+                                );
+
+                                await carregarMensagens(
+                                  conversaSelecionada.id,
+                                  false,
+                                  null,
+                                  janelaInicial.inicio,
+                                  janelaInicial.fim
+                                );
                               }}
                             >
                               Ver conversa completa
@@ -5783,7 +6177,18 @@ const templateFooterTexto = useMemo(() => {
 
                                       setProtocoloSelecionadoId(protocolo.id);
                                       setProtocoloSelecionadoNumero(protocolo.protocolo);
-                                      await carregarMensagens(conversaSelecionada.id, false, protocolo.id);
+
+                                      setInicioJanelaHistorico(null);
+                                      setFimJanelaHistorico(null);
+                                      setTemMaisHistorico(false);
+
+                                      await carregarMensagens(
+                                        conversaSelecionada.id,
+                                        false,
+                                        protocolo.id,
+                                        null,
+                                        null
+                                      );
                                     }}
                                   >
                                     Ver mensagens deste protocolo

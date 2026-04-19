@@ -8,14 +8,14 @@
 
 .chatLayout {
   display: grid;
-  grid-template-columns: 380px minmax(0, 1fr);
+  grid-template-columns: 385px minmax(0, 1fr);
   gap: 16px;
   flex: 1;
   min-height: 0;
 }
 
 .chatLayoutWithPanel {
-  grid-template-columns: 380px minmax(0, 1fr);
+  grid-template-columns: 385px minmax(0, 1fr);
 }
 
 .sidebar,
@@ -326,6 +326,7 @@
   cursor: pointer;
   text-align: left;
   transition: 0.2s ease;
+  align-items: center;
 }
 
 .conversationItem:hover {
@@ -371,6 +372,10 @@
 
 .conversationMain {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
 }
 
 .conversationTopLine,
@@ -384,6 +389,10 @@
 
 .conversationPreviewRow {
   margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
 }
 
 .conversationBottomLine {
@@ -445,24 +454,37 @@
   flex: 1;
   min-width: 0;
   font-size: 13px;
+  line-height: 20px;
   color: #475569;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
+.unreadSlot {
+  width: 34px;
+  min-width: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+
 .unreadBadge {
-  min-width: 22px;
-  height: 22px;
+  min-width: 20px;
+  height: 20px;
   padding: 0 6px;
-  border-radius: 999px;
-  background: #0f766e;
-  color: #ffffff;
-  font-size: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1;
+  border-radius: 999px;
+  background-color: #22c55e;
+  color: #ffffff;
+  flex-shrink: 0;
 }
 
 .statusMiniBadge,
@@ -507,7 +529,7 @@
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: px;
+  gap: 0px;
 }
 
 .chatMainColumn {
@@ -3526,13 +3548,12 @@
 }
 
 
-.disparoQuickCard {
-  display: grid;
-  grid-template-columns: minmax(320px, 0.92fr) minmax(420px, 1.08fr);
-  gap: 16px;
-  align-items: stretch;
-  padding: 16px;
-  border-radius: 22px;
+.disparoCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96));
   box-shadow:
@@ -3540,52 +3561,130 @@
     inset 0 1px 0 rgba(255,255,255,0.75);
 }
 
-.disparoQuickLeft {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.disparoCardResumo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.disparoCardResumoLeft {
   min-width: 0;
 }
 
-.disparoQuickAlert {
+.disparoCardResumoRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.disparoAlertCompact {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid rgba(239, 68, 68, 0.14);
-  background: linear-gradient(180deg, rgba(254, 242, 242, 0.95), rgba(255, 247, 237, 0.95));
+  border: 1px solid transparent;
 }
 
-.disparoQuickAlertIcon {
-  width: 34px;
-  height: 34px;
+.disparoAlertCompactDanger {
+  background: linear-gradient(80deg, #fca8a8f5, #fce3e3f5);
+  border-color: rgb(251, 102, 102);
+}
+
+.disparoAlertCompactWarning {
+  background: linear-gradient(80deg, #fca8a8f5, #fce3e3f5);
+  border-color: rgb(251, 102, 102);
+}
+
+.disparoAlertCompactIcon {
+  width: 38px;
+  height: 38px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(239, 68, 68, 0.10);
-  font-size: 16px;
   flex-shrink: 0;
+  font-size: 18px;
+  background: rgba(255, 194, 194, 0.6);
 }
 
-.disparoQuickAlertContent {
+.disparoAlertCompactContent {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
-.disparoQuickAlertTitle {
+.disparoAlertCompactTitle {
   font-size: 14px;
-  color: #991b1b;
-  line-height: 1.2;
+  line-height: 1.25;
+  color: #0f172a;
 }
 
-.disparoQuickAlertText {
+.disparoAlertCompactText {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #7f1d1d;
+  color: #2f2f2f;
+}
+
+.disparoExpandButton {
+  height: 46px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #0f172a, #1e293b);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+.disparoExpandButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.20);
+}
+
+.disparoCardExpandido {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.05fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.disparoFormCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(255,255,255,0.82);
+}
+
+.disparoFormHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.disparoFormTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.disparoFormSubtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #64748b;
 }
 
 .disparoQuickTopRow {
@@ -3597,7 +3696,7 @@
 
 .disparoQuickSelect {
   width: 100%;
-  height: 44px;
+  height: 46px;
   padding: 0 14px;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.22);
@@ -3615,7 +3714,7 @@
 }
 
 .disparoQuickNewButton {
-  height: 44px;
+  height: 46px;
   padding: 0 14px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
@@ -3640,9 +3739,9 @@
 }
 
 .disparoInput {
-  height: 40px;
+  height: 42px;
   padding: 0 12px;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: #fff;
   color: #0f172a;
@@ -3660,6 +3759,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-top: 2px;
 }
 
 .disparoQuickTarget {
@@ -3722,7 +3822,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 14px;
+  padding: 16px;
   border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: linear-gradient(180deg, rgba(248,250,252,0.98), rgba(241,245,249,0.96));
@@ -3798,7 +3898,19 @@
 }
 
 @media (max-width: 980px) {
-  .disparoQuickCard {
+  .disparoCardResumo {
+    grid-template-columns: 1fr;
+  }
+
+  .disparoCardResumoRight {
+    justify-content: stretch;
+  }
+
+  .disparoExpandButton {
+    width: 100%;
+  }
+
+  .disparoCardExpandido {
     grid-template-columns: 1fr;
   }
 
