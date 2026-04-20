@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import styles from "./comecar.module.css";
 
 type TipoOferta = "normal" | "vip" | "jv";
 
 export default function ComecarPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -40,7 +39,12 @@ export default function ComecarPage() {
   }
 
   function obterTipoOfertaDaUrl(): TipoOferta {
-    const oferta = String(searchParams.get("oferta") ?? "")
+    if (typeof window === "undefined") {
+      return "normal";
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const oferta = String(params.get("oferta") ?? "")
       .trim()
       .toLowerCase();
 
@@ -206,31 +210,7 @@ export default function ComecarPage() {
               />
             </div>
 
-            {erro && (
-              <div className={styles.errorBox}>
-                <p className={styles.errorText}>{erro}</p>
-
-                {erro.includes("conta") && (
-                  <div className={styles.errorActions}>
-                    <button
-                      type="button"
-                      onClick={() => router.push("/login")}
-                      className={styles.errorButtonPrimary}
-                    >
-                      Fazer login
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => router.push("/recuperar-senha")}
-                      className={styles.errorButtonSecondary}
-                    >
-                      Recuperar senha
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            {erro && <p className={styles.error}>{erro}</p>}
 
             <button className={styles.button} disabled={loading}>
               {loading ? "Carregando..." : "Continuar"}
