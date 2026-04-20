@@ -1,208 +1,291 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { criarEmpresaSelfService } from "@/lib/usuarios/criar-empresa-self-service";
 
 const supabase = getSupabaseAdmin();
 
-type LeadCadastroRow = {
-  id: string;
-  nome: string;
+/* =========================
+   HELPERS
+========================= */
+
+function limparTelefone(valor: string | null | undefined) {
+  if (!valor) return "";
+  return valor.replace(/\D/g, "");
+}
+
+function normalizarEmail(valor: string | null | undefined) {
+  if (!valor) return "";
+  return valor.trim().toLowerCase();
+}
+
+function somenteDataValida(valor: string | null | undefined) {
+  if (!valor) return null;
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return null;
+  return data.toISOString();
+}
+
+function montarNomeEmpresa(lead: any, payload: any) {
+  const empresaLead = String(lead?.empresa ?? "").trim();
+  const nomeCliente = String(payload.customer?.name ?? "").trim();
+
+  if (empresaLead) return empresaLead;
+  if (nomeCliente) return nomeCliente;
+
+  return "Empresa Cliente";
+}
+
+/* =========================
+   BUSCAR / CRIAR LEAD
+========================= */
+
+async function buscarLeadCadastro(params: {
   email: string;
-  telefone: string | null;
-  empresa: string | null;
-  status: string;
-  plano_slug: string;
-  pago: boolean | null;
-  pago_em: string | null;
-  empresa_id: string | null;
-  usuario_id: string | null;
-};
+  telefone1: string;
+  telefone2: string;
+}) {
+  const { email, telefone1, telefone2 } = params;
+
+  if (email) {
+    const { data } = await supabase
+      .from("leads_cadastro")
+      .select("*")
+      .ilike("email", email)
+      .limit(1)
+      .maybeSingle();
+
+    if (data) return data;
+  }
+
+  const telefones = [telefone1, telefone2].filter(Boolean);
+
+  for (const telefone of telefones) {
+    const { data } = await supabase
+      .from("leads_cadastro")
+      .select("*")
+      .eq("telefone", telefone)
+      .limit(1)
+      .maybeSingle();
+
+    if (data) return data;
+  }
+
+  return null;
+}
+
+async function criarLeadAutomatico(payload: any) {
+  const { data, error } = await supabase
+    .from("leads_cadastro")
+    .insert({
+      nome: payload.customer?.name ?? "Cliente",
+      email: normalizarEmail(payload.customer?.email),
+      telefone: limparTelefone(
+        payload.customer?.phone_number || payload.customer?.phone
+      ),
+      empresa: payload.offer?.title ?? "Cliente Átomo",
+      status: "novo",
+      pago: false,
+      metadata_json: payload,
+      created_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  return data;
+}
+
+/* =========================
+   EMPRESA
+========================= */
+
+async function buscarPlanoIdPorSlug(planoSlug: string | null | undefined) {
+  if (!planoSlug) return null;
+
+  const { data } = await supabase
+    .from("planos")
+    .select("id")
+    .eq("slug", planoSlug)
+    .limit(1)
+    .maybeSingle();
+
+  return data?.id ?? null;
+}
+
+async function criarEmpresa(lead: any, payload: any) {
+  if (lead?.empresa_id) {
+    const { data } = await supabase
+      .from("empresas")
+      .select("*")
+      .eq("id", lead.empresa_id)
+      .maybeSingle();
+
+    if (data) return data;
+  }
+
+  const planoId = await buscarPlanoIdPorSlug(lead?.plano_slug);
+
+  const { data, error } = await supabase
+    .from("empresas")
+    .insert({
+      plano_id: planoId,
+      nome_fantasia: montarNomeEmpresa(lead, payload),
+      razao_social: montarNomeEmpresa(lead, payload),
+      documento: payload.customer?.document ?? null,
+      email: normalizarEmail(payload.customer?.email),
+      telefone: limparTelefone(
+        payload.customer?.phone_number || payload.customer?.phone
+      ),
+      nome_responsavel: payload.customer?.name ?? null,
+      status: "ativa",
+      timezone: "America/Sao_Paulo",
+      observacoes: "Criada automaticamente via webhook",
+    })
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  return data;
+}
+
+/* =========================
+   PAGAMENTO
+========================= */
+
+async function salvarPagamento(payload: any, leadId: string | null) {
+  const { data, error } = await supabase
+    .from("pagamentos")
+    .upsert(
+      {
+        transaction_id: payload.transaction?.id,
+        status: payload.status,
+        metodo: payload.method,
+        valor: payload.transaction?.amount,
+        valor_liquido: payload.transaction?.net_amount,
+        customer_email: normalizarEmail(payload.customer?.email),
+        customer_nome: payload.customer?.name,
+        lead_id: leadId,
+        payload,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "transaction_id" }
+    )
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  return data;
+}
+
+/* =========================
+   CONVITE AUTH
+========================= */
+
+async function enviarConviteAuth(params: {
+  email: string;
+  nome: string;
+  empresaId: string;
+  telefone?: string | null;
+}) {
+  const { email, nome, empresaId, telefone } = params;
+
+  const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/definir-senha`,
+    data: {
+      nome,
+      empresa_id: empresaId,
+      telefone: telefone ?? null,
+    },
+  });
+
+  if (error) throw new Error(error.message);
+}
+
+/* =========================
+   PROCESSAR PAGAMENTO
+========================= */
+
+async function processarPagamentoAprovado(lead: any, payload: any) {
+  const empresa = await criarEmpresa(lead, payload);
+
+  const email = normalizarEmail(lead.email || payload.customer?.email);
+
+  if (!email) {
+    throw new Error("Pagamento sem email válido");
+  }
+
+  await enviarConviteAuth({
+    email,
+    nome: lead.nome || payload.customer?.name,
+    empresaId: empresa.id,
+    telefone: limparTelefone(
+      lead.telefone ||
+        payload.customer?.phone_number ||
+        payload.customer?.phone
+    ),
+  });
+
+  await supabase
+    .from("leads_cadastro")
+    .update({
+      status: "pago",
+      pago: true,
+      pago_em: somenteDataValida(payload.paid_at) ?? new Date().toISOString(),
+      empresa_id: empresa.id,
+      atomopay_checkout_id: payload.transaction?.id,
+      atomopay_customer_id: payload.customer?.id,
+      metadata_json: payload,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", lead.id);
+}
+
+/* =========================
+   ROUTE
+========================= */
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    console.log("[ATOMOPAY WEBHOOK] Payload recebido:", JSON.stringify(body, null, 2));
+    console.log("[WEBHOOK ATOMO]", body);
 
-    const status = String(body?.status ?? "").trim().toLowerCase();
-    const email = String(body?.customer?.email ?? "").trim().toLowerCase();
-    const nome = String(body?.customer?.name ?? "").trim();
-    const telefone = String(body?.customer?.phone_number ?? "").trim();
+    const email = normalizarEmail(body.customer?.email);
+    const telefone1 = limparTelefone(body.customer?.phone);
+    const telefone2 = limparTelefone(body.customer?.phone_number);
 
-    if (!status) {
-      return NextResponse.json({ error: "Status não enviado." }, { status: 400 });
-    }
-
-    if (!email) {
-      return NextResponse.json({ error: "Email do cliente não enviado." }, { status: 400 });
-    }
-
-    const statusPagoAceitos = ["paid", "pago"];
-
-    const statusIgnorados = [
-      "waiting_payment",
-      "aguardando pagamento",
-      "processing",
-      "prossessing",
-      "authorized",
-      "refused",
-      "refunded",
-      "chargedback",
-      "chargeback",
-      "cancelado",
-      "falha",
-      "antifraud",
-      "pre chargeback",
-    ];
-
-    if (!statusPagoAceitos.includes(status)) {
-      if (statusIgnorados.includes(status)) {
-        console.log("[ATOMOPAY WEBHOOK] Status ignorado:", status);
-        return NextResponse.json({ ok: true, ignored: true });
-      }
-
-      console.log("[ATOMOPAY WEBHOOK] Status não tratado:", status);
-      return NextResponse.json({ ok: true, ignored: true });
-    }
-
-    const { data: leadPorEmail, error: leadEmailError } = await supabase
-      .from("leads_cadastro")
-      .select("*")
-      .eq("email", email)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<LeadCadastroRow>();
-
-    if (leadEmailError) {
-      console.error("[ATOMOPAY WEBHOOK] Erro ao buscar lead por email:", leadEmailError);
-      return NextResponse.json({ error: "Erro ao buscar lead." }, { status: 500 });
-    }
-
-    let lead = leadPorEmail;
-
-    if (!lead && telefone) {
-      const { data: leadPorTelefone, error: leadTelefoneError } = await supabase
-        .from("leads_cadastro")
-        .select("*")
-        .eq("telefone", telefone)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<LeadCadastroRow>();
-
-      if (leadTelefoneError) {
-        console.error(
-          "[ATOMOPAY WEBHOOK] Erro ao buscar lead por telefone:",
-          leadTelefoneError
-        );
-        return NextResponse.json({ error: "Erro ao buscar lead." }, { status: 500 });
-      }
-
-      lead = leadPorTelefone;
-    }
+    let lead = await buscarLeadCadastro({
+      email,
+      telefone1,
+      telefone2,
+    });
 
     if (!lead) {
-      console.error("[ATOMOPAY WEBHOOK] Lead não encontrado para email/telefone.");
-      return NextResponse.json({ ok: true, not_found: true });
+      lead = await criarLeadAutomatico(body);
     }
 
-    if (lead.status === "convertido" || lead.empresa_id || lead.usuario_id) {
-      console.log("[ATOMOPAY WEBHOOK] Lead já convertido:", lead.id);
-      return NextResponse.json({ ok: true, already_converted: true });
+    const pagamento = await salvarPagamento(body, lead?.id);
+
+    const status = String(body.status ?? body.transaction?.status ?? "")
+      .toLowerCase()
+      .trim();
+
+    if (status === "paid") {
+      await processarPagamentoAprovado(lead, body);
     }
 
-    const { data: usuarioAuthExistente, error: authExistenteError } =
-      await supabase.auth.admin.listUsers();
-
-    if (authExistenteError) {
-      console.error("[ATOMOPAY WEBHOOK] Erro ao listar usuários auth:", authExistenteError);
-      return NextResponse.json({ error: "Erro ao validar usuário auth." }, { status: 500 });
-    }
-
-    const usuarioMesmoEmail = usuarioAuthExistente.users.find(
-      (item) => item.email?.toLowerCase() === email
-    );
-
-    let authUserId: string | null = null;
-
-    if (usuarioMesmoEmail) {
-      authUserId = usuarioMesmoEmail.id;
-    } else {
-      const { data: novoAuthUser, error: novoAuthError } =
-        await supabase.auth.admin.createUser({
-          email,
-          email_confirm: false,
-          user_metadata: {
-            nome: nome || lead.nome,
-          },
-        });
-
-      if (novoAuthError || !novoAuthUser?.user) {
-        console.error("[ATOMOPAY WEBHOOK] Erro ao criar auth user:", novoAuthError);
-        return NextResponse.json(
-          { error: "Erro ao criar usuário de autenticação." },
-          { status: 500 }
-        );
-      }
-
-      authUserId = novoAuthUser.user.id;
-    }
-
-    if (!authUserId) {
-      return NextResponse.json(
-        { error: "Não foi possível definir o auth user." },
-        { status: 500 }
-      );
-    }
-
-    const resultadoCriacao = await criarEmpresaSelfService({
-      auth_user_id: authUserId,
-      nome_fantasia: lead.empresa || nome || lead.nome,
-      razao_social: "",
-      documento: "",
-      email_empresa: email,
-      telefone_empresa: telefone || lead.telefone || "",
-      nome_responsavel: nome || lead.nome,
-      nome_usuario: nome || lead.nome,
-      email_usuario: email,
-      plano_slug: lead.plano_slug || "basico",
+    return NextResponse.json({
+      ok: true,
+      lead_id: lead?.id,
+      pagamento_id: pagamento?.id,
     });
-
-    const { error: updateLeadError } = await supabase
-      .from("leads_cadastro")
-      .update({
-        status: "convertido",
-        pago: true,
-        pago_em: new Date().toISOString(),
-        empresa_id: resultadoCriacao.empresa_id,
-        usuario_id: resultadoCriacao.usuario_id,
-        updated_at: new Date().toISOString(),
-        metadata_json: body,
-      })
-      .eq("id", lead.id);
-
-    if (updateLeadError) {
-      console.error("[ATOMOPAY WEBHOOK] Erro ao atualizar lead:", updateLeadError);
-      return NextResponse.json(
-        { error: "Conta criada, mas falhou ao atualizar lead." },
-        { status: 500 }
-      );
-    }
-
-    console.log("[ATOMOPAY WEBHOOK] Lead convertido com sucesso:", {
-      lead_id: lead.id,
-      empresa_id: resultadoCriacao.empresa_id,
-      usuario_id: resultadoCriacao.usuario_id,
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("[ATOMOPAY WEBHOOK] Erro interno:", error);
+  } catch (error: any) {
+    console.error("[ERRO WEBHOOK ATOMO]", error);
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Erro interno no webhook.",
-      },
+      { ok: false, error: error.message },
       { status: 500 }
     );
   }

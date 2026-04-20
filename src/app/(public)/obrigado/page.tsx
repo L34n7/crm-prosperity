@@ -1,135 +1,87 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import styles from "./obrigado.module.css";
 
 export default function ObrigadoPage() {
   const router = useRouter();
 
+  const passos = [
+    "Verifique seu email.",
+    "Confirme sua conta.",
+    "Entre na plataforma.",
+    "Conecte seu WhatsApp oficial.",
+  ];
+
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#f8fafc",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "680px",
-          background: "#ffffff",
-          borderRadius: "24px",
-          padding: "32px",
-          boxShadow: "0 20px 60px rgba(15, 23, 42, 0.08)",
-          border: "1px solid #e2e8f0",
-          textAlign: "center",
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            fontSize: "13px",
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "#64748b",
-          }}
-        >
-          Pagamento recebido
-        </p>
+    <main className={styles.page}>
+      <div className={styles.backgroundGlowTop} />
+      <div className={styles.backgroundGlowBottom} />
+      <div className={styles.backgroundGrid} />
 
-        <h1
-          style={{
-            margin: "12px 0 0",
-            fontSize: "34px",
-            lineHeight: 1.1,
-            fontWeight: 800,
-            color: "#0f172a",
-          }}
-        >
-          Obrigado pela sua assinatura
-        </h1>
-
-        <p
-          style={{
-            margin: "16px 0 0",
-            fontSize: "16px",
-            lineHeight: 1.7,
-            color: "#475569",
-          }}
-        >
-          Estamos finalizando a criação da sua conta. Assim que tudo estiver
-          concluído, você poderá entrar no CRM e seguir com a configuração do
-          seu WhatsApp oficial.
-        </p>
-
-        <div
-          style={{
-            marginTop: "24px",
-            padding: "18px",
-            borderRadius: "18px",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            color: "#334155",
-            fontSize: "14px",
-            lineHeight: 1.7,
-            textAlign: "left",
-          }}
-        >
-          <strong>Próximos passos:</strong>
-          <br />
-          1. Verifique seu email.
-          <br />
-          2. Confirme sua conta.
-          <br />
-          3. Entre na plataforma.
-          <br />
-          4. Conecte seu WhatsApp oficial.
+      <section className={styles.card}>
+        <div className={styles.successSeal}>
+          <div className={styles.successSealInner}>✓</div>
         </div>
 
-        <div
-          style={{
-            marginTop: "24px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-          }}
-        >
+        <p className={styles.kicker}>Pagamento recebido</p>
+
+        <h1 className={styles.title}>Assinatura confirmada com sucesso</h1>
+
+        <p className={styles.description}>
+          Estamos finalizando a criação da sua conta no <strong>CRM Prosperity</strong>.
+          Em instantes, você poderá acessar a plataforma e começar a configurar
+          sua operação com estrutura profissional.
+        </p>
+
+        <div className={styles.highlightBox}>
+          <div className={styles.highlightIcon}>⚡</div>
+          <div className={styles.highlightContent}>
+            <strong>Seu acesso está em preparação.</strong>
+            <p>
+              Assim que a ativação estiver concluída, você poderá entrar no sistema
+              e seguir com a configuração do seu WhatsApp oficial.
+            </p>
+          </div>
+        </div>
+
+        <div className={styles.stepsCard}>
+          <div className={styles.stepsHeader}>
+            <h2 className={styles.stepsTitle}>Próximos passos</h2>
+            <p className={styles.stepsSubtitle}>
+              Siga esta sequência para começar da forma certa.
+            </p>
+          </div>
+
+          <div className={styles.stepsList}>
+            {passos.map((passo, index) => (
+              <div key={passo} className={styles.stepItem}>
+                <div className={styles.stepNumber}>{index + 1}</div>
+                <div className={styles.stepText}>{passo}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className={styles.actions}>
           <button
             onClick={() => router.push("/login")}
-            style={{
-              minHeight: "52px",
-              border: "none",
-              borderRadius: "16px",
-              background: "#0f172a",
-              color: "#ffffff",
-              fontSize: "15px",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
+            className={styles.primaryButton}
           >
             Ir para login
           </button>
 
           <button
             onClick={() => router.push("/comecar")}
-            style={{
-              minHeight: "48px",
-              borderRadius: "16px",
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              color: "#0f172a",
-              fontSize: "14px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
+            className={styles.secondaryButton}
           >
             Fazer novo cadastro
           </button>
         </div>
+
+        <p className={styles.footerNote}>
+          Se não encontrar o email de acesso, verifique também a caixa de spam ou promoções.
+        </p>
       </section>
     </main>
   );
