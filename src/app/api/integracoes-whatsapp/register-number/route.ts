@@ -22,13 +22,17 @@ async function registerNumber(request: NextRequest) {
   try {
     const contexto = await getUsuarioContexto();
 
-    if (!contexto?.usuario?.empresa_id) {
+    if (!contexto.ok) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Empresa do usuário não encontrada.",
-        },
-        { status: 401 }
+        { ok: false, error: contexto.error },
+        { status: contexto.status }
+      );
+    }
+
+    if (!contexto.usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Empresa não encontrada para o usuário." },
+        { status: 403 }
       );
     }
 
