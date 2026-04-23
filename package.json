@@ -21,7 +21,8 @@
     "react-dom": "19.2.4",
     "react-easy-crop": "^5.5.7",
     "react-input-mask": "^2.0.4",
-    "twemoji": "^14.0.2"
+    "twemoji": "^14.0.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

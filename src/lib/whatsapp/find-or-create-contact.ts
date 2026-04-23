@@ -1,8 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import {
-  normalizeContactName,
-  normalizeWhatsAppPhone,
-} from "@/lib/whatsapp/normalize";
+import { normalizeContactName } from "@/lib/whatsapp/normalize";
+import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 
 export type WhatsAppContact = {
   id: string;
@@ -29,7 +27,7 @@ export async function findOrCreateWhatsAppContact({
 }: FindOrCreateContactParams): Promise<WhatsAppContact> {
   const supabaseAdmin = getSupabaseAdmin();
 
-  const telefone = normalizeWhatsAppPhone(phone);
+  const telefone = normalizarTelefoneBrasilParaWhatsApp(phone);
   const nome = normalizeContactName(profileName);
 
   if (!empresaId) {

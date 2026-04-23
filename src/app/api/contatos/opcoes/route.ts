@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-function onlyDigits(value: string | null | undefined) {
-  return String(value || "").replace(/\D/g, "");
-}
-
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     const supabase = await createClient();
 
@@ -47,85 +43,41 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const busca = req.nextUrl.searchParams.get("busca")?.trim() || "";
-    const buscaNumerica = onlyDigits(busca);
-
-    console.log("[CONTATOS OPCOES] busca:", busca);
-    console.log("[CONTATOS OPCOES] buscaNumerica:", buscaNumerica);
-    console.log("[CONTATOS OPCOES] empresa_id usuario:", usuarioSistema.empresa_id);
+    console.log(
+      "[CONTATOS OPCOES] empresa_id:",
+      usuarioSistema.empresa_id
+    );
 
     const { data, error } = await supabase
       .from("contatos")
-      .select(`
-        id,
-        empresa_id,
-        nome,
-        telefone,
-        email,
-        origem,
-        campanha,
-        status_lead,
-        created_at,
-        updated_at
-      `)
+      .select("origem")
       .eq("empresa_id", usuarioSistema.empresa_id)
-      .order("nome", { ascending: true })
-      .limit(200);
+      .not("origem", "is", null);
 
-    console.log("[CONTATOS OPCOES] contatos raw error:", error || null);
-    console.log("[CONTATOS OPCOES] contatos raw total:", data?.length || 0);
-    console.log("[CONTATOS OPCOES] contatos raw sample:", data?.slice(0, 5) || []);
+    console.log("[CONTATOS OPCOES] raw error:", error || null);
+    console.log("[CONTATOS OPCOES] raw total:", data?.length || 0);
 
     if (error) {
       return NextResponse.json(
-        { ok: false, error: error.message || "Erro ao buscar contatos." },
+        { ok: false, error: error.message || "Erro ao buscar origens." },
         { status: 400 }
       );
     }
 
-    let contatos = Array.isArray(data) ? data : [];
+    // 🔥 Remove duplicados + limpa valores
+    const origens = Array.from(
+      new Set(
+        (data || [])
+          .map((item) => String(item.origem || "").trim())
+          .filter((origem) => origem.length > 0)
+      )
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-    if (busca) {
-      const termo = busca.toLowerCase();
-
-      contatos = contatos.filter((contato) => {
-        const nome = String(contato.nome || "").toLowerCase();
-        const telefone = String(contato.telefone || "");
-        const telefoneNumerico = onlyDigits(telefone);
-        const telefoneSem55 = telefoneNumerico.startsWith("55")
-          ? telefoneNumerico.slice(2)
-          : telefoneNumerico;
-        const email = String(contato.email || "").toLowerCase();
-        const campanha = String(contato.campanha || "").toLowerCase();
-        const statusLead = String(contato.status_lead || "").toLowerCase();
-        const origem = String(contato.origem || "").toLowerCase();
-
-        const matchTexto =
-          nome.includes(termo) ||
-          email.includes(termo) ||
-          campanha.includes(termo) ||
-          statusLead.includes(termo) ||
-          origem.includes(termo);
-
-        const matchTelefone =
-          !!buscaNumerica &&
-          (
-            telefoneNumerico.includes(buscaNumerica) ||
-            telefoneSem55.includes(buscaNumerica) ||
-            (`55${buscaNumerica}`).includes(telefoneNumerico) ||
-            (`55${buscaNumerica}`).includes(telefoneSem55)
-          );
-
-        return matchTexto || matchTelefone;
-      });
-    }
-
-    console.log("[CONTATOS OPCOES] contatos final total:", contatos.length);
-    console.log("[CONTATOS OPCOES] contatos final sample:", contatos.slice(0, 5));
+    console.log("[CONTATOS OPCOES] origens:", origens);
 
     return NextResponse.json({
       ok: true,
-      contatos,
+      origens,
     });
   } catch (error: any) {
     console.error("[CONTATOS OPCOES] erro interno:", error);

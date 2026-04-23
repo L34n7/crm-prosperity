@@ -407,8 +407,12 @@ function getStatusLabel(status?: string | null) {
       return "Em atendimento";
     case "aguardando_cliente":
       return "Aguardando cliente";
-    case "encerrada":
-      return "Encerrada";
+    case "encerrado_manual":
+      return "Encerrada manualmente";
+    case "encerrado_24h":
+      return "Encerrada por 24h";
+    case "encerrado_aut":
+      return "Encerrada pela automação";
     default:
       return status;
   }
@@ -1207,6 +1211,27 @@ export default function ConversasPage() {
   const [templateDisparoBody1, setTemplateDisparoBody1] = useState("");
   const [enviandoDisparoIndividual, setEnviandoDisparoIndividual] = useState(false);
   const [disparoIndividualAberto, setDisparoIndividualAberto] = useState(false);
+
+  const [previewCustoDisparoIndividual, setPreviewCustoDisparoIndividual] = useState<{
+    categoria: string;
+    totalSelecionados: number;
+    totalIsentos: number;
+    totalCobrados: number;
+    valorUnitarioUsd: number;
+    valorTotalUsd: number;
+    cotacaoUsdBrl: number;
+    valorTotalBrlEstimado: number;
+    valorTotalBrlMin: number;
+    valorTotalBrlMax: number;
+    margemMinPercent: number;
+    margemMaxPercent: number;
+    fonteCotacao?: string;
+    cotacaoDataHora?: string | null;
+    cotacaoFallback?: boolean;
+  } | null>(null);
+
+  const [loadingPreviewCustoDisparoIndividual, setLoadingPreviewCustoDisparoIndividual] = useState(false);  
+
   const [templatesWhatsapp, setTemplatesWhatsapp] = useState<
     {
       id: string;
@@ -2125,7 +2150,6 @@ export default function ConversasPage() {
 
       const lista = data.conversas || [];
       setConversas(lista);
-      return lista;
 
       setConversaSelecionada((atual) => {
         if (!lista.length) return null;
@@ -2156,6 +2180,8 @@ export default function ConversasPage() {
 
         return mudouVisualPrincipal ? encontrada : atual;
       });
+
+      return lista;
     } catch {
       setErro("Erro ao carregar conversas");
       return [];
@@ -2571,7 +2597,7 @@ export default function ConversasPage() {
 
   async function confirmarEncerramento() {
     await atualizarConversa(
-      { status: "encerrada" },
+      { status: "encerrado_manual" },
       "Conversa encerrada com sucesso."
     );
   }
@@ -3313,6 +3339,67 @@ export default function ConversasPage() {
     }
   }
 
+  async function calcularPreviewCustoDisparoIndividual(
+    categoria: string,
+    telefone?: string | null
+  ) {
+    try {
+      const telefoneContato = String(telefone || "").trim();
+
+      if (!categoria || !telefoneContato) {
+        setPreviewCustoDisparoIndividual(null);
+        return;
+      }
+
+      setLoadingPreviewCustoDisparoIndividual(true);
+
+      const res = await fetch("/api/whatsapp/disparos/custo-preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          categoria,
+          contatos: [
+            {
+              id: conversaSelecionada?.contatos?.id || conversaSelecionada?.id || "disparo-individual",
+              telefone: telefoneContato,
+            },
+          ],
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao calcular custo do disparo individual.");
+      }
+
+      setPreviewCustoDisparoIndividual({
+        categoria: String(json.categoria || ""),
+        totalSelecionados: Number(json.totalSelecionados || 0),
+        totalIsentos: Number(json.totalIsentos || 0),
+        totalCobrados: Number(json.totalCobrados || 0),
+        valorUnitarioUsd: Number(json.valorUnitarioUsd || 0),
+        valorTotalUsd: Number(json.valorTotalUsd || 0),
+        cotacaoUsdBrl: Number(json.cotacaoUsdBrl || 0),
+        valorTotalBrlEstimado: Number(json.valorTotalBrlEstimado || 0),
+        valorTotalBrlMin: Number(json.valorTotalBrlMin || 0),
+        valorTotalBrlMax: Number(json.valorTotalBrlMax || 0),
+        margemMinPercent: Number(json.margemMinPercent || 0),
+        margemMaxPercent: Number(json.margemMaxPercent || 0),
+        fonteCotacao: json.fonteCotacao || "",
+        cotacaoDataHora: json.cotacaoDataHora || null,
+        cotacaoFallback: Boolean(json.cotacaoFallback),
+      });
+    } catch (error: any) {
+      setPreviewCustoDisparoIndividual(null);
+      setErro(error?.message || "Erro ao calcular custo do disparo individual.");
+    } finally {
+      setLoadingPreviewCustoDisparoIndividual(false);
+    }
+  }
+
   async function enviarDisparoIndividual() {
     if (!conversaSelecionada?.id) {
       setErro("Selecione uma conversa.");
@@ -3520,7 +3607,25 @@ export default function ConversasPage() {
   const conversaEhMinha = !!usuarioId && conversaResponsavelId === usuarioId;
   const conversaEhDeUmDosMeusSetores =
     !!conversaSetorId && usuarioSetoresIds.includes(conversaSetorId);
-  const conversaEncerrada = conversaSelecionada?.status === "encerrada";
+  const STATUS_ENCERRADOS = [
+    "encerrado_manual",
+    "encerrado_24h",
+    "encerrado_aut",
+  ];
+
+  const conversaEncerrada = STATUS_ENCERRADOS.includes(
+    conversaSelecionada?.status || ""
+  );
+
+  const conversaEncerradaManual =
+    conversaSelecionada?.status === "encerrado_manual";
+
+  const conversaEncerrada24h =
+    conversaSelecionada?.status === "encerrado_24h";
+
+  const conversaEncerradaAutomacao =
+    conversaSelecionada?.status === "encerrado_aut";
+
   const conversaNaFila = conversaSelecionada?.status === "fila";
   const conversaSemResponsavel = !conversaResponsavelId;
   
@@ -3924,6 +4029,10 @@ const templateFooterTexto = useMemo(() => {
     resetarFormularioEtiqueta();
     setSelecionandoEtiqueta(false);
     setDisparoIndividualAberto(false);
+    setTemplateDisparoId("");
+    setTemplateDisparoNome("");
+    setParametros([]);
+    setPreviewCustoDisparoIndividual(null);
 
     async function iniciarConversaSelecionada() {
       const janelaInicial = calcularJanelaInicialPorUltimaMensagem(
@@ -3935,7 +4044,7 @@ const templateFooterTexto = useMemo(() => {
         false,
         null,
         janelaInicial.inicio,
-        janelaInicial.fim
+        null
       );
 
       if (conversaLidaRef.current !== conversaId) {
@@ -3972,10 +4081,6 @@ const templateFooterTexto = useMemo(() => {
         (c: Conversa) => c.id === conversaSelecionada.id
       );
 
-      const novoFimJanela =
-        atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
-        fimJanelaHistorico;
-
       if (protocoloSelecionadoId) {
         await carregarMensagens(
           conversaSelecionada.id,
@@ -3990,7 +4095,7 @@ const templateFooterTexto = useMemo(() => {
           true,
           null,
           inicioJanelaHistorico,
-          novoFimJanela
+          null
         );
       }
     }, 5000);
@@ -4173,6 +4278,23 @@ const templateFooterTexto = useMemo(() => {
     setParametros([]);
   }, [templateDisparoNome]);
 
+  useEffect(() => {
+    const categoria = String(templateSelecionado?.categoria || "").toLowerCase();
+    const telefoneContato = conversaSelecionada?.contatos?.telefone || "";
+
+    if (!disparoIndividualAberto || !categoria || !telefoneContato) {
+      setPreviewCustoDisparoIndividual(null);
+      return;
+    }
+
+    calcularPreviewCustoDisparoIndividual(categoria, telefoneContato);
+  }, [
+    disparoIndividualAberto,
+    templateSelecionado?.id,
+    templateSelecionado?.categoria,
+    conversaSelecionada?.contatos?.telefone,
+  ]);
+
   useLayoutEffect(() => {
     const container = mensagensRef.current;
     const scrollSalvo = restaurarScrollHistoricoRef.current;
@@ -4250,7 +4372,9 @@ const templateFooterTexto = useMemo(() => {
                       <option value="bot">Bot</option>
                       <option value="em_atendimento">Em atendimento</option>
                       <option value="aguardando_cliente">Aguardando cliente</option>
-                      <option value="encerrada">Encerradas</option>
+                      <option value="encerrado_manual">Encerradas manualmente</option>
+                      <option value="encerrado_24h">Encerradas por 24h</option>
+                      <option value="encerrado_aut">Encerradas pela automação</option>
                     </select>
 
                     <select
@@ -4466,7 +4590,7 @@ const templateFooterTexto = useMemo(() => {
                         <div className={styles.conversationBottomLine}>
                           <span
                             className={`${styles.statusMiniBadge} ${
-                              c.status === "encerrada"
+                              ["encerrado_manual", "encerrado_24h", "encerrado_aut"].includes(c.status)
                                 ? styles.statusMiniClosed
                                 : c.status === "fila"
                                 ? styles.statusMiniWaiting
@@ -4569,11 +4693,11 @@ const templateFooterTexto = useMemo(() => {
                     </div>
 
                     <div className={styles.chatHeaderActions}>
-                      {conversaSelecionada.status === "encerrada" ? (
+                      {conversaEncerradaManual ? (
                         <button className={styles.primaryButton} onClick={reabrirConversa}>
                           Reabrir
                         </button>
-                      ) : (
+                      ) : conversaEncerrada ? null : (
                         <>
 
                           {conversaTemNotas && (
@@ -5313,7 +5437,17 @@ const templateFooterTexto = useMemo(() => {
                                   <button
                                     type="button"
                                     className={styles.disparoExpandButton}
-                                    onClick={() => setDisparoIndividualAberto((prev) => !prev)}
+                                    onClick={() => {
+                                      setDisparoIndividualAberto((prev) => {
+                                        const proximo = !prev;
+
+                                        if (!proximo) {
+                                          setPreviewCustoDisparoIndividual(null);
+                                        }
+
+                                        return proximo;
+                                      });
+                                    }}
                                   >
                                     {disparoIndividualAberto
                                       ? "Ocultar disparo individual"
@@ -5410,6 +5544,50 @@ const templateFooterTexto = useMemo(() => {
                                         {enviandoDisparoIndividual ? "Enviando..." : "Enviar"}
                                       </button>
                                     </div>
+
+                                    {templateSelecionado && (
+                                      <div className={styles.disparoCustoBox}>
+                                        <div className={styles.disparoCustoHeader}>
+                                          <span className={styles.disparoCustoEyebrow}>Estimativa de cobrança</span>
+
+                                          <span className={styles.disparoCustoCategoria}>
+                                            {String(previewCustoDisparoIndividual?.categoria || templateSelecionado?.categoria || "-").toUpperCase()}
+                                          </span>
+                                        </div>
+
+                                        <div className={styles.disparoCustoMain}>
+                                          <div className={styles.disparoCustoValorPrincipal}>
+                                            {loadingPreviewCustoDisparoIndividual ? (
+                                              "Calculando..."
+                                            ) : (
+                                              `R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMin ?? 0).toFixed(2)} ~ R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMax ?? 0).toFixed(2)}`
+                                            )}
+                                          </div>
+
+                                          <div className={styles.disparoCustoMetaLinha}>
+                                            <span>
+                                              <strong>USD:</strong>{" "}
+                                              {`US$ ${(previewCustoDisparoIndividual?.valorTotalUsd ?? 0).toFixed(4)}`}
+                                            </span>
+
+                                            <span>
+                                              <strong>Cobrados:</strong>{" "}
+                                              {previewCustoDisparoIndividual?.totalCobrados ?? 0}
+                                            </span>
+
+                                            <span>
+                                              <strong>Isentos:</strong>{" "}
+                                              {previewCustoDisparoIndividual?.totalIsentos ?? 0}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        <div className={styles.disparoCustoAviso}>
+                                          A cobrança pode ser realizada pela Meta na forma de pagamento cadastrada na conta comercial.
+                                          O valor final pode variar conforme dólar, impostos, IOF, taxas e regras de faturamento.
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
 
                                   <div className={styles.disparoTemplatePreviewCard}>

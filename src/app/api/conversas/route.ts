@@ -6,6 +6,7 @@ import {
   podeAtribuirConversas,
   podeVisualizarConversas,
 } from "@/lib/auth/authorization";
+import { encerrarConversasExpiradas } from "@/lib/whatsapp/verificar-expiracao-conversas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -100,7 +101,9 @@ function isStatusValido(status: string | null) {
     "fila",
     "em_atendimento",
     "aguardando_cliente",
-    "encerrada",
+    "encerrado_manual",
+    "encerrado_24h",
+    "encerrado_aut",
   ].includes(status);
 }
 
@@ -179,6 +182,8 @@ export async function GET(request: Request) {
       { status: 400 }
     );
   }
+
+  await encerrarConversasExpiradas(usuario.empresa_id);
 
   let query = supabaseAdmin
     .from("conversas")

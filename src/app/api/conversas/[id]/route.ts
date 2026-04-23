@@ -28,14 +28,18 @@ type ConversaAtual = {
   closed_at?: string | null;
 };
 
-function isStatusValido(status: string) {
+function isStatusValido(status: string | null) {
+  if (!status) return false;
+
   return [
     "aberta",
     "bot",
     "fila",
     "em_atendimento",
     "aguardando_cliente",
-    "encerrada",
+    "encerrado_manual",
+    "encerrado_24h",
+    "encerrado_aut",
   ].includes(status);
 }
 
@@ -332,12 +336,23 @@ export async function PUT(
     );
   }
 
+  const STATUS_ENCERRADOS = [
+    "encerrado_manual",
+    "encerrado_24h",
+    "encerrado_aut",
+  ];
+
   const mudouSetor = setor_id !== conversaAtual.setor_id;
   const mudouResponsavel = responsavel_id !== conversaAtual.responsavel_id;
+
+  const conversaAtualEstaEncerrada = STATUS_ENCERRADOS.includes(conversaAtual.status);
+  const novoStatusEhEncerrado = STATUS_ENCERRADOS.includes(status);
+
   const estaEncerrando =
-    status === "encerrada" && conversaAtual.status !== "encerrada";
+    novoStatusEhEncerrado && !conversaAtualEstaEncerrada;
+
   const estaReabrindo =
-    status !== "encerrada" && conversaAtual.status === "encerrada";
+    !novoStatusEhEncerrado && conversaAtualEstaEncerrada;
 
   if (mudouSetor && !(await usuarioPodeTransferir(usuario, conversaAtual))) {
     return NextResponse.json(
@@ -556,12 +571,12 @@ export async function PUT(
 
   let dataFechamento: string | null = null;
 
-  if (status === "encerrada" && !conversaAtual.closed_at) {
+  if (novoStatusEhEncerrado && !conversaAtual.closed_at) {
     dataFechamento = new Date().toISOString();
     updateData.closed_at = dataFechamento;
   }
 
-  if (status !== "encerrada" && !mudouSetor) {
+  if (!novoStatusEhEncerrado && !mudouSetor) {
     updateData.closed_at = null;
   }
 

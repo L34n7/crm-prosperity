@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto, type UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+
 
 function podeGerenciarContatos(usuario: UsuarioContexto) {
   const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
@@ -10,10 +12,6 @@ function podeGerenciarContatos(usuario: UsuarioContexto) {
     nomesPerfis.includes("Supervisor") ||
     nomesPerfis.includes("Atendente")
   );
-}
-
-function normalizarTelefone(telefone: string) {
-  return telefone.replace(/\D/g, "");
 }
 
 export async function GET(request: Request) {
@@ -43,15 +41,45 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+
   const statusLead = searchParams.get("status_lead");
-  const busca = searchParams.get("busca")?.trim();
+  const busca = searchParams.get("busca")?.trim() || "";
+  const origem = searchParams.get("origem")?.trim() || "";
+  const campanha = searchParams.get("campanha")?.trim() || "";
+  const telefoneRevisar = searchParams.get("telefone_revisar");
+  const ordenacao = searchParams.get("ordenacao") || "recentes";
+
+  const pagina = Math.max(1, Number(searchParams.get("pagina") || "1"));
+
+  const limite = Math.max(
+    1,
+    Math.min(5000, Number(searchParams.get("limite") || "5000"))
+  );
+
+  const from = (pagina - 1) * limite;
+
   const supabaseAdmin = getSupabaseAdmin();
 
   let query = supabaseAdmin
     .from("contatos")
-    .select("*")
-    .eq("empresa_id", usuario.empresa_id)
-    .order("created_at", { ascending: false });
+    .select(
+      `
+        id,
+        empresa_id,
+        nome,
+        telefone,
+        email,
+        origem,
+        campanha,
+        status_lead,
+        observacoes,
+        telefone_revisar,
+        created_at,
+        updated_at
+      `,
+      { count: "exact" }
+    )
+    .eq("empresa_id", usuario.empresa_id);
 
   if (
     statusLead &&
@@ -62,24 +90,161 @@ export async function GET(request: Request) {
     query = query.eq("status_lead", statusLead);
   }
 
+  if (origem) {
+    query = query.eq("origem", origem);
+  }
+
+  if (campanha) {
+    query = query.ilike("campanha", `%${campanha}%`);
+  }
+
+  if (telefoneRevisar === "true") {
+    query = query.eq("telefone_revisar", true);
+  }
+
+  if (telefoneRevisar === "false") {
+    query = query.eq("telefone_revisar", false);
+  }
+
   if (busca) {
     query = query.or(
-      `nome.ilike.%${busca}%,telefone.ilike.%${busca}%,email.ilike.%${busca}%`
+      `nome.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha.ilike.%${busca}%,telefone.ilike.%${busca}%`
     );
   }
 
-  const { data, error } = await query;
-
-  if (error) {
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 }
-    );
+  if (ordenacao === "antigos") {
+    query = query.order("created_at", { ascending: true });
+  } else if (ordenacao === "nome_asc") {
+    query = query.order("nome", { ascending: true });
+  } else if (ordenacao === "nome_desc") {
+    query = query.order("nome", { ascending: false });
+  } else {
+    query = query.order("created_at", { ascending: false });
   }
+
+  const tamanhoLote = 1000;
+  let contatosAcumulados: any[] = [];
+  let totalCount = 0;
+  let offsetAtual = from;
+
+  while (contatosAcumulados.length < limite) {
+    let queryLote = supabaseAdmin
+      .from("contatos")
+      .select(
+        `
+          id,
+          empresa_id,
+          nome,
+          telefone,
+          email,
+          origem,
+          campanha,
+          status_lead,
+          observacoes,
+          telefone_revisar,
+          created_at,
+          updated_at
+        `,
+        { count: "exact" }
+      )
+      .eq("empresa_id", usuario.empresa_id);
+
+    if (
+      statusLead &&
+      ["novo", "em_atendimento", "qualificado", "cliente", "perdido"].includes(
+        statusLead
+      )
+    ) {
+      queryLote = queryLote.eq("status_lead", statusLead);
+    }
+
+    if (origem) {
+      queryLote = queryLote.eq("origem", origem);
+    }
+
+    if (campanha) {
+      queryLote = queryLote.ilike("campanha", `%${campanha}%`);
+    }
+
+    if (telefoneRevisar === "true") {
+      queryLote = queryLote.eq("telefone_revisar", true);
+    }
+
+    if (telefoneRevisar === "false") {
+      queryLote = queryLote.eq("telefone_revisar", false);
+    }
+
+    if (busca) {
+      queryLote = queryLote.or(
+        `nome.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha.ilike.%${busca}%,telefone.ilike.%${busca}%`
+      );
+    }
+
+    if (ordenacao === "antigos") {
+      queryLote = queryLote.order("created_at", { ascending: true });
+    } else if (ordenacao === "nome_asc") {
+      queryLote = queryLote.order("nome", { ascending: true });
+    } else if (ordenacao === "nome_desc") {
+      queryLote = queryLote.order("nome", { ascending: false });
+    } else {
+      queryLote = queryLote.order("created_at", { ascending: false });
+    }
+
+    const loteFrom = offsetAtual;
+    const loteTo = offsetAtual + tamanhoLote - 1;
+
+    const { data: loteData, error: loteError, count } = await queryLote.range(
+      loteFrom,
+      loteTo
+    );
+
+    if (loteError) {
+      return NextResponse.json(
+        { ok: false, error: loteError.message },
+        { status: 500 }
+      );
+    }
+
+    if (typeof count === "number") {
+      totalCount = count;
+    }
+
+    const lote = loteData ?? [];
+
+    contatosAcumulados.push(...lote);
+
+    if (lote.length < tamanhoLote) {
+      break;
+    }
+
+    offsetAtual += tamanhoLote;
+  }
+
+  const data = contatosAcumulados.slice(0, limite);
+  const count = totalCount;
+
+  const { data: origensData } = await supabaseAdmin
+    .from("contatos")
+    .select("origem")
+    .eq("empresa_id", usuario.empresa_id)
+    .not("origem", "is", null);
+
+  const origens = Array.from(
+    new Set(
+      (origensData || [])
+        .map((item) => String(item.origem || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   return NextResponse.json({
     ok: true,
     contatos: data ?? [],
+    total: count ?? 0,
+    pagina,
+    limite,
+    totalPaginas: Math.max(1, Math.ceil((count ?? 0) / limite)),
+    origens, 
   });
 }
 
@@ -114,13 +279,17 @@ export async function POST(request: Request) {
 
   const nome = body?.nome?.trim() || null;
   const telefoneOriginal = body?.telefone?.trim();
-  const telefone = telefoneOriginal ? normalizarTelefone(telefoneOriginal) : "";
+  const telefone = telefoneOriginal
+    ? normalizarTelefoneBrasilParaWhatsApp(telefoneOriginal)
+    : "";
+    
   const email = body?.email?.trim()?.toLowerCase() || null;
   const origem = body?.origem?.trim() || null;
   const campanha = body?.campanha?.trim() || null;
   const status_lead = body?.status_lead || "novo";
   const observacoes = body?.observacoes?.trim() || null;
   const empresa_id = usuario.empresa_id;
+  
 
   if (!empresa_id) {
     return NextResponse.json(
@@ -176,18 +345,17 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabaseAdmin
     .from("contatos")
-    .insert([
-      {
-        empresa_id,
-        nome,
-        telefone,
-        email,
-        origem,
-        campanha,
-        status_lead,
-        observacoes,
-      },
-    ])
+    .insert({
+      empresa_id,
+      nome,
+      telefone,
+      email,
+      origem,
+      campanha,
+      status_lead,
+      observacoes,
+      telefone_revisar: false,
+    })
     .select("*")
     .single();
 

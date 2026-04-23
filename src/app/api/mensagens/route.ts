@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth/authorization";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
+import { encerrarConversaExpirada } from "@/lib/whatsapp/encerrar-conversa-expirada";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -472,6 +473,8 @@ export async function POST(request: Request) {
   });
 
   if (!janela24h.podeEnviarMensagemLivre) {
+    await encerrarConversaExpirada(conversa_id);
+
     return NextResponse.json(
       {
         ok: false,

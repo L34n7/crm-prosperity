@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { listarPermissoesDoUsuario } from "@/lib/permissoes/can";
-import { can } from "@/lib/permissoes/frontend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 type UsuarioSistema = {
@@ -36,9 +34,14 @@ async function getUsuarioLogado() {
     return { error: "Usuário inativo.", status: 403 as const };
   }
 
-  const permissoes = await listarPermissoesDoUsuario(usuario.id);
+  return { usuario };
+}
 
-  return { usuario, permissoes };
+function montarNomeConexaoPadrao(nomeEmpresa?: string | null) {
+  if (nomeEmpresa && nomeEmpresa.trim()) {
+    return `WhatsApp ${nomeEmpresa.trim()}`;
+  }
+  return "WhatsApp principal";
 }
 
 export async function GET() {
@@ -52,7 +55,7 @@ export async function GET() {
       );
     }
 
-    const { usuario, permissoes } = auth;
+    const { usuario } = auth;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(
@@ -61,40 +64,95 @@ export async function GET() {
       );
     }
 
-    if (
-      !can(permissoes, "whatsapp_templates.visualizar") &&
-      !can(permissoes, "whatsapp_templates.criar")
-    ) {
+    const supabaseAdmin = getSupabaseAdmin();
+
+    // 🔍 Busca integração existente
+    const { data: integracaoExistente, error: integracaoError } =
+      await supabaseAdmin
+        .from("integracoes_whatsapp")
+        .select("*")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("provider", "meta_official")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (integracaoError) {
       return NextResponse.json(
-        { ok: false, error: "Sem permissão para visualizar integrações WhatsApp." },
-        { status: 403 }
+        { ok: false, error: integracaoError.message },
+        { status: 500 }
       );
     }
 
-    const supabaseAdmin = getSupabaseAdmin();
+    // ✅ Se já existe, retorna
+    if (integracaoExistente) {
+      return NextResponse.json({
+        ok: true,
+        created: false,
+        integracao: integracaoExistente,
+      });
+    }
 
-    const { data, error } = await supabaseAdmin
-      .from("integracoes_whatsapp")
-      .select("id, nome_conexao, numero, status, waba_id")
-      .eq("empresa_id", usuario.empresa_id)
-      .order("created_at", { ascending: false });
+    // 🔍 Busca empresa
+    const { data: empresa, error: empresaError } = await supabaseAdmin
+      .from("empresas")
+      .select("id, nome_fantasia")
+      .eq("id", usuario.empresa_id)
+      .maybeSingle();
 
-    if (error) {
+    if (empresaError || !empresa) {
       return NextResponse.json(
-        { ok: false, error: error.message },
+        { ok: false, error: "Empresa não encontrada." },
+        { status: 404 }
+      );
+    }
+
+    const agora = new Date().toISOString();
+
+    // 🆕 Cria integração inicial
+    const { data: novaIntegracao, error: createError } =
+      await supabaseAdmin
+        .from("integracoes_whatsapp")
+        .insert({
+          empresa_id: usuario.empresa_id,
+          nome_conexao: montarNomeConexaoPadrao(empresa.nome_fantasia),
+          numero: `pendente_${usuario.empresa_id}`,
+          provider: "meta_official",
+          status: "pendente",
+          webhook_verificado: false,
+
+          // onboarding
+          onboarding_etapa: "inicio",
+          onboarding_status: "pendente",
+          phone_registered: false,
+          payment_method_added: false,
+          app_assigned: false,
+
+          config_json: {},
+
+          created_at: agora,
+          updated_at: agora,
+        })
+        .select("*")
+        .single();
+
+    if (createError) {
+      return NextResponse.json(
+        { ok: false, error: createError.message },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       ok: true,
-      data: data || [],
+      created: true,
+      integracao: novaIntegracao,
     });
   } catch (error) {
-    console.error("Erro ao listar integrações WhatsApp:", error);
+    console.error("Erro ao iniciar integração WhatsApp:", error);
 
     return NextResponse.json(
-      { ok: false, error: "Erro interno ao listar integrações WhatsApp." },
+      { ok: false, error: "Erro interno." },
       { status: 500 }
     );
   }

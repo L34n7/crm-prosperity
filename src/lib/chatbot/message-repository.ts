@@ -6,7 +6,15 @@ type CreateMensagemParams = {
   remetenteTipo: "contato" | "bot" | "ia" | "usuario" | "sistema";
   remetenteId?: string | null;
   conteudo: string;
-  tipoMensagem?: "texto" | "imagem" | "audio" | "video" | "documento" | "template" | "botao" | "lista";
+  tipoMensagem?:
+    | "texto"
+    | "imagem"
+    | "audio"
+    | "video"
+    | "documento"
+    | "template"
+    | "botao"
+    | "lista";
   origem: "recebida" | "enviada" | "automatica";
   statusEnvio?: "pendente" | "enviada" | "entregue" | "lida" | "falha";
   mensagemExternaId?: string | null;
@@ -50,6 +58,21 @@ export async function createMensagem(params: CreateMensagemParams) {
 
   if (error) {
     throw new Error(`Erro ao salvar mensagem: ${error.message}`);
+  }
+
+  const referenciaData = data?.created_at || new Date().toISOString();
+
+  const { error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .update({
+      last_message_at: referenciaData,
+    })
+    .eq("id", params.conversaId);
+
+  if (conversaError) {
+    throw new Error(
+      `Mensagem salva, mas erro ao atualizar last_message_at da conversa: ${conversaError.message}`
+    );
   }
 
   return data;

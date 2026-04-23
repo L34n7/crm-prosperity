@@ -4,6 +4,8 @@ import {
   getUsuarioContexto,
   type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
+import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -18,7 +20,23 @@ function podeGerenciarContatos(usuario: UsuarioContexto) {
 }
 
 function normalizarTelefone(telefone: string) {
-  return telefone.replace(/\D/g, "");
+  let numeros = telefone.replace(/\D/g, "");
+
+  // remove 55 se vier com DDI
+  if (numeros.startsWith("55") && numeros.length > 11) {
+    numeros = numeros.slice(2);
+  }
+
+  // se tiver 10 dígitos (DDD + número antigo sem 9)
+  if (numeros.length === 10) {
+    const ddd = numeros.slice(0, 2);
+    const numero = numeros.slice(2);
+
+    // adiciona o 9 na frente
+    numeros = ddd + "9" + numero;
+  }
+
+  return numeros;
 }
 
 export async function PUT(
@@ -90,7 +108,9 @@ if (body?.nome !== undefined) {
 // telefone
 if (body?.telefone !== undefined) {
   const telefoneOriginal = body.telefone?.trim();
-  const telefone = telefoneOriginal ? normalizarTelefone(telefoneOriginal) : "";
+  const telefone = telefoneOriginal
+    ? normalizarTelefoneBrasilParaWhatsApp(telefoneOriginal)
+    : "";
 
   if (!telefone) {
     return NextResponse.json(

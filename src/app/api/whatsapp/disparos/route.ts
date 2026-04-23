@@ -49,6 +49,18 @@ function podeRealizarDisparos(usuario: any) {
   );
 }
 
+function contarVariaveisNoTexto(texto?: string | null) {
+  if (!texto) return 0;
+
+  const matches = texto.match(/\{\{\d+\}\}/g) || [];
+  const numeros = matches
+    .map((item) => Number(item.replace(/[{}]/g, "")))
+    .filter((n) => !Number.isNaN(n));
+
+  if (numeros.length === 0) return 0;
+  return Math.max(...numeros);
+}
+
 function contarVariaveisTemplate(payload: TemplatePayload | null) {
   if (!payload?.components?.length) return 0;
 
@@ -63,51 +75,6 @@ function contarVariaveisTemplate(payload: TemplatePayload | null) {
   return Math.max(...numeros);
 }
 
-function montarComponentesTemplate(
-  payload: TemplatePayload | null,
-  variaveis: string[]
-) {
-  const componentesOriginais = payload?.components || [];
-  const totalVariaveis = contarVariaveisTemplate(payload);
-
-  if (totalVariaveis === 0) {
-    return undefined;
-  }
-
-  const parametros = Array.from({ length: totalVariaveis }).map((_, index) => ({
-    type: "text",
-    text: variaveis[index] || "",
-  }));
-
-  const componentesMontados: any[] = [];
-
-  const header = componentesOriginais.find((item) => item.type === "HEADER");
-  const body = componentesOriginais.find((item) => item.type === "BODY");
-
-  if (header?.text && /\{\{\d+\}\}/.test(header.text)) {
-    componentesMontados.push({
-      type: "header",
-      parameters: parametros,
-    });
-  }
-
-  if (body?.text && /\{\{\d+\}\}/.test(body.text)) {
-    componentesMontados.push({
-      type: "body",
-      parameters: parametros,
-    });
-  }
-
-  if (componentesMontados.length === 0) {
-    componentesMontados.push({
-      type: "body",
-      parameters: parametros,
-    });
-  }
-
-  return componentesMontados;
-}
-
 function substituirVariaveisTexto(texto: string, variaveis: string[]) {
   if (!texto) return "";
 
@@ -115,6 +82,59 @@ function substituirVariaveisTexto(texto: string, variaveis: string[]) {
     const index = Number(numero) - 1;
     return variaveis[index] ?? `{{${numero}}}`;
   });
+}
+
+function montarParametrosParaTexto(texto: string | undefined, variaveis: string[]) {
+  const totalVariaveis = contarVariaveisNoTexto(texto);
+
+  if (totalVariaveis === 0) {
+    return [];
+  }
+
+  return Array.from({ length: totalVariaveis }).map((_, index) => ({
+    type: "text",
+    text: variaveis[index] || "",
+  }));
+}
+
+function montarComponentesTemplate(
+  payload: TemplatePayload | null,
+  variaveis: string[]
+) {
+  const componentesOriginais = payload?.components || [];
+  const componentesMontados: Array<Record<string, any>> = [];
+
+  const header = componentesOriginais.find((item) => item.type === "HEADER");
+  const body = componentesOriginais.find((item) => item.type === "BODY");
+
+  const headerParams = montarParametrosParaTexto(header?.text, variaveis);
+  const bodyParams = montarParametrosParaTexto(body?.text, variaveis);
+
+  if (headerParams.length > 0) {
+    componentesMontados.push({
+      type: "header",
+      parameters: headerParams,
+    });
+  }
+
+  if (bodyParams.length > 0) {
+    componentesMontados.push({
+      type: "body",
+      parameters: bodyParams,
+    });
+  }
+
+  if (componentesMontados.length === 0 && contarVariaveisTemplate(payload) > 0) {
+    componentesMontados.push({
+      type: "body",
+      parameters: variaveis.map((valor) => ({
+        type: "text",
+        text: valor || "",
+      })),
+    });
+  }
+
+  return componentesMontados.length > 0 ? componentesMontados : undefined;
 }
 
 function montarConteudoTextoTemplate(
@@ -172,8 +192,13 @@ function montarConteudoTextoTemplate(
   return partes.join("\n\n");
 }
 
-async function buscarProtocoloAtivoDaConversa(conversaId: string) {
-  const { data, error } = await supabaseAdmin
+async function buscarOuCriarProtocoloAtivoDaConversa(params: {
+  empresaId: string;
+  conversaId: string;
+}) {
+  const { empresaId, conversaId } = params;
+
+  const { data: protocoloAtivo, error: protocoloAtivoError } = await supabaseAdmin
     .from("conversa_protocolos")
     .select("id, protocolo, ativo")
     .eq("conversa_id", conversaId)
@@ -182,32 +207,103 @@ async function buscarProtocoloAtivoDaConversa(conversaId: string) {
     .limit(1)
     .maybeSingle();
 
-  if (error) {
+  if (protocoloAtivoError) {
     throw new Error(
-      `Erro ao buscar protocolo ativo da conversa: ${error.message}`
+      `Erro ao buscar protocolo ativo da conversa: ${protocoloAtivoError.message}`
     );
   }
 
-  if (!data) {
-    throw new Error("Nenhum protocolo ativo encontrado para a conversa.");
+  if (protocoloAtivo) {
+    return protocoloAtivo;
   }
 
-  return data;
+  const now = new Date().toISOString();
+  const protocoloTexto = `DIS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+  const { error: fecharAnterioresError } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .update({
+      ativo: false,
+      closed_at: now,
+      updated_at: now,
+    })
+    .eq("conversa_id", conversaId)
+    .eq("ativo", true);
+
+  if (fecharAnterioresError) {
+    throw new Error(
+      `Erro ao encerrar protocolos anteriores: ${fecharAnterioresError.message}`
+    );
+  }
+
+  const { data: novoProtocolo, error: novoProtocoloError } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      protocolo: protocoloTexto,
+      tipo: "manual",
+      ativo: true,
+      started_at: now,
+      closed_at: null,
+      created_at: now,
+      updated_at: now,
+    })
+    .select("id, protocolo, ativo")
+    .single();
+
+  if (novoProtocoloError || !novoProtocolo) {
+    throw new Error(
+      `Erro ao criar protocolo da conversa: ${
+        novoProtocoloError?.message || "Erro desconhecido."
+      }`
+    );
+  }
+
+  return novoProtocolo;
+}
+
+async function reativarConversaParaDisparo(params: {
+  conversaId: string;
+  usuarioId: string;
+}) {
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("conversas")
+    .update({
+      status: "aberta",
+      origem_atendimento: "manual",
+      responsavel_id: params.usuarioId,
+      bot_ativo: false,
+      menu_aguardando_resposta: false,
+      closed_at: null,
+      last_message_at: now,
+      updated_at: now,
+    })
+    .eq("id", params.conversaId);
+
+  if (error) {
+    throw new Error(`Erro ao reativar conversa: ${error.message}`);
+  }
 }
 
 async function registrarMensagemDeDisparo(params: {
   empresaId: string;
   conversaId: string;
-  conversaProtocoloId: string;
+  conversaProtocoloId: string | null;
   usuarioId: string;
   templateId: string;
   templateNome: string;
   templateIdioma: string | null;
   numeroDestino: string;
+  nomeContato: string | null;
   variaveis: string[];
   payloadTemplate: TemplatePayload | null;
   mensagemExternaId: string | null;
+  statusEnvio: "enviada" | "falha";
   metaResponse: any;
+  erroEnvio?: string | null;
 }) {
   const now = new Date().toISOString();
 
@@ -215,15 +311,22 @@ async function registrarMensagemDeDisparo(params: {
     montarConteudoTextoTemplate(params.payloadTemplate, params.variaveis) ||
     `Template enviado: ${params.templateNome}`;
 
+  const conteudoFinal =
+    params.statusEnvio === "falha"
+      ? `[FALHA NO DISPARO]\n${conteudoTemplate}${
+          params.erroEnvio ? `\n\nMotivo: ${params.erroEnvio}` : ""
+        }`
+      : conteudoTemplate;
+
   const { error } = await supabaseAdmin.from("mensagens").insert({
     empresa_id: params.empresaId,
     conversa_id: params.conversaId,
     remetente_tipo: "usuario",
     remetente_id: params.usuarioId,
-    conteudo: conteudoTemplate,
+    conteudo: conteudoFinal,
     tipo_mensagem: "template",
     origem: "enviada",
-    status_envio: "enviada",
+    status_envio: params.statusEnvio,
     mensagem_externa_id: params.mensagemExternaId,
     metadata_json: {
       tipo: "disparo_template",
@@ -231,8 +334,10 @@ async function registrarMensagemDeDisparo(params: {
       template_nome: params.templateNome,
       template_idioma: params.templateIdioma,
       numero_destino: params.numeroDestino,
+      nome_contato: params.nomeContato,
       variaveis: params.variaveis,
       conteudo_renderizado: conteudoTemplate,
+      erro_envio: params.erroEnvio || null,
       meta_response: params.metaResponse,
     },
     conversa_protocolo_id: params.conversaProtocoloId,
@@ -242,6 +347,59 @@ async function registrarMensagemDeDisparo(params: {
 
   if (error) {
     throw new Error(`Erro ao registrar mensagem de disparo: ${error.message}`);
+  }
+}
+
+
+async function registrarLogDisparo(params: {
+  empresaId: string;
+  integracaoWhatsappId: string | null;
+  templateId: string | null;
+  conversaId: string | null;
+  conversaProtocoloId: string | null;
+  contatoId: string | null;
+  usuarioId: string | null;
+  numero: string;
+  nomeContato: string | null;
+  templateNome: string | null;
+  templateIdioma: string | null;
+  mensagem: string | null;
+  status: "sucesso" | "falha";
+  erro: string | null;
+  statusHttp: number | null;
+  messageId: string | null;
+  variaveis: string[];
+  metaResponse: any;
+  metadataJson?: Record<string, any>;
+}) {
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseAdmin.from("whatsapp_disparos_logs").insert({
+    empresa_id: params.empresaId,
+    integracao_whatsapp_id: params.integracaoWhatsappId,
+    template_id: params.templateId,
+    conversa_id: params.conversaId,
+    conversa_protocolo_id: params.conversaProtocoloId,
+    contato_id: params.contatoId,
+    usuario_id: params.usuarioId,
+    numero: params.numero,
+    nome_contato: params.nomeContato,
+    template_nome: params.templateNome,
+    template_idioma: params.templateIdioma,
+    mensagem: params.mensagem,
+    status: params.status,
+    erro: params.erro,
+    status_http: params.statusHttp,
+    message_id: params.messageId,
+    variaveis: params.variaveis,
+    meta_response: params.metaResponse,
+    metadata_json: params.metadataJson || {},
+    created_at: now,
+    updated_at: now,
+  });
+
+  if (error) {
+    throw new Error(`Erro ao registrar log do disparo: ${error.message}`);
   }
 }
 
@@ -261,17 +419,47 @@ async function atualizarUltimaMensagemConversa(conversaId: string) {
   }
 }
 
-export async function POST(req: NextRequest) {
-  console.log("[DISPAROS] ===== INICIO =====");
+async function garantirContatoConversaEProtocolo(params: {
+  empresaId: string;
+  integracaoWhatsappId: string;
+  usuarioId: string;
+  numero: string;
+  nomeContato?: string | null;
+}) {
+  const contato = await findOrCreateWhatsAppContact({
+    empresaId: params.empresaId,
+    phone: params.numero,
+    profileName: params.nomeContato || null,
+  });
 
+  const conversa = await findOrCreateWhatsAppConversation({
+    empresaId: params.empresaId,
+    contatoId: contato.id,
+    integracaoWhatsappId: params.integracaoWhatsappId,
+  });
+
+  await reativarConversaParaDisparo({
+    conversaId: conversa.id,
+    usuarioId: params.usuarioId,
+  });
+
+  const protocoloAtivo = await buscarOuCriarProtocoloAtivoDaConversa({
+    empresaId: params.empresaId,
+    conversaId: conversa.id,
+  });
+
+  return {
+    contato,
+    conversa,
+    protocoloAtivo,
+  };
+}
+
+export async function GET(req: NextRequest) {
   try {
     const resultadoContexto = await getUsuarioContexto();
 
-    console.log("[DISPAROS] resultadoContexto.ok:", resultadoContexto.ok);
-
     if (!resultadoContexto.ok) {
-      console.log("[DISPAROS] contexto inválido:", resultadoContexto);
-
       return NextResponse.json(
         { ok: false, error: resultadoContexto.error },
         { status: resultadoContexto.status }
@@ -280,12 +468,85 @@ export async function POST(req: NextRequest) {
 
     const { usuario } = resultadoContexto;
 
-    console.log("[DISPAROS] usuario.id:", usuario?.id || null);
-    console.log("[DISPAROS] usuario.empresa_id:", usuario?.empresa_id || null);
-    console.log("[DISPAROS] usuario.status:", usuario?.status || null);
-    console.log("[DISPAROS] usuario.permissoes:", usuario?.permissoes || []);
-    console.log("[DISPAROS] usuario.perfis:", usuario?.perfis_dinamicos || []);
+    if (!usuario?.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada." },
+        { status: 400 }
+      );
+    }
 
+    const limitParam = Number(req.nextUrl.searchParams.get("limit") || "100");
+    const limit = Number.isFinite(limitParam)
+      ? Math.min(Math.max(limitParam, 1), 300)
+      : 100;
+
+    const { data, error } = await supabaseAdmin
+      .from("whatsapp_disparos_logs")
+      .select(`
+        id,
+        conversa_id,
+        numero,
+        nome_contato,
+        template_nome,
+        template_idioma,
+        mensagem,
+        status,
+        erro,
+        status_http,
+        message_id,
+        created_at
+      `)
+      .eq("empresa_id", usuario.empresa_id)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: `Erro ao buscar histórico: ${error.message}` },
+        { status: 500 }
+      );
+    }
+
+    const resultados = (data || []).map((item: any) => ({
+      id: item.id,
+      created_at: item.created_at,
+      conversa_id: item.conversa_id,
+      numero: item.numero || "-",
+      nome_contato: item.nome_contato || "Sem nome",
+      template_nome: item.template_nome || "-",
+      mensagem_template: item.mensagem || "Sem conteúdo",
+      status_disparo: item.status || "falha",
+      status_label: item.status === "sucesso" ? "Enviado" : "Falhou",
+      erro: item.erro || null,
+      status_http: item.status_http || null,
+      message_id: item.message_id || null,
+      ok: item.status === "sucesso",
+    }));
+
+    return NextResponse.json({
+      ok: true,
+      resultados,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { ok: false, error: error?.message || "Erro interno." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const resultadoContexto = await getUsuarioContexto();
+
+    if (!resultadoContexto.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultadoContexto.error },
+        { status: resultadoContexto.status }
+      );
+    }
+
+    const { usuario } = resultadoContexto;
     const body = await req.json();
 
     const integracaoWhatsappId = String(body?.integracao_whatsapp_id || "").trim();
@@ -294,14 +555,7 @@ export async function POST(req: NextRequest) {
       ? (body.destinatarios as DestinatarioEntrada[])
       : [];
 
-    console.log("[DISPAROS] integracaoWhatsappId:", integracaoWhatsappId);
-    console.log("[DISPAROS] templateId:", templateId);
-    console.log("[DISPAROS] totalDestinatarios:", destinatarios.length);
-    console.log("[DISPAROS] destinatariosPreview:", destinatarios.slice(0, 5));
-
     if (!usuario?.empresa_id) {
-      console.log("[DISPAROS] usuário sem empresa vinculada");
-
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },
         { status: 400 }
@@ -333,23 +587,15 @@ export async function POST(req: NextRequest) {
 
     const permitido = podeRealizarDisparos(usuario);
 
-    console.log("[DISPAROS] podeRealizarDisparos:", permitido);
-
     if (!permitido) {
       return NextResponse.json(
         {
           ok: false,
           error: "Você não tem permissão para realizar disparos.",
-          debug: {
-            permissoes: usuario?.permissoes || [],
-            perfis: usuario?.perfis_dinamicos || [],
-          },
         },
         { status: 403 }
       );
     }
-
-    console.log("[DISPAROS] buscando integração...");
 
     const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")
@@ -357,15 +603,11 @@ export async function POST(req: NextRequest) {
       .eq("id", integracaoWhatsappId)
       .single();
 
-    console.log("[DISPAROS] integracao:", integracao || null);
-    console.log("[DISPAROS] integracaoError:", integracaoError || null);
-
     if (integracaoError || !integracao) {
       return NextResponse.json(
         {
           ok: false,
           error: "Integração WhatsApp não encontrada.",
-          debug: { integracaoError },
         },
         { status: 404 }
       );
@@ -376,16 +618,10 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           error: "Você não pode usar esta integração.",
-          debug: {
-            integracao_empresa_id: integracao.empresa_id,
-            usuario_empresa_id: usuario.empresa_id,
-          },
         },
         { status: 403 }
       );
     }
-
-    console.log("[DISPAROS] buscando template...");
 
     const { data: template, error: templateError } = await supabaseAdmin
       .from("whatsapp_templates")
@@ -401,15 +637,11 @@ export async function POST(req: NextRequest) {
       .eq("id", templateId)
       .single();
 
-    console.log("[DISPAROS] template:", template || null);
-    console.log("[DISPAROS] templateError:", templateError || null);
-
     if (templateError || !template) {
       return NextResponse.json(
         {
           ok: false,
           error: "Template não encontrado.",
-          debug: { templateError },
         },
         { status: 404 }
       );
@@ -420,10 +652,6 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           error: "Você não pode usar este template.",
-          debug: {
-            template_empresa_id: template.empresa_id,
-            usuario_empresa_id: usuario.empresa_id,
-          },
         },
         { status: 403 }
       );
@@ -434,10 +662,6 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           error: "O template não pertence à integração selecionada.",
-          debug: {
-            template_integracao_whatsapp_id: template.integracao_whatsapp_id,
-            integracaoWhatsappId,
-          },
         },
         { status: 400 }
       );
@@ -448,7 +672,6 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           error: "Somente templates aprovados podem ser disparados.",
-          debug: { template_status: template.status },
         },
         { status: 400 }
       );
@@ -463,21 +686,12 @@ export async function POST(req: NextRequest) {
     const phoneNumberId =
       integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
 
-    console.log("[DISPAROS] tokenEnvName:", tokenEnvName);
-    console.log("[DISPAROS] tokenExiste:", !!token);
-    console.log("[DISPAROS] phoneNumberId:", phoneNumberId || null);
-
     if (!token || !phoneNumberId) {
       return NextResponse.json(
         {
           ok: false,
           error:
             "Token ou phone_number_id do WhatsApp não configurado para esta integração.",
-          debug: {
-            tokenEnvName,
-            tokenExiste: !!token,
-            phoneNumberId,
-          },
         },
         { status: 500 }
       );
@@ -485,28 +699,69 @@ export async function POST(req: NextRequest) {
 
     const payloadTemplate = (template.payload || null) as TemplatePayload | null;
 
-    console.log(
-      "[DISPAROS] payloadTemplate:",
-      JSON.stringify(payloadTemplate, null, 2)
-    );
-
     const resultados = await Promise.all(
-      destinatarios.map(async (item, index) => {
+      destinatarios.map(async (item) => {
         const numero = limparNumero(item.numero || "");
         const variaveis = Array.isArray(item.variaveis) ? item.variaveis : [];
-
-        console.log(`[DISPAROS] destinatario #${index + 1} numero:`, numero);
-        console.log(`[DISPAROS] destinatario #${index + 1} variaveis:`, variaveis);
+        const nomeContatoVariavel = variaveis[0] || null;
 
         if (!numero || numero.length < 10) {
+          const mensagemTemplateInvalida =
+            montarConteudoTextoTemplate(payloadTemplate, variaveis) ||
+            `Template enviado: ${template.nome}`;
+
+          await registrarLogDisparo({
+            empresaId,
+            integracaoWhatsappId,
+            templateId: template.id,
+            conversaId: null,
+            conversaProtocoloId: null,
+            contatoId: null,
+            usuarioId: usuario.id,
+            numero,
+            nomeContato: nomeContatoVariavel,
+            templateNome: template.nome,
+            templateIdioma: template.idioma || null,
+            mensagem: mensagemTemplateInvalida,
+            status: "falha",
+            erro: "Número inválido.",
+            statusHttp: 0,
+            messageId: null,
+            variaveis,
+            metaResponse: null,
+            metadataJson: {
+              tipo: "disparo_template",
+              motivo: "numero_invalido",
+            },
+          });
           return {
             numero,
+            nome_contato: nomeContatoVariavel,
             ok: false,
+            status: 0,
+            status_disparo: "falha",
+            status_label: "Falhou",
+            template_nome: template.nome,
+            mensagem_template:
+              montarConteudoTextoTemplate(payloadTemplate, variaveis) ||
+              `Template enviado: ${template.nome}`,
+            message_id: null,
             erro: "Número inválido.",
           };
         }
 
         try {
+          const recursos = await garantirContatoConversaEProtocolo({
+            empresaId,
+            integracaoWhatsappId,
+            usuarioId: usuario.id,
+            numero,
+            nomeContato: nomeContatoVariavel,
+          });
+
+          const nomeContatoFinal =
+            recursos.contato?.nome || nomeContatoVariavel || "Sem nome";
+
           const components = montarComponentesTemplate(payloadTemplate, variaveis);
 
           const bodyMeta: Record<string, any> = {
@@ -525,11 +780,6 @@ export async function POST(req: NextRequest) {
             bodyMeta.template.components = components;
           }
 
-          console.log(
-            `[DISPAROS] bodyMeta destinatario #${index + 1}:`,
-            JSON.stringify(bodyMeta, null, 2)
-          );
-
           const response = await fetch(
             `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
             {
@@ -544,14 +794,9 @@ export async function POST(req: NextRequest) {
 
           const data = await response.json();
 
-          console.log(
-            `[DISPAROS] meta status destinatario #${index + 1}:`,
-            response.status
-          );
-          console.log(
-            `[DISPAROS] meta resposta destinatario #${index + 1}:`,
-            data
-          );
+          const mensagemTemplate =
+            montarConteudoTextoTemplate(payloadTemplate, variaveis) ||
+            `Template enviado: ${template.nome}`;
 
           if (!response.ok) {
             const erroMeta =
@@ -559,73 +804,172 @@ export async function POST(req: NextRequest) {
               data?.error?.message ||
               "Erro ao enviar mensagem.";
 
+            await registrarMensagemDeDisparo({
+              empresaId,
+              conversaId: recursos.conversa.id,
+              conversaProtocoloId: recursos.protocoloAtivo.id,
+              usuarioId: usuario.id,
+              templateId: template.id,
+              templateNome: template.nome,
+              templateIdioma: template.idioma || null,
+              numeroDestino: numero,
+              nomeContato: nomeContatoFinal,
+              variaveis,
+              payloadTemplate,
+              mensagemExternaId: null,
+              statusEnvio: "falha",
+              metaResponse: data,
+              erroEnvio: erroMeta,
+            });
+
+            await registrarLogDisparo({
+              empresaId,
+              integracaoWhatsappId,
+              templateId: template.id,
+              conversaId: recursos.conversa.id,
+              conversaProtocoloId: recursos.protocoloAtivo.id,
+              contatoId: recursos.contato.id,
+              usuarioId: usuario.id,
+              numero,
+              nomeContato: nomeContatoFinal,
+              templateNome: template.nome,
+              templateIdioma: template.idioma || null,
+              mensagem: mensagemTemplate,
+              status: "falha",
+              erro: erroMeta,
+              statusHttp: response.status,
+              messageId: null,
+              variaveis,
+              metaResponse: data,
+              metadataJson: {
+                tipo: "disparo_template",
+              },
+            });
+
+            await atualizarUltimaMensagemConversa(recursos.conversa.id);
+
             return {
               numero,
+              nome_contato: nomeContatoFinal,
               ok: false,
               status: response.status,
+              status_disparo: "falha",
+              status_label: "Falhou",
+              template_nome: template.nome,
+              mensagem_template: mensagemTemplate,
+              message_id: null,
+              conversa_id: recursos.conversa.id,
+              conversa_protocolo_id: recursos.protocoloAtivo.id,
               erro: erroMeta,
             };
           }
 
           const messageId = data?.messages?.[0]?.id || null;
 
-          const contato = await findOrCreateWhatsAppContact({
-            empresaId,
-            phone: numero,
-            profileName: null,
-          });
-
-          const conversa = await findOrCreateWhatsAppConversation({
-            empresaId,
-            contatoId: contato.id,
-            integracaoWhatsappId,
-          });
-
-          const protocoloAtivo = await buscarProtocoloAtivoDaConversa(conversa.id);
-
           await registrarMensagemDeDisparo({
             empresaId,
-            conversaId: conversa.id,
-            conversaProtocoloId: protocoloAtivo.id,
+            conversaId: recursos.conversa.id,
+            conversaProtocoloId: recursos.protocoloAtivo.id,
             usuarioId: usuario.id,
             templateId: template.id,
             templateNome: template.nome,
             templateIdioma: template.idioma || null,
             numeroDestino: numero,
+            nomeContato: nomeContatoFinal,
             variaveis,
             payloadTemplate,
             mensagemExternaId: messageId,
+            statusEnvio: "enviada",
             metaResponse: data,
+            erroEnvio: null,
           });
 
-          await atualizarUltimaMensagemConversa(conversa.id);
+          await registrarLogDisparo({
+            empresaId,
+            integracaoWhatsappId,
+            templateId: template.id,
+            conversaId: recursos.conversa.id,
+            conversaProtocoloId: recursos.protocoloAtivo.id,
+            contatoId: recursos.contato.id,
+            usuarioId: usuario.id,
+            numero,
+            nomeContato: nomeContatoFinal,
+            templateNome: template.nome,
+            templateIdioma: template.idioma || null,
+            mensagem: mensagemTemplate,
+            status: "sucesso",
+            erro: null,
+            statusHttp: response.status,
+            messageId,
+            variaveis,
+            metaResponse: data,
+            metadataJson: {
+              tipo: "disparo_template",
+            },
+          });
+
+          await atualizarUltimaMensagemConversa(recursos.conversa.id);
 
           return {
             numero,
+            nome_contato: nomeContatoFinal,
             ok: true,
             status: response.status,
+            status_disparo: "enviada",
+            status_label: "Enviado",
+            template_nome: template.nome,
+            mensagem_template: mensagemTemplate,
             message_id: messageId,
-            conversa_id: conversa.id,
-            conversa_protocolo_id: protocoloAtivo.id,
+            conversa_id: recursos.conversa.id,
+            conversa_protocolo_id: recursos.protocoloAtivo.id,
             erro: null,
           };
         } catch (error: any) {
-          console.error(
-            `[DISPAROS] erro inesperado destinatario #${index + 1}:`,
-            error
-          );
+          const mensagemTemplateErro =
+            montarConteudoTextoTemplate(payloadTemplate, variaveis) ||
+            `Template enviado: ${template.nome}`;
 
+          await registrarLogDisparo({
+            empresaId,
+            integracaoWhatsappId,
+            templateId: template.id,
+            conversaId: null,
+            conversaProtocoloId: null,
+            contatoId: null,
+            usuarioId: usuario.id,
+            numero,
+            nomeContato: nomeContatoVariavel || "Sem nome",
+            templateNome: template.nome,
+            templateIdioma: template.idioma || null,
+            mensagem: mensagemTemplateErro,
+            status: "falha",
+            erro: error?.message || "Erro inesperado no envio.",
+            statusHttp: 0,
+            messageId: null,
+            variaveis,
+            metaResponse: null,
+            metadataJson: {
+              tipo: "disparo_template",
+              origem: "catch",
+            },
+          });
           return {
             numero,
+            nome_contato: nomeContatoVariavel || "Sem nome",
             ok: false,
+            status: 0,
+            status_disparo: "falha",
+            status_label: "Falhou",
+            template_nome: template.nome,
+            mensagem_template:
+              montarConteudoTextoTemplate(payloadTemplate, variaveis) ||
+              `Template enviado: ${template.nome}`,
+            message_id: null,
             erro: error?.message || "Erro inesperado no envio.",
           };
         }
       })
     );
-
-    console.log("[DISPAROS] resultados finais:", resultados);
-    console.log("[DISPAROS] ===== FIM OK =====");
 
     return NextResponse.json({
       ok: true,
@@ -635,8 +979,6 @@ export async function POST(req: NextRequest) {
       resultados,
     });
   } catch (error: any) {
-    console.error("[DISPAROS] ===== FIM ERRO =====", error);
-
     return NextResponse.json(
       { ok: false, error: error?.message || "Erro interno." },
       { status: 500 }

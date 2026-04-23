@@ -192,7 +192,7 @@ async function enviarConviteAuth(params: {
   const { email, nome, empresaId, telefone } = params;
 
   const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/definir-senha`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/definir-senha`,
     data: {
       nome,
       empresa_id: empresaId,

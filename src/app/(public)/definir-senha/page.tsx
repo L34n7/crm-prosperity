@@ -4,21 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
-function getCookie(nome: string) {
-  if (typeof document === "undefined") return null;
-
-  const valor = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith(`${nome}=`))
-    ?.split("=")[1];
-
-  return valor ? decodeURIComponent(valor) : null;
-}
-
-function apagarCookie(nome: string) {
-  document.cookie = `${nome}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
-}
-
 export default function DefinirSenhaPage() {
   const router = useRouter();
 
@@ -38,45 +23,25 @@ export default function DefinirSenhaPage() {
   const [emailUsuario, setEmailUsuario] = useState("");
 
   useEffect(() => {
-    async function iniciarSessao() {
+    async function carregarUsuario() {
       try {
-        const accessToken = getCookie("sb-access-token");
-        const refreshToken = getCookie("sb-refresh-token");
+        const { data, error } = await supabase.auth.getUser();
 
-        if (!accessToken || !refreshToken) {
-          setErro("Seu link é inválido ou expirou. Solicite um novo acesso.");
+        if (error || !data.user) {
+          setErro("Seu link é inválido, expirou ou sua sessão não foi criada.");
           setCarregandoSessao(false);
           return;
         }
 
-        const { data, error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-
-        if (error || !data.session) {
-          setErro("Não foi possível validar seu acesso. Solicite um novo email.");
-          setCarregandoSessao(false);
-          return;
-        }
-
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-
-        if (userError || !userData.user) {
-          setErro("Não foi possível carregar seu usuário.");
-          setCarregandoSessao(false);
-          return;
-        }
-
-        setEmailUsuario(userData.user.email ?? "");
+        setEmailUsuario(data.user.email ?? "");
       } catch {
-        setErro("Ocorreu um erro ao validar seu link.");
+        setErro("Ocorreu um erro ao validar seu acesso.");
       } finally {
         setCarregandoSessao(false);
       }
     }
 
-    iniciarSessao();
+    carregarUsuario();
   }, [supabase]);
 
   async function handleSubmit(event: FormEvent) {
@@ -98,12 +63,21 @@ export default function DefinirSenhaPage() {
     try {
       setEnviando(true);
 
-      const { error } = await supabase.auth.updateUser({
+      const { error: erroSenha } = await supabase.auth.updateUser({
         password: senha,
       });
 
-      if (error) {
-        setErro(error.message);
+      if (erroSenha) {
+        setErro(erroSenha.message);
+        return;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setErro("Não foi possível obter a sessão do usuário.");
         return;
       }
 
@@ -111,6 +85,7 @@ export default function DefinirSenhaPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
 
@@ -120,9 +95,6 @@ export default function DefinirSenhaPage() {
         setErro(json.error || "Senha criada, mas houve erro ao finalizar cadastro.");
         return;
       }
-
-      apagarCookie("sb-access-token");
-      apagarCookie("sb-refresh-token");
 
       setSucesso("Senha criada com sucesso. Redirecionando para o login...");
 

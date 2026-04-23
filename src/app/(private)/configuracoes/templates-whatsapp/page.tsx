@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import "./templates-whatsapp.css";
+import Header from "@/components/Header";
+import styles from "./templates-whatsapp.module.css";
 
 type IntegracaoWhatsApp = {
   id: string;
@@ -11,14 +12,16 @@ type IntegracaoWhatsApp = {
   waba_id: string | null;
 };
 
+type TemplateButton = {
+  type: string;
+  text: string;
+};
+
 type TemplateComponent = {
   type: string;
   text?: string;
   format?: string;
-  buttons?: Array<{
-    type: string;
-    text: string;
-  }>;
+  buttons?: TemplateButton[];
   example?: {
     body_text?: string[][];
   };
@@ -81,32 +84,82 @@ function getStatusLabel(status: string | null | undefined) {
 }
 
 function getStatusClass(status: string | null | undefined) {
-  if (!status) return "tw-badge tw-badge-gray";
+  if (!status) return `${styles.badge} ${styles.badgeGray}`;
 
   switch (status.toUpperCase()) {
     case "PENDING":
-      return "tw-badge tw-badge-yellow";
+      return `${styles.badge} ${styles.badgeYellow}`;
     case "APPROVED":
-      return "tw-badge tw-badge-green";
+      return `${styles.badge} ${styles.badgeGreen}`;
     case "REJECTED":
-      return "tw-badge tw-badge-red";
+      return `${styles.badge} ${styles.badgeRed}`;
     case "PAUSED":
     case "DISABLED":
     case "ARCHIVED":
-      return "tw-badge tw-badge-gray";
+      return `${styles.badge} ${styles.badgeGray}`;
+    case "ERRO_ENVIO":
+      return `${styles.badge} ${styles.badgeRed}`;
     default:
-      return "tw-badge tw-badge-blue";
+      return `${styles.badge} ${styles.badgeBlue}`;
   }
 }
 
+function getComponent(
+  payload: WhatsAppTemplate["payload"],
+  type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS"
+) {
+  return payload?.components?.find((item) => item.type === type) || null;
+}
+
+function extrairHeader(payload: WhatsAppTemplate["payload"]) {
+  const header = getComponent(payload, "HEADER");
+  return header?.text || "";
+}
+
 function extrairBody(payload: WhatsAppTemplate["payload"]) {
-  const body = payload?.components?.find((item) => item.type === "BODY");
-  return body?.text || "-";
+  const body = getComponent(payload, "BODY");
+  return body?.text || "";
 }
 
 function extrairFooter(payload: WhatsAppTemplate["payload"]) {
-  const footer = payload?.components?.find((item) => item.type === "FOOTER");
-  return footer?.text || "-";
+  const footer = getComponent(payload, "FOOTER");
+  return footer?.text || "";
+}
+
+function extrairQuickReplies(payload: WhatsAppTemplate["payload"]) {
+  const buttons = getComponent(payload, "BUTTONS");
+
+  return (
+    buttons?.buttons
+      ?.filter((button) => button?.type === "QUICK_REPLY" && button?.text)
+      .map((button) => button.text || "")
+      .filter(Boolean) || []
+  );
+}
+
+function contarVariaveisTexto(texto: string) {
+  const matches = texto.match(/\{\{\d+\}\}/g) || [];
+  const numeros = matches
+    .map((item) => Number(item.replace(/[{}]/g, "")))
+    .filter((n) => !Number.isNaN(n));
+
+  if (numeros.length === 0) return 0;
+  return Math.max(...numeros);
+}
+
+function formatarStatusIntegracao(status?: string | null) {
+  if (!status) return "Sem status";
+
+  switch ((status || "").toLowerCase()) {
+    case "ativo":
+      return "Ativo";
+    case "conectado":
+      return "Conectado";
+    case "inativo":
+      return "Inativo";
+    default:
+      return status;
+  }
 }
 
 export default function TemplatesWhatsAppPage() {
@@ -116,6 +169,7 @@ export default function TemplatesWhatsAppPage() {
   const [loadingIntegracoes, setLoadingIntegracoes] = useState(true);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
 
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
@@ -136,11 +190,11 @@ export default function TemplatesWhatsAppPage() {
   const [quickReply1, setQuickReply1] = useState("");
   const [quickReply2, setQuickReply2] = useState("");
   const [quickReply3, setQuickReply3] = useState("");
-  const [sincronizando, setSincronizando] = useState(false);
 
   async function carregarIntegracoes() {
     try {
       setLoadingIntegracoes(true);
+      setErro("");
 
       const res = await fetch("/api/integracoes-whatsapp", {
         cache: "no-store",
@@ -200,6 +254,29 @@ export default function TemplatesWhatsAppPage() {
     return integracoes.find((item) => item.id === integracaoId) || null;
   }, [integracoes, integracaoId]);
 
+  const quickRepliesPreview = [quickReply1, quickReply2, quickReply3]
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const totalVariaveisBody = useMemo(() => contarVariaveisTexto(bodyText), [bodyText]);
+
+  const resumoTemplates = useMemo(() => {
+    const total = templates.length;
+    const aprovados = templates.filter(
+      (item) => item.status?.toUpperCase() === "APPROVED"
+    ).length;
+    const pendentes = templates.filter(
+      (item) => item.status?.toUpperCase() === "PENDING"
+    ).length;
+    const rejeitados = templates.filter(
+      (item) =>
+        item.status?.toUpperCase() === "REJECTED" ||
+        item.status?.toUpperCase() === "ERRO_ENVIO"
+    ).length;
+
+    return { total, aprovados, pendentes, rejeitados };
+  }, [templates]);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -256,14 +333,10 @@ export default function TemplatesWhatsAppPage() {
         });
       }
 
-      const quickReplies = [quickReply1, quickReply2, quickReply3]
-        .map((item) => item.trim())
-        .filter(Boolean);
-
-      if (quickReplies.length > 0) {
+      if (quickRepliesPreview.length > 0) {
         components.push({
           type: "BUTTONS",
-          buttons: quickReplies.map((text) => ({
+          buttons: quickRepliesPreview.map((text) => ({
             type: "QUICK_REPLY",
             text,
           })),
@@ -296,6 +369,7 @@ export default function TemplatesWhatsAppPage() {
       }
 
       setMensagem("Template criado com sucesso e enviado para análise do Meta.");
+
       setName("");
       setHeaderText("");
       setBodyText(
@@ -317,348 +391,470 @@ export default function TemplatesWhatsAppPage() {
   }
 
   async function sincronizarTemplatesMeta() {
-  try {
-    setMensagem("");
-    setErro("");
+    try {
+      setMensagem("");
+      setErro("");
 
-    if (!filtroIntegracao && !integracaoId) {
-      setErro("Selecione uma integração para sincronizar.");
-      return;
+      if (!filtroIntegracao && !integracaoId) {
+        setErro("Selecione uma integração para sincronizar.");
+        return;
+      }
+
+      const integracaoParaSync = filtroIntegracao || integracaoId;
+
+      setSincronizando(true);
+
+      const res = await fetch("/api/whatsapp/templates/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          integracao_whatsapp_id: integracaoParaSync,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao sincronizar templates.");
+      }
+
+      setMensagem(
+        `Sincronização concluída. Meta: ${json.total_meta}, inseridos: ${json.inseridos}, atualizados: ${json.atualizados}.`
+      );
+
+      await carregarTemplates(filtroIntegracao);
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao sincronizar templates.");
+    } finally {
+      setSincronizando(false);
     }
-
-    const integracaoParaSync = filtroIntegracao || integracaoId;
-
-    setSincronizando(true);
-
-    const res = await fetch("/api/whatsapp/templates/sync", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        integracao_whatsapp_id: integracaoParaSync,
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao sincronizar templates.");
-    }
-
-    setMensagem(
-      `Sincronização concluída. Meta: ${json.total_meta}, inseridos: ${json.inseridos}, atualizados: ${json.atualizados}.`
-    );
-
-    await carregarTemplates(filtroIntegracao);
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao sincronizar templates.");
-  } finally {
-    setSincronizando(false);
   }
-}
 
   return (
-    <div className="tw-page">
-      <div className="tw-header-card">
-        <div>
-          <h1 className="tw-title">Templates do WhatsApp</h1>
-          <p className="tw-subtitle">
-            Crie, visualize e acompanhe os templates enviados para aprovação no Meta.
-          </p>
-        </div>
+    <>
+      <Header
+        title="Templates do WhatsApp"
+        subtitle="Crie, visualize e acompanhe os templates enviados para aprovação no Meta."
+      />
 
-        <button
-          type="button"
-          onClick={() => carregarTemplates(filtroIntegracao)}
-          className="tw-button tw-button-secondary"
-        >
-          Atualizar lista
-        </button>
+      <div className={styles.pageContent}>
+        {(mensagem || erro) && (
+          <>
+            {mensagem ? <div className={styles.successAlert}>{mensagem}</div> : null}
+            {erro ? <div className={styles.errorAlert}>{erro}</div> : null}
+          </>
+        )}
 
-        <button
-            type="button"
-            onClick={sincronizarTemplatesMeta}
-            className="tw-button tw-button-primary"
-            disabled={sincronizando}
-          >
-            {sincronizando ? "Sincronizando..." : "Sincronizar com Meta"}
-          </button>
-          
-      </div>
+        <div className={styles.layout}>
+          <div className={styles.formCard}>
+            <div className={styles.cardHeader}>
+              <p className={styles.eyebrow}>Criação de template</p>
+              <h2 className={styles.cardTitle}>Novo template</h2>
+              <p className={styles.cardSubtitle}>
+                Monte o template, revise a prévia e envie para validação do Meta.
+              </p>
+            </div>
 
-      <div className="tw-layout">
-        <div className="tw-card">
-          <div className="tw-card-header">
-            <h2 className="tw-card-title">Novo template</h2>
-            <p className="tw-card-subtitle">
-              Monte o template e envie para validação do Meta.
-            </p>
-          </div>
+            <form onSubmit={handleSubmit} className={styles.form}>
+              <div className={styles.topGrid}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Integração WhatsApp</label>
+                  <select
+                    value={integracaoId}
+                    onChange={(e) => setIntegracaoId(e.target.value)}
+                    className={styles.input}
+                    required
+                  >
+                    <option value="">
+                      {loadingIntegracoes ? "Carregando..." : "Selecione uma integração"}
+                    </option>
 
-          <form onSubmit={handleSubmit} className="tw-form">
-            <div className="tw-field">
-              <label className="tw-label">Integração WhatsApp</label>
-              <select
-                value={integracaoId}
-                onChange={(e) => setIntegracaoId(e.target.value)}
-                className="tw-input"
-                required
-              >
-                <option value="">
-                  {loadingIntegracoes ? "Carregando..." : "Selecione uma integração"}
-                </option>
-                {integracoes.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.nome_conexao} {item.numero ? `- ${item.numero}` : ""}
-                  </option>
-                ))}
-              </select>
+                    {integracoes.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.nome_conexao}
+                        {item.numero ? ` - ${item.numero}` : ""}
+                      </option>
+                    ))}
+                  </select>
 
-              {integracaoSelecionada ? (
-                <div className="tw-info-box">
-                  <div>
-                    <strong>Status:</strong> {integracaoSelecionada.status || "-"}
-                  </div>
-                  <div>
-                    <strong>WABA ID:</strong> {integracaoSelecionada.waba_id || "-"}
-                  </div>
+                  {integracaoSelecionada ? (
+                    <div className={styles.infoBox}>
+                      <div>
+                        <strong>Status:</strong>{" "}
+                        {formatarStatusIntegracao(integracaoSelecionada.status)}
+                      </div>
+                      <div>
+                        <strong>WABA ID:</strong> {integracaoSelecionada.waba_id || "-"}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
 
-            <div className="tw-field">
-              <label className="tw-label">Nome do template</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="tw-input"
-                placeholder="ex: aviso_atendimento_iniciado"
-                required
-              />
-              <p className="tw-help">
-                Use nome simples, sem espaços. O backend já normaliza automaticamente.
-              </p>
-            </div>
-
-            <div className="tw-grid-2">
-              <div className="tw-field">
-                <label className="tw-label">Categoria</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as "UTILITY" | "MARKETING")}
-                  className="tw-input"
-                >
-                  <option value="UTILITY">UTILITY</option>
-                  <option value="MARKETING">MARKETING</option>
-                </select>
+                <div className={styles.field}>
+                  <label className={styles.label}>Nome do template</label>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={styles.input}
+                    placeholder="ex: aviso_atendimento_iniciado"
+                    required
+                  />
+                  <p className={styles.help}>
+                    Use nome simples, sem espaços. O backend normaliza automaticamente.
+                  </p>
+                </div>
               </div>
 
-              <div className="tw-field">
-                <label className="tw-label">Idioma</label>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="tw-input"
-                >
-                  <option value="pt_BR">Português (Brasil)</option>
-                </select>
+              <div className={styles.topGrid}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Categoria</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value as "UTILITY" | "MARKETING")}
+                    className={styles.input}
+                  >
+                    <option value="UTILITY">UTILITY</option>
+                    <option value="MARKETING">MARKETING</option>
+                  </select>
+                  <p className={styles.help}>
+                    UTILITY para comunicação operacional. MARKETING para campanhas e divulgação.
+                  </p>
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Idioma</label>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className={styles.input}
+                  >
+                    <option value="pt_BR">Português (Brasil)</option>
+                  </select>
+                </div>
               </div>
-            </div>
 
-            <div className="tw-field">
-              <label className="tw-label">Header</label>
-              <input
-                value={headerText}
-                onChange={(e) => setHeaderText(e.target.value)}
-                className="tw-input"
-                placeholder="Opcional"
-              />
-            </div>
-
-            <div className="tw-field">
-              <label className="tw-label">Body</label>
-              <textarea
-                value={bodyText}
-                onChange={(e) => setBodyText(e.target.value)}
-                rows={6}
-                className="tw-textarea"
-                placeholder="Digite o conteúdo principal do template"
-                required
-              />
-              <p className="tw-help">
-                Evite deixar variável no começo ou no final. Exemplo:
-                <code className="tw-inline-code">{' {{1}} '}</code>
-                deve ficar com texto antes e depois.
-              </p>
-            </div>
-
-            <div className="tw-grid-2">
-              <div className="tw-field">
-                <label className="tw-label">Exemplo variável 1</label>
+              <div className={styles.field}>
+                <label className={styles.label}>Header</label>
                 <input
-                  value={bodyExample1}
-                  onChange={(e) => setBodyExample1(e.target.value)}
-                  className="tw-input"
-                  placeholder="Ex: João"
+                  value={headerText}
+                  onChange={(e) => setHeaderText(e.target.value)}
+                  className={styles.input}
+                  placeholder="Opcional"
                 />
               </div>
 
-              <div className="tw-field">
-                <label className="tw-label">Exemplo variável 2</label>
-                <input
-                  value={bodyExample2}
-                  onChange={(e) => setBodyExample2(e.target.value)}
-                  className="tw-input"
-                  placeholder="Ex: ABC-123456"
+              <div className={styles.field}>
+                <label className={styles.label}>Body</label>
+                <textarea
+                  value={bodyText}
+                  onChange={(e) => setBodyText(e.target.value)}
+                  rows={7}
+                  className={styles.textarea}
+                  placeholder="Digite o conteúdo principal do template"
+                  required
                 />
-              </div>
-            </div>
-
-            <div className="tw-field">
-              <label className="tw-label">Footer</label>
-              <input
-                value={footerText}
-                onChange={(e) => setFooterText(e.target.value)}
-                className="tw-input"
-                placeholder="Opcional"
-              />
-            </div>
-
-            <div className="tw-card-muted">
-              <div className="tw-card-muted-header">
-                <h3 className="tw-card-muted-title">Quick replies</h3>
-                <p className="tw-card-muted-subtitle">
-                  Opcional. Você pode adicionar até 3 respostas rápidas.
+                <p className={styles.help}>
+                  Use variáveis como {"{{1}}"} e {"{{2}}"}. Evite deixar variável no início ou no
+                  final da frase.
                 </p>
               </div>
 
-              <div className="tw-stack">
-                <input
-                  value={quickReply1}
-                  onChange={(e) => setQuickReply1(e.target.value)}
-                  className="tw-input"
-                  placeholder="Quick reply 1"
-                />
+              <div className={styles.topGrid}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Exemplo variável 1</label>
+                  <input
+                    value={bodyExample1}
+                    onChange={(e) => setBodyExample1(e.target.value)}
+                    className={styles.input}
+                    placeholder="Ex: João"
+                  />
+                </div>
 
+                <div className={styles.field}>
+                  <label className={styles.label}>Exemplo variável 2</label>
+                  <input
+                    value={bodyExample2}
+                    onChange={(e) => setBodyExample2(e.target.value)}
+                    className={styles.input}
+                    placeholder="Ex: ABC-123456"
+                  />
+                </div>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Footer</label>
                 <input
-                  value={quickReply2}
-                  onChange={(e) => setQuickReply2(e.target.value)}
-                  className="tw-input"
-                  placeholder="Quick reply 2"
+                  value={footerText}
+                  onChange={(e) => setFooterText(e.target.value)}
+                  className={styles.input}
+                  placeholder="Opcional"
                 />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Quick replies</label>
+
+                <div className={styles.topGrid}>
+                  <input
+                    value={quickReply1}
+                    onChange={(e) => setQuickReply1(e.target.value)}
+                    className={styles.input}
+                    placeholder="Quick reply 1"
+                  />
+
+                  <input
+                    value={quickReply2}
+                    onChange={(e) => setQuickReply2(e.target.value)}
+                    className={styles.input}
+                    placeholder="Quick reply 2"
+                  />
+                </div>
 
                 <input
                   value={quickReply3}
                   onChange={(e) => setQuickReply3(e.target.value)}
-                  className="tw-input"
+                  className={styles.input}
                   placeholder="Quick reply 3"
                 />
+
+                <p className={styles.help}>
+                  Opcional. Você pode adicionar até 3 respostas rápidas.
+                </p>
               </div>
-            </div>
 
-            {mensagem ? <div className="tw-alert tw-alert-success">{mensagem}</div> : null}
-            {erro ? <div className="tw-alert tw-alert-error">{erro}</div> : null}
+              <div className={styles.previewCard}>
+                <div className={styles.previewHeader}>
+                  <div>
+                    <h3 className={styles.previewTitle}>Prévia do template</h3>
+                    <p className={styles.previewSubtitle}>
+                      Revise o conteúdo antes de enviar para aprovação.
+                    </p>
+                  </div>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="tw-button tw-button-primary tw-button-full"
-            >
-              {submitting ? "Enviando..." : "Criar template"}
-            </button>
-          </form>
-        </div>
+                  <span className={`${styles.badge} ${styles.badgeBlue}`}>
+                    Variáveis detectadas: {totalVariaveisBody}
+                  </span>
+                </div>
 
-        <div className="tw-card">
-          <div className="tw-list-header">
-            <div>
-              <h2 className="tw-card-title">Templates cadastrados</h2>
-              <p className="tw-card-subtitle">
-                Acompanhe o status dos templates enviados ao Meta.
+                <div className={styles.previewGrid}>
+                  <div className={styles.previewBlock}>
+                    <span className={styles.previewLabel}>Header</span>
+                    <p className={styles.previewText}>{headerText.trim() || "Não informado"}</p>
+                  </div>
+
+                  <div className={styles.previewBlock}>
+                    <span className={styles.previewLabel}>Body</span>
+                    <p className={styles.previewText}>{bodyText.trim() || "Não informado"}</p>
+                  </div>
+
+                  <div className={styles.previewBlock}>
+                    <span className={styles.previewLabel}>Footer</span>
+                    <p className={styles.previewText}>{footerText.trim() || "Não informado"}</p>
+                  </div>
+
+                  <div className={styles.previewBlock}>
+                    <span className={styles.previewLabel}>Quick replies</span>
+
+                    {quickRepliesPreview.length > 0 ? (
+                      <div className={styles.quickRepliesList}>
+                        {quickRepliesPreview.map((item, index) => (
+                          <span
+                            key={`${item}-${index}`}
+                            className={`${styles.badge} ${styles.badgeGray}`}
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={styles.previewText}>Nenhuma quick reply adicionada.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.submitBar}>
+                <div className={styles.submitInfo}>
+                  <span>
+                    <strong>Integração:</strong>{" "}
+                    {integracaoSelecionada?.nome_conexao || "Não selecionada"}
+                  </span>
+                  <span>
+                    <strong>Categoria:</strong> {category}
+                  </span>
+                  <span>
+                    <strong>Idioma:</strong> {language}
+                  </span>
+                </div>
+
+                <div className={styles.actions}>
+                  <button type="submit" disabled={submitting} className={styles.primaryButton}>
+                    {submitting ? "Enviando..." : "Criar template"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <div className={styles.resultsCard}>
+            <div className={styles.cardHeader}>
+              <p className={styles.eyebrow}>Templates cadastrados</p>
+              <h2 className={styles.cardTitle}>Lista de templates</h2>
+              <p className={styles.cardSubtitle}>
+                Acompanhe status, conteúdo e sincronize a integração com o Meta.
               </p>
             </div>
 
-            <div className="tw-filter-box">
-              <label className="tw-label">Filtrar por integração</label>
-              <select
-                value={filtroIntegracao}
-                onChange={(e) => setFiltroIntegracao(e.target.value)}
-                className="tw-input"
-              >
-                <option value="">Todas as integrações</option>
-                {integracoes.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.nome_conexao}
-                  </option>
-                ))}
-              </select>
+            <div className={styles.resultsSummary}>
+              <div className={styles.summaryCard}>
+                <span className={styles.summaryLabel}>Total</span>
+                <span className={styles.summaryValue}>{resumoTemplates.total}</span>
+              </div>
+
+              <div className={styles.summaryCard}>
+                <span className={styles.summaryLabel}>Aprovados</span>
+                <span className={styles.summaryValue}>{resumoTemplates.aprovados}</span>
+              </div>
+
+              <div className={styles.summaryCard}>
+                <span className={styles.summaryLabel}>Pendentes / Rejeitados</span>
+                <span className={styles.summaryValueSmall}>
+                  {resumoTemplates.pendentes} pendentes • {resumoTemplates.rejeitados} com erro/rejeição
+                </span>
+              </div>
             </div>
-          </div>
 
-          {loadingTemplates ? (
-            <div className="tw-empty-state">Carregando templates...</div>
-          ) : templates.length === 0 ? (
-            <div className="tw-empty-state">Nenhum template encontrado.</div>
-          ) : (
-            <div className="tw-template-list">
-              {templates.map((template) => (
-                <div key={template.id} className="tw-template-card">
-                  <div className="tw-template-top">
-                    <div>
-                      <div className="tw-template-title-row">
-                        <h3 className="tw-template-title">{template.nome}</h3>
-                        <span className={getStatusClass(template.status)}>
-                          {getStatusLabel(template.status)}
-                        </span>
-                      </div>
-
-                      <div className="tw-meta-row">
-                        <span>
-                          <strong>Categoria:</strong> {template.categoria}
-                        </span>
-                        <span>
-                          <strong>Idioma:</strong> {template.idioma}
-                        </span>
-                        <span>
-                          <strong>Meta ID:</strong> {template.meta_template_id || "-"}
-                        </span>
-                        <span>
-                          <strong>Criado em:</strong> {formatarData(template.created_at)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="tw-template-grid">
-                    <div className="tw-template-box">
-                      <div className="tw-template-box-label">Body</div>
-                      <p className="tw-template-box-text">{extrairBody(template.payload)}</p>
-                    </div>
-
-                    <div className="tw-template-box">
-                      <div className="tw-template-box-label">Footer</div>
-                      <p className="tw-template-box-text">{extrairFooter(template.payload)}</p>
-                    </div>
-                  </div>
-
-                  {template.quality_rating ? (
-                    <div className="tw-alert tw-alert-info">
-                      <strong>Qualidade:</strong> {template.quality_rating}
-                    </div>
-                  ) : null}
-
-                  {template.rejeicao_motivo ? (
-                    <div className="tw-alert tw-alert-error">
-                      <strong>Motivo da rejeição:</strong> {template.rejeicao_motivo}
-                    </div>
-                  ) : null}
+            <div className={styles.inlineBlock}>
+              <div className={styles.searchRow}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Filtrar por integração</label>
+                  <select
+                    value={filtroIntegracao}
+                    onChange={(e) => setFiltroIntegracao(e.target.value)}
+                    className={styles.input}
+                  >
+                    <option value="">Todas as integrações</option>
+                    {integracoes.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.nome_conexao}
+                        {item.numero ? ` - ${item.numero}` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ))}
+
+                <div className={styles.inlineActions}>
+                  <button
+                    type="button"
+                    onClick={() => carregarTemplates(filtroIntegracao)}
+                    className={styles.secondaryButton}
+                  >
+                    Atualizar lista
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={sincronizarTemplatesMeta}
+                    className={styles.primaryButton}
+                    disabled={sincronizando}
+                  >
+                    {sincronizando ? "Sincronizando..." : "Sincronizar com Meta"}
+                  </button>
+                </div>
+              </div>
             </div>
-          )}
+
+            {loadingTemplates ? (
+              <div className={styles.emptyState}>Carregando templates...</div>
+            ) : templates.length === 0 ? (
+              <div className={styles.emptyState}>Nenhum template encontrado.</div>
+            ) : (
+              <div className={styles.resultsList}>
+                {templates.map((template) => {
+                  const header = extrairHeader(template.payload);
+                  const body = extrairBody(template.payload);
+                  const footer = extrairFooter(template.payload);
+                  const quickReplies = extrairQuickReplies(template.payload);
+
+                  return (
+                    <div key={template.id} className={styles.compactTemplateCard}>
+                      <div className={styles.compactTemplateTop}>
+                        <div className={styles.compactTemplateMain}>
+                          <div className={styles.compactTemplateTitleRow}>
+                            <h3 className={styles.compactTemplateTitle}>{template.nome}</h3>
+                            <span className={getStatusClass(template.status)}>
+                              {getStatusLabel(template.status)}
+                            </span>
+                          </div>
+
+                          <p className={styles.compactTemplateMeta}>
+                            Categoria: {template.categoria} • Idioma: {template.idioma} • Meta ID:{" "}
+                            {template.meta_template_id || "-"} • Criado em:{" "}
+                            {formatarData(template.created_at)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {header ? (
+                        <div className={styles.compactBlock}>
+                          <span className={styles.compactLabel}>Header</span>
+                          <p className={styles.compactText}>{header}</p>
+                        </div>
+                      ) : null}
+
+                      <div className={styles.compactBlock}>
+                        <span className={styles.compactLabel}>Body</span>
+                        <p className={styles.compactText}>{body || "Não informado"}</p>
+                      </div>
+
+                      {(footer || quickReplies.length > 0) && (
+                        <div className={styles.compactFooterRow}>
+                          {footer ? (
+                            <div className={styles.compactMiniBlock}>
+                              <span className={styles.compactLabel}>Footer</span>
+                              <p className={styles.compactText}>{footer}</p>
+                            </div>
+                          ) : null}
+
+                          {quickReplies.length > 0 ? (
+                            <div className={styles.compactMiniBlock}>
+                              <span className={styles.compactLabel}>Quick replies</span>
+                              <div className={styles.quickRepliesList}>
+                                {quickReplies.map((item, index) => (
+                                  <span
+                                    key={`${item}-${index}`}
+                                    className={`${styles.badge} ${styles.badgeGray}`}
+                                  >
+                                    {item}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+
+                      {template.quality_rating ? (
+                        <p className={styles.resultText}>
+                          <strong>Qualidade:</strong> {template.quality_rating}
+                        </p>
+                      ) : null}
+
+                      {template.rejeicao_motivo ? (
+                        <p className={styles.resultCompactError}>
+                          <strong>Motivo da rejeição:</strong> {template.rejeicao_motivo}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

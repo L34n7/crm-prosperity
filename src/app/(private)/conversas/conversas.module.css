@@ -3897,6 +3897,74 @@
   line-height: 1.6;
 }
 
+.disparoCustoBox {
+  margin-top: 14px;
+  border: 1px solid #dbe7ff;
+  background: linear-gradient(180deg, #f8fbff 0%, #f1f7ff 100%);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.disparoCustoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.disparoCustoEyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.disparoCustoCategoria {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #e8f0ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.disparoCustoMain {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.disparoCustoValorPrincipal {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.disparoCustoMetaLinha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.disparoCustoAviso {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+  border-top: 1px dashed #c7d2fe;
+  padding-top: 10px;
+}
+
 @media (max-width: 980px) {
   .disparoCardResumo {
     grid-template-columns: 1fr;

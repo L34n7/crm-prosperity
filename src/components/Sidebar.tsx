@@ -14,6 +14,7 @@ import {
   IdCard,
   ShieldCheck,
   Settings2,
+  FileText,
 } from "lucide-react";
 import styles from "./Sidebar.module.css";
 
@@ -31,6 +32,7 @@ const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Conversas", href: "/conversas", icon: MessageSquare },
   { label: "Disparos", href: "/disparos-whatsapp", icon: Send },
+  { label: "Templates", href: "/configuracoes/templates-whatsapp", icon: FileText },
   { label: "Contatos", href: "/contatos", icon: Contact },
   { label: "Usuários", href: "/usuarios", icon: Users },
   { label: "Empresas", href: "/empresas", icon: Building2 },

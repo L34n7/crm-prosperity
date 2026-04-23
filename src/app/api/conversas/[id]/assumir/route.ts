@@ -22,6 +22,7 @@ export async function POST(
   _request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
+  console.log("[ASSUMIR] rota carregada");
   try {
     const { id } = await context.params;
 
