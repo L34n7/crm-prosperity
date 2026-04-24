@@ -1,70 +1,62 @@
 export default function PoliticaPrivacidade() {
   return (
-    <div className="max-w-3xl mx-auto p-6 text-gray-800">
-      <h1 className="text-3xl font-bold mb-6">Política de Privacidade</h1>
+    <main style={{ maxWidth: 900, margin: "0 auto", padding: "40px", lineHeight: 1.6 }}>
+      <h1>Política de Privacidade - CRM Prosperity</h1>
 
-      <p className="mb-4">
-        <strong>Última atualização:</strong> 2026
-      </p>
-
-      <p className="mb-4">
-        Esta Política de Privacidade descreve como o CRM Prosperity coleta,
-        utiliza e protege as informações dos usuários e clientes.
-      </p>
-
-      <h2 className="text-xl font-semibold mt-6 mb-2">
-        1. Informações coletadas
-      </h2>
-      <p className="mb-4">
-        Coletamos informações fornecidas diretamente pelos usuários e clientes,
-        incluindo:
-      </p>
-      <ul className="list-disc ml-6 mb-4">
-        <li>Nome</li>
-        <li>Número de telefone</li>
-        <li>Mensagens trocadas via WhatsApp</li>
-      </ul>
-
-      <h2 className="text-xl font-semibold mt-6 mb-2">
-        2. Uso das informações
-      </h2>
-      <ul className="list-disc ml-6 mb-4">
-        <li>Atendimento ao cliente</li>
-        <li>Gestão de relacionamento</li>
-        <li>Melhoria dos serviços</li>
-      </ul>
-
-      <h2 className="text-xl font-semibold mt-6 mb-2">
-        3. Compartilhamento de dados
-      </h2>
-      <p className="mb-4">
-        Não compartilhamos dados pessoais com terceiros, exceto quando exigido
-        por lei.
-      </p>
-
-      <h2 className="text-xl font-semibold mt-6 mb-2">
-        4. Segurança
-      </h2>
-      <p className="mb-4">
-        Implementamos medidas de segurança para proteger os dados contra acesso
-        não autorizado.
-      </p>
-
-      <h2 className="text-xl font-semibold mt-6 mb-2">
-        5. Direitos do usuário
-      </h2>
-      <p className="mb-4">
-        O usuário pode solicitar acesso, correção ou exclusução de seus dados a
-        qualquer momento.
-      </p>
-
-      <h2 className="text-xl font-semibold mt-6 mb-2">
-        6. Contato
-      </h2>
       <p>
-        Em caso de dúvidas, entre em contato pelo e-mail:
-        <strong> seuemail@email.com</strong>
+        Esta Política de Privacidade descreve como coletamos, usamos e
+        protegemos os dados dos usuários da plataforma CRM Prosperity.
       </p>
-    </div>
+
+      <h2>1. Dados Coletados</h2>
+      <p>
+        Podemos coletar informações como nome, telefone, e-mail, mensagens e
+        dados de uso da plataforma.
+      </p>
+
+      <h2>2. Uso das Informações</h2>
+      <p>
+        Os dados são utilizados para:
+      </p>
+      <ul>
+        <li>Operação do sistema CRM</li>
+        <li>Envio de mensagens via API oficial do WhatsApp</li>
+        <li>Melhoria da experiência do usuário</li>
+      </ul>
+
+      <h2>3. Integração com a Meta</h2>
+      <p>
+        Ao utilizar funcionalidades do WhatsApp, seus dados podem ser
+        processados pela Meta Platforms, Inc., de acordo com as políticas
+        dessa empresa.
+      </p>
+
+      <h2>4. Compartilhamento de Dados</h2>
+      <p>
+        Não vendemos dados pessoais. Compartilhamos informações apenas com
+        serviços essenciais para funcionamento da plataforma.
+      </p>
+
+      <h2>5. Segurança</h2>
+      <p>
+        Implementamos medidas técnicas e organizacionais para proteger os
+        dados contra acesso não autorizado.
+      </p>
+
+      <h2>6. Direitos do Usuário</h2>
+      <p>
+        O usuário pode solicitar acesso, correção ou exclusão dos seus dados
+        a qualquer momento.
+      </p>
+
+      <h2>7. Retenção de Dados</h2>
+      <p>
+        Os dados serão armazenados apenas pelo tempo necessário para cumprir
+        as finalidades descritas, respeitando obrigações legais.
+      </p>
+
+      <p><strong>Última atualização:</strong> 2026</p>
+    </main>
   );
 }
+
