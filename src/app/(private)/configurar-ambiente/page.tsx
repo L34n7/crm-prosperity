@@ -136,6 +136,27 @@ export default function ConfigurarAmbientePage() {
   const [recarregando, setRecarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [conectandoMeta, setConectandoMeta] = useState(false);
+  
+
+  async function sincronizarDadosMeta(integracaoId: string) {
+    const response = await fetch("/api/integracoes-whatsapp/meta-dados", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        integracao_id: integracaoId,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erro ao sincronizar dados da Meta.");
+    }
+
+    return data;
+  }
 
   async function carregarIntegracao(mostrarLoadingCompleto = false) {
     try {
@@ -158,9 +179,40 @@ export default function ConfigurarAmbientePage() {
         throw new Error(data.error || "Erro ao carregar integração.");
       }
 
-      setIntegracao(data.integracao);
+      let integracaoAtualizada = data.integracao;
+
+      const temToken =
+        !!integracaoAtualizada.config_json &&
+        typeof integracaoAtualizada.config_json === "object" &&
+        !!(integracaoAtualizada.config_json as any).access_token;
+
+      const precisaBuscarDadosMeta =
+        temToken &&
+        (!integracaoAtualizada.waba_id || !integracaoAtualizada.phone_number_id);
+
+      if (precisaBuscarDadosMeta) {
+        await sincronizarDadosMeta(integracaoAtualizada.id);
+
+        const responseAtualizada = await fetch("/api/integracoes-whatsapp", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const dataAtualizada: ApiResponse = await responseAtualizada.json();
+
+        if (
+          responseAtualizada.ok &&
+          dataAtualizada.ok &&
+          dataAtualizada.integracao
+        ) {
+          integracaoAtualizada = dataAtualizada.integracao;
+        }
+      }
+
+      setIntegracao(integracaoAtualizada);
     } catch (error) {
       console.error("[CONFIGURAR AMBIENTE] Erro ao carregar integração:", error);
+
       setErro(
         error instanceof Error
           ? error.message
@@ -171,142 +223,59 @@ export default function ConfigurarAmbientePage() {
       setRecarregando(false);
     }
   }
+  
+function montarUrlMeta() {
+  if (!integracao?.id) {
+    throw new Error("Integração ainda não carregada.");
+  }
 
-    async function iniciarEmbeddedSignup() {
-    const signupUrl = process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_URL;
+  const appId = process.env.NEXT_PUBLIC_META_APP_ID;
+  const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
+  const redirectUri = process.env.NEXT_PUBLIC_META_REDIRECT_URI;
 
-    if (!signupUrl) {
-        alert(
-        "NEXT_PUBLIC_META_EMBEDDED_SIGNUP_URL não está definida no .env.local."
-        );
-        return;
-    }
+  if (!appId) {
+    throw new Error("NEXT_PUBLIC_META_APP_ID não configurado.");
+  }
+
+  if (!configId) {
+    throw new Error("NEXT_PUBLIC_META_CONFIG_ID não configurado.");
+  }
+
+  if (!redirectUri) {
+    throw new Error("NEXT_PUBLIC_META_REDIRECT_URI não configurado.");
+  }
+
+  const url = new URL("https://www.facebook.com/v25.0/dialog/oauth");
+
+  url.searchParams.set("client_id", appId);
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("state", integracao.id);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("override_default_response_type", "true");
+  url.searchParams.set("config_id", configId);
+
+  return url.toString();
+}
+
+async function iniciarEmbeddedSignup() {
+  try {
+    const signupUrl = montarUrlMeta();
 
     setConectandoMeta(true);
 
-    let popup: Window | null = null;
+    window.open(signupUrl, "_blank", "noopener,noreferrer");
 
-    try {
-        popup = abrirPopupCentralizado(signupUrl, "MetaEmbeddedSignup");
+    setConectandoMeta(false);
+  } catch (error) {
+    setConectandoMeta(false);
 
-        if (!popup) {
-        throw new Error("Não foi possível abrir a janela do Meta.");
-        }
-
-        const resultado = await new Promise<any>((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-            window.removeEventListener("message", onMessage);
-            reject(new Error("Tempo esgotado aguardando retorno do Meta."));
-        }, 10 * 60 * 1000);
-
-        function onMessage(event: MessageEvent) {
-            const origin = event.origin || "";
-
-            const origemValida =
-            origin.includes("facebook.com") || origin.includes("meta.com");
-
-            if (!origemValida) {
-            return;
-            }
-
-            const payload = event.data;
-
-            if (!payload) {
-            return;
-            }
-
-            // Mantemos tolerante porque o formato pode variar conforme a configuração.
-            const texto =
-            typeof payload === "string" ? payload : JSON.stringify(payload);
-
-            const contemWaba =
-            texto.includes("waba") || texto.includes("WABA") || texto.includes("phone_number");
-
-            if (!contemWaba) {
-            return;
-            }
-
-            window.clearTimeout(timeout);
-            window.removeEventListener("message", onMessage);
-            resolve(payload);
-        }
-
-        window.addEventListener("message", onMessage);
-        });
-
-        const payloadNormalizado =
-        typeof resultado === "string" ? JSON.parse(resultado) : resultado;
-
-        const wabaId =
-        payloadNormalizado?.waba_id ||
-        payloadNormalizado?.wabaId ||
-        payloadNormalizado?.data?.waba_id ||
-        payloadNormalizado?.data?.wabaId ||
-        null;
-
-        const phoneNumberId =
-        payloadNormalizado?.phone_number_id ||
-        payloadNormalizado?.phoneNumberId ||
-        payloadNormalizado?.data?.phone_number_id ||
-        payloadNormalizado?.data?.phoneNumberId ||
-        null;
-
-        const businessPortfolioId =
-        payloadNormalizado?.business_portfolio_id ||
-        payloadNormalizado?.businessPortfolioId ||
-        payloadNormalizado?.data?.business_portfolio_id ||
-        payloadNormalizado?.data?.businessPortfolioId ||
-        null;
-
-        const metaBusinessId =
-        payloadNormalizado?.meta_business_id ||
-        payloadNormalizado?.business_id ||
-        payloadNormalizado?.data?.meta_business_id ||
-        payloadNormalizado?.data?.business_id ||
-        null;
-
-        const response = await fetch(
-        "/api/integracoes-whatsapp/embedded-signup/finish",
-        {
-            method: "POST",
-            headers: {
-            "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-            event: "FINISH",
-            waba_id: wabaId,
-            phone_number_id: phoneNumberId,
-            business_portfolio_id: businessPortfolioId,
-            meta_business_id: metaBusinessId,
-            raw: payloadNormalizado,
-            }),
-        }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok || !data.ok) {
-        throw new Error(
-            data.error || "Erro ao salvar retorno do Embedded Signup."
-        );
-        }
-
-        await carregarIntegracao(false);
-    } catch (error) {
-        console.error("[CONFIGURAR AMBIENTE] Erro no Embedded Signup:", error);
-        alert(
-        error instanceof Error
-            ? error.message
-            : "Erro ao iniciar Embedded Signup."
-        );
-    } finally {
-        setConectandoMeta(false);
-
-        try {
-        popup?.close();
-        } catch {}
-    }
-    }
+    alert(
+      error instanceof Error
+        ? error.message
+        : "Erro ao abrir configuração do Meta."
+    );
+  }
+}
 
   useEffect(() => {
     carregarIntegracao(true);
@@ -427,34 +396,12 @@ export default function ConfigurarAmbientePage() {
                         {index === 0 && (
                           <div className={styles.stepActions}>
                             <button
-                                type="button"
-                                className={styles.primaryButton}
-                                onClick={async () => {
-                                try {
-                                    const response = await fetch(
-                                    "/api/integracoes-whatsapp/conectar-meta",
-                                    {
-                                        method: "POST",
-                                    }
-                                    );
-
-                                    const data = await response.json();
-
-                                    if (!response.ok || !data.ok) {
-                                    throw new Error(data.error || "Erro ao conectar Meta");
-                                    }
-
-                                    await carregarIntegracao(false);
-                                } catch (error) {
-                                    alert(
-                                    error instanceof Error
-                                        ? error.message
-                                        : "Erro ao conectar com Meta"
-                                    );
-                                }
-                                }}
-                                >
-                                Conectar com Meta
+                              type="button"
+                              className={styles.primaryButton}
+                              onClick={iniciarEmbeddedSignup}
+                              disabled={conectandoMeta}
+                            >
+                              {conectandoMeta ? "Abrindo Meta..." : "Conectar com Meta"}
                             </button>
                           </div>
                         )}
