@@ -38,11 +38,8 @@ const menuItems: MenuItem[] = [
   { label: "Empresas", href: "/empresas", icon: Building2 },
   { label: "Setores", href: "/setores", icon: Layers3 },
   { label: "Config. Perfis", href: "/configuracoes/perfis", icon: IdCard },
-  {
-    label: "Config. Permissões",
-    href: "/configuracoes/permissoes",
-    icon: ShieldCheck,
-  },
+  { label: "Config. Ambiente", href: "/configurar-ambiente", icon: ShieldCheck },
+
   {
     label: "Config. Setores",
     href: "/configuracoes/setores",

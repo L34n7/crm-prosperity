@@ -18,7 +18,6 @@ export default function Header({
   title,
   subtitle,
   profileName,
-  creditLabel = "R$ 0,00",
   avatarUrl,
 }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
