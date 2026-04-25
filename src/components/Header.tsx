@@ -62,8 +62,6 @@ export default function Header({
       </div>
 
       <div className={styles.right}>
-        <span className={styles.credit}>{creditLabel}</span>
-
         <div className={styles.userMenuWrapper} ref={menuRef}>
           <button
             type="button"
