@@ -141,7 +141,7 @@ export default function LoginPage() {
               }}
             >
               <Link
-                href="/cadastro"
+                href="/comecar"
                 style={{
                   fontSize: "14px",
                   color: "#2563eb",
