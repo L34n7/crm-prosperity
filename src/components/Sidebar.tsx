@@ -40,6 +40,12 @@ const menuItems: MenuItem[] = [
   { label: "Config. Perfis", href: "/configuracoes/perfis", icon: IdCard },
   { label: "Config. Ambiente", href: "/configurar-ambiente", icon: ShieldCheck },
 
+  
+  {
+    label: "Config. Permissões",
+    href: "/configuracoes/permissoes",
+    icon: ShieldCheck,
+  },
   {
     label: "Config. Setores",
     href: "/configuracoes/setores",
