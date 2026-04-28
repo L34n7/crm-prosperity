@@ -8,7 +8,7 @@ import { findWhatsAppIntegrationByPhoneNumberId } from "@/lib/whatsapp/find-inte
 import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import { saveIncomingWhatsAppMessage } from "@/lib/whatsapp/save-incoming-message";
-import { processChatbotAutomation } from "@/lib/chatbot/process-automation";
+import { processAutomationEngine } from "@/lib/automacoes/process-automation-engine";
 import { updateWhatsAppMessageStatus } from "@/lib/whatsapp/update-message-status";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -220,8 +220,11 @@ export async function POST(req: NextRequest) {
 
         let automationResult:
           | {
-              replied: boolean;
-              decision: { action: string };
+              ok: boolean;
+              status?: string;
+              execucaoId?: string;
+              fluxoId?: string;
+              error?: string;
             }
           | null = null;
 
@@ -229,28 +232,11 @@ export async function POST(req: NextRequest) {
           message.tipoMensagem === "texto" && !!message.text?.trim();
 
         if (podeRodarAutomacao) {
-          automationResult = await processChatbotAutomation({
+          automationResult = await processAutomationEngine({
             empresaId: integration.empresa_id,
-            integracaoWhatsappId: integration.id,
-            conversa: {
-              id: conversation.id,
-              empresa_id: conversation.empresa_id,
-              bot_ativo: conversation.bot_ativo ?? false,
-              fluxo_etapa: conversation.fluxo_etapa ?? null,
-              menu_aguardando_resposta:
-                conversation.menu_aguardando_resposta ?? false,
-              ultima_opcao_escolhida:
-                conversation.ultima_opcao_escolhida ?? null,
-              tentativas_invalidas: conversation.tentativas_invalidas ?? 0,
-              ultima_interacao_bot_em:
-                conversation.ultima_interacao_bot_em ?? null,
-              automacao_id: conversation.automacao_id ?? null,
-              status: conversation.status ?? null,
-              setor_id: conversation.setor_id ?? null,
-              responsavel_id: conversation.responsavel_id ?? null,
-            },
-            mensagemCliente: message.text ?? "",
-            numeroDestino: message.from,
+            conversaId: conversation.id,
+            contatoId: contact.id,
+            mensagemTexto: message.text ?? "",
           });
         }
 
@@ -264,8 +250,11 @@ export async function POST(req: NextRequest) {
           conversaProtocoloId: protocoloAtivo?.id ?? null,
           savedMessageId: savedMessage.messageId,
           tipoMensagem: message.tipoMensagem,
-          automationReplied: automationResult?.replied ?? false,
-          automationAction: automationResult?.decision.action ?? null,
+          automationOk: automationResult?.ok ?? false,
+          automationStatus: automationResult?.status ?? null,
+          automationExecucaoId: automationResult?.execucaoId ?? null,
+          automationFluxoId: automationResult?.fluxoId ?? null,
+          automationError: automationResult?.error ?? null,
         });
       } catch (messageError) {
         console.error(
