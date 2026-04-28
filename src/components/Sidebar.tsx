@@ -15,6 +15,8 @@ import {
   ShieldCheck,
   Settings2,
   FileText,
+  GitBranch,
+  PlugZap,
 } from "lucide-react";
 import styles from "./Sidebar.module.css";
 
@@ -33,14 +35,13 @@ const menuItems: MenuItem[] = [
   { label: "Conversas", href: "/conversas", icon: MessageSquare },
   { label: "Disparos", href: "/disparos-whatsapp", icon: Send },
   { label: "Templates", href: "/configuracoes/templates-whatsapp", icon: FileText },
+  { label: "Fluxos", href: "/fluxos", icon: GitBranch },
   { label: "Contatos", href: "/contatos", icon: Contact },
   { label: "Usuários", href: "/usuarios", icon: Users },
   { label: "Empresas", href: "/empresas", icon: Building2 },
   { label: "Setores", href: "/setores", icon: Layers3 },
   { label: "Config. Perfis", href: "/configuracoes/perfis", icon: IdCard },
-  { label: "Config. Ambiente", href: "/configurar-ambiente", icon: ShieldCheck },
 
-  
   {
     label: "Config. Permissões",
     href: "/configuracoes/permissoes",
@@ -51,6 +52,8 @@ const menuItems: MenuItem[] = [
     href: "/configuracoes/setores",
     icon: Settings2,
   },
+
+  { label: "Config. Ambiente", href: "/configurar-ambiente", icon: PlugZap },
 ];
 
 function isActivePath(pathname: string, href: string) {

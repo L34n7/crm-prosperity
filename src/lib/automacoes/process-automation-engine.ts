@@ -31,17 +31,39 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     return { ok: false, error: "Erro ao buscar execução." };
   }
 
-  if (execucaoExistente) {
-    console.log("[AUTOMATION_ENGINE] Já existe execução ativa", {
-      execucaoId: execucaoExistente.id,
-    });
+if (execucaoExistente) {
+  console.log("[AUTOMATION_ENGINE] Continuando execução existente", {
+    execucaoId: execucaoExistente.id,
+    noAtualId: execucaoExistente.no_atual_id,
+  });
 
-    return {
-      ok: true,
-      status: "execucao_existente",
-      execucaoId: execucaoExistente.id,
-    };
+  const { data: noAtual, error: noAtualError } = await supabaseAdmin
+    .from("automacao_nos")
+    .select("*")
+    .eq("id", execucaoExistente.no_atual_id)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (noAtualError || !noAtual) {
+    console.error("[AUTOMATION_ENGINE] Erro ao buscar nó atual:", noAtualError);
+    return { ok: false, error: "Erro ao buscar nó atual." };
   }
+
+  await executarNo({
+    empresaId,
+    conversaId,
+    execucaoId: execucaoExistente.id,
+    fluxoId: execucaoExistente.fluxo_id,
+    no: noAtual,
+    mensagemTexto,
+  });
+
+  return {
+    ok: true,
+    status: "execucao_continuada",
+    execucaoId: execucaoExistente.id,
+  };
+}
 
   const { data: gatilhos, error: gatilhosError } = await supabaseAdmin
     .from("automacao_gatilhos")
@@ -148,6 +170,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     execucaoId: execucaoCriada.id,
     fluxoId: fluxo.id,
     no: noInicial,
+    mensagemTexto,
   });
 
   return {
@@ -164,8 +187,9 @@ async function executarNo(params: {
   execucaoId: string;
   fluxoId: string;
   no: AutomacaoNo;
+  mensagemTexto?: string;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, no } = params;
+  const { empresaId, conversaId, execucaoId, fluxoId, no, mensagemTexto } = params;
 
   console.log("[AUTOMATION_ENGINE] Executando nó", {
     noId: no.id,
@@ -179,6 +203,7 @@ async function executarNo(params: {
       execucaoId,
       fluxoId,
       noAtualId: no.id,
+      mensagemTexto,
     });
 
     return;
@@ -220,6 +245,48 @@ async function executarNo(params: {
       execucaoId,
       fluxoId,
       noAtualId: no.id,
+      mensagemTexto,
+    });
+
+    return;
+  }
+
+  if (no.tipo_no === "pergunta_opcoes") {
+    let mensagem = no.configuracao_json?.mensagem || "";
+
+    const opcoes = Array.isArray(no.configuracao_json?.opcoes)
+      ? no.configuracao_json.opcoes
+      : [];
+
+    if (opcoes.length > 0) {
+      const textoOpcoes = opcoes
+        .map((op: any) => `${op.valor} - ${op.titulo}`)
+        .join("\n");
+
+      mensagem = `${mensagem}\n\n${textoOpcoes}`;
+    }
+
+    await supabaseAdmin.from("mensagens").insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      remetente_tipo: "bot",
+      conteudo: mensagem,
+      tipo_mensagem: "texto",
+      origem: "automatica",
+      status_envio: "enviada",
+      metadata_json: {
+        automacao_execucao_id: execucaoId,
+        automacao_no_id: no.id,
+      },
+    });
+
+    await seguirParaProximoNo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noAtualId: no.id,
+      mensagemTexto,
     });
 
     return;
@@ -250,6 +317,53 @@ async function executarNo(params: {
     return;
   }
 
+  if (no.tipo_no === "transferir_setor") {
+    const mensagem =
+      no.configuracao_json?.mensagem ||
+      "Vou te encaminhar para um atendente.";
+
+    await supabaseAdmin.from("mensagens").insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      remetente_tipo: "bot",
+      conteudo: mensagem,
+      tipo_mensagem: "texto",
+      origem: "automatica",
+      status_envio: "enviada",
+    });
+
+    // 🔥 PARAR automação
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "finalizado",
+        finished_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId);
+
+    // 🔥 definir setor
+    if (no.configuracao_json?.setor_id) {
+      await supabaseAdmin
+        .from("conversas")
+        .update({
+          setor_id: no.configuracao_json.setor_id,
+        })
+        .eq("id", conversaId);
+    }
+
+    // 🔥 liberar para atendimento humano
+    await supabaseAdmin
+      .from("conversas")
+      .update({
+        status: "aberta",
+        atendente_id: null,
+        automacao_ativa: false,
+      })
+      .eq("id", conversaId);
+
+    return;
+  }
+
   await registrarLog({
     empresaId,
     execucaoId,
@@ -268,56 +382,106 @@ async function seguirParaProximoNo(params: {
   execucaoId: string;
   fluxoId: string;
   noAtualId: string;
+  mensagemTexto?: string;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, noAtualId } = params;
+  const {
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noAtualId,
+    mensagemTexto,
+  } = params;
 
-  const { data: conexao, error: conexaoError } = await supabaseAdmin
+  const { data: conexoes, error } = await supabaseAdmin
     .from("automacao_conexoes")
     .select("*")
     .eq("empresa_id", empresaId)
     .eq("fluxo_id", fluxoId)
     .eq("no_origem_id", noAtualId)
     .eq("ativo", true)
-    .order("ordem", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .order("ordem", { ascending: true });
 
-  if (conexaoError) {
-    console.error("[AUTOMATION_ENGINE] Erro ao buscar conexão:", conexaoError);
+  if (error) {
+    console.error("[AUTOMATION] erro conexões", error);
     return;
   }
 
-  if (!conexao) {
-    await supabaseAdmin
-      .from("automacao_execucoes")
-      .update({
-        status: "finalizado",
-        finished_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", execucaoId)
-      .eq("empresa_id", empresaId);
-
+  if (!conexoes || conexoes.length === 0) {
+    await finalizarExecucao(execucaoId, empresaId);
     return;
   }
 
-  const { data: proximoNo, error: proximoNoError } = await supabaseAdmin
+  // 🔥 NOVO: lógica de decisão
+  let conexaoEscolhida = conexoes[0];
+
+  if (mensagemTexto) {
+    const msg = mensagemTexto.trim().toLowerCase();
+
+    const conexoesComCondicao = conexoes.filter((c) => {
+      const cond = c.condicao_json;
+      return cond && cond.tipo;
+    });
+
+    const encontrada = conexoesComCondicao.find((c) => {
+      const cond = c.condicao_json;
+
+      if (cond.tipo === "resposta_igual") {
+        return String(cond.valor || "").trim().toLowerCase() === msg;
+      }
+
+      if (cond.tipo === "resposta_contem") {
+        return msg.includes(String(cond.valor || "").trim().toLowerCase());
+      }
+
+      return false;
+    });
+
+    if (encontrada) {
+      conexaoEscolhida = encontrada;
+    } else if (conexoesComCondicao.length > 0) {
+      await supabaseAdmin.from("mensagens").insert({
+        empresa_id: empresaId,
+        conversa_id: conversaId,
+        remetente_tipo: "bot",
+        conteudo: "Opção inválida. Por favor, escolha uma das opções disponíveis.",
+        tipo_mensagem: "texto",
+        origem: "automatica",
+        status_envio: "enviada",
+        metadata_json: {
+          automacao_execucao_id: execucaoId,
+          automacao_no_id: noAtualId,
+          motivo: "resposta_invalida",
+          resposta_cliente: mensagemTexto,
+        },
+      });
+
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: noAtualId,
+        tipoEvento: "resposta_invalida",
+        descricao: "Cliente enviou uma resposta que não corresponde a nenhuma conexão.",
+        entrada: {
+          mensagemTexto,
+        },
+        saida: {
+          mensagem: "Opção inválida enviada ao cliente.",
+        },
+      });
+
+      return;
+    }
+  }
+
+  const { data: proximoNo } = await supabaseAdmin
     .from("automacao_nos")
     .select("*")
-    .eq("id", conexao.no_destino_id)
-    .eq("empresa_id", empresaId)
-    .eq("ativo", true)
-    .maybeSingle();
+    .eq("id", conexaoEscolhida.no_destino_id)
+    .single();
 
-  if (proximoNoError) {
-    console.error("[AUTOMATION_ENGINE] Erro ao buscar próximo nó:", proximoNoError);
-    return;
-  }
-
-  if (!proximoNo) {
-    console.log("[AUTOMATION_ENGINE] Próximo nó não encontrado.");
-    return;
-  }
+  if (!proximoNo) return;
 
   await supabaseAdmin
     .from("automacao_execucoes")
@@ -325,25 +489,7 @@ async function seguirParaProximoNo(params: {
       no_atual_id: proximoNo.id,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", execucaoId)
-    .eq("empresa_id", empresaId);
-
-  await registrarLog({
-    empresaId,
-    execucaoId,
-    fluxoId,
-    noId: proximoNo.id,
-    conexaoId: conexao.id,
-    tipoEvento: "transicao_no",
-    descricao: "Execução avançou para o próximo nó.",
-    entrada: {
-      no_origem_id: noAtualId,
-      no_destino_id: proximoNo.id,
-    },
-    saida: {
-      conexao_id: conexao.id,
-    },
-  });
+    .eq("id", execucaoId);
 
   await executarNo({
     empresaId,
@@ -351,7 +497,19 @@ async function seguirParaProximoNo(params: {
     execucaoId,
     fluxoId,
     no: proximoNo,
+    mensagemTexto,
   });
+}
+
+async function finalizarExecucao(execucaoId: string, empresaId: string) {
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      status: "finalizado",
+      finished_at: new Date().toISOString(),
+    })
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId);
 }
 
 async function registrarLog(params: {
