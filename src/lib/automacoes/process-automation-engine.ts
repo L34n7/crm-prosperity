@@ -51,6 +51,17 @@ if (execucaoExistente) {
     return { ok: false, error: "Erro ao buscar nó atual." };
   }
 
+if (execucaoExistente.status === "aguardando") {
+  await seguirParaProximoNo({
+    empresaId,
+    conversaId,
+    execucaoId: execucaoExistente.id,
+    fluxoId: execucaoExistente.fluxo_id,
+    noAtualId: execucaoExistente.no_atual_id,
+    mensagemTexto,
+    numeroDestino,
+  });
+} else {
   await executarNo({
     empresaId,
     conversaId,
@@ -60,6 +71,7 @@ if (execucaoExistente) {
     mensagemTexto,
     numeroDestino,
   });
+}
 
   return {
     ok: true,
@@ -246,13 +258,39 @@ async function executarNo(params: {
       saida: { mensagem },
     });
 
+    const { data: conexoesDoNo } = await supabaseAdmin
+      .from("automacao_conexoes")
+      .select("id, condicao_json")
+      .eq("empresa_id", empresaId)
+      .eq("fluxo_id", fluxoId)
+      .eq("no_origem_id", no.id)
+      .eq("ativo", true);
+
+    const temCondicao = (conexoesDoNo || []).some((c) => {
+      const cond = c.condicao_json;
+      return cond && cond.tipo;
+    });
+
+    if (temCondicao) {
+      await supabaseAdmin
+        .from("automacao_execucoes")
+        .update({
+          no_atual_id: no.id,
+          status: "aguardando",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", execucaoId)
+        .eq("empresa_id", empresaId);
+
+      return;
+    }
+
     await seguirParaProximoNo({
       empresaId,
       conversaId,
       execucaoId,
       fluxoId,
       noAtualId: no.id,
-      mensagemTexto,
       numeroDestino,
     });
 
@@ -283,15 +321,15 @@ async function executarNo(params: {
       noId: no.id,
     });
 
-    await seguirParaProximoNo({
-      empresaId,
-      conversaId,
-      execucaoId,
-      fluxoId,
-      noAtualId: no.id,
-      mensagemTexto,
-      numeroDestino,
-    });
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        no_atual_id: no.id,
+        status: "aguardando",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
 
     return;
   }

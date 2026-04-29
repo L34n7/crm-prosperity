@@ -15,7 +15,7 @@ export async function encerrarConversaExpirada({
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, status, closed_at")
+    .select("id, empresa_id, status, closed_at")
     .eq("id", conversaId)
     .maybeSingle();
 
@@ -60,6 +60,7 @@ export async function encerrarConversaExpirada({
 
   await supabaseAdmin.from("mensagens").insert([
     {
+      empresa_id: conversa.empresa_id,
       conversa_id: conversaId,
       conteudo: `Conversa encerrada automaticamente: ${motivo}.`,
       tipo_mensagem: "texto",
