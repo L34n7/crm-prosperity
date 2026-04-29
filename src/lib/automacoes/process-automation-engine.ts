@@ -331,15 +331,13 @@ async function executarNo(params: {
       conversaId,
     });
 
-    await supabaseAdmin.from("mensagens").insert({
-      empresa_id: empresaId,
-      conversa_id: conversaId,
-      conversa_protocolo_id: protocoloAtivo.id,
-      remetente_tipo: "bot",
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
       conteudo: mensagem,
-      tipo_mensagem: "texto",
-      origem: "automatica",
-      status_envio: "enviada",
+      execucaoId,
+      noId: no.id,
     });
 
     // 🔥 PARAR automação
@@ -365,11 +363,13 @@ async function executarNo(params: {
     await supabaseAdmin
       .from("conversas")
       .update({
-        status: "aberta",
-        atendente_id: null,
-        automacao_ativa: false,
+        status: "fila",
+        responsavel_id: null,
+        bot_ativo: false,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", conversaId);
+      .eq("id", conversaId)
+      .eq("empresa_id", empresaId);
 
     return;
   }
@@ -580,8 +580,17 @@ async function enviarMensagemAutomacao(params: {
     ? conversa.integracoes_whatsapp[0]
     : conversa.integracoes_whatsapp;
 
-  if (!integracao?.phone_number_id || !integracao?.token_ref) {
-    throw new Error("Integração WhatsApp sem phone_number_id ou token.");
+  const phoneNumberId =
+    integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+
+  if (!phoneNumberId) {
+    throw new Error("WHATSAPP_PHONE_NUMBER_ID não configurado.");
+  }
+
+  if (!accessToken) {
+    throw new Error("WHATSAPP_ACCESS_TOKEN não configurado.");
   }
 
   const permissaoEnvio = await canSendFreeformWhatsAppMessage({
@@ -618,8 +627,8 @@ async function enviarMensagemAutomacao(params: {
   }
 
   const envio = await sendWhatsAppTextMessage({
-    phoneNumberId: integracao.phone_number_id,
-    accessToken: integracao.token_ref,
+    phoneNumberId,
+    accessToken,
     to: numeroDestino,
     body: conteudo,
   });
@@ -634,6 +643,7 @@ async function enviarMensagemAutomacao(params: {
     .insert({
       empresa_id: empresaId,
       conversa_id: conversaId,
+      conversa_protocolo_id: protocoloAtivo.id,
       remetente_tipo: "bot",
       conteudo,
       tipo_mensagem: "texto",
