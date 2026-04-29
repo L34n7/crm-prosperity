@@ -5,11 +5,13 @@ import type {
   AutomacaoNo,
 } from "./types";
 import { gatilhoCombinaComMensagem } from "./match-trigger";
+import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
+import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 
 const supabaseAdmin = getSupabaseAdmin();
 
 export async function processAutomationEngine(input: AutomationEngineInput) {
-  const { empresaId, conversaId, contatoId, mensagemTexto } = input;
+  const { empresaId, conversaId, contatoId, mensagemTexto, numeroDestino } = input;
 
   console.log("[AUTOMATION_ENGINE] Iniciando motor", {
     empresaId,
@@ -56,6 +58,7 @@ if (execucaoExistente) {
     fluxoId: execucaoExistente.fluxo_id,
     no: noAtual,
     mensagemTexto,
+    numeroDestino,
   });
 
   return {
@@ -122,6 +125,11 @@ if (execucaoExistente) {
     return { ok: false, error: "Fluxo sem nó inicial." };
   }
 
+  const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+    empresaId,
+    conversaId,
+  });
+
   const { data: execucaoCriada, error: criarExecucaoError } = await supabaseAdmin
     .from("automacao_execucoes")
     .insert({
@@ -129,6 +137,7 @@ if (execucaoExistente) {
       fluxo_id: fluxo.id,
       contato_id: contatoId,
       conversa_id: conversaId,
+      conversa_protocolo_id: protocoloAtivo.id,
       no_atual_id: noInicial.id,
       status: "rodando",
       metadata_json: {
@@ -171,6 +180,7 @@ if (execucaoExistente) {
     fluxoId: fluxo.id,
     no: noInicial,
     mensagemTexto,
+    numeroDestino,
   });
 
   return {
@@ -188,8 +198,9 @@ async function executarNo(params: {
   fluxoId: string;
   no: AutomacaoNo;
   mensagemTexto?: string;
+  numeroDestino: string;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, no, mensagemTexto } = params;
+  const { empresaId, conversaId, execucaoId, fluxoId, no, mensagemTexto, numeroDestino } = params;
 
   console.log("[AUTOMATION_ENGINE] Executando nó", {
     noId: no.id,
@@ -204,6 +215,7 @@ async function executarNo(params: {
       fluxoId,
       noAtualId: no.id,
       mensagemTexto,
+      numeroDestino,
     });
 
     return;
@@ -213,18 +225,13 @@ async function executarNo(params: {
     const mensagem = no.configuracao_json?.mensagem;
 
     if (mensagem) {
-      await supabaseAdmin.from("mensagens").insert({
-        empresa_id: empresaId,
-        conversa_id: conversaId,
-        remetente_tipo: "bot",
+      await enviarMensagemAutomacao({
+        empresaId,
+        conversaId,
+        numeroDestino,
         conteudo: mensagem,
-        tipo_mensagem: "texto",
-        origem: "automatica",
-        status_envio: "enviada",
-        metadata_json: {
-          automacao_execucao_id: execucaoId,
-          automacao_no_id: no.id,
-        },
+        execucaoId,
+        noId: no.id,
       });
     }
 
@@ -246,6 +253,7 @@ async function executarNo(params: {
       fluxoId,
       noAtualId: no.id,
       mensagemTexto,
+      numeroDestino,
     });
 
     return;
@@ -266,18 +274,13 @@ async function executarNo(params: {
       mensagem = `${mensagem}\n\n${textoOpcoes}`;
     }
 
-    await supabaseAdmin.from("mensagens").insert({
-      empresa_id: empresaId,
-      conversa_id: conversaId,
-      remetente_tipo: "bot",
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
       conteudo: mensagem,
-      tipo_mensagem: "texto",
-      origem: "automatica",
-      status_envio: "enviada",
-      metadata_json: {
-        automacao_execucao_id: execucaoId,
-        automacao_no_id: no.id,
-      },
+      execucaoId,
+      noId: no.id,
     });
 
     await seguirParaProximoNo({
@@ -287,6 +290,7 @@ async function executarNo(params: {
       fluxoId,
       noAtualId: no.id,
       mensagemTexto,
+      numeroDestino,
     });
 
     return;
@@ -322,9 +326,15 @@ async function executarNo(params: {
       no.configuracao_json?.mensagem ||
       "Vou te encaminhar para um atendente.";
 
+    const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+      empresaId,
+      conversaId,
+    });
+
     await supabaseAdmin.from("mensagens").insert({
       empresa_id: empresaId,
       conversa_id: conversaId,
+      conversa_protocolo_id: protocoloAtivo.id,
       remetente_tipo: "bot",
       conteudo: mensagem,
       tipo_mensagem: "texto",
@@ -383,6 +393,7 @@ async function seguirParaProximoNo(params: {
   fluxoId: string;
   noAtualId: string;
   mensagemTexto?: string;
+  numeroDestino: string;
 }) {
   const {
     empresaId,
@@ -391,6 +402,7 @@ async function seguirParaProximoNo(params: {
     fluxoId,
     noAtualId,
     mensagemTexto,
+    numeroDestino 
   } = params;
 
   const { data: conexoes, error } = await supabaseAdmin
@@ -440,20 +452,13 @@ async function seguirParaProximoNo(params: {
     if (encontrada) {
       conexaoEscolhida = encontrada;
     } else if (conexoesComCondicao.length > 0) {
-      await supabaseAdmin.from("mensagens").insert({
-        empresa_id: empresaId,
-        conversa_id: conversaId,
-        remetente_tipo: "bot",
+      await enviarMensagemAutomacao({
+        empresaId,
+        conversaId,
+        numeroDestino,
         conteudo: "Opção inválida. Por favor, escolha uma das opções disponíveis.",
-        tipo_mensagem: "texto",
-        origem: "automatica",
-        status_envio: "enviada",
-        metadata_json: {
-          automacao_execucao_id: execucaoId,
-          automacao_no_id: noAtualId,
-          motivo: "resposta_invalida",
-          resposta_cliente: mensagemTexto,
-        },
+        execucaoId,
+        noId: noAtualId,
       });
 
       await registrarLog({
@@ -498,6 +503,7 @@ async function seguirParaProximoNo(params: {
     fluxoId,
     no: proximoNo,
     mensagemTexto,
+    numeroDestino,
   });
 }
 
@@ -534,4 +540,180 @@ async function registrarLog(params: {
     entrada_json: params.entrada,
     saida_json: params.saida,
   });
+}
+
+async function enviarMensagemAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+  numeroDestino: string;
+  conteudo: string;
+  execucaoId: string;
+  noId: string;
+}) {
+  const { empresaId, conversaId, numeroDestino, conteudo, execucaoId, noId } =
+    params;
+
+  const { data: conversa, error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .select(
+      `
+      id,
+      empresa_id,
+      integracao_whatsapp_id,
+      integracoes_whatsapp (
+        id,
+        phone_number_id,
+        token_ref,
+        status
+      )
+    `
+    )
+    .eq("id", conversaId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (conversaError || !conversa) {
+    throw new Error("Conversa não encontrada para envio da automação.");
+  }
+
+  const integracao = Array.isArray(conversa.integracoes_whatsapp)
+    ? conversa.integracoes_whatsapp[0]
+    : conversa.integracoes_whatsapp;
+
+  if (!integracao?.phone_number_id || !integracao?.token_ref) {
+    throw new Error("Integração WhatsApp sem phone_number_id ou token.");
+  }
+
+  const permissaoEnvio = await canSendFreeformWhatsAppMessage({
+    conversaId,
+  });
+
+  if (!permissaoEnvio.podeEnviarMensagemLivre) {
+    await supabaseAdmin.from("mensagens").insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      remetente_tipo: "sistema",
+      conteudo:
+        permissaoEnvio.motivoBloqueio ||
+        "Mensagem automática não enviada: janela de 24 horas encerrada.",
+      tipo_mensagem: "texto",
+      origem: "automatica",
+      status_envio: "falha",
+      metadata_json: {
+        automacao_execucao_id: execucaoId,
+        automacao_no_id: noId,
+        motivo: "janela_24h_encerrada",
+      },
+    });
+
+    return {
+      ok: false,
+      status_envio: "falha",
+      messageId: null,
+      metaResponse: null,
+      erro:
+        permissaoEnvio.motivoBloqueio ||
+        "Janela de 24 horas encerrada para mensagem livre.",
+    };
+  }
+
+  const envio = await sendWhatsAppTextMessage({
+    phoneNumberId: integracao.phone_number_id,
+    accessToken: integracao.token_ref,
+    to: numeroDestino,
+    body: conteudo,
+  });
+
+  const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+    empresaId,
+    conversaId,
+  });
+
+  const { data: mensagemSalva, error: mensagemError } = await supabaseAdmin
+    .from("mensagens")
+    .insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      remetente_tipo: "bot",
+      conteudo,
+      tipo_mensagem: "texto",
+      origem: "automatica",
+      status_envio: envio.ok ? "enviada" : "falha",
+      mensagem_externa_id: envio.messageId,
+      metadata_json: {
+        automacao_execucao_id: execucaoId,
+        automacao_no_id: noId,
+        meta_response: envio.raw,
+        erro: envio.error,
+      },
+    })
+    .select("*")
+    .single();
+
+  if (mensagemError) {
+    throw new Error(`Erro ao salvar mensagem da automação: ${mensagemError.message}`);
+  }
+
+  return {
+    ok: envio.ok,
+    status_envio: envio.ok ? "enviada" : "falha",
+    messageId: envio.messageId,
+    metaResponse: envio.raw,
+    erro: envio.error,
+    mensagemId: mensagemSalva?.id,
+  };
+}
+
+
+async function buscarOuCriarProtocoloAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+}) {
+  const { empresaId, conversaId } = params;
+
+  const { data: protocoloAtivo, error: protocoloAtivoError } =
+    await supabaseAdmin
+      .from("conversa_protocolos")
+      .select("id, protocolo, ativo")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .eq("ativo", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+  if (protocoloAtivoError) {
+    throw new Error(
+      `Erro ao buscar protocolo ativo da conversa: ${protocoloAtivoError.message}`
+    );
+  }
+
+  if (protocoloAtivo) {
+    return protocoloAtivo;
+  }
+
+  const now = new Date().toISOString();
+  const protocoloTexto = `AUTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+  const { data: novoProtocolo, error: novoProtocoloError } =
+    await supabaseAdmin
+      .from("conversa_protocolos")
+      .insert({
+        empresa_id: empresaId,
+        conversa_id: conversaId,
+        protocolo: protocoloTexto,
+        tipo: "automacao",
+        ativo: true,
+        started_at: now,
+      })
+      .select("id, protocolo, ativo")
+      .single();
+
+  if (novoProtocoloError) {
+    throw new Error(
+      `Erro ao criar protocolo da automação: ${novoProtocoloError.message}`
+    );
+  }
+
+  return novoProtocolo;
 }

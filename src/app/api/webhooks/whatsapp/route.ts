@@ -237,6 +237,7 @@ export async function POST(req: NextRequest) {
             conversaId: conversation.id,
             contatoId: contact.id,
             mensagemTexto: message.text ?? "",
+            numeroDestino: message.from,
           });
         }
 

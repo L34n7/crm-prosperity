@@ -3,6 +3,7 @@ export type AutomationEngineInput = {
   conversaId: string;
   contatoId: string;
   mensagemTexto: string;
+  numeroDestino: string;
 };
 
 export type AutomacaoFluxo = {
