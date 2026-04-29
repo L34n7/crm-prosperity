@@ -1027,6 +1027,46 @@ async function confirmarApagarDefinitivo() {
   }
 }
 
+
+async function alterarStatusFluxo(
+  fluxo: Fluxo,
+  novoStatus: "ativo" | "rascunho" | "pausado"
+) {
+  try {
+    setErro("");
+    setSucesso("");
+
+    const res = await fetch("/api/automacoes", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: fluxo.id,
+        status: novoStatus,
+      }),
+    });
+
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : {};
+
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || "Erro ao alterar status do fluxo.");
+    }
+
+    setSucesso(
+      novoStatus === "ativo"
+        ? "Fluxo ativado com sucesso."
+        : "Fluxo pausado com sucesso."
+    );
+
+    setFluxoSelecionado(json.fluxo);
+    await carregarFluxos();
+  } catch (error: any) {
+    setErro(error?.message || "Erro ao alterar status do fluxo.");
+  }
+}
+
   function badgeClass(status: string) {
     if (status === "ativo") return `${styles.badge} ${styles.badgeGreen}`;
     if (status === "pausado") return `${styles.badge} ${styles.badgeYellow}`;
@@ -1319,6 +1359,27 @@ function removerConexao(edgeId: string) {
                         }}
                     >
                         Apagar
+                    </button>
+                    )}
+
+                    {fluxo.status !== "arquivado" && (
+                    <button
+                        type="button"
+                        className={
+                        fluxo.status === "ativo"
+                            ? styles.secondaryButton
+                            : styles.primaryButton
+                        }
+                        onClick={(e) => {
+                        e.stopPropagation();
+
+                        alterarStatusFluxo(
+                            fluxo,
+                            fluxo.status === "ativo" ? "pausado" : "ativo"
+                        );
+                        }}
+                    >
+                        {fluxo.status === "ativo" ? "Pausar" : "Ativar"}
                     </button>
                     )}
                 </div>
