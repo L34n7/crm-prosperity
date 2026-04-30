@@ -229,7 +229,9 @@ export async function POST(req: NextRequest) {
           | null = null;
 
         const podeRodarAutomacao =
-          message.tipoMensagem === "texto" && !!message.text?.trim();
+          !savedMessage.duplicated &&
+          message.tipoMensagem === "texto" &&
+          !!message.text?.trim();
 
         if (podeRodarAutomacao) {
           automationResult = await processAutomationEngine({

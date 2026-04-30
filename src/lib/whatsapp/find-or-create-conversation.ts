@@ -1,5 +1,4 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import type { FluxoEtapa } from "@/lib/chatbot/types";
 
 export type WhatsAppConversation = {
   id: string;
@@ -25,14 +24,7 @@ export type WhatsAppConversation = {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
-
   bot_ativo: boolean;
-  fluxo_etapa: FluxoEtapa;
-  menu_aguardando_resposta: boolean;
-  ultima_opcao_escolhida: string | null;
-  tentativas_invalidas: number;
-  ultima_interacao_bot_em: string | null;
-  automacao_id: string | null;
 };
 
 type FindOrCreateConversationParams = {
@@ -184,14 +176,7 @@ async function reabrirConversaEncerrada(
       started_at: now,
       last_message_at: now,
       closed_at: null,
-
       bot_ativo: !!automacaoAtiva,
-      fluxo_etapa: null,
-      menu_aguardando_resposta: false,
-      ultima_opcao_escolhida: null,
-      tentativas_invalidas: 0,
-      ultima_interacao_bot_em: null,
-      automacao_id: automacaoAtiva?.id ?? null,
     })
     .eq("id", conversa.id)
     .select("*")
@@ -319,14 +304,7 @@ export async function findOrCreateWhatsAppConversation({
       started_at: now,
       last_message_at: now,
       closed_at: null,
-
       bot_ativo: !!automacaoAtiva,
-      fluxo_etapa: null,
-      menu_aguardando_resposta: false,
-      ultima_opcao_escolhida: null,
-      tentativas_invalidas: 0,
-      ultima_interacao_bot_em: null,
-      automacao_id: automacaoAtiva?.id ?? null,
     })
     .select("*")
     .single();

@@ -51,7 +51,24 @@ type GatilhoFluxo = {
   ativo: boolean;
 };
 
+type SetorOpcao = {
+  id: string;
+  nome: string;
+};
+
+type MidiaOpcao = {
+  id: string;
+  nome: string;
+  tipo: "imagem" | "video";
+  url: string;
+  mime_type: string | null;
+  tamanho_bytes: number | null;
+};
+
 const nodeTypes = {};
+
+const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
+const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 
 function criarIdTemporario(prefixo: string) {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -67,6 +84,8 @@ function labelTipoNo(tipo: string) {
   if (tipo === "pergunta_opcoes") return "Pergunta";
   if (tipo === "transferir_setor") return "Transferir";
   if (tipo === "encerrar") return "Encerrar";
+  if (tipo === "enviar_imagem") return "Imagem";
+  if (tipo === "enviar_video") return "Vídeo";
   return tipo;
 }
 
@@ -76,6 +95,8 @@ function corTipoNo(tipo: string) {
   if (tipo === "pergunta_opcoes") return styles.nodePergunta;
   if (tipo === "transferir_setor") return styles.nodeTransferir;
   if (tipo === "encerrar") return styles.nodeEncerrar;
+  if (tipo === "enviar_imagem") return styles.nodeMensagem;
+  if (tipo === "enviar_video") return styles.nodeMensagem;
   return styles.nodePadrao;
 }
 
@@ -102,15 +123,17 @@ function dbNoParaReactFlow(no: AutomacaoNo): Node {
 }
 
 function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {
+  const ehSempreSeguir = conexao.condicao_json?.tipo === "sempre";
+
   return {
     id: conexao.id,
     source: conexao.no_origem_id,
     target: conexao.no_destino_id,
-    label: conexao.rotulo || undefined,
+    label: ehSempreSeguir ? "" : conexao.rotulo || undefined,
     animated: true,
     data: {
       condicao_json: conexao.condicao_json || {},
-      rotulo: conexao.rotulo || "",
+      rotulo: ehSempreSeguir ? "Sempre seguir" : conexao.rotulo || "",
     },
   };
 }
@@ -135,12 +158,22 @@ export default function FluxosPage() {
   const [editandoNodeId, setEditandoNodeId] = useState<string | null>(null);
   const [tituloNode, setTituloNode] = useState("");
   const [mensagemNode, setMensagemNode] = useState("");
+  const [midiaUrlNode, setMidiaUrlNode] = useState("");
+  const [midiaNomeNode, setMidiaNomeNode] = useState("");
   const [buscaFluxo, setBuscaFluxo] = useState("");
+  const [tipoNodeEdicao, setTipoNodeEdicao] = useState("");
+
+  const [midias, setMidias] = useState<MidiaOpcao[]>([]);
+  const [carregandoMidias, setCarregandoMidias] = useState(false);
+  const [enviandoMidia, setEnviandoMidia] = useState(false);
 
   const [editandoFluxo, setEditandoFluxo] = useState(false);
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
   const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
   const [setorDestino, setSetorDestino] = useState("");
+
+  const [setores, setSetores] = useState<SetorOpcao[]>([]);
+  const [carregandoSetores, setCarregandoSetores] = useState(false);
 
   const [gatilhosFluxo, setGatilhosFluxo] = useState<GatilhoFluxo[]>([]);
   const [novoGatilhoValor, setNovoGatilhoValor] = useState("");
@@ -170,6 +203,8 @@ const [opcoesNode, setOpcoesNode] = useState<
 const [editandoEdgeId, setEditandoEdgeId] = useState<string | null>(null);
 const [rotuloConexao, setRotuloConexao] = useState("");
 const [valorCondicao, setValorCondicao] = useState("");
+const [tipoCondicaoConexao, setTipoCondicaoConexao] =
+  useState("resposta_contem");
 
   const nodeEditado = useMemo(() => {
     return nodes.find((node) => node.id === editandoNodeId) || null;
@@ -178,6 +213,99 @@ const [valorCondicao, setValorCondicao] = useState("");
 const edgeEditada = useMemo(() => {
   return edges.find((edge) => edge.id === editandoEdgeId) || null;
 }, [edges, editandoEdgeId]);
+
+
+  async function carregarSetores() {
+    try {
+      setCarregandoSetores(true);
+
+      const res = await fetch("/api/setores/opcoes", {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar setores.");
+      }
+
+      setSetores(json.setores || []);
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao carregar setores.");
+    } finally {
+      setCarregandoSetores(false);
+    }
+  }
+
+
+  async function enviarNovaMidia(arquivo: File) {
+    try {
+      setEnviandoMidia(true);
+      setErro("");
+      setSucesso("");
+
+      const formData = new FormData();
+      formData.append("arquivo", arquivo);
+
+      const res = await fetch("/api/automacoes/midias/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao enviar mídia.");
+      }
+
+      setMidiaUrlNode(json.midia.url);
+      setMidiaNomeNode(json.midia.nome);
+
+      setMidias((atuais) => {
+        const jaExiste = atuais.some((m) => m.id === json.midia.id);
+
+        if (jaExiste) {
+          return atuais;
+        }
+
+        return [json.midia, ...atuais];
+      });
+
+      setSucesso("Mídia enviada com sucesso.");
+
+      await carregarMidias();
+      
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao enviar mídia.");
+    } finally {
+      setEnviandoMidia(false);
+    }
+  }
+
+
+  async function carregarMidias(tipo?: "imagem" | "video") {
+    try {
+      setCarregandoMidias(true);
+
+      const params = tipo ? `?tipo=${tipo}` : "";
+
+      const res = await fetch(`/api/automacoes/midias${params}`, {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar mídias.");
+      }
+
+      setMidias(json.midias || []);
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao carregar mídias.");
+    } finally {
+      setCarregandoMidias(false);
+    }
+  }
 
   async function carregarFluxos() {
     try {
@@ -237,6 +365,8 @@ const edgeEditada = useMemo(() => {
 
   useEffect(() => {
     carregarFluxos();
+    carregarSetores();
+    carregarMidias();
   }, []);
 
   useEffect(() => {
@@ -427,10 +557,13 @@ function abrirEdicaoNo(node: Node) {
     | undefined;
 
   setEditandoNodeId(node.id);
+  setTipoNodeEdicao(String(node.data?.tipo_no || ""));
   setEditandoEdgeId(null);
 
   setTituloNode(String(node.data?.titulo || ""));
   setMensagemNode(String(configuracaoJson?.mensagem || ""));
+  setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
+  setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
   setSetorDestino(configuracaoJson?.setor_id || "");
 
   if (Array.isArray(configuracaoJson?.opcoes)) {
@@ -455,6 +588,7 @@ function abrirEdicaoConexao(edge: Edge) {
 
   setRotuloConexao(String(edge.label || data?.rotulo || ""));
   setValorCondicao(String(condicao.valor || ""));
+  setTipoCondicaoConexao(String(condicao.tipo || "resposta_contem"));
 }
 
 function adicionarOpcaoPergunta() {
@@ -483,66 +617,92 @@ function removerOpcaoPergunta(index: number) {
   setOpcoesNode((atuais) => atuais.filter((_, i) => i !== index));
 }
 
-  function aplicarEdicaoNo() {
-    if (!editandoNodeId) return;
+function aplicarEdicaoNo() {
+  if (!editandoNodeId) return;
 
-    setNodes((atuais) =>
-      atuais.map((node) => {
-        if (node.id !== editandoNodeId) return node;
+  setNodes((atuais) =>
+    atuais.map((node) => {
+      if (node.id !== editandoNodeId) return node;
 
-        const tipoNo = String(node.data?.tipo_no || "enviar_texto");
-        const configuracaoAtual = (node.data?.configuracao_json || {}) as Record<
-          string,
-          any
-        >;
+      const tipoAtual = String(node.data?.tipo_no || "enviar_texto");
+      const tipoFinal = tipoAtual === "inicio" ? "inicio" : tipoNodeEdicao;
 
-        const configuracao_json = {
-        ...configuracaoAtual,
-        mensagem: mensagemNode,
-        ...(tipoNo === "pergunta_opcoes" ? { opcoes: opcoesNode } : {}),
-        ...(tipoNo === "transferir_setor"
-            ? { setor_id: setorDestino }
-            : {}),
-        };
+      let configuracao_json: Record<string, any> = {};
 
-        return dbNoParaReactFlow({
-          id: node.id,
-          tipo_no: tipoNo,
-          titulo: tituloNode || "Bloco",
-          descricao: String(node.data?.descricao || "") || null,
-          posicao_x: node.position.x,
-          posicao_y: node.position.y,
-          configuracao_json,
-        });
-      })
-    );
+      if (
+        tipoFinal === "enviar_texto" ||
+        tipoFinal === "pergunta_opcoes" ||
+        tipoFinal === "enviar_imagem" ||
+        tipoFinal === "enviar_video" ||
+        tipoFinal === "transferir_setor" ||
+        tipoFinal === "encerrar"
+      ) {
+        configuracao_json.mensagem = mensagemNode;
+      }
 
-    setSucesso("Bloco atualizado. Clique em Salvar fluxo para gravar no banco.");
-  }
+      if (tipoFinal === "pergunta_opcoes") {
+        configuracao_json.opcoes = opcoesNode;
+      }
+
+      if (tipoFinal === "enviar_imagem" || tipoFinal === "enviar_video") {
+        configuracao_json.midia_url = midiaUrlNode;
+        configuracao_json.midia_nome = midiaNomeNode;
+      }
+
+      return dbNoParaReactFlow({
+        id: node.id,
+        tipo_no: tipoFinal,
+        titulo: tituloNode || labelTipoNo(tipoFinal),
+        descricao: String(node.data?.descricao || "") || null,
+        posicao_x: node.position.x,
+        posicao_y: node.position.y,
+        configuracao_json,
+      });
+    })
+  );
+
+  setSucesso("Bloco atualizado. Clique em Salvar fluxo para gravar no banco.");
+}
 
 function aplicarEdicaoConexao() {
   if (!editandoEdgeId) return;
 
-    setEdges((atuais) =>
-        atuais.map((edge) => {
-        if (edge.id !== editandoEdgeId) return edge;
+  setEdges((atuais) =>
+    atuais.map((edge) => {
+      if (edge.id !== editandoEdgeId) return edge;
 
-        return {
-            ...edge,
-            label: rotuloConexao || valorCondicao || "Condição",
-            data: {
-            ...(edge.data || {}),
-            rotulo: rotuloConexao,
-            condicao_json: valorCondicao
-                ? {
-                    tipo: "resposta_igual",
-                    valor: valorCondicao,
-                }
-                : {},
-            },
-        };
-        })
-    );
+      const ehSempreSeguir = tipoCondicaoConexao === "sempre";
+
+      return {
+        ...edge,
+
+        // Se for "Sempre seguir", não exibe nome na linha.
+        // Se for condição, exibe nome digitado, valor da condição ou "Condição".
+        label: ehSempreSeguir
+          ? ""
+          : rotuloConexao || valorCondicao || "Condição",
+
+        data: {
+          ...(edge.data || {}),
+
+          // Se for "Sempre seguir", grava o nome interno como "Sempre seguir".
+          // Mas não permite alterar/exibir nome visual.
+          rotulo: ehSempreSeguir ? "Sempre seguir" : rotuloConexao,
+
+          condicao_json: ehSempreSeguir
+            ? {
+                tipo: "sempre",
+              }
+            : valorCondicao
+            ? {
+                tipo: tipoCondicaoConexao,
+                valor: valorCondicao,
+              }
+            : {},
+        },
+      };
+    })
+  );
 
   setSucesso("Conexão atualizada. Clique em Salvar fluxo para gravar no banco.");
 }
@@ -1027,6 +1187,69 @@ async function confirmarApagarDefinitivo() {
   }
 }
 
+function validarFluxoAntesDeAtivar() {
+  if (!fluxoSelecionado) {
+    return "Selecione um fluxo.";
+  }
+
+  const inicio = nodes.find((node) => node.data?.tipo_no === "inicio");
+
+  if (!inicio) {
+    return "Adicione um bloco de início antes de ativar o fluxo.";
+  }
+
+  const conexaoSaindoDoInicio = edges.some((edge) => edge.source === inicio.id);
+
+  if (!conexaoSaindoDoInicio) {
+    return "O bloco de início precisa estar conectado a outro bloco.";
+  }
+
+  const temBlocoFinal = nodes.some(
+    (node) =>
+      node.data?.tipo_no === "encerrar" ||
+      node.data?.tipo_no === "transferir_setor"
+  );
+
+  if (!temBlocoFinal) {
+    return "Adicione pelo menos um bloco final: Encerrar ou Transferir.";
+  }
+
+  for (const node of nodes) {
+    const tipoNo = String(node.data?.tipo_no || "");
+    const config = (node.data?.configuracao_json || {}) as Record<string, any>;
+
+    if (tipoNo === "enviar_texto" && !String(config.mensagem || "").trim()) {
+      return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
+    }
+
+    if (tipoNo === "pergunta_opcoes") {
+      if (!String(config.mensagem || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
+      }
+
+      if (!Array.isArray(config.opcoes) || config.opcoes.length === 0) {
+        return `O bloco "${node.data?.titulo}" precisa ter pelo menos uma opção.`;
+      }
+    }
+
+    if (
+      tipoNo === "transferir_setor" &&
+      !String(config.setor_id || "").trim()
+    ) {
+      return `O bloco "${node.data?.titulo}" precisa ter um setor destino.`;
+    }
+
+    if (
+      (tipoNo === "enviar_imagem" || tipoNo === "enviar_video") &&
+      !String(config.midia_url || "").trim()
+    ) {
+      return `O bloco "${node.data?.titulo}" precisa ter uma URL de mídia.`;
+    }
+  }
+
+  return "";
+}
+
 
 async function alterarStatusFluxo(
   fluxo: Fluxo,
@@ -1035,6 +1258,17 @@ async function alterarStatusFluxo(
   try {
     setErro("");
     setSucesso("");
+
+    if (novoStatus === "ativo") {
+      const erroValidacao = validarFluxoAntesDeAtivar();
+
+      if (erroValidacao) {
+        setErro(erroValidacao);
+        return;
+      }
+
+      await salvarEstrutura();
+    }
 
     const res = await fetch("/api/automacoes", {
       method: "PATCH",
@@ -1518,155 +1752,371 @@ function removerConexao(edgeId: string) {
                 </p>
                 ) : nodeEditado ? (
                 <div className={styles.propertiesForm}>
+                  {tipoNodeEdicao !== "inicio" && (
                     <label className={styles.field}>
-                    <span className={styles.label}>Tipo</span>
-                    <input
-                        className={styles.input}
-                        value={labelTipoNo(String(nodeEditado.data?.tipo_no))}
-                        disabled
-                    />
-                    </label>
+                      <span className={styles.label}>Tipo do bloco</span>
 
-                    <label className={styles.field}>
-                    <span className={styles.label}>Título</span>
-                    <input
+                      <select
                         className={styles.input}
-                        value={tituloNode}
-                        onChange={(e) => setTituloNode(e.target.value)}
-                    />
-                    </label>
+                        value={tipoNodeEdicao}
+                        onChange={(e) => {
+                          const novoTipo = e.target.value;
 
-                    {(nodeEditado.data?.tipo_no === "enviar_texto" ||
-                    nodeEditado.data?.tipo_no === "pergunta_opcoes") && (
+                          setTipoNodeEdicao(novoTipo);
+
+                          if (novoTipo === "encerrar") {
+                            setMensagemNode("");
+                            setSetorDestino("");
+                            setOpcoesNode([]);
+                          }
+
+                          if (novoTipo === "transferir_setor") {
+                            setSetorDestino("");
+                            setOpcoesNode([]);
+                          }
+
+                          if (novoTipo === "enviar_texto") {
+                            setSetorDestino("");
+                            setOpcoesNode([]);
+                          }
+
+                          if (novoTipo === "pergunta_opcoes") {
+                            setSetorDestino("");
+                          }
+
+                          if (novoTipo === "enviar_imagem" || novoTipo === "enviar_video") {
+                            setSetorDestino("");
+                            setOpcoesNode([]);
+                          }
+
+                          if (
+                            novoTipo !== "enviar_imagem" &&
+                            novoTipo !== "enviar_video"
+                          ) {
+                            setMidiaUrlNode("");
+                          }
+                        }}
+                      >
+                        <option value="enviar_texto">Mensagem</option>
+                        <option value="pergunta_opcoes">Pergunta</option>
+                        <option value="transferir_setor">Transferir</option>
+                        <option value="encerrar">Encerrar</option>
+                        <option value="enviar_imagem">Imagem</option>
+                        <option value="enviar_video">Vídeo</option>
+                      </select>
+                    </label>
+                  )}
+
+                  <label className={styles.field}>
+                    <span className={styles.label}>
+                      Título
+                    </span>
+
+                    <span className={styles.help}>
+                      Esse título é interno e não aparece na conversa.
+                    </span>
+
+                    <input
+                      className={styles.input}
+                      value={tituloNode}
+                      onChange={(e) => setTituloNode(e.target.value)}
+                    />
+                  </label>
+
+                  {[
+                    "enviar_texto",
+                    "pergunta_opcoes",
+                    "enviar_imagem",
+                    "enviar_video",
+                    "transferir_setor",
+                    "encerrar",
+                  ].includes(tipoNodeEdicao) && (
                     <label className={styles.field}>
-                        <span className={styles.label}>Mensagem</span>
-                        <textarea
+                      <span className={styles.label}>
+                        {tipoNodeEdicao === "pergunta_opcoes"
+                          ? "Pergunta"
+                          : tipoNodeEdicao === "enviar_imagem"
+                          ? "Legenda da imagem"
+                          : tipoNodeEdicao === "enviar_video"
+                          ? "Legenda do vídeo"
+                          : tipoNodeEdicao === "transferir_setor"
+                          ? "Mensagem antes de transferir"
+                          : tipoNodeEdicao === "encerrar"
+                          ? "Mensagem de encerramento (opcional)"
+                          : "Mensagem"}
+                      </span>
+
+                      <textarea
                         className={styles.textarea}
                         value={mensagemNode}
                         onChange={(e) => setMensagemNode(e.target.value)}
-                        />
+                        placeholder="Digite o conteúdo"
+                      />
                     </label>
-                    )}
+                  )}
 
-                    {nodeEditado.data?.tipo_no === "pergunta_opcoes" && (
+                  {["enviar_imagem", "enviar_video"].includes(tipoNodeEdicao) && (
+                    <div className={styles.field}>
+                      <span className={styles.label}>
+                        {tipoNodeEdicao === "enviar_imagem"
+                          ? "Mídia da imagem"
+                          : "Mídia do vídeo"}
+                      </span>
+
+                      {midiaUrlNode ? (
+                        <div className={styles.midiaSelecionadaBox}>
+                          <div className={styles.midiaSelecionadaInfo}>
+                            <div className={styles.midiaSelecionadaIcone}>
+                              {tipoNodeEdicao === "enviar_imagem" ? "🖼️" : "🎬"}
+                            </div>
+
+                            <div>
+                              <strong className={styles.midiaSelecionadaTitulo}>
+                                {tipoNodeEdicao === "enviar_imagem"
+                                  ? "Imagem selecionada"
+                                  : "Vídeo selecionado"}
+                              </strong>
+
+                              <p className={styles.midiaSelecionadaNome}>
+                                {midiaNomeNode || "Mídia selecionada"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            className={styles.dangerSmallButton}
+                            onClick={() => {
+                              setMidiaUrlNode("");
+                              setMidiaNomeNode("");
+                            }}
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <select
+                            className={styles.input}
+                            value={midiaUrlNode}
+                            onChange={(e) => {
+                              const urlSelecionada = e.target.value;
+                              const midiaSelecionada = midias.find(
+                                (m) => m.url === urlSelecionada
+                              );
+
+                              setMidiaUrlNode(urlSelecionada);
+                              setMidiaNomeNode(midiaSelecionada?.nome || "");
+                            }}
+                            disabled={carregandoMidias || enviandoMidia}
+                          >
+                            <option value="">
+                              {carregandoMidias ? "Carregando mídias..." : "Selecione uma mídia"}
+                            </option>
+
+                            {midias
+                              .filter((midia) =>
+                                tipoNodeEdicao === "enviar_imagem"
+                                  ? midia.tipo === "imagem"
+                                  : midia.tipo === "video"
+                              )
+                              .map((midia) => (
+                                <option key={midia.id} value={midia.url}>
+                                  {midia.nome}
+                                </option>
+                              ))}
+                          </select>
+
+                          <label className={styles.secondaryButton}>
+                            {enviandoMidia ? "Enviando..." : "Subir nova mídia"}
+
+                            <input
+                              type="file"
+                              accept={tipoNodeEdicao === "enviar_imagem" ? "image/*" : "video/*"}
+                              style={{ display: "none" }}
+                              disabled={enviandoMidia}
+                              onChange={(e) => {
+                                const arquivo = e.target.files?.[0];
+
+                                if (!arquivo) return;
+
+                                setErro("");
+                                setSucesso("");
+
+                                if (arquivo.type.startsWith("image/")) {
+                                  if (arquivo.size > 5 * 1024 * 1024) {
+                                    setErro("A imagem deve ter no máximo 5MB.");
+                                    return;
+                                  }
+                                }
+
+                                if (arquivo.type.startsWith("video/")) {
+                                  if (arquivo.size > 16 * 1024 * 1024) {
+                                    setErro(
+                                      "O vídeo deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
+                                    );
+                                    return;
+                                  }
+                                }
+
+                                enviarNovaMidia(arquivo);
+
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+
+                          <span className={styles.help}>
+                            Imagens até 5MB e vídeos até 16MB. Se o arquivo for maior, reduza antes
+                            de enviar.
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {tipoNodeEdicao === "pergunta_opcoes" && (
                     <div className={styles.optionsBox}>
-                        <div className={styles.optionsHeader}>
+                      <div className={styles.optionsHeader}>
                         <span className={styles.label}>Opções da pergunta</span>
                         <button
-                            type="button"
-                            className={styles.smallButton}
-                            onClick={adicionarOpcaoPergunta}
+                          type="button"
+                          className={styles.smallButton}
+                          onClick={adicionarOpcaoPergunta}
                         >
-                            + Opção
+                          + Opção
                         </button>
-                        </div>
+                      </div>
 
-                        {opcoesNode.length === 0 ? (
+                      {opcoesNode.length === 0 ? (
                         <p className={styles.help}>Nenhuma opção cadastrada.</p>
-                        ) : (
+                      ) : (
                         opcoesNode.map((opcao, index) => (
-                            <div key={index} className={styles.optionRow}>
+                          <div key={index} className={styles.optionRow}>
                             <input
-                                className={styles.optionValueInput}
-                                value={opcao.valor}
-                                onChange={(e) =>
+                              className={styles.optionValueInput}
+                              value={opcao.valor}
+                              onChange={(e) =>
                                 atualizarOpcaoPergunta(index, "valor", e.target.value)
-                                }
-                                placeholder="1"
+                              }
+                              placeholder="1"
                             />
 
                             <input
-                                className={styles.input}
-                                value={opcao.titulo}
-                                onChange={(e) =>
+                              className={styles.input}
+                              value={opcao.titulo}
+                              onChange={(e) =>
                                 atualizarOpcaoPergunta(index, "titulo", e.target.value)
-                                }
-                                placeholder="Comercial"
+                              }
+                              placeholder="Comercial"
                             />
 
                             <button
-                                type="button"
-                                className={styles.dangerSmallButton}
-                                onClick={() => removerOpcaoPergunta(index)}
+                              type="button"
+                              className={styles.dangerSmallButton}
+                              onClick={() => removerOpcaoPergunta(index)}
                             >
-                                ×
+                              ×
                             </button>
-                            </div>
+                          </div>
                         ))
-                        )}
+                      )}
                     </div>
-                    )}
+                  )}
 
-                    {nodeEditado.data?.tipo_no === "transferir_setor" && (
-                    <>
-                        <label className={styles.field}>
-                        <span className={styles.label}>Mensagem</span>
-                        <textarea
-                            className={styles.textarea}
-                            value={mensagemNode}
-                            onChange={(e) => setMensagemNode(e.target.value)}
-                            placeholder="Ex: Vou te encaminhar para um atendente..."
-                        />
-                        </label>
+                  {tipoNodeEdicao === "transferir_setor" && (
+                    <label className={styles.field}>
+                      <span className={styles.label}>Setor destino</span>
 
-                        <label className={styles.field}>
-                        <span className={styles.label}>Setor destino</span>
-                        <input
-                            className={styles.input}
-                            value={setorDestino}
-                            onChange={(e) => setSetorDestino(e.target.value)}
-                            placeholder="Ex: suporte"
-                        />
-                        </label>
-                    </>
-                    )}
+                      <select
+                        className={styles.input}
+                        value={setorDestino}
+                        onChange={(e) => setSetorDestino(e.target.value)}
+                        disabled={carregandoSetores}
+                      >
+                        <option value="">
+                          {carregandoSetores ? "Carregando setores..." : "Selecione um setor"}
+                        </option>
 
-                    {nodeEditado.data?.tipo_no !== "inicio" && (
-                        <button
-                            type="button"
-                            className={styles.dangerButton}
-                            onClick={() => removerNode(nodeEditado.id)}
-                        >
-                            Excluir bloco
-                        </button>
-                    )}
+                        {setores.map((setor) => (
+                          <option key={setor.id} value={setor.id}>
+                            {setor.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
 
+                  {nodeEditado.data?.tipo_no !== "inicio" && (
                     <button
+                      type="button"
+                      className={styles.dangerButton}
+                      onClick={() => removerNode(nodeEditado.id)}
+                    >
+                      Excluir bloco
+                    </button>
+                  )}
+
+                  <button
                     type="button"
                     className={styles.primaryButton}
                     onClick={aplicarEdicaoNo}
-                    >
+                  >
                     Aplicar no bloco
-                    </button>
+                  </button>
 
-                    <p className={styles.help}>
+                  <p className={styles.help}>
                     Depois de aplicar, clique em Salvar fluxo para gravar no banco.
-                    </p>
+                  </p>
                 </div>
                 ) : (
                 <div className={styles.propertiesForm}>
                     <label className={styles.field}>
-                    <span className={styles.label}>Nome da conexão</span>
-                    <input
+                      <span className={styles.label}>Nome da conexão</span>
+                      <input
                         className={styles.input}
-                        value={rotuloConexao}
+                        value={tipoCondicaoConexao === "sempre" ? "Sempre seguir" : rotuloConexao}
                         onChange={(e) => setRotuloConexao(e.target.value)}
-                        placeholder="Ex: Cliente escolheu 1"
-                    />
+                        placeholder="Ex: Opção 1, Sim, Comercial"
+                        disabled={tipoCondicaoConexao === "sempre"}
+                      />
                     </label>
 
                     <label className={styles.field}>
-                    <span className={styles.label}>Resposta esperada</span>
-                    <input
-                        className={styles.input}
-                        value={valorCondicao}
-                        onChange={(e) => setValorCondicao(e.target.value)}
-                        placeholder="Ex: 1"
-                    />
-                    <p className={styles.help}>
-                        Se o cliente digitar esse valor, o fluxo seguirá por esta conexão.
-                    </p>
+                      <span className={styles.label}>Tipo da condição</span>
+                      <select
+                          className={styles.input}
+                          value={tipoCondicaoConexao}
+                          onChange={(e) => {
+                            const novoTipo = e.target.value;
+
+                            setTipoCondicaoConexao(novoTipo);
+
+                            if (novoTipo === "sempre") {
+                              setValorCondicao("");
+                              setRotuloConexao("Sempre seguir");
+                            }
+                          }}
+                        >
+                          <option value="resposta_igual">Exata</option>
+                          <option value="resposta_contem">Contém</option>
+                          <option value="resposta_inicia_com">Inicia com</option>
+                          <option value="resposta_regex">Regex</option>
+                          <option value="sempre">Sempre seguir</option>
+                      </select>
                     </label>
+
+                    {tipoCondicaoConexao !== "sempre" && (
+                      <label className={styles.field}>
+                        <span className={styles.label}>Resposta esperada</span>
+                        <input
+                          className={styles.input}
+                          value={valorCondicao}
+                          onChange={(e) => setValorCondicao(e.target.value)}
+                          placeholder="Ex: 1, sim, quero comprar"
+                        />
+                      </label>
+                    )}
 
                     <button
                     type="button"
@@ -1757,6 +2207,7 @@ function removerConexao(edgeId: string) {
                         <option value="contem">Contém a palavra</option>
                         <option value="exata">Igual exatamente</option>
                         <option value="inicia_com">Começa com</option>
+                        <option value="regex">Regex</option>
                     </select>
 
                     <button

@@ -1,17 +1,18 @@
 import type { AutomacaoGatilho } from "./types";
 
 function normalizarTexto(texto: string) {
-  return String(texto || "")
-    .trim()
-    .toLowerCase();
+  return String(texto || "").trim().toLowerCase();
 }
 
 export function gatilhoCombinaComMensagem(
   gatilho: AutomacaoGatilho,
   mensagemTexto: string
 ) {
-  const mensagem = normalizarTexto(mensagemTexto);
-  const valor = normalizarTexto(gatilho.valor || "");
+  const mensagemOriginal = String(mensagemTexto || "").trim();
+  const valorOriginal = String(gatilho.valor || "").trim();
+
+  const mensagem = normalizarTexto(mensagemOriginal);
+  const valor = normalizarTexto(valorOriginal);
 
   if (!mensagem || !valor) return false;
 
@@ -29,6 +30,15 @@ export function gatilhoCombinaComMensagem(
 
   if (gatilho.condicao === "contem") {
     return mensagem.includes(valor);
+  }
+
+  if (gatilho.condicao === "regex") {
+    try {
+      const regex = new RegExp(valorOriginal, "i");
+      return regex.test(mensagemOriginal);
+    } catch {
+      return false;
+    }
   }
 
   return false;

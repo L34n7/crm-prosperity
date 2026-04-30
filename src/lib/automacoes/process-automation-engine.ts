@@ -10,6 +10,63 @@ import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message"
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function normalizarTexto(texto: string) {
+  return String(texto || "").trim().toLowerCase();
+}
+
+function condicaoPrecisaDeResposta(condicao: Record<string, any> | null | undefined) {
+  if (!condicao?.tipo) return false;
+
+  return [
+    "resposta_igual",
+    "resposta_contem",
+    "resposta_inicia_com",
+    "resposta_regex",
+  ].includes(condicao.tipo);
+}
+
+function condicaoCombinaComMensagem(
+  condicao: Record<string, any> | null | undefined,
+  mensagemTexto?: string
+) {
+  if (!condicao?.tipo) return false;
+
+  if (condicao.tipo === "sempre") {
+    return true;
+  }
+
+  const mensagemOriginal = String(mensagemTexto || "").trim();
+  const valorOriginal = String(condicao.valor || "").trim();
+
+  const mensagem = normalizarTexto(mensagemOriginal);
+  const valor = normalizarTexto(valorOriginal);
+
+  if (!mensagem || !valor) return false;
+
+  if (condicao.tipo === "resposta_igual") {
+    return mensagem === valor;
+  }
+
+  if (condicao.tipo === "resposta_contem") {
+    return mensagem.includes(valor);
+  }
+
+  if (condicao.tipo === "resposta_inicia_com") {
+    return mensagem.startsWith(valor);
+  }
+
+  if (condicao.tipo === "resposta_regex") {
+    try {
+      const regex = new RegExp(valorOriginal, "i");
+      return regex.test(mensagemOriginal);
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 export async function processAutomationEngine(input: AutomationEngineInput) {
   const { empresaId, conversaId, contatoId, mensagemTexto, numeroDestino } = input;
 
@@ -266,12 +323,11 @@ async function executarNo(params: {
       .eq("no_origem_id", no.id)
       .eq("ativo", true);
 
-    const temCondicao = (conexoesDoNo || []).some((c) => {
-      const cond = c.condicao_json;
-      return cond && cond.tipo;
-    });
+    const precisaAguardarResposta = (conexoesDoNo || []).some((c) =>
+      condicaoPrecisaDeResposta(c.condicao_json)
+    );
 
-    if (temCondicao) {
+    if (precisaAguardarResposta) {
       await supabaseAdmin
         .from("automacao_execucoes")
         .update({
@@ -334,7 +390,88 @@ async function executarNo(params: {
     return;
   }
 
+  if (no.tipo_no === "enviar_imagem" || no.tipo_no === "enviar_video") {
+    const midiaUrl = String(no.configuracao_json?.midia_url || "").trim();
+    const legenda = String(no.configuracao_json?.mensagem || "").trim();
+
+    if (!midiaUrl) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "erro_no_midia",
+        descricao: `Nó ${no.tipo_no} sem URL de mídia configurada.`,
+        entrada: no.configuracao_json,
+        saida: {},
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        numeroDestino,
+      });
+
+      return;
+    }
+
+    await enviarMidiaAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      tipo: no.tipo_no === "enviar_imagem" ? "image" : "video",
+      midiaUrl,
+      legenda,
+      execucaoId,
+      noId: no.id,
+    });
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "no_executado",
+      descricao:
+        no.tipo_no === "enviar_imagem"
+          ? "Imagem enviada pela automação."
+          : "Vídeo enviado pela automação.",
+      entrada: no.configuracao_json,
+      saida: {
+        midia_url: midiaUrl,
+        legenda,
+      },
+    });
+
+    await seguirParaProximoNo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noAtualId: no.id,
+      numeroDestino,
+    });
+
+    return;
+  }
+
   if (no.tipo_no === "encerrar") {
+    const mensagem = String(no.configuracao_json?.mensagem || "").trim();
+
+    if (mensagem) {
+      await enviarMensagemAutomacao({
+        empresaId,
+        conversaId,
+        numeroDestino,
+        conteudo: mensagem,
+        execucaoId,
+        noId: no.id,
+      });
+    }
+
     await supabaseAdmin
       .from("automacao_execucoes")
       .update({
@@ -351,9 +488,14 @@ async function executarNo(params: {
       fluxoId,
       noId: no.id,
       tipoEvento: "execucao_finalizada",
-      descricao: "Execução finalizada pelo nó encerrar.",
-      entrada: {},
-      saida: {},
+      descricao: mensagem
+        ? "Execução finalizada pelo nó encerrar com mensagem de encerramento."
+        : "Execução finalizada pelo nó encerrar sem mensagem de encerramento.",
+      entrada: no.configuracao_json,
+      saida: {
+        mensagem_enviada: !!mensagem,
+        mensagem,
+      },
     });
 
     return;
@@ -440,7 +582,7 @@ async function seguirParaProximoNo(params: {
     fluxoId,
     noAtualId,
     mensagemTexto,
-    numeroDestino 
+    numeroDestino,
   } = params;
 
   const { data: conexoes, error } = await supabaseAdmin
@@ -462,39 +604,33 @@ async function seguirParaProximoNo(params: {
     return;
   }
 
-  // 🔥 NOVO: lógica de decisão
-  let conexaoEscolhida = conexoes[0];
+  let conexaoEscolhida = null;
 
-  if (mensagemTexto) {
-    const msg = mensagemTexto.trim().toLowerCase();
+  const conexoesComCondicaoDeResposta = conexoes.filter((conexao) =>
+    condicaoPrecisaDeResposta(conexao.condicao_json)
+  );
 
-    const conexoesComCondicao = conexoes.filter((c) => {
-      const cond = c.condicao_json;
-      return cond && cond.tipo;
-    });
+  const conexoesSempre = conexoes.filter(
+    (conexao) => conexao.condicao_json?.tipo === "sempre"
+  );
 
-    const encontrada = conexoesComCondicao.find((c) => {
-      const cond = c.condicao_json;
+  const conexoesSemCondicao = conexoes.filter(
+    (conexao) => !conexao.condicao_json?.tipo
+  );
 
-      if (cond.tipo === "resposta_igual") {
-        return String(cond.valor || "").trim().toLowerCase() === msg;
-      }
+  if (mensagemTexto && conexoesComCondicaoDeResposta.length > 0) {
+    conexaoEscolhida =
+      conexoesComCondicaoDeResposta.find((conexao) =>
+        condicaoCombinaComMensagem(conexao.condicao_json, mensagemTexto)
+      ) || null;
 
-      if (cond.tipo === "resposta_contem") {
-        return msg.includes(String(cond.valor || "").trim().toLowerCase());
-      }
-
-      return false;
-    });
-
-    if (encontrada) {
-      conexaoEscolhida = encontrada;
-    } else if (conexoesComCondicao.length > 0) {
+    if (!conexaoEscolhida) {
       await enviarMensagemAutomacao({
         empresaId,
         conversaId,
         numeroDestino,
-        conteudo: "Opção inválida. Por favor, escolha uma das opções disponíveis.",
+        conteudo:
+          "Opção inválida. Por favor, escolha uma das opções disponíveis.",
         execucaoId,
         noId: noAtualId,
       });
@@ -505,9 +641,14 @@ async function seguirParaProximoNo(params: {
         fluxoId,
         noId: noAtualId,
         tipoEvento: "resposta_invalida",
-        descricao: "Cliente enviou uma resposta que não corresponde a nenhuma conexão.",
+        descricao:
+          "Cliente enviou uma resposta que não corresponde a nenhuma conexão.",
         entrada: {
           mensagemTexto,
+          conexoes_avaliadas: conexoesComCondicaoDeResposta.map((c) => ({
+            id: c.id,
+            condicao_json: c.condicao_json,
+          })),
         },
         saida: {
           mensagem: "Opção inválida enviada ao cliente.",
@@ -518,11 +659,25 @@ async function seguirParaProximoNo(params: {
     }
   }
 
+  if (!conexaoEscolhida && conexoesSempre.length > 0) {
+    conexaoEscolhida = conexoesSempre[0];
+  }
+
+  if (!conexaoEscolhida && conexoesSemCondicao.length > 0) {
+    conexaoEscolhida = conexoesSemCondicao[0];
+  }
+
+  if (!conexaoEscolhida) {
+    await finalizarExecucao(execucaoId, empresaId);
+    return;
+  }
+
   const { data: proximoNo } = await supabaseAdmin
     .from("automacao_nos")
     .select("*")
     .eq("id", conexaoEscolhida.no_destino_id)
-    .single();
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
 
   if (!proximoNo) return;
 
@@ -530,9 +685,29 @@ async function seguirParaProximoNo(params: {
     .from("automacao_execucoes")
     .update({
       no_atual_id: proximoNo.id,
+      status: "rodando",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", execucaoId);
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId);
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId: noAtualId,
+    conexaoId: conexaoEscolhida.id,
+    tipoEvento: "conexao_seguida",
+    descricao: "Motor seguiu para o próximo bloco.",
+    entrada: {
+      mensagemTexto,
+      condicao_json: conexaoEscolhida.condicao_json,
+    },
+    saida: {
+      proximo_no_id: proximoNo.id,
+      proximo_tipo_no: proximoNo.tipo_no,
+    },
+  });
 
   await executarNo({
     empresaId,
@@ -712,6 +887,172 @@ async function enviarMensagemAutomacao(params: {
   };
 }
 
+
+async function enviarMidiaAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+  numeroDestino: string;
+  tipo: "image" | "video";
+  midiaUrl: string;
+  legenda?: string;
+  execucaoId: string;
+  noId: string;
+}) {
+  const {
+    empresaId,
+    conversaId,
+    numeroDestino,
+    tipo,
+    midiaUrl,
+    legenda,
+    execucaoId,
+    noId,
+  } = params;
+
+  const { data: conversa, error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .select(
+      `
+      id,
+      empresa_id,
+      integracao_whatsapp_id,
+      integracoes_whatsapp (
+        id,
+        phone_number_id,
+        token_ref,
+        status
+      )
+    `
+    )
+    .eq("id", conversaId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (conversaError || !conversa) {
+    throw new Error("Conversa não encontrada para envio da mídia da automação.");
+  }
+
+  const integracao = Array.isArray(conversa.integracoes_whatsapp)
+    ? conversa.integracoes_whatsapp[0]
+    : conversa.integracoes_whatsapp;
+
+  const phoneNumberId =
+    integracao?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+
+  if (!phoneNumberId) {
+    throw new Error("WHATSAPP_PHONE_NUMBER_ID não configurado.");
+  }
+
+  if (!accessToken) {
+    throw new Error("WHATSAPP_ACCESS_TOKEN não configurado.");
+  }
+
+  const permissaoEnvio = await canSendFreeformWhatsAppMessage({
+    conversaId,
+  });
+
+  if (!permissaoEnvio.podeEnviarMensagemLivre) {
+    await supabaseAdmin.from("mensagens").insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      remetente_tipo: "sistema",
+      conteudo:
+        permissaoEnvio.motivoBloqueio ||
+        "Mídia automática não enviada: janela de 24 horas encerrada.",
+      tipo_mensagem: "texto",
+      origem: "automatica",
+      status_envio: "falha",
+      metadata_json: {
+        automacao_execucao_id: execucaoId,
+        automacao_no_id: noId,
+        motivo: "janela_24h_encerrada",
+        tipo_midia: tipo,
+        midia_url: midiaUrl,
+      },
+    });
+
+    return {
+      ok: false,
+      status_envio: "falha",
+      messageId: null,
+      metaResponse: null,
+      erro:
+        permissaoEnvio.motivoBloqueio ||
+        "Janela de 24 horas encerrada para mensagem livre.",
+    };
+  }
+
+  const body = {
+    messaging_product: "whatsapp",
+    to: numeroDestino,
+    type: tipo,
+    [tipo]: {
+      link: midiaUrl,
+      ...(legenda ? { caption: legenda } : {}),
+    },
+  };
+
+  const response = await fetch(
+    `https://graph.facebook.com/v22.0/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  const raw = await response.json().catch(() => null);
+
+  const messageId = raw?.messages?.[0]?.id || null;
+
+  const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+    empresaId,
+    conversaId,
+  });
+
+  const { data: mensagemSalva, error: mensagemError } = await supabaseAdmin
+    .from("mensagens")
+    .insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      conversa_protocolo_id: protocoloAtivo.id,
+      remetente_tipo: "bot",
+      conteudo: legenda || midiaUrl,
+      tipo_mensagem: tipo === "image" ? "imagem" : "video",
+      origem: "automatica",
+      status_envio: response.ok ? "enviada" : "falha",
+      mensagem_externa_id: messageId,
+      metadata_json: {
+        automacao_execucao_id: execucaoId,
+        automacao_no_id: noId,
+        tipo_midia: tipo,
+        midia_url: midiaUrl,
+        legenda: legenda || "",
+        meta_response: raw,
+        erro: response.ok ? null : raw,
+      },
+    })
+    .select("*")
+    .single();
+
+  if (mensagemError) {
+    throw new Error(`Erro ao salvar mídia da automação: ${mensagemError.message}`);
+  }
+
+  return {
+    ok: response.ok,
+    status_envio: response.ok ? "enviada" : "falha",
+    messageId,
+    metaResponse: raw,
+    erro: response.ok ? null : raw,
+    mensagemId: mensagemSalva?.id,
+  };
+}
 
 async function buscarOuCriarProtocoloAutomacao(params: {
   empresaId: string;
