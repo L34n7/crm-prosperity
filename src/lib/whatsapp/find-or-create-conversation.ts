@@ -128,28 +128,6 @@ async function garantirProtocoloAtivo(conversa: WhatsAppConversation) {
   return data;
 }
 
-async function buscarAutomacaoAtiva(
-  empresaId: string,
-  integracaoWhatsappId: string
-) {
-  const supabaseAdmin = getSupabaseAdmin();
-
-  const { data, error } = await supabaseAdmin
-    .from("whatsapp_automacoes")
-    .select("id, ativa, setor_padrao_id, criado_em")
-    .eq("empresa_id", empresaId)
-    .eq("integracao_whatsapp_id", integracaoWhatsappId)
-    .eq("ativa", true)
-    .order("criado_em", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Erro ao buscar automação ativa: ${error.message}`);
-  }
-
-  return data;
-}
 
 async function reabrirConversaEncerrada(
   conversa: WhatsAppConversation,
@@ -158,12 +136,7 @@ async function reabrirConversaEncerrada(
   const supabaseAdmin = getSupabaseAdmin();
   const now = new Date().toISOString();
 
-  const automacaoAtiva = await buscarAutomacaoAtiva(
-    conversa.empresa_id,
-    integracaoWhatsappId
-  );
-
-  const statusInicial = automacaoAtiva ? "bot" : "fila";
+  const statusInicial = "fila";
 
   const { data: conversaReaberta, error: updateError } = await supabaseAdmin
     .from("conversas")
@@ -179,7 +152,7 @@ async function reabrirConversaEncerrada(
       started_at: now,
       last_message_at: now,
       closed_at: null,
-      bot_ativo: !!automacaoAtiva,
+      bot_ativo: false,
     })
     .eq("id", conversa.id)
     .select("*")
@@ -292,11 +265,7 @@ export async function findOrCreateWhatsAppConversation({
   }
 
   const now = new Date().toISOString();
-  const automacaoAtiva = await buscarAutomacaoAtiva(
-    empresaId,
-    integracaoWhatsappId
-  );
-  const statusInicial = automacaoAtiva ? "bot" : "fila";
+  const statusInicial = "fila";
 
   const { data: newConversation, error: insertError } = await supabaseAdmin
     .from("conversas")
@@ -314,7 +283,7 @@ export async function findOrCreateWhatsAppConversation({
       started_at: now,
       last_message_at: now,
       closed_at: null,
-      bot_ativo: !!automacaoAtiva,
+      bot_ativo: false,
     })
     .select("*")
     .single();
