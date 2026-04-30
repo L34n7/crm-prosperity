@@ -194,6 +194,33 @@ if (execucaoExistente.status === "aguardando") {
     return { ok: false, error: "Fluxo sem nó inicial." };
   }
 
+  const agora = new Date().toISOString();
+
+  const { error: atualizarConversaParaBotError } = await supabaseAdmin
+    .from("conversas")
+    .update({
+      status: "bot",
+      bot_ativo: true,
+      responsavel_id: null,
+      closed_at: null,
+      updated_at: agora,
+      last_message_at: agora,
+    })
+    .eq("empresa_id", empresaId)
+    .eq("id", conversaId);
+
+  if (atualizarConversaParaBotError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao atualizar conversa para bot:",
+      atualizarConversaParaBotError
+    );
+
+    return {
+      ok: false,
+      error: "Erro ao atualizar conversa para bot.",
+    };
+  }
+
   const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
     empresaId,
     conversaId,
@@ -505,33 +532,6 @@ async function executarNo(params: {
     const mensagem =
       no.configuracao_json?.mensagem ||
       "Vou te encaminhar para um atendente.";
-
-    const agora = new Date().toISOString();
-
-    const { error: atualizarConversaError } = await supabaseAdmin
-      .from("conversas")
-      .update({
-        status: "bot",
-        bot_ativo: true,
-        responsavel_id: null,
-        closed_at: null,
-        updated_at: agora,
-        last_message_at: agora,
-      })
-      .eq("empresa_id", empresaId)
-      .eq("id", conversaId);
-
-    if (atualizarConversaError) {
-      console.error(
-        "[AUTOMATION_ENGINE] Erro ao atualizar conversa para bot:",
-        atualizarConversaError
-      );
-
-      return {
-        ok: false,
-        error: "Erro ao atualizar conversa para bot.",
-      };
-    }
 
     const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
       empresaId,
