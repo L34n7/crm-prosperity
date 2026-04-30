@@ -14,6 +14,9 @@ export type WhatsAppConversation = {
     | "em_atendimento"
     | "aguardando_cliente"
     | "encerrada"
+    | "encerrado_manual"
+    | "encerrado_24h"
+    | "encerrado_aut"
     | null;
   canal: string | null;
   origem_atendimento: string | null;
@@ -270,7 +273,14 @@ export async function findOrCreateWhatsAppConversation({
   if (existingConversation) {
     const conversaExistente = existingConversation as WhatsAppConversation;
 
-    if (conversaExistente.status === "encerrada") {
+    const statusEncerrados = [
+      "encerrada",
+      "encerrado_manual",
+      "encerrado_24h",
+      "encerrado_aut",
+    ];
+
+    if (statusEncerrados.includes(conversaExistente.status || "")) {
       return await reabrirConversaEncerrada(
         conversaExistente,
         integracaoWhatsappId

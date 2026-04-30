@@ -118,6 +118,9 @@ type Mensagem = {
       type?: string | null;
       details?: string | null;
     } | null;
+    midia_url?: string | null;
+    tipo_midia?: string | null;
+    legenda?: string | null;
   } | null;
 };
 
@@ -1278,9 +1281,15 @@ export default function ConversasPage() {
     for (const msg of mensagens) {
       const mediaId = msg.metadata_json?.media_id || null;
       const mimeType = msg.metadata_json?.mime_type || "";
-      const caption = msg.metadata_json?.caption || null;
+      const caption =
+        msg.metadata_json?.caption ||
+        msg.metadata_json?.legenda ||
+        null;
       const filename = msg.metadata_json?.filename || null;
-      const urlMidia = mediaId ? `/api/whatsapp/media/${mediaId}` : null;
+      const urlMidia =
+        msg.metadata_json?.midia_url ||
+        msg.metadata_json?.url ||
+        (mediaId ? `/api/whatsapp/media/${mediaId}` : null);
 
       const isImage = msg.tipo_mensagem === "imagem";
       const isVideo = msg.tipo_mensagem === "video";
@@ -1525,10 +1534,32 @@ export default function ConversasPage() {
   
   function renderizarConteudoMensagem(msg: Mensagem) {
     const mediaId = msg.metadata_json?.media_id || null;
-    const url = mediaId ? `/api/whatsapp/media/${mediaId}` : null;
-    const caption = msg.metadata_json?.caption || null;
-    const fileName = msg.metadata_json?.filename || "documento";
-    const mimeType = msg.metadata_json?.mime_type || "";
+
+    const url =
+      msg.metadata_json?.midia_url ||
+      msg.metadata_json?.url ||
+      (mediaId ? `/api/whatsapp/media/${mediaId}` : null);
+
+    const caption =
+      msg.metadata_json?.caption ||
+      msg.metadata_json?.legenda ||
+      null;
+
+    const fileName =
+      msg.metadata_json?.filename ||
+      (msg.tipo_mensagem === "video"
+        ? "video.mp4"
+        : msg.tipo_mensagem === "imagem"
+        ? "imagem"
+        : "documento");
+
+    const mimeType =
+      msg.metadata_json?.mime_type ||
+      (msg.tipo_mensagem === "video"
+        ? "video/mp4"
+        : msg.tipo_mensagem === "imagem"
+        ? "image/jpeg"
+        : "");
     const contatoNome = getSharedContactName(msg);
     const contatoTelefones = getSharedContactPhones(msg);
     const contatoEmails = getSharedContactEmails(msg);
