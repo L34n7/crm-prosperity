@@ -7,14 +7,18 @@ import {
   Controls,
   MiniMap,
   ReactFlow,
+  Position,
+  MarkerType,
   useEdgesState,
   useNodesState,
   type Connection,
   type Edge,
   type Node,
 } from "@xyflow/react";
+import Header from "@/components/Header";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
+import { Handle } from "@xyflow/react";
 
 type Fluxo = {
   id: string;
@@ -22,6 +26,7 @@ type Fluxo = {
   descricao: string | null;
   status: "rascunho" | "ativo" | "pausado" | "arquivado";
   canal: string;
+  created_at?: string;
 };
 
 type AutomacaoNo = {
@@ -65,7 +70,9 @@ type MidiaOpcao = {
   tamanho_bytes: number | null;
 };
 
-const nodeTypes = {};
+const nodeTypes = {
+  custom: NodeCustom,
+};
 
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
@@ -95,8 +102,8 @@ function corTipoNo(tipo: string) {
   if (tipo === "pergunta_opcoes") return styles.nodePergunta;
   if (tipo === "transferir_setor") return styles.nodeTransferir;
   if (tipo === "encerrar") return styles.nodeEncerrar;
-  if (tipo === "enviar_imagem") return styles.nodeMensagem;
-  if (tipo === "enviar_video") return styles.nodeMensagem;
+  if (tipo === "enviar_imagem") return styles.nodeImagem;
+  if (tipo === "enviar_video") return styles.nodeVideo;
   return styles.nodePadrao;
 }
 
@@ -107,19 +114,40 @@ function dbNoParaReactFlow(no: AutomacaoNo): Node {
       x: no.posicao_x || 0,
       y: no.posicao_y || 0,
     },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    type: "custom",
+
     data: {
       tipo_no: no.tipo_no,
       titulo: no.titulo,
       descricao: no.descricao,
       configuracao_json: no.configuracao_json || {},
-      label: (
-        <div className={`${styles.nodeBox} ${corTipoNo(no.tipo_no)}`}>
-          <span className={styles.nodeType}>{labelTipoNo(no.tipo_no)}</span>
-          <strong className={styles.nodeTitle}>{no.titulo}</strong>
-        </div>
-      ),
+      isNovo: false,
     },
   };
+}
+
+function NodeCustom({ data }: any) {
+  return (
+    <div
+        className={`${styles.nodeBox} ${corTipoNo(data.tipo_no)} ${
+          data.isNovo ? styles.nodeNovo : ""
+        }`}
+      >
+      <Handle type="target" position={Position.Left} className={styles.nodeHandle} />
+
+      <div className={styles.nodeHeader}>
+        <span className={styles.nodeType}>{labelTipoNo(data.tipo_no)}</span>
+      </div>
+
+      <div className={styles.nodeContent}>
+        <strong className={styles.nodeTitle}>{data.titulo}</strong>
+      </div>
+
+      <Handle type="source" position={Position.Right} className={styles.nodeHandle} />
+    </div>
+  );
 }
 
 function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {
@@ -129,8 +157,30 @@ function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {
     id: conexao.id,
     source: conexao.no_origem_id,
     target: conexao.no_destino_id,
-    label: ehSempreSeguir ? "" : conexao.rotulo || undefined,
+    type: "default",
     animated: true,
+    label: ehSempreSeguir
+      ? ""
+      : conexao.rotulo || conexao.condicao_json?.valor || "Condição",
+
+    labelBgPadding: [8, 4],
+    labelBgBorderRadius: 8,
+    labelBgStyle: {
+      fill: "#ffffff",
+      fillOpacity: 0.95,
+    },
+    labelStyle: {
+      fill: "#0f172a",
+      fontSize: 11,
+      fontWeight: 700,
+    },
+
+    style: {
+      stroke: "#cbd5e1",
+      strokeWidth: 2,
+      strokeDasharray: "6 6",
+    },
+
     data: {
       condicao_json: conexao.condicao_json || {},
       rotulo: ehSempreSeguir ? "Sempre seguir" : conexao.rotulo || "",
@@ -161,6 +211,7 @@ export default function FluxosPage() {
   const [midiaUrlNode, setMidiaUrlNode] = useState("");
   const [midiaNomeNode, setMidiaNomeNode] = useState("");
   const [buscaFluxo, setBuscaFluxo] = useState("");
+  const [menuFluxoAbertoId, setMenuFluxoAbertoId] = useState<string | null>(null);
   const [tipoNodeEdicao, setTipoNodeEdicao] = useState("");
 
   const [midias, setMidias] = useState<MidiaOpcao[]>([]);
@@ -171,9 +222,19 @@ export default function FluxosPage() {
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
   const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
   const [setorDestino, setSetorDestino] = useState("");
+  const [nodeNovoId, setNodeNovoId] = useState<string | null>(null);
+  const fluxo = fluxoSelecionado;
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [carregandoSetores, setCarregandoSetores] = useState(false);
+  const [menuHeaderAberto, setMenuHeaderAberto] = useState(false);
+  const [menuFluxo, setMenuFluxo] = useState<{
+    fluxo: Fluxo | null;
+    x: number;
+    y: number;
+    buttonTop: number;
+    buttonBottom: number;
+  } | null>(null);
 
   const [gatilhosFluxo, setGatilhosFluxo] = useState<GatilhoFluxo[]>([]);
   const [novoGatilhoValor, setNovoGatilhoValor] = useState("");
@@ -274,7 +335,7 @@ const edgeEditada = useMemo(() => {
       setSucesso("Mídia enviada com sucesso.");
 
       await carregarMidias();
-      
+
     } catch (error: any) {
       setErro(error?.message || "Erro ao enviar mídia.");
     } finally {
@@ -377,16 +438,35 @@ const edgeEditada = useMemo(() => {
 
   const onConnect = useCallback(
     (connection: Connection) => {
-        const novaConexao: Edge = {
+      const novaConexao: Edge = {
         ...connection,
         id: criarIdTemporario("edge"),
+        type: "default",
         animated: true,
-        label: "Condição",
-        data: {
-            rotulo: "Condição",
-            condicao_json: {},
+        label: "Nova condição",
+        labelBgPadding: [8, 4],
+        labelBgBorderRadius: 8,
+        labelBgStyle: {
+          fill: "#ffffff",
+          fillOpacity: 0.95,
         },
-        } as Edge;
+        labelStyle: {
+          fill: "#0f172a",
+          fontSize: 11,
+          fontWeight: 700,
+        },
+
+        style: {
+          stroke: "#cbd5e1",
+          strokeWidth: 2,
+          strokeDasharray: "6 6"
+        },
+
+        data: {
+          rotulo: "Condição",
+          condicao_json: {},
+        },
+      } as Edge;
 
       setEdges((eds) => addEdge(novaConexao, eds));
     },
@@ -504,8 +584,15 @@ async function criarFluxoRapido() {
       tipo_no: tipoNo,
       titulo: tituloPadrao,
       descricao: null,
-      posicao_x: 180 + nodes.length * 40,
-      posicao_y: 120 + nodes.length * 40,
+      posicao_x:
+        nodes.length > 0
+          ? nodes[nodes.length - 1].position.x + 230
+          : 180,
+
+      posicao_y:
+        nodes.length > 0
+          ? nodes[nodes.length - 1].position.y
+          : 220,
       configuracao_json:
         tipoNo === "enviar_texto"
           ? { mensagem: "Digite a mensagem aqui." }
@@ -520,9 +607,19 @@ async function criarFluxoRapido() {
           : {},
     };
 
-    const novoNode = dbNoParaReactFlow(novoNoDb);
+    const novoNodeBase = dbNoParaReactFlow(novoNoDb);
+
+    const novoNode = {
+      ...novoNodeBase,
+      data: {
+        ...novoNodeBase.data,
+        isNovo: true,
+      },
+    };
 
     setNodes((atuais) => [...atuais, novoNode]);
+
+    setNodeNovoId(id);
 
     if (tipoNo !== "inicio") {
     const inicio = nodes.find((n) => n.data?.tipo_no === "inicio");
@@ -532,17 +629,25 @@ async function criarFluxoRapido() {
     );
 
     if (inicio && !jaExisteConexaoSaindoDoInicio) {
-        const novaConexao: Edge = {
+      const novaConexao: Edge = {
         id: criarIdTemporario("edge"),
         source: inicio.id,
         target: id,
+        type: "default",
         animated: true,
         label: "Início",
-        data: {
-            rotulo: "Início",
-            condicao_json: {},
+
+        style: {
+          stroke: "#cbd5e1",
+          strokeWidth: 2,
+          strokeDasharray: "6 6",
         },
-        };
+
+        data: {
+          rotulo: "Início",
+          condicao_json: {},
+        },
+      };
 
         setEdges((atuais) => [...atuais, novaConexao]);
     }
@@ -642,6 +747,10 @@ function aplicarEdicaoNo() {
 
       if (tipoFinal === "pergunta_opcoes") {
         configuracao_json.opcoes = opcoesNode;
+      }
+
+      if (tipoFinal === "transferir_setor") {
+        configuracao_json.setor_id = setorDestino;
       }
 
       if (tipoFinal === "enviar_imagem" || tipoFinal === "enviar_video") {
@@ -1338,7 +1447,21 @@ function removerConexao(edgeId: string) {
   setSucesso("Conexão removida. Clique em Salvar fluxo para gravar no banco.");
 }
 
+useEffect(() => {
+  function handleClick() {
+    setMenuFluxo(null);
+  }
+
+  window.addEventListener("click", handleClick);
+  return () => window.removeEventListener("click", handleClick);
+}, []);
+
   return (
+    <>
+      <Header
+        title="Fluxos de automação"
+        subtitle="Monte fluxos visuais para automatizar atendimentos, direcionar clientes e escalar suas conversas no WhatsApp."
+      />
     <main className={styles.pageContent}>
       <aside className={styles.sidebarFluxos}>
         <div className={styles.sidebarHeader}>
@@ -1349,180 +1472,45 @@ function removerConexao(edgeId: string) {
           </p>
         </div>
 
-        <div className={styles.createFlowBox}>
-            {!abrirCriacao ? (
-                <button
-                className={styles.primaryButton}
-                onClick={() => setAbrirCriacao(true)}
-                >
-                + Novo fluxo
-                </button>
-            ) : (
-                <div className={styles.createFlowForm}>
-                <input
-                    className={styles.input}
-                    value={novoFluxoNome}
-                    onChange={(e) => setNovoFluxoNome(e.target.value)}
-                    placeholder="Nome do fluxo"
-                />
+        <div className={styles.sidebarFilters}>
+          <input
+            className={styles.input}
+            placeholder="Buscar fluxo..."
+            value={buscaFluxo}
+            onChange={(e) => setBuscaFluxo(e.target.value)}
+          />
 
-                <textarea
-                    className={styles.textarea}
-                    value={descricaoNovoFluxo}
-                    onChange={(e) => setDescricaoNovoFluxo(e.target.value)}
-                    placeholder="Descrição (opcional)"
-                />
+          <div className={styles.filterRow}>
+            <select
+              className={styles.input}
+              value={filtroStatusFluxo}
+              onChange={(e) =>
+                setFiltroStatusFluxo(
+                  e.target.value as
+                    | "todos"
+                    | "rascunho"
+                    | "ativo"
+                    | "pausado"
+                    | "arquivado"
+                )
+              }
+            >
+              <option value="todos">Todos</option>
+              <option value="ativo">Ativos</option>
+              <option value="rascunho">Rascunhos</option>
+              <option value="pausado">Pausados</option>
+              <option value="arquivado">Arquivados</option>
+            </select>
 
-                <div className={styles.gatilhosBox}>
-                <div>
-                    <p className={styles.modalSectionTitle}>Gatilhos do fluxo</p>
-                    <p className={styles.help}>
-                    Palavras que iniciam este fluxo quando o cliente envia uma mensagem.
-                    </p>
-                </div>
-
-                <div className={styles.gatilhoCreateRow}>
-                    <input
-                        className={styles.input}
-                        value={novoGatilhoValor}
-                        onChange={(e) => setNovoGatilhoValor(e.target.value)}
-                        placeholder="Ex: suporte, login, senha"
-                    />
-
-                    <div className={styles.gatilhoBottomRow}>
-                        <select
-                            className={styles.input}
-                            value={novoGatilhoCondicao}
-                            onChange={(e) =>
-                                setNovoGatilhoCondicao(e.target.value as GatilhoFluxo["condicao"])
-                            }
-                            >
-                            <option value="contem">Contém</option>
-                            <option value="exata">Exata</option>
-                            <option value="inicia_com">Inicia com</option>
-                            <option value="regex">Regex</option>
-                        </select>
-
-                        <button
-                            type="button"
-                            className={styles.primaryButton}
-                            onClick={adicionarGatilhoNovoFluxo}
-                            >
-                            Adicionar
-                        </button>
-                    </div>
-                </div>
-
-                {gatilhosNovoFluxo.length === 0 ? (
-                <div className={styles.emptyMini}>
-                    Nenhum gatilho adicionado para este novo fluxo.
-                </div>
-                ) : (
-                <div className={styles.gatilhosList}>
-                    {gatilhosNovoFluxo.map((gatilho, index) => (
-                    <div
-                        key={`${gatilho.valor}-${gatilho.condicao}-${index}`}
-                        className={styles.gatilhoItem}
-                    >
-                        <div>
-                        <strong className={styles.gatilhoValor}>{gatilho.valor}</strong>
-                        <p className={styles.gatilhoMeta}>
-                            Condição:{" "}
-                            {gatilho.condicao === "contem"
-                            ? "Contém a palavra"
-                            : gatilho.condicao === "exata"
-                            ? "Igual exatamente"
-                            : gatilho.condicao === "inicia_com"
-                            ? "Começa com"
-                            : gatilho.condicao}{" "}
-                            · Ativo
-                        </p>
-                        </div>
-
-                        <div className={styles.gatilhoActions}>
-                        <button
-                            type="button"
-                            className={styles.secondaryButton}
-                            onClick={() =>
-                            setGatilhosNovoFluxo((atuais) =>
-                                atuais.map((item, i) =>
-                                i === index
-                                    ? {
-                                        ...item,
-                                        ativo: item.ativo === false ? true : false,
-                                    }
-                                    : item
-                                )
-                            )
-                            }
-                        >
-                            {gatilho.ativo === false ? "Ativar" : "Desativar"}
-                        </button>
-
-                        <button
-                            type="button"
-                            className={styles.dangerSmallButton}
-                            onClick={() =>
-                            setGatilhosNovoFluxo((atuais) =>
-                                atuais.filter((_, i) => i !== index)
-                            )
-                            }
-                        >
-                            ×
-                        </button>
-                        </div>
-                    </div>
-                    ))}
-                </div>
-                )}
-                </div>
-
-                <div className={styles.createFlowActions}>
-                    <button
-                    className={styles.secondaryButton}
-                    onClick={() => setAbrirCriacao(false)}
-                    >
-                    Cancelar
-                    </button>
-
-                    <button
-                    className={styles.primaryButton}
-                    onClick={criarFluxoRapido}
-                    >
-                    Criar
-                    </button>
-                </div>
-                </div>
-            )}
+            <button
+              type="button"
+              className={styles.newFlowButton}
+              onClick={() => setAbrirCriacao(true)}
+            >
+              +
+            </button>
+          </div>
         </div>
-
-        <select
-        className={styles.input}
-        value={filtroStatusFluxo}
-        onChange={(e) =>
-            setFiltroStatusFluxo(
-            e.target.value as
-                | "todos"
-                | "rascunho"
-                | "ativo"
-                | "pausado"
-                | "arquivado"
-            )
-        }
-        >
-        <option value="todos">Todos os fluxos</option>
-        <option value="ativo">Ativos</option>
-        <option value="rascunho">Rascunhos</option>
-        <option value="pausado">Pausados</option>
-        <option value="arquivado">Arquivados</option>
-        </select>
-
-        <input
-        className={styles.input}
-        placeholder="Buscar fluxo..."
-        value={buscaFluxo}
-        onChange={(e) => setBuscaFluxo(e.target.value)}
-        />
 
         <div className={styles.flowList}>
           {carregandoFluxos ? (
@@ -1531,94 +1519,92 @@ function removerConexao(edgeId: string) {
             <div className={styles.emptyMini}>Nenhum fluxo cadastrado.</div>
           ) : (
             fluxos
-                .filter((f) =>
-                    f.nome.toLowerCase().includes(buscaFluxo.toLowerCase())
-                )
-                .filter((f) =>
-                    filtroStatusFluxo === "todos" ? true : f.status === filtroStatusFluxo
-                )
-                .map((fluxo) => (
-                <div
-                    key={fluxo.id}
-                    role="button"
-                    tabIndex={0}
-                    className={
-                        fluxoSelecionado?.id === fluxo.id
-                        ? styles.flowItemActive
-                        : styles.flowItem
-                    }
-                    onClick={() => setFluxoSelecionado(fluxo)}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                        setFluxoSelecionado(fluxo);
-                        }
-                    }}
-                    >
+              .filter((f) =>
+                f.nome.toLowerCase().includes(buscaFluxo.toLowerCase())
+              )
+              .filter((f) =>
+                filtroStatusFluxo === "todos" ? true : f.status === filtroStatusFluxo
+              )
+              .sort((a, b) => {
+                const ordemStatus = {
+                  rascunho: 1,
+                  ativo: 2,
+                  pausado: 3,
+                  arquivado: 4,
+                };
+
+                const statusDiff =
+                  ordemStatus[a.status] - ordemStatus[b.status];
+
+                if (statusDiff !== 0) return statusDiff;
+
+                // 🔥 Ordenação por data (mais recente primeiro)
+                return (
+                  new Date(b.created_at || 0).getTime() -
+                  new Date(a.created_at || 0).getTime()
+                );
+              })
+              .map((fluxo) => (
+              <div
+                key={fluxo.id}
+                role="button"
+                tabIndex={0}
+                className={
+                  fluxoSelecionado?.id === fluxo.id
+                    ? styles.flowItemActive
+                    : styles.flowItem
+                }
+                onClick={() => {
+                  setFluxoSelecionado(fluxo);
+                  setMenuFluxoAbertoId(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    setFluxoSelecionado(fluxo);
+                    setMenuFluxoAbertoId(null);
+                  }
+                }}
+              >
+                <div className={styles.flowItemTop}>
+                  <div className={styles.flowItemInfo}>
                     <span className={styles.flowItemTitle}>{fluxo.nome}</span>
+
                     <span className={badgeClass(fluxo.status)}>
-                    {fluxo.status}
+                      {fluxo.status}
                     </span>
+                  </div>
 
-                    {fluxo.status === "arquivado" ? (
-                    <>
-                        <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            restaurarFluxo(fluxo);
-                        }}
-                        >
-                        Restaurar
-                        </button>
-
-                        <button
-                        type="button"
-                        className={styles.dangerButton}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            abrirModalApagarDefinitivo(fluxo);
-                        }}
-                        >
-                        Apagar definitivo
-                        </button>
-                    </>
-                    ) : (
+                  <div className={styles.flowMenuWrapper}>
                     <button
-                        type="button"
-                        className={styles.dangerButton}
-                        onClick={(e) => {
-                        e.stopPropagation();
-                        abrirModalArquivarFluxo(fluxo);
-                        }}
-                    >
-                        Apagar
-                    </button>
-                    )}
-
-                    {fluxo.status !== "arquivado" && (
-                    <button
-                        type="button"
-                        className={
-                        fluxo.status === "ativo"
-                            ? styles.secondaryButton
-                            : styles.primaryButton
-                        }
-                        onClick={(e) => {
+                      type="button"
+                      className={styles.flowMenuButton}
+                      onClick={(e) => {
                         e.stopPropagation();
 
-                        alterarStatusFluxo(
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+
+                        setMenuFluxo((menuAtual) => {
+                          if (menuAtual?.fluxo?.id === fluxo.id) {
+                            return null;
+                          }
+
+                          return {
                             fluxo,
-                            fluxo.status === "ativo" ? "pausado" : "ativo"
-                        );
-                        }}
+                            x: rect.right,
+                            y: rect.bottom,
+                            buttonTop: rect.top,
+                            buttonBottom: rect.bottom,
+                          };
+                        });
+                      }}
                     >
-                        {fluxo.status === "ativo" ? "Pausar" : "Ativar"}
+                      ⋮
                     </button>
-                    )}
+                  </div>
                 </div>
-                ))
-            )}
+              </div>
+            ))
+          )}
         </div>
       </aside>
 
@@ -1635,70 +1621,191 @@ function removerConexao(edgeId: string) {
           </div>
 
           <div className={styles.headerActions}>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => adicionarNo("enviar_texto")}
-              disabled={!fluxoSelecionado || fluxoSelecionado.status === "arquivado"}
-            >
-              + Mensagem
-            </button>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => adicionarNo("pergunta_opcoes")}
-              disabled={!fluxoSelecionado || fluxoSelecionado.status === "arquivado"}
-            >
-              + Pergunta
-            </button>
+            {fluxoSelecionado?.status === "arquivado" ? (
+              <>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => restaurarFluxo(fluxoSelecionado)}
+                >
+                  Restaurar
+                </button>
 
-            <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={() => adicionarNo("transferir_setor")}
-            disabled={!fluxoSelecionado || fluxoSelecionado.status === "arquivado"}
-            >
-            + Transferir
-            </button>
+                <button
+                  type="button"
+                  className={styles.dangerButton}
+                  onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}
+                >
+                  Apagar definitivo
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => adicionarNo("enviar_texto")}
+                  disabled={!fluxoSelecionado}
+                >
+                  + Bloco
+                </button>
 
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => adicionarNo("encerrar")}
-              disabled={!fluxoSelecionado || fluxoSelecionado.status === "arquivado"}
-            >
-              + Encerrar
-            </button>
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={salvarEstrutura}
-              disabled={!fluxoSelecionado || salvando || fluxoSelecionado.status === "arquivado"}
-            >
-              {salvando ? "Salvando..." : "Salvar fluxo"}
-            </button>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={abrirEdicaoFluxo}
+                  disabled={!fluxoSelecionado}
+                >
+                  Editar fluxo
+                </button>
 
-            <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={abrirEdicaoFluxo}
-            disabled={!fluxoSelecionado || fluxoSelecionado.status === "arquivado"}
-            >
-            Editar fluxo
-            </button>
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={salvarEstrutura}
+                  disabled={!fluxoSelecionado || salvando}
+                >
+                  {salvando ? "Salvando..." : "Salvar fluxo"}
+                </button>
 
-            <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={() => fluxoSelecionado && duplicarFluxo(fluxoSelecionado)}
-            disabled={!fluxoSelecionado || fluxoSelecionado.status === "arquivado"}
-            >
-            Duplicar
-            </button>
+                {fluxo &&
+                  fluxo.status !== "ativo" &&
+                  fluxo.status !== "arquivado" && (
+                    <button
+                      type="button"
+                      className={styles.primaryButtonActv}
+                      onClick={() =>
+                        alterarStatusFluxo(fluxo, "ativo")
+                      }
+                    >
+                      Ativar fluxo
+                    </button>
+                )}
+
+                <div className={styles.headerMenuWrapper}>
+                  <button
+                    type="button"
+                    className={styles.headerMenuButton}
+                    disabled={!fluxoSelecionado}
+                    onClick={() => setMenuHeaderAberto((atual) => !atual)}
+                  >
+                    ⋮
+                  </button>
+
+                  {menuHeaderAberto && fluxoSelecionado && (
+                    <div className={styles.headerDropdownMenu}>
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          adicionarNo("pergunta_opcoes");
+                        }}
+                      >
+                        Adicionar pergunta
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          adicionarNo("transferir_setor");
+                        }}
+                      >
+                        Adicionar transferência
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          adicionarNo("encerrar");
+                        }}
+                      >
+                        Adicionar encerramento
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          adicionarNo("enviar_imagem");
+                        }}
+                      >
+                        Adicionar imagem
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          adicionarNo("enviar_video");
+                        }}
+                      >
+                        Adicionar vídeo
+                      </button>
+
+                      <div className={styles.headerDropdownDivider} />
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          duplicarFluxo(fluxoSelecionado);
+                        }}
+                      >
+                        Clonar fluxo
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          alterarStatusFluxo(
+                            fluxoSelecionado,
+                            fluxoSelecionado.status === "ativo" ? "pausado" : "ativo"
+                          );
+                        }}
+                      >
+                        {fluxoSelecionado.status === "ativo"
+                          ? "Pausar fluxo"
+                          : "Ativar fluxo"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`${styles.headerDropdownItem} ${styles.headerDropdownDanger}`}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          abrirModalArquivarFluxo(fluxoSelecionado);
+                        }}
+                      >
+                        Apagar fluxo
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-        </header>
+          </header>
 
-        {(erro || sucesso) && (
+          {fluxoSelecionado?.status === "arquivado" && (
+            <div className={styles.archivedNotice}>
+              <strong>Fluxo arquivado.</strong>
+              <span>
+                Este fluxo não está em execução e não pode ser editado. Restaure o fluxo para voltar a usar.
+              </span>
+            </div>
+          )}
+
+          {(erro || sucesso) && (
           <div className={styles.alertArea}>
             {erro && <div className={styles.errorAlert}>{erro}</div>}
             {sucesso && <div className={styles.successAlert}>{sucesso}</div>}
@@ -1713,16 +1820,43 @@ function removerConexao(edgeId: string) {
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
+                fitView
+                fitViewOptions={{
+                  padding: 0.25,
+                }}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
-                onNodeClick={(_, node) => abrirEdicaoNo(node)}
-                onEdgeClick={(_, edge) => abrirEdicaoConexao(edge)}
-                fitView
+                onNodeClick={(_, node) => {
+                  abrirEdicaoNo(node);
+
+                  if (node.id === nodeNovoId) {
+                    setNodeNovoId(null);
+                  }
+                }}
+                onEdgeClick={(_, edge) => {
+                  abrirEdicaoConexao(edge);
+
+                  setEdges((atuais) =>
+                    atuais.map((item) => ({
+                      ...item,
+                      selected: item.id === edge.id,
+                      style: {
+                        ...(item.style || {}),
+                        stroke: item.id === edge.id ? "#0098bab6" : "#cbd5e1",
+                        strokeWidth: item.id === edge.id ? 3 : 2,
+                        strokeDasharray: "6 6",
+                      },
+                    }))
+                  );
+                }}
                 nodeTypes={nodeTypes}
+                
               >
                 <Background />
-                <Controls />
+                <Controls
+                  showInteractive={false}
+                />
                 <MiniMap />
               </ReactFlow>
             )}
@@ -1738,8 +1872,21 @@ function removerConexao(edgeId: string) {
                     type="button"
                     className={styles.closePanelButton}
                     onClick={() => {
-                        setEditandoNodeId(null);
-                        setEditandoEdgeId(null);
+                      setEditandoNodeId(null);
+                      setEditandoEdgeId(null);
+
+                      setEdges((atuais) =>
+                        atuais.map((edge) => ({
+                          ...edge,
+                          selected: false,
+                          style: {
+                            ...(edge.style || {}),
+                            stroke: "#cbd5e1",
+                            strokeWidth: 2,
+                            strokeDasharray: "6 6",
+                          },
+                        }))
+                      );
                     }}
                     >
                     ×
@@ -1859,8 +2006,8 @@ function removerConexao(edgeId: string) {
                     <div className={styles.field}>
                       <span className={styles.label}>
                         {tipoNodeEdicao === "enviar_imagem"
-                          ? "Mídia da imagem"
-                          : "Mídia do vídeo"}
+                          ? "Imagem"
+                          : "Vídeo"}
                       </span>
 
                       {midiaUrlNode ? (
@@ -2392,6 +2539,256 @@ function removerConexao(edgeId: string) {
             </div>
         </div>
         )}
+
+        {abrirCriacao && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalCard}>
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Novo fluxo</p>
+                  <h3 className={styles.modalTitle}>Criar automação</h3>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.closePanelButton}
+                  onClick={() => setAbrirCriacao(false)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className={styles.modalBody}>
+                <label className={styles.field}>
+                  <span className={styles.label}>Nome do fluxo</span>
+                  <input
+                    className={styles.input}
+                    value={novoFluxoNome}
+                    onChange={(e) => setNovoFluxoNome(e.target.value)}
+                    placeholder="Ex: Atendimento inicial"
+                  />
+                </label>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Descrição</span>
+                  <textarea
+                    className={styles.textarea}
+                    value={descricaoNovoFluxo}
+                    onChange={(e) => setDescricaoNovoFluxo(e.target.value)}
+                    placeholder="Descrição opcional"
+                  />
+                </label>
+
+                <div className={styles.gatilhosBox}>
+                  <div>
+                    <p className={styles.modalSectionTitle}>Gatilhos do fluxo</p>
+                    <p className={styles.help}>
+                      Palavras que iniciam este fluxo quando o cliente envia uma mensagem.
+                    </p>
+                  </div>
+
+                  <div className={styles.gatilhoCreateRow}>
+                    <input
+                      className={styles.input}
+                      value={novoGatilhoValor}
+                      onChange={(e) => setNovoGatilhoValor(e.target.value)}
+                      placeholder="Ex: suporte, login, senha"
+                    />
+
+                    <div className={styles.gatilhoBottomRow}>
+                      <select
+                        className={styles.input}
+                        value={novoGatilhoCondicao}
+                        onChange={(e) =>
+                          setNovoGatilhoCondicao(
+                            e.target.value as GatilhoFluxo["condicao"]
+                          )
+                        }
+                      >
+                        <option value="contem">Contém</option>
+                        <option value="exata">Exata</option>
+                        <option value="inicia_com">Inicia com</option>
+                        <option value="regex">Regex</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        className={styles.primaryButton}
+                        onClick={adicionarGatilhoNovoFluxo}
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  </div>
+
+                  {gatilhosNovoFluxo.length === 0 ? (
+                    <div className={styles.emptyMini}>
+                      Nenhum gatilho adicionado para este novo fluxo.
+                    </div>
+                  ) : (
+                    <div className={styles.gatilhosList}>
+                      {gatilhosNovoFluxo.map((gatilho, index) => (
+                        <div
+                          key={`${gatilho.valor}-${gatilho.condicao}-${index}`}
+                          className={styles.gatilhoItem}
+                        >
+                          <div>
+                            <strong className={styles.gatilhoValor}>
+                              {gatilho.valor}
+                            </strong>
+
+                            <p className={styles.gatilhoMeta}>
+                              Condição:{" "}
+                              {gatilho.condicao === "contem"
+                                ? "Contém a palavra"
+                                : gatilho.condicao === "exata"
+                                ? "Igual exatamente"
+                                : gatilho.condicao === "inicia_com"
+                                ? "Começa com"
+                                : gatilho.condicao}{" "}
+                              · {gatilho.ativo === false ? "Inativo" : "Ativo"}
+                            </p>
+                          </div>
+
+                          <div className={styles.gatilhoActions}>
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={() =>
+                                setGatilhosNovoFluxo((atuais) =>
+                                  atuais.map((item, i) =>
+                                    i === index
+                                      ? {
+                                          ...item,
+                                          ativo: item.ativo === false ? true : false,
+                                        }
+                                      : item
+                                  )
+                                )
+                              }
+                            >
+                              {gatilho.ativo === false ? "Ativar" : "Desativar"}
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.dangerSmallButton}
+                              onClick={() =>
+                                setGatilhosNovoFluxo((atuais) =>
+                                  atuais.filter((_, i) => i !== index)
+                                )
+                              }
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.modalFooter}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setAbrirCriacao(false)}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={criarFluxoRapido}
+                >
+                  Criar fluxo
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {menuFluxo && menuFluxo.fluxo && (
+          <div
+            className={styles.flowDropdownPortal}
+            style={{
+              top:
+                window.innerHeight - menuFluxo.buttonBottom < 170
+                  ? menuFluxo.buttonTop - 8
+                  : menuFluxo.buttonBottom + 6,
+              left: menuFluxo.x - 180,
+              transform:
+                window.innerHeight - menuFluxo.buttonBottom < 170
+                  ? "translateY(-100%)"
+                  : "none",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {menuFluxo.fluxo.status === "arquivado" ? (
+              <>
+                <button
+                  className={styles.flowDropdownItem}
+                  onClick={() => {
+                    restaurarFluxo(menuFluxo.fluxo!);
+                    setMenuFluxo(null);
+                  }}
+                >
+                  Restaurar
+                </button>
+
+                <button
+                  className={`${styles.flowDropdownItem} ${styles.flowDropdownDanger}`}
+                  onClick={() => {
+                    abrirModalApagarDefinitivo(menuFluxo.fluxo!);
+                    setMenuFluxo(null);
+                  }}
+                >
+                  Apagar definitivo
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className={styles.flowDropdownItem}
+                  onClick={() => {
+                    alterarStatusFluxo(
+                      menuFluxo.fluxo!,
+                      menuFluxo.fluxo!.status === "ativo" ? "pausado" : "ativo"
+                    );
+                    setMenuFluxo(null);
+                  }}
+                >
+                  {menuFluxo.fluxo.status === "ativo" ? "Pausar" : "Ativar"}
+                </button>
+
+                <button
+                  className={styles.flowDropdownItem}
+                  onClick={() => {
+                    duplicarFluxo(menuFluxo.fluxo!);
+                    setMenuFluxo(null);
+                  }}
+                >
+                  Clonar
+                </button>
+
+                <button
+                  className={`${styles.flowDropdownItem} ${styles.flowDropdownDanger}`}
+                  onClick={() => {
+                    abrirModalArquivarFluxo(menuFluxo.fluxo!);
+                    setMenuFluxo(null);
+                  }}
+                >
+                  Apagar
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
     </main>
+  </>
   );
 }

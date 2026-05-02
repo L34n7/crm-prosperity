@@ -411,11 +411,11 @@ function getStatusLabel(status?: string | null) {
     case "aguardando_cliente":
       return "Aguardando cliente";
     case "encerrado_manual":
-      return "Encerrada manualmente";
+      return "Encerrado manualmente";
     case "encerrado_24h":
-      return "Encerrada por 24h";
+      return "Encerrado após 24h";
     case "encerrado_aut":
-      return "Encerrada pela automação";
+      return "Encerrado pela automação";
     default:
       return status;
   }
