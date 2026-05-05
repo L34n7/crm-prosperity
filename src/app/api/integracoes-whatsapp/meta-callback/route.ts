@@ -8,6 +8,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const code = body?.code;
     const state = body?.state;
+    const wabaId = body?.waba_id || null;
+    const phoneNumberId = body?.phone_number_id || null;
+    const embeddedSignup = body?.embedded_signup || null;
 
     if (!code) {
       return NextResponse.json(
@@ -108,10 +111,12 @@ export async function POST(request: NextRequest) {
       await supabaseAdmin
         .from("integracoes_whatsapp")
         .update({
-          onboarding_etapa: "meta_conectado",
+          onboarding_etapa: wabaId ? "waba_criada" : "meta_conectado",
           onboarding_status: "em_andamento",
           onboarding_erro: null,
           token_ref: "config_json.access_token",
+          waba_id: wabaId || integracao.waba_id,
+          phone_number_id: phoneNumberId || integracao.phone_number_id,
           config_json: {
             ...configJsonAtual,
             access_token: accessToken,
@@ -119,6 +124,7 @@ export async function POST(request: NextRequest) {
             expires_in: tokenData?.expires_in ?? null,
             meta_token_response: tokenData,
             meta_connected_at: agora,
+            embedded_signup: embeddedSignup,
           },
           ultimo_sync_at: agora,
           updated_at: agora,

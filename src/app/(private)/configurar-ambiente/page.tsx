@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import styles from "./configurar-ambiente.module.css";
 
+declare global {
+  interface Window {
+    fbAsyncInit?: () => void;
+    FB?: any;
+  }
+}
+
 type IntegracaoWhatsapp = {
   id: string;
   empresa_id: string;
@@ -158,6 +165,43 @@ export default function ConfigurarAmbientePage() {
     return data;
   }
 
+  function carregarFacebookSdk() {
+    return new Promise<void>((resolve, reject) => {
+      if (window.FB) {
+        resolve();
+        return;
+      }
+
+      window.fbAsyncInit = function () {
+        window.FB.init({
+          appId: process.env.NEXT_PUBLIC_META_APP_ID,
+          cookie: true,
+          xfbml: true,
+          version: "v25.0",
+        });
+
+        resolve();
+      };
+
+      const scriptExistente = document.getElementById("facebook-jssdk");
+
+      if (scriptExistente) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.id = "facebook-jssdk";
+      script.src = "https://connect.facebook.net/pt_BR/sdk.js";
+      script.async = true;
+      script.defer = true;
+      script.onerror = () =>
+        reject(new Error("Não foi possível carregar o SDK do Facebook."));
+
+      document.body.appendChild(script);
+    });
+  }
+
   async function carregarIntegracao(mostrarLoadingCompleto = false) {
     try {
       if (mostrarLoadingCompleto) {
@@ -261,15 +305,94 @@ function montarUrlMeta() {
   return url.toString();
 }
 
+
 async function iniciarEmbeddedSignup() {
   try {
-    const signupUrl = montarUrlMeta();
+    if (!integracao?.id) {
+      throw new Error("Integração ainda não carregada.");
+    }
+
+    const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
+
+    if (!configId) {
+      throw new Error("NEXT_PUBLIC_META_CONFIG_ID não configurado.");
+    }
 
     setConectandoMeta(true);
 
-    window.open(signupUrl, "_blank", "noopener,noreferrer");
+    await carregarFacebookSdk();
 
-    setConectandoMeta(false);
+    const onMessage = (event: MessageEvent) => {
+      if (
+        !event.origin.includes("facebook.com") &&
+        !event.origin.includes("meta.com")
+      ) {
+        return;
+      }
+
+      try {
+        const data =
+          typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+
+        console.log("[META EVENT RAW]", event);
+        console.log("[META EVENT DATA]", event.data);
+
+        if (data?.type !== "WA_EMBEDDED_SIGNUP") {
+          return;
+        }
+
+        if (data.event === "FINISH" || data.event === "FINISH_ONLY_WABA") {
+          const wabaId = data?.data?.waba_id || null;
+          const phoneNumberId = data?.data?.phone_number_id || null;
+
+          localStorage.setItem(
+            `meta_embedded_signup_${integracao.id}`,
+            JSON.stringify({
+              waba_id: wabaId,
+              phone_number_id: phoneNumberId,
+              event: data.event,
+              raw: data,
+            })
+          );
+        }
+
+        if (data.event === "CANCEL") {
+          console.warn("[META EMBEDDED SIGNUP] Cancelado:", data);
+        }
+
+        if (data.event === "ERROR") {
+          console.error("[META EMBEDDED SIGNUP] Erro:", data);
+        }
+      } catch (error) {
+        console.warn("[META EMBEDDED SIGNUP] Mensagem ignorada:", error);
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+
+    window.FB.login(
+      function (response: any) {
+        const handler = (event: MessageEvent) => onMessage(event);
+        window.addEventListener("message", handler);
+        setConectandoMeta(false);
+
+        if (!response?.authResponse?.code) {
+          alert("O Meta não retornou o código de autorização.");
+          return;
+        }
+
+        const code = response.authResponse.code;
+
+        window.location.href = `/configuracao-meta-callback?code=${encodeURIComponent(
+          code
+        )}&state=${encodeURIComponent(integracao.id)}`;
+      },
+      {
+        config_id: configId,
+        response_type: "code",
+        override_default_response_type: true,
+      }
+    );
   } catch (error) {
     setConectandoMeta(false);
 

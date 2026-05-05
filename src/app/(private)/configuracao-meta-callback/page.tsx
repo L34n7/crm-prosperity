@@ -38,16 +38,28 @@ function CallbackContent() {
         setStatus("carregando");
         setMensagem("Conectando sua conta Meta ao CRM...");
 
-        const response = await fetch("/api/integracoes-whatsapp/meta-callback", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            code,
-            state,
-          }),
-        });
+      const embeddedSignupRaw =
+        typeof window !== "undefined"
+          ? localStorage.getItem(`meta_embedded_signup_${state}`)
+          : null;
+
+      const embeddedSignup = embeddedSignupRaw
+        ? JSON.parse(embeddedSignupRaw)
+        : null;
+
+      const response = await fetch("/api/integracoes-whatsapp/meta-callback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code,
+          state,
+          waba_id: embeddedSignup?.waba_id || null,
+          phone_number_id: embeddedSignup?.phone_number_id || null,
+          embedded_signup: embeddedSignup,
+        }),
+      });
 
         const data = await response.json();
 
@@ -60,6 +72,9 @@ function CallbackContent() {
         }
 
         setStatus("sucesso");
+        if (state) {
+          localStorage.removeItem(`meta_embedded_signup_${state}`);
+        }
         setMensagem(
           "Meta conectado com sucesso. Você já pode voltar para a tela de configuração do ambiente."
         );
