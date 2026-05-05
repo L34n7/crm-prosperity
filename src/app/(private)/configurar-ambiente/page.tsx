@@ -74,7 +74,7 @@ const ETAPAS: Etapa[] = [
   },
   {
     numero: 2,
-    titulo: "Registrar número na Cloud API",
+    titulo: "Ativar número no WhatsApp",
     descricao:
       "Finalize o registro técnico do número para permitir envio e recebimento de mensagens.",
     chave: "numero_registrado",
@@ -457,15 +457,6 @@ async function handleRegistrarNumero() {
       return;
     }
 
-    const pin = window.prompt("Digite o PIN de 6 dígitos configurado no WhatsApp:");
-
-    if (!pin) return;
-
-    if (!/^\d{6}$/.test(pin)) {
-      alert("O PIN precisa ter exatamente 6 números.");
-      return;
-    }
-
     setRecarregando(true);
 
     const response = await fetch("/api/integracoes-whatsapp/register-number", {
@@ -475,7 +466,6 @@ async function handleRegistrarNumero() {
       },
       body: JSON.stringify({
         integracao_id: integracao.id,
-        pin,
       }),
     });
 
@@ -673,7 +663,7 @@ async function handleConfigurarWebhook() {
                               onClick={handleRegistrarNumero}
                               disabled={indiceEtapaAtual < 1 || recarregando}
                             >
-                              {recarregando ? "Registrando..." : "Registrar número"}
+                              {recarregando ? "Ativando..." : "Ativar número"}
                             </button>
                           </div>
                         )}

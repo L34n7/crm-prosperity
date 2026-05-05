@@ -128,7 +128,6 @@ async function registerNumber(request: NextRequest) {
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          pin,
         }),
       }
     );
