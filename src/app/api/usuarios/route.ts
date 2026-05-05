@@ -330,7 +330,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/login`;
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com";
+
+  const redirectTo = `${siteUrl}/auth/callback?next=/definir-senha`;
 
   const { data: inviteData, error: inviteError } =
     await supabaseAdmin.auth.admin.inviteUserByEmail(email, {

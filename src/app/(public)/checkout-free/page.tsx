@@ -132,7 +132,20 @@ export default function CheckoutFreePage() {
 
       window.location.href = "/obrigado";
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro inesperado.");
+      let mensagem = "Erro inesperado.";
+
+      if (error instanceof Error) {
+        if (
+          error.message.includes("already been registered") ||
+          error.message.includes("User already registered")
+        ) {
+          mensagem = "Este email já está cadastrado. Faça login ou recupere sua senha.";
+        } else {
+          mensagem = error.message;
+        }
+      }
+
+      setErro(mensagem);
     } finally {
       setCarregando(false);
     }
