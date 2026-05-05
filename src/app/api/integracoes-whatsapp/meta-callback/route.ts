@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     const wabaId = body?.waba_id || null;
     const phoneNumberId = body?.phone_number_id || null;
     const businessPortfolioId = body?.business_portfolio_id || null;
+    const embeddedSignup = body?.embedded_signup || null;
 
     if (!code) {
       return NextResponse.json(
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
             expires_in: tokenData?.expires_in ?? null,
             meta_token_response: tokenData,
             meta_connected_at: agora,
-            embedded_signup: businessPortfolioId ,
+            embedded_signup: embeddedSignup,
           },
           ultimo_sync_at: agora,
           updated_at: agora,

@@ -69,51 +69,52 @@ const ETAPAS: Etapa[] = [
     numero: 1,
     titulo: "Conectar conta Meta",
     descricao:
-      "Vincule sua conta Meta Business para iniciar a configuração do WhatsApp oficial.",
+      "Vincule sua conta Meta Business e capture os dados oficiais do WhatsApp.",
     chave: "meta_conectado",
   },
   {
     numero: 2,
-    titulo: "Criar ou vincular empresa no Meta",
+    titulo: "Registrar número na Cloud API",
     descricao:
-      "Defina a estrutura da conta WhatsApp Business que será usada pelo CRM.",
-    chave: "waba_criada",
-  },
-  {
-    numero: 3,
-    titulo: "Cadastrar e registrar o número",
-    descricao:
-      "Conecte o número oficial do CRM e conclua o registro técnico na Cloud API.",
+      "Finalize o registro técnico do número para permitir envio e recebimento de mensagens.",
     chave: "numero_registrado",
   },
   {
-    numero: 4,
-    titulo: "Adicionar forma de pagamento",
+    numero: 3,
+    titulo: "Configurar webhook",
     descricao:
-      "Cadastre o pagamento no Meta para habilitar o uso oficial do WhatsApp Business.",
-    chave: "pagamento_configurado",
+      "Permite que o CRM receba mensagens, status e eventos do WhatsApp em tempo real.",
+    chave: "webhook_configurado" as any,
+  },
+  {
+    numero: 4,
+    titulo: "Concluir configuração",
+    descricao:
+      "Verifica os dados finais e ativa a integração do WhatsApp no CRM.",
+    chave: "concluido",
   },
 ];
 
 function obterIndiceEtapaAtual(integracao: IntegracaoWhatsapp | null) {
-  const etapa = integracao?.onboarding_etapa || "inicio";
+  if (!integracao) return 0;
 
-  switch (etapa) {
-    case "meta_conectado":
-      return 1;
-    case "waba_criada":
-      return 2;
-    case "registrando_numero":
-    case "numero_registrado":
-      return 3;
-    case "pagamento_configurado":
-      return 4;
-    case "concluido":
-      return 4;
-    case "inicio":
-    default:
-      return 0;
+  if (integracao.status === "ativa" || integracao.onboarding_etapa === "concluido") {
+    return 4;
   }
+
+  if (integracao.webhook_verificado || integracao.app_assigned) {
+    return 3;
+  }
+
+  if (integracao.phone_registered) {
+    return 2;
+  }
+
+  if (integracao.waba_id && integracao.phone_number_id) {
+    return 1;
+  }
+
+  return 0;
 }
 
 function formatarStatus(valor?: string | null) {
@@ -448,6 +449,93 @@ async function iniciarEmbeddedSignup() {
   }
 }
 
+
+async function handleRegistrarNumero() {
+  try {
+    if (!integracao?.id) {
+      alert("Integração ainda não carregada.");
+      return;
+    }
+
+    const pin = window.prompt("Digite o PIN de 6 dígitos configurado no WhatsApp:");
+
+    if (!pin) return;
+
+    if (!/^\d{6}$/.test(pin)) {
+      alert("O PIN precisa ter exatamente 6 números.");
+      return;
+    }
+
+    setRecarregando(true);
+
+    const response = await fetch("/api/integracoes-whatsapp/register-number", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        integracao_id: integracao.id,
+        pin,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erro ao registrar número.");
+    }
+
+    alert("Número registrado com sucesso.");
+    await carregarIntegracao(false);
+  } catch (error) {
+    alert(
+      error instanceof Error
+        ? error.message
+        : "Erro inesperado ao registrar número."
+    );
+  } finally {
+    setRecarregando(false);
+  }
+}
+
+
+async function handleConfigurarWebhook() {
+  try {
+    if (!integracao?.id) {
+      alert("Integração não carregada.");
+      return;
+    }
+
+    const response = await fetch(
+      "/api/integracoes-whatsapp/subscribe-webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          integracao_id: integracao.id,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erro ao configurar webhook.");
+    }
+
+    alert("Webhook configurado com sucesso.");
+    await carregarIntegracao(false);
+  } catch (error) {
+    alert(
+      error instanceof Error
+        ? error.message
+        : "Erro ao configurar webhook."
+    );
+  }
+}
+
   useEffect(() => {
     carregarIntegracao(true);
   }, []);
@@ -564,7 +652,7 @@ async function iniciarEmbeddedSignup() {
 
                         <p className={styles.stepDescription}>{etapa.descricao}</p>
 
-                        {index === 0 && (
+                        {etapa.numero === 1 && (
                           <div className={styles.stepActions}>
                             <button
                               type="button"
@@ -577,14 +665,40 @@ async function iniciarEmbeddedSignup() {
                           </div>
                         )}
 
-                        {index > 0 && (
+                        {etapa.numero === 2 && !concluida && (
+                          <div className={styles.stepActions}>
+                            <button
+                              type="button"
+                              className={indiceEtapaAtual >= 1 ? styles.primaryButton : styles.disabledButton}
+                              onClick={handleRegistrarNumero}
+                              disabled={indiceEtapaAtual < 1 || recarregando}
+                            >
+                              {recarregando ? "Registrando..." : "Registrar número"}
+                            </button>
+                          </div>
+                        )}
+
+                        {etapa.numero === 3 && !concluida && (
+                          <div className={styles.stepActions}>
+                            <button
+                              type="button"
+                              className={indiceEtapaAtual >= 2 ? styles.primaryButton : styles.disabledButton}
+                              onClick={handleConfigurarWebhook}
+                              disabled={indiceEtapaAtual < 2}
+                            >
+                              Configurar webhook
+                            </button>
+                          </div>
+                        )}
+
+                        {etapa.numero === 4 && !concluida && (
                           <div className={styles.stepActions}>
                             <button
                               type="button"
                               className={styles.disabledButton}
                               disabled
                             >
-                              Disponível após concluir a etapa anterior
+                              Disponível após configurar o webhook
                             </button>
                           </div>
                         )}

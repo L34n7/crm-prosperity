@@ -119,7 +119,7 @@ async function registerNumber(request: NextRequest) {
       .eq("id", integracao.id);
 
     const response = await fetch(
-      `https://graph.facebook.com/v23.0/${integracao.phone_number_id}/register`,
+      `https://graph.facebook.com/v25.0/${integracao.phone_number_id}/register`,
       {
         method: "POST",
         headers: {
