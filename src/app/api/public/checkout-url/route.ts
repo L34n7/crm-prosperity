@@ -6,14 +6,19 @@ const supabase = getSupabaseAdmin();
 function obterCheckoutUrlPorOferta(tipoOferta: string | null) {
   const checkoutPadrao = process.env.ATOMOPAY_CHECKOUT_URL_PADRAO ?? "";
   const checkoutVip = process.env.ATOMOPAY_CHECKOUT_URL_VIP ?? "";
-  const checkoutjv = process.env.ATOMOPAY_CHECKOUT_URL_jv ?? "";
+  const checkoutJv = process.env.ATOMOPAY_CHECKOUT_URL_JV ?? "";
+  const checkoutFree = process.env.CRM_CHECKOUT_FREE_URL ?? "";
 
   if (tipoOferta === "vip") {
     return checkoutVip || checkoutPadrao;
   }
 
   if (tipoOferta === "jv") {
-    return checkoutjv || checkoutPadrao;
+    return checkoutJv || checkoutPadrao;
+  }
+
+  if (tipoOferta === "free") {
+    return checkoutFree;
   }
 
   return checkoutPadrao;

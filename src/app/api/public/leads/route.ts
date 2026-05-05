@@ -3,7 +3,10 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabase = getSupabaseAdmin();
 
-function normalizarTipoOferta(valor: unknown): "normal" | "vip" | "jv" {
+function normalizarTipoOferta(
+  valor: unknown,
+  chaveFree?: string
+): "normal" | "vip" | "jv" | "free" {
   if (typeof valor !== "string") {
     return "normal";
   }
@@ -18,6 +21,15 @@ function normalizarTipoOferta(valor: unknown): "normal" | "vip" | "jv" {
     return "jv";
   }
 
+  // 🔐 proteção do free
+  if (valorNormalizado === "free") {
+    if (chaveFree === process.env.CRM_FREE_CHECKOUT_KEY) {
+      return "free";
+    }
+
+    return "normal"; // se tentar burlar, volta pra normal
+  }
+
   return "normal";
 }
 
@@ -29,7 +41,10 @@ export async function POST(request: Request) {
     const email = String(body?.email ?? "").toLowerCase().trim();
     const telefone = String(body?.telefone ?? "").trim();
     const empresa = String(body?.empresa ?? "").trim();
-    const tipoOferta = normalizarTipoOferta(body?.tipo_oferta);
+    const tipoOferta = normalizarTipoOferta(
+      body?.tipo_oferta,
+      body?.chave_free
+    );
 
     if (!nome) {
       throw new Error("Nome é obrigatório.");

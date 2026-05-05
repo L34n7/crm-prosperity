@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./comecar.module.css";
 
-type TipoOferta = "normal" | "vip" | "jv";
+type TipoOferta = "normal" | "vip" | "jv" | "free";
 
 export default function ComecarPage() {
   const router = useRouter();
@@ -56,6 +56,10 @@ export default function ComecarPage() {
       return "jv";
     }
 
+    if (oferta === "free_beta_crm_2026_liberado_92xa!kl") {
+      return "free";
+    }
+
     return "normal";
   }
 
@@ -92,6 +96,10 @@ export default function ComecarPage() {
           telefone: telefoneLimpo || null,
           empresa,
           tipo_oferta: tipoOferta,
+          chave_free:
+            tipoOferta === "free"
+              ? "free_beta_crm_2026_liberado_92xA!kL"
+              : null,
         }),
       });
 
