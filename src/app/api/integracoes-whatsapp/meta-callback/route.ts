@@ -50,6 +50,9 @@ export async function POST(request: NextRequest) {
     const tokenData = await tokenResponse.json();
 
     if (!tokenResponse.ok) {
+
+    console.error("[META TOKEN ERROR]", tokenData);
+
       return NextResponse.json(
         {
           ok: false,
