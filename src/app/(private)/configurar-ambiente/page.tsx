@@ -322,6 +322,46 @@ async function iniciarEmbeddedSignup() {
 
     await carregarFacebookSdk();
 
+    let dadosEmbeddedSignup: {
+      waba_id: string | null;
+      phone_number_id: string | null;
+      business_portfolio_id: string | null;
+      event: string;
+      raw: unknown;
+    } | null = null;
+
+    const salvarDadosEmbeddedSignup = (data: any) => {
+      const wabaId =
+        data?.data?.waba_id ||
+        data?.data?.whatsapp_business_account_id ||
+        null;
+
+      const phoneNumberId =
+        data?.data?.phone_number_id ||
+        data?.data?.business_phone_number_id ||
+        null;
+
+      const businessPortfolioId =
+        data?.data?.business_id ||
+        data?.data?.business_portfolio_id ||
+        null;
+
+      dadosEmbeddedSignup = {
+        waba_id: wabaId,
+        phone_number_id: phoneNumberId,
+        business_portfolio_id: businessPortfolioId,
+        event: data.event,
+        raw: data,
+      };
+
+      localStorage.setItem(
+        `meta_embedded_signup_${integracao.id}`,
+        JSON.stringify(dadosEmbeddedSignup)
+      );
+
+      console.log("✅ DADOS META CAPTURADOS E SALVOS:", dadosEmbeddedSignup);
+    };
+
     const onMessage = (event: MessageEvent) => {
       if (
         !event.origin.includes("facebook.com") &&
@@ -334,58 +374,14 @@ async function iniciarEmbeddedSignup() {
         const data =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
 
-          console.log("[META EVENT RAW]", event);
-          console.log("[META EVENT DATA]", event.data);
+        console.log("[META EVENT RECEBIDO]", data);
 
-          if (data?.type === "WA_EMBEDDED_SIGNUP") {
-            console.log("[META EVENT CAPTURADO]", data);
+        if (data?.type !== "WA_EMBEDDED_SIGNUP") {
+          return;
+        }
 
-          if (data?.type === "WA_EMBEDDED_SIGNUP") {
-            console.log("[META EVENT CAPTURADO]", data);
-
-            if (data.event === "FINISH" || data.event === "FINISH_ONLY_WABA") {
-              const wabaId =
-                data?.data?.waba_id ||
-                data?.data?.whatsapp_business_account_id ||
-                null;
-
-              const phoneNumberId =
-                data?.data?.phone_number_id ||
-                data?.data?.business_phone_number_id ||
-                null;
-
-              const businessPortfolioId =
-                data?.data?.business_id ||
-                data?.data?.business_portfolio_id ||
-                null;
-
-              localStorage.setItem(
-                `meta_embedded_signup_${integracao.id}`,
-                JSON.stringify({
-                  waba_id: wabaId,
-                  phone_number_id: phoneNumberId,
-                  business_portfolio_id: businessPortfolioId,
-                  event: data.event,
-                  raw: data,
-                })
-              );
-
-              console.log("✅ DADOS META CAPTURADOS:", {
-                wabaId,
-                phoneNumberId,
-                businessPortfolioId,
-                raw: data,
-              });
-            }
-
-            if (data.event === "CANCEL") {
-              console.warn("[META EMBEDDED SIGNUP] Cancelado:", data);
-            }
-
-            if (data.event === "ERROR") {
-              console.error("[META EMBEDDED SIGNUP] Erro:", data);
-            }
-          }
+        if (data.event === "FINISH" || data.event === "FINISH_ONLY_WABA") {
+          salvarDadosEmbeddedSignup(data);
         }
 
         if (data.event === "CANCEL") {
@@ -404,23 +400,41 @@ async function iniciarEmbeddedSignup() {
 
     window.FB.login(
       function (response: any) {
-        setConectandoMeta(false);
-
         if (!response?.authResponse?.code) {
+          window.removeEventListener("message", onMessage);
+          setConectandoMeta(false);
           alert("O Meta não retornou o código de autorização.");
           return;
         }
 
         const code = response.authResponse.code;
 
-        window.location.href = `/configuracao-meta-callback?code=${encodeURIComponent(
-          code
-        )}&state=${encodeURIComponent(integracao.id)}`;
+        setTimeout(() => {
+          window.removeEventListener("message", onMessage);
+          setConectandoMeta(false);
+
+          const dadosSalvos = localStorage.getItem(
+            `meta_embedded_signup_${integracao.id}`
+          );
+
+          console.log("[META DADOS ANTES DO REDIRECT]", {
+            dadosEmbeddedSignup,
+            dadosSalvos,
+          });
+
+          window.location.href = `/configuracao-meta-callback?code=${encodeURIComponent(
+            code
+          )}&state=${encodeURIComponent(integracao.id)}`;
+        }, 1500);
       },
       {
         config_id: configId,
         response_type: "code",
         override_default_response_type: true,
+        auth_type: "rerequest",
+        extras: {
+          sessionInfoVersion: "3",
+        },
       }
     );
   } catch (error) {
