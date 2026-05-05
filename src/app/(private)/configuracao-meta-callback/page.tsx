@@ -57,6 +57,7 @@ function CallbackContent() {
           state,
           waba_id: embeddedSignup?.waba_id || null,
           phone_number_id: embeddedSignup?.phone_number_id || null,
+          business_portfolio_id: embeddedSignup?.business_portfolio_id || null,
           embedded_signup: embeddedSignup,
         }),
       });

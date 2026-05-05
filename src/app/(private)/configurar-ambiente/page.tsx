@@ -334,26 +334,58 @@ async function iniciarEmbeddedSignup() {
         const data =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
 
-        console.log("[META EVENT RAW]", event);
-        console.log("[META EVENT DATA]", event.data);
+          console.log("[META EVENT RAW]", event);
+          console.log("[META EVENT DATA]", event.data);
 
-        if (data?.type !== "WA_EMBEDDED_SIGNUP") {
-          return;
-        }
+          if (data?.type === "WA_EMBEDDED_SIGNUP") {
+            console.log("[META EVENT CAPTURADO]", data);
 
-        if (data.event === "FINISH" || data.event === "FINISH_ONLY_WABA") {
-          const wabaId = data?.data?.waba_id || null;
-          const phoneNumberId = data?.data?.phone_number_id || null;
+          if (data?.type === "WA_EMBEDDED_SIGNUP") {
+            console.log("[META EVENT CAPTURADO]", data);
 
-          localStorage.setItem(
-            `meta_embedded_signup_${integracao.id}`,
-            JSON.stringify({
-              waba_id: wabaId,
-              phone_number_id: phoneNumberId,
-              event: data.event,
-              raw: data,
-            })
-          );
+            if (data.event === "FINISH" || data.event === "FINISH_ONLY_WABA") {
+              const wabaId =
+                data?.data?.waba_id ||
+                data?.data?.whatsapp_business_account_id ||
+                null;
+
+              const phoneNumberId =
+                data?.data?.phone_number_id ||
+                data?.data?.business_phone_number_id ||
+                null;
+
+              const businessPortfolioId =
+                data?.data?.business_id ||
+                data?.data?.business_portfolio_id ||
+                null;
+
+              localStorage.setItem(
+                `meta_embedded_signup_${integracao.id}`,
+                JSON.stringify({
+                  waba_id: wabaId,
+                  phone_number_id: phoneNumberId,
+                  business_portfolio_id: businessPortfolioId,
+                  event: data.event,
+                  raw: data,
+                })
+              );
+
+              console.log("✅ DADOS META CAPTURADOS:", {
+                wabaId,
+                phoneNumberId,
+                businessPortfolioId,
+                raw: data,
+              });
+            }
+
+            if (data.event === "CANCEL") {
+              console.warn("[META EMBEDDED SIGNUP] Cancelado:", data);
+            }
+
+            if (data.event === "ERROR") {
+              console.error("[META EMBEDDED SIGNUP] Erro:", data);
+            }
+          }
         }
 
         if (data.event === "CANCEL") {
@@ -372,8 +404,6 @@ async function iniciarEmbeddedSignup() {
 
     window.FB.login(
       function (response: any) {
-        const handler = (event: MessageEvent) => onMessage(event);
-        window.addEventListener("message", handler);
         setConectandoMeta(false);
 
         if (!response?.authResponse?.code) {
