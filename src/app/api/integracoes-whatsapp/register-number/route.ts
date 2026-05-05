@@ -165,16 +165,12 @@ async function registerNumber(request: NextRequest) {
 
     const updatePayload: Record<string, any> = {
       phone_registered: true,
-      onboarding_status: "concluido",
+      onboarding_status: "em_andamento",
       onboarding_etapa: "numero_registrado",
       onboarding_erro: null,
       ultimo_sync_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-
-    if (integracao.status === "pendente" || integracao.status === "erro") {
-      updatePayload.status = "ativa";
-    }
 
     await supabaseAdmin
       .from("integracoes_whatsapp")
