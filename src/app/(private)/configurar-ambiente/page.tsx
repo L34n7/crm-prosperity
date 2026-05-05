@@ -144,7 +144,9 @@ export default function ConfigurarAmbientePage() {
   const [recarregando, setRecarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [conectandoMeta, setConectandoMeta] = useState(false);
-  
+  const [modalPinAberto, setModalPinAberto] = useState(false);
+  const [pin, setPin] = useState("");
+  const [registrandoNumero, setRegistrandoNumero] = useState(false);
 
   async function sincronizarDadosMeta(integracaoId: string) {
     const response = await fetch("/api/integracoes-whatsapp/meta-dados", {
@@ -450,14 +452,19 @@ async function iniciarEmbeddedSignup() {
 }
 
 
-async function handleRegistrarNumero() {
+async function handleRegistrarNumero(pinInformado?: string) {
   try {
     if (!integracao?.id) {
       alert("Integração ainda não carregada.");
       return;
     }
 
-    setRecarregando(true);
+    if (pinInformado && !/^\d{6}$/.test(pinInformado)) {
+      alert("O PIN precisa ter exatamente 6 números.");
+      return;
+    }
+
+    setRegistrandoNumero(true);
 
     const response = await fetch("/api/integracoes-whatsapp/register-number", {
       method: "POST",
@@ -466,28 +473,41 @@ async function handleRegistrarNumero() {
       },
       body: JSON.stringify({
         integracao_id: integracao.id,
+        ...(pinInformado ? { pin: pinInformado } : {}),
       }),
     });
 
     const data = await response.json();
 
     if (!response.ok || !data.ok) {
+      if (data?.requires_pin) {
+        setModalPinAberto(true);
+        return;
+      }
+
       throw new Error(data.error || "Erro ao registrar número.");
     }
 
-    alert("Número registrado com sucesso.");
+    setModalPinAberto(false);
+    setPin("");
+
+    alert("Número ativado com sucesso.");
     await carregarIntegracao(false);
   } catch (error) {
     alert(
       error instanceof Error
         ? error.message
-        : "Erro inesperado ao registrar número."
+        : "Erro inesperado ao ativar número."
     );
   } finally {
-    setRecarregando(false);
+    setRegistrandoNumero(false);
   }
 }
 
+
+async function handleConfirmarPin() {
+  await handleRegistrarNumero(pin.trim());
+}
 
 async function handleConfigurarWebhook() {
   try {
@@ -660,7 +680,7 @@ async function handleConfigurarWebhook() {
                             <button
                               type="button"
                               className={indiceEtapaAtual >= 1 ? styles.primaryButton : styles.disabledButton}
-                              onClick={handleRegistrarNumero}
+                              onClick={() => handleRegistrarNumero()}
                               disabled={indiceEtapaAtual < 1 || recarregando}
                             >
                               {recarregando ? "Ativando..." : "Ativar número"}
@@ -793,6 +813,55 @@ async function handleConfigurarWebhook() {
           </div>
         )}
       </div>
+
+      {modalPinAberto && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalCard}>
+            <h2 className={styles.modalTitle}>PIN de verificação em duas etapas</h2>
+
+            <p className={styles.modalText}>
+              A Meta informou que este número exige um PIN de 6 dígitos para concluir
+              a ativação na Cloud API.
+            </p>
+
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              className={styles.modalInput}
+              value={pin}
+              onChange={(e) => {
+                const somenteNumeros = e.target.value.replace(/\D/g, "");
+                setPin(somenteNumeros);
+              }}
+              placeholder="Digite o PIN de 6 dígitos"
+            />
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => {
+                  setModalPinAberto(false);
+                  setPin("");
+                }}
+                disabled={registrandoNumero}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={handleConfirmarPin}
+                disabled={registrandoNumero || pin.length !== 6}
+              >
+                {registrandoNumero ? "Ativando..." : "Confirmar PIN"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

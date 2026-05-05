@@ -43,15 +43,6 @@ async function registerNumber(request: NextRequest) {
         ? body.pin.trim()
         : null;
 
-    if (!pin) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Informe o PIN do número para registrar na Meta.",
-        },
-        { status: 400 }
-      );
-    }
 
     const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")
@@ -126,9 +117,10 @@ async function registerNumber(request: NextRequest) {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-        }),
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        ...(pin ? { pin } : {}),
+      }),
       }
     );
 
@@ -150,10 +142,21 @@ async function registerNumber(request: NextRequest) {
         })
         .eq("id", integracao.id);
 
+      const mensagemMeta = data?.error?.message || "";
+
+      const precisaPin =
+        mensagemMeta.toLowerCase().includes("pin") ||
+        mensagemMeta.toLowerCase().includes("two-step") ||
+        mensagemMeta.toLowerCase().includes("two factor") ||
+        mensagemMeta.toLowerCase().includes("two-factor");
+
       return NextResponse.json(
         {
           ok: false,
-          error: "Erro ao registrar número na Meta.",
+          error: precisaPin
+            ? "Este número exige um PIN de verificação em duas etapas."
+            : "Erro ao registrar número na Meta.",
+          requires_pin: precisaPin,
           meta_response: data,
         },
         { status: response.status }
