@@ -39,7 +39,6 @@ export async function POST(request: NextRequest) {
     const tokenUrl = new URL("https://graph.facebook.com/v25.0/oauth/access_token");
     tokenUrl.searchParams.set("client_id", appId);
     tokenUrl.searchParams.set("client_secret", appSecret);
-    tokenUrl.searchParams.set("redirect_uri", REDIRECT_URI);
     tokenUrl.searchParams.set("code", code);
 
     const tokenResponse = await fetch(tokenUrl.toString(), {
