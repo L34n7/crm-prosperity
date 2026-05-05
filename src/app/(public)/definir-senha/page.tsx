@@ -1,21 +1,39 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { CheckCircle2, Eye, EyeOff, LockKeyhole, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import styles from "./definir-senha.module.css";
 
 export default function DefinirSenhaPage() {
   const router = useRouter();
-
   const supabase = useMemo(() => createClient(), []);
 
   const [carregandoSessao, setCarregandoSessao] = useState(true);
   const [senha, setSenha] = useState("");
   const [confirmacao, setConfirmacao] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [mostrarConfirmacao, setMostrarConfirmacao] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [emailUsuario, setEmailUsuario] = useState("");
+
+  const requisitos = {
+    minimo: senha.length >= 8,
+    maiuscula: /[A-Z]/.test(senha),
+    minuscula: /[a-z]/.test(senha),
+    numero: /\d/.test(senha),
+    especial: /[^A-Za-z0-9]/.test(senha),
+  };
+
+  const totalRequisitos = Object.values(requisitos).filter(Boolean).length;
+  const senhasIguais = senha.length > 0 && senha === confirmacao;
+  const senhaValida = totalRequisitos >= 4 && senhasIguais;
+
+  const forcaSenha =
+    totalRequisitos <= 2 ? "fraca" : totalRequisitos < 5 ? "media" : "forte";
 
   useEffect(() => {
     async function carregarUsuario() {
@@ -24,7 +42,6 @@ export default function DefinirSenhaPage() {
 
         if (error || !data.user) {
           setErro("Seu link é inválido, expirou ou sua sessão não foi criada.");
-          setCarregandoSessao(false);
           return;
         }
 
@@ -45,13 +62,8 @@ export default function DefinirSenhaPage() {
     setErro("");
     setSucesso("");
 
-    if (senha.length < 8) {
-      setErro("A senha precisa ter pelo menos 8 caracteres.");
-      return;
-    }
-
-    if (senha !== confirmacao) {
-      setErro("A confirmação da senha não confere.");
+    if (!senhaValida) {
+      setErro("Crie uma senha segura e confirme corretamente.");
       return;
     }
 
@@ -103,192 +115,129 @@ export default function DefinirSenhaPage() {
     }
   }
 
+  function RegraSenha({
+    valido,
+    texto,
+  }: {
+    valido: boolean;
+    texto: string;
+  }) {
+    return (
+      <li className={valido ? styles.regraValida : styles.regraInvalida}>
+        {valido ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+        {texto}
+      </li>
+    );
+  }
+
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#f8fafc",
-        padding: "24px",
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "460px",
-          background: "#ffffff",
-          borderRadius: "24px",
-          border: "1px solid #e2e8f0",
-          boxShadow: "0 20px 60px rgba(15,23,42,0.08)",
-          padding: "32px",
-        }}
-      >
-        <div style={{ marginBottom: "24px", textAlign: "center" }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "28px",
-              fontWeight: 800,
-              color: "#0f172a",
-            }}
-          >
-            Definir senha
-          </h1>
+    <main className={styles.page}>
+      <section className={styles.card}>
+        <div className={styles.iconBox}>
+          <LockKeyhole size={28} />
+        </div>
 
-          <p
-            style={{
-              marginTop: "10px",
-              marginBottom: 0,
-              color: "#475569",
-              fontSize: "14px",
-              lineHeight: 1.6,
-            }}
-          >
-            Crie sua senha para acessar o CRM.
-          </p>
+        <div className={styles.header}>
+          <h1>Definir senha</h1>
+          <p>Crie uma senha segura para acessar o CRM Prosperity.</p>
 
-          {emailUsuario ? (
-            <p
-              style={{
-                marginTop: "8px",
-                marginBottom: 0,
-                color: "#0f172a",
-                fontSize: "14px",
-                fontWeight: 700,
-              }}
-            >
-              {emailUsuario}
-            </p>
-          ) : null}
+          {emailUsuario ? <strong>{emailUsuario}</strong> : null}
         </div>
 
         {carregandoSessao ? (
-          <div
-            style={{
-              padding: "18px",
-              borderRadius: "16px",
-              background: "#eff6ff",
-              color: "#1d4ed8",
-              fontSize: "14px",
-              textAlign: "center",
-            }}
-          >
-            Validando seu acesso...
-          </div>
+          <div className={styles.infoBox}>Validando seu acesso...</div>
         ) : (
-          <form onSubmit={handleSubmit}>
-            <div style={{ display: "grid", gap: "16px" }}>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    color: "#0f172a",
-                  }}
-                >
-                  Nova senha
-                </label>
+          <form onSubmit={handleSubmit} className={styles.form}>
+            <div className={styles.inputGroup}>
+              <label>Nova senha</label>
 
+              <div className={styles.passwordWrapper}>
                 <input
-                  type="password"
+                  type={mostrarSenha ? "text" : "password"}
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
                   placeholder="Digite sua nova senha"
-                  style={{
-                    width: "100%",
-                    height: "48px",
-                    borderRadius: "14px",
-                    border: "1px solid #cbd5e1",
-                    padding: "0 14px",
-                    fontSize: "15px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
+                  autoComplete="new-password"
                 />
-              </div>
 
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    color: "#0f172a",
-                  }}
+                <button
+                  type="button"
+                  onClick={() => setMostrarSenha((valor) => !valor)}
+                  className={styles.eyeButton}
+                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
                 >
-                  Confirmar senha
-                </label>
+                  {mostrarSenha ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+            </div>
 
+            <div className={styles.inputGroup}>
+              <label>Confirmar senha</label>
+
+              <div className={styles.passwordWrapper}>
                 <input
-                  type="password"
+                  type={mostrarConfirmacao ? "text" : "password"}
                   value={confirmacao}
                   onChange={(e) => setConfirmacao(e.target.value)}
                   placeholder="Confirme sua senha"
-                  style={{
-                    width: "100%",
-                    height: "48px",
-                    borderRadius: "14px",
-                    border: "1px solid #cbd5e1",
-                    padding: "0 14px",
-                    fontSize: "15px",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
+                  autoComplete="new-password"
                 />
+
+                <button
+                  type="button"
+                  onClick={() => setMostrarConfirmacao((valor) => !valor)}
+                  className={styles.eyeButton}
+                  aria-label={
+                    mostrarConfirmacao ? "Ocultar confirmação" : "Mostrar confirmação"
+                  }
+                >
+                  {mostrarConfirmacao ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
 
-              {erro ? (
-                <div
-                  style={{
-                    padding: "14px",
-                    borderRadius: "14px",
-                    background: "#fef2f2",
-                    color: "#b91c1c",
-                    fontSize: "14px",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {erro}
-                </div>
+              {confirmacao && !senhasIguais ? (
+                <p className={styles.passwordMismatch}>As senhas não conferem.</p>
               ) : null}
-
-              {sucesso ? (
-                <div
-                  style={{
-                    padding: "14px",
-                    borderRadius: "14px",
-                    background: "#f0fdf4",
-                    color: "#166534",
-                    fontSize: "14px",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {sucesso}
-                </div>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={enviando || carregandoSessao}
-                style={{
-                  height: "50px",
-                  border: "none",
-                  borderRadius: "14px",
-                  background: enviando ? "#94a3b8" : "#0f172a",
-                  color: "#ffffff",
-                  fontSize: "15px",
-                  fontWeight: 800,
-                  cursor: enviando ? "not-allowed" : "pointer",
-                }}
-              >
-                {enviando ? "Salvando..." : "Criar senha e continuar"}
-              </button>
             </div>
+
+            <div className={styles.strengthArea}>
+              <div className={styles.strengthHeader}>
+                <span>Força da senha</span>
+                <strong className={styles[forcaSenha]}>
+                  {forcaSenha === "fraca"
+                    ? "Fraca"
+                    : forcaSenha === "media"
+                      ? "Média"
+                      : "Forte"}
+                </strong>
+              </div>
+
+              <div className={styles.strengthBar}>
+                <div
+                  className={`${styles.strengthFill} ${styles[forcaSenha]}`}
+                  style={{ width: `${(totalRequisitos / 5) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            <ul className={styles.regras}>
+              <RegraSenha valido={requisitos.minimo} texto="Mínimo de 8 caracteres" />
+              <RegraSenha valido={requisitos.maiuscula} texto="Uma letra maiúscula" />
+              <RegraSenha valido={requisitos.minuscula} texto="Uma letra minúscula" />
+              <RegraSenha valido={requisitos.numero} texto="Um número" />
+              <RegraSenha valido={requisitos.especial} texto="Um caractere especial" />
+            </ul>
+
+            {erro ? <div className={styles.errorBox}>{erro}</div> : null}
+            {sucesso ? <div className={styles.successBox}>{sucesso}</div> : null}
+
+            <button
+              type="submit"
+              disabled={enviando || carregandoSessao || !senhaValida}
+              className={styles.submitButton}
+            >
+              {enviando ? "Salvando..." : "Criar senha e continuar"}
+            </button>
           </form>
         )}
       </section>

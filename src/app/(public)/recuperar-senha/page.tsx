@@ -2,39 +2,53 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
+import { ArrowLeft, CheckCircle2, Mail, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import styles from "./recuperar-senha.module.css";
 
 export default function RecuperarSenhaPage() {
   const supabase = useMemo(() => createClient(), []);
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
 
+  const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
     setLoading(true);
     setMensagem("");
     setErro("");
 
-    try {
-      const redirectTo =
-        typeof window !== "undefined"
-          ? `${window.location.origin}/atualizar-senha`
-          : undefined;
+    if (!emailValido) {
+      setErro("Digite um e-mail válido para continuar.");
+      setLoading(false);
+      return;
+    }
 
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo,
+    try {
+      const res = await fetch("/api/auth/recuperar-senha", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
       });
 
-      if (error) {
-        setErro(error.message);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao enviar email");
         return;
       }
 
       setMensagem(
-        "Se existir uma conta com esse e-mail, enviamos um link para redefinir a senha."
+        "Se existir uma conta com esse e-mail, enviamos um link para redefinir sua senha."
       );
+
       setEmail("");
     } catch {
       setErro("Não foi possível solicitar a recuperação de senha.");
@@ -44,128 +58,75 @@ export default function RecuperarSenhaPage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: "24px",
-        background:
-          "linear-gradient(135deg, #0f172a 0%, #111827 45%, #1e293b 100%)",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "420px",
-          background: "rgba(255, 255, 255, 0.06)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: "20px",
-          padding: "32px",
-          backdropFilter: "blur(10px)",
-          color: "#fff",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
-        }}
-      >
-        <h1 style={{ fontSize: "28px", fontWeight: 700, marginBottom: "8px" }}>
-          Recuperar senha
-        </h1>
+    <main className={styles.page}>
+      <section className={styles.card}>
+        <div className={styles.iconBox}>
+          <ShieldCheck size={30} />
+        </div>
 
-        <p
-          style={{
-            fontSize: "14px",
-            color: "rgba(255,255,255,0.75)",
-            marginBottom: "24px",
-            lineHeight: 1.5,
-          }}
-        >
-          Informe seu e-mail para receber o link de redefinição de senha.
-        </p>
+        <div className={styles.header}>
+          <h1>Recuperar senha</h1>
+          <p>
+            Informe seu e-mail cadastrado para receber um link seguro de
+            redefinição de senha.
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "grid", gap: "16px" }}>
-          <div style={{ display: "grid", gap: "8px" }}>
-            <label htmlFor="email" style={{ fontSize: "14px", fontWeight: 600 }}>
-              E-mail
-            </label>
+        <form onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.inputGroup}>
+            <label htmlFor="email">E-mail cadastrado</label>
 
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="seuemail@empresa.com"
-              required
-              style={{
-                height: "46px",
-                borderRadius: "12px",
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(255,255,255,0.08)",
-                color: "#fff",
-                padding: "0 14px",
-                outline: "none",
-              }}
-            />
+            <div className={styles.inputWrapper}>
+              <Mail size={20} />
+
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setErro("");
+                  setMensagem("");
+                }}
+                placeholder="seuemail@empresa.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            {email && !emailValido ? (
+              <p className={styles.inputHintError}>Digite um e-mail válido.</p>
+            ) : (
+              <p className={styles.inputHint}>
+                Enviaremos as instruções para este endereço.
+              </p>
+            )}
           </div>
 
-          {mensagem ? (
-            <div
-              style={{
-                padding: "12px 14px",
-                borderRadius: "12px",
-                background: "rgba(34,197,94,0.14)",
-                border: "1px solid rgba(34,197,94,0.35)",
-                fontSize: "14px",
-              }}
-            >
-              {mensagem}
-            </div>
-          ) : null}
+          <div className={styles.infoBox}>
+            <CheckCircle2 size={18} />
+            <span>
+              O link de recuperação é temporário e só deve ser usado por você.
+            </span>
+          </div>
 
-          {erro ? (
-            <div
-              style={{
-                padding: "12px 14px",
-                borderRadius: "12px",
-                background: "rgba(239,68,68,0.14)",
-                border: "1px solid rgba(239,68,68,0.35)",
-                fontSize: "14px",
-              }}
-            >
-              {erro}
-            </div>
-          ) : null}
+          {mensagem ? <div className={styles.successBox}>{mensagem}</div> : null}
+          {erro ? <div className={styles.errorBox}>{erro}</div> : null}
 
           <button
             type="submit"
-            disabled={loading}
-            style={{
-              height: "46px",
-              borderRadius: "12px",
-              border: "none",
-              background: "#2563eb",
-              color: "#fff",
-              fontWeight: 700,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
-            }}
+            disabled={loading || !emailValido}
+            className={styles.submitButton}
           >
             {loading ? "Enviando..." : "Enviar link de recuperação"}
           </button>
         </form>
 
-        <div style={{ marginTop: "18px" }}>
-          <Link
-            href="/login"
-            style={{
-              color: "#93c5fd",
-              fontSize: "14px",
-              textDecoration: "none",
-            }}
-          >
-            Voltar para o login
-          </Link>
-        </div>
-      </div>
+        <Link href="/login" className={styles.backLink}>
+          <ArrowLeft size={17} />
+          Voltar para o login
+        </Link>
+      </section>
     </main>
   );
 }

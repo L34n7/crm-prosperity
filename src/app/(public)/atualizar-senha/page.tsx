@@ -1,8 +1,25 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  XCircle,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import styles from "./atualizar-senha.module.css";
 
 function AtualizarSenhaContent() {
   const supabase = useMemo(() => createClient(), []);
@@ -12,11 +29,28 @@ function AtualizarSenhaContent() {
 
   const [password, setPassword] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [mostrarConfirmacao, setMostrarConfirmacao] = useState(false);
   const [loading, setLoading] = useState(false);
   const [verificando, setVerificando] = useState(true);
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
   const [podeAlterar, setPodeAlterar] = useState(false);
+
+  const requisitos = {
+    minimo: password.length >= 8,
+    maiuscula: /[A-Z]/.test(password),
+    minuscula: /[a-z]/.test(password),
+    numero: /\d/.test(password),
+    especial: /[^A-Za-z0-9]/.test(password),
+  };
+
+  const totalRequisitos = Object.values(requisitos).filter(Boolean).length;
+  const senhasIguais = password.length > 0 && password === confirmarSenha;
+  const senhaValida = totalRequisitos === 4 && senhasIguais;
+
+  const forcaSenha =
+    totalRequisitos <= 2 ? "fraca" : totalRequisitos < 4 ? "media" : "forte";
 
   useEffect(() => {
     if (processadoRef.current) return;
@@ -30,24 +64,54 @@ function AtualizarSenhaContent() {
         const tokenHash = searchParams.get("token_hash");
         const type = searchParams.get("type");
 
-        if (!tokenHash || type !== "recovery") {
-          setErro("Link inválido ou expirado. Solicite uma nova recuperação de senha.");
-          setPodeAlterar(false);
+        if (tokenHash && type === "recovery") {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: "recovery",
+          });
+
+          if (error) {
+            setErro("Link inválido ou expirado. Solicite uma nova recuperação de senha.");
+            setPodeAlterar(false);
+            return;
+          }
+
+          setPodeAlterar(true);
           return;
         }
 
-        const { error } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: "recovery",
-        });
+        const hash = window.location.hash.replace("#", "");
+        const params = new URLSearchParams(hash);
 
-        if (error) {
-          setErro("Link inválido ou expirado. Solicite uma nova recuperação de senha.");
-          setPodeAlterar(false);
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+        const hashType = params.get("type");
+
+        if (accessToken && refreshToken && hashType === "recovery") {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) {
+            setErro("Link inválido ou expirado. Solicite uma nova recuperação de senha.");
+            setPodeAlterar(false);
+            return;
+          }
+
+          setPodeAlterar(true);
           return;
         }
 
-        setPodeAlterar(true);
+        const { data } = await supabase.auth.getSession();
+
+        if (data.session) {
+          setPodeAlterar(true);
+          return;
+        }
+
+        setErro("Link inválido ou expirado. Solicite uma nova recuperação de senha.");
+        setPodeAlterar(false);
       } catch {
         setErro("Não foi possível validar o link de recuperação.");
         setPodeAlterar(false);
@@ -61,23 +125,21 @@ function AtualizarSenhaContent() {
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
     setErro("");
     setMensagem("");
 
-    if (password.length < 6) {
-      setErro("A nova senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    if (password !== confirmarSenha) {
-      setErro("A confirmação de senha não confere.");
+    if (!senhaValida) {
+      setErro("Crie uma senha segura e confirme corretamente.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await supabase.auth.updateUser({
+        password,
+      });
 
       if (error) {
         setErro(error.message);
@@ -88,9 +150,9 @@ function AtualizarSenhaContent() {
 
       setTimeout(async () => {
         await supabase.auth.signOut();
-        router.push("/login");
+        router.push("/login?sucesso=senha_atualizada");
         router.refresh();
-      }, 1200);
+      }, 1500);
     } catch {
       setErro("Não foi possível atualizar a senha.");
     } finally {
@@ -98,197 +160,179 @@ function AtualizarSenhaContent() {
     }
   }
 
+  function RegraSenha({
+    valido,
+    texto,
+  }: {
+    valido: boolean;
+    texto: string;
+  }) {
+    return (
+      <li className={valido ? styles.regraValida : styles.regraInvalida}>
+        {valido ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+        {texto}
+      </li>
+    );
+  }
+
   if (verificando) {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background:
-            "linear-gradient(135deg, #0f172a 0%, #111827 45%, #1e293b 100%)",
-          color: "#fff",
-          padding: "24px",
-        }}
-      >
-        <p>Validando link de recuperação...</p>
+      <main className={styles.page}>
+        <section className={styles.card}>
+          <div className={styles.infoBox}>Validando link de recuperação...</div>
+        </section>
       </main>
     );
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: "24px",
-        background:
-          "linear-gradient(135deg, #0f172a 0%, #111827 45%, #1e293b 100%)",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "420px",
-          background: "rgba(255, 255, 255, 0.06)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: "20px",
-          padding: "32px",
-          backdropFilter: "blur(10px)",
-          color: "#fff",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
-        }}
-      >
-        <h1 style={{ fontSize: "28px", fontWeight: 700, marginBottom: "8px" }}>
-          Definir nova senha
-        </h1>
+    <main className={styles.page}>
+      <section className={styles.card}>
+        <div className={styles.iconBox}>
+          <LockKeyhole size={28} />
+        </div>
 
-        <p
-          style={{
-            fontSize: "14px",
-            color: "rgba(255,255,255,0.75)",
-            marginBottom: "24px",
-            lineHeight: 1.5,
-          }}
-        >
-          Digite sua nova senha para concluir a recuperação de acesso.
-        </p>
+        <div className={styles.header}>
+          <h1>Definir nova senha</h1>
+          <p>Crie uma senha segura para recuperar o acesso à sua conta.</p>
+        </div>
 
         {erro && !podeAlterar ? (
-          <div
-            style={{
-              padding: "12px 14px",
-              borderRadius: "12px",
-              background: "rgba(239,68,68,0.14)",
-              border: "1px solid rgba(239,68,68,0.35)",
-              fontSize: "14px",
-            }}
-          >
-            {erro}
-          </div>
+          <>
+            <div className={styles.errorBox}>{erro}</div>
+
+            <Link href="/recuperar-senha" className={styles.backLink}>
+              <ArrowLeft size={17} />
+              Solicitar novo link
+            </Link>
+          </>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: "grid", gap: "16px" }}>
-            <div style={{ display: "grid", gap: "8px" }}>
-              <label htmlFor="password" style={{ fontSize: "14px", fontWeight: 600 }}>
-                Nova senha
-              </label>
+          <form onSubmit={handleSubmit} className={styles.form}>
+            <div className={styles.inputGroup}>
+              <label htmlFor="password">Nova senha</label>
 
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Digite a nova senha"
-                required
-                style={{
-                  height: "46px",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  background: "rgba(255,255,255,0.08)",
-                  color: "#fff",
-                  padding: "0 14px",
-                  outline: "none",
-                }}
-              />
+              <div className={styles.passwordWrapper}>
+                <input
+                  id="password"
+                  type={mostrarSenha ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setErro("");
+                    setMensagem("");
+                  }}
+                  placeholder="Digite a nova senha"
+                  autoComplete="new-password"
+                  required
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setMostrarSenha((valor) => !valor)}
+                  className={styles.eyeButton}
+                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                >
+                  {mostrarSenha ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
 
-            <div style={{ display: "grid", gap: "8px" }}>
-              <label htmlFor="confirmarSenha" style={{ fontSize: "14px", fontWeight: 600 }}>
-                Confirmar nova senha
-              </label>
+            <div className={styles.inputGroup}>
+              <label htmlFor="confirmarSenha">Confirmar nova senha</label>
 
-              <input
-                id="confirmarSenha"
-                type="password"
-                value={confirmarSenha}
-                onChange={(e) => setConfirmarSenha(e.target.value)}
-                placeholder="Repita a nova senha"
-                required
-                style={{
-                  height: "46px",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  background: "rgba(255,255,255,0.08)",
-                  color: "#fff",
-                  padding: "0 14px",
-                  outline: "none",
-                }}
-              />
+              <div className={styles.passwordWrapper}>
+                <input
+                  id="confirmarSenha"
+                  type={mostrarConfirmacao ? "text" : "password"}
+                  value={confirmarSenha}
+                  onChange={(e) => {
+                    setConfirmarSenha(e.target.value);
+                    setErro("");
+                    setMensagem("");
+                  }}
+                  placeholder="Repita a nova senha"
+                  autoComplete="new-password"
+                  required
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setMostrarConfirmacao((valor) => !valor)}
+                  className={styles.eyeButton}
+                  aria-label={
+                    mostrarConfirmacao ? "Ocultar confirmação" : "Mostrar confirmação"
+                  }
+                >
+                  {mostrarConfirmacao ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+
+              {confirmarSenha && !senhasIguais ? (
+                <p className={styles.passwordMismatch}>As senhas não conferem.</p>
+              ) : null}
             </div>
 
-            {mensagem ? (
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "12px",
-                  background: "rgba(34,197,94,0.14)",
-                  border: "1px solid rgba(34,197,94,0.35)",
-                  fontSize: "14px",
-                }}
-              >
-                {mensagem}
+            <div className={styles.strengthArea}>
+              <div className={styles.strengthHeader}>
+                <span>Força da senha</span>
+                <strong className={styles[forcaSenha]}>
+                  {forcaSenha === "fraca"
+                    ? "Fraca"
+                    : forcaSenha === "media"
+                      ? "Média"
+                      : "Forte"}
+                </strong>
               </div>
-            ) : null}
 
-            {erro ? (
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "12px",
-                  background: "rgba(239,68,68,0.14)",
-                  border: "1px solid rgba(239,68,68,0.35)",
-                  fontSize: "14px",
-                }}
-              >
-                {erro}
+              <div className={styles.strengthBar}>
+                <div
+                  className={`${styles.strengthFill} ${styles[forcaSenha]}`}
+                  style={{ width: `${(totalRequisitos / 4) * 100}%` }}
+                />
               </div>
-            ) : null}
+            </div>
+
+            <ul className={styles.regras}>
+              <RegraSenha valido={requisitos.minimo} texto="Mínimo de 8 caracteres" />
+              <RegraSenha valido={requisitos.maiuscula} texto="Uma letra maiúscula" />
+              <RegraSenha valido={requisitos.minuscula} texto="Uma letra minúscula" />
+              <RegraSenha valido={requisitos.numero} texto="Um número" />
+              <RegraSenha valido={requisitos.especial} texto="Um caractere especial" />
+            </ul>
+
+            {mensagem ? <div className={styles.successBox}>{mensagem}</div> : null}
+            {erro ? <div className={styles.errorBox}>{erro}</div> : null}
 
             <button
               type="submit"
-              disabled={loading}
-              style={{
-                height: "46px",
-                borderRadius: "12px",
-                border: "none",
-                background: "#2563eb",
-                color: "#fff",
-                fontWeight: 700,
-                cursor: loading ? "not-allowed" : "pointer",
-                opacity: loading ? 0.7 : 1,
-              }}
+              disabled={loading || !senhaValida}
+              className={styles.submitButton}
             >
               {loading ? "Salvando..." : "Atualizar senha"}
             </button>
           </form>
         )}
-      </div>
-    </main>
-  );
-}
 
-function AtualizarSenhaFallback() {
-  return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background:
-          "linear-gradient(135deg, #0f172a 0%, #111827 45%, #1e293b 100%)",
-        color: "#fff",
-        padding: "24px",
-      }}
-    >
-      <p>Carregando...</p>
+        <Link href="/login" className={styles.backLink}>
+          <ArrowLeft size={17} />
+          Voltar para o login
+        </Link>
+      </section>
     </main>
   );
 }
 
 export default function AtualizarSenhaPage() {
   return (
-    <Suspense fallback={<AtualizarSenhaFallback />}>
+    <Suspense
+      fallback={
+        <main className={styles.page}>
+          <section className={styles.card}>
+            <div className={styles.infoBox}>Carregando...</div>
+          </section>
+        </main>
+      }
+    >
       <AtualizarSenhaContent />
     </Suspense>
   );

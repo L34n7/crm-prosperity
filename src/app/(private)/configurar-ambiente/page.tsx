@@ -191,7 +191,11 @@ export default function ConfigurarAmbientePage() {
         (!integracaoAtualizada.waba_id || !integracaoAtualizada.phone_number_id);
 
       if (precisaBuscarDadosMeta) {
-        await sincronizarDadosMeta(integracaoAtualizada.id);
+        try {
+          await sincronizarDadosMeta(integracaoAtualizada.id);
+        } catch (syncError) {
+          console.warn("[CONFIGURAR AMBIENTE] Erro ao sincronizar Meta:", syncError);
+        }
 
         const responseAtualizada = await fetch("/api/integracoes-whatsapp", {
           method: "GET",
