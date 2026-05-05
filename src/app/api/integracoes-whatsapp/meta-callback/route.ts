@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-const REDIRECT_URI = "https://crm-prosperity.vercel.app/configuracao-meta-callback";
+const REDIRECT_URI = process.env.NEXT_PUBLIC_META_REDIRECT_URI!;
 
 export async function POST(request: NextRequest) {
   try {
