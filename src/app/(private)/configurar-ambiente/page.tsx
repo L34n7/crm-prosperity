@@ -458,6 +458,8 @@ async function iniciarEmbeddedSignup() {
         response_type: "code",
         override_default_response_type: true,
         auth_type: "rerequest",
+        scope:
+          "business_management,whatsapp_business_management,whatsapp_business_messaging",
         extras: {
           sessionInfoVersion: "3",
         },
