@@ -421,7 +421,7 @@ async function iniciarEmbeddedSignup() {
     window.addEventListener("message", onMessage);
 
     window.FB.login(
-      async function (response: any) {
+      function (response: any) {
         if (!response?.authResponse?.code) {
           window.removeEventListener("message", onMessage);
           setConectandoMeta(false);
