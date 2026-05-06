@@ -11,10 +11,6 @@ function extrairAccessToken(integracao: any) {
     return tokenConfig.trim();
   }
 
-  if (process.env.WHATSAPP_ACCESS_TOKEN?.trim()) {
-    return process.env.WHATSAPP_ACCESS_TOKEN.trim();
-  }
-
   return null;
 }
 
@@ -93,21 +89,11 @@ async function registerNumber(request: NextRequest) {
         {
           ok: false,
           error:
-            "Token de acesso não encontrado. Salve o token em config_json.access_token ou defina WHATSAPP_ACCESS_TOKEN temporariamente.",
+            "Token de acesso não encontrado. Conecte novamente com a Meta para salvar o token em config_json.access_token.",
         },
         { status: 500 }
       );
     }
-
-    await supabaseAdmin
-      .from("integracoes_whatsapp")
-      .update({
-        onboarding_status: "em_andamento",
-        onboarding_etapa: "registrando_numero",
-        onboarding_erro: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", integracao.id);
 
     const response = await fetch(
       `https://graph.facebook.com/v25.0/${integracao.phone_number_id}/register`,
@@ -132,7 +118,6 @@ async function registerNumber(request: NextRequest) {
       await supabaseAdmin
         .from("integracoes_whatsapp")
         .update({
-          status: "erro",
           phone_registered: false,
           onboarding_status: "erro",
           onboarding_etapa: "registrar_numero",

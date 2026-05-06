@@ -169,6 +169,24 @@ export default function ConfigurarAmbientePage() {
     return data;
   }
 
+  async function finalizarEmbeddedSignup(dadosEmbeddedSignup: any) {
+    const response = await fetch("/api/integracoes-whatsapp/embedded-signup/finish", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(dadosEmbeddedSignup),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erro ao finalizar dados do Embedded Signup.");
+    }
+
+    return data;
+  }
+
   function carregarFacebookSdk() {
     return new Promise<void>((resolve, reject) => {
       if (window.FB) {
@@ -403,7 +421,7 @@ async function iniciarEmbeddedSignup() {
     window.addEventListener("message", onMessage);
 
     window.FB.login(
-      function (response: any) {
+      async function (response: any) {
         if (!response?.authResponse?.code) {
           window.removeEventListener("message", onMessage);
           setConectandoMeta(false);
@@ -413,22 +431,26 @@ async function iniciarEmbeddedSignup() {
 
         const code = response.authResponse.code;
 
-        setTimeout(() => {
-          window.removeEventListener("message", onMessage);
-          setConectandoMeta(false);
+        setTimeout(async () => {
+          try {
+            window.removeEventListener("message", onMessage);
+            setConectandoMeta(false);
 
-          const dadosSalvos = localStorage.getItem(
-            `meta_embedded_signup_${integracao.id}`
-          );
+            if (dadosEmbeddedSignup) {
+              await finalizarEmbeddedSignup(dadosEmbeddedSignup);
+            }
 
-          console.log("[META DADOS ANTES DO REDIRECT]", {
-            dadosEmbeddedSignup,
-            dadosSalvos,
-          });
-
-          window.location.href = `/configuracao-meta-callback?code=${encodeURIComponent(
-            code
-          )}&state=${encodeURIComponent(integracao.id)}`;
+            window.location.href = `/configuracao-meta-callback?code=${encodeURIComponent(
+              code
+            )}&state=${encodeURIComponent(integracao.id)}`;
+          } catch (error) {
+            console.error("[EMBEDDED SIGNUP FINISH ERROR]", error);
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Erro ao salvar dados do Embedded Signup."
+            );
+          }
         }, 1500);
       },
       {
