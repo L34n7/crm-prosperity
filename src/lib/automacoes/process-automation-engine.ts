@@ -1027,12 +1027,45 @@ async function enviarBotoesAutomacao({
   execucaoId: string;
   noId: string;
 }) {
-  const token = process.env.META_WHATSAPP_TOKEN;
-  const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
+    const { data: conversa, error: conversaError } = await supabaseAdmin
+      .from("conversas")
+      .select(
+        `
+        id,
+        empresa_id,
+        integracao_whatsapp_id,
+        integracoes_whatsapp (
+          id,
+          phone_number_id,
+          token_ref,
+          status
+        )
+      `
+      )
+      .eq("id", conversaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
 
-  if (!token || !phoneNumberId) {
-    throw new Error("Token ou Phone Number ID do WhatsApp não configurado.");
-  }
+    if (conversaError || !conversa) {
+      throw new Error("Conversa não encontrada para envio dos botões da automação.");
+    }
+
+    const integracao = Array.isArray(conversa.integracoes_whatsapp)
+      ? conversa.integracoes_whatsapp[0]
+      : conversa.integracoes_whatsapp;
+
+    const phoneNumberId =
+      integracao?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+
+    if (!phoneNumberId) {
+      throw new Error("WHATSAPP_PHONE_NUMBER_ID não configurado.");
+    }
+
+    if (!accessToken) {
+      throw new Error("WHATSAPP_ACCESS_TOKEN não configurado.");
+    }
 
   const body = {
     messaging_product: "whatsapp",
@@ -1060,7 +1093,7 @@ async function enviarBotoesAutomacao({
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
