@@ -456,6 +456,11 @@
   background: #ffd1fc;
 }
 
+.nodeAudio {
+  border-color: #bae6fd;
+  background: #e0f7ff;
+}
+
 .nodePadrao {
   border-color: #e2e8f0;
   background: #ffffff;

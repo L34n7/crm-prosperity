@@ -64,18 +64,20 @@ type SetorOpcao = {
 type MidiaOpcao = {
   id: string;
   nome: string;
-  tipo: "imagem" | "video";
+  tipo: "imagem" | "video" | "audio";
   url: string;
   mime_type: string | null;
   tamanho_bytes: number | null;
 };
 
+const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
+const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
+const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
+
 const nodeTypes = {
   custom: NodeCustom,
 };
 
-const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
-const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 
 function criarIdTemporario(prefixo: string) {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -93,6 +95,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "encerrar") return "Encerrar";
   if (tipo === "enviar_imagem") return "Imagem";
   if (tipo === "enviar_video") return "Vídeo";
+  if (tipo === "enviar_audio") return "Áudio";
   return tipo;
 }
 
@@ -104,6 +107,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "encerrar") return styles.nodeEncerrar;
   if (tipo === "enviar_imagem") return styles.nodeImagem;
   if (tipo === "enviar_video") return styles.nodeVideo;
+  if (tipo === "enviar_audio") return styles.nodeAudio;
   return styles.nodePadrao;
 }
 
@@ -344,7 +348,7 @@ const edgeEditada = useMemo(() => {
   }
 
 
-  async function carregarMidias(tipo?: "imagem" | "video") {
+  async function carregarMidias(tipo?: "imagem" | "video" | "audio") {
     try {
       setCarregandoMidias(true);
 
@@ -577,6 +581,12 @@ async function criarFluxoRapido() {
         ? "Transferir setor"
         : tipoNo === "encerrar"
         ? "Encerrar"
+        : tipoNo === "enviar_imagem"
+        ? "Nova imagem"
+        : tipoNo === "enviar_video"
+        ? "Novo vídeo"
+        : tipoNo === "enviar_audio"
+        ? "Novo áudio"
         : "Novo bloco";
 
     const novoNoDb: AutomacaoNo = {
@@ -739,6 +749,7 @@ function aplicarEdicaoNo() {
         tipoFinal === "pergunta_opcoes" ||
         tipoFinal === "enviar_imagem" ||
         tipoFinal === "enviar_video" ||
+        tipoFinal === "enviar_audio" ||
         tipoFinal === "transferir_setor" ||
         tipoFinal === "encerrar"
       ) {
@@ -753,7 +764,11 @@ function aplicarEdicaoNo() {
         configuracao_json.setor_id = setorDestino;
       }
 
-      if (tipoFinal === "enviar_imagem" || tipoFinal === "enviar_video") {
+      if (
+        tipoFinal === "enviar_imagem" ||
+        tipoFinal === "enviar_video" ||
+        tipoFinal === "enviar_audio"
+      ) {
         configuracao_json.midia_url = midiaUrlNode;
         configuracao_json.midia_nome = midiaNomeNode;
       }
@@ -1349,7 +1364,11 @@ function validarFluxoAntesDeAtivar() {
     }
 
     if (
-      (tipoNo === "enviar_imagem" || tipoNo === "enviar_video") &&
+        (
+          tipoNo === "enviar_imagem" ||
+          tipoNo === "enviar_video" ||
+          tipoNo === "enviar_audio"
+        ) &&
       !String(config.midia_url || "").trim()
     ) {
       return `O bloco "${node.data?.titulo}" precisa ter uma URL de mídia.`;
@@ -1749,6 +1768,17 @@ useEffect(() => {
                         Adicionar vídeo
                       </button>
 
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          adicionarNo("enviar_audio");
+                        }}
+                      >
+                        Adicionar áudio
+                      </button>
+
                       <div className={styles.headerDropdownDivider} />
 
                       <button
@@ -1931,14 +1961,19 @@ useEffect(() => {
                             setSetorDestino("");
                           }
 
-                          if (novoTipo === "enviar_imagem" || novoTipo === "enviar_video") {
+                          if (
+                            novoTipo === "enviar_imagem" ||
+                            novoTipo === "enviar_video" ||
+                            novoTipo === "enviar_audio"
+                          ) {
                             setSetorDestino("");
                             setOpcoesNode([]);
                           }
 
                           if (
                             novoTipo !== "enviar_imagem" &&
-                            novoTipo !== "enviar_video"
+                            novoTipo !== "enviar_video" &&
+                            novoTipo !== "enviar_audio"
                           ) {
                             setMidiaUrlNode("");
                           }
@@ -1950,6 +1985,7 @@ useEffect(() => {
                         <option value="encerrar">Encerrar</option>
                         <option value="enviar_imagem">Imagem</option>
                         <option value="enviar_video">Vídeo</option>
+                        <option value="enviar_audio">Áudio</option>
                       </select>
                     </label>
                   )}
@@ -1975,6 +2011,7 @@ useEffect(() => {
                     "pergunta_opcoes",
                     "enviar_imagem",
                     "enviar_video",
+                    "enviar_audio",
                     "transferir_setor",
                     "encerrar",
                   ].includes(tipoNodeEdicao) && (
@@ -1986,6 +2023,8 @@ useEffect(() => {
                           ? "Legenda da imagem"
                           : tipoNodeEdicao === "enviar_video"
                           ? "Legenda do vídeo"
+                          : tipoNodeEdicao === "enviar_audio"
+                          ? "Legenda do áudio"
                           : tipoNodeEdicao === "transferir_setor"
                           ? "Mensagem antes de transferir"
                           : tipoNodeEdicao === "encerrar"
@@ -2002,26 +2041,34 @@ useEffect(() => {
                     </label>
                   )}
 
-                  {["enviar_imagem", "enviar_video"].includes(tipoNodeEdicao) && (
+                  {["enviar_imagem", "enviar_video", "enviar_audio"].includes(tipoNodeEdicao) && (
                     <div className={styles.field}>
                       <span className={styles.label}>
                         {tipoNodeEdicao === "enviar_imagem"
                           ? "Imagem"
-                          : "Vídeo"}
+                          : tipoNodeEdicao === "enviar_video"
+                          ? "Vídeo"
+                          : "Áudio"}
                       </span>
 
                       {midiaUrlNode ? (
                         <div className={styles.midiaSelecionadaBox}>
                           <div className={styles.midiaSelecionadaInfo}>
                             <div className={styles.midiaSelecionadaIcone}>
-                              {tipoNodeEdicao === "enviar_imagem" ? "🖼️" : "🎬"}
+                              {tipoNodeEdicao === "enviar_imagem"
+                                ? "🖼️"
+                                : tipoNodeEdicao === "enviar_video"
+                                ? "🎬"
+                                : "🎧"}
                             </div>
 
                             <div>
                               <strong className={styles.midiaSelecionadaTitulo}>
                                 {tipoNodeEdicao === "enviar_imagem"
                                   ? "Imagem selecionada"
-                                  : "Vídeo selecionado"}
+                                  : tipoNodeEdicao === "enviar_video"
+                                  ? "Vídeo selecionado"
+                                  : "Áudio selecionado"}
                               </strong>
 
                               <p className={styles.midiaSelecionadaNome}>
@@ -2065,7 +2112,9 @@ useEffect(() => {
                               .filter((midia) =>
                                 tipoNodeEdicao === "enviar_imagem"
                                   ? midia.tipo === "imagem"
-                                  : midia.tipo === "video"
+                                  : tipoNodeEdicao === "enviar_video"
+                                  ? midia.tipo === "video"
+                                  : midia.tipo === "audio"
                               )
                               .map((midia) => (
                                 <option key={midia.id} value={midia.url}>
@@ -2079,7 +2128,13 @@ useEffect(() => {
 
                             <input
                               type="file"
-                              accept={tipoNodeEdicao === "enviar_imagem" ? "image/*" : "video/*"}
+                              accept={
+                                tipoNodeEdicao === "enviar_imagem"
+                                  ? "image/*"
+                                  : tipoNodeEdicao === "enviar_video"
+                                  ? "video/*"
+                                  : "audio/*"
+                              }
                               style={{ display: "none" }}
                               disabled={enviandoMidia}
                               onChange={(e) => {
@@ -2106,6 +2161,15 @@ useEffect(() => {
                                   }
                                 }
 
+                                if (arquivo.type.startsWith("audio/")) {
+                                  if (arquivo.size > LIMITE_AUDIO_BYTES) {
+                                    setErro(
+                                      "O áudio deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
+                                    );
+                                    return;
+                                  }
+                                }
+
                                 enviarNovaMidia(arquivo);
 
                                 e.target.value = "";
@@ -2114,7 +2178,7 @@ useEffect(() => {
                           </label>
 
                           <span className={styles.help}>
-                            Imagens até 5MB e vídeos até 16MB. Se o arquivo for maior, reduza antes
+                            Imagens até 5MB, vídeos até 16MB e áudios até 16MB. Se o arquivo for maior, reduza antes
                             de enviar.
                           </span>
                         </>

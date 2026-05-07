@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 function tipoMidiaPorMime(mimeType: string) {
   if (mimeType.startsWith("image/")) return "imagem";
   if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("audio/")) return "audio";
   return "";
 }
 
@@ -57,13 +58,14 @@ export async function POST(req: NextRequest) {
 
     if (!tipo) {
       return NextResponse.json(
-        { ok: false, error: "Envie apenas imagem ou vídeo." },
+        { ok: false, error: "Envie apenas imagem, vídeo ou áudio." },
         { status: 400 }
       );
     }
 
     const limiteImagem = 5 * 1024 * 1024;
     const limiteVideo = 16 * 1024 * 1024;
+    const limiteAudio = 16 * 1024 * 1024;
 
     if (tipo === "imagem" && arquivo.size > limiteImagem) {
       return NextResponse.json(
@@ -75,6 +77,13 @@ export async function POST(req: NextRequest) {
     if (tipo === "video" && arquivo.size > limiteVideo) {
       return NextResponse.json(
         { ok: false, error: "O vídeo deve ter no máximo 16MB." },
+        { status: 400 }
+      );
+    }
+
+    if (tipo === "audio" && arquivo.size > limiteAudio) {
+      return NextResponse.json(
+        { ok: false, error: "O áudio deve ter no máximo 16MB." },
         { status: 400 }
       );
     }

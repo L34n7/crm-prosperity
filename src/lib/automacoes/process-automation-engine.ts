@@ -417,7 +417,11 @@ async function executarNo(params: {
     return;
   }
 
-  if (no.tipo_no === "enviar_imagem" || no.tipo_no === "enviar_video") {
+  if (
+    no.tipo_no === "enviar_imagem" ||
+    no.tipo_no === "enviar_video" ||
+    no.tipo_no === "enviar_audio"
+  ) {
     const midiaUrl = String(no.configuracao_json?.midia_url || "").trim();
     const legenda = String(no.configuracao_json?.mensagem || "").trim();
 
@@ -445,13 +449,31 @@ async function executarNo(params: {
       return;
     }
 
+    const tipoMidia =
+      no.tipo_no === "enviar_imagem"
+        ? "image"
+        : no.tipo_no === "enviar_video"
+        ? "video"
+        : "audio";
+
+    if (tipoMidia === "audio" && legenda) {
+      await enviarMensagemAutomacao({
+        empresaId,
+        conversaId,
+        numeroDestino,
+        conteudo: legenda,
+        execucaoId,
+        noId: no.id,
+      });
+    }
+
     await enviarMidiaAutomacao({
       empresaId,
       conversaId,
       numeroDestino,
-      tipo: no.tipo_no === "enviar_imagem" ? "image" : "video",
+      tipo: tipoMidia,
       midiaUrl,
-      legenda,
+      legenda: tipoMidia === "audio" ? "" : legenda,
       execucaoId,
       noId: no.id,
     });
@@ -465,11 +487,14 @@ async function executarNo(params: {
       descricao:
         no.tipo_no === "enviar_imagem"
           ? "Imagem enviada pela automação."
-          : "Vídeo enviado pela automação.",
+          : no.tipo_no === "enviar_video"
+          ? "Vídeo enviado pela automação."
+          : "Áudio enviado pela automação.",
       entrada: no.configuracao_json,
       saida: {
         midia_url: midiaUrl,
         legenda,
+        tipo_midia: tipoMidia,
       },
     });
 
@@ -919,7 +944,7 @@ async function enviarMidiaAutomacao(params: {
   empresaId: string;
   conversaId: string;
   numeroDestino: string;
-  tipo: "image" | "video";
+  tipo: "image" | "video" | "audio";
   midiaUrl: string;
   legenda?: string;
   execucaoId: string;
@@ -1015,10 +1040,15 @@ async function enviarMidiaAutomacao(params: {
     messaging_product: "whatsapp",
     to: numeroDestino,
     type: tipo,
-    [tipo]: {
-      link: midiaUrl,
-      ...(legenda ? { caption: legenda } : {}),
-    },
+    [tipo]:
+      tipo === "audio"
+        ? {
+            link: midiaUrl,
+          }
+        : {
+            link: midiaUrl,
+            ...(legenda ? { caption: legenda } : {}),
+          },
   };
 
   const response = await fetch(
@@ -1050,7 +1080,8 @@ async function enviarMidiaAutomacao(params: {
       conversa_protocolo_id: protocoloAtivo.id,
       remetente_tipo: "bot",
       conteudo: legenda || midiaUrl,
-      tipo_mensagem: tipo === "image" ? "imagem" : "video",
+      tipo_mensagem:
+        tipo === "image" ? "imagem" : tipo === "video" ? "video" : "audio",
       origem: "automatica",
       status_envio: response.ok ? "enviada" : "falha",
       mensagem_externa_id: messageId,
