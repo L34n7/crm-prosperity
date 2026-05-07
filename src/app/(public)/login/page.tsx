@@ -30,6 +30,15 @@ export default function LoginPage() {
     checkUser();
   }, [router, supabase]);
 
+  function traduzirErroLogin(message: string) {
+    const mapa: Record<string, string> = {
+      "Invalid login credentials": "Invalid email or password.",
+      "Email not confirmed": "Please confirm your email before signing in.",
+    };
+
+    return mapa[message] || message;
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -41,12 +50,12 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setMensagem(error.message);
+      setMensagem(traduzirErroLogin(error.message));
       setLoading(false);
       return;
     }
 
-    setMensagem("Login realizado com sucesso.");
+    setMensagem("Login completed successfully.");
     setLoading(false);
     router.push("/");
     router.refresh();
@@ -61,39 +70,39 @@ export default function LoginPage() {
         <div className={styles.brandPanel}>
           <div className={styles.brandBadge}>CRM</div>
 
-          <p className={styles.eyebrow}>Plataforma empresarial</p>
+          <p className={styles.eyebrow}>Business platform</p>
 
           <h1 className={styles.title}>CRM Prosperity</h1>
 
           <p className={styles.description}>
-            Centralize conversas, contatos, usuários, setores e regras de
-            atendimento em uma experiência profissional, organizada e moderna.
+            Centralize conversations, contacts, users, departments, and service
+            rules in a professional, organized, and modern experience.
           </p>
 
           <div className={styles.featureList}>
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Atendimento multissetor</span>
+              <span>Multi-department support</span>
             </div>
 
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Permissões dinâmicas por perfil</span>
+              <span>Dynamic profile-based permissions</span>
             </div>
 
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Operação integrada com WhatsApp</span>
+              <span>Integrated WhatsApp operation</span>
             </div>
           </div>
         </div>
 
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <p className={styles.cardEyebrow}>Acesso seguro</p>
-            <h2 className={styles.cardTitle}>Entrar na plataforma</h2>
+            <p className={styles.cardEyebrow}>Secure access</p>
+            <h2 className={styles.cardTitle}>Sign in to the platform</h2>
             <p className={styles.cardSubtitle}>
-              Entre com seu email e senha para acessar o painel administrativo.
+              Enter your email and password to access the admin dashboard.
             </p>
           </div>
 
@@ -105,13 +114,13 @@ export default function LoginPage() {
                 className={styles.input}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seuemail@exemplo.com"
+                placeholder="yourname@example.com"
                 required
               />
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Senha</label>
+              <label className={styles.label}>Password</label>
               <input
                 type="password"
                 className={styles.input}
@@ -127,7 +136,7 @@ export default function LoginPage() {
               disabled={loading}
               className={styles.submitButton}
             >
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? "Signing in..." : "Sign in"}
             </button>
 
             <div
@@ -149,7 +158,7 @@ export default function LoginPage() {
                   fontWeight: 600,
                 }}
               >
-                Ainda não tenho conta
+                I do not have an account yet
               </Link>
 
               <Link
@@ -161,7 +170,7 @@ export default function LoginPage() {
                   fontWeight: 600,
                 }}
               >
-                Esqueci minha senha
+                Forgot my password
               </Link>
             </div>
           </form>
@@ -169,7 +178,7 @@ export default function LoginPage() {
           {mensagem && (
             <div
               className={`${styles.messageBox} ${
-                mensagem === "Login realizado com sucesso."
+                mensagem === "Login completed successfully."
                   ? styles.messageSuccess
                   : styles.messageError
               }`}

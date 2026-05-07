@@ -32,28 +32,30 @@ type SidebarProps = {
 
 const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Conversas", href: "/conversas", icon: MessageSquare },
-  { label: "Disparos", href: "/disparos-whatsapp", icon: Send },
+  { label: "Conversations", href: "/conversas", icon: MessageSquare },
+  { label: "Broadcasts", href: "/disparos-whatsapp", icon: Send },
   { label: "Templates", href: "/configuracoes/templates-whatsapp", icon: FileText },
-  { label: "Fluxos", href: "/fluxos", icon: GitBranch },
-  { label: "Contatos", href: "/contatos", icon: Contact },
-  { label: "Usuários", href: "/usuarios", icon: Users },
-  { label: "Empresas", href: "/empresas", icon: Building2 },
-  { label: "Setores", href: "/setores", icon: Layers3 },
-  { label: "Config. Perfis", href: "/configuracoes/perfis", icon: IdCard },
-
+  { label: "Flows", href: "/fluxos", icon: GitBranch },
+  { label: "Contacts", href: "/contatos", icon: Contact },
+  { label: "Users", href: "/usuarios", icon: Users },
+  { label: "Companies", href: "/empresas", icon: Building2 },
+  { label: "Departments", href: "/setores", icon: Layers3 },
+  { label: "Profile Settings", href: "/configuracoes/perfis", icon: IdCard },
   {
-    label: "Config. Permissões",
+    label: "Permission Settings",
     href: "/configuracoes/permissoes",
     icon: ShieldCheck,
   },
   {
-    label: "Config. Setores",
+    label: "Department Settings",
     href: "/configuracoes/setores",
     icon: Settings2,
   },
-
-  { label: "Config. Ambiente", href: "/configurar-ambiente", icon: PlugZap },
+  {
+    label: "Environment Setup",
+    href: "/configurar-ambiente",
+    icon: PlugZap,
+  },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -61,9 +63,7 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function Sidebar({
-  initialCollapsed = false,
-}: SidebarProps) {
+export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
 
@@ -95,7 +95,7 @@ export default function Sidebar({
 
             {!collapsed && (
               <div className={styles.brandText}>
-                <p className={styles.brandLabel}>Plataforma</p>
+                <p className={styles.brandLabel}>Platform</p>
                 <h1 className={styles.brandTitle}>CRM Prosperity</h1>
               </div>
             )}
@@ -110,7 +110,7 @@ export default function Sidebar({
               collapsed ? styles.sectionTitleCollapsed : ""
             }`}
           >
-            Navegação principal
+            Main Navigation
           </p>
 
           <nav className={styles.nav}>
@@ -144,8 +144,8 @@ export default function Sidebar({
           type="button"
           onClick={toggleSidebar}
           className={styles.menuButton}
-          aria-label="Alternar menu lateral"
-          title={collapsed ? "Expandir menu" : "Minimizar menu"}
+          aria-label="Toggle sidebar menu"
+          title={collapsed ? "Expand menu" : "Collapse menu"}
         >
           <span className={styles.menuIcon}>
             <span></span>
