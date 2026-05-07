@@ -99,27 +99,17 @@ const ETAPAS: Etapa[] = [
 function obterIndiceEtapaAtual(integracao: IntegracaoWhatsapp | null) {
   if (!integracao) return 0;
 
-  const metaConectado =
-    integracao.status !== "desconectada" &&
-    !!integracao.waba_id &&
-    !!integracao.phone_number_id &&
-    !!integracao.business_account_id;
-
-  const numeroRegistrado =
-    metaConectado &&
-    integracao.phone_registered === true;
-
+  const metaConectado = !!integracao.waba_id && !!integracao.phone_number_id;
+  const numeroRegistrado = !!integracao.phone_registered;
   const webhookConfigurado =
-    numeroRegistrado &&
-    integracao.webhook_verificado === true &&
-    integracao.app_assigned === true;
+    !!integracao.webhook_verificado && !!integracao.app_assigned;
 
   const concluido =
-    webhookConfigurado &&
     integracao.status === "ativa" &&
     integracao.onboarding_etapa === "concluido" &&
     integracao.onboarding_status === "concluido" &&
-    !!integracao.setup_completed_at;
+    numeroRegistrado &&
+    webhookConfigurado;
 
   if (concluido) return 4;
   if (webhookConfigurado) return 3;
