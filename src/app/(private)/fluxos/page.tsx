@@ -96,6 +96,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "enviar_imagem") return "Imagem";
   if (tipo === "enviar_video") return "Vídeo";
   if (tipo === "enviar_audio") return "Áudio";
+  if (tipo === "enviar_botoes") return "Botões";
   return tipo;
 }
 
@@ -108,6 +109,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "enviar_imagem") return styles.nodeImagem;
   if (tipo === "enviar_video") return styles.nodeVideo;
   if (tipo === "enviar_audio") return styles.nodeAudio;
+  if (tipo === "enviar_botoes") return styles.nodeBotoes;
   return styles.nodePadrao;
 }
 
@@ -261,23 +263,27 @@ export default function FluxosPage() {
   const [fluxoParaApagarDefinitivo, setFluxoParaApagarDefinitivo] =
     useState<Fluxo | null>(null);
 
-const [opcoesNode, setOpcoesNode] = useState<
-  { valor: string; titulo: string }[]
->([]);
+  const [opcoesNode, setOpcoesNode] = useState<
+    { valor: string; titulo: string }[]
+  >([]);
 
-const [editandoEdgeId, setEditandoEdgeId] = useState<string | null>(null);
-const [rotuloConexao, setRotuloConexao] = useState("");
-const [valorCondicao, setValorCondicao] = useState("");
-const [tipoCondicaoConexao, setTipoCondicaoConexao] =
-  useState("resposta_contem");
+  const [botoesNode, setBotoesNode] = useState<
+    { id: string; titulo: string }[]
+  >([]);
+
+  const [editandoEdgeId, setEditandoEdgeId] = useState<string | null>(null);
+  const [rotuloConexao, setRotuloConexao] = useState("");
+  const [valorCondicao, setValorCondicao] = useState("");
+  const [tipoCondicaoConexao, setTipoCondicaoConexao] =
+    useState("resposta_contem");
 
   const nodeEditado = useMemo(() => {
     return nodes.find((node) => node.id === editandoNodeId) || null;
   }, [nodes, editandoNodeId]);
 
-const edgeEditada = useMemo(() => {
-  return edges.find((edge) => edge.id === editandoEdgeId) || null;
-}, [edges, editandoEdgeId]);
+  const edgeEditada = useMemo(() => {
+    return edges.find((edge) => edge.id === editandoEdgeId) || null;
+  }, [edges, editandoEdgeId]);
 
 
   async function carregarSetores() {
@@ -577,6 +583,8 @@ async function criarFluxoRapido() {
         ? "Nova mensagem"
         : tipoNo === "pergunta_opcoes"
         ? "Nova pergunta"
+        : tipoNo === "enviar_botoes"
+        ? "Nova mensagem com botões"
         : tipoNo === "transferir_setor"
         ? "Transferir setor"
         : tipoNo === "encerrar"
@@ -612,6 +620,14 @@ async function criarFluxoRapido() {
               opcoes: [
                 { valor: "1", titulo: "Opção 1" },
                 { valor: "2", titulo: "Opção 2" },
+              ],
+            }
+          : tipoNo === "enviar_botoes"
+          ? {
+              mensagem: "Escolha uma opção:",
+              botoes: [
+                { id: "sim", titulo: "Sim" },
+                { id: "nao", titulo: "Não" },
               ],
             }
           : {},
@@ -666,6 +682,39 @@ async function criarFluxoRapido() {
     return;
   }
 
+  function adicionarBotaoResposta() {
+    setBotoesNode((atuais) => {
+      if (atuais.length >= 3) {
+        setErro("O WhatsApp permite no máximo 3 botões.");
+        return atuais;
+      }
+
+      return [
+        ...atuais,
+        {
+          id: `opcao_${atuais.length + 1}`,
+          titulo: `Opção ${atuais.length + 1}`,
+        },
+      ];
+    });
+  }
+
+  function atualizarBotaoResposta(
+    index: number,
+    campo: "id" | "titulo",
+    valor: string
+  ) {
+    setBotoesNode((atuais) =>
+      atuais.map((botao, i) =>
+        i === index ? { ...botao, [campo]: valor } : botao
+      )
+    );
+  }
+
+  function removerBotaoResposta(index: number) {
+    setBotoesNode((atuais) => atuais.filter((_, i) => i !== index));
+  }
+
 function abrirEdicaoNo(node: Node) {
   const configuracaoJson = node.data?.configuracao_json as
     | Record<string, any>
@@ -685,6 +734,11 @@ function abrirEdicaoNo(node: Node) {
     setOpcoesNode(configuracaoJson.opcoes);
   } else {
     setOpcoesNode([]);
+  }
+  if (Array.isArray(configuracaoJson?.botoes)) {
+    setBotoesNode(configuracaoJson.botoes);
+  } else {
+    setBotoesNode([]);
   }
 }
 
@@ -747,6 +801,7 @@ function aplicarEdicaoNo() {
       if (
         tipoFinal === "enviar_texto" ||
         tipoFinal === "pergunta_opcoes" ||
+        tipoFinal === "enviar_botoes" ||
         tipoFinal === "enviar_imagem" ||
         tipoFinal === "enviar_video" ||
         tipoFinal === "enviar_audio" ||
@@ -758,6 +813,10 @@ function aplicarEdicaoNo() {
 
       if (tipoFinal === "pergunta_opcoes") {
         configuracao_json.opcoes = opcoesNode;
+      }
+
+      if (tipoFinal === "enviar_botoes") {
+        configuracao_json.botoes = botoesNode;
       }
 
       if (tipoFinal === "transferir_setor") {
@@ -1356,6 +1415,31 @@ function validarFluxoAntesDeAtivar() {
       }
     }
 
+    if (tipoNo === "enviar_botoes") {
+      if (!String(config.mensagem || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
+      }
+
+      if (!Array.isArray(config.botoes) || config.botoes.length === 0) {
+        return `O bloco "${node.data?.titulo}" precisa ter pelo menos um botão.`;
+      }
+
+      if (config.botoes.length > 3) {
+        return `O bloco "${node.data?.titulo}" pode ter no máximo 3 botões.`;
+      }
+
+      const botaoInvalido = config.botoes.some(
+        (botao: any) =>
+          !String(botao.id || "").trim() ||
+          !String(botao.titulo || "").trim() ||
+          String(botao.titulo || "").length > 20
+      );
+
+      if (botaoInvalido) {
+        return `O bloco "${node.data?.titulo}" tem botão inválido. Verifique ID e título.`;
+      }
+    }
+
     if (
       tipoNo === "transferir_setor" &&
       !String(config.setor_id || "").trim()
@@ -1729,6 +1813,17 @@ useEffect(() => {
                         className={styles.headerDropdownItem}
                         onClick={() => {
                           setMenuHeaderAberto(false);
+                          adicionarNo("enviar_botoes");
+                        }}
+                      >
+                        Adicionar botões
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
                           adicionarNo("transferir_setor");
                         }}
                       >
@@ -1955,10 +2050,24 @@ useEffect(() => {
                           if (novoTipo === "enviar_texto") {
                             setSetorDestino("");
                             setOpcoesNode([]);
+                            setBotoesNode([]);
                           }
-
+                          
                           if (novoTipo === "pergunta_opcoes") {
                             setSetorDestino("");
+                            setBotoesNode([]);
+                          }
+
+                          if (novoTipo === "enviar_botoes") {
+                            setSetorDestino("");
+                            setOpcoesNode([]);
+
+                            if (botoesNode.length === 0) {
+                              setBotoesNode([
+                                { id: "sim", titulo: "Sim" },
+                                { id: "nao", titulo: "Não" },
+                              ]);
+                            }
                           }
 
                           if (
@@ -1986,6 +2095,7 @@ useEffect(() => {
                         <option value="enviar_imagem">Imagem</option>
                         <option value="enviar_video">Vídeo</option>
                         <option value="enviar_audio">Áudio</option>
+                        <option value="enviar_botoes">Botões</option>
                       </select>
                     </label>
                   )}
@@ -2009,6 +2119,7 @@ useEffect(() => {
                   {[
                     "enviar_texto",
                     "pergunta_opcoes",
+                    "enviar_botoes",
                     "enviar_imagem",
                     "enviar_video",
                     "enviar_audio",
@@ -2019,6 +2130,8 @@ useEffect(() => {
                       <span className={styles.label}>
                         {tipoNodeEdicao === "pergunta_opcoes"
                           ? "Pergunta"
+                          : tipoNodeEdicao === "enviar_botoes"
+                          ? "Mensagem dos botões"
                           : tipoNodeEdicao === "enviar_imagem"
                           ? "Legenda da imagem"
                           : tipoNodeEdicao === "enviar_video"
@@ -2232,6 +2345,62 @@ useEffect(() => {
                           </div>
                         ))
                       )}
+                    </div>
+                  )}
+
+                  {tipoNodeEdicao === "enviar_botoes" && (
+                    <div className={styles.optionsBox}>
+                      <div className={styles.optionsHeader}>
+                        <span className={styles.label}>Botões de resposta</span>
+
+                        <button
+                          type="button"
+                          className={styles.smallButton}
+                          onClick={adicionarBotaoResposta}
+                          disabled={botoesNode.length >= 3}
+                        >
+                          + Botão
+                        </button>
+                      </div>
+
+                      {botoesNode.length === 0 ? (
+                        <p className={styles.help}>Nenhum botão cadastrado.</p>
+                      ) : (
+                        botoesNode.map((botao, index) => (
+                          <div key={index} className={styles.optionRow}>
+                            <input
+                              className={styles.optionValueInput}
+                              value={botao.id}
+                              onChange={(e) =>
+                                atualizarBotaoResposta(index, "id", e.target.value)
+                              }
+                              placeholder="sim"
+                            />
+
+                            <input
+                              className={styles.input}
+                              value={botao.titulo}
+                              onChange={(e) =>
+                                atualizarBotaoResposta(index, "titulo", e.target.value)
+                              }
+                              placeholder="Sim"
+                              maxLength={20}
+                            />
+
+                            <button
+                              type="button"
+                              className={styles.dangerSmallButton}
+                              onClick={() => removerBotaoResposta(index)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))
+                      )}
+
+                      <p className={styles.help}>
+                        O WhatsApp permite até 3 botões. Cada título deve ter até 20 caracteres.
+                      </p>
                     </div>
                   )}
 

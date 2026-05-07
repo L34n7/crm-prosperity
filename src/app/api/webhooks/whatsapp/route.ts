@@ -228,17 +228,24 @@ export async function POST(req: NextRequest) {
             }
           | null = null;
 
+        const metadataJson = (message.metadataJson || {}) as any;
+
+        const textoAutomacao =
+          message.text?.trim() ||
+          metadataJson?.interactive?.button_reply?.id ||
+          metadataJson?.interactive?.button_reply?.title ||
+          "";
+
         const podeRodarAutomacao =
           !savedMessage.duplicated &&
-          message.tipoMensagem === "texto" &&
-          !!message.text?.trim();
+          !!textoAutomacao.trim();
 
         if (podeRodarAutomacao) {
           automationResult = await processAutomationEngine({
             empresaId: integration.empresa_id,
             conversaId: conversation.id,
             contatoId: contact.id,
-            mensagemTexto: message.text ?? "",
+            mensagemTexto: textoAutomacao,
             numeroDestino: message.from,
           });
         }

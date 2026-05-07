@@ -10,6 +10,18 @@ import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message"
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function aguardar(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function delayAposMidia(tipo: "image" | "video" | "audio") {
+  if (tipo === "video") return 4500;
+  if (tipo === "audio") return 2500;
+  if (tipo === "image") return 1800;
+
+  return 1000;
+}
+
 function normalizarTexto(texto: string) {
   return String(texto || "").trim().toLowerCase();
 }
@@ -417,6 +429,63 @@ async function executarNo(params: {
     return;
   }
 
+  if (no.tipo_no === "enviar_botoes") {
+    const mensagem = String(no.configuracao_json?.mensagem || "").trim();
+    const botoes = Array.isArray(no.configuracao_json?.botoes)
+      ? no.configuracao_json.botoes
+      : [];
+
+    if (!mensagem || botoes.length === 0) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "erro_no_botoes",
+        descricao: "Nó de botões sem mensagem ou sem botões configurados.",
+        entrada: no.configuracao_json,
+        saida: {},
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        numeroDestino,
+      });
+
+      return;
+    }
+
+    await enviarBotoesAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      mensagem,
+      botoes,
+      execucaoId,
+      noId: no.id,
+    });
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "no_executado",
+      descricao: "Mensagem com botões enviada pela automação.",
+      entrada: no.configuracao_json,
+      saida: {
+        mensagem,
+        botoes,
+      },
+    });
+
+    return;
+  }
+
   if (
     no.tipo_no === "enviar_imagem" ||
     no.tipo_no === "enviar_video" ||
@@ -477,6 +546,8 @@ async function executarNo(params: {
       execucaoId,
       noId: no.id,
     });
+
+    await aguardar(delayAposMidia(tipoMidia));
 
     await registrarLog({
       empresaId,
@@ -939,6 +1010,93 @@ async function enviarMensagemAutomacao(params: {
   };
 }
 
+async function enviarBotoesAutomacao({
+  empresaId,
+  conversaId,
+  numeroDestino,
+  mensagem,
+  botoes,
+  execucaoId,
+  noId,
+}: {
+  empresaId: string;
+  conversaId: string;
+  numeroDestino: string;
+  mensagem: string;
+  botoes: { id: string; titulo: string }[];
+  execucaoId: string;
+  noId: string;
+}) {
+  const token = process.env.META_WHATSAPP_TOKEN;
+  const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneNumberId) {
+    throw new Error("Token ou Phone Number ID do WhatsApp não configurado.");
+  }
+
+  const body = {
+    messaging_product: "whatsapp",
+    to: numeroDestino,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: {
+        text: mensagem,
+      },
+      action: {
+        buttons: botoes.slice(0, 3).map((botao) => ({
+          type: "reply",
+          reply: {
+            id: botao.id,
+            title: botao.titulo,
+          },
+        })),
+      },
+    },
+  };
+
+  const response = await fetch(
+    `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  const json = await response.json();
+
+  const mensagemExternaId = json?.messages?.[0]?.id || null;
+
+  await supabaseAdmin.from("mensagens").insert({
+    empresa_id: empresaId,
+    conversa_id: conversaId,
+    remetente_tipo: "bot",
+    conteudo: mensagem,
+    tipo_mensagem: "botao",
+    origem: "automatica",
+    status_envio: response.ok ? "enviado" : "erro",
+    mensagem_externa_id: mensagemExternaId,
+    metadata_json: {
+      automacao_execucao_id: execucaoId,
+      automacao_no_id: noId,
+      botoes,
+      meta_response: json,
+      erro: response.ok ? null : json,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      json?.error?.message || "Erro ao enviar botões pelo WhatsApp."
+    );
+  }
+
+  return json;
+}
 
 async function enviarMidiaAutomacao(params: {
   empresaId: string;

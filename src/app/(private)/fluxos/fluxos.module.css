@@ -1012,6 +1012,12 @@
   white-space: nowrap;
 }
 
+.nodeBotoes {
+  border-color: #bfdbfe;
+  background: #dbeafe;
+}
+
+
 @keyframes dash-flow {
   to {
     stroke-dashoffset: -12;
