@@ -113,6 +113,82 @@ function corTipoNo(tipo: string) {
   return styles.nodePadrao;
 }
 
+function tituloPadraoTipoNo(tipo: string) {
+  if (tipo === "inicio") return "Início";
+  if (tipo === "enviar_texto") return "Nova mensagem";
+  if (tipo === "pergunta_opcoes") return "Nova pergunta";
+  if (tipo === "enviar_botoes") return "Pergunta botões";
+  if (tipo === "transferir_setor") return "Transferir setor";
+  if (tipo === "encerrar") return "Encerrar";
+  if (tipo === "enviar_imagem") return "Nova imagem";
+  if (tipo === "enviar_video") return "Novo vídeo";
+  if (tipo === "enviar_audio") return "Novo áudio";
+
+  return "Novo bloco";
+}
+
+function tituloEhPadraoDoSistema(titulo: string, tipoNoAtual: string) {
+  const tituloLimpo = String(titulo || "").trim();
+
+  if (!tituloLimpo) return true;
+
+  return (
+    tituloLimpo === tituloPadraoTipoNo(tipoNoAtual) ||
+    tituloLimpo === labelTipoNo(tipoNoAtual)
+  );
+}
+
+function cortarTextoCard(texto: string, limite = 34) {
+  const textoLimpo = String(texto || "").replace(/\s+/g, " ").trim();
+
+  if (!textoLimpo) return "";
+
+  return textoLimpo.length > limite
+    ? `${textoLimpo.slice(0, limite)}...`
+    : textoLimpo;
+}
+
+function tituloVisivelCard(data: any) {
+  const tipoNo = String(data?.tipo_no || "");
+  const titulo = String(data?.titulo || "").trim();
+  const tituloPadrao = tituloPadraoTipoNo(tipoNo);
+  const labelPadrao = labelTipoNo(tipoNo);
+
+  const mensagensPadrao = [
+    "Digite a mensagem aqui.",
+    "Escolha uma opção:",
+    "",
+  ];
+
+  const mensagem = String(data?.configuracao_json?.mensagem || "").trim();
+  const mensagemEhPadrao = mensagensPadrao.includes(mensagem);
+
+  const tituloEhPadrao =
+    !titulo || titulo === tituloPadrao || titulo === labelPadrao;
+
+  if (!tituloEhPadrao) {
+    return titulo;
+  }
+
+  if (mensagem && !mensagemEhPadrao) {
+    return cortarTextoCard(mensagem);
+  }
+
+  return tituloPadrao;
+}
+
+function tipoNoEsperaResposta(tipoNo: string) {
+  return tipoNo === "pergunta_opcoes" || tipoNo === "enviar_botoes";
+}
+
+function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {
+  return tipoNoEsperaResposta(tipoNo) ? "resposta_contem" : "sempre";
+}
+
+function rotuloPadraoPorTipoNo(tipoNo: string) {
+  return tipoNoEsperaResposta(tipoNo) ? "Condição" : "Sempre seguir";
+}
+
 function dbNoParaReactFlow(no: AutomacaoNo): Node {
   return {
     id: no.id,
@@ -148,7 +224,7 @@ function NodeCustom({ data }: any) {
       </div>
 
       <div className={styles.nodeContent}>
-        <strong className={styles.nodeTitle}>{data.titulo}</strong>
+        <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>
       </div>
 
       <Handle type="source" position={Position.Right} className={styles.nodeHandle} />
@@ -230,6 +306,7 @@ export default function FluxosPage() {
   const [setorDestino, setSetorDestino] = useState("");
   const [nodeNovoId, setNodeNovoId] = useState<string | null>(null);
   const fluxo = fluxoSelecionado;
+  const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [carregandoSetores, setCarregandoSetores] = useState(false);
@@ -448,12 +525,18 @@ export default function FluxosPage() {
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      const nodeOrigem = nodes.find((node) => node.id === connection.source);
+      const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
+
+      const tipoCondicaoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);
+      const rotuloPadrao = rotuloPadraoPorTipoNo(tipoOrigem);
+      const ehSempreSeguir = tipoCondicaoPadrao === "sempre";
       const novaConexao: Edge = {
         ...connection,
         id: criarIdTemporario("edge"),
         type: "default",
         animated: true,
-        label: "Nova condição",
+        label: ehSempreSeguir ? "" : "Nova condição",
         labelBgPadding: [8, 4],
         labelBgBorderRadius: 8,
         labelBgStyle: {
@@ -473,14 +556,16 @@ export default function FluxosPage() {
         },
 
         data: {
-          rotulo: "Condição",
-          condicao_json: {},
+          rotulo: rotuloPadrao,
+          condicao_json: {
+            tipo: tipoCondicaoPadrao,
+          },
         },
       } as Edge;
 
       setEdges((eds) => addEdge(novaConexao, eds));
     },
-    [setEdges]
+    [nodes, setEdges]
   );
 
 async function criarFluxoRapido() {
@@ -576,26 +661,7 @@ async function criarFluxoRapido() {
 
     const id = criarIdTemporario("node");
 
-    const tituloPadrao =
-      tipoNo === "inicio"
-        ? "Início"
-        : tipoNo === "enviar_texto"
-        ? "Nova mensagem"
-        : tipoNo === "pergunta_opcoes"
-        ? "Nova pergunta"
-        : tipoNo === "enviar_botoes"
-        ? "Nova mensagem com botões"
-        : tipoNo === "transferir_setor"
-        ? "Transferir setor"
-        : tipoNo === "encerrar"
-        ? "Encerrar"
-        : tipoNo === "enviar_imagem"
-        ? "Nova imagem"
-        : tipoNo === "enviar_video"
-        ? "Novo vídeo"
-        : tipoNo === "enviar_audio"
-        ? "Novo áudio"
-        : "Novo bloco";
+const tituloPadrao = tituloPadraoTipoNo(tipoNo);
 
     const novoNoDb: AutomacaoNo = {
       id,
@@ -661,7 +727,7 @@ async function criarFluxoRapido() {
         target: id,
         type: "default",
         animated: true,
-        label: "Início",
+        label: "",
 
         style: {
           stroke: "#cbd5e1",
@@ -670,8 +736,10 @@ async function criarFluxoRapido() {
         },
 
         data: {
-          rotulo: "Início",
-          condicao_json: {},
+          rotulo: "Sempre seguir",
+          condicao_json: {
+            tipo: "sempre",
+          },
         },
       };
 
@@ -729,7 +797,8 @@ function abrirEdicaoNo(node: Node) {
   setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
   setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
   setSetorDestino(configuracaoJson?.setor_id || "");
-
+  setConfirmandoExclusaoNo(false);
+  
   if (Array.isArray(configuracaoJson?.opcoes)) {
     setOpcoesNode(configuracaoJson.opcoes);
   } else {
@@ -757,7 +826,12 @@ function abrirEdicaoConexao(edge: Edge) {
 
   setRotuloConexao(String(edge.label || data?.rotulo || ""));
   setValorCondicao(String(condicao.valor || ""));
-  setTipoCondicaoConexao(String(condicao.tipo || "resposta_contem"));
+  
+  const nodeOrigem = nodes.find((node) => node.id === edge.source);
+  const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
+  const tipoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);
+
+  setTipoCondicaoConexao(String(condicao.tipo || tipoPadrao));
 }
 
 function adicionarOpcaoPergunta() {
@@ -835,7 +909,7 @@ function aplicarEdicaoNo() {
       return dbNoParaReactFlow({
         id: node.id,
         tipo_no: tipoFinal,
-        titulo: tituloNode || labelTipoNo(tipoFinal),
+        titulo: tituloNode.trim() || tituloPadraoTipoNo(tipoFinal),
         descricao: String(node.data?.descricao || "") || null,
         posicao_x: node.position.x,
         posicao_y: node.position.y,
@@ -1802,21 +1876,21 @@ useEffect(() => {
                         className={styles.headerDropdownItem}
                         onClick={() => {
                           setMenuHeaderAberto(false);
-                          adicionarNo("pergunta_opcoes");
+                          adicionarNo("enviar_texto");
                         }}
                       >
-                        Adicionar pergunta
+                        + Mensagem
                       </button>
-
+                      
                       <button
                         type="button"
                         className={styles.headerDropdownItem}
                         onClick={() => {
                           setMenuHeaderAberto(false);
-                          adicionarNo("enviar_botoes");
+                          adicionarNo("pergunta_opcoes");
                         }}
                       >
-                        Adicionar botões
+                        + Pergunta
                       </button>
 
                       <button
@@ -1827,7 +1901,7 @@ useEffect(() => {
                           adicionarNo("transferir_setor");
                         }}
                       >
-                        Adicionar transferência
+                        + Transferência
                       </button>
 
                       <button
@@ -1838,7 +1912,7 @@ useEffect(() => {
                           adicionarNo("encerrar");
                         }}
                       >
-                        Adicionar encerramento
+                        + Encerramento
                       </button>
 
                       <button
@@ -1849,7 +1923,7 @@ useEffect(() => {
                           adicionarNo("enviar_imagem");
                         }}
                       >
-                        Adicionar imagem
+                        + Imagem
                       </button>
 
                       <button
@@ -1860,7 +1934,7 @@ useEffect(() => {
                           adicionarNo("enviar_video");
                         }}
                       >
-                        Adicionar vídeo
+                        + Vídeo
                       </button>
 
                       <button
@@ -1871,7 +1945,18 @@ useEffect(() => {
                           adicionarNo("enviar_audio");
                         }}
                       >
-                        Adicionar áudio
+                        + Áudio
+                      </button>
+                      
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          adicionarNo("enviar_botoes");
+                        }}
+                      >
+                        + Pergunta com botões
                       </button>
 
                       <div className={styles.headerDropdownDivider} />
@@ -1999,7 +2084,8 @@ useEffect(() => {
                     onClick={() => {
                       setEditandoNodeId(null);
                       setEditandoEdgeId(null);
-
+                      setConfirmandoExclusaoNo(false);
+                      
                       setEdges((atuais) =>
                         atuais.map((edge) => ({
                           ...edge,
@@ -2033,8 +2119,13 @@ useEffect(() => {
                         value={tipoNodeEdicao}
                         onChange={(e) => {
                           const novoTipo = e.target.value;
+                          const tipoAnterior = tipoNodeEdicao;
 
                           setTipoNodeEdicao(novoTipo);
+
+                          if (tituloEhPadraoDoSistema(tituloNode, tipoAnterior)) {
+                            setTituloNode(tituloPadraoTipoNo(novoTipo));
+                          }
 
                           if (novoTipo === "encerrar") {
                             setMensagemNode("");
@@ -2095,7 +2186,7 @@ useEffect(() => {
                         <option value="enviar_imagem">Imagem</option>
                         <option value="enviar_video">Vídeo</option>
                         <option value="enviar_audio">Áudio</option>
-                        <option value="enviar_botoes">Botões</option>
+                        <option value="enviar_botoes">Pergunta com Botões</option>
                       </select>
                     </label>
                   )}
@@ -2131,7 +2222,7 @@ useEffect(() => {
                         {tipoNodeEdicao === "pergunta_opcoes"
                           ? "Pergunta"
                           : tipoNodeEdicao === "enviar_botoes"
-                          ? "Mensagem dos botões"
+                          ? "Pergunta dos botões"
                           : tipoNodeEdicao === "enviar_imagem"
                           ? "Legenda da imagem"
                           : tipoNodeEdicao === "enviar_video"
@@ -2367,25 +2458,31 @@ useEffect(() => {
                         <p className={styles.help}>Nenhum botão cadastrado.</p>
                       ) : (
                         botoesNode.map((botao, index) => (
-                          <div key={index} className={styles.optionRow}>
-                            <input
-                              className={styles.optionValueInput}
-                              value={botao.id}
-                              onChange={(e) =>
-                                atualizarBotaoResposta(index, "id", e.target.value)
-                              }
-                              placeholder="sim"
-                            />
+                          <div key={index} className={styles.botaoRespostaRow}>
+                            <label className={styles.botaoRespostaCampo}>
+                              <span className={styles.botaoRespostaLabel}>ID da resposta</span>
+                              <input
+                                className={styles.optionValueInput}
+                                value={botao.id}
+                                onChange={(e) =>
+                                  atualizarBotaoResposta(index, "id", e.target.value)
+                                }
+                                placeholder="sim"
+                              />
+                            </label>
 
-                            <input
-                              className={styles.input}
-                              value={botao.titulo}
-                              onChange={(e) =>
-                                atualizarBotaoResposta(index, "titulo", e.target.value)
-                              }
-                              placeholder="Sim"
-                              maxLength={20}
-                            />
+                            <label className={styles.botaoRespostaCampo}>
+                              <span className={styles.botaoRespostaLabel}>Texto do botão</span>
+                              <input
+                                className={styles.input}
+                                value={botao.titulo}
+                                onChange={(e) =>
+                                  atualizarBotaoResposta(index, "titulo", e.target.value)
+                                }
+                                placeholder="Sim"
+                                maxLength={20}
+                              />
+                            </label>
 
                             <button
                               type="button"
@@ -2399,7 +2496,8 @@ useEffect(() => {
                       )}
 
                       <p className={styles.help}>
-                        O WhatsApp permite até 3 botões. Cada título deve ter até 20 caracteres.
+                        O cliente vê o texto do botão. A conexão do fluxo deve usar o ID da resposta.
+                        Exemplo: ID “não” conecta com resposta esperada “não”.
                       </p>
                     </div>
                   )}
@@ -2427,27 +2525,43 @@ useEffect(() => {
                     </label>
                   )}
 
-                  {nodeEditado.data?.tipo_no !== "inicio" && (
-                    <button
-                      type="button"
-                      className={styles.dangerButton}
-                      onClick={() => removerNode(nodeEditado.id)}
-                    >
-                      Excluir bloco
-                    </button>
-                  )}
+                  <div className={styles.actionButtonsRow}>
+                    {nodeEditado.data?.tipo_no !== "inicio" && (
+                      <>
+                        {confirmandoExclusaoNo ? (
+                          <button
+                            type="button"
+                            className={styles.deleteNodeConfirmButton}
+                            onClick={() => removerNode(nodeEditado.id)}
+                          >
+                            Excluir
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className={styles.deleteNodeIconButton}
+                            onClick={() => setConfirmandoExclusaoNo(true)}
+                            title="Excluir bloco"
+                          >
+                            🗑
+                          </button>
+                        )}
+                      </>
+                    )}
 
-                  <button
-                    type="button"
-                    className={styles.primaryButton}
-                    onClick={aplicarEdicaoNo}
-                  >
-                    Aplicar no bloco
-                  </button>
+                    <button
+                      type="submit"
+                      className={styles.primaryButton}
+                    >
+                      Aplicar no bloco
+                    </button>
+                  </div>
 
                   <p className={styles.help}>
                     Depois de aplicar, clique em Salvar fluxo para gravar no banco.
                   </p>
+
+
                 </div>
                 ) : (
                 <div className={styles.propertiesForm}>
@@ -2488,7 +2602,9 @@ useEffect(() => {
 
                     {tipoCondicaoConexao !== "sempre" && (
                       <label className={styles.field}>
-                        <span className={styles.label}>Resposta esperada</span>
+                        <span className={styles.label}>Resposta esperada 
+                           <span className={styles.botaoRespostaLabel2}> * ID da resposta</span>
+                        </span>
                         <input
                           className={styles.input}
                           value={valorCondicao}
@@ -2995,6 +3111,17 @@ useEffect(() => {
                   }}
                 >
                   {menuFluxo.fluxo.status === "ativo" ? "Pausar" : "Ativar"}
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.flowDropdownItem}
+                  onClick={() => {
+                    abrirEdicaoFluxo();
+                    setMenuFluxo(null);
+                  }}
+                >
+                  Editar fluxo
                 </button>
 
                 <button
