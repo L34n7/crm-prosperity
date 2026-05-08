@@ -115,7 +115,18 @@ type WhatsAppSharedContact = {
   org?: WhatsAppSharedContactOrg;
 };
 
-type WhatsAppInteractiveMessage = unknown;
+type WhatsAppInteractiveMessage = {
+  type?: string;
+  button_reply?: {
+    id?: string;
+    title?: string;
+  };
+  list_reply?: {
+    id?: string;
+    title?: string;
+    description?: string;
+  };
+};
 
 type WhatsAppButtonMessage = {
   text?: string;
@@ -220,6 +231,7 @@ export type NormalizedMessageMetadata = {
     name?: string | null;
     address?: string | null;
   } | null;
+  interactive?: WhatsAppInteractiveMessage | null;
   unsupported?: {
     type?: string | null;
     details?: string | null;
@@ -261,7 +273,7 @@ function mapWhatsAppTypeToInternalType(type?: string | null): string {
     case "button":
       return "botao";
     case "interactive":
-      return "lista";
+      return "botao";
     case "unsupported":
       return "unsupported";
     default:
@@ -319,7 +331,14 @@ function buildConteudo(
   }
 
   if (tipoMensagem === "botao") {
-    return rawMessage.button?.text?.trim() || "🔘 Botão";
+    return (
+      rawMessage.button?.text?.trim() ||
+      rawMessage.interactive?.button_reply?.title?.trim() ||
+      rawMessage.interactive?.button_reply?.id?.trim() ||
+      rawMessage.interactive?.list_reply?.title?.trim() ||
+      rawMessage.interactive?.list_reply?.id?.trim() ||
+      "🔘 Botão"
+    );
   }
 
   if (tipoMensagem === "lista") {
@@ -439,6 +458,23 @@ function buildMetadataJson(
     };
   }
 
+  if (tipo === "interactive") {
+    return {
+      tipo_original_whatsapp: tipo,
+      media_id: null,
+      mime_type: null,
+      sha256: null,
+      caption: null,
+      filename: null,
+      url: null,
+      voice: null,
+      contacts: null,
+      location: null,
+      interactive: rawMessage.interactive ?? null,
+      unsupported: null,
+    };
+  }
+
   if (tipo === "unsupported") {
     return {
       tipo_original_whatsapp: tipo,
@@ -503,7 +539,16 @@ export function extractIncomingMessages(
         const tipoMensagem = mapWhatsAppTypeToInternalType(type);
         const conteudo = buildConteudo(message, tipoMensagem);
         const metadataJson = buildMetadataJson(message);
-
+        const textoExtraido =
+          message.text?.body ??
+          message.interactive?.button_reply?.id ??
+          message.interactive?.button_reply?.title ??
+          message.interactive?.list_reply?.id ??
+          message.interactive?.list_reply?.title ??
+          message.button?.payload ??
+          message.button?.text ??
+          null;
+          
         results.push({
           phoneNumberId,
           displayPhoneNumber,
@@ -513,7 +558,7 @@ export function extractIncomingMessages(
           messageId: message.id ?? "",
           timestamp: message.timestamp ?? null,
           type,
-          text: message.text?.body ?? null,
+          text: textoExtraido,
           tipoMensagem,
           conteudo,
           metadataJson,

@@ -1104,7 +1104,7 @@ async function enviarBotoesAutomacao({
 
   const mensagemExternaId = json?.messages?.[0]?.id || null;
 
-  await supabaseAdmin.from("mensagens").insert({
+  const { error: insertMensagemError } = await supabaseAdmin.from("mensagens").insert({
     empresa_id: empresaId,
     conversa_id: conversaId,
     remetente_tipo: "bot",
@@ -1121,6 +1121,10 @@ async function enviarBotoesAutomacao({
       erro: response.ok ? null : json,
     },
   });
+
+  if (insertMensagemError) {
+    console.error("[AUTOMATION_ENGINE] Erro ao salvar mensagem de botão:", insertMensagemError);
+  }
 
   if (!response.ok) {
     throw new Error(
