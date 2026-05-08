@@ -483,6 +483,16 @@ async function executarNo(params: {
       },
     });
 
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        no_atual_id: no.id,
+        status: "aguardando",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
+
     return;
   }
 
@@ -1104,26 +1114,32 @@ async function enviarBotoesAutomacao({
 
   const mensagemExternaId = json?.messages?.[0]?.id || null;
 
-  const { error: insertMensagemError } = await supabaseAdmin.from("mensagens").insert({
-    empresa_id: empresaId,
-    conversa_id: conversaId,
-    remetente_tipo: "bot",
-    conteudo: mensagem,
-    tipo_mensagem: "botao",
-    origem: "automatica",
-    status_envio: response.ok ? "enviado" : "erro",
-    mensagem_externa_id: mensagemExternaId,
-    metadata_json: {
-      automacao_execucao_id: execucaoId,
-      automacao_no_id: noId,
-      botoes,
-      meta_response: json,
-      erro: response.ok ? null : json,
-    },
-  });
+  const { error: insertMensagemError } = await supabaseAdmin
+    .from("mensagens")
+    .insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      remetente_tipo: "bot",
+      remetente_id: null,
+      conteudo: mensagem,
+      tipo_mensagem: "botao",
+      origem: "automatica",
+      status_envio: response.ok ? "enviado" : "erro",
+      mensagem_externa_id: mensagemExternaId,
+      metadata_json: {
+        automacao_execucao_id: execucaoId,
+        automacao_no_id: noId,
+        botoes,
+        meta_response: json,
+        erro: response.ok ? null : json,
+      },
+    });
 
   if (insertMensagemError) {
-    console.error("[AUTOMATION_ENGINE] Erro ao salvar mensagem de botão:", insertMensagemError);
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao salvar mensagem de botão:",
+      insertMensagemError
+    );
   }
 
   if (!response.ok) {
