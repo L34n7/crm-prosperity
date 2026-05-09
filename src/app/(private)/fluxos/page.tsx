@@ -232,44 +232,6 @@ function NodeCustom({ data }: any) {
   );
 }
 
-function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {
-  const ehSempreSeguir = conexao.condicao_json?.tipo === "sempre";
-
-  return {
-    id: conexao.id,
-    source: conexao.no_origem_id,
-    target: conexao.no_destino_id,
-    type: "default",
-    animated: true,
-    label: ehSempreSeguir
-      ? ""
-      : conexao.rotulo || conexao.condicao_json?.valor || "Condição",
-
-    labelBgPadding: [8, 4],
-    labelBgBorderRadius: 8,
-    labelBgStyle: {
-      fill: "#ffffff",
-      fillOpacity: 0.95,
-    },
-    labelStyle: {
-      fill: "#0f172a",
-      fontSize: 11,
-      fontWeight: 700,
-    },
-
-    style: {
-      stroke: "#cbd5e1",
-      strokeWidth: 2,
-      strokeDasharray: "6 6",
-    },
-
-    data: {
-      condicao_json: conexao.condicao_json || {},
-      rotulo: ehSempreSeguir ? "Sempre seguir" : conexao.rotulo || "",
-    },
-  };
-}
-
 export default function FluxosPage() {
   const [fluxos, setFluxos] = useState<Fluxo[]>([]);
   const [fluxoSelecionado, setFluxoSelecionado] = useState<Fluxo | null>(null);
@@ -307,7 +269,9 @@ export default function FluxosPage() {
   const [nodeNovoId, setNodeNovoId] = useState<string | null>(null);
   const fluxo = fluxoSelecionado;
   const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);
-
+  const [confirmandoExclusaoConexao, setConfirmandoExclusaoConexao] =
+  useState(false);
+  
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [carregandoSetores, setCarregandoSetores] = useState(false);
   const [menuHeaderAberto, setMenuHeaderAberto] = useState(false);
@@ -511,6 +475,55 @@ export default function FluxosPage() {
     }
   }
 
+  function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {
+    const ehSempreSeguir = conexao.condicao_json?.tipo === "sempre";
+    const offsetY = offsetLabelConexao(conexao.id);
+    return {
+      id: conexao.id,
+      source: conexao.no_origem_id,
+      target: conexao.no_destino_id,
+      type: "default",
+      ...( {
+        pathOptions: {
+        curvature: 0.55,
+        },
+      } as any ),
+      animated: true,
+      label: ehSempreSeguir
+        ? ""
+        : conexao.rotulo || conexao.condicao_json?.valor || "",
+
+      labelStyle: {
+        fill: "#0f172a",
+        fontSize: 10,
+        fontWeight: 700,
+        transform: `translateY(${offsetY}px)`,
+      },
+
+      labelBgStyle: {
+        fill: "#ffffff",
+        fillOpacity: 0.92,
+        transform: `translateY(${offsetY}px)`,
+      },
+
+      labelBgPadding: [4, 2],
+
+
+      labelBgBorderRadius: 6,
+      labelShowBg: true,
+      style: {
+        stroke: "#cbd5e1",
+        strokeWidth: 2,
+        strokeDasharray: "6 6",
+      },
+
+      data: {
+        condicao_json: conexao.condicao_json || {},
+        rotulo: ehSempreSeguir ? "Sempre seguir" : conexao.rotulo || "",
+      },
+    };
+  }
+
   useEffect(() => {
     carregarFluxos();
     carregarSetores();
@@ -531,23 +544,37 @@ export default function FluxosPage() {
       const tipoCondicaoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);
       const rotuloPadrao = rotuloPadraoPorTipoNo(tipoOrigem);
       const ehSempreSeguir = tipoCondicaoPadrao === "sempre";
+      const id = criarIdTemporario("edge");
+      const offsetY = offsetLabelConexao(id);
       const novaConexao: Edge = {
         ...connection,
-        id: criarIdTemporario("edge"),
+        id,
         type: "default",
+        pathOptions: {
+          curvature: 0.75,
+        },
         animated: true,
         label: ehSempreSeguir ? "" : "Nova condição",
-        labelBgPadding: [8, 4],
-        labelBgBorderRadius: 8,
-        labelBgStyle: {
-          fill: "#ffffff",
-          fillOpacity: 0.95,
-        },
+        labelShowBg: true,
+
         labelStyle: {
           fill: "#0f172a",
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: 700,
+          transform: `translateY(${offsetY}px)`,
         },
+
+        labelBgStyle: {
+          fill: "#ffffff",
+          fillOpacity: 0.92,
+          transform: `translateY(${offsetY}px)`,
+        },
+
+        labelBgPadding: [4, 2],
+
+
+
+        labelBgBorderRadius: 6,
 
         style: {
           stroke: "#cbd5e1",
@@ -661,7 +688,7 @@ async function criarFluxoRapido() {
 
     const id = criarIdTemporario("node");
 
-const tituloPadrao = tituloPadraoTipoNo(tipoNo);
+    const tituloPadrao = tituloPadraoTipoNo(tipoNo);
 
     const novoNoDb: AutomacaoNo = {
       id,
@@ -766,6 +793,18 @@ const tituloPadrao = tituloPadraoTipoNo(tipoNo);
       ];
     });
   }
+  
+function offsetLabelConexao(edgeId: string) {
+  let hash = 0;
+
+  for (let i = 0; i < edgeId.length; i++) {
+    hash = edgeId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const offsets = [-20, 0, 20];
+
+  return offsets[Math.abs(hash) % offsets.length];
+}
 
   function atualizarBotaoResposta(
     index: number,
@@ -824,8 +863,9 @@ function abrirEdicaoConexao(edge: Edge) {
   setEditandoEdgeId(edge.id);
   setEditandoNodeId(null);
 
-  setRotuloConexao(String(edge.label || data?.rotulo || ""));
+  setRotuloConexao(String(data?.rotulo || ""));
   setValorCondicao(String(condicao.valor || ""));
+  setConfirmandoExclusaoConexao(false);
   
   const nodeOrigem = nodes.find((node) => node.id === edge.source);
   const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
@@ -2079,28 +2119,29 @@ useEffect(() => {
                     <h3 className={styles.propertiesTitle}>Configuração</h3>
 
                     <button
-                    type="button"
-                    className={styles.closePanelButton}
-                    onClick={() => {
-                      setEditandoNodeId(null);
-                      setEditandoEdgeId(null);
-                      setConfirmandoExclusaoNo(false);
-                      
-                      setEdges((atuais) =>
-                        atuais.map((edge) => ({
-                          ...edge,
-                          selected: false,
-                          style: {
-                            ...(edge.style || {}),
-                            stroke: "#cbd5e1",
-                            strokeWidth: 2,
-                            strokeDasharray: "6 6",
-                          },
-                        }))
-                      );
-                    }}
-                    >
-                    ×
+                      type="button"
+                      className={styles.closePanelButton}
+                      onClick={() => {
+                        setEditandoNodeId(null);
+                        setEditandoEdgeId(null);
+                        setConfirmandoExclusaoNo(false);
+                        setConfirmandoExclusaoConexao(false);
+                        
+                        setEdges((atuais) =>
+                          atuais.map((edge) => ({
+                            ...edge,
+                            selected: false,
+                            style: {
+                              ...(edge.style || {}),
+                              stroke: "#cbd5e1",
+                              strokeWidth: 2,
+                              strokeDasharray: "6 6",
+                            },
+                          }))
+                        );
+                      }}
+                      >
+                      ×
                     </button>
                 </div>
 
@@ -2552,6 +2593,7 @@ useEffect(() => {
                     <button
                       type="submit"
                       className={styles.primaryButton}
+                      onClick={aplicarEdicaoNo}
                     >
                       Aplicar no bloco
                     </button>
@@ -2614,21 +2656,38 @@ useEffect(() => {
                       </label>
                     )}
 
-                    <button
-                    type="button"
-                    className={styles.dangerButton}
-                    onClick={() => edgeEditada && removerConexao(edgeEditada.id)}
-                    >
-                    Excluir conexão
-                    </button>
+                    <div className={styles.actionButtonsRow}>
+                      {edgeEditada && (
+                        <>
+                          {confirmandoExclusaoConexao ? (
+                            <button
+                              type="button"
+                              className={styles.deleteNodeConfirmButton}
+                              onClick={() => removerConexao(edgeEditada.id)}
+                            >
+                              Excluir
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className={styles.deleteNodeIconButton}
+                              onClick={() => setConfirmandoExclusaoConexao(true)}
+                              title="Excluir conexão"
+                            >
+                              🗑
+                            </button>
+                          )}
+                        </>
+                      )}
 
-                    <button
-                    type="button"
-                    className={styles.primaryButton}
-                    onClick={aplicarEdicaoConexao}
-                    >
-                    Aplicar na conexão
-                    </button>
+                      <button
+                        type="button"
+                        className={styles.primaryButton}
+                        onClick={aplicarEdicaoConexao}
+                      >
+                        Aplicar na conexão
+                      </button>
+                    </div>
 
                     <p className={styles.help}>
                     Depois de aplicar, clique em Salvar fluxo para gravar no banco.

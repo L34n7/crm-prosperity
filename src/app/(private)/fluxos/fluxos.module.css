@@ -833,9 +833,18 @@
   word-break: break-word;
 }
 
-.react-flow__edge-path:hover {
-  stroke: #2563eb !important;
-  stroke-width: 3 !important;
+.react-flow__edge-path {
+  stroke-dasharray: 7 7;
+  animation: flowLine 0.8s linear infinite;
+}
+
+@keyframes flowLine {
+  from {
+    stroke-dashoffset: 14;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 .react-flow__edge.animated path {
