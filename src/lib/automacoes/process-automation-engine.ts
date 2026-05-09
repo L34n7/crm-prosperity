@@ -164,15 +164,43 @@ if (execucaoExistente.status === "aguardando") {
     gatilhoCombinaComMensagem(gatilho, mensagemTexto)
   );
 
-  if (!gatilhoEncontrado) {
-    console.log("[AUTOMATION_ENGINE] Nenhum gatilho encontrado.");
-    return { ok: true, status: "sem_gatilho" };
+  let fluxoIdParaExecutar = "";
+  let gatilhoIdParaMetadata: string | null = null;
+  let tipoInicioExecucao: "gatilho" | "fluxo_padrao" = "gatilho";
+
+  if (gatilhoEncontrado) {
+    fluxoIdParaExecutar = gatilhoEncontrado.fluxo_id;
+    gatilhoIdParaMetadata = gatilhoEncontrado.id;
+  } else {
+    console.log("[AUTOMATION_ENGINE] Nenhum gatilho encontrado. Buscando fluxo padrão.");
+
+    const { data: fluxoPadrao, error: fluxoPadraoError } = await supabaseAdmin
+      .from("automacao_fluxos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("status", "ativo")
+      .eq("fluxo_padrao", true)
+      .eq("canal", "whatsapp")
+      .maybeSingle();
+
+    if (fluxoPadraoError) {
+      console.error("[AUTOMATION_ENGINE] Erro ao buscar fluxo padrão:", fluxoPadraoError);
+      return { ok: false, error: "Erro ao buscar fluxo padrão." };
+    }
+
+    if (!fluxoPadrao) {
+      console.log("[AUTOMATION_ENGINE] Nenhum fluxo padrão ativo encontrado.");
+      return { ok: true, status: "sem_gatilho" };
+    }
+
+    fluxoIdParaExecutar = fluxoPadrao.id;
+    tipoInicioExecucao = "fluxo_padrao";
   }
 
   const { data: fluxo, error: fluxoError } = await supabaseAdmin
     .from("automacao_fluxos")
     .select("*")
-    .eq("id", gatilhoEncontrado.fluxo_id)
+    .eq("id", fluxoIdParaExecutar)
     .eq("empresa_id", empresaId)
     .eq("status", "ativo")
     .maybeSingle();
@@ -183,7 +211,7 @@ if (execucaoExistente.status === "aguardando") {
   }
 
   if (!fluxo) {
-    console.log("[AUTOMATION_ENGINE] Gatilho encontrado, mas fluxo não está ativo.");
+    console.log("[AUTOMATION_ENGINE] Fluxo encontrado, mas não está ativo.");
     return { ok: true, status: "fluxo_inativo" };
   }
 
@@ -249,7 +277,8 @@ if (execucaoExistente.status === "aguardando") {
       no_atual_id: noInicial.id,
       status: "rodando",
       metadata_json: {
-        gatilho_id: gatilhoEncontrado.id,
+        gatilho_id: gatilhoIdParaMetadata,
+        tipo_inicio: tipoInicioExecucao,
         mensagem_inicial: mensagemTexto,
       },
     })
@@ -271,10 +300,14 @@ if (execucaoExistente.status === "aguardando") {
     fluxoId: fluxo.id,
     noId: noInicial.id,
     tipoEvento: "execucao_iniciada",
-    descricao: "Execução iniciada por palavra-chave.",
+    descricao:
+      tipoInicioExecucao === "gatilho"
+        ? "Execução iniciada por palavra-chave."
+        : "Execução iniciada pelo fluxo padrão.",
     entrada: {
       mensagemTexto,
-      gatilho: gatilhoEncontrado,
+      gatilho: gatilhoEncontrado || null,
+      tipo_inicio: tipoInicioExecucao,
     },
     saida: {
       execucaoId: execucaoCriada.id,

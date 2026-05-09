@@ -26,6 +26,7 @@ type Fluxo = {
   descricao: string | null;
   status: "rascunho" | "ativo" | "pausado" | "arquivado";
   canal: string;
+  fluxo_padrao?: boolean;
   created_at?: string;
 };
 
@@ -249,6 +250,7 @@ export default function FluxosPage() {
   const [sucesso, setSucesso] = useState("");
 
   const [novoFluxoNome, setNovoFluxoNome] = useState("");
+  const [novoFluxoPadrao, setNovoFluxoPadrao] = useState(false);
   const [editandoNodeId, setEditandoNodeId] = useState<string | null>(null);
   const [tituloNode, setTituloNode] = useState("");
   const [mensagemNode, setMensagemNode] = useState("");
@@ -571,9 +573,6 @@ export default function FluxosPage() {
         },
 
         labelBgPadding: [4, 2],
-
-
-
         labelBgBorderRadius: 6,
 
         style: {
@@ -607,6 +606,11 @@ async function criarFluxoRapido() {
       return;
     }
 
+    if (!novoFluxoPadrao && gatilhosNovoFluxo.length === 0) {
+      setErro("Adicione pelo menos um gatilho ou marque como Fluxo padrão.");
+      return;
+    }
+
     const res = await fetch("/api/automacoes", {
       method: "POST",
       headers: {
@@ -617,6 +621,7 @@ async function criarFluxoRapido() {
         descricao: descricaoNovoFluxo,
         canal: "whatsapp",
         status: "rascunho",
+        fluxo_padrao: novoFluxoPadrao,
       }),
     });
 
@@ -628,7 +633,8 @@ async function criarFluxoRapido() {
 
     const fluxoCriado = json.fluxo;
 
-    for (const gatilho of gatilhosNovoFluxo) {
+    if (!novoFluxoPadrao) {
+      for (const gatilho of gatilhosNovoFluxo) {
       const gatilhoRes = await fetch(
         `/api/automacoes/${fluxoCriado.id}/gatilhos`,
         {
@@ -652,11 +658,12 @@ async function criarFluxoRapido() {
           gatilhoJson.error || "Fluxo criado, mas houve erro ao criar um gatilho."
         );
       }
-    }
+    }}
 
     setNovoFluxoNome("");
     setDescricaoNovoFluxo("");
     setGatilhosNovoFluxo([]);
+    setNovoFluxoPadrao(false);
     setNovoGatilhoValor("");
     setNovoGatilhoCondicao("contem");
     setAbrirCriacao(false);
@@ -1786,9 +1793,17 @@ useEffect(() => {
                   <div className={styles.flowItemInfo}>
                     <span className={styles.flowItemTitle}>{fluxo.nome}</span>
 
-                    <span className={badgeClass(fluxo.status)}>
-                      {fluxo.status}
-                    </span>
+                    <div className={styles.flowBadges}>
+                      {fluxo.fluxo_padrao && (
+                        <span className={`${styles.badge} ${styles.badgeBlue}`}>
+                          padrão
+                        </span>
+                      )}
+
+                      <span className={badgeClass(fluxo.status)}>
+                        {fluxo.status}
+                      </span>
+                    </div>
                   </div>
 
                   <div className={styles.flowMenuWrapper}>
@@ -2987,114 +3002,138 @@ useEffect(() => {
                   />
                 </label>
 
-                <div className={styles.gatilhosBox}>
+                <label className={styles.switchField}>
+                  <input
+                    type="checkbox"
+                    checked={novoFluxoPadrao}
+                    onChange={(e) => {
+                      setNovoFluxoPadrao(e.target.checked);
+
+                      if (e.target.checked) {
+                        setGatilhosNovoFluxo([]);
+                        setNovoGatilhoValor("");
+                      }
+                    }}
+                  />
+
                   <div>
-                    <p className={styles.modalSectionTitle}>Gatilhos do fluxo</p>
-                    <p className={styles.help}>
-                      Palavras que iniciam este fluxo quando o cliente envia uma mensagem.
+                    <strong>Fluxo padrão</strong>
+                    <p>
+                      Inicia automaticamente quando nenhuma palavra-chave de outro fluxo for encontrada.
                     </p>
                   </div>
+                </label>
 
-                  <div className={styles.gatilhoCreateRow}>
-                    <input
-                      className={styles.input}
-                      value={novoGatilhoValor}
-                      onChange={(e) => setNovoGatilhoValor(e.target.value)}
-                      placeholder="Ex: suporte, login, senha"
-                    />
+                {!novoFluxoPadrao && (
+                  <div className={styles.gatilhosBox}>
+                    <div>
+                      <p className={styles.modalSectionTitle}>Gatilhos do fluxo</p>
+                      <p className={styles.help}>
+                        Palavras que iniciam este fluxo quando o cliente envia uma mensagem.
+                      </p>
+                    </div>
 
-                    <div className={styles.gatilhoBottomRow}>
-                      <select
+                    <div className={styles.gatilhoCreateRow}>
+                      <input
                         className={styles.input}
-                        value={novoGatilhoCondicao}
-                        onChange={(e) =>
-                          setNovoGatilhoCondicao(
-                            e.target.value as GatilhoFluxo["condicao"]
-                          )
-                        }
-                      >
-                        <option value="contem">Contém</option>
-                        <option value="exata">Exata</option>
-                        <option value="inicia_com">Inicia com</option>
-                        <option value="regex">Regex</option>
-                      </select>
+                        value={novoGatilhoValor}
+                        onChange={(e) => setNovoGatilhoValor(e.target.value)}
+                        placeholder="Ex: suporte, login, senha"
+                      />
 
-                      <button
-                        type="button"
-                        className={styles.primaryButton}
-                        onClick={adicionarGatilhoNovoFluxo}
-                      >
-                        Adicionar
-                      </button>
-                    </div>
-                  </div>
-
-                  {gatilhosNovoFluxo.length === 0 ? (
-                    <div className={styles.emptyMini}>
-                      Nenhum gatilho adicionado para este novo fluxo.
-                    </div>
-                  ) : (
-                    <div className={styles.gatilhosList}>
-                      {gatilhosNovoFluxo.map((gatilho, index) => (
-                        <div
-                          key={`${gatilho.valor}-${gatilho.condicao}-${index}`}
-                          className={styles.gatilhoItem}
+                      <div className={styles.gatilhoBottomRow}>
+                        <select
+                          className={styles.input}
+                          value={novoGatilhoCondicao}
+                          onChange={(e) =>
+                            setNovoGatilhoCondicao(
+                              e.target.value as GatilhoFluxo["condicao"]
+                            )
+                          }
                         >
-                          <div>
-                            <strong className={styles.gatilhoValor}>
-                              {gatilho.valor}
-                            </strong>
+                          <option value="contem">Contém</option>
+                          <option value="exata">Exata</option>
+                          <option value="inicia_com">Inicia com</option>
+                          <option value="regex">Regex</option>
+                        </select>
 
-                            <p className={styles.gatilhoMeta}>
-                              Condição:{" "}
-                              {gatilho.condicao === "contem"
-                                ? "Contém a palavra"
-                                : gatilho.condicao === "exata"
-                                ? "Igual exatamente"
-                                : gatilho.condicao === "inicia_com"
-                                ? "Começa com"
-                                : gatilho.condicao}{" "}
-                              · {gatilho.ativo === false ? "Inativo" : "Ativo"}
-                            </p>
-                          </div>
-
-                          <div className={styles.gatilhoActions}>
-                            <button
-                              type="button"
-                              className={styles.secondaryButton}
-                              onClick={() =>
-                                setGatilhosNovoFluxo((atuais) =>
-                                  atuais.map((item, i) =>
-                                    i === index
-                                      ? {
-                                          ...item,
-                                          ativo: item.ativo === false ? true : false,
-                                        }
-                                      : item
-                                  )
-                                )
-                              }
-                            >
-                              {gatilho.ativo === false ? "Ativar" : "Desativar"}
-                            </button>
-
-                            <button
-                              type="button"
-                              className={styles.dangerSmallButton}
-                              onClick={() =>
-                                setGatilhosNovoFluxo((atuais) =>
-                                  atuais.filter((_, i) => i !== index)
-                                )
-                              }
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        <button
+                          type="button"
+                          className={styles.primaryButton}
+                          onClick={adicionarGatilhoNovoFluxo}
+                        >
+                          Adicionar
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
+
+                    {gatilhosNovoFluxo.length === 0 ? (
+                      <div className={styles.emptyMini}>
+                        Nenhum gatilho adicionado para este novo fluxo.
+                      </div>
+                    ) : (
+                      <div className={styles.gatilhosList}>
+                        {gatilhosNovoFluxo.map((gatilho, index) => (
+                          <div
+                            key={`${gatilho.valor}-${gatilho.condicao}-${index}`}
+                            className={styles.gatilhoItem}
+                          >
+                            <div>
+                              <strong className={styles.gatilhoValor}>
+                                {gatilho.valor}
+                              </strong>
+
+                              <p className={styles.gatilhoMeta}>
+                                Condição:{" "}
+                                {gatilho.condicao === "contem"
+                                  ? "Contém a palavra"
+                                  : gatilho.condicao === "exata"
+                                  ? "Igual exatamente"
+                                  : gatilho.condicao === "inicia_com"
+                                  ? "Começa com"
+                                  : gatilho.condicao}{" "}
+                                · {gatilho.ativo === false ? "Inativo" : "Ativo"}
+                              </p>
+                            </div>
+
+                            <div className={styles.gatilhoActions}>
+                              <button
+                                type="button"
+                                className={styles.secondaryButton}
+                                onClick={() =>
+                                  setGatilhosNovoFluxo((atuais) =>
+                                    atuais.map((item, i) =>
+                                      i === index
+                                        ? {
+                                            ...item,
+                                            ativo: item.ativo === false ? true : false,
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                              >
+                                {gatilho.ativo === false ? "Ativar" : "Desativar"}
+                              </button>
+
+                              <button
+                                type="button"
+                                className={styles.dangerSmallButton}
+                                onClick={() =>
+                                  setGatilhosNovoFluxo((atuais) =>
+                                    atuais.filter((_, i) => i !== index)
+                                  )
+                                }
+                              >
+                                ×
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className={styles.modalFooter}>

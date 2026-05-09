@@ -33,7 +33,8 @@ export async function GET() {
         status,
         canal,
         created_at,
-        updated_at
+        updated_at,
+        fluxo_padrao
       `)
       .eq("empresa_id", usuario.empresa_id)
       .order("created_at", { ascending: false });
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest) {
     const descricao = String(body?.descricao || "").trim();
     const canal = String(body?.canal || "whatsapp").trim();
     const status = String(body?.status || "rascunho").trim();
+    const fluxoPadrao = Boolean(body?.fluxo_padrao);
 
     if (!nome) {
       return NextResponse.json(
@@ -100,6 +102,7 @@ export async function POST(req: NextRequest) {
         status,
         criado_por: usuario.id,
         atualizado_por: usuario.id,
+        fluxo_padrao: fluxoPadrao,
       })
       .select("*")
       .single();
@@ -197,6 +200,10 @@ export async function PATCH(req: NextRequest) {
 
     if (body?.status !== undefined) {
       atualizacao.status = String(body.status || "rascunho").trim();
+    }
+
+    if (body?.fluxo_padrao !== undefined) {
+      atualizacao.fluxo_padrao = Boolean(body.fluxo_padrao);
     }
 
     if (atualizacao.nome !== undefined && !atualizacao.nome) {
@@ -361,6 +368,7 @@ export async function PUT(req: NextRequest) {
         status: "rascunho",
         criado_por: usuario.id,
         atualizado_por: usuario.id,
+        fluxo_padrao: false,
       })
       .select("*")
       .single();
