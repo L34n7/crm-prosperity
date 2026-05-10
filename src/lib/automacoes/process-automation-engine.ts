@@ -143,6 +143,21 @@ if (execucaoExistente) {
   }
 
 if (execucaoExistente.status === "aguardando") {
+  if (noAtual.tipo_no === "avaliacao") {
+    const avaliacaoRegistrada = await registrarAvaliacaoAutomacao({
+      empresaId,
+      conversaId,
+      execucao: execucaoExistente,
+      no: noAtual,
+      mensagemTexto,
+      numeroDestino,
+    });
+
+    if (!avaliacaoRegistrada.ok) {
+      return avaliacaoRegistrada;
+    }
+  }
+
   await seguirParaProximoNo({
     empresaId,
     conversaId,
@@ -570,6 +585,44 @@ async function executarNo(params: {
     return;
   }
 
+  if (no.tipo_no === "avaliacao") {
+    const mensagem =
+      String(no.configuracao_json?.mensagem || "").trim() ||
+      "De 1 a 5, como você avalia este atendimento?";
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagem,
+      execucaoId,
+      noId: no.id,
+    });
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        no_atual_id: no.id,
+        status: "aguardando",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "avaliacao_solicitada",
+      descricao: "Pergunta de avaliação enviada ao cliente.",
+      entrada: no.configuracao_json,
+      saida: { mensagem },
+    });
+
+    return;
+  }
+
   if (
     no.tipo_no === "enviar_imagem" ||
     no.tipo_no === "enviar_video" ||
@@ -925,6 +978,120 @@ async function seguirParaProximoNo(params: {
     mensagemTexto,
     numeroDestino,
   });
+}
+
+async function registrarAvaliacaoAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+  execucao: any;
+  no: AutomacaoNo;
+  mensagemTexto?: string;
+  numeroDestino: string;
+}) {
+  const { empresaId, conversaId, execucao, no, mensagemTexto, numeroDestino } =
+    params;
+
+  const resposta = String(mensagemTexto || "").trim();
+  const nota = Number(resposta);
+
+  const notaMinima = Number(no.configuracao_json?.nota_minima || 1);
+  const notaMaxima = Number(no.configuracao_json?.nota_maxima || 5);
+
+  if (
+    !Number.isInteger(nota) ||
+    nota < notaMinima ||
+    nota > notaMaxima
+  ) {
+    const mensagemErro =
+      String(no.configuracao_json?.mensagem_erro || "").trim() ||
+      `Por favor, responda com uma nota de ${notaMinima} a ${notaMaxima}.`;
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagemErro,
+      execucaoId: execucao.id,
+      noId: no.id,
+    });
+
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "avaliacao_invalida",
+      descricao: "Cliente enviou uma avaliação inválida.",
+      entrada: { mensagemTexto },
+      saida: { mensagemErro },
+    });
+
+    return {
+      ok: false,
+      status: "avaliacao_invalida",
+    };
+  }
+
+  const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+    empresaId,
+    conversaId,
+  });
+
+  const { error } = await supabaseAdmin
+    .from("atendimento_avaliacoes")
+    .insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      contato_id: execucao.contato_id || null,
+      conversa_protocolo_id: protocoloAtivo.id,
+      automacao_execucao_id: execucao.id,
+      automacao_fluxo_id: execucao.fluxo_id,
+      automacao_no_id: no.id,
+      numero_cliente: numeroDestino,
+      protocolo: protocoloAtivo.protocolo,
+      nota,
+      origem: "automacao",
+      metadata_json: {
+        resposta_original: resposta,
+        configuracao_no: no.configuracao_json || {},
+      },
+    });
+
+  if (error) {
+    console.error("[AUTOMATION_ENGINE] Erro ao registrar avaliação:", error);
+
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "erro_registrar_avaliacao",
+      descricao: "Erro ao salvar avaliação no banco.",
+      entrada: { mensagemTexto },
+      saida: { error: error.message },
+    });
+
+    return {
+      ok: false,
+      error: "Erro ao registrar avaliação.",
+    };
+  }
+
+  await registrarLog({
+    empresaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    noId: no.id,
+    tipoEvento: "avaliacao_registrada",
+    descricao: "Avaliação registrada com sucesso.",
+    entrada: { mensagemTexto },
+    saida: { nota, protocolo: protocoloAtivo.protocolo },
+  });
+
+  return {
+    ok: true,
+    status: "avaliacao_registrada",
+  };
 }
 
 async function finalizarExecucao(execucaoId: string, empresaId: string) {

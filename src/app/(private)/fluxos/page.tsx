@@ -99,6 +99,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "enviar_video") return "Vídeo";
   if (tipo === "enviar_audio") return "Áudio";
   if (tipo === "enviar_botoes") return "Botões";
+  if (tipo === "avaliacao") return "Avaliação";
   return tipo;
 }
 
@@ -112,6 +113,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "enviar_video") return styles.nodeVideo;
   if (tipo === "enviar_audio") return styles.nodeAudio;
   if (tipo === "enviar_botoes") return styles.nodeBotoes;
+  if (tipo === "avaliacao") return styles.nodeAvaliacao;
   return styles.nodePadrao;
 }
 
@@ -125,7 +127,7 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "enviar_imagem") return "Nova imagem";
   if (tipo === "enviar_video") return "Novo vídeo";
   if (tipo === "enviar_audio") return "Novo áudio";
-
+  if (tipo === "avaliacao") return "Avaliação";
   return "Novo bloco";
 }
 
@@ -743,6 +745,13 @@ async function criarFluxoRapido() {
                 { id: "nao", titulo: "Não" },
               ],
             }
+          : tipoNo === "avaliacao"
+          ? {
+              mensagem: "De 1 a 5, como você avalia este atendimento?",
+              nota_minima: 1,
+              nota_maxima: 5,
+              mensagem_erro: "Por favor, responda com uma nota de 1 a 5.",
+            }
           : {},
           delay_segundos: null,
     };
@@ -860,7 +869,7 @@ function abrirEdicaoNo(node: Node) {
       ? String(node.data.delay_segundos)
       : ""
   );
-  
+
   setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
   setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
   setSetorDestino(configuracaoJson?.setor_id || "");
@@ -1594,6 +1603,10 @@ function validarFluxoAntesDeAtivar() {
       }
     }
 
+    if (tipoNo === "avaliacao" && !String(config.mensagem || "").trim()) {
+      return `O bloco "${node.data?.titulo}" precisa ter uma pergunta de avaliação.`;
+    }
+
     if (
       tipoNo === "transferir_setor" &&
       !String(config.setor_id || "").trim()
@@ -2050,6 +2063,17 @@ useEffect(() => {
                         + Pergunta com botões
                       </button>
 
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          adicionarNo("avaliacao");
+                        }}
+                      >
+                        + Avaliação
+                      </button>
+
                       <div className={styles.headerDropdownDivider} />
 
                       <button
@@ -2279,6 +2303,7 @@ useEffect(() => {
                         <option value="enviar_video">Vídeo</option>
                         <option value="enviar_audio">Áudio</option>
                         <option value="enviar_botoes">Pergunta com Botões</option>
+                        <option value="avaliacao">Avaliação</option>
                       </select>
                     </label>
                   )}
@@ -2308,6 +2333,7 @@ useEffect(() => {
                     "enviar_audio",
                     "transferir_setor",
                     "encerrar",
+                    "avaliacao",
                   ].includes(tipoNodeEdicao) && (
                     <label className={styles.field}>
                       <span className={styles.label}>
@@ -2325,6 +2351,8 @@ useEffect(() => {
                           ? "Mensagem antes de transferir"
                           : tipoNodeEdicao === "encerrar"
                           ? "Mensagem de encerramento (opcional)"
+                          : tipoNodeEdicao === "avaliacao"
+                          ? "Pergunta de avaliação"
                           : "Mensagem"}
                       </span>
 
@@ -2618,34 +2646,36 @@ useEffect(() => {
                   )}
                   
                   {tipoNodeEdicao !== "inicio" && (
-                    <label className={styles.field}>
-                      <span className={styles.label}>Delay antes de enviar</span>
+                    <label className={styles.delayField}>
+                      <div className={styles.delayTopRow}>
+                        <span className={styles.label}>Delay antes de enviar:</span>
 
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.5}
-                        placeholder="0"
-                        className={styles.input}
-                        value={delayNode}
-                        onChange={(e) => {
-                          const valor = e.target.value;
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          placeholder="0"
+                          className={styles.delayInput}
+                          value={delayNode}
+                          onChange={(e) => {
+                            const valor = e.target.value;
 
-                          if (valor === "") {
-                            setDelayNode("");
-                            return;
-                          }
+                            if (valor === "") {
+                              setDelayNode("");
+                              return;
+                            }
 
-                          const numero = Number(valor);
+                            const numero = Number(valor);
 
-                          if (numero < 0) {
-                            setDelayNode("0");
-                            return;
-                          }
+                            if (numero < 0) {
+                              setDelayNode("0");
+                              return;
+                            }
 
-                          setDelayNode(valor);
-                        }}
-                      />
+                            setDelayNode(valor);
+                          }}
+                        />
+                      </div>
 
                       <span className={styles.help}>
                         Delay adicional antes do envio deste bloco. Deixe vazio para envio imediato.
