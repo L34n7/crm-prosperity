@@ -255,6 +255,9 @@ export default function FluxosPage() {
   const [mensagemComentarioNode, setMensagemComentarioNode] =
     useState("");
 
+  const [notaMinimaNode, setNotaMinimaNode] = useState("1");
+  const [notaMaximaNode, setNotaMaximaNode] = useState("5");
+
   const [erro, setErro] = useState("");
   const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
   const [sucesso, setSucesso] = useState("");
@@ -884,6 +887,14 @@ function abrirEdicaoNo(node: Node) {
     String(configuracaoJson?.mensagem_comentario || "")
   );
 
+  setNotaMinimaNode(
+    String(configuracaoJson?.nota_minima ?? 1)
+  );
+
+  setNotaMaximaNode(
+    String(configuracaoJson?.nota_maxima ?? 5)
+  );
+
   setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
   setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
   setSetorDestino(configuracaoJson?.setor_id || "");
@@ -1005,11 +1016,18 @@ function aplicarEdicaoNo() {
         configuracao_json.mensagem_comentario =
           mensagemComentarioNode;
 
-        configuracao_json.nota_minima = 1;
-        configuracao_json.nota_maxima = 5;
+        configuracao_json.nota_minima = Math.max(
+          0,
+          Number(notaMinimaNode || 0)
+        );
+
+        configuracao_json.nota_maxima = Math.max(
+          Number(notaMinimaNode || 0),
+          Number(notaMaximaNode || 5)
+        );
 
         configuracao_json.mensagem_erro =
-          "Por favor, responda com uma nota de 1 a 5.";
+          `Por favor, responda com uma nota de ${configuracao_json.nota_minima} a ${configuracao_json.nota_maxima}.`;
       }
 
       return dbNoParaReactFlow({
@@ -1638,6 +1656,15 @@ function validarFluxoAntesDeAtivar() {
       !String(config.mensagem_comentario || "").trim()
     ) {
       return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para solicitar comentário.`;
+    }
+
+    if (tipoNo === "avaliacao") {
+      const notaMinima = Number(config.nota_minima);
+      const notaMaxima = Number(config.nota_maxima);
+
+      if (notaMinima >= notaMaxima) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma nota máxima maior que a mínima.`;
+      }
     }
 
     if (
@@ -2399,7 +2426,35 @@ useEffect(() => {
                   )}
 
                   {tipoNodeEdicao === "avaliacao" && (
+
                     <div className={styles.optionsBox}>
+
+                      <div className={styles.optionRow}>
+                        <label className={styles.field}>
+                          <span className={styles.label}>Nota mínima</span>
+
+                          <input
+                            type="number"
+                            className={styles.input}
+                            value={notaMinimaNode}
+                            onChange={(e) => setNotaMinimaNode(e.target.value)}
+                            min={0}
+                          />
+                        </label>
+
+                        <label className={styles.field}>
+                          <span className={styles.label}>Nota máxima</span>
+
+                          <input
+                            type="number"
+                            className={styles.input}
+                            value={notaMaximaNode}
+                            onChange={(e) => setNotaMaximaNode(e.target.value)}
+                            min={1}
+                          />
+                        </label>
+                      </div>
+
                       <label className={styles.switchField}>
                         <input
                           type="checkbox"
