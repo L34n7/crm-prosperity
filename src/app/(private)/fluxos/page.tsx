@@ -249,6 +249,11 @@ export default function FluxosPage() {
   const [carregandoFluxos, setCarregandoFluxos] = useState(true);
   const [carregandoEstrutura, setCarregandoEstrutura] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [solicitarComentarioNode, setSolicitarComentarioNode] =
+    useState(false);
+
+  const [mensagemComentarioNode, setMensagemComentarioNode] =
+    useState("");
 
   const [erro, setErro] = useState("");
   const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
@@ -750,6 +755,8 @@ async function criarFluxoRapido() {
               mensagem: "De 1 a 5, como você avalia este atendimento?",
               nota_minima: 1,
               nota_maxima: 5,
+              solicitar_comentario: false,
+              mensagem_comentario: "Obrigado! Agora escreva um comentário sobre seu atendimento.",
               mensagem_erro: "Por favor, responda com uma nota de 1 a 5.",
             }
           : {},
@@ -869,6 +876,13 @@ function abrirEdicaoNo(node: Node) {
       ? String(node.data.delay_segundos)
       : ""
   );
+  setSolicitarComentarioNode(
+    Boolean(configuracaoJson?.solicitar_comentario)
+  );
+
+  setMensagemComentarioNode(
+    String(configuracaoJson?.mensagem_comentario || "")
+  );
 
   setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
   setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
@@ -957,7 +971,8 @@ function aplicarEdicaoNo() {
         tipoFinal === "enviar_video" ||
         tipoFinal === "enviar_audio" ||
         tipoFinal === "transferir_setor" ||
-        tipoFinal === "encerrar"
+        tipoFinal === "encerrar" ||
+        tipoFinal === "avaliacao"
       ) {
         configuracao_json.mensagem = mensagemNode;
       }
@@ -981,6 +996,20 @@ function aplicarEdicaoNo() {
       ) {
         configuracao_json.midia_url = midiaUrlNode;
         configuracao_json.midia_nome = midiaNomeNode;
+      }
+
+      if (tipoFinal === "avaliacao") {
+        configuracao_json.solicitar_comentario =
+          solicitarComentarioNode;
+
+        configuracao_json.mensagem_comentario =
+          mensagemComentarioNode;
+
+        configuracao_json.nota_minima = 1;
+        configuracao_json.nota_maxima = 5;
+
+        configuracao_json.mensagem_erro =
+          "Por favor, responda com uma nota de 1 a 5.";
       }
 
       return dbNoParaReactFlow({
@@ -1603,8 +1632,12 @@ function validarFluxoAntesDeAtivar() {
       }
     }
 
-    if (tipoNo === "avaliacao" && !String(config.mensagem || "").trim()) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma pergunta de avaliação.`;
+    if (
+      tipoNo === "avaliacao" &&
+      config.solicitar_comentario === true &&
+      !String(config.mensagem_comentario || "").trim()
+    ) {
+      return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para solicitar comentário.`;
     }
 
     if (
@@ -2363,6 +2396,40 @@ useEffect(() => {
                         placeholder="Digite o conteúdo"
                       />
                     </label>
+                  )}
+
+                  {tipoNodeEdicao === "avaliacao" && (
+                    <div className={styles.optionsBox}>
+                      <label className={styles.switchField}>
+                        <input
+                          type="checkbox"
+                          checked={solicitarComentarioNode}
+                          onChange={(e) => setSolicitarComentarioNode(e.target.checked)}
+                        />
+
+                        <div>
+                          <strong>Solicitar comentário</strong>
+                          <p>
+                            Após enviar a nota, o cliente poderá escrever um comentário sobre o atendimento.
+                          </p>
+                        </div>
+                      </label>
+
+                      {solicitarComentarioNode && (
+                        <label className={styles.field}>
+                          <span className={styles.label}>
+                            Mensagem para solicitar comentário
+                          </span>
+
+                          <textarea
+                            className={styles.textarea}
+                            value={mensagemComentarioNode}
+                            onChange={(e) => setMensagemComentarioNode(e.target.value)}
+                            placeholder="Ex: Conte como foi sua experiência."
+                          />
+                        </label>
+                      )}
+                    </div>
                   )}
 
                   {["enviar_imagem", "enviar_video", "enviar_audio"].includes(tipoNodeEdicao) && (

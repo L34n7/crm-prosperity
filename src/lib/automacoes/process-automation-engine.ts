@@ -1365,7 +1365,7 @@ async function enviarBotoesAutomacao({
       conteudo: mensagem,
       tipo_mensagem: "botao",
       origem: "automatica",
-      status_envio: response.ok ? "enviado" : "erro",
+      status_envio: response.ok ? "enviada" : "erro",
       mensagem_externa_id: mensagemExternaId,
       metadata_json: {
         automacao_execucao_id: execucaoId,
