@@ -143,6 +143,43 @@ if (execucaoExistente) {
   }
 
 if (execucaoExistente.status === "aguardando") {
+  const metadataExecucao = execucaoExistente.metadata_json || {};
+
+  if (
+    noAtual.tipo_no === "avaliacao" &&
+    metadataExecucao.avaliacao_pendente_comentario === true &&
+    metadataExecucao.avaliacao_id
+  ) {
+    const comentarioRegistrado = await registrarComentarioAvaliacaoAutomacao({
+      empresaId,
+      conversaId,
+      execucao: execucaoExistente,
+      no: noAtual,
+      mensagemTexto,
+      numeroDestino,
+    });
+
+    if (!comentarioRegistrado.ok) {
+      return comentarioRegistrado;
+    }
+
+    await seguirParaProximoNo({
+      empresaId,
+      conversaId,
+      execucaoId: execucaoExistente.id,
+      fluxoId: execucaoExistente.fluxo_id,
+      noAtualId: execucaoExistente.no_atual_id,
+      mensagemTexto,
+      numeroDestino,
+    });
+
+    return {
+      ok: true,
+      status: "comentario_avaliacao_registrado",
+      execucaoId: execucaoExistente.id,
+    };
+  }
+
   if (noAtual.tipo_no === "avaliacao") {
     const avaliacaoRegistrada = await registrarAvaliacaoAutomacao({
       empresaId,
@@ -155,6 +192,14 @@ if (execucaoExistente.status === "aguardando") {
 
     if (!avaliacaoRegistrada.ok) {
       return avaliacaoRegistrada;
+    }
+
+    if (avaliacaoRegistrada.aguardandoComentario) {
+      return {
+        ok: true,
+        status: "aguardando_comentario_avaliacao",
+        execucaoId: execucaoExistente.id,
+      };
     }
   }
 
@@ -1037,7 +1082,7 @@ async function registrarAvaliacaoAutomacao(params: {
     conversaId,
   });
 
-  const { error } = await supabaseAdmin
+  const { data: avaliacaoCriada, error } = await supabaseAdmin
     .from("atendimento_avaliacoes")
     .insert({
       empresa_id: empresaId,
@@ -1055,7 +1100,9 @@ async function registrarAvaliacaoAutomacao(params: {
         resposta_original: resposta,
         configuracao_no: no.configuracao_json || {},
       },
-    });
+    })
+    .select("id")
+    .single();
 
   if (error) {
     console.error("[AUTOMATION_ENGINE] Erro ao registrar avaliação:", error);
@@ -1088,9 +1135,139 @@ async function registrarAvaliacaoAutomacao(params: {
     saida: { nota, protocolo: protocoloAtivo.protocolo },
   });
 
+  const solicitarComentario =
+    no.configuracao_json?.solicitar_comentario === true;
+
+  if (solicitarComentario && avaliacaoCriada?.id) {
+    const mensagemComentario =
+      String(no.configuracao_json?.mensagem_comentario || "").trim() ||
+      "Obrigado! Agora escreva um comentário sobre seu atendimento.";
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagemComentario,
+      execucaoId: execucao.id,
+      noId: no.id,
+    });
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "aguardando",
+        no_atual_id: no.id,
+        metadata_json: {
+          ...(execucao.metadata_json || {}),
+          avaliacao_pendente_comentario: true,
+          avaliacao_id: avaliacaoCriada.id,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucao.id)
+      .eq("empresa_id", empresaId);
+
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "avaliacao_comentario_solicitado",
+      descricao: "Mensagem solicitando comentário da avaliação enviada ao cliente.",
+      entrada: no.configuracao_json,
+      saida: {
+        avaliacao_id: avaliacaoCriada.id,
+        mensagemComentario,
+      },
+    });
+
+    return {
+      ok: true,
+      status: "aguardando_comentario_avaliacao",
+      aguardandoComentario: true,
+    };
+  }
+
   return {
     ok: true,
     status: "avaliacao_registrada",
+  };
+}
+
+async function registrarComentarioAvaliacaoAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+  execucao: any;
+  no: AutomacaoNo;
+  mensagemTexto?: string;
+  numeroDestino: string;
+}) {
+  const { empresaId, execucao, no, mensagemTexto } = params;
+
+  const comentario = String(mensagemTexto || "").trim();
+  const metadataExecucao = execucao.metadata_json || {};
+  const avaliacaoId = metadataExecucao.avaliacao_id;
+
+  if (!avaliacaoId) {
+    return {
+      ok: false,
+      error: "Avaliação pendente não encontrada.",
+    };
+  }
+
+  const { error } = await supabaseAdmin
+    .from("atendimento_avaliacoes")
+    .update({
+      comentario,
+      metadata_json: {
+        comentario_original: comentario,
+        comentario_registrado_em: new Date().toISOString(),
+      },
+    })
+    .eq("id", avaliacaoId)
+    .eq("empresa_id", empresaId);
+
+  if (error) {
+    console.error("[AUTOMATION_ENGINE] Erro ao registrar comentário da avaliação:", error);
+
+    return {
+      ok: false,
+      error: "Erro ao registrar comentário da avaliação.",
+    };
+  }
+
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      metadata_json: {
+        ...(metadataExecucao || {}),
+        avaliacao_pendente_comentario: false,
+        avaliacao_comentario_registrado: true,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", execucao.id)
+    .eq("empresa_id", empresaId);
+
+  await registrarLog({
+    empresaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    noId: no.id,
+    tipoEvento: "avaliacao_comentario_registrado",
+    descricao: "Comentário da avaliação registrado com sucesso.",
+    entrada: {
+      mensagemTexto,
+      avaliacaoId,
+    },
+    saida: {
+      comentario,
+    },
+  });
+
+  return {
+    ok: true,
+    status: "comentario_avaliacao_registrado",
   };
 }
 
