@@ -302,6 +302,7 @@
 .errorAlert {
   border-radius: 16px;
   padding: 12px 14px;
+  margin: 0px 20px 10px 20px;
   font-size: 14px;
   font-weight: 600;
 }
@@ -696,7 +697,7 @@
 }
 
 .modalBody {
-  padding: 22px;
+  padding: 22px 22px 15px 22px;
   display: grid;
   gap: 16px;
 }

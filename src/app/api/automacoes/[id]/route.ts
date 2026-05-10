@@ -139,6 +139,12 @@ export async function PUT(
         posicao_x: Math.round(Number(no.posicao_x || 0)),
         posicao_y: Math.round(Number(no.posicao_y || 0)),
         configuracao_json: no.configuracao_json || {},
+        delay_segundos:
+          no.tipo_no === "inicio"
+            ? null
+            : no.delay_segundos != null
+            ? Math.max(0, Number(no.delay_segundos))
+            : null,
         ativo: true,
         updated_at: agora,
       }));

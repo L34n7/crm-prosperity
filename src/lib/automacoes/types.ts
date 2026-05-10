@@ -32,6 +32,7 @@ export type AutomacaoNo = {
   titulo: string;
   descricao: string | null;
   configuracao_json: Record<string, any>;
+  delay_segundos: number;
   ativo: boolean;
 };
 

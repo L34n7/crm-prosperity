@@ -38,6 +38,7 @@ type AutomacaoNo = {
   posicao_x: number;
   posicao_y: number;
   configuracao_json: Record<string, any>;
+  delay_segundos: number | null;
 };
 
 type AutomacaoConexao = {
@@ -206,6 +207,7 @@ function dbNoParaReactFlow(no: AutomacaoNo): Node {
       titulo: no.titulo,
       descricao: no.descricao,
       configuracao_json: no.configuracao_json || {},
+      delay_segundos: no.delay_segundos ?? null,
       isNovo: false,
     },
   };
@@ -247,13 +249,21 @@ export default function FluxosPage() {
   const [salvando, setSalvando] = useState(false);
 
   const [erro, setErro] = useState("");
+  const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
   const [sucesso, setSucesso] = useState("");
 
   const [novoFluxoNome, setNovoFluxoNome] = useState("");
   const [novoFluxoPadrao, setNovoFluxoPadrao] = useState(false);
+  const jaExisteFluxoPadrao = fluxos.some(
+    (fluxo) =>
+      fluxo.fluxo_padrao &&
+      fluxo.status !== "arquivado"
+  );
   const [editandoNodeId, setEditandoNodeId] = useState<string | null>(null);
   const [tituloNode, setTituloNode] = useState("");
   const [mensagemNode, setMensagemNode] = useState("");
+  const [delayNode, setDelayNode] = useState<string>("");
+
   const [midiaUrlNode, setMidiaUrlNode] = useState("");
   const [midiaNomeNode, setMidiaNomeNode] = useState("");
   const [buscaFluxo, setBuscaFluxo] = useState("");
@@ -598,16 +608,17 @@ async function criarFluxoRapido() {
   try {
     setErro("");
     setSucesso("");
+    setErroCriacaoFluxo("");
 
     const nome = novoFluxoNome.trim();
 
     if (!nome) {
-      setErro("Informe o nome do fluxo.");
+      setErroCriacaoFluxo("Informe o nome do fluxo.");
       return;
     }
 
     if (!novoFluxoPadrao && gatilhosNovoFluxo.length === 0) {
-      setErro("Adicione pelo menos um gatilho ou marque como Fluxo padrão.");
+      setErroCriacaoFluxo("Adicione pelo menos um gatilho.");
       return;
     }
 
@@ -672,7 +683,7 @@ async function criarFluxoRapido() {
     await carregarFluxos();
     setFluxoSelecionado(fluxoCriado);
   } catch (error: any) {
-    setErro(error?.message || "Erro ao criar fluxo.");
+    setErroCriacaoFluxo(error?.message || "Erro ao criar fluxo.");
   }
 }
 
@@ -712,11 +723,12 @@ async function criarFluxoRapido() {
           ? nodes[nodes.length - 1].position.y
           : 220,
       configuracao_json:
-        tipoNo === "enviar_texto"
-          ? { mensagem: "Digite a mensagem aqui." }
+      tipoNo === "enviar_texto"
+        ? { mensagem: "Digite a mensagem aqui.", delay_segundos: 3 }
           : tipoNo === "pergunta_opcoes"
           ? {
               mensagem: "Escolha uma opção:",
+              delay_segundos: 3,
               opcoes: [
                 { valor: "1", titulo: "Opção 1" },
                 { valor: "2", titulo: "Opção 2" },
@@ -725,12 +737,14 @@ async function criarFluxoRapido() {
           : tipoNo === "enviar_botoes"
           ? {
               mensagem: "Escolha uma opção:",
+              delay_segundos: 3,
               botoes: [
                 { id: "sim", titulo: "Sim" },
                 { id: "nao", titulo: "Não" },
               ],
             }
           : {},
+          delay_segundos: null,
     };
 
     const novoNodeBase = dbNoParaReactFlow(novoNoDb);
@@ -840,6 +854,13 @@ function abrirEdicaoNo(node: Node) {
 
   setTituloNode(String(node.data?.titulo || ""));
   setMensagemNode(String(configuracaoJson?.mensagem || ""));
+  setDelayNode(
+    node.data?.delay_segundos !== null &&
+    node.data?.delay_segundos !== undefined
+      ? String(node.data.delay_segundos)
+      : ""
+  );
+  
   setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
   setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
   setSetorDestino(configuracaoJson?.setor_id || "");
@@ -961,6 +982,12 @@ function aplicarEdicaoNo() {
         posicao_x: node.position.x,
         posicao_y: node.position.y,
         configuracao_json,
+        delay_segundos:
+          tipoFinal === "inicio"
+            ? null
+            : delayNode !== ""
+            ? Math.max(0, Number(delayNode))
+            : null,
       });
     })
   );
@@ -1105,6 +1132,12 @@ async function duplicarFluxo(fluxo: Fluxo) {
         posicao_x: node.position.x,
         posicao_y: node.position.y,
         configuracao_json: node.data?.configuracao_json || {},
+        delay_segundos:
+          node.data?.tipo_no === "inicio"
+            ? null
+            : node.data?.delay_segundos != null
+            ? Math.max(0, Number(node.data.delay_segundos))
+            : null,
       }));
 
     const conexoesParaSalvar = edges.map((edge, index) => {
@@ -1729,7 +1762,10 @@ useEffect(() => {
             <button
               type="button"
               className={styles.newFlowButton}
-              onClick={() => setAbrirCriacao(true)}
+              onClick={() => {
+                setErroCriacaoFluxo("");
+                setAbrirCriacao(true);
+              }}
             >
               +
             </button>
@@ -2580,7 +2616,43 @@ useEffect(() => {
                       </select>
                     </label>
                   )}
+                  
+                  {tipoNodeEdicao !== "inicio" && (
+                    <label className={styles.field}>
+                      <span className={styles.label}>Delay antes de enviar</span>
 
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        placeholder="0"
+                        className={styles.input}
+                        value={delayNode}
+                        onChange={(e) => {
+                          const valor = e.target.value;
+
+                          if (valor === "") {
+                            setDelayNode("");
+                            return;
+                          }
+
+                          const numero = Number(valor);
+
+                          if (numero < 0) {
+                            setDelayNode("0");
+                            return;
+                          }
+
+                          setDelayNode(valor);
+                        }}
+                      />
+
+                      <span className={styles.help}>
+                        Delay adicional antes do envio deste bloco. Deixe vazio para envio imediato.
+                      </span>
+                    </label>
+                  )}
+                  
                   <div className={styles.actionButtonsRow}>
                     {nodeEditado.data?.tipo_no !== "inicio" && (
                       <>
@@ -2975,7 +3047,10 @@ useEffect(() => {
                 <button
                   type="button"
                   className={styles.closePanelButton}
-                  onClick={() => setAbrirCriacao(false)}
+                  onClick={() => {
+                    setErroCriacaoFluxo("");
+                    setAbrirCriacao(false);
+                  }}
                 >
                   ×
                 </button>
@@ -3002,27 +3077,29 @@ useEffect(() => {
                   />
                 </label>
 
-                <label className={styles.switchField}>
-                  <input
-                    type="checkbox"
-                    checked={novoFluxoPadrao}
-                    onChange={(e) => {
-                      setNovoFluxoPadrao(e.target.checked);
+                {!jaExisteFluxoPadrao && (
+                  <label className={styles.switchField}>
+                    <input
+                      type="checkbox"
+                      checked={novoFluxoPadrao}
+                      onChange={(e) => {
+                        setNovoFluxoPadrao(e.target.checked);
 
-                      if (e.target.checked) {
-                        setGatilhosNovoFluxo([]);
-                        setNovoGatilhoValor("");
-                      }
-                    }}
-                  />
+                        if (e.target.checked) {
+                          setGatilhosNovoFluxo([]);
+                          setNovoGatilhoValor("");
+                        }
+                      }}
+                    />
 
-                  <div>
-                    <strong>Fluxo padrão</strong>
-                    <p>
-                      Inicia automaticamente quando nenhuma palavra-chave de outro fluxo for encontrada.
-                    </p>
-                  </div>
-                </label>
+                    <div>
+                      <strong>Fluxo padrão</strong>
+                      <p>
+                        Inicia automaticamente quando nenhuma palavra-chave de outro fluxo for encontrada.
+                      </p>
+                    </div>
+                  </label>
+                )}
 
                 {!novoFluxoPadrao && (
                   <div className={styles.gatilhosBox}>
@@ -3135,7 +3212,11 @@ useEffect(() => {
                   </div>
                 )}
               </div>
-
+              {erroCriacaoFluxo && (
+                <div className={styles.errorAlert}>
+                  {erroCriacaoFluxo}
+                </div>
+              )}
               <div className={styles.modalFooter}>
                 <button
                   type="button"

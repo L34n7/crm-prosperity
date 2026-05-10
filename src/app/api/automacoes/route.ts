@@ -85,6 +85,26 @@ export async function POST(req: NextRequest) {
     const status = String(body?.status || "rascunho").trim();
     const fluxoPadrao = Boolean(body?.fluxo_padrao);
 
+    if (fluxoPadrao) {
+      const { data: fluxoPadraoExistente } = await supabaseAdmin
+        .from("automacao_fluxos")
+        .select("id")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("fluxo_padrao", true)
+        .neq("status", "arquivado")
+        .maybeSingle();
+
+      if (fluxoPadraoExistente) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Já existe um fluxo padrão cadastrado.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     if (!nome) {
       return NextResponse.json(
         { ok: false, error: "Nome do fluxo é obrigatório." },
@@ -204,6 +224,27 @@ export async function PATCH(req: NextRequest) {
 
     if (body?.fluxo_padrao !== undefined) {
       atualizacao.fluxo_padrao = Boolean(body.fluxo_padrao);
+    }
+
+    if (Boolean(body?.fluxo_padrao)) {
+      const { data: fluxoPadraoExistente } = await supabaseAdmin
+        .from("automacao_fluxos")
+        .select("id")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("fluxo_padrao", true)
+        .neq("id", id)
+        .neq("status", "arquivado")
+        .maybeSingle();
+
+      if (fluxoPadraoExistente) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Já existe um fluxo padrão cadastrado.",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     if (atualizacao.nome !== undefined && !atualizacao.nome) {

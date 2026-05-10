@@ -22,6 +22,27 @@ function delayAposMidia(tipo: "image" | "video" | "audio") {
   return 1000;
 }
 
+function delaySegundosDoNo(no: {
+  tipo_no: string;
+  delay_segundos?: number | string | null;
+}) {
+  if (no.tipo_no === "inicio") {
+    return 0;
+  }
+
+  if (no.delay_segundos == null) {
+    return 0;
+  }
+
+  const delay = Number(no.delay_segundos);
+
+  if (!Number.isFinite(delay)) {
+    return 0;
+  }
+
+  return Math.max(0, delay);
+}
+
 function normalizarTexto(texto: string) {
   return String(texto || "").trim().toLowerCase();
 }
@@ -88,6 +109,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     contatoId,
     mensagemTexto,
   });
+  
 
   const { data: execucaoExistente, error: execucaoError } = await supabaseAdmin
     .from("automacao_execucoes")
@@ -347,6 +369,25 @@ async function executarNo(params: {
     noId: no.id,
     tipoNo: no.tipo_no,
   });
+
+  const delaySegundos = delaySegundosDoNo(no);
+
+  if (delaySegundos > 0) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "delay_no",
+      descricao: `Aguardando ${delaySegundos}s antes de executar o bloco.`,
+      entrada: {
+        delay_segundos: delaySegundos,
+      },
+      saida: {},
+    });
+
+    await aguardar(delaySegundos * 1000);
+  }
 
   if (no.tipo_no === "inicio") {
     await seguirParaProximoNo({
