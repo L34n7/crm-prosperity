@@ -1346,7 +1346,7 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
     return;
   }
 
-  if (timeoutSegundos >= 86400) {
+  if (timeoutSegundos > 79200) {
     await registrarLog({
       empresaId,
       execucaoId,

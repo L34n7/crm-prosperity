@@ -280,6 +280,7 @@ export default function FluxosPage() {
       fluxo.fluxo_padrao &&
       fluxo.status !== "arquivado"
   );
+
   const [editandoNodeId, setEditandoNodeId] = useState<string | null>(null);
   const [tituloNode, setTituloNode] = useState("");
   const [mensagemNode, setMensagemNode] = useState("");
@@ -298,6 +299,8 @@ export default function FluxosPage() {
 
   const [timeoutUnidade, setTimeoutUnidade] =
     useState<"minutos" | "horas">("horas");
+  const [statusEnvioTimeout, setStatusEnvioTimeout] =
+    useState<"qualquer" | "entregue" | "lida">("qualquer");
 
   const [editandoFluxo, setEditandoFluxo] = useState(false);
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
@@ -307,7 +310,7 @@ export default function FluxosPage() {
   const fluxo = fluxoSelecionado;
   const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);
   const [confirmandoExclusaoConexao, setConfirmandoExclusaoConexao] =
-  useState(false);
+    useState(false);
   
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [carregandoSetores, setCarregandoSetores] = useState(false);
@@ -946,6 +949,10 @@ function abrirEdicaoConexao(edge: Edge) {
     setTimeoutUnidade("minutos");
   }
 
+  setStatusEnvioTimeout(
+    condicao.status_envio || "qualquer"
+  );
+
   setEditandoEdgeId(edge.id);
   setEditandoNodeId(null);
 
@@ -1107,11 +1114,22 @@ function aplicarEdicaoConexao() {
           return edge;
         }
 
+        const LIMITE_TIMEOUT_SEGUNDOS = 79200; // 22 horas
+
+        if (timeoutSegundos > LIMITE_TIMEOUT_SEGUNDOS) {
+          setErro(
+            "Para mensagens comuns, o tempo máximo sem resposta é de 22 horas."
+          );
+
+          return edge;
+        }
+
         condicaoJson = {
           tipo: "timeout_sem_resposta",
           timeout_segundos: timeoutSegundos,
           tempo_quantidade: quantidade,
           tempo_unidade: timeoutUnidade,
+          status_envio: statusEnvioTimeout,
         };
       } else if (valorCondicao) {
         condicaoJson = {
@@ -2937,11 +2955,12 @@ useEffect(() => {
                       <div className={styles.optionsBox}>
                         <div className={styles.optionRow}>
                           <label className={styles.field}>
-                            <span className={styles.label}>Tempo</span>
+                            <span className={styles.label}>Tempo mínimo</span>
 
                             <input
                               type="number"
                               min={5}
+                              max={timeoutUnidade === "horas" ? 22 : 1320}
                               className={styles.input}
                               value={timeoutQuantidade}
                               onChange={(e) => setTimeoutQuantidade(e.target.value)}
@@ -2950,6 +2969,37 @@ useEffect(() => {
 
                           <label className={styles.field}>
                             <span className={styles.label}>Unidade</span>
+
+                          <label className={styles.field}>
+                            <span className={styles.label}>
+                              Status da mensagem
+                            </span>
+
+                            <select
+                              className={styles.input}
+                              value={statusEnvioTimeout}
+                              onChange={(e) =>
+                                setStatusEnvioTimeout(
+                                  e.target.value as
+                                    | "qualquer"
+                                    | "entregue"
+                                    | "lida"
+                                )
+                              }
+                            >
+                              <option value="qualquer">
+                                Qualquer status
+                              </option>
+
+                              <option value="entregue">
+                                Apenas entregue
+                              </option>
+
+                              <option value="lida">
+                                Apenas lida
+                              </option>
+                            </select>
+                          </label>
 
                             <select
                               className={styles.input}
@@ -2965,8 +3015,8 @@ useEffect(() => {
                         </div>
 
                         <p className={styles.help}>
-                          Para mensagens comuns do WhatsApp, o tempo precisa ser menor que 24 horas.
-                          Para 24h ou mais será necessário usar template aprovado.
+                          Para mensagens comuns do WhatsApp, o tempo precisa ser menor que 22 horas.
+                          Para 22h ou mais será necessário usar template aprovado.
                         </p>
                       </div>
                     )}

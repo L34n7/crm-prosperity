@@ -75,6 +75,45 @@ export async function GET(request: Request) {
           continue;
         }
 
+        const { data: ultimaMensagemAutomacao } = await supabaseAdmin
+        .from("mensagens")
+        .select("id, status_envio, created_at")
+        .eq("empresa_id", agendamento.empresa_id)
+        .eq("conversa_id", payload.conversa_id)
+        .eq("automacao_execucao_id", agendamento.execucao_id)
+        .eq("automacao_no_id", agendamento.no_id)
+        .eq("origem", "enviada")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+        const statusEnvioAtual =
+        ultimaMensagemAutomacao?.status_envio || "desconhecido";
+
+        const statusExigido =
+        payload.condicao_json?.status_envio || "qualquer";
+
+        if (
+        statusExigido !== "qualquer" &&
+        statusEnvioAtual !== statusExigido
+        ) {
+        await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+            status: "cancelado",
+            executed_at: new Date().toISOString(),
+            payload_json: {
+                ...payload,
+                status_envio_encontrado: statusEnvioAtual,
+                status_envio_exigido: statusExigido,
+                motivo_cancelamento: "status_envio_nao_corresponde",
+            },
+            })
+            .eq("id", agendamento.id);
+
+        continue;
+        }
+
         const { data: proximoNo } = await supabaseAdmin
           .from("automacao_nos")
           .select("*")

@@ -532,6 +532,8 @@ export async function POST(request: Request) {
         status_envio: "enviada",
         mensagem_externa_id: envioWhatsApp.messageId,
         metadata_json: metadataFinal,
+        automacao_execucao_id: null,
+        automacao_no_id: null,
       },
     ])
     .select("*")
