@@ -225,7 +225,18 @@ function NodeCustom({ data }: any) {
       <Handle type="target" position={Position.Left} className={styles.nodeHandle} />
 
       <div className={styles.nodeHeader}>
-        <span className={styles.nodeType}>{labelTipoNo(data.tipo_no)}</span>
+        <div className={styles.nodeTypeRow}>
+          <span className={styles.nodeType}>
+            {labelTipoNo(data.tipo_no)}
+          </span>
+
+          {data?.delay_segundos != null &&
+            Number(data.delay_segundos) > 0 && (
+              <span className={styles.nodeDelayBadge}>
+                ⏱ {data.delay_segundos}s
+              </span>
+            )}
+        </div>
       </div>
 
       <div className={styles.nodeContent}>
@@ -283,6 +294,10 @@ export default function FluxosPage() {
   const [midias, setMidias] = useState<MidiaOpcao[]>([]);
   const [carregandoMidias, setCarregandoMidias] = useState(false);
   const [enviandoMidia, setEnviandoMidia] = useState(false);
+  const [timeoutQuantidade, setTimeoutQuantidade] = useState("2");
+
+  const [timeoutUnidade, setTimeoutUnidade] =
+    useState<"minutos" | "horas">("horas");
 
   const [editandoFluxo, setEditandoFluxo] = useState(false);
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
@@ -921,6 +936,15 @@ function abrirEdicaoConexao(edge: Edge) {
     | undefined;
 
   const condicao = data?.condicao_json || {};
+  const timeoutSegundos = Number(condicao.timeout_segundos || 7200);
+
+  if (timeoutSegundos % 3600 === 0) {
+    setTimeoutQuantidade(String(timeoutSegundos / 3600));
+    setTimeoutUnidade("horas");
+  } else {
+    setTimeoutQuantidade(String(Math.max(1, Math.round(timeoutSegundos / 60))));
+    setTimeoutUnidade("minutos");
+  }
 
   setEditandoEdgeId(edge.id);
   setEditandoNodeId(null);
@@ -1059,33 +1083,60 @@ function aplicarEdicaoConexao() {
       if (edge.id !== editandoEdgeId) return edge;
 
       const ehSempreSeguir = tipoCondicaoConexao === "sempre";
+      const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
+
+      let condicaoJson: Record<string, any> = {};
+
+      if (ehSempreSeguir) {
+        condicaoJson = {
+          tipo: "sempre",
+        };
+      } else if (ehTimeout) {
+        const quantidade = Math.max(1, Number(timeoutQuantidade || 1));
+
+        const multiplicador =
+          timeoutUnidade === "horas" ? 3600 : 60;
+
+        const timeoutSegundos = quantidade * multiplicador;
+
+        if (timeoutSegundos < 300) {
+          setErro(
+            "O tempo mínimo para timeout sem resposta é de 5 minutos."
+          );
+
+          return edge;
+        }
+
+        condicaoJson = {
+          tipo: "timeout_sem_resposta",
+          timeout_segundos: timeoutSegundos,
+          tempo_quantidade: quantidade,
+          tempo_unidade: timeoutUnidade,
+        };
+      } else if (valorCondicao) {
+        condicaoJson = {
+          tipo: tipoCondicaoConexao,
+          valor: valorCondicao,
+        };
+      }
 
       return {
         ...edge,
-
-        // Se for "Sempre seguir", não exibe nome na linha.
-        // Se for condição, exibe nome digitado, valor da condição ou "Condição".
         label: ehSempreSeguir
           ? ""
+          : ehTimeout
+          ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
           : rotuloConexao || valorCondicao || "Condição",
 
         data: {
           ...(edge.data || {}),
+          rotulo: ehSempreSeguir
+            ? "Sempre seguir"
+            : ehTimeout
+            ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
+            : rotuloConexao,
 
-          // Se for "Sempre seguir", grava o nome interno como "Sempre seguir".
-          // Mas não permite alterar/exibir nome visual.
-          rotulo: ehSempreSeguir ? "Sempre seguir" : rotuloConexao,
-
-          condicao_json: ehSempreSeguir
-            ? {
-                tipo: "sempre",
-              }
-            : valorCondicao
-            ? {
-                tipo: tipoCondicaoConexao,
-                valor: valorCondicao,
-              }
-            : {},
+          condicao_json: condicaoJson,
         },
       };
     })
@@ -2878,10 +2929,50 @@ useEffect(() => {
                           <option value="resposta_inicia_com">Inicia com</option>
                           <option value="resposta_regex">Regex</option>
                           <option value="sempre">Sempre seguir</option>
+                          <option value="timeout_sem_resposta">Sem resposta após tempo</option>
                       </select>
                     </label>
 
-                    {tipoCondicaoConexao !== "sempre" && (
+                    {tipoCondicaoConexao === "timeout_sem_resposta" && (
+                      <div className={styles.optionsBox}>
+                        <div className={styles.optionRow}>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Tempo</span>
+
+                            <input
+                              type="number"
+                              min={5}
+                              className={styles.input}
+                              value={timeoutQuantidade}
+                              onChange={(e) => setTimeoutQuantidade(e.target.value)}
+                            />
+                          </label>
+
+                          <label className={styles.field}>
+                            <span className={styles.label}>Unidade</span>
+
+                            <select
+                              className={styles.input}
+                              value={timeoutUnidade}
+                              onChange={(e) =>
+                                setTimeoutUnidade(e.target.value as "minutos" | "horas")
+                              }
+                            >
+                              <option value="minutos">Minutos</option>
+                              <option value="horas">Horas</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        <p className={styles.help}>
+                          Para mensagens comuns do WhatsApp, o tempo precisa ser menor que 24 horas.
+                          Para 24h ou mais será necessário usar template aprovado.
+                        </p>
+                      </div>
+                    )}
+
+                    {tipoCondicaoConexao !== "sempre" &&
+                      tipoCondicaoConexao !== "timeout_sem_resposta" && (
                       <label className={styles.field}>
                         <span className={styles.label}>Resposta esperada 
                            <span className={styles.botaoRespostaLabel2}> * ID da resposta</span>

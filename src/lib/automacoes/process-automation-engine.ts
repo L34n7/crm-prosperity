@@ -145,6 +145,12 @@ if (execucaoExistente) {
 if (execucaoExistente.status === "aguardando") {
   const metadataExecucao = execucaoExistente.metadata_json || {};
 
+  await cancelarAgendamentosTimeoutPendentes({
+    empresaId,
+    execucaoId: execucaoExistente.id,
+    noId: execucaoExistente.no_atual_id,
+  });
+
   if (
     noAtual.tipo_no === "avaliacao" &&
     metadataExecucao.avaliacao_pendente_comentario === true &&
@@ -414,7 +420,7 @@ if (execucaoExistente.status === "aguardando") {
   };
 }
 
-async function executarNo(params: {
+export async function executarNo(params: {
   empresaId: string;
   conversaId: string;
   execucaoId: string;
@@ -560,6 +566,14 @@ async function executarNo(params: {
       .eq("id", execucaoId)
       .eq("empresa_id", empresaId);
 
+    await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+    });
+
     return;
   }
 
@@ -626,6 +640,14 @@ async function executarNo(params: {
       })
       .eq("id", execucaoId)
       .eq("empresa_id", empresaId);
+
+    await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+    });
 
     return;
   }
@@ -1270,6 +1292,134 @@ async function registrarComentarioAvaliacaoAutomacao(params: {
     status: "comentario_avaliacao_registrado",
   };
 }
+
+async function agendarTimeoutSemRespostaSeExistir(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  noId: string;
+}) {
+  const { empresaId, conversaId, execucaoId, fluxoId, noId } = params;
+
+  const { data: conexoesTimeout, error } = await supabaseAdmin
+    .from("automacao_conexoes")
+    .select("*")
+    .eq("empresa_id", empresaId)
+    .eq("fluxo_id", fluxoId)
+    .eq("no_origem_id", noId)
+    .eq("ativo", true)
+    .eq("condicao_json->>tipo", "timeout_sem_resposta");
+
+  if (error) {
+    console.error("[AUTOMATION_ENGINE] Erro ao buscar conexão timeout:", error);
+    return;
+  }
+
+  const conexaoTimeout = conexoesTimeout?.[0];
+
+  if (!conexaoTimeout) {
+    return;
+  }
+
+  const timeoutSegundos = Number(
+    conexaoTimeout.condicao_json?.timeout_segundos || 0
+  );
+
+  if (!Number.isFinite(timeoutSegundos) || timeoutSegundos <= 0) {
+    return;
+  }
+
+  if (timeoutSegundos >= 86400) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId,
+      conexaoId: conexaoTimeout.id,
+      tipoEvento: "timeout_nao_agendado_janela_24h",
+      descricao:
+        "Timeout não agendado porque ultrapassa a janela de 24 horas do WhatsApp.",
+      entrada: conexaoTimeout.condicao_json,
+      saida: {},
+    });
+
+    return;
+  }
+
+  await cancelarAgendamentosTimeoutPendentes({
+    empresaId,
+    execucaoId,
+    noId,
+  });
+
+  const executarEm = new Date(Date.now() + timeoutSegundos * 1000).toISOString();
+
+  const { error: insertError } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .insert({
+      empresa_id: empresaId,
+      execucao_id: execucaoId,
+      fluxo_id: fluxoId,
+      no_id: noId,
+      tipo_agendamento: "timeout_sem_resposta",
+      executar_em: executarEm,
+      status: "pendente",
+      payload_json: {
+        conversa_id: conversaId,
+        conexao_id: conexaoTimeout.id,
+        no_origem_id: noId,
+        no_destino_id: conexaoTimeout.no_destino_id,
+        timeout_segundos: timeoutSegundos,
+        condicao_json: conexaoTimeout.condicao_json,
+      },
+    });
+
+  if (insertError) {
+    console.error("[AUTOMATION_ENGINE] Erro ao criar agendamento timeout:", insertError);
+    return;
+  }
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId,
+    conexaoId: conexaoTimeout.id,
+    tipoEvento: "timeout_sem_resposta_agendado",
+    descricao: "Timeout sem resposta agendado com sucesso.",
+    entrada: conexaoTimeout.condicao_json,
+    saida: {
+      executar_em: executarEm,
+      no_destino_id: conexaoTimeout.no_destino_id,
+    },
+  });
+}
+
+
+async function cancelarAgendamentosTimeoutPendentes(params: {
+  empresaId: string;
+  execucaoId: string;
+  noId: string;
+}) {
+  const { empresaId, execucaoId, noId } = params;
+
+  const { error } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .update({
+      status: "cancelado",
+    })
+    .eq("empresa_id", empresaId)
+    .eq("execucao_id", execucaoId)
+    .eq("no_id", noId)
+    .eq("tipo_agendamento", "timeout_sem_resposta")
+    .eq("status", "pendente");
+
+  if (error) {
+    console.error("[AUTOMATION_ENGINE] Erro ao cancelar timeout pendente:", error);
+  }
+}
+
 
 async function finalizarExecucao(execucaoId: string, empresaId: string) {
   await supabaseAdmin
