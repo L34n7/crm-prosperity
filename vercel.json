@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/timeout_sem_resposta",
-      "schedule": "*/5 * * * *"
-    }
-  ]
-}

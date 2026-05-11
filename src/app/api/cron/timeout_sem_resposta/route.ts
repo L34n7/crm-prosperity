@@ -4,7 +4,19 @@ import { executarNo } from "@/lib/automacoes/process-automation-engine";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authHeader = request.headers.get("authorization");
+
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Unauthorized",
+      },
+      { status: 401 }
+    );
+  }
+
   try {
     const agora = new Date().toISOString();
 
