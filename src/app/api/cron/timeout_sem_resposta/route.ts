@@ -98,7 +98,7 @@ export async function GET(request: Request) {
           execucaoId: agendamento.execucao_id,
           fluxoId: agendamento.fluxo_id,
           no: proximoNo,
-          numeroDestino: execucao.numero_destino,
+          numeroDestino: payload.numero_destino,
         });
 
         await supabaseAdmin

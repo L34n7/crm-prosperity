@@ -572,6 +572,7 @@ export async function executarNo(params: {
       execucaoId,
       fluxoId,
       noId: no.id,
+      numeroDestino,
     });
 
     return;
@@ -647,6 +648,7 @@ export async function executarNo(params: {
       execucaoId,
       fluxoId,
       noId: no.id,
+      numeroDestino,
     });
 
     return;
@@ -1299,8 +1301,9 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
   execucaoId: string;
   fluxoId: string;
   noId: string;
+  numeroDestino: string;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, noId } = params;
+  const { empresaId, conversaId, execucaoId, fluxoId, noId, numeroDestino } = params;
 
   console.log("[AUTOMATION_TIMEOUT] Verificando timeout", {
     empresaId,
@@ -1385,6 +1388,7 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
         no_destino_id: conexaoTimeout.no_destino_id,
         timeout_segundos: timeoutSegundos,
         condicao_json: conexaoTimeout.condicao_json,
+        numero_destino: numeroDestino,
       },
     });
 
