@@ -102,11 +102,11 @@ export async function GET(request: Request) {
         });
 
         await supabaseAdmin
-          .from("automacao_agendamentos")
-          .update({
+        .from("automacao_agendamentos")
+        .update({
             status: "executado",
-            executado_em: new Date().toISOString(),
-          })
+            executed_at: new Date().toISOString(),
+        })
           .eq("id", agendamento.id);
       } catch (error) {
         console.error("[CRON TIMEOUT] Erro ao executar timeout:", error);

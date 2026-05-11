@@ -1302,6 +1302,14 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
 }) {
   const { empresaId, conversaId, execucaoId, fluxoId, noId } = params;
 
+  console.log("[AUTOMATION_TIMEOUT] Verificando timeout", {
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noId,
+  });
+
   const { data: conexoesTimeout, error } = await supabaseAdmin
     .from("automacao_conexoes")
     .select("*")
@@ -1315,6 +1323,11 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
     console.error("[AUTOMATION_ENGINE] Erro ao buscar conexão timeout:", error);
     return;
   }
+
+  console.log("[AUTOMATION_TIMEOUT] Conexões encontradas", {
+    quantidade: conexoesTimeout?.length || 0,
+    conexoesTimeout,
+  });
 
   const conexaoTimeout = conexoesTimeout?.[0];
 
