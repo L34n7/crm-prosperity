@@ -605,6 +605,14 @@ export async function executarNo(params: {
     tipoNo: no.tipo_no,
   });
 
+  await registrarNotificacaoChegadaNoBloco({
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    no,
+  });
+
   const delaySegundos = delaySegundosDoNo(no);
 
   if (delaySegundos > 0) {
@@ -1099,6 +1107,106 @@ export async function executarNo(params: {
     descricao: `Tipo de nó ainda não implementado: ${no.tipo_no}`,
     entrada: no.configuracao_json,
     saida: {},
+  });
+}
+
+async function registrarNotificacaoChegadaNoBloco(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  no: AutomacaoNo;
+}) {
+  const { empresaId, conversaId, execucaoId, fluxoId, no } = params;
+
+  const config = no.configuracao_json || {};
+
+  if (config.notificar_ao_chegar !== true) {
+    return;
+  }
+
+  const { data: notificacaoExistente, error: buscarNotificacaoError } =
+    await supabaseAdmin
+      .from("notificacoes")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("automacao_execucao_id", execucaoId)
+      .eq("automacao_no_id", no.id)
+      .maybeSingle();
+
+  if (buscarNotificacaoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao verificar notificação existente:",
+      buscarNotificacaoError
+    );
+    return;
+  }
+
+  if (notificacaoExistente) {
+    return;
+  }
+
+  const titulo =
+    String(config.notificacao_titulo || "").trim() ||
+    `Automação chegou no bloco: ${no.titulo}`;
+
+  const mensagem =
+    String(config.notificacao_mensagem || "").trim() ||
+    `Um contato chegou no bloco "${no.titulo}".`;
+
+  const { data: execucao } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("contato_id, conversa_protocolo_id")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  const { error: criarNotificacaoError } = await supabaseAdmin
+    .from("notificacoes")
+    .insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      contato_id: execucao?.contato_id || null,
+      automacao_execucao_id: execucaoId,
+      automacao_fluxo_id: fluxoId,
+      automacao_no_id: no.id,
+      tipo: "automacao",
+      titulo,
+      mensagem,
+      lida: false,
+      metadata_json: {
+        tipo_no: no.tipo_no,
+        titulo_no: no.titulo,
+        notificar_email: config.notificar_email === true,
+        conversa_protocolo_id: execucao?.conversa_protocolo_id || null,
+      },
+    });
+
+  if (criarNotificacaoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao criar notificação:",
+      criarNotificacaoError
+    );
+    return;
+  }
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId: no.id,
+    tipoEvento: "notificacao_bloco_criada",
+    descricao: "Notificação criada ao chegar no bloco.",
+    entrada: {
+      notificar_ao_chegar: config.notificar_ao_chegar,
+      notificacao_titulo: config.notificacao_titulo,
+      notificacao_mensagem: config.notificacao_mensagem,
+      notificar_email: config.notificar_email,
+    },
+    saida: {
+      titulo,
+      mensagem,
+    },
   });
 }
 

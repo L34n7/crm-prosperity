@@ -372,6 +372,11 @@ export default function FluxosPage() {
   const [capturaMensagemErroNode, setCapturaMensagemErroNode] = useState("");
   const [capturaMaxTentativasNode, setCapturaMaxTentativasNode] = useState("3");
 
+  const [notificarAoChegarNode, setNotificarAoChegarNode] = useState(false);
+  const [notificacaoTituloNode, setNotificacaoTituloNode] = useState("");
+  const [notificacaoMensagemNode, setNotificacaoMensagemNode] = useState("");
+  const [notificarEmailNode, setNotificarEmailNode] = useState(false);
+
   const nodeEditado = useMemo(() => {
     return nodes.find((node) => node.id === editandoNodeId) || null;
   }, [nodes, editandoNodeId]);
@@ -951,6 +956,18 @@ function abrirEdicaoNo(node: Node) {
   );
   setCapturaMaxTentativasNode(String(configuracaoJson?.max_tentativas || 3));
 
+  setNotificarAoChegarNode(Boolean(configuracaoJson?.notificar_ao_chegar));
+
+  setNotificacaoTituloNode(
+    String(configuracaoJson?.notificacao_titulo || "")
+  );
+
+  setNotificacaoMensagemNode(
+    String(configuracaoJson?.notificacao_mensagem || "")
+  );
+
+  setNotificarEmailNode(Boolean(configuracaoJson?.notificar_email));
+
   if (Array.isArray(configuracaoJson?.opcoes)) {
     setOpcoesNode(configuracaoJson.opcoes);
   } else {
@@ -1111,6 +1128,11 @@ function aplicarEdicaoNo() {
           Number(capturaMaxTentativasNode || 3)
         );
       }
+
+        configuracao_json.notificar_ao_chegar = notificarAoChegarNode;
+        configuracao_json.notificacao_titulo = notificacaoTituloNode.trim();
+        configuracao_json.notificacao_mensagem = notificacaoMensagemNode.trim();
+        configuracao_json.notificar_email = notificarEmailNode;
 
       return dbNoParaReactFlow({
         id: node.id,
@@ -3029,6 +3051,64 @@ useEffect(() => {
                     </label>
                   )}
                   
+                  {tipoNodeEdicao !== "inicio" && (
+                    <div className={styles.optionsBox}>
+                      <label className={styles.switchField}>
+                        <input
+                          type="checkbox"
+                          checked={notificarAoChegarNode}
+                          onChange={(e) => setNotificarAoChegarNode(e.target.checked)}
+                        />
+
+                        <div>
+                          <strong>Notificar quando chegar neste bloco</strong>
+                          <p>
+                            Cria uma notificação no sistema quando a automação alcançar este bloco.
+                          </p>
+                        </div>
+                      </label>
+
+                      {notificarAoChegarNode && (
+                        <>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Título da notificação</span>
+                            <input
+                              className={styles.input}
+                              value={notificacaoTituloNode}
+                              onChange={(e) => setNotificacaoTituloNode(e.target.value)}
+                              placeholder="Ex: Lead chegou na escolha de plano"
+                            />
+                          </label>
+
+                          <label className={styles.field}>
+                            <span className={styles.label}>Mensagem da notificação</span>
+                            <textarea
+                              className={styles.textarea}
+                              value={notificacaoMensagemNode}
+                              onChange={(e) => setNotificacaoMensagemNode(e.target.value)}
+                              placeholder="Ex: O contato chegou no bloco de escolha de plano."
+                            />
+                          </label>
+
+                          <label className={styles.switchField}>
+                            <input
+                              type="checkbox"
+                              checked={notificarEmailNode}
+                              onChange={(e) => setNotificarEmailNode(e.target.checked)}
+                            />
+
+                            <div>
+                              <strong>Enviar email também</strong>
+                              <p>
+                                Além da notificação no sistema, envia um email para os responsáveis.
+                              </p>
+                            </div>
+                          </label>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <div className={styles.actionButtonsRow}>
                     {nodeEditado.data?.tipo_no !== "inicio" && (
                       <>
