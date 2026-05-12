@@ -1303,7 +1303,8 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
   noId: string;
   numeroDestino: string;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, noId, numeroDestino } = params;
+  const { empresaId, conversaId, execucaoId, fluxoId, noId, numeroDestino } =
+    params;
 
   console.log("[AUTOMATION_TIMEOUT] Verificando timeout", {
     empresaId,
@@ -1332,34 +1333,7 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
     conexoesTimeout,
   });
 
-  const conexaoTimeout = conexoesTimeout?.[0];
-
-  if (!conexaoTimeout) {
-    return;
-  }
-
-  const timeoutSegundos = Number(
-    conexaoTimeout.condicao_json?.timeout_segundos || 0
-  );
-
-  if (!Number.isFinite(timeoutSegundos) || timeoutSegundos <= 0) {
-    return;
-  }
-
-  if (timeoutSegundos > 79200) {
-    await registrarLog({
-      empresaId,
-      execucaoId,
-      fluxoId,
-      noId,
-      conexaoId: conexaoTimeout.id,
-      tipoEvento: "timeout_nao_agendado_janela_24h",
-      descricao:
-        "Timeout não agendado porque ultrapassa a janela de 24 horas do WhatsApp.",
-      entrada: conexaoTimeout.condicao_json,
-      saida: {},
-    });
-
+  if (!conexoesTimeout || conexoesTimeout.length === 0) {
     return;
   }
 
@@ -1369,48 +1343,85 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
     noId,
   });
 
-  const executarEm = new Date(Date.now() + timeoutSegundos * 1000).toISOString();
+  for (const conexaoTimeout of conexoesTimeout) {
+    const timeoutSegundos = Number(
+      conexaoTimeout.condicao_json?.timeout_segundos || 0
+    );
 
-  const { error: insertError } = await supabaseAdmin
-    .from("automacao_agendamentos")
-    .insert({
-      empresa_id: empresaId,
-      execucao_id: execucaoId,
-      fluxo_id: fluxoId,
-      no_id: noId,
-      tipo_agendamento: "timeout_sem_resposta",
-      executar_em: executarEm,
-      status: "pendente",
-      payload_json: {
-        conversa_id: conversaId,
-        conexao_id: conexaoTimeout.id,
-        no_origem_id: noId,
+    if (!Number.isFinite(timeoutSegundos) || timeoutSegundos <= 0) {
+      continue;
+    }
+
+    if (timeoutSegundos < 300) {
+      continue;
+    }
+
+    if (timeoutSegundos > 79200) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId,
+        conexaoId: conexaoTimeout.id,
+        tipoEvento: "timeout_nao_agendado_janela_22h",
+        descricao:
+          "Timeout não agendado porque ultrapassa a janela segura de 22 horas do WhatsApp.",
+        entrada: conexaoTimeout.condicao_json,
+        saida: {},
+      });
+
+      continue;
+    }
+
+    const executarEm = new Date(
+      Date.now() + timeoutSegundos * 1000
+    ).toISOString();
+
+    const { error: insertError } = await supabaseAdmin
+      .from("automacao_agendamentos")
+      .insert({
+        empresa_id: empresaId,
+        execucao_id: execucaoId,
+        fluxo_id: fluxoId,
+        no_id: noId,
+        tipo_agendamento: "timeout_sem_resposta",
+        executar_em: executarEm,
+        status: "pendente",
+        payload_json: {
+          conversa_id: conversaId,
+          numero_destino: numeroDestino,
+          conexao_id: conexaoTimeout.id,
+          no_origem_id: noId,
+          no_destino_id: conexaoTimeout.no_destino_id,
+          timeout_segundos: timeoutSegundos,
+          condicao_json: conexaoTimeout.condicao_json,
+        },
+      });
+
+    if (insertError) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao criar agendamento timeout:",
+        insertError
+      );
+
+      continue;
+    }
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId,
+      conexaoId: conexaoTimeout.id,
+      tipoEvento: "timeout_sem_resposta_agendado",
+      descricao: "Timeout sem resposta agendado com sucesso.",
+      entrada: conexaoTimeout.condicao_json,
+      saida: {
+        executar_em: executarEm,
         no_destino_id: conexaoTimeout.no_destino_id,
-        timeout_segundos: timeoutSegundos,
-        condicao_json: conexaoTimeout.condicao_json,
-        numero_destino: numeroDestino,
       },
     });
-
-  if (insertError) {
-    console.error("[AUTOMATION_ENGINE] Erro ao criar agendamento timeout:", insertError);
-    return;
   }
-
-  await registrarLog({
-    empresaId,
-    execucaoId,
-    fluxoId,
-    noId,
-    conexaoId: conexaoTimeout.id,
-    tipoEvento: "timeout_sem_resposta_agendado",
-    descricao: "Timeout sem resposta agendado com sucesso.",
-    entrada: conexaoTimeout.condicao_json,
-    saida: {
-      executar_em: executarEm,
-      no_destino_id: conexaoTimeout.no_destino_id,
-    },
-  });
 }
 
 
