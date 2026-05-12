@@ -7,6 +7,7 @@ import type {
 import { gatilhoCombinaComMensagem } from "./match-trigger";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
+import { sendAutomationNotificationEmail } from "@/lib/email/send-automation-notification-email";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -1125,27 +1126,6 @@ async function registrarNotificacaoChegadaNoBloco(params: {
     return;
   }
 
-  const { data: notificacaoExistente, error: buscarNotificacaoError } =
-    await supabaseAdmin
-      .from("notificacoes")
-      .select("id")
-      .eq("empresa_id", empresaId)
-      .eq("automacao_execucao_id", execucaoId)
-      .eq("automacao_no_id", no.id)
-      .maybeSingle();
-
-  if (buscarNotificacaoError) {
-    console.error(
-      "[AUTOMATION_ENGINE] Erro ao verificar notificação existente:",
-      buscarNotificacaoError
-    );
-    return;
-  }
-
-  if (notificacaoExistente) {
-    return;
-  }
-
   const titulo =
     String(config.notificacao_titulo || "").trim() ||
     `Automação chegou no bloco: ${no.titulo}`;
@@ -1189,6 +1169,15 @@ async function registrarNotificacaoChegadaNoBloco(params: {
     );
     return;
   }
+
+  if (config.notificar_email === true) {
+  await sendAutomationNotificationEmail({
+    empresaId,
+    conversaId,
+    titulo,
+    mensagem,
+  });
+}
 
   await registrarLog({
     empresaId,
