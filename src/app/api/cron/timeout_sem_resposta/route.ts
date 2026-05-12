@@ -114,6 +114,43 @@ export async function GET(request: Request) {
         const statusExigido =
         payload.condicao_json?.status_envio || "qualquer";
 
+
+        if (statusExigido === "qualquer") {
+          const { data: agendamentosEspecificos } = await supabaseAdmin
+            .from("automacao_agendamentos")
+            .select("id, status, payload_json")
+            .eq("empresa_id", agendamento.empresa_id)
+            .eq("execucao_id", agendamento.execucao_id)
+            .eq("no_id", agendamento.no_id)
+            .eq("tipo_agendamento", "timeout_sem_resposta")
+            .in("status", ["pendente", "executando", "executado"]);
+
+          const existeEspecifico = (agendamentosEspecificos || []).some((item) => {
+            if (item.id === agendamento.id) return false;
+
+            const condicao = item.payload_json?.condicao_json || {};
+            const statusOutro = condicao.status_envio || "qualquer";
+
+            return statusOutro !== "qualquer";
+          });
+
+          if (existeEspecifico) {
+            await supabaseAdmin
+              .from("automacao_agendamentos")
+              .update({
+                status: "cancelado",
+                executed_at: new Date().toISOString(),
+                payload_json: {
+                  ...payload,
+                  motivo_cancelamento: "fallback_qualquer_ignorado_por_status_especifico",
+                },
+              })
+              .eq("id", agendamento.id);
+
+            continue;
+          }
+        }
+
         const atendeStatus = statusMensagemAtendeCondicao(
           statusEnvioAtual,
           statusExigido
@@ -194,6 +231,19 @@ export async function GET(request: Request) {
       } catch (error) {
         console.error("[CRON TIMEOUT] Erro ao executar timeout:", error);
 
+        await supabaseAdmin
+          .from("automacao_agendamentos")
+          .update({
+            status: "cancelado",
+            executed_at: new Date().toISOString(),
+          })
+          .eq("empresa_id", agendamento.empresa_id)
+          .eq("execucao_id", agendamento.execucao_id)
+          .eq("no_id", agendamento.no_id)
+          .eq("tipo_agendamento", "timeout_sem_resposta")
+          .eq("status", "pendente")
+          .neq("id", agendamento.id);
+          
         await supabaseAdmin
           .from("automacao_agendamentos")
           .update({

@@ -2951,75 +2951,62 @@ useEffect(() => {
                       </select>
                     </label>
 
-                    {tipoCondicaoConexao === "timeout_sem_resposta" && (
-                      <div className={styles.optionsBox}>
-                        <div className={styles.optionRow}>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Tempo mínimo</span>
+{tipoCondicaoConexao === "timeout_sem_resposta" && (
+  <div className={styles.optionsBox}>
+    <div className={styles.timeoutGrid}>
+      <label className={styles.field}>
+        <span className={styles.label}>Tempo mínimo</span>
 
-                            <input
-                              type="number"
-                              min={5}
-                              max={timeoutUnidade === "horas" ? 22 : 1320}
-                              className={styles.input}
-                              value={timeoutQuantidade}
-                              onChange={(e) => setTimeoutQuantidade(e.target.value)}
-                            />
-                          </label>
+        <input
+          type="number"
+          min={5}
+          max={timeoutUnidade === "horas" ? 22 : 1320}
+          className={styles.input}
+          value={timeoutQuantidade}
+          onChange={(e) => setTimeoutQuantidade(e.target.value)}
+        />
+      </label>
 
-                          <label className={styles.field}>
-                            <span className={styles.label}>Unidade</span>
+      <label className={styles.field}>
+        <span className={styles.label}>Unidade</span>
 
-                          <label className={styles.field}>
-                            <span className={styles.label}>
-                              Status da mensagem
-                            </span>
+        <select
+          className={styles.input}
+          value={timeoutUnidade}
+          onChange={(e) =>
+            setTimeoutUnidade(e.target.value as "minutos" | "horas")
+          }
+        >
+          <option value="minutos">Minutos</option>
+          <option value="horas">Horas</option>
+        </select>
+      </label>
+    </div>
 
-                            <select
-                              className={styles.input}
-                              value={statusEnvioTimeout}
-                              onChange={(e) =>
-                                setStatusEnvioTimeout(
-                                  e.target.value as
-                                    | "qualquer"
-                                    | "entregue"
-                                    | "lida"
-                                )
-                              }
-                            >
-                              <option value="qualquer">
-                                Qualquer status
-                              </option>
+    <label className={styles.field}>
+      <span className={styles.label}>Status da mensagem</span>
 
-                              <option value="entregue">
-                                Apenas entregue
-                              </option>
+      <select
+        className={styles.input}
+        value={statusEnvioTimeout}
+        onChange={(e) =>
+          setStatusEnvioTimeout(
+            e.target.value as "qualquer" | "entregue" | "lida"
+          )
+        }
+      >
+        <option value="qualquer">Qualquer status</option>
+        <option value="entregue">Apenas entregue</option>
+        <option value="lida">Apenas lida</option>
+      </select>
+    </label>
 
-                              <option value="lida">
-                                Apenas lida
-                              </option>
-                            </select>
-                          </label>
-
-                            <select
-                              className={styles.input}
-                              value={timeoutUnidade}
-                              onChange={(e) =>
-                                setTimeoutUnidade(e.target.value as "minutos" | "horas")
-                              }
-                            >
-                              <option value="minutos">Minutos</option>
-                              <option value="horas">Horas</option>
-                            </select>
-                          </label>
-                        </div>
-
-                        <p className={styles.help}>
-                          Para mensagens comuns do WhatsApp, o tempo precisa ser menor que 22 horas.
-                          Para 22h ou mais será necessário usar template aprovado.
-                        </p>
-                      </div>
-                    )}
+    <p className={styles.help}>
+      Para mensagens comuns do WhatsApp, o tempo precisa ser menor que 22 horas.
+      Para 22h ou mais será necessário usar template aprovado.
+    </p>
+  </div>
+)}
 
                     {tipoCondicaoConexao !== "sempre" &&
                       tipoCondicaoConexao !== "timeout_sem_resposta" && (
