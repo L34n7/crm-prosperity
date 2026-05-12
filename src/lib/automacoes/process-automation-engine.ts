@@ -1710,11 +1710,17 @@ async function enviarBotoesAutomacao({
 
   const mensagemExternaId = json?.messages?.[0]?.id || null;
 
+  const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+    empresaId,
+    conversaId,
+  });
+
   const { error: insertMensagemError } = await supabaseAdmin
     .from("mensagens")
     .insert({
       empresa_id: empresaId,
       conversa_id: conversaId,
+      conversa_protocolo_id: protocoloAtivo.id,
       remetente_tipo: "bot",
       remetente_id: null,
       conteudo: mensagem,

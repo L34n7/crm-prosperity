@@ -4,6 +4,27 @@ import { executarNo } from "@/lib/automacoes/process-automation-engine";
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function statusMensagemAtendeCondicao(
+  statusAtual: string,
+  statusExigido: string
+) {
+  if (statusExigido === "qualquer") return true;
+
+  if (statusExigido === "entregue") {
+    return (
+      statusAtual === "enviada" ||
+      statusAtual === "entregue" ||
+      statusAtual === "lida"
+    );
+  }
+
+  if (statusExigido === "lida") {
+    return statusAtual === "lida";
+  }
+
+  return statusAtual === statusExigido;
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
 
@@ -92,6 +113,29 @@ export async function GET(request: Request) {
 
         const statusExigido =
         payload.condicao_json?.status_envio || "qualquer";
+
+        const atendeStatus = statusMensagemAtendeCondicao(
+          statusEnvioAtual,
+          statusExigido
+        );
+
+        if (!atendeStatus) {
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "cancelado",
+              executed_at: new Date().toISOString(),
+              payload_json: {
+                ...payload,
+                status_envio_encontrado: statusEnvioAtual,
+                status_envio_exigido: statusExigido,
+                motivo_cancelamento: "status_envio_nao_corresponde",
+              },
+            })
+            .eq("id", agendamento.id);
+
+          continue;
+        }
 
         if (
         statusExigido !== "qualquer" &&
