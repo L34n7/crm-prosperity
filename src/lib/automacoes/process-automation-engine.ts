@@ -1102,6 +1102,56 @@ export async function executarNo(params: {
   });
 }
 
+async function substituirVariaveisMensagem(params: {
+  empresaId: string;
+  execucaoId?: string | null;
+  texto: string;
+}) {
+  const { empresaId, execucaoId, texto } = params;
+
+  if (!texto || !execucaoId) {
+    return texto;
+  }
+
+  const regex = /{{\s*([^}]+)\s*}}/g;
+  const matches = [...texto.matchAll(regex)];
+
+  if (matches.length === 0) {
+    return texto;
+  }
+
+  const chaves = Array.from(
+    new Set(matches.map((match) => match[1].trim().toLowerCase()))
+  );
+
+  const { data: variaveis, error } = await supabaseAdmin
+    .from("automacao_variaveis")
+    .select("chave, valor")
+    .eq("empresa_id", empresaId)
+    .eq("execucao_id", execucaoId)
+    .in("chave", chaves);
+
+  if (error) {
+    console.error("[AUTOMATION_ENGINE] Erro ao buscar variáveis:", error);
+    return texto;
+  }
+
+  const mapaVariaveis = new Map<string, string>();
+
+  for (const variavel of variaveis || []) {
+    mapaVariaveis.set(
+      String(variavel.chave || "").toLowerCase(),
+      String(variavel.valor || "")
+    );
+  }
+
+  return texto.replace(regex, (_, chaveOriginal) => {
+    const chave = String(chaveOriginal).trim().toLowerCase();
+
+    return mapaVariaveis.get(chave) || `{{${chave}}}`;
+  });
+}
+
 async function registrarCapturaRespostaAutomacao(params: {
   empresaId: string;
   conversaId: string;
@@ -1858,8 +1908,16 @@ async function enviarMensagemAutomacao(params: {
   execucaoId: string;
   noId: string;
 }) {
-  const { empresaId, conversaId, numeroDestino, conteudo, execucaoId, noId } =
+  const { empresaId, conversaId, numeroDestino, execucaoId, noId } =
     params;
+
+  let conteudo = params.conteudo;
+
+  const conteudoComVariaveis = await substituirVariaveisMensagem({
+    empresaId,
+    execucaoId,
+    texto: conteudo,
+  });
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
@@ -1938,7 +1996,7 @@ async function enviarMensagemAutomacao(params: {
     phoneNumberId,
     accessToken,
     to: numeroDestino,
-    body: conteudo,
+    body: conteudoComVariaveis,
   });
 
   const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
@@ -1953,7 +2011,7 @@ async function enviarMensagemAutomacao(params: {
       conversa_id: conversaId,
       conversa_protocolo_id: protocoloAtivo.id,
       remetente_tipo: "bot",
-      conteudo,
+      conteudo: conteudoComVariaveis,
       tipo_mensagem: "texto",
       origem: "automatica",
       status_envio: envio.ok ? "enviada" : "falha",

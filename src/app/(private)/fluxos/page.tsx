@@ -2575,22 +2575,35 @@ useEffect(() => {
                   {tipoNodeEdicao === "capturar_resposta" && (
                     <div className={styles.optionsBox}>
                       <label className={styles.field}>
-                        <span className={styles.label}>Salvar resposta na variável</span>
-                        <input
-                          className={styles.input}
-                          value={capturaVariavelNode}
-                          onChange={(e) => setCapturaVariavelNode(e.target.value)}
-                          placeholder="Ex: nome, cpf, email"
-                        />
-                      </label>
-
-                      <label className={styles.field}>
                         <span className={styles.label}>Tipo de captura</span>
-                        <select
-                          className={styles.input}
-                          value={capturaTipoNode}
-                          onChange={(e) => setCapturaTipoNode(e.target.value)}
-                        >
+                          <select
+                            className={styles.input}
+                            value={capturaTipoNode}
+                            onChange={(e) => {
+                              const novoTipo = e.target.value;
+                              const variavelAtual = capturaVariavelNode.trim().toLowerCase();
+
+                              setCapturaTipoNode(novoTipo);
+
+                              const variaveisPadrao = [
+                                "resposta",
+                                "texto",
+                                "nome",
+                                "cpf",
+                                "cnpj",
+                                "email",
+                                "telefone",
+                                "numero",
+                                "data",
+                                "cep",
+                                "moeda",
+                              ];
+
+                              if (!variavelAtual || variaveisPadrao.includes(variavelAtual)) {
+                                setCapturaVariavelNode(novoTipo);
+                              }
+                            }}
+                          >
                           <option value="texto">Texto livre</option>
                           <option value="nome">Nome</option>
                           <option value="cpf">CPF</option>
@@ -2604,6 +2617,16 @@ useEffect(() => {
                         </select>
                       </label>
 
+                      <label className={styles.field}>
+                        <span className={styles.label}>Salvar resposta na variável</span>
+                        <input
+                          className={styles.input}
+                          value={capturaVariavelNode}
+                          onChange={(e) => setCapturaVariavelNode(e.target.value)}
+                          placeholder="Ex: nome, cpf, email"
+                        />
+                      </label>
+                      
                       <label className={styles.field}>
                         <span className={styles.label}>Mensagem quando inválido</span>
                         <textarea
