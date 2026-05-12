@@ -10,6 +10,133 @@ import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message"
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function somenteDigitos(valor: string) {
+  return String(valor || "").replace(/\D/g, "");
+}
+
+function validarCpf(cpfEntrada: string) {
+  const cpf = somenteDigitos(cpfEntrada);
+
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1+$/.test(cpf)) return false;
+
+  let soma = 0;
+
+  for (let i = 0; i < 9; i++) {
+    soma += Number(cpf[i]) * (10 - i);
+  }
+
+  let digito1 = 11 - (soma % 11);
+  if (digito1 >= 10) digito1 = 0;
+
+  soma = 0;
+
+  for (let i = 0; i < 10; i++) {
+    soma += Number(cpf[i]) * (11 - i);
+  }
+
+  let digito2 = 11 - (soma % 11);
+  if (digito2 >= 10) digito2 = 0;
+
+  return digito1 === Number(cpf[9]) && digito2 === Number(cpf[10]);
+}
+
+function validarCaptura(tipo: string, valorOriginal: string) {
+  const valor = String(valorOriginal || "").trim();
+  const digitos = somenteDigitos(valor);
+
+  if (!valor) {
+    return { valido: false, valorLimpo: "", valorFormatado: "" };
+  }
+
+  if (tipo === "texto") {
+    return { valido: true, valorLimpo: valor, valorFormatado: valor };
+  }
+
+  if (tipo === "nome") {
+    const pareceFrase =
+      valor.split(/\s+/).length > 5 ||
+      /\b(quero|preciso|boleto|conta|pagamento|segunda via|atendente)\b/i.test(valor);
+
+    const valido =
+      /^[A-Za-zÀ-ÿ'´`^~\s]{2,80}$/.test(valor) &&
+      !/\d/.test(valor) &&
+      !pareceFrase;
+
+    return { valido, valorLimpo: valor, valorFormatado: valor };
+  }
+
+  if (tipo === "cpf") {
+    return {
+      valido: validarCpf(valor),
+      valorLimpo: digitos,
+      valorFormatado:
+        digitos.length === 11
+          ? `${digitos.slice(0, 3)}.${digitos.slice(3, 6)}.${digitos.slice(6, 9)}-${digitos.slice(9)}`
+          : valor,
+    };
+  }
+
+  if (tipo === "cnpj") {
+    return {
+      valido: digitos.length === 14 && !/^(\d)\1+$/.test(digitos),
+      valorLimpo: digitos,
+      valorFormatado: valor,
+    };
+  }
+
+  if (tipo === "email") {
+    const valido = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(valor);
+    return { valido, valorLimpo: valor.toLowerCase(), valorFormatado: valor.toLowerCase() };
+  }
+
+  if (tipo === "telefone") {
+    return {
+      valido: digitos.length >= 10 && digitos.length <= 13,
+      valorLimpo: digitos,
+      valorFormatado: valor,
+    };
+  }
+
+  if (tipo === "numero") {
+    return {
+      valido: /^-?\d+([.,]\d+)?$/.test(valor),
+      valorLimpo: valor.replace(",", "."),
+      valorFormatado: valor,
+    };
+  }
+
+  if (tipo === "data") {
+    const valido =
+      /^\d{2}\/\d{2}\/\d{4}$/.test(valor) ||
+      /^\d{4}-\d{2}-\d{2}$/.test(valor);
+
+    return { valido, valorLimpo: valor, valorFormatado: valor };
+  }
+
+  if (tipo === "cep") {
+    return {
+      valido: digitos.length === 8,
+      valorLimpo: digitos,
+      valorFormatado:
+        digitos.length === 8 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : valor,
+    };
+  }
+
+  if (tipo === "moeda") {
+    const normalizado = valor.replace(/[R$\s.]/g, "").replace(",", ".");
+    const numero = Number(normalizado);
+
+    return {
+      valido: Number.isFinite(numero) && numero >= 0,
+      valorLimpo: String(numero),
+      valorFormatado: valor,
+    };
+  }
+
+  return { valido: true, valorLimpo: valor, valorFormatado: valor };
+}
+
 function aguardar(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -124,118 +251,160 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     return { ok: false, error: "Erro ao buscar execução." };
   }
 
-if (execucaoExistente) {
-  console.log("[AUTOMATION_ENGINE] Continuando execução existente", {
-    execucaoId: execucaoExistente.id,
-    noAtualId: execucaoExistente.no_atual_id,
-  });
-
-  const { data: noAtual, error: noAtualError } = await supabaseAdmin
-    .from("automacao_nos")
-    .select("*")
-    .eq("id", execucaoExistente.no_atual_id)
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
-
-  if (noAtualError || !noAtual) {
-    console.error("[AUTOMATION_ENGINE] Erro ao buscar nó atual:", noAtualError);
-    return { ok: false, error: "Erro ao buscar nó atual." };
-  }
-
-if (execucaoExistente.status === "aguardando") {
-  const metadataExecucao = execucaoExistente.metadata_json || {};
-
-  await cancelarAgendamentosTimeoutPendentes({
-    empresaId,
-    execucaoId: execucaoExistente.id,
-    noId: execucaoExistente.no_atual_id,
-  });
-
-  if (
-    noAtual.tipo_no === "avaliacao" &&
-    metadataExecucao.avaliacao_pendente_comentario === true &&
-    metadataExecucao.avaliacao_id
-  ) {
-    const comentarioRegistrado = await registrarComentarioAvaliacaoAutomacao({
-      empresaId,
-      conversaId,
-      execucao: execucaoExistente,
-      no: noAtual,
-      mensagemTexto,
-      numeroDestino,
+  if (execucaoExistente) {
+    console.log("[AUTOMATION_ENGINE] Continuando execução existente", {
+      execucaoId: execucaoExistente.id,
+      noAtualId: execucaoExistente.no_atual_id,
+      status: execucaoExistente.status,
     });
 
-    if (!comentarioRegistrado.ok) {
-      return comentarioRegistrado;
+    const { data: noAtual, error: noAtualError } = await supabaseAdmin
+      .from("automacao_nos")
+      .select("*")
+      .eq("id", execucaoExistente.no_atual_id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (noAtualError || !noAtual) {
+      console.error("[AUTOMATION_ENGINE] Erro ao buscar nó atual:", noAtualError);
+      return { ok: false, error: "Erro ao buscar nó atual." };
     }
 
-    await seguirParaProximoNo({
-      empresaId,
-      conversaId,
-      execucaoId: execucaoExistente.id,
-      fluxoId: execucaoExistente.fluxo_id,
-      noAtualId: execucaoExistente.no_atual_id,
-      mensagemTexto,
-      numeroDestino,
-    });
+    if (execucaoExistente.status === "aguardando") {
+      const metadataExecucao = execucaoExistente.metadata_json || {};
+
+      await cancelarAgendamentosTimeoutPendentes({
+        empresaId,
+        execucaoId: execucaoExistente.id,
+        noId: execucaoExistente.no_atual_id,
+      });
+
+      if (
+        noAtual.tipo_no === "avaliacao" &&
+        metadataExecucao.avaliacao_pendente_comentario === true &&
+        metadataExecucao.avaliacao_id
+      ) {
+        const comentarioRegistrado = await registrarComentarioAvaliacaoAutomacao({
+          empresaId,
+          conversaId,
+          execucao: execucaoExistente,
+          no: noAtual,
+          mensagemTexto,
+          numeroDestino,
+        });
+
+        if (!comentarioRegistrado.ok) {
+          return comentarioRegistrado;
+        }
+
+        await seguirParaProximoNo({
+          empresaId,
+          conversaId,
+          execucaoId: execucaoExistente.id,
+          fluxoId: execucaoExistente.fluxo_id,
+          noAtualId: execucaoExistente.no_atual_id,
+          mensagemTexto,
+          numeroDestino,
+        });
+
+        return {
+          ok: true,
+          status: "comentario_avaliacao_registrado",
+          execucaoId: execucaoExistente.id,
+        };
+      }
+
+      if (noAtual.tipo_no === "avaliacao") {
+        const avaliacaoRegistrada = await registrarAvaliacaoAutomacao({
+          empresaId,
+          conversaId,
+          execucao: execucaoExistente,
+          no: noAtual,
+          mensagemTexto,
+          numeroDestino,
+        });
+
+        if (!avaliacaoRegistrada.ok) {
+          return avaliacaoRegistrada;
+        }
+
+        if (avaliacaoRegistrada.aguardandoComentario) {
+          return {
+            ok: true,
+            status: "aguardando_comentario_avaliacao",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+      }
+
+      if (noAtual.tipo_no === "capturar_resposta") {
+        const capturaRegistrada = await registrarCapturaRespostaAutomacao({
+          empresaId,
+          conversaId,
+          execucao: execucaoExistente,
+          no: noAtual,
+          mensagemTexto,
+          numeroDestino,
+        });
+
+        if (!capturaRegistrada.ok) {
+          return capturaRegistrada;
+        }
+
+        if (!capturaRegistrada.valido && !capturaRegistrada.excedeuTentativas) {
+          return {
+            ok: true,
+            status: "captura_invalida_aguardando_nova_resposta",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+
+        await seguirParaProximoNo({
+          empresaId,
+          conversaId,
+          execucaoId: execucaoExistente.id,
+          fluxoId: execucaoExistente.fluxo_id,
+          noAtualId: execucaoExistente.no_atual_id,
+          mensagemTexto,
+          numeroDestino,
+        });
+
+        return {
+          ok: true,
+          status: capturaRegistrada.excedeuTentativas
+            ? "captura_tentativas_excedidas"
+            : "captura_registrada",
+          execucaoId: execucaoExistente.id,
+        };
+      }
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId: execucaoExistente.id,
+        fluxoId: execucaoExistente.fluxo_id,
+        noAtualId: execucaoExistente.no_atual_id,
+        mensagemTexto,
+        numeroDestino,
+      });
+    } else {
+      await executarNo({
+        empresaId,
+        conversaId,
+        execucaoId: execucaoExistente.id,
+        fluxoId: execucaoExistente.fluxo_id,
+        no: noAtual,
+        mensagemTexto,
+        numeroDestino,
+      });
+    }
 
     return {
       ok: true,
-      status: "comentario_avaliacao_registrado",
+      status: "execucao_continuada",
       execucaoId: execucaoExistente.id,
     };
   }
-
-  if (noAtual.tipo_no === "avaliacao") {
-    const avaliacaoRegistrada = await registrarAvaliacaoAutomacao({
-      empresaId,
-      conversaId,
-      execucao: execucaoExistente,
-      no: noAtual,
-      mensagemTexto,
-      numeroDestino,
-    });
-
-    if (!avaliacaoRegistrada.ok) {
-      return avaliacaoRegistrada;
-    }
-
-    if (avaliacaoRegistrada.aguardandoComentario) {
-      return {
-        ok: true,
-        status: "aguardando_comentario_avaliacao",
-        execucaoId: execucaoExistente.id,
-      };
-    }
-  }
-
-  await seguirParaProximoNo({
-    empresaId,
-    conversaId,
-    execucaoId: execucaoExistente.id,
-    fluxoId: execucaoExistente.fluxo_id,
-    noAtualId: execucaoExistente.no_atual_id,
-    mensagemTexto,
-    numeroDestino,
-  });
-} else {
-  await executarNo({
-    empresaId,
-    conversaId,
-    execucaoId: execucaoExistente.id,
-    fluxoId: execucaoExistente.fluxo_id,
-    no: noAtual,
-    mensagemTexto,
-    numeroDestino,
-  });
-}
-
-  return {
-    ok: true,
-    status: "execucao_continuada",
-    execucaoId: execucaoExistente.id,
-  };
-}
 
   const { data: gatilhos, error: gatilhosError } = await supabaseAdmin
     .from("automacao_gatilhos")
@@ -692,6 +861,44 @@ export async function executarNo(params: {
     return;
   }
 
+  if (no.tipo_no === "capturar_resposta") {
+    const mensagem =
+      String(no.configuracao_json?.mensagem || "").trim() ||
+      "Por favor, envie sua resposta.";
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagem,
+      execucaoId,
+      noId: no.id,
+    });
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "aguardando",
+        no_atual_id: no.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "aguardando_captura",
+      descricao: "Automação aguardando resposta para captura.",
+      entrada: no.configuracao_json,
+      saida: {},
+    });
+
+    return;
+  }
+
   if (
     no.tipo_no === "enviar_imagem" ||
     no.tipo_no === "enviar_video" ||
@@ -893,6 +1100,152 @@ export async function executarNo(params: {
     entrada: no.configuracao_json,
     saida: {},
   });
+}
+
+async function registrarCapturaRespostaAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+  execucao: any;
+  no: any;
+  mensagemTexto: string;
+  numeroDestino: string;
+}) {
+  const { empresaId, conversaId, execucao, no, mensagemTexto, numeroDestino } =
+    params;
+
+  const config = no.configuracao_json || {};
+  const tipoCaptura = String(config.tipo_captura || "texto");
+  const chave = String(config.variavel || "resposta").trim().toLowerCase();
+  const maxTentativas = Math.max(1, Number(config.max_tentativas || 3));
+  const mensagemErro =
+    String(config.mensagem_erro || "").trim() ||
+    "Não consegui identificar essa informação. Por favor, envie novamente.";
+
+  const validacao = validarCaptura(tipoCaptura, mensagemTexto);
+
+  const metadataAtual = execucao.metadata_json || {};
+  const tentativas = metadataAtual.tentativas_captura || {};
+  const tentativasDoNo = Number(tentativas[no.id] || 0);
+
+  if (!validacao.valido) {
+    const novasTentativas = tentativasDoNo + 1;
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "aguardando",
+        metadata_json: {
+          ...metadataAtual,
+          tentativas_captura: {
+            ...tentativas,
+            [no.id]: novasTentativas,
+          },
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucao.id)
+      .eq("empresa_id", empresaId);
+
+    if (novasTentativas >= maxTentativas) {
+      await registrarLog({
+        empresaId,
+        execucaoId: execucao.id,
+        fluxoId: execucao.fluxo_id,
+        noId: no.id,
+        tipoEvento: "captura_tentativas_excedidas",
+        descricao: "Cliente excedeu o limite de tentativas da captura.",
+        entrada: {
+          tipo_captura: tipoCaptura,
+          mensagemTexto,
+          tentativas: novasTentativas,
+        },
+        saida: {},
+      });
+
+      return {
+        ok: true,
+        valido: false,
+        excedeuTentativas: true,
+      };
+    }
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagemErro,
+      execucaoId: execucao.id,
+      noId: no.id,
+    });
+
+    return {
+      ok: true,
+      valido: false,
+      excedeuTentativas: false,
+    };
+  }
+
+  await supabaseAdmin.from("automacao_variaveis").upsert(
+    {
+      empresa_id: empresaId,
+      execucao_id: execucao.id,
+      contato_id: execucao.contato_id,
+      chave,
+      valor: validacao.valorLimpo,
+      metadata_json: {
+        tipo_captura: tipoCaptura,
+        valor_original: mensagemTexto,
+        valor_formatado: validacao.valorFormatado,
+      },
+      updated_at: new Date().toISOString(),
+    },
+    {
+      onConflict: "empresa_id,execucao_id,chave",
+    }
+  );
+
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      metadata_json: {
+        ...metadataAtual,
+        tentativas_captura: {
+          ...tentativas,
+          [no.id]: 0,
+        },
+        variaveis: {
+          ...(metadataAtual.variaveis || {}),
+          [chave]: validacao.valorLimpo,
+        },
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", execucao.id)
+    .eq("empresa_id", empresaId);
+
+  await registrarLog({
+    empresaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    noId: no.id,
+    tipoEvento: "captura_registrada",
+    descricao: `Resposta capturada na variável ${chave}.`,
+    entrada: {
+      tipo_captura: tipoCaptura,
+      mensagemTexto,
+    },
+    saida: {
+      chave,
+      valor: validacao.valorLimpo,
+      valor_formatado: validacao.valorFormatado,
+    },
+  });
+
+  return {
+    ok: true,
+    valido: true,
+    excedeuTentativas: false,
+  };
 }
 
 async function seguirParaProximoNo(params: {

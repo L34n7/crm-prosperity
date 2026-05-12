@@ -100,6 +100,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "enviar_audio") return "Áudio";
   if (tipo === "enviar_botoes") return "Botões";
   if (tipo === "avaliacao") return "Avaliação";
+  if (tipo === "capturar_resposta") return "Captura";
   return tipo;
 }
 
@@ -114,6 +115,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "enviar_audio") return styles.nodeAudio;
   if (tipo === "enviar_botoes") return styles.nodeBotoes;
   if (tipo === "avaliacao") return styles.nodeAvaliacao;
+  if (tipo === "capturar_resposta") return styles.nodePergunta;
   return styles.nodePadrao;
 }
 
@@ -128,6 +130,7 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "enviar_video") return "Novo vídeo";
   if (tipo === "enviar_audio") return "Novo áudio";
   if (tipo === "avaliacao") return "Avaliação";
+  if (tipo === "capturar_resposta") return "Capturar resposta";
   return "Novo bloco";
 }
 
@@ -182,10 +185,16 @@ function tituloVisivelCard(data: any) {
 }
 
 function tipoNoEsperaResposta(tipoNo: string) {
-  return tipoNo === "pergunta_opcoes" || tipoNo === "enviar_botoes";
+  return (
+    tipoNo === "pergunta_opcoes" ||
+    tipoNo === "enviar_botoes" ||
+    tipoNo === "capturar_resposta"
+  );
 }
 
 function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {
+  if (tipoNo === "capturar_resposta") return "sempre";
+
   return tipoNoEsperaResposta(tipoNo) ? "resposta_contem" : "sempre";
 }
 
@@ -357,6 +366,11 @@ export default function FluxosPage() {
   const [valorCondicao, setValorCondicao] = useState("");
   const [tipoCondicaoConexao, setTipoCondicaoConexao] =
     useState("resposta_contem");
+
+  const [capturaVariavelNode, setCapturaVariavelNode] = useState("nome");
+  const [capturaTipoNode, setCapturaTipoNode] = useState("nome");
+  const [capturaMensagemErroNode, setCapturaMensagemErroNode] = useState("");
+  const [capturaMaxTentativasNode, setCapturaMaxTentativasNode] = useState("3");
 
   const nodeEditado = useMemo(() => {
     return nodes.find((node) => node.id === editandoNodeId) || null;
@@ -780,6 +794,15 @@ async function criarFluxoRapido() {
               mensagem_comentario: "Obrigado! Agora escreva um comentário sobre seu atendimento.",
               mensagem_erro: "Por favor, responda com uma nota de 1 a 5.",
             }
+          : tipoNo === "capturar_resposta"
+          ? {
+              mensagem: "Me informe seu nome, por favor.",
+              variavel: "nome",
+              tipo_captura: "nome",
+              obrigatorio: true,
+              mensagem_erro: "Não consegui identificar essa informação. Por favor, envie novamente.",
+              max_tentativas: 3,
+            }
           : {},
           delay_segundos: null,
     };
@@ -918,6 +941,16 @@ function abrirEdicaoNo(node: Node) {
   setSetorDestino(configuracaoJson?.setor_id || "");
   setConfirmandoExclusaoNo(false);
   
+  setCapturaVariavelNode(String(configuracaoJson?.variavel || "nome"));
+  setCapturaTipoNode(String(configuracaoJson?.tipo_captura || "nome"));
+  setCapturaMensagemErroNode(
+    String(
+      configuracaoJson?.mensagem_erro ||
+        "Não consegui identificar essa informação. Por favor, envie novamente."
+    )
+  );
+  setCapturaMaxTentativasNode(String(configuracaoJson?.max_tentativas || 3));
+
   if (Array.isArray(configuracaoJson?.opcoes)) {
     setOpcoesNode(configuracaoJson.opcoes);
   } else {
@@ -1014,7 +1047,8 @@ function aplicarEdicaoNo() {
         tipoFinal === "enviar_audio" ||
         tipoFinal === "transferir_setor" ||
         tipoFinal === "encerrar" ||
-        tipoFinal === "avaliacao"
+        tipoFinal === "avaliacao" ||
+        tipoFinal === "capturar_resposta"
       ) {
         configuracao_json.mensagem = mensagemNode;
       }
@@ -1059,6 +1093,23 @@ function aplicarEdicaoNo() {
 
         configuracao_json.mensagem_erro =
           `Por favor, responda com uma nota de ${configuracao_json.nota_minima} a ${configuracao_json.nota_maxima}.`;
+      }
+
+      if (tipoFinal === "capturar_resposta") {
+        configuracao_json.variavel =
+          capturaVariavelNode.trim().toLowerCase() || "resposta";
+
+        configuracao_json.tipo_captura = capturaTipoNode || "texto";
+        configuracao_json.obrigatorio = true;
+
+        configuracao_json.mensagem_erro =
+          capturaMensagemErroNode.trim() ||
+          "Não consegui identificar essa informação. Por favor, envie novamente.";
+
+        configuracao_json.max_tentativas = Math.max(
+          1,
+          Number(capturaMaxTentativasNode || 3)
+        );
       }
 
       return dbNoParaReactFlow({
@@ -1736,6 +1787,20 @@ function validarFluxoAntesDeAtivar() {
       }
     }
 
+    if (tipoNo === "capturar_resposta") {
+      if (!String(config.mensagem || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
+      }
+
+      if (!String(config.variavel || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa informar a variável onde a resposta será salva.`;
+      }
+
+      if (!String(config.tipo_captura || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter um tipo de captura.`;
+      }
+    }
+
     if (
       tipoNo === "transferir_setor" &&
       !String(config.setor_id || "").trim()
@@ -2131,6 +2196,17 @@ useEffect(() => {
                         className={styles.headerDropdownItem}
                         onClick={() => {
                           setMenuHeaderAberto(false);
+                          adicionarNo("capturar_resposta");
+                        }}
+                      >
+                        + Capturar resposta
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
                           adicionarNo("transferir_setor");
                         }}
                       >
@@ -2426,6 +2502,7 @@ useEffect(() => {
                       >
                         <option value="enviar_texto">Mensagem</option>
                         <option value="pergunta_opcoes">Pergunta</option>
+                        <option value="capturar_resposta">Capturar resposta</option>
                         <option value="transferir_setor">Transferir</option>
                         <option value="encerrar">Encerrar</option>
                         <option value="enviar_imagem">Imagem</option>
@@ -2463,6 +2540,7 @@ useEffect(() => {
                     "transferir_setor",
                     "encerrar",
                     "avaliacao",
+                    "capturar_resposta",
                   ].includes(tipoNodeEdicao) && (
                     <label className={styles.field}>
                       <span className={styles.label}>
@@ -2492,6 +2570,60 @@ useEffect(() => {
                         placeholder="Digite o conteúdo"
                       />
                     </label>
+                  )}
+
+                  {tipoNodeEdicao === "capturar_resposta" && (
+                    <div className={styles.optionsBox}>
+                      <label className={styles.field}>
+                        <span className={styles.label}>Salvar resposta na variável</span>
+                        <input
+                          className={styles.input}
+                          value={capturaVariavelNode}
+                          onChange={(e) => setCapturaVariavelNode(e.target.value)}
+                          placeholder="Ex: nome, cpf, email"
+                        />
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Tipo de captura</span>
+                        <select
+                          className={styles.input}
+                          value={capturaTipoNode}
+                          onChange={(e) => setCapturaTipoNode(e.target.value)}
+                        >
+                          <option value="texto">Texto livre</option>
+                          <option value="nome">Nome</option>
+                          <option value="cpf">CPF</option>
+                          <option value="cnpj">CNPJ</option>
+                          <option value="email">Email</option>
+                          <option value="telefone">Telefone</option>
+                          <option value="numero">Número</option>
+                          <option value="data">Data</option>
+                          <option value="cep">CEP</option>
+                          <option value="moeda">Moeda</option>
+                        </select>
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Mensagem quando inválido</span>
+                        <textarea
+                          className={styles.textarea}
+                          value={capturaMensagemErroNode}
+                          onChange={(e) => setCapturaMensagemErroNode(e.target.value)}
+                        />
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Máximo de tentativas</span>
+                        <input
+                          type="number"
+                          min={1}
+                          className={styles.input}
+                          value={capturaMaxTentativasNode}
+                          onChange={(e) => setCapturaMaxTentativasNode(e.target.value)}
+                        />
+                      </label>
+                    </div>
                   )}
 
                   {tipoNodeEdicao === "avaliacao" && (
@@ -2951,62 +3083,62 @@ useEffect(() => {
                       </select>
                     </label>
 
-{tipoCondicaoConexao === "timeout_sem_resposta" && (
-  <div className={styles.optionsBox}>
-    <div className={styles.timeoutGrid}>
-      <label className={styles.field}>
-        <span className={styles.label}>Tempo mínimo</span>
+                    {tipoCondicaoConexao === "timeout_sem_resposta" && (
+                      <div className={styles.optionsBox}>
+                        <div className={styles.timeoutGrid}>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Tempo mínimo</span>
 
-        <input
-          type="number"
-          min={5}
-          max={timeoutUnidade === "horas" ? 22 : 1320}
-          className={styles.input}
-          value={timeoutQuantidade}
-          onChange={(e) => setTimeoutQuantidade(e.target.value)}
-        />
-      </label>
+                            <input
+                              type="number"
+                              min={5}
+                              max={timeoutUnidade === "horas" ? 22 : 1320}
+                              className={styles.input}
+                              value={timeoutQuantidade}
+                              onChange={(e) => setTimeoutQuantidade(e.target.value)}
+                            />
+                          </label>
 
-      <label className={styles.field}>
-        <span className={styles.label}>Unidade</span>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Unidade</span>
 
-        <select
-          className={styles.input}
-          value={timeoutUnidade}
-          onChange={(e) =>
-            setTimeoutUnidade(e.target.value as "minutos" | "horas")
-          }
-        >
-          <option value="minutos">Minutos</option>
-          <option value="horas">Horas</option>
-        </select>
-      </label>
-    </div>
+                            <select
+                              className={styles.input}
+                              value={timeoutUnidade}
+                              onChange={(e) =>
+                                setTimeoutUnidade(e.target.value as "minutos" | "horas")
+                              }
+                            >
+                              <option value="minutos">Minutos</option>
+                              <option value="horas">Horas</option>
+                            </select>
+                          </label>
+                        </div>
 
-    <label className={styles.field}>
-      <span className={styles.label}>Status da mensagem</span>
+                        <label className={styles.field}>
+                          <span className={styles.label}>Status da mensagem</span>
 
-      <select
-        className={styles.input}
-        value={statusEnvioTimeout}
-        onChange={(e) =>
-          setStatusEnvioTimeout(
-            e.target.value as "qualquer" | "entregue" | "lida"
-          )
-        }
-      >
-        <option value="qualquer">Qualquer status</option>
-        <option value="entregue">Apenas entregue</option>
-        <option value="lida">Apenas lida</option>
-      </select>
-    </label>
+                          <select
+                            className={styles.input}
+                            value={statusEnvioTimeout}
+                            onChange={(e) =>
+                              setStatusEnvioTimeout(
+                                e.target.value as "qualquer" | "entregue" | "lida"
+                              )
+                            }
+                          >
+                            <option value="qualquer">Qualquer status</option>
+                            <option value="entregue">Apenas entregue</option>
+                            <option value="lida">Apenas lida</option>
+                          </select>
+                        </label>
 
-    <p className={styles.help}>
-      Para mensagens comuns do WhatsApp, o tempo precisa ser menor que 22 horas.
-      Para 22h ou mais será necessário usar template aprovado.
-    </p>
-  </div>
-)}
+                        <p className={styles.help}>
+                          Para mensagens comuns do WhatsApp, o tempo precisa ser menor que 22 horas.
+                          Para 22h ou mais será necessário usar template aprovado.
+                        </p>
+                      </div>
+                    )}
 
                     {tipoCondicaoConexao !== "sempre" &&
                       tipoCondicaoConexao !== "timeout_sem_resposta" && (
