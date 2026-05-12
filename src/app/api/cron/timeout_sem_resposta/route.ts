@@ -76,16 +76,16 @@ export async function GET(request: Request) {
         }
 
         const { data: ultimaMensagemAutomacao } = await supabaseAdmin
-        .from("mensagens")
-        .select("id, status_envio, created_at")
-        .eq("empresa_id", agendamento.empresa_id)
-        .eq("conversa_id", payload.conversa_id)
-        .eq("automacao_execucao_id", agendamento.execucao_id)
-        .eq("automacao_no_id", agendamento.no_id)
-        .eq("origem", "enviada")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+          .from("mensagens")
+          .select("id, status_envio, origem, created_at")
+          .eq("empresa_id", agendamento.empresa_id)
+          .eq("conversa_id", payload.conversa_id)
+          .eq("automacao_execucao_id", agendamento.execucao_id)
+          .eq("automacao_no_id", agendamento.no_id)
+          .in("origem", ["enviada", "automatica"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
         const statusEnvioAtual =
         ultimaMensagemAutomacao?.status_envio || "desconhecido";
