@@ -1185,24 +1185,37 @@ async function registrarCapturaRespostaAutomacao(params: {
     };
   }
 
-  await supabaseAdmin.from("automacao_variaveis").upsert(
-    {
-      empresa_id: empresaId,
-      execucao_id: execucao.id,
-      contato_id: execucao.contato_id,
-      chave,
-      valor: validacao.valorLimpo,
-      metadata_json: {
-        tipo_captura: tipoCaptura,
-        valor_original: mensagemTexto,
-        valor_formatado: validacao.valorFormatado,
+  const { error: variavelError } = await supabaseAdmin
+    .from("automacao_variaveis")
+    .upsert(
+      {
+        empresa_id: empresaId,
+        execucao_id: execucao.id,
+        contato_id: execucao.contato_id,
+        chave,
+        valor: validacao.valorLimpo,
+        metadata_json: {
+          tipo_captura: tipoCaptura,
+          valor_original: mensagemTexto,
+          valor_formatado: validacao.valorFormatado,
+        },
+        updated_at: new Date().toISOString(),
       },
-      updated_at: new Date().toISOString(),
-    },
-    {
-      onConflict: "empresa_id,execucao_id,chave",
-    }
-  );
+      {
+        onConflict: "empresa_id,execucao_id,chave",
+      }
+    );
+
+  if (variavelError) {
+    console.error("[AUTOMATION_ENGINE] Erro ao salvar variável:", variavelError);
+
+    return {
+      ok: false,
+      valido: false,
+      excedeuTentativas: false,
+      error: "Erro ao salvar variável da automação.",
+    };
+  }
 
   await supabaseAdmin
     .from("automacao_execucoes")
