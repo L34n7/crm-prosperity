@@ -253,6 +253,45 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     return { ok: false, error: "Erro ao buscar execução." };
   }
 
+  if (!execucaoExistente) {
+    const { data: conversaAtual, error: conversaAtualError } = await supabaseAdmin
+      .from("conversas")
+      .select("id, status, responsavel_id, bot_ativo")
+      .eq("empresa_id", empresaId)
+      .eq("id", conversaId)
+      .maybeSingle();
+
+    if (conversaAtualError) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao buscar conversa antes de iniciar automação:",
+        conversaAtualError
+      );
+
+      return { ok: false, error: "Erro ao buscar conversa." };
+    }
+
+    const conversaEmAtendimentoHumano =
+      conversaAtual?.status === "em_atendimento" &&
+      !!conversaAtual?.responsavel_id &&
+      conversaAtual?.bot_ativo !== true;
+
+    if (conversaEmAtendimentoHumano) {
+      console.log(
+        "[AUTOMATION_ENGINE] Automação ignorada: conversa em atendimento humano.",
+        {
+          conversaId,
+          status: conversaAtual.status,
+          responsavelId: conversaAtual.responsavel_id,
+        }
+      );
+
+      return {
+        ok: true,
+        status: "ignorado_atendimento_humano",
+      };
+    }
+  }
+
   if (execucaoExistente) {
     console.log("[AUTOMATION_ENGINE] Continuando execução existente", {
       execucaoId: execucaoExistente.id,
