@@ -624,6 +624,7 @@ function getTooltipEtiqueta(etiqueta?: {
 
 type AudioMessagePlayerProps = {
   src: string;
+  mimeType?: string;
   isOutgoing?: boolean;
   isVoice?: boolean;
   fileName?: string | null;
@@ -640,6 +641,7 @@ function formatarTempoAudio(segundos: number) {
 
 function AudioMessagePlayer({
   src,
+  mimeType = "",
   isOutgoing = false,
   isVoice = false,
   fileName = null,
@@ -652,6 +654,7 @@ function AudioMessagePlayer({
   const [duracao, setDuracao] = useState(0);
   const [velocidade, setVelocidade] = useState(1);
   const [arrastando, setArrastando] = useState(false);
+  const [erroAudio, setErroAudio] = useState(false);
 
   const barrasWave = useMemo(() => {
     return Array.from({ length: 40 }, (_, i) => {
@@ -679,6 +682,18 @@ function AudioMessagePlayer({
   const waveInactiveClass = isOutgoing
     ? styles.audioWaveBarInactiveOutgoing
     : styles.audioWaveBarInactiveIncoming;
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    setErroAudio(false);
+    setTocando(false);
+    setTempoAtual(0);
+    setDuracao(0);
+
+    audio.load();
+  }, [src]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -826,9 +841,24 @@ function AudioMessagePlayer({
 
   return (
     <div className={containerClass}>
-      <audio ref={audioRef} preload="metadata">
-        <source src={src} />
+      <audio
+        key={src}
+        ref={audioRef}
+        preload="metadata"
+        src={src}
+        onError={() => {
+          setErroAudio(true);
+          setTocando(false);
+        }}
+      >
+        {mimeType ? <source src={src} type={mimeType} /> : null}
       </audio>
+
+      {erroAudio && (
+        <div className={`${styles.audioTimeInfo} ${textClass}`}>
+          Não foi possível reproduzir este áudio. Tente baixar o arquivo.
+        </div>
+      )}
 
       <div className={styles.audioPlayerTopRow}>
         <div className={styles.audioPlayerTopLeft}>
@@ -1450,7 +1480,7 @@ export default function ConversasPage() {
   const [imagemModalUrl, setImagemModalUrl] = useState<string | null>(null);
   const [imagemModalTitulo, setImagemModalTitulo] = useState<string | null>(null);
   const [imagemZoom, setImagemZoom] = useState(1);
-
+  
   const [arquivoPreview, setArquivoPreview] = useState<{
     url: string;
     nome: string;
@@ -1615,17 +1645,30 @@ export default function ConversasPage() {
     }
 
     if (msg.tipo_mensagem === "audio") {
+      const audioFileName =
+        msg.metadata_json?.filename ||
+        (mimeType.includes("ogg")
+          ? "audio.ogg"
+          : mimeType.includes("mpeg")
+          ? "audio.mp3"
+          : mimeType.includes("mp4")
+          ? "audio.m4a"
+          : "audio");
+
       return (
         <div>
           {url ? (
             <AudioMessagePlayer
               src={url}
+              mimeType={mimeType || "audio/ogg"}
               isOutgoing={msg.origem === "enviada"}
               isVoice={!!msg.metadata_json?.voice}
-              fileName={fileName}
+              fileName={audioFileName}
             />
           ) : (
-            <p className={styles.messageText}><TextoComEmoji texto={msg.conteudo} /></p>
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={msg.conteudo || "🎵 Áudio recebido"} />
+            </p>
           )}
         </div>
       );
@@ -1682,8 +1725,10 @@ export default function ConversasPage() {
             <div style={{ marginTop: 8 }}>
               <AudioMessagePlayer
                 src={url}
+                mimeType={mimeType}
                 isOutgoing={msg.origem === "enviada"}
                 isVoice={!!msg.metadata_json?.voice}
+                fileName={fileName}
               />
             </div>
           )}
