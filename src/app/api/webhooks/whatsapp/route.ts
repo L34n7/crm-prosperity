@@ -288,13 +288,40 @@ export async function POST(req: NextRequest) {
 
           const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
 
+          const mensagemAvisoAudio =
+            "Não consegui entender o áudio. Pode enviar novamente falando mais claro ou escrever sua resposta?";
+
           if (phoneNumberId && accessToken) {
-            await sendWhatsAppTextMessage({
+            const envioAviso = await sendWhatsAppTextMessage({
               phoneNumberId,
               accessToken,
               to: message.from,
-              body:
-                "Não consegui entender o áudio. Pode enviar novamente falando mais claro ou escrever sua resposta?",
+              body: mensagemAvisoAudio,
+            });
+
+            const { data: protocoloMensagemAviso } = await supabaseAdmin
+              .from("conversa_protocolos")
+              .select("id")
+              .eq("conversa_id", conversation.id)
+              .eq("ativo", true)
+              .maybeSingle();
+
+            await supabaseAdmin.from("mensagens").insert({
+              empresa_id: integration.empresa_id,
+              conversa_id: conversation.id,
+              conversa_protocolo_id:
+                protocoloMensagemAviso?.id || protocoloAtivo?.id || null,
+              remetente_tipo: "bot",
+              conteudo: mensagemAvisoAudio,
+              tipo_mensagem: "texto",
+              origem: "automatica",
+              status_envio: envioAviso.ok ? "enviada" : "falha",
+              mensagem_externa_id: envioAviso.messageId,
+              metadata_json: {
+                tipo: "aviso_audio_sem_transcricao",
+                meta_response: envioAviso.raw,
+                erro: envioAviso.error,
+              },
             });
           } else {
             console.error(
