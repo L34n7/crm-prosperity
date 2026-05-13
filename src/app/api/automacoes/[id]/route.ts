@@ -171,6 +171,12 @@ export async function PUT(
         condicao_json: conexao.condicao_json || {},
         rotulo: conexao.rotulo || null,
         ordem: Number(conexao.ordem || index + 1),
+
+        usar_ia: conexao.usar_ia === true,
+        descricao_ia: conexao.descricao_ia
+          ? String(conexao.descricao_ia).trim()
+          : null,
+
         ativo: true,
         updated_at: agora,
       }));

@@ -48,6 +48,8 @@ type AutomacaoConexao = {
   rotulo: string | null;
   ordem: number;
   condicao_json: Record<string, any>;
+  usar_ia?: boolean;
+  descricao_ia?: string | null;
 };
 
 type GatilhoFluxo = {
@@ -367,6 +369,8 @@ export default function FluxosPage() {
   const [tipoCondicaoConexao, setTipoCondicaoConexao] =
     useState("resposta_contem");
 
+  const [usarIaConexao, setUsarIaConexao] = useState(false);
+  const [descricaoIaConexao, setDescricaoIaConexao] = useState("");
   const [capturaVariavelNode, setCapturaVariavelNode] = useState("nome");
   const [capturaTipoNode, setCapturaTipoNode] = useState("nome");
   const [capturaMensagemErroNode, setCapturaMensagemErroNode] = useState("");
@@ -579,6 +583,8 @@ export default function FluxosPage() {
       data: {
         condicao_json: conexao.condicao_json || {},
         rotulo: ehSempreSeguir ? "Sempre seguir" : conexao.rotulo || "",
+        usar_ia: conexao.usar_ia === true,
+        descricao_ia: conexao.descricao_ia || "",
       },
     };
   }
@@ -643,6 +649,8 @@ export default function FluxosPage() {
           condicao_json: {
             tipo: tipoCondicaoPadrao,
           },
+          usar_ia: false,
+          descricao_ia: "",
         },
       } as Edge;
 
@@ -981,12 +989,14 @@ function abrirEdicaoNo(node: Node) {
 }
 
 function abrirEdicaoConexao(edge: Edge) {
-  const data = edge.data as
-    | {
-        condicao_json?: Record<string, any>;
-        rotulo?: string;
-      }
-    | undefined;
+    const data = edge.data as
+      | {
+          condicao_json?: Record<string, any>;
+          rotulo?: string;
+          usar_ia?: boolean;
+          descricao_ia?: string;
+        }
+      | undefined;
 
   const condicao = data?.condicao_json || {};
   const timeoutSegundos = Number(condicao.timeout_segundos || 7200);
@@ -1009,6 +1019,9 @@ function abrirEdicaoConexao(edge: Edge) {
   setRotuloConexao(String(data?.rotulo || ""));
   setValorCondicao(String(condicao.valor || ""));
   setConfirmandoExclusaoConexao(false);
+
+  setUsarIaConexao(Boolean(data?.usar_ia));
+  setDescricaoIaConexao(String(data?.descricao_ia || ""));
   
   const nodeOrigem = nodes.find((node) => node.id === edge.source);
   const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
@@ -1228,6 +1241,8 @@ function aplicarEdicaoConexao() {
             : rotuloConexao,
 
           condicao_json: condicaoJson,
+          usar_ia: usarIaConexao,
+          descricao_ia: descricaoIaConexao.trim(),
         },
       };
     })
@@ -1343,6 +1358,8 @@ async function duplicarFluxo(fluxo: Fluxo) {
         | {
             condicao_json?: Record<string, any>;
             rotulo?: string;
+            usar_ia?: boolean;
+            descricao_ia?: string;
         }
         | undefined;
 
@@ -1355,6 +1372,8 @@ async function duplicarFluxo(fluxo: Fluxo) {
         (typeof edge.label === "string" ? edge.label : null),
         ordem: index + 1,
         condicao_json: data?.condicao_json || {},
+        usar_ia: data?.usar_ia === true,
+        descricao_ia: data?.descricao_ia || null,
     };
     });
 
@@ -3242,6 +3261,40 @@ useEffect(() => {
                         </p>
                       </div>
                     )}
+
+                    <div className={styles.optionsBox}>
+                      <label className={styles.switchField}>
+                        <input
+                          type="checkbox"
+                          checked={usarIaConexao}
+                          onChange={(e) => setUsarIaConexao(e.target.checked)}
+                        />
+
+                        <div>
+                          <strong>Usar IA para interpretar esta conexão</strong>
+                          <p>
+                            A IA vai analisar a resposta do cliente e escolher esta conexão quando a intenção combinar com a descrição abaixo.
+                          </p>
+                        </div>
+                      </label>
+
+                      {usarIaConexao && (
+                        <label className={styles.field}>
+                          <span className={styles.label}>Descrição para IA</span>
+
+                          <textarea
+                            className={styles.textarea}
+                            value={descricaoIaConexao}
+                            onChange={(e) => setDescricaoIaConexao(e.target.value)}
+                            placeholder="Ex: Use esta conexão quando o cliente quiser saber preço, planos, mensalidade, orçamento ou contratar."
+                          />
+
+                          <span className={styles.help}>
+                            Descreva a intenção do cliente. Não coloque resposta pronta; coloque quando esta conexão deve ser usada.
+                          </span>
+                        </label>
+                      )}
+                    </div>
 
                     {tipoCondicaoConexao !== "sempre" &&
                       tipoCondicaoConexao !== "timeout_sem_resposta" && (

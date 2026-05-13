@@ -8,6 +8,7 @@ import { gatilhoCombinaComMensagem } from "./match-trigger";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendAutomationNotificationEmail } from "@/lib/email/send-automation-notification-email";
+import { interpretarConexaoComIA } from "@/lib/ia/interpretar-conexao";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -1465,6 +1466,88 @@ async function seguirParaProximoNo(params: {
       conexoesComCondicaoDeResposta.find((conexao) =>
         condicaoCombinaComMensagem(conexao.condicao_json, mensagemTexto)
       ) || null;
+
+    if (!conexaoEscolhida) {
+      const conexoesComIA = conexoes.filter(
+        (conexao) => conexao.usar_ia === true
+      );
+
+      if (conexoesComIA.length > 0) {
+        try {
+          const resultadoIA = await interpretarConexaoComIA({
+            mensagemCliente: mensagemTexto,
+            conexoesDisponiveis: conexoesComIA.map((conexao) => ({
+              id: conexao.id,
+              nome:
+                conexao.nome_conexao ||
+                conexao.nome ||
+                conexao.titulo ||
+                "Conexão sem nome",
+              descricao_ia: conexao.descricao_ia,
+            })),
+          });
+
+          console.log("[IA CONEXÃO]", resultadoIA);
+
+          const conexaoIA = conexoesComIA.find(
+            (conexao) => conexao.id === resultadoIA.conexao_id
+          );
+
+          if (conexaoIA && resultadoIA.confianca >= 0.75) {
+            conexaoEscolhida = conexaoIA;
+
+            await registrarLog({
+              empresaId,
+              execucaoId,
+              fluxoId,
+              noId: noAtualId,
+              conexaoId: conexaoIA.id,
+              tipoEvento: "ia_conexao_escolhida",
+              descricao: "IA interpretou a resposta do cliente e escolheu uma conexão.",
+              entrada: {
+                mensagemTexto,
+                conexoes_avaliadas: conexoesComIA.map((c) => ({
+                  id: c.id,
+                  nome: c.nome_conexao || c.nome || c.titulo || null,
+                  descricao_ia: c.descricao_ia,
+                })),
+              },
+              saida: resultadoIA,
+            });
+          } else {
+            await registrarLog({
+              empresaId,
+              execucaoId,
+              fluxoId,
+              noId: noAtualId,
+              tipoEvento: "ia_conexao_baixa_confianca",
+              descricao: "IA não escolheu uma conexão com confiança suficiente.",
+              entrada: {
+                mensagemTexto,
+              },
+              saida: resultadoIA,
+            });
+          }
+        } catch (iaError) {
+          console.error("[AUTOMATION_ENGINE] Erro ao interpretar conexão com IA:", iaError);
+
+          await registrarLog({
+            empresaId,
+            execucaoId,
+            fluxoId,
+            noId: noAtualId,
+            tipoEvento: "erro_ia_conexao",
+            descricao: "Erro ao chamar IA para interpretar conexão.",
+            entrada: {
+              mensagemTexto,
+            },
+            saida: {
+              erro: iaError instanceof Error ? iaError.message : String(iaError),
+            },
+          });
+        }
+      }
+    }
 
     if (!conexaoEscolhida) {
       await enviarMensagemAutomacao({
