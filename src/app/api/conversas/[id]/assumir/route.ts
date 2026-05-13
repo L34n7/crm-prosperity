@@ -195,6 +195,44 @@ export async function POST(
       );
     }
 
+    const agora = new Date().toISOString();
+
+    const { data: execucoesAtivas } = await supabaseAdmin
+      .from("automacao_execucoes")
+      .select("id")
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("conversa_id", id)
+      .in("status", ["rodando", "aguardando"]);
+
+    const execucaoIds = (execucoesAtivas || []).map((execucao) => execucao.id);
+
+    if (execucaoIds.length > 0) {
+      await supabaseAdmin
+        .from("automacao_execucoes")
+        .update({
+          status: "cancelado",
+          finished_at: agora,
+          updated_at: agora,
+          metadata_json: {
+            motivo_cancelamento: "atendente_assumiu_conversa",
+            cancelado_em: agora,
+            usuario_responsavel_id: usuario.id,
+          },
+        })
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("conversa_id", id)
+        .in("status", ["rodando", "aguardando"]);
+
+      await supabaseAdmin
+        .from("automacao_agendamentos")
+        .update({
+          status: "cancelado",
+        })
+        .eq("empresa_id", usuario.empresa_id)
+        .in("execucao_id", execucaoIds)
+        .eq("status", "pendente");
+    }
+
     return NextResponse.json({
       ok: true,
       message: "Conversa assumida com sucesso",

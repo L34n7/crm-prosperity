@@ -4238,12 +4238,13 @@ const templateFooterTexto = useMemo(() => {
     const interval = window.setInterval(async () => {
       const estavaNoFinal = verificarSeUsuarioEstaNoFinal();
 
-      if (estavaNoFinal) {
-        forcarScrollParaFinalRef.current = true;
-        impedirAutoScrollRef.current = false;
-      } else {
-        impedirAutoScrollRef.current = true;
-      }
+    if (estavaNoFinal) {
+      impedirAutoScrollRef.current = false;
+      forcarScrollParaFinalRef.current = false;
+    } else {
+      impedirAutoScrollRef.current = true;
+      forcarScrollParaFinalRef.current = false;
+    }
 
       const listaAtualizada = await carregarConversas(true);
       const conversaAtualizada = listaAtualizada.find(

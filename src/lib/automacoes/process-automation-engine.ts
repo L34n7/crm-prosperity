@@ -238,7 +238,81 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     contatoId,
     mensagemTexto,
   });
-  
+
+  const { data: conversaAtual, error: conversaAtualError } = await supabaseAdmin
+    .from("conversas")
+    .select("id, status, responsavel_id, bot_ativo")
+    .eq("empresa_id", empresaId)
+    .eq("id", conversaId)
+    .maybeSingle();
+
+  if (conversaAtualError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao buscar conversa antes de processar automação:",
+      conversaAtualError
+    );
+
+    return { ok: false, error: "Erro ao buscar conversa." };
+  }
+
+  const conversaEmAtendimentoHumano =
+    conversaAtual?.status === "em_atendimento" &&
+    !!conversaAtual?.responsavel_id &&
+    conversaAtual?.bot_ativo !== true;
+
+  if (conversaEmAtendimentoHumano) {
+    const agora = new Date().toISOString();
+
+    const { data: execucoesParaCancelar } = await supabaseAdmin
+      .from("automacao_execucoes")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .in("status", ["rodando", "aguardando"]);
+
+    const execucaoIds = (execucoesParaCancelar || []).map((execucao) => execucao.id);
+
+    if (execucaoIds.length > 0) {
+      await supabaseAdmin
+        .from("automacao_execucoes")
+        .update({
+          status: "cancelado",
+          finished_at: agora,
+          updated_at: agora,
+          metadata_json: {
+            motivo_cancelamento: "atendimento_humano_assumiu_conversa",
+            cancelado_em: agora,
+          },
+        })
+        .eq("empresa_id", empresaId)
+        .eq("conversa_id", conversaId)
+        .in("status", ["rodando", "aguardando"]);
+
+      await supabaseAdmin
+        .from("automacao_agendamentos")
+        .update({
+          status: "cancelado",
+        })
+        .eq("empresa_id", empresaId)
+        .in("execucao_id", execucaoIds)
+        .eq("status", "pendente");
+    }
+
+    console.log(
+      "[AUTOMATION_ENGINE] Automação ignorada/cancelada: conversa em atendimento humano.",
+      {
+        conversaId,
+        status: conversaAtual.status,
+        responsavelId: conversaAtual.responsavel_id,
+        execucoesCanceladas: execucaoIds.length,
+      }
+    );
+
+    return {
+      ok: true,
+      status: "ignorado_atendimento_humano",
+    };
+  }  
 
   const { data: execucaoExistente, error: execucaoError } = await supabaseAdmin
     .from("automacao_execucoes")
@@ -251,45 +325,6 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   if (execucaoError) {
     console.error("[AUTOMATION_ENGINE] Erro ao buscar execução:", execucaoError);
     return { ok: false, error: "Erro ao buscar execução." };
-  }
-
-  if (!execucaoExistente) {
-    const { data: conversaAtual, error: conversaAtualError } = await supabaseAdmin
-      .from("conversas")
-      .select("id, status, responsavel_id, bot_ativo")
-      .eq("empresa_id", empresaId)
-      .eq("id", conversaId)
-      .maybeSingle();
-
-    if (conversaAtualError) {
-      console.error(
-        "[AUTOMATION_ENGINE] Erro ao buscar conversa antes de iniciar automação:",
-        conversaAtualError
-      );
-
-      return { ok: false, error: "Erro ao buscar conversa." };
-    }
-
-    const conversaEmAtendimentoHumano =
-      conversaAtual?.status === "em_atendimento" &&
-      !!conversaAtual?.responsavel_id &&
-      conversaAtual?.bot_ativo !== true;
-
-    if (conversaEmAtendimentoHumano) {
-      console.log(
-        "[AUTOMATION_ENGINE] Automação ignorada: conversa em atendimento humano.",
-        {
-          conversaId,
-          status: conversaAtual.status,
-          responsavelId: conversaAtual.responsavel_id,
-        }
-      );
-
-      return {
-        ok: true,
-        status: "ignorado_atendimento_humano",
-      };
-    }
   }
 
   if (execucaoExistente) {
