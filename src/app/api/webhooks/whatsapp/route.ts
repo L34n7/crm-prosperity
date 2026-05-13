@@ -11,6 +11,8 @@ import { saveIncomingWhatsAppMessage } from "@/lib/whatsapp/save-incoming-messag
 import { processAutomationEngine } from "@/lib/automacoes/process-automation-engine";
 import { updateWhatsAppMessageStatus } from "@/lib/whatsapp/update-message-status";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { baixarAudioWhatsApp } from "@/lib/whatsapp/baixar-audio-whatsapp";
+import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 const supabaseAdmin = getSupabaseAdmin();
@@ -202,15 +204,60 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        const metadataJson = (message.metadataJson || {}) as any;
+
+        let textoAutomacao =
+          message.text?.trim() ||
+          metadataJson?.interactive?.button_reply?.id ||
+          metadataJson?.interactive?.button_reply?.title ||
+          "";
+
+        let transcricaoAudio: string | null = null;
+
+        if (message.tipoMensagem === "audio") {
+          try {
+            const mediaId =
+              metadataJson?.media_id ||
+              metadataJson?.audio?.id ||
+              message.rawMessage?.audio?.id;
+
+            if (mediaId) {
+              const audioBuffer = await baixarAudioWhatsApp(mediaId);
+
+              transcricaoAudio = await transcreverAudioComIA({
+                audioBuffer,
+                fileName: `${mediaId}.ogg`,
+              });
+
+              if (transcricaoAudio.trim()) {
+                textoAutomacao = transcricaoAudio.trim();
+              }
+
+              console.log("[WEBHOOK WHATSAPP] Áudio transcrito:", {
+                mediaId,
+                texto: transcricaoAudio,
+              });
+            } else {
+              console.warn("[WEBHOOK WHATSAPP] Áudio recebido sem mediaId.");
+            }
+          } catch (audioError) {
+            console.error("[WEBHOOK WHATSAPP] Erro ao transcrever áudio:", audioError);
+          }
+        }
+
         const payloadSalvarMensagem: any = {
           empresaId: integration.empresa_id,
           conversaId: conversation.id,
-          conteudo: message.conteudo,
+          conteudo: transcricaoAudio || message.conteudo,
           tipoMensagem: message.tipoMensagem,
           statusEnvio: "entregue",
           mensagemExternaId: message.messageId,
           timestamp: message.timestamp,
-          metadataJson: message.metadataJson,
+          metadataJson: {
+            ...(message.metadataJson || {}),
+            transcricao_audio: transcricaoAudio,
+            transcricao_modelo: transcricaoAudio ? "gpt-4o-mini-transcribe" : null,
+          },
           conversaProtocoloId: protocoloAtivo?.id ?? null,
         };
 
@@ -228,18 +275,10 @@ export async function POST(req: NextRequest) {
             }
           | null = null;
 
-        const metadataJson = (message.metadataJson || {}) as any;
-
-        const textoAutomacao =
-          message.text?.trim() ||
-          metadataJson?.interactive?.button_reply?.id ||
-          metadataJson?.interactive?.button_reply?.title ||
-          "";
-
         const podeRodarAutomacao =
           !savedMessage.duplicated &&
-          ["texto", "botao"].includes(message.tipoMensagem) &&
-          !!message.text?.trim();
+          ["texto", "botao", "audio"].includes(message.tipoMensagem) &&
+          !!textoAutomacao.trim();
 
         if (podeRodarAutomacao) {
           automationResult = await processAutomationEngine({
