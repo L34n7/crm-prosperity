@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+export const runtime = "nodejs";
+
+const supabaseAdmin = getSupabaseAdmin();
 
 type MetaMediaInfoResponse = {
   url?: string;
@@ -7,6 +12,16 @@ type MetaMediaInfoResponse = {
   file_size?: number;
   id?: string;
   messaging_product?: string;
+};
+
+type IntegracaoWhatsapp = {
+  id: string;
+  status: string | null;
+  config_json: {
+    access_token?: string;
+    token_type?: string;
+    expires_in?: number;
+  } | null;
 };
 
 function getFileExtensionFromMimeType(mimeType?: string | null) {
@@ -31,6 +46,42 @@ function buildSafeFilename(mediaId: string, mimeType?: string | null) {
   return `whatsapp-media-${mediaId}${ext}`;
 }
 
+async function buscarAccessTokenDaMidia(mediaId: string) {
+  const { data: mensagem, error: mensagemError } = await supabaseAdmin
+    .from("mensagens")
+    .select(
+      `
+      id,
+      conversa_id,
+      metadata_json,
+      conversas (
+        id,
+        integracao_whatsapp_id,
+        integracoes_whatsapp (
+          id,
+          status,
+          config_json
+        )
+      )
+    `
+    )
+    .filter("metadata_json->>media_id", "eq", mediaId)
+    .maybeSingle();
+
+  if (mensagemError) {
+    throw new Error(mensagemError.message);
+  }
+
+  const integracao = Array.isArray(mensagem?.conversas?.integracoes_whatsapp)
+    ? mensagem?.conversas?.integracoes_whatsapp?.[0]
+    : mensagem?.conversas?.integracoes_whatsapp;
+
+  const tokenDaIntegracao = (integracao as IntegracaoWhatsapp | null)
+    ?.config_json?.access_token;
+
+  return tokenDaIntegracao || process.env.WHATSAPP_ACCESS_TOKEN || "";
+}
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ mediaId: string }> }
@@ -45,14 +96,15 @@ export async function GET(
       );
     }
 
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const accessToken = await buscarAccessTokenDaMidia(mediaId);
     const apiVersion = process.env.WHATSAPP_API_VERSION || "v23.0";
 
     if (!accessToken) {
       return NextResponse.json(
         {
           ok: false,
-          error: "WHATSAPP_ACCESS_TOKEN não definido nas variáveis de ambiente",
+          error:
+            "Token do WhatsApp não encontrado na integração nem nas variáveis de ambiente",
         },
         { status: 500 }
       );
@@ -130,10 +182,7 @@ export async function GET(
 
     const responseHeaders = new Headers();
     responseHeaders.set("Content-Type", contentType);
-    responseHeaders.set(
-      "Content-Disposition",
-      `inline; filename="${filename}"`
-    );
+    responseHeaders.set("Content-Disposition", `inline; filename="${filename}"`);
     responseHeaders.set("Cache-Control", "private, no-store, max-age=0");
     responseHeaders.set("Accept-Ranges", "bytes");
 
@@ -155,7 +204,10 @@ export async function GET(
     return NextResponse.json(
       {
         ok: false,
-        error: "Erro interno ao processar mídia do WhatsApp",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro interno ao processar mídia do WhatsApp",
       },
       { status: 500 }
     );
