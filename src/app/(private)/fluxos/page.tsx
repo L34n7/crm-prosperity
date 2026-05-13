@@ -377,6 +377,14 @@ export default function FluxosPage() {
   const [capturaMensagemErroNode, setCapturaMensagemErroNode] = useState("");
   const [capturaMaxTentativasNode, setCapturaMaxTentativasNode] = useState("3");
 
+  const [maxTentativasInvalidasNode, setMaxTentativasInvalidasNode] = useState("3");
+  const [maxTentativasSemRespostaNode, setMaxTentativasSemRespostaNode] = useState("3");
+  const [acaoExcessoTentativasNode, setAcaoExcessoTentativasNode] =
+    useState("transferir_atendimento");
+  const [setorExcessoTentativasNode, setSetorExcessoTentativasNode] =
+    useState("");
+  const [mensagemExcessoTentativasNode, setMensagemExcessoTentativasNode] =
+    useState("Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.");
   const [notificarAoChegarNode, setNotificarAoChegarNode] = useState(false);
   const [notificacaoTituloNode, setNotificacaoTituloNode] = useState("");
   const [notificacaoMensagemNode, setNotificacaoMensagemNode] = useState("");
@@ -789,6 +797,11 @@ async function criarFluxoRapido() {
                 { valor: "1", titulo: "Opção 1" },
                 { valor: "2", titulo: "Opção 2" },
               ],
+              max_tentativas_invalidas: 3,
+              max_tentativas_sem_resposta: 3,
+              acao_excesso_tentativas: "transferir_atendimento",
+              mensagem_excesso_tentativas:
+                "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.",
             }
           : tipoNo === "enviar_botoes"
           ? {
@@ -798,6 +811,11 @@ async function criarFluxoRapido() {
                 { id: "sim", titulo: "Sim" },
                 { id: "nao", titulo: "Não" },
               ],
+              max_tentativas_invalidas: 3,
+              max_tentativas_sem_resposta: 3,
+              acao_excesso_tentativas: "transferir_atendimento",
+              mensagem_excesso_tentativas:
+                "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.",
             }
           : tipoNo === "avaliacao"
           ? {
@@ -964,6 +982,27 @@ function abrirEdicaoNo(node: Node) {
     )
   );
   setCapturaMaxTentativasNode(String(configuracaoJson?.max_tentativas || 3));
+  setMaxTentativasInvalidasNode(
+    String(configuracaoJson?.max_tentativas_invalidas || 3)
+  );
+
+  setMaxTentativasSemRespostaNode(
+    String(configuracaoJson?.max_tentativas_sem_resposta || 3)
+  );
+
+  setAcaoExcessoTentativasNode(
+    String(configuracaoJson?.acao_excesso_tentativas || "transferir_atendimento")
+  );
+  setSetorExcessoTentativasNode(
+    String(configuracaoJson?.setor_excesso_tentativas || "")
+  );
+
+  setMensagemExcessoTentativasNode(
+    String(
+      configuracaoJson?.mensagem_excesso_tentativas ||
+        "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente."
+    )
+  );
 
   setNotificarAoChegarNode(Boolean(configuracaoJson?.notificar_ao_chegar));
 
@@ -1107,6 +1146,33 @@ function aplicarEdicaoNo() {
         configuracao_json.botoes = botoesNode;
       }
 
+      if (
+        tipoFinal === "pergunta_opcoes" ||
+        tipoFinal === "enviar_botoes" ||
+        tipoFinal === "capturar_resposta" ||
+        tipoFinal === "avaliacao"
+      ) {
+        configuracao_json.max_tentativas_invalidas = Math.max(
+          1,
+          Number(maxTentativasInvalidasNode || 3)
+        );
+
+        configuracao_json.max_tentativas_sem_resposta = Math.max(
+          1,
+          Number(maxTentativasSemRespostaNode || 3)
+        );
+
+        configuracao_json.acao_excesso_tentativas =
+          acaoExcessoTentativasNode || "transferir_atendimento";
+          
+        configuracao_json.setor_excesso_tentativas =
+          setorExcessoTentativasNode || null;
+
+        configuracao_json.mensagem_excesso_tentativas =
+          mensagemExcessoTentativasNode.trim() ||
+          "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.";
+      }
+
       if (tipoFinal === "transferir_setor") {
         configuracao_json.setor_id = setorDestino;
       }
@@ -1151,11 +1217,6 @@ function aplicarEdicaoNo() {
         configuracao_json.mensagem_erro =
           capturaMensagemErroNode.trim() ||
           "Não consegui identificar essa informação. Por favor, envie novamente.";
-
-        configuracao_json.max_tentativas = Math.max(
-          1,
-          Number(capturaMaxTentativasNode || 3)
-        );
       }
 
         configuracao_json.notificar_ao_chegar = notificarAoChegarNode;
@@ -2690,17 +2751,6 @@ useEffect(() => {
                           onChange={(e) => setCapturaMensagemErroNode(e.target.value)}
                         />
                       </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Máximo de tentativas</span>
-                        <input
-                          type="number"
-                          min={1}
-                          className={styles.input}
-                          value={capturaMaxTentativasNode}
-                          onChange={(e) => setCapturaMaxTentativasNode(e.target.value)}
-                        />
-                      </label>
                     </div>
                   )}
 
@@ -3142,6 +3192,122 @@ useEffect(() => {
                     </div>
                   )}
 
+                  {[
+                    "pergunta_opcoes",
+                    "enviar_botoes",
+                    "capturar_resposta",
+                    "avaliacao",
+                  ].includes(tipoNodeEdicao) && (
+                    <div className={styles.tentativasBox}>
+                      <div>
+                        <span className={styles.label}>Controle de tentativas</span>
+
+                        <p className={styles.help}>
+                          Evita que o fluxo fique repetindo este bloco em loop.
+                        </p>
+                      </div>
+
+                      <div className={styles.optionRow}>
+                        <label className={styles.field}>
+                          <span className={styles.label}>
+                            Respostas inválidas
+                          </span>
+
+                          <input
+                            type="number"
+                            min={1}
+                            className={styles.input}
+                            value={maxTentativasInvalidasNode}
+                            onChange={(e) =>
+                              setMaxTentativasInvalidasNode(e.target.value)
+                            }
+                          />
+                        </label>
+
+                        <label className={styles.field}>
+                          <span className={styles.label}>
+                            Sem resposta
+                          </span>
+
+                          <input
+                            type="number"
+                            min={1}
+                            className={styles.input}
+                            value={maxTentativasSemRespostaNode}
+                            onChange={(e) =>
+                              setMaxTentativasSemRespostaNode(e.target.value)
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>
+                          Quando exceder
+                        </span>
+
+                        <select
+                          className={styles.input}
+                          value={acaoExcessoTentativasNode}
+                          onChange={(e) =>
+                            setAcaoExcessoTentativasNode(e.target.value)
+                          }
+                        >
+                          <option value="transferir_atendimento">
+                            Transferir para atendimento
+                          </option>
+
+                          <option value="encerrar_fluxo">
+                            Encerrar fluxo
+                          </option>
+
+                          <option value="reiniciar_fluxo">
+                            Reiniciar fluxo
+                          </option>
+                        </select>
+                        {acaoExcessoTentativasNode === "transferir_atendimento" && (
+                          <label className={styles.field}>
+                            <span className={styles.label}>
+                              Setor do atendimento
+                            </span>
+
+                            <select
+                              className={styles.input}
+                              value={setorExcessoTentativasNode}
+                              onChange={(e) =>
+                                setSetorExcessoTentativasNode(e.target.value)
+                              }
+                            >
+                              <option value="">
+                                Selecione um setor
+                              </option>
+
+                              {setores.map((setor) => (
+                                <option key={setor.id} value={setor.id}>
+                                  {setor.nome}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>
+                          Mensagem ao exceder
+                        </span>
+
+                        <textarea
+                          className={styles.textarea}
+                          value={mensagemExcessoTentativasNode}
+                          onChange={(e) =>
+                            setMensagemExcessoTentativasNode(e.target.value)
+                          }
+                        />
+                      </label>
+                    </div>
+                  )}
+
                   <div className={styles.actionButtonsRow}>
                     {nodeEditado.data?.tipo_no !== "inicio" && (
                       <>
@@ -3276,8 +3442,8 @@ useEffect(() => {
                       </div>
                     )}
 
-                    <div className={styles.optionsBox}>
-                      <label className={styles.switchField}>
+                    <div className={styles.IABox}>
+                      <label className={styles.IAField}>
                         <input
                           type="checkbox"
                           checked={usarIaConexao}

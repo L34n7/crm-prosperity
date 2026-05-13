@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { executarNo } from "@/lib/automacoes/process-automation-engine";
+import {
+  executarNo,
+  registrarTentativaBloco,
+  executarAcaoExcessoTentativas,
+} from "@/lib/automacoes/process-automation-engine";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -63,12 +67,6 @@ export async function GET(request: Request) {
 
     for (const agendamento of agendamentos || []) {
       try {
-        await supabaseAdmin
-          .from("automacao_agendamentos")
-          .update({
-            status: "executando",
-          })
-          .eq("id", agendamento.id);
 
         const payload = agendamento.payload_json || {};
 
@@ -193,6 +191,63 @@ export async function GET(request: Request) {
             .eq("id", agendamento.id);
 
         continue;
+        }
+
+        const { data: noOrigem } = await supabaseAdmin
+          .from("automacao_nos")
+          .select("*")
+          .eq("id", agendamento.no_id)
+          .eq("empresa_id", agendamento.empresa_id)
+          .maybeSingle();
+
+        if (!noOrigem) {
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "erro",
+              executed_at: new Date().toISOString(),
+              payload_json: {
+                ...payload,
+                motivo_erro: "no_origem_timeout_nao_encontrado",
+              },
+            })
+            .eq("id", agendamento.id);
+
+          continue;
+        }
+
+        const tentativa = await registrarTentativaBloco({
+          empresaId: agendamento.empresa_id,
+          execucao,
+          no: noOrigem,
+          tipo: "sem_resposta",
+        });
+
+        if (tentativa.excedeu) {
+          await executarAcaoExcessoTentativas({
+            empresaId: agendamento.empresa_id,
+            conversaId: payload.conversa_id,
+            execucao,
+            no: noOrigem,
+            numeroDestino: payload.numero_destino,
+            tipo: "sem_resposta",
+          });
+
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "executado",
+              executed_at: new Date().toISOString(),
+              payload_json: {
+                ...payload,
+                tentativa_sem_resposta: tentativa.quantidade,
+                limite_sem_resposta: tentativa.limite,
+                motivo_execucao: "limite_tentativas_sem_resposta_excedido",
+              },
+            })
+            .eq("id", agendamento.id);
+
+          continue;
         }
 
         const { data: proximoNo } = await supabaseAdmin

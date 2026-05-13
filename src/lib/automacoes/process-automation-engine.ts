@@ -361,6 +361,23 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           };
         }
 
+        if (capturaRegistrada.excedeuTentativas) {
+          await executarAcaoExcessoTentativas({
+            empresaId,
+            conversaId,
+            execucao: execucaoExistente,
+            no: noAtual,
+            numeroDestino,
+            tipo: "resposta_invalida",
+          });
+
+          return {
+            ok: true,
+            status: "captura_tentativas_excedidas",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+
         await seguirParaProximoNo({
           empresaId,
           conversaId,
@@ -1287,7 +1304,7 @@ async function registrarCapturaRespostaAutomacao(params: {
   const config = no.configuracao_json || {};
   const tipoCaptura = String(config.tipo_captura || "texto");
   const chave = String(config.variavel || "resposta").trim().toLowerCase();
-  const maxTentativas = Math.max(1, Number(config.max_tentativas || 3));
+  const maxTentativas = Math.max(1, Number(config.max_tentativas_invalidas || 3));
   const mensagemErro =
     String(config.mensagem_erro || "").trim() ||
     "Não consegui identificar essa informação. Por favor, envie novamente.";
@@ -1429,6 +1446,165 @@ async function registrarCapturaRespostaAutomacao(params: {
     ok: true,
     valido: true,
     excedeuTentativas: false,
+  };
+}
+
+export async function executarAcaoExcessoTentativas(params: {
+  empresaId: string;
+  conversaId: string;
+  execucao: any;
+  no: any;
+  numeroDestino: string;
+  tipo: "resposta_invalida" | "sem_resposta";
+}) {
+  const { empresaId, conversaId, execucao, no, numeroDestino, tipo } = params;
+
+  const config = no.configuracao_json || {};
+
+  const mensagem =
+    String(config.mensagem_excesso_tentativas || "").trim() ||
+    "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.";
+
+  const acao =
+    String(config.acao_excesso_tentativas || "transferir_atendimento");
+
+  if (mensagem) {
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagem,
+      execucaoId: execucao.id,
+      noId: no.id,
+    });
+  }
+
+  await registrarLog({
+    empresaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    noId: no.id,
+    tipoEvento: "excesso_tentativas",
+    descricao: `Cliente excedeu o limite de tentativas: ${tipo}.`,
+    entrada: {
+      tipo,
+      acao,
+      configuracao_json: config,
+    },
+    saida: {},
+  });
+
+  if (acao === "encerrar_fluxo") {
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "finalizado",
+        finished_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucao.id)
+      .eq("empresa_id", empresaId);
+
+    await supabaseAdmin
+      .from("conversas")
+      .update({
+        status: "encerrado_aut",
+        bot_ativo: false,
+        closed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", conversaId)
+      .eq("empresa_id", empresaId);
+
+    return;
+  }
+
+  if (acao === "reiniciar_fluxo") {
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        no_atual_id: null,
+        status: "finalizado",
+        finished_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucao.id)
+      .eq("empresa_id", empresaId);
+
+    return;
+  }
+
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      status: "finalizado",
+      finished_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", execucao.id)
+    .eq("empresa_id", empresaId);
+
+  const setorExcessoTentativas =
+    String(no.configuracao_json?.setor_excesso_tentativas || "").trim() || null;
+
+  await supabaseAdmin
+    .from("conversas")
+    .update({
+      status: "fila",
+      setor_id: setorExcessoTentativas,
+      responsavel_id: null,
+      bot_ativo: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", conversaId)
+    .eq("empresa_id", empresaId);
+}
+
+export async function registrarTentativaBloco(params: {
+  empresaId: string;
+  execucao: any;
+  no: any;
+  tipo: "resposta_invalida" | "sem_resposta";
+}) {
+  const { empresaId, execucao, no, tipo } = params;
+
+  const metadataAtual = execucao.metadata_json || {};
+  const tentativasBlocos = metadataAtual.tentativas_blocos || {};
+  const tentativasDoNo = tentativasBlocos[no.id] || {};
+
+  const quantidadeAtual = Number(tentativasDoNo[tipo] || 0);
+  const novaQuantidade = quantidadeAtual + 1;
+
+  const config = no.configuracao_json || {};
+
+  const limite =
+    tipo === "sem_resposta"
+      ? Math.max(1, Number(config.max_tentativas_sem_resposta || 3))
+      : Math.max(1, Number(config.max_tentativas_invalidas || 3));
+
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      status: "aguardando",
+      metadata_json: {
+        ...metadataAtual,
+        tentativas_blocos: {
+          ...tentativasBlocos,
+          [no.id]: {
+            ...tentativasDoNo,
+            [tipo]: novaQuantidade,
+          },
+        },
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", execucao.id)
+    .eq("empresa_id", empresaId);
+
+  return {
+    quantidade: novaQuantidade,
+    limite,
+    excedeu: novaQuantidade >= limite,
   };
 }
 
@@ -1575,6 +1751,42 @@ async function seguirParaProximoNo(params: {
     }
 
     if (!conexaoEscolhida) {
+      const { data: execucaoAtual } = await supabaseAdmin
+        .from("automacao_execucoes")
+        .select("*")
+        .eq("id", execucaoId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+
+      const { data: noAtual } = await supabaseAdmin
+        .from("automacao_nos")
+        .select("*")
+        .eq("id", noAtualId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+
+      if (execucaoAtual && noAtual) {
+        const tentativa = await registrarTentativaBloco({
+          empresaId,
+          execucao: execucaoAtual,
+          no: noAtual,
+          tipo: "resposta_invalida",
+        });
+
+        if (tentativa.excedeu) {
+          await executarAcaoExcessoTentativas({
+            empresaId,
+            conversaId,
+            execucao: execucaoAtual,
+            no: noAtual,
+            numeroDestino,
+            tipo: "resposta_invalida",
+          });
+
+          return;
+        }
+      }
+
       await enviarMensagemAutomacao({
         empresaId,
         conversaId,
@@ -1620,6 +1832,34 @@ async function seguirParaProximoNo(params: {
   if (!conexaoEscolhida) {
     await finalizarExecucao(execucaoId, empresaId);
     return;
+  }
+
+  const { data: execucaoAtualParaLimpar } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("metadata_json")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (execucaoAtualParaLimpar?.metadata_json?.tentativas_blocos) {
+    const metadataAtual = execucaoAtualParaLimpar.metadata_json;
+    const tentativasBlocos = {
+      ...(metadataAtual.tentativas_blocos || {}),
+    };
+
+    delete tentativasBlocos[noAtualId];
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        metadata_json: {
+          ...metadataAtual,
+          tentativas_blocos: tentativasBlocos,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
   }
 
   const { data: proximoNo } = await supabaseAdmin
