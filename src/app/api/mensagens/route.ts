@@ -85,6 +85,11 @@ export async function GET(request: Request) {
     const conversaProtocoloId = searchParams.get("conversa_protocolo_id");
     const inicio = searchParams.get("inicio");
     const fim = searchParams.get("fim");
+    const antesDe = searchParams.get("antes_de");
+    const limiteParam = Number(searchParams.get("limite") || 30);
+    const limite = Number.isFinite(limiteParam)
+      ? Math.min(Math.max(limiteParam, 1), 100)
+      : 30;
 
     if (!conversaId) {
       return NextResponse.json(
@@ -143,6 +148,62 @@ export async function GET(request: Request) {
         "conversa_protocolo_id",
         conversaProtocoloId
       );
+    }
+
+    if (antesDe) {
+      queryMensagens = queryMensagens.lt("created_at", antesDe);
+
+      const { data, error } = await queryMensagens
+        .order("created_at", { ascending: false })
+        .limit(limite);
+
+      if (error) {
+        return NextResponse.json(
+          { ok: false, error: error.message },
+          { status: 500 }
+        );
+      }
+
+      const mensagens = (data ?? []).reverse();
+
+      let queryMaisAntigas = supabaseAdmin
+        .from("mensagens")
+        .select("id", { count: "exact", head: true })
+        .eq("conversa_id", conversaId);
+
+      if (conversaProtocoloId) {
+        queryMaisAntigas = queryMaisAntigas.eq(
+          "conversa_protocolo_id",
+          conversaProtocoloId
+        );
+      }
+
+      const primeiraMensagem = mensagens[0];
+
+      if (primeiraMensagem?.created_at) {
+        queryMaisAntigas = queryMaisAntigas.lt(
+          "created_at",
+          primeiraMensagem.created_at
+        );
+      } else {
+        queryMaisAntigas = queryMaisAntigas.lt("created_at", antesDe);
+      }
+
+      const { count, error: maisAntigasError } = await queryMaisAntigas;
+
+      if (maisAntigasError) {
+        return NextResponse.json(
+          { ok: false, error: maisAntigasError.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        mensagens,
+        temMaisHistorico: (count || 0) > 0,
+        modo: "antes_de",
+      });
     }
 
     if (dataInicioFiltro) {

@@ -613,6 +613,7 @@ export async function executarNo(params: {
     execucaoId,
     fluxoId,
     no,
+    numeroDestino,
   });
 
   const delaySegundos = delaySegundosDoNo(no);
@@ -1118,8 +1119,9 @@ async function registrarNotificacaoChegadaNoBloco(params: {
   execucaoId: string;
   fluxoId: string;
   no: AutomacaoNo;
+  numeroDestino: string;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, no } = params;
+  const { empresaId, conversaId, execucaoId, fluxoId, no, numeroDestino } = params;
 
   const config = no.configuracao_json || {};
 
@@ -1141,6 +1143,22 @@ async function registrarNotificacaoChegadaNoBloco(params: {
     .eq("id", execucaoId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
+
+  const { data: fluxo } = await supabaseAdmin
+    .from("automacao_fluxos")
+    .select("nome")
+    .eq("id", fluxoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  const { data: contato } = execucao?.contato_id
+    ? await supabaseAdmin
+        .from("contatos")
+        .select("nome, telefone")
+        .eq("id", execucao.contato_id)
+        .eq("empresa_id", empresaId)
+        .maybeSingle()
+    : { data: null };
 
   const { error: criarNotificacaoError } = await supabaseAdmin
     .from("notificacoes")
@@ -1177,6 +1195,11 @@ async function registrarNotificacaoChegadaNoBloco(params: {
     conversaId,
     titulo,
     mensagem,
+    fluxoNome: fluxo?.nome || null,
+    blocoTitulo: no.titulo || null,
+    blocoTipo: no.tipo_no || null,
+    contatoNome: contato?.nome || null,
+    contatoTelefone: contato?.telefone || numeroDestino || null,
   });
 }
 

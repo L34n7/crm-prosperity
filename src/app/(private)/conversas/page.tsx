@@ -78,6 +78,8 @@ type Mensagem = {
     filename?: string | null;
     url?: string | null;
     voice?: boolean | null;
+    transcricao_audio?: string | null;
+    transcricao_modelo?: string | null;
     contacts?: Array<{
       name?: {
         formatted_name?: string;
@@ -1040,6 +1042,48 @@ function CampoContatoEditavel({
   );
 }
 
+function TranscricaoAudioBox({
+  texto,
+  isOutgoing,
+}: {
+  texto: string;
+  isOutgoing: boolean;
+}) {
+  const [aberta, setAberta] = useState(false);
+
+  if (!texto.trim()) return null;
+
+  const textoGrande = texto.length > 120;
+
+  return (
+    <div
+      className={`${styles.audioTranscriptionBox} ${
+        isOutgoing
+          ? styles.audioTranscriptionBoxOutgoing
+          : styles.audioTranscriptionBoxIncoming
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => setAberta((prev) => !prev)}
+        className={styles.audioTranscriptionToggle}
+      >
+        {aberta ? "Ocultar transcrição" : "Ver transcrição"}
+      </button>
+
+      {aberta && (
+        <p
+          className={`${styles.messageText} ${
+            textoGrande ? styles.audioTranscriptionTextLarge : styles.audioTranscriptionText
+          }`}
+        >
+          <TextoComEmoji texto={texto} />
+        </p>
+      )}
+    </div>
+  );
+}
+
 const TextoComEmoji = React.memo(function TextoComEmoji({
   texto,
 }: {
@@ -1187,6 +1231,7 @@ export default function ConversasPage() {
   const [abaVisivel, setAbaVisivel] = useState(true);
 
   const mensagensRef = useRef<HTMLDivElement | null>(null);
+  const mensagemMaisAntigaCarregadaRef = useRef<string | null>(null);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [menuContatoAberto, setMenuContatoAberto] = useState(false);
   const menuContatoRef = useRef<HTMLDivElement | null>(null);
@@ -1614,16 +1659,12 @@ export default function ConversasPage() {
                 setImagemModalTitulo(caption || "Imagem");
                 setImagemZoom(1);
               }}
-              style={{
-                border: "none",
-                padding: 0,
-                background: "transparent",
-                cursor: "pointer",
-              }}
+              className={styles.mediaImageButton}
             >
               <img
                 src={url}
                 alt={caption || "Imagem recebida"}
+                className={styles.messageImage}
                 style={{
                   maxWidth: "260px",
                   width: "100%",
@@ -1657,6 +1698,11 @@ export default function ConversasPage() {
           ? "audio.m4a"
           : "audio");
 
+      const transcricaoAudio =
+        msg.metadata_json?.transcricao_audio?.trim() ||
+        msg.conteudo?.trim() ||
+        "";
+
       return (
         <div>
           {url ? (
@@ -1669,8 +1715,15 @@ export default function ConversasPage() {
             />
           ) : (
             <p className={styles.messageText}>
-              <TextoComEmoji texto={msg.conteudo || "🎵 Áudio recebido"} />
+              <TextoComEmoji texto="🎵 Áudio recebido" />
             </p>
+          )}
+
+          {transcricaoAudio && (
+            <TranscricaoAudioBox
+              texto={transcricaoAudio}
+              isOutgoing={msg.origem === "enviada"}
+            />
           )}
         </div>
       );
@@ -1683,13 +1736,9 @@ export default function ConversasPage() {
             <video
               controls
               preload="metadata"
-              style={{
-                maxWidth: "260px",
-                width: "100%",
-                borderRadius: "12px",
-                display: "block",
-                marginBottom: caption ? "8px" : "0",
-              }}
+              className={`${styles.messageVideo} ${
+                caption ? styles.messageVideoWithCaption : ""
+              }`}
             >
               <source src={url} type={mimeType || "video/mp4"} />
               Seu navegador não suporta vídeo.
@@ -1724,7 +1773,7 @@ export default function ConversasPage() {
           )}
 
           {ehAudioArquivo && url && (
-            <div style={{ marginTop: 8 }}>
+            <div className={styles.documentAudioWrap}>
               <AudioMessagePlayer
                 src={url}
                 mimeType={mimeType}
@@ -1738,8 +1787,7 @@ export default function ConversasPage() {
           {ehPdf && url && (
             <button
               type="button"
-              className={styles.secondaryButton}
-              style={{ marginTop: 8 }}
+              className={`${styles.secondaryButton} ${styles.documentActionButton}`}
               onClick={() =>
                 setArquivoPreview({
                   url,
@@ -1757,11 +1805,7 @@ export default function ConversasPage() {
               href={url}
               target="_blank"
               rel="noreferrer"
-              style={{
-                fontSize: "14px",
-                textDecoration: "underline",
-                wordBreak: "break-word",
-              }}
+              className={styles.messageFileLink}
             >
               Baixar arquivo
             </a>
@@ -2275,7 +2319,11 @@ export default function ConversasPage() {
     silencioso = false,
     conversaProtocoloId?: string | null,
     inicioJanela?: string | null,
-    fimJanela?: string | null
+    fimJanela?: string | null,
+    opcoes?: {
+      antesDe?: string | null;
+      modoAppendHistorico?: boolean;
+    }
   ) {
     try {
       usuarioEstavaNoFinalRef.current = verificarSeUsuarioEstaNoFinal();
@@ -2297,6 +2345,11 @@ export default function ConversasPage() {
         url += `&fim=${encodeURIComponent(fimJanela)}`;
       }
 
+      if (opcoes?.antesDe) {
+        url += `&antes_de=${encodeURIComponent(opcoes.antesDe)}`;
+        url += `&limite=30`;
+      }
+
       const res = await fetch(url, {
         cache: "no-store",
       });
@@ -2308,7 +2361,33 @@ export default function ConversasPage() {
         return;
       }
 
-      setMensagens(data.mensagens || []);
+      if (opcoes?.modoAppendHistorico) {
+        setMensagens((atuais) => {
+          const antigas = data.mensagens || [];
+          const idsAtuais = new Set(atuais.map((msg) => msg.id));
+
+          const antigasSemDuplicar = antigas.filter(
+            (msg: Mensagem) => !idsAtuais.has(msg.id)
+          );
+
+          const novaLista = [...antigasSemDuplicar, ...atuais];
+
+          const maisAntiga = novaLista[0]?.created_at || null;
+          mensagemMaisAntigaCarregadaRef.current = maisAntiga;
+          setInicioJanelaHistorico(maisAntiga);
+
+          return novaLista;
+        });
+      } else {
+        const lista = data.mensagens || [];
+
+        setMensagens(lista);
+
+        const maisAntiga = lista[0]?.created_at || null;
+        mensagemMaisAntigaCarregadaRef.current = maisAntiga;
+        setInicioJanelaHistorico(maisAntiga);
+      }
+
       setTemMaisHistorico(!!data.temMaisHistorico);
 
       if (inicioJanela) {
@@ -2339,8 +2418,7 @@ export default function ConversasPage() {
     if (
       !conversaSelecionada?.id ||
       carregandoMaisHistorico ||
-      !inicioJanelaHistorico ||
-      !fimJanelaHistorico
+      mensagens.length === 0
     ) {
       return;
     }
@@ -2349,6 +2427,7 @@ export default function ConversasPage() {
       setCarregandoMaisHistorico(true);
 
       const container = mensagensRef.current;
+
       if (container) {
         restaurarScrollHistoricoRef.current = {
           scrollTop: container.scrollTop,
@@ -2359,17 +2438,27 @@ export default function ConversasPage() {
       impedirAutoScrollRef.current = true;
       forcarScrollParaFinalRef.current = false;
 
-      const novoInicio = new Date(inicioJanelaHistorico);
-      novoInicio.setHours(novoInicio.getHours() - 24);
+      const mensagemMaisAntiga = [...mensagens].sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() -
+          new Date(b.created_at).getTime()
+      )[0];
 
-      const novoInicioIso = novoInicio.toISOString();
+      if (!mensagemMaisAntiga?.created_at) {
+        setTemMaisHistorico(false);
+        return;
+      }
 
       await carregarMensagens(
         conversaSelecionada.id,
         true,
         protocoloSelecionadoId,
-        novoInicioIso,
-        fimJanelaHistorico
+        null,
+        null,
+        {
+          antesDe: mensagemMaisAntiga.created_at,
+          modoAppendHistorico: true,
+        }
       );
     } finally {
       setCarregandoMaisHistorico(false);
@@ -4092,6 +4181,8 @@ const templateFooterTexto = useMemo(() => {
 
     setInicioJanelaHistorico(null);
     setFimJanelaHistorico(null);
+    mensagemMaisAntigaCarregadaRef.current = null;
+
     setTemMaisHistorico(false);
     setCarregandoMaisHistorico(false);
 
@@ -4159,12 +4250,15 @@ const templateFooterTexto = useMemo(() => {
         (c: Conversa) => c.id === conversaSelecionada.id
       );
 
+      const inicioHistoricoAtual =
+        mensagemMaisAntigaCarregadaRef.current || inicioJanelaHistorico;
+
       if (protocoloSelecionadoId) {
         await carregarMensagens(
           conversaSelecionada.id,
           true,
           protocoloSelecionadoId,
-          null,
+          inicioHistoricoAtual,
           null
         );
       } else {
@@ -4172,7 +4266,7 @@ const templateFooterTexto = useMemo(() => {
           conversaSelecionada.id,
           true,
           null,
-          inicioJanelaHistorico,
+          inicioHistoricoAtual,
           null
         );
       }
@@ -5132,18 +5226,12 @@ const templateFooterTexto = useMemo(() => {
                       <div className={styles.timelineWrapper}>
                         <div ref={mensagensRef} className={styles.timelineArea}>
                           {!loadingMensagens && temMaisHistorico && (
-                            <div className={styles.timelineInfoHis} style={{ textAlign: "center", marginBottom: 12 }}>
+                            <div className={styles.timelineHistoryMore}>
                               <button
                                 type="button"
-                                className={styles.secondaryButton}
                                 onClick={carregarMaisHistorico}
                                 disabled={carregandoMaisHistorico}
-                                style={{
-                                  padding: "6px 12px",
-                                  fontSize: 12,
-                                  borderRadius: 999,
-                                  opacity: 0.9,
-                                }}
+                                className={`${styles.secondaryButton} ${styles.timelineHistoryMoreButton}`}
                               >
                                 {carregandoMaisHistorico ? "Carregando..." : "Ver mais"}
                               </button>
@@ -5217,7 +5305,7 @@ const templateFooterTexto = useMemo(() => {
                                           )}
 
                                         <div className={styles.messageContentRow}>
-                                          <div style={{ flex: 1, minWidth: 0 }}>
+                                          <div className={styles.messageContentFlex}>
                                             {renderizarConteudoMensagem(msg)}
                                           </div>
 
@@ -5296,7 +5384,7 @@ const templateFooterTexto = useMemo(() => {
                           <input
                             ref={documentoInputRef}
                             type="file"
-                            style={{ display: "none" }}
+                            className={styles.hiddenFileInput}
                             accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar,.ppt,.pptx"
                             onChange={(e) => {
                               const file = e.target.files?.[0] || null;
@@ -5307,7 +5395,7 @@ const templateFooterTexto = useMemo(() => {
                           <input
                             ref={midiaInputRef}
                             type="file"
-                            style={{ display: "none" }}
+                            className={styles.hiddenFileInput}
                             accept="image/*,video/*"
                             onChange={(e) => {
                               const file = e.target.files?.[0] || null;
@@ -5318,7 +5406,7 @@ const templateFooterTexto = useMemo(() => {
                           <input
                             ref={audioInputRef}
                             type="file"
-                            style={{ display: "none" }}
+                            className={styles.hiddenFileInput}
                             accept="audio/*"
                             onChange={(e) => {
                               const file = e.target.files?.[0] || null;
@@ -5371,14 +5459,7 @@ const templateFooterTexto = useMemo(() => {
                                   <img
                                     src={arquivoEnvioPreviewUrl}
                                     alt={arquivoEnvio.name}
-                                    style={{
-                                      maxWidth: "220px",
-                                      maxHeight: "220px",
-                                      width: "auto",
-                                      height: "auto",
-                                      borderRadius: 12,
-                                      display: "block",
-                                    }}
+                                    className={styles.filePreviewImage}
                                   />
                                 </div>
                               )}
@@ -5387,12 +5468,7 @@ const templateFooterTexto = useMemo(() => {
                                 <div>
                                   <video
                                     controls
-                                    style={{
-                                      maxWidth: "260px",
-                                      width: "100%",
-                                      borderRadius: 12,
-                                      display: "block",
-                                    }}
+                                    className={styles.filePreviewVideo}
                                   >
                                     <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
                                     Seu navegador não suporta vídeo.
@@ -6093,7 +6169,7 @@ const templateFooterTexto = useMemo(() => {
                               <div className={styles.whatsInfoRow}>
                                 <span className={styles.whatsInfoLabel}>PROTOCOLO</span>
 
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div className={styles.protocolRow}>
                                   <strong className={styles.whatsInfoValue}>
                                     {conversaSelecionada.protocolo || "Não gerado"}
                                   </strong>
@@ -6105,15 +6181,7 @@ const templateFooterTexto = useMemo(() => {
                                       setPainelDireitoAberto(true);
                                       await carregarProtocolosDaConversa();
                                     }}
-                                    style={{
-                                      fontSize: 11,
-                                      padding: "4px 8px",
-                                      borderRadius: 6,
-                                      border: "1px solid rgba(148,163,184,0.4)",
-                                      background: "transparent",
-                                      cursor: "pointer",
-                                      color: "#64748b",
-                                    }}
+                                    className={styles.protocolSmallButton}
                                   >
                                     Ver outros
                                   </button>

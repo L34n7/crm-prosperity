@@ -19,6 +19,7 @@ import Header from "@/components/Header";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
 import { Handle } from "@xyflow/react";
+import { gerarSugestaoDescricaoIA } from "@/lib/ia/sugestoes-descricao-ia";
 
 type Fluxo = {
   id: string;
@@ -1022,6 +1023,21 @@ function abrirEdicaoConexao(edge: Edge) {
 
   setUsarIaConexao(Boolean(data?.usar_ia));
   setDescricaoIaConexao(String(data?.descricao_ia || ""));
+
+  const respostaEsperada = String(condicao.valor || "").trim();
+
+  if (!data?.descricao_ia) {
+    setDescricaoIaConexao(
+      gerarSugestaoDescricaoIA(
+        respostaEsperada ||
+          data?.rotulo ||
+          edge.label?.toString() ||
+          ""
+      )
+    );
+  } else {
+    setDescricaoIaConexao(String(data.descricao_ia || ""));
+  }
   
   const nodeOrigem = nodes.find((node) => node.id === edge.source);
   const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
@@ -2637,7 +2653,6 @@ useEffect(() => {
                                 "numero",
                                 "data",
                                 "cep",
-                                "moeda",
                               ];
 
                               if (!variavelAtual || variaveisPadrao.includes(variavelAtual)) {
@@ -2654,7 +2669,6 @@ useEffect(() => {
                           <option value="numero">Número</option>
                           <option value="data">Data</option>
                           <option value="cep">CEP</option>
-                          <option value="moeda">Moeda</option>
                         </select>
                       </label>
 
@@ -3267,7 +3281,24 @@ useEffect(() => {
                         <input
                           type="checkbox"
                           checked={usarIaConexao}
-                          onChange={(e) => setUsarIaConexao(e.target.checked)}
+                          onChange={(e) => {
+                            const ativo = e.target.checked;
+
+                            setUsarIaConexao(ativo);
+
+                            if (!ativo) {
+                              setDescricaoIaConexao("");
+                              return;
+                            }
+
+                            const respostaEsperada = String(
+                              valorCondicao || ""
+                            ).trim();
+
+                            setDescricaoIaConexao(
+                              gerarSugestaoDescricaoIA(respostaEsperada)
+                            );
+                          }}
                         />
 
                         <div>
@@ -3305,7 +3336,17 @@ useEffect(() => {
                         <input
                           className={styles.input}
                           value={valorCondicao}
-                          onChange={(e) => setValorCondicao(e.target.value)}
+                          onChange={(e) => {
+                            const novoValor = e.target.value;
+
+                            setValorCondicao(novoValor);
+
+                            if (!descricaoIaConexao.trim()) {
+                              setDescricaoIaConexao(
+                                gerarSugestaoDescricaoIA(novoValor)
+                              );
+                            }
+                          }}
                           placeholder="Ex: 1, sim, quero comprar"
                         />
                       </label>
