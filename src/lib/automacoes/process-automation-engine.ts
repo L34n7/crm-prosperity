@@ -1465,6 +1465,9 @@ export async function executarAcaoExcessoTentativas(params: {
     String(config.mensagem_excesso_tentativas || "").trim() ||
     "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.";
 
+  const setorExcessoTentativas =
+    String(no.configuracao_json?.setor_excesso_tentativas || "").trim() || null;
+
   const acao =
     String(config.acao_excesso_tentativas || "transferir_atendimento");
 
@@ -1493,6 +1496,77 @@ export async function executarAcaoExcessoTentativas(params: {
     },
     saida: {},
   });
+
+  if (config.notificar_excesso_tentativas !== false) {
+    const tituloNotificacao = "Excesso de tentativas no fluxo";
+
+    const mensagemNotificacao =
+      tipo === "sem_resposta"
+        ? `O contato excedeu o limite de tentativas sem resposta no bloco "${no.titulo}".`
+        : `O contato excedeu o limite de respostas inválidas no bloco "${no.titulo}".`;
+
+    const { data: contato } = execucao?.contato_id
+      ? await supabaseAdmin
+          .from("contatos")
+          .select("nome, telefone")
+          .eq("id", execucao.contato_id)
+          .eq("empresa_id", empresaId)
+          .maybeSingle()
+      : { data: null };
+
+    const { data: fluxo } = await supabaseAdmin
+      .from("automacao_fluxos")
+      .select("nome")
+      .eq("id", execucao.fluxo_id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    const { data: setorDestino } = setorExcessoTentativas
+      ? await supabaseAdmin
+          .from("setores")
+          .select("nome")
+          .eq("id", setorExcessoTentativas)
+          .eq("empresa_id", empresaId)
+          .maybeSingle()
+      : { data: null };
+
+    await supabaseAdmin.from("notificacoes").insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      contato_id: execucao?.contato_id || null,
+      automacao_execucao_id: execucao.id,
+      automacao_fluxo_id: execucao.fluxo_id,
+      automacao_no_id: no.id,
+      tipo: "automacao",
+      titulo: tituloNotificacao,
+      mensagem: mensagemNotificacao,
+      lida: false,
+      metadata_json: {
+        origem: "excesso_tentativas",
+        tipo_tentativa: tipo,
+        acao_executada: acao,
+        bloco_titulo: no.titulo,
+        bloco_tipo: no.tipo_no,
+        notificar_email: config.notificar_email_excesso_tentativas !== false,
+      },
+    });
+
+    if (config.notificar_email_excesso_tentativas !== false) {
+      await sendAutomationNotificationEmail({
+        empresaId,
+        conversaId,
+        titulo: tituloNotificacao,
+        mensagem: mensagemNotificacao,
+        fluxoNome: fluxo?.nome || null,
+        blocoTitulo: no.titulo || null,
+        blocoTipo: no.tipo_no || null,
+        contatoNome: contato?.nome || null,
+        contatoTelefone: contato?.telefone || numeroDestino || null,
+        setorDestino: setorDestino?.nome || null,
+        tipoNotificacao: "excesso_tentativas",
+      });
+    }
+  }
 
   if (acao === "encerrar_fluxo") {
     await supabaseAdmin
@@ -1543,9 +1617,6 @@ export async function executarAcaoExcessoTentativas(params: {
     })
     .eq("id", execucao.id)
     .eq("empresa_id", empresaId);
-
-  const setorExcessoTentativas =
-    String(no.configuracao_json?.setor_excesso_tentativas || "").trim() || null;
 
   await supabaseAdmin
     .from("conversas")

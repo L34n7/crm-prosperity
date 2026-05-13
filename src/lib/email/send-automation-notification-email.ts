@@ -17,6 +17,8 @@ type SendAutomationNotificationEmailParams = {
   blocoTipo?: string | null;
   contatoNome?: string | null;
   contatoTelefone?: string | null;
+  setorDestino?: string | null;
+  tipoNotificacao?: "fluxo" | "excesso_tentativas";
 };
 
 function escaparHtml(valor: string) {
@@ -46,6 +48,8 @@ export async function sendAutomationNotificationEmail({
   blocoTipo,
   contatoNome,
   contatoTelefone,
+  setorDestino,
+  tipoNotificacao = "fluxo",
 }: SendAutomationNotificationEmailParams) {
   if (!resend) {
     console.warn("[AUTOMATION_EMAIL] RESEND_API_KEY não configurada.");
@@ -80,6 +84,16 @@ export async function sendAutomationNotificationEmail({
   const linkConversa = `${appUrl}/conversas?id=${conversaId}`;
 
   const tituloSeguro = escaparHtml(titulo || "Nova notificação da automação");
+  const ehExcessoTentativas =
+    tipoNotificacao === "excesso_tentativas";
+
+  const tituloPrincipal = ehExcessoTentativas
+    ? "🚨 EXCESSO DE TENTATIVAS"
+    : "🚨 ALERTA DE FLUXO";
+
+  const subtituloPrincipal = ehExcessoTentativas
+    ? "Um contato excedeu o limite de tentativas configurado no fluxo."
+    : "Um contato chegou em um ponto importante do fluxo.";
   const mensagemSegura = escaparHtml(mensagem || "Um contato chegou em um ponto importante do fluxo.");
   const fluxoSeguro = escaparHtml(fluxoNome || "Não informado");
   const blocoSeguro = escaparHtml(blocoTitulo || "Não informado");
@@ -92,12 +106,15 @@ export async function sendAutomationNotificationEmail({
   const contatoTelefoneSeguro = escaparHtml(
     contatoTelefone || "Não informado"
   );
+  const setorDestinoSeguro = escaparHtml(
+    setorDestino || "Não informado"
+  );
 
   try {
     await resend.emails.send({
       from: "CRM Prosperity <no-reply@crmprosperity.com>",
       to: destinatarios,
-      subject: `🚨 ALERTA DE FLUXO • ${titulo || "Nova notificação"}`,
+      subject: `${tituloPrincipal} • ${titulo || "Nova notificação"}`,
       html: `
         <div style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
@@ -111,10 +128,10 @@ export async function sendAutomationNotificationEmail({
                         CRM Prosperity
                       </div>
                       <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">
-                        🚨 ALERTA DE FLUXO
+                        ${tituloPrincipal}
                       </h1>
                       <p style="margin:10px 0 0;font-size:14px;line-height:1.6;opacity:0.9;">
-                        Um contato chegou em um ponto importante do fluxo e requer atenção da equipe.
+                        ${subtituloPrincipal}
                       </p>
                     </td>
                   </tr>
@@ -190,6 +207,29 @@ export async function sendAutomationNotificationEmail({
                               "
                             >
                               ${contatoTelefoneSeguro}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td
+                              style="
+                                width:120px;
+                                color:#64748b;
+                                font-size:13px;
+                                padding-top:10px;
+                              "
+                            >
+                              Setor transferido
+                            </td>
+
+                            <td
+                              style="
+                                color:#0f172a;
+                                font-size:14px;
+                                font-weight:700;
+                                padding-top:10px;
+                              "
+                            >
+                              ${setorDestinoSeguro}
                             </td>
                           </tr>
                         </table>

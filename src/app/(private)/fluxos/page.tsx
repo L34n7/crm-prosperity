@@ -385,6 +385,12 @@ export default function FluxosPage() {
     useState("");
   const [mensagemExcessoTentativasNode, setMensagemExcessoTentativasNode] =
     useState("Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.");
+  const [notificarExcessoTentativasNode, setNotificarExcessoTentativasNode] =
+    useState(true);
+
+  const [notificarEmailExcessoTentativasNode, setNotificarEmailExcessoTentativasNode] =
+    useState(true);
+
   const [notificarAoChegarNode, setNotificarAoChegarNode] = useState(false);
   const [notificacaoTituloNode, setNotificacaoTituloNode] = useState("");
   const [notificacaoMensagemNode, setNotificacaoMensagemNode] = useState("");
@@ -802,6 +808,8 @@ async function criarFluxoRapido() {
               acao_excesso_tentativas: "transferir_atendimento",
               mensagem_excesso_tentativas:
                 "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.",
+              notificar_excesso_tentativas: true,
+              notificar_email_excesso_tentativas: true,
             }
           : tipoNo === "enviar_botoes"
           ? {
@@ -816,6 +824,8 @@ async function criarFluxoRapido() {
               acao_excesso_tentativas: "transferir_atendimento",
               mensagem_excesso_tentativas:
                 "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.",
+              notificar_excesso_tentativas: true,
+              notificar_email_excesso_tentativas: true,
             }
           : tipoNo === "avaliacao"
           ? {
@@ -834,6 +844,8 @@ async function criarFluxoRapido() {
               obrigatorio: true,
               mensagem_erro: "Não consegui identificar essa informação. Por favor, envie novamente.",
               max_tentativas: 3,
+              notificar_excesso_tentativas: true,
+              notificar_email_excesso_tentativas: true,
             }
           : {},
           delay_segundos: null,
@@ -1004,6 +1016,14 @@ function abrirEdicaoNo(node: Node) {
     )
   );
 
+  setNotificarExcessoTentativasNode(
+    configuracaoJson?.notificar_excesso_tentativas !== false
+  );
+
+  setNotificarEmailExcessoTentativasNode(
+    configuracaoJson?.notificar_email_excesso_tentativas !== false
+  );
+  
   setNotificarAoChegarNode(Boolean(configuracaoJson?.notificar_ao_chegar));
 
   setNotificacaoTituloNode(
@@ -1164,13 +1184,18 @@ function aplicarEdicaoNo() {
 
         configuracao_json.acao_excesso_tentativas =
           acaoExcessoTentativasNode || "transferir_atendimento";
-          
+
         configuracao_json.setor_excesso_tentativas =
           setorExcessoTentativasNode || null;
 
         configuracao_json.mensagem_excesso_tentativas =
           mensagemExcessoTentativasNode.trim() ||
           "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.";
+        configuracao_json.notificar_excesso_tentativas =
+          notificarExcessoTentativasNode;
+
+        configuracao_json.notificar_email_excesso_tentativas =
+          notificarEmailExcessoTentativasNode;
       }
 
       if (tipoFinal === "transferir_setor") {
@@ -3304,6 +3329,40 @@ useEffect(() => {
                             setMensagemExcessoTentativasNode(e.target.value)
                           }
                         />
+                      </label>
+
+                      <label className={styles.switchField}>
+                        <input
+                          type="checkbox"
+                          checked={notificarExcessoTentativasNode}
+                          onChange={(e) =>
+                            setNotificarExcessoTentativasNode(e.target.checked)
+                          }
+                        />
+
+                        <div>
+                          <strong>Notificar no sistema</strong>
+                          <p>
+                            Cria uma notificação quando este bloco exceder o limite de tentativas.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className={styles.switchField}>
+                        <input
+                          type="checkbox"
+                          checked={notificarEmailExcessoTentativasNode}
+                          onChange={(e) =>
+                            setNotificarEmailExcessoTentativasNode(e.target.checked)
+                          }
+                        />
+
+                        <div>
+                          <strong>Enviar email</strong>
+                          <p>
+                            Envia um alerta por email quando o limite de tentativas for excedido.
+                          </p>
+                        </div>
                       </label>
                     </div>
                   )}
