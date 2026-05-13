@@ -49,22 +49,7 @@ function buildSafeFilename(mediaId: string, mimeType?: string | null) {
 async function buscarAccessTokenDaMidia(mediaId: string) {
   const { data: mensagem, error: mensagemError } = await supabaseAdmin
     .from("mensagens")
-    .select(
-      `
-      id,
-      conversa_id,
-      metadata_json,
-      conversas (
-        id,
-        integracao_whatsapp_id,
-        integracoes_whatsapp (
-          id,
-          status,
-          config_json
-        )
-      )
-    `
-    )
+    .select("id, conversa_id, metadata_json")
     .filter("metadata_json->>media_id", "eq", mediaId)
     .maybeSingle();
 
@@ -72,14 +57,37 @@ async function buscarAccessTokenDaMidia(mediaId: string) {
     throw new Error(mensagemError.message);
   }
 
-  const integracao = Array.isArray(mensagem?.conversas?.integracoes_whatsapp)
-    ? mensagem?.conversas?.integracoes_whatsapp?.[0]
-    : mensagem?.conversas?.integracoes_whatsapp;
+  if (!mensagem?.conversa_id) {
+    return process.env.WHATSAPP_ACCESS_TOKEN || "";
+  }
 
-  const tokenDaIntegracao = (integracao as IntegracaoWhatsapp | null)
-    ?.config_json?.access_token;
+  const { data: conversa, error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .select("id, integracao_whatsapp_id")
+    .eq("id", mensagem.conversa_id)
+    .maybeSingle();
 
-  return tokenDaIntegracao || process.env.WHATSAPP_ACCESS_TOKEN || "";
+  if (conversaError) {
+    throw new Error(conversaError.message);
+  }
+
+  if (!conversa?.integracao_whatsapp_id) {
+    return process.env.WHATSAPP_ACCESS_TOKEN || "";
+  }
+
+  const { data: integracao, error: integracaoError } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select("id, status, config_json")
+    .eq("id", conversa.integracao_whatsapp_id)
+    .maybeSingle();
+
+  if (integracaoError) {
+    throw new Error(integracaoError.message);
+  }
+
+  const configJson = integracao?.config_json as IntegracaoWhatsapp["config_json"];
+
+  return configJson?.access_token || process.env.WHATSAPP_ACCESS_TOKEN || "";
 }
 
 export async function GET(
