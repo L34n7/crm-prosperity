@@ -1493,7 +1493,9 @@ async function seguirParaProximoNo(params: {
             (conexao) => conexao.id === resultadoIA.conexao_id
           );
 
-          if (conexaoIA && resultadoIA.confianca >= 0.75) {
+          const CONFIANCA_MINIMA_IA = 0.7;
+
+          if (conexaoIA && resultadoIA.confianca >= CONFIANCA_MINIMA_IA) {
             conexaoEscolhida = conexaoIA;
 
             await registrarLog({
