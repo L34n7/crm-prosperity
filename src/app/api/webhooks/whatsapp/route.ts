@@ -13,6 +13,7 @@ import { updateWhatsAppMessageStatus } from "@/lib/whatsapp/update-message-statu
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { baixarAudioWhatsApp } from "@/lib/whatsapp/baixar-audio-whatsapp";
 import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
+import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 const supabaseAdmin = getSupabaseAdmin();
@@ -213,6 +214,7 @@ export async function POST(req: NextRequest) {
           "";
 
         let transcricaoAudio: string | null = null;
+        let audioSemTranscricao = false;
 
         if (message.tipoMensagem === "audio") {
           try {
@@ -229,8 +231,15 @@ export async function POST(req: NextRequest) {
                 fileName: `${mediaId}.ogg`,
               });
 
-              if (transcricaoAudio.trim()) {
+              if (transcricaoAudio && transcricaoAudio.trim()) {
                 textoAutomacao = transcricaoAudio.trim();
+              } else {
+                textoAutomacao = "";
+                audioSemTranscricao = true;
+
+                console.warn("[WEBHOOK WHATSAPP] Áudio sem transcrição útil:", {
+                  mediaId,
+                });
               }
 
               console.log("[WEBHOOK WHATSAPP] Áudio transcrito:", {
@@ -238,9 +247,15 @@ export async function POST(req: NextRequest) {
                 texto: transcricaoAudio,
               });
             } else {
+              textoAutomacao = "";
+              audioSemTranscricao = true;
+
               console.warn("[WEBHOOK WHATSAPP] Áudio recebido sem mediaId.");
             }
           } catch (audioError) {
+            textoAutomacao = "";
+            audioSemTranscricao = true;
+
             console.error("[WEBHOOK WHATSAPP] Erro ao transcrever áudio:", audioError);
           }
         }
@@ -264,6 +279,29 @@ export async function POST(req: NextRequest) {
         const savedMessage = await saveIncomingWhatsAppMessage(
           payloadSalvarMensagem
         );
+
+        if (audioSemTranscricao && !savedMessage.duplicated) {
+          const phoneNumberId =
+            integration.phone_number_id ||
+            process.env.WHATSAPP_PHONE_NUMBER_ID ||
+            "";
+
+          const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+
+          if (phoneNumberId && accessToken) {
+            await sendWhatsAppTextMessage({
+              phoneNumberId,
+              accessToken,
+              to: message.from,
+              body:
+                "Não consegui entender o áudio. Pode enviar novamente falando mais claro ou escrever sua resposta?",
+            });
+          } else {
+            console.error(
+              "[WEBHOOK WHATSAPP] Não foi possível enviar aviso de áudio inválido: phoneNumberId ou accessToken ausente."
+            );
+          }
+        }
 
         let automationResult:
           | {
