@@ -1566,9 +1566,11 @@ export default function ConversasPage() {
     const mediaId = msg.metadata_json?.media_id || null;
 
     const url =
-      msg.metadata_json?.midia_url ||
-      msg.metadata_json?.url ||
-      (mediaId ? `/api/whatsapp/media/${mediaId}` : null);
+      mediaId
+        ? `/api/whatsapp/media/${mediaId}`
+        : msg.metadata_json?.midia_url ||
+          msg.metadata_json?.url ||
+          null;
 
     const caption =
       msg.metadata_json?.caption ||
