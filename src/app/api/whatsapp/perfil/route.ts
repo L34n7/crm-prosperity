@@ -14,15 +14,28 @@ type IntegracaoWhatsapp = {
   verified_name: string | null;
   phone_number_display_name: string | null;
   config_json: any;
+  token_ref: string | null;
+
 };
 
-function extrairToken(configJson: any) {
-  return (
-    configJson?.access_token ||
-    configJson?.accessToken ||
-    configJson?.token ||
-    null
-  );
+function extrairToken(integracao: IntegracaoWhatsapp) {
+  const tokenDoConfig =
+    integracao.config_json?.access_token ||
+    integracao.config_json?.accessToken ||
+    integracao.config_json?.token ||
+    integracao.config_json?.meta_access_token ||
+    integracao.config_json?.long_lived_token ||
+    null;
+
+  if (tokenDoConfig) {
+    return tokenDoConfig;
+  }
+
+  if (integracao.token_ref) {
+    return process.env[integracao.token_ref] || null;
+  }
+
+  return null;
 }
 
 function jsonErro(error: string, status = 400, extra?: any) {
@@ -38,7 +51,7 @@ async function buscarIntegracao(
   let query = supabase
     .from("integracoes_whatsapp")
     .select(
-      "id, empresa_id, nome_conexao, numero, status, phone_number_id, verified_name, phone_number_display_name, config_json"
+      "id, empresa_id, nome_conexao, numero, status, phone_number_id, verified_name, phone_number_display_name, config_json, token_ref"
     )
     .eq("empresa_id", empresaId)
     .eq("provider", "meta_official")
@@ -97,7 +110,7 @@ export async function GET(req: NextRequest) {
       return jsonErro("Essa integração não possui phone_number_id.", 400);
     }
 
-    const token = extrairToken(integracaoSelecionada.config_json);
+    const token = extrairToken(integracaoSelecionada)
 
     if (!token) {
       return jsonErro(
@@ -257,7 +270,7 @@ export async function PATCH(req: NextRequest) {
       return jsonErro("Essa integração não possui phone_number_id.", 400);
     }
 
-    const token = extrairToken(integracao.config_json);
+    const token = extrairToken(integracao)
 
     if (!token) {
       return jsonErro(
