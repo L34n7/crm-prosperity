@@ -303,7 +303,7 @@ export default function DisparosWhatsAppPage() {
       setLoadingIntegracoes(true);
       setErro("");
 
-      const res = await fetch("/api/integracoes-whatsapp", {
+      const res = await fetch("/api/integracoes-whatsapp/listar", {
         cache: "no-store",
       });
 

@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Send,
+  CalendarClock,
   Contact,
   Users,
   Building2,
@@ -34,6 +35,7 @@ const menuItems: MenuItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Conversations", href: "/conversas", icon: MessageSquare },
   { label: "Broadcasts", href: "/disparos-whatsapp", icon: Send },
+  { label: "Scheduled Broadcasts", href: "/disparos-agendados", icon: CalendarClock },
   { label: "Templates", href: "/configuracoes/templates-whatsapp", icon: FileText },
   { label: "Flows", href: "/fluxos", icon: GitBranch },
   { label: "Contacts", href: "/contatos", icon: Contact },
@@ -56,6 +58,7 @@ const menuItems: MenuItem[] = [
     href: "/configurar-ambiente",
     icon: PlugZap,
   },
+  { label: "Perfil WhatsApp", href: "/configuracoes/whatsapp/perfil", icon: Settings2 },
 ];
 
 function isActivePath(pathname: string, href: string) {

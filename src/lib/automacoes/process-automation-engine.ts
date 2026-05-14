@@ -807,7 +807,14 @@ export async function executarNo(params: {
 
     const { data: template } = await supabaseAdmin
       .from("whatsapp_templates")
-      .select("id, nome, idioma, status, integracao_whatsapp_id")
+      .select(`
+        id,
+        nome,
+        idioma,
+        status,
+        integracao_whatsapp_id,
+        payload
+      `)
       .eq("id", templateId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -890,6 +897,7 @@ export async function executarNo(params: {
           template_id: template.id,
           template_nome: template.nome,
           template_idioma: template.idioma,
+          template_payload: template.payload || null,
           integracao_whatsapp_id: integracaoWhatsappId,
 
           variaveis,
