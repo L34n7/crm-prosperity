@@ -27,6 +27,12 @@ type DisparoAgendado = {
     titulo: string;
     tipo_no: string;
   } | null;
+  envio_status?: "falha" | "sucesso" | "processando" | null;
+  envio_label?: string | null;
+  envio_message_id?: string | null;
+  envio_erro_codigo_meta?: number | string | null;
+  envio_erro_tecnico?: string | null;
+  envio_erro_amigavel?: string | null;
 };
 
 function formatarData(valor?: string | null) {
@@ -55,6 +61,13 @@ function statusClass(status: string) {
   if (status === "executado") return `${styles.badge} ${styles.badgeGreen}`;
   if (status === "cancelado") return `${styles.badge} ${styles.badgeGray}`;
   if (status === "erro") return `${styles.badge} ${styles.badgeRed}`;
+  return `${styles.badge} ${styles.badgeGray}`;
+}
+
+function envioStatusClass(status?: string | null) {
+  if (status === "falha") return `${styles.badge} ${styles.badgeRed}`;
+  if (status === "sucesso") return `${styles.badge} ${styles.badgeGreen}`;
+  if (status === "processando") return `${styles.badge} ${styles.badgeBlue}`;
   return `${styles.badge} ${styles.badgeGray}`;
 }
 
@@ -384,9 +397,11 @@ export default function DisparosAgendadosPage() {
                               {templateNome}
                             </strong>
 
-                            <span className={statusClass(disparo.status)}>
-                              {statusLabel(disparo.status)}
-                            </span>
+                            {disparo.envio_status ? (
+                              <span className={envioStatusClass(disparo.envio_status)}>
+                                {disparo.envio_label || "Status do envio"}
+                              </span>
+                            ) : null}
                           </div>
 
                           <p className={styles.disparoMeta}>
@@ -397,10 +412,16 @@ export default function DisparosAgendadosPage() {
                             Fluxo: {fluxoNome} · Bloco: {blocoTitulo}
                           </p>
 
-                          <p className={styles.disparoMeta}>
-                            Agendado para:{" "}
-                            <strong>{formatarData(disparo.executar_em)}</strong>
-                          </p>
+                          {disparo.envio_status === "falha" && disparo.envio_erro_amigavel ? (
+                            <div className={styles.envioErroBox}>
+                              <strong>Falha no envio</strong>
+                              <p>{disparo.envio_erro_amigavel}</p>
+
+                              {disparo.envio_erro_tecnico ? (
+                                <small>Detalhe técnico: {disparo.envio_erro_tecnico}</small>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
@@ -462,6 +483,13 @@ export default function DisparosAgendadosPage() {
               </div>
 
               <div className={styles.detailGroup}>
+                <span>Status do envio WhatsApp</span>
+                <strong className={envioStatusClass(disparoSelecionado.envio_status)}>
+                  {disparoSelecionado.envio_label || "Ainda não enviado"}
+                </strong>
+              </div>
+
+              <div className={styles.detailGroup}>
                 <span>Template</span>
                 <strong>{disparoSelecionado.payload_json?.template_nome || "-"}</strong>
               </div>
@@ -504,6 +532,20 @@ export default function DisparosAgendadosPage() {
                 <span>Executado em</span>
                 <strong>{formatarData(disparoSelecionado.executed_at)}</strong>
               </div>
+
+              {disparoSelecionado.envio_status === "falha" &&
+                disparoSelecionado.envio_erro_amigavel ? (
+                <div className={styles.envioErroBox}>
+                  <strong>Falha no envio</strong>
+                  <p>{disparoSelecionado.envio_erro_amigavel}</p>
+
+                  {disparoSelecionado.envio_erro_tecnico ? (
+                    <small>
+                      Detalhe técnico: {disparoSelecionado.envio_erro_tecnico}
+                    </small>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className={styles.payloadBox}>
                 <span>Prévia do template</span>

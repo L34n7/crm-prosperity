@@ -2,24 +2,48 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
+function traduzirErroMetaWhatsApp(
+  codigo?: number | string | null,
+  erroTecnico?: string | null
+) {
+  const code = Number(codigo || 0);
+
+  switch (code) {
+    case 131042:
+      return "A conta WhatsApp Business possui pendências financeiras na Meta. Para regularizar, acesse o Gerenciador de Negócios da Meta, vá em Cobrança/Pagamentos, selecione a conta WhatsApp Business e quite o valor pendente. Depois da confirmação do pagamento, tente enviar o disparo novamente.";
+
+    case 131026:
+      return "O número do destinatário está inválido, indisponível ou não pode receber mensagens pelo WhatsApp.";
+
+    case 470:
+      return "A janela de atendimento de 24 horas foi encerrada. Envie um template aprovado para iniciar uma nova conversa.";
+
+    case 368:
+      return "A conta WhatsApp está temporariamente bloqueada pela Meta.";
+
+    default:
+      return erroTecnico || "Falha ao enviar mensagem pelo WhatsApp.";
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const resultado = await getUsuarioContexto();
 
     if (!resultado.ok) {
-    return NextResponse.json(
+      return NextResponse.json(
         { ok: false, error: resultado.error },
         { status: resultado.status }
-    );
+      );
     }
 
     const { usuario } = resultado;
 
     if (!usuario.empresa_id) {
-    return NextResponse.json(
+      return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },
         { status: 400 }
-    );
+      );
     }
 
     const supabase = getSupabaseAdmin();
@@ -30,8 +54,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("automacao_agendamentos")
-      .select(
-        `
+      .select(`
         id,
         empresa_id,
         execucao_id,
@@ -52,8 +75,7 @@ export async function GET(request: NextRequest) {
           titulo,
           tipo_no
         )
-      `
-      )
+      `)
       .eq("empresa_id", usuario.empresa_id)
       .eq("tipo_agendamento", "disparo_template")
       .order("created_at", { ascending: false });
@@ -74,6 +96,42 @@ export async function GET(request: NextRequest) {
     }
 
     let disparos = data || [];
+
+    const messageIds = Array.from(
+      new Set(
+        disparos
+          .map((item: any) =>
+            String(item.payload_json?.resultado_envio?.message_id || "").trim()
+          )
+          .filter(Boolean)
+      )
+    );
+
+    let mensagensPorMessageId = new Map<string, any>();
+
+    if (messageIds.length > 0) {
+      const { data: mensagens, error: mensagensError } = await supabase
+        .from("mensagens")
+        .select(`
+          id,
+          status_envio,
+          mensagem_externa_id,
+          metadata_json,
+          created_at,
+          updated_at
+        `)
+        .eq("empresa_id", usuario.empresa_id)
+        .in("mensagem_externa_id", messageIds);
+
+      if (!mensagensError && mensagens) {
+        mensagensPorMessageId = new Map(
+          mensagens.map((mensagem: any) => [
+            mensagem.mensagem_externa_id,
+            mensagem,
+          ])
+        );
+      }
+    }
 
     const templateIds = Array.from(
       new Set(
@@ -104,6 +162,44 @@ export async function GET(request: NextRequest) {
       const templateId = String(payload.template_id || "").trim();
       const template = templatesPorId.get(templateId);
 
+      const messageId = String(payload.resultado_envio?.message_id || "").trim();
+      const mensagem = messageId ? mensagensPorMessageId.get(messageId) : null;
+
+      const metadataMensagem = mensagem?.metadata_json || {};
+      const whatsappStatus = metadataMensagem?.whatsapp_status || {};
+      const rawStatus = whatsappStatus?.raw_status || {};
+      const erroMeta = rawStatus?.errors?.[0] || null;
+
+      const codigoErroMeta = erroMeta?.code || null;
+
+      const erroTecnico =
+        whatsappStatus?.error_message ||
+        erroMeta?.message ||
+        erroMeta?.title ||
+        null;
+
+      const statusEnvio = mensagem?.status_envio || null;
+
+      const envioStatus =
+        statusEnvio === "falha"
+          ? "falha"
+          : statusEnvio === "entregue" || statusEnvio === "lida"
+          ? "sucesso"
+          : statusEnvio === "enviada"
+          ? "processando"
+          : item.status === "executado"
+          ? "processando"
+          : null;
+
+      const envioLabel =
+        envioStatus === "falha"
+          ? "Falhou"
+          : envioStatus === "sucesso"
+          ? "Entregue"
+          : envioStatus === "processando"
+          ? "Aguardando confirmação"
+          : "Ainda não enviado";
+
       return {
         ...item,
         payload_json: {
@@ -112,6 +208,15 @@ export async function GET(request: NextRequest) {
           template_idioma: payload.template_idioma || template?.idioma || null,
           template_payload: payload.template_payload || template?.payload || null,
         },
+        envio_status: envioStatus,
+        envio_label: envioLabel,
+        envio_message_id: messageId || null,
+        envio_erro_codigo_meta: codigoErroMeta,
+        envio_erro_tecnico: erroTecnico,
+        envio_erro_amigavel:
+          envioStatus === "falha"
+            ? traduzirErroMetaWhatsApp(codigoErroMeta, erroTecnico)
+            : null,
       };
     });
 
