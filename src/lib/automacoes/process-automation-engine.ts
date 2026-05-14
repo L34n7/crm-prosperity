@@ -1120,6 +1120,18 @@ export async function executarNo(params: {
       .eq("id", execucaoId)
       .eq("empresa_id", empresaId);
 
+    await supabaseAdmin
+      .from("conversas")
+      .update({
+        status: "encerrado_aut",
+        bot_ativo: false,
+        closed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", conversaId)
+      .eq("empresa_id", empresaId)
+      .eq("status", "bot");
+
     await registrarLog({
       empresaId,
       execucaoId,
@@ -2456,14 +2468,38 @@ async function cancelarAgendamentosTimeoutPendentes(params: {
 
 
 async function finalizarExecucao(execucaoId: string, empresaId: string) {
+  const agora = new Date().toISOString();
+
+  const { data: execucao } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("conversa_id")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
   await supabaseAdmin
     .from("automacao_execucoes")
     .update({
       status: "finalizado",
-      finished_at: new Date().toISOString(),
+      finished_at: agora,
+      updated_at: agora,
     })
     .eq("id", execucaoId)
     .eq("empresa_id", empresaId);
+
+  if (execucao?.conversa_id) {
+    await supabaseAdmin
+      .from("conversas")
+      .update({
+        status: "encerrado_aut",
+        bot_ativo: false,
+        closed_at: agora,
+        updated_at: agora,
+      })
+      .eq("id", execucao.conversa_id)
+      .eq("empresa_id", empresaId)
+      .eq("status", "bot");
+  }
 }
 
 async function registrarLog(params: {

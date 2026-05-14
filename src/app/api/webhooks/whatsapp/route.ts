@@ -191,6 +191,9 @@ export async function POST(req: NextRequest) {
           integracaoWhatsappId: integration.id,
         });
 
+        const conversaEstaEmFluxo =
+          conversation.status === "bot" || conversation.bot_ativo === true;
+
         const { data: protocoloAtivo, error: protocoloAtivoError } =
           await supabaseAdmin
             .from("conversa_protocolos")
@@ -217,46 +220,57 @@ export async function POST(req: NextRequest) {
         let audioSemTranscricao = false;
 
         if (message.tipoMensagem === "audio") {
-          try {
-            const mediaId =
-              metadataJson?.media_id ||
-              metadataJson?.audio?.id ||
-              message.rawMessage?.audio?.id;
+          if (conversaEstaEmFluxo) {
+            try {
+              const mediaId =
+                metadataJson?.media_id ||
+                metadataJson?.audio?.id ||
+                message.rawMessage?.audio?.id;
 
-            if (mediaId) {
-              const audioBuffer = await baixarAudioWhatsApp(mediaId);
+              if (mediaId) {
+                const audioBuffer = await baixarAudioWhatsApp(mediaId);
 
-              transcricaoAudio = await transcreverAudioComIA({
-                audioBuffer,
-                fileName: `${mediaId}.ogg`,
-              });
+                transcricaoAudio = await transcreverAudioComIA({
+                  audioBuffer,
+                  fileName: `${mediaId}.ogg`,
+                });
 
-              if (transcricaoAudio && transcricaoAudio.trim()) {
-                textoAutomacao = transcricaoAudio.trim();
+                if (transcricaoAudio && transcricaoAudio.trim()) {
+                  textoAutomacao = transcricaoAudio.trim();
+                } else {
+                  textoAutomacao = "";
+                  audioSemTranscricao = true;
+
+                  console.warn("[WEBHOOK WHATSAPP] Áudio sem transcrição útil:", {
+                    mediaId,
+                  });
+                }
+
+                console.log("[WEBHOOK WHATSAPP] Áudio transcrito para automação:", {
+                  mediaId,
+                  texto: transcricaoAudio,
+                });
               } else {
                 textoAutomacao = "";
                 audioSemTranscricao = true;
 
-                console.warn("[WEBHOOK WHATSAPP] Áudio sem transcrição útil:", {
-                  mediaId,
-                });
+                console.warn("[WEBHOOK WHATSAPP] Áudio recebido sem mediaId.");
               }
-
-              console.log("[WEBHOOK WHATSAPP] Áudio transcrito:", {
-                mediaId,
-                texto: transcricaoAudio,
-              });
-            } else {
+            } catch (audioError) {
               textoAutomacao = "";
               audioSemTranscricao = true;
 
-              console.warn("[WEBHOOK WHATSAPP] Áudio recebido sem mediaId.");
+              console.error("[WEBHOOK WHATSAPP] Erro ao transcrever áudio:", audioError);
             }
-          } catch (audioError) {
+          } else {
             textoAutomacao = "";
-            audioSemTranscricao = true;
 
-            console.error("[WEBHOOK WHATSAPP] Erro ao transcrever áudio:", audioError);
+            console.log(
+              "[WEBHOOK WHATSAPP] Áudio recebido fora do fluxo. Transcrição automática ignorada.",
+              {
+                conversaId: conversation.id,
+              }
+            );
           }
         }
 
@@ -270,8 +284,9 @@ export async function POST(req: NextRequest) {
           timestamp: message.timestamp,
           metadataJson: {
             ...(message.metadataJson || {}),
-            transcricao_audio: transcricaoAudio,
+            transcricao_audio: transcricaoAudio || null,
             transcricao_modelo: transcricaoAudio ? "gpt-4o-mini-transcribe" : null,
+            transcricao_automatica: !!transcricaoAudio,
           },
           conversaProtocoloId: protocoloAtivo?.id ?? null,
         };
@@ -280,7 +295,7 @@ export async function POST(req: NextRequest) {
           payloadSalvarMensagem
         );
 
-        if (audioSemTranscricao && !savedMessage.duplicated) {
+        if (conversaEstaEmFluxo && audioSemTranscricao && !savedMessage.duplicated) {
           const phoneNumberId =
             integration.phone_number_id ||
             process.env.WHATSAPP_PHONE_NUMBER_ID ||

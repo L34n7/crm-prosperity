@@ -1043,17 +1043,56 @@ function CampoContatoEditavel({
 }
 
 function TranscricaoAudioBox({
-  texto,
+  mensagemId,
+  textoInicial,
   isOutgoing,
+  onTranscricaoSalva,
 }: {
-  texto: string;
+  mensagemId: string;
+  textoInicial: string;
   isOutgoing: boolean;
+  onTranscricaoSalva: (mensagemId: string, transcricao: string) => void;
 }) {
   const [aberta, setAberta] = useState(false);
-
-  if (!texto.trim()) return null;
+  const [texto, setTexto] = useState(textoInicial || "");
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
 
   const textoGrande = texto.length > 120;
+
+  async function abrirOuGerarTranscricao() {
+    setErro("");
+
+    if (texto.trim()) {
+      setAberta((prev) => !prev);
+      return;
+    }
+
+    try {
+      setCarregando(true);
+
+      const res = await fetch(`/api/mensagens/${mensagemId}/transcrever-audio`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao transcrever áudio.");
+        return;
+      }
+
+      const transcricao = data.transcricao || "";
+
+      setTexto(transcricao);
+      setAberta(true);
+      onTranscricaoSalva(mensagemId, transcricao);
+    } catch {
+      setErro("Erro ao transcrever áudio.");
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   return (
     <div
@@ -1065,16 +1104,25 @@ function TranscricaoAudioBox({
     >
       <button
         type="button"
-        onClick={() => setAberta((prev) => !prev)}
+        onClick={abrirOuGerarTranscricao}
+        disabled={carregando}
         className={styles.audioTranscriptionToggle}
       >
-        {aberta ? "Ocultar transcrição" : "Ver transcrição"}
+        {carregando
+          ? "Transcrevendo..."
+          : aberta
+          ? "Ocultar transcrição"
+          : "Ver transcrição"}
       </button>
 
-      {aberta && (
+      {erro && <p className={styles.messageText}>{erro}</p>}
+
+      {aberta && texto.trim() && (
         <p
           className={`${styles.messageText} ${
-            textoGrande ? styles.audioTranscriptionTextLarge : styles.audioTranscriptionText
+            textoGrande
+              ? styles.audioTranscriptionTextLarge
+              : styles.audioTranscriptionText
           }`}
         >
           <TextoComEmoji texto={texto} />
@@ -1083,6 +1131,33 @@ function TranscricaoAudioBox({
     </div>
   );
 }
+
+function ChatToast({
+  sucesso,
+  erro,
+}: {
+  sucesso: string;
+  erro: string;
+}) {
+  if (!sucesso && !erro) return null;
+
+  return (
+    <div className={styles.chatToastArea}>
+      {sucesso && (
+        <div className={`${styles.chatToast} ${styles.chatToastSuccess}`}>
+          {sucesso}
+        </div>
+      )}
+
+      {erro && (
+        <div className={`${styles.chatToast} ${styles.chatToastError}`}>
+          {erro}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 const TextoComEmoji = React.memo(function TextoComEmoji({
   texto,
@@ -1495,6 +1570,7 @@ export default function ConversasPage() {
   } | null>(null);
 
   const forcarScrollParaFinalRef = useRef(false);
+  const acompanharCrescimentoChatRef = useRef(false);
 
   const totalMensagensAnteriorRef = useRef(0);
   const ultimaMensagemIdAnteriorRef = useRef<string | null>(null);
@@ -1606,6 +1682,23 @@ export default function ConversasPage() {
       focarEditorNoFinal();
     });
   }
+
+  function atualizarTranscricaoMensagem(mensagemId: string, transcricao: string) {
+  setMensagens((atuais) =>
+    atuais.map((msg) => {
+      if (msg.id !== mensagemId) return msg;
+
+      return {
+        ...msg,
+        conteudo: transcricao || msg.conteudo,
+        metadata_json: {
+          ...(msg.metadata_json || {}),
+          transcricao_audio: transcricao,
+        },
+      };
+    })
+  );
+}
   
   function renderizarConteudoMensagem(msg: Mensagem) {
     const mediaId = msg.metadata_json?.media_id || null;
@@ -1719,12 +1812,12 @@ export default function ConversasPage() {
             </p>
           )}
 
-          {transcricaoAudio && (
-            <TranscricaoAudioBox
-              texto={transcricaoAudio}
-              isOutgoing={msg.origem === "enviada"}
-            />
-          )}
+          <TranscricaoAudioBox
+            mensagemId={msg.id}
+            textoInicial={transcricaoAudio}
+            isOutgoing={msg.origem === "enviada"}
+            onTranscricaoSalva={atualizarTranscricaoMensagem}
+          />
         </div>
       );
     }
@@ -2285,7 +2378,6 @@ export default function ConversasPage() {
 
         const mudouVisualPrincipal =
           encontrada.id !== atual.id ||
-          encontrada.last_message_at !== atual.last_message_at ||
           encontrada.status !== atual.status ||
           encontrada.prioridade !== atual.prioridade ||
           encontrada.favorita !== atual.favorita ||
@@ -2323,6 +2415,7 @@ export default function ConversasPage() {
     opcoes?: {
       antesDe?: string | null;
       modoAppendHistorico?: boolean;
+      modoMergeNovas?: boolean;
     }
   ) {
     try {
@@ -2371,6 +2464,27 @@ export default function ConversasPage() {
           );
 
           const novaLista = [...antigasSemDuplicar, ...atuais];
+
+          const maisAntiga = novaLista[0]?.created_at || null;
+          mensagemMaisAntigaCarregadaRef.current = maisAntiga;
+          setInicioJanelaHistorico(maisAntiga);
+
+          return novaLista;
+        });
+      } else if (opcoes?.modoMergeNovas) {
+        setMensagens((atuais) => {
+          const recebidas = data.mensagens || [];
+          const mapa = new Map<string, Mensagem>();
+
+          [...atuais, ...recebidas].forEach((msg) => {
+            mapa.set(msg.id, msg);
+          });
+
+          const novaLista = Array.from(mapa.values()).sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime()
+          );
 
           const maisAntiga = novaLista[0]?.created_at || null;
           mensagemMaisAntigaCarregadaRef.current = maisAntiga;
@@ -2596,15 +2710,19 @@ export default function ConversasPage() {
         atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
         fimJanelaHistorico;
 
-      forcarScrollParaFinalRef.current = true;
+      forcarScrollParaFinalRef.current = false;
+      acompanharCrescimentoChatRef.current = true;
       impedirAutoScrollRef.current = false;
 
       await carregarMensagens(
         conversaSelecionada.id,
         true,
         protocoloSelecionadoId,
-        inicioJanelaHistorico,
-        novoFimJanela
+        mensagemMaisAntigaCarregadaRef.current || inicioJanelaHistorico,
+        novoFimJanela,
+        {
+          modoMergeNovas: true,
+        }
       );
     } catch {
       setErro("Erro ao enviar mensagem");
@@ -3372,15 +3490,19 @@ export default function ConversasPage() {
         atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
         fimJanelaHistorico;
 
-      forcarScrollParaFinalRef.current = true;
+      forcarScrollParaFinalRef.current = false;
+      acompanharCrescimentoChatRef.current = true;
       impedirAutoScrollRef.current = false;
 
       await carregarMensagens(
         conversaSelecionada.id,
         true,
         protocoloSelecionadoId,
-        inicioJanelaHistorico,
-        novoFimJanela
+        mensagemMaisAntigaCarregadaRef.current || inicioJanelaHistorico,
+        novoFimJanela,
+        {
+          modoMergeNovas: true,
+        }
       );
     } catch {
       setErro("Erro ao enviar mídia");
@@ -3628,6 +3750,15 @@ export default function ConversasPage() {
   }
 
   function rolarParaFinal() {
+    const el = mensagensRef.current;
+    if (!el) return;
+
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }
+
+  function acompanharCrescimentoChat() {
     const el = mensagensRef.current;
     if (!el) return;
 
@@ -4227,7 +4358,7 @@ const templateFooterTexto = useMemo(() => {
     }
 
     iniciarConversaSelecionada();
-    }, [conversaSelecionada?.id, conversaSelecionada?.last_message_at]);
+    }, [conversaSelecionada?.id]);
 
     useEffect(() => {
       if (!conversaSelecionada?.id) return;
@@ -4239,9 +4370,11 @@ const templateFooterTexto = useMemo(() => {
       const estavaNoFinal = verificarSeUsuarioEstaNoFinal();
 
     if (estavaNoFinal) {
+      acompanharCrescimentoChatRef.current = true;
       impedirAutoScrollRef.current = false;
       forcarScrollParaFinalRef.current = false;
     } else {
+      acompanharCrescimentoChatRef.current = false;
       impedirAutoScrollRef.current = true;
       forcarScrollParaFinalRef.current = false;
     }
@@ -4260,7 +4393,10 @@ const templateFooterTexto = useMemo(() => {
           true,
           protocoloSelecionadoId,
           inicioHistoricoAtual,
-          null
+          null,
+          {
+            modoMergeNovas: true,
+          }
         );
       } else {
         await carregarMensagens(
@@ -4268,7 +4404,10 @@ const templateFooterTexto = useMemo(() => {
           true,
           null,
           inicioHistoricoAtual,
-          null
+          null,
+          {
+            modoMergeNovas: true,
+          }
         );
       }
     }, 5000);
@@ -4307,7 +4446,14 @@ const templateFooterTexto = useMemo(() => {
 
     if (forcarScrollParaFinalRef.current) {
       forcarScrollParaFinalRef.current = false;
+      acompanharCrescimentoChatRef.current = false;
       rolarParaFinal();
+      return;
+    }
+
+    if (acompanharCrescimentoChatRef.current) {
+      acompanharCrescimentoChatRef.current = false;
+      acompanharCrescimentoChat();
       return;
     }
 
@@ -4467,6 +4613,19 @@ const templateFooterTexto = useMemo(() => {
     templateSelecionado?.categoria,
     conversaSelecionada?.contatos?.telefone,
   ]);
+
+  useEffect(() => {
+    if (!mensagemSucesso && !erro) return;
+
+    const timeout = window.setTimeout(() => {
+      setMensagemSucesso("");
+      setErro("");
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [mensagemSucesso, erro]);
 
   useLayoutEffect(() => {
     const container = mensagensRef.current;
@@ -4797,6 +4956,7 @@ const templateFooterTexto = useMemo(() => {
           <section className={styles.content}>
             {conversaSelecionada ? (
               <div className={styles.chatShell}>
+                <ChatToast sucesso={mensagemSucesso} erro={erro} />
                 <div className={styles.chatMainColumn}>
                   <header className={styles.chatHeader}>
                     <div className={styles.chatHeaderLeft}>
@@ -5366,12 +5526,6 @@ const templateFooterTexto = useMemo(() => {
                         </div>
 
                         <div className={styles.composerArea}>
-                          {mensagemSucesso && (
-                            <div className={styles.successAlert}>{mensagemSucesso}</div>
-                          )}
-
-                          {erro && <div className={styles.errorAlert}>{erro}</div>}
-
                           {!podeEnviarMensagem &&
                             conversaSelecionada.status !== "encerrada" &&
                             !conversaComBotAtivo &&
