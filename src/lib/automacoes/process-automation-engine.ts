@@ -172,6 +172,17 @@ function delaySegundosDoNo(no: {
   return Math.max(0, delay);
 }
 
+function calcularSegundosAgendamentoDisparo(config: Record<string, any>) {
+  const quantidade = Math.max(1, Number(config.tempo_quantidade || 1));
+  const unidade = String(config.tempo_unidade || "horas");
+
+  if (unidade === "dias") {
+    return quantidade * 24 * 60 * 60;
+  }
+
+  return quantidade * 60 * 60;
+}
+
 function normalizarTexto(texto: string) {
   return String(texto || "").trim().toLowerCase();
 }
@@ -727,6 +738,204 @@ export async function executarNo(params: {
   }
 
   if (no.tipo_no === "inicio") {
+    await seguirParaProximoNo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noAtualId: no.id,
+      mensagemTexto,
+      numeroDestino,
+    });
+
+    return;
+  }
+
+  if (no.tipo_no === "agendar_disparo") {
+    const config = no.configuracao_json || {};
+
+    const templateId = String(config.template_id || "").trim();
+
+    if (!templateId) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agendar_disparo_erro",
+        descricao: "Bloco Agendar disparo sem template configurado.",
+        entrada: config,
+        saida: {},
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        mensagemTexto,
+        numeroDestino,
+      });
+
+      return;
+    }
+
+    const segundosParaAgendar = calcularSegundosAgendamentoDisparo(config);
+
+    const executarEm = new Date(
+      Date.now() + segundosParaAgendar * 1000
+    ).toISOString();
+
+    const variaveis = Array.isArray(config.variaveis)
+      ? config.variaveis
+      : [];
+
+    const { data: execucaoAtual } = await supabaseAdmin
+      .from("automacao_execucoes")
+      .select("contato_id, conversa_protocolo_id")
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    const { data: conversa } = await supabaseAdmin
+      .from("conversas")
+      .select("id, contato_id, integracao_whatsapp_id")
+      .eq("id", conversaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    const { data: template } = await supabaseAdmin
+      .from("whatsapp_templates")
+      .select("id, nome, idioma, status, integracao_whatsapp_id")
+      .eq("id", templateId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (!template) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agendar_disparo_template_nao_encontrado",
+        descricao: "Template configurado no bloco Agendar disparo não foi encontrado.",
+        entrada: config,
+        saida: {
+          template_id: templateId,
+        },
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        mensagemTexto,
+        numeroDestino,
+      });
+
+      return;
+    }
+
+    if (String(template.status || "").toUpperCase() !== "APPROVED") {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agendar_disparo_template_nao_aprovado",
+        descricao: "Template configurado no bloco Agendar disparo não está aprovado.",
+        entrada: config,
+        saida: {
+          template_id: template.id,
+          template_nome: template.nome,
+          status: template.status,
+        },
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        mensagemTexto,
+        numeroDestino,
+      });
+
+      return;
+    }
+
+    const integracaoWhatsappId =
+      conversa?.integracao_whatsapp_id || template.integracao_whatsapp_id || null;
+
+    const { error: insertAgendamentoError } = await supabaseAdmin
+      .from("automacao_agendamentos")
+      .insert({
+        empresa_id: empresaId,
+        execucao_id: execucaoId,
+        fluxo_id: fluxoId,
+        no_id: no.id,
+        tipo_agendamento: "disparo_template",
+        executar_em: executarEm,
+        status: "pendente",
+        payload_json: {
+          conversa_id: conversaId,
+          contato_id: execucaoAtual?.contato_id || conversa?.contato_id || null,
+          conversa_protocolo_id: execucaoAtual?.conversa_protocolo_id || null,
+          numero_destino: numeroDestino,
+
+          template_id: template.id,
+          template_nome: template.nome,
+          template_idioma: template.idioma,
+          integracao_whatsapp_id: integracaoWhatsappId,
+
+          variaveis,
+          tempo_quantidade: config.tempo_quantidade || null,
+          tempo_unidade: config.tempo_unidade || null,
+          segundos_para_agendar: segundosParaAgendar,
+
+          origem: "fluxo_automacao",
+          automacao_no_titulo: no.titulo,
+        },
+      });
+
+    if (insertAgendamentoError) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agendar_disparo_erro_insert",
+        descricao: "Erro ao criar agendamento de disparo template.",
+        entrada: config,
+        saida: {
+          erro: insertAgendamentoError.message,
+        },
+      });
+
+      return;
+    }
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "disparo_template_agendado",
+      descricao: "Disparo de template WhatsApp agendado com sucesso.",
+      entrada: config,
+      saida: {
+        executar_em: executarEm,
+        template_id: template.id,
+        template_nome: template.nome,
+        integracao_whatsapp_id: integracaoWhatsappId,
+        variaveis,
+      },
+    });
+
     await seguirParaProximoNo({
       empresaId,
       conversaId,

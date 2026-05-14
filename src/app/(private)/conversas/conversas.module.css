@@ -2132,7 +2132,7 @@
   padding: 0;
   margin: 0;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   opacity: 0.75;
   text-transform: uppercase;
@@ -4211,6 +4211,31 @@
   gap: 12px;
   align-items: flex-start;
   margin-bottom: 8px;
+}
+
+.buttonMessageOptions {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.buttonMessageOption {
+  min-width: 160px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid #16379136;
+  background: rgba(253, 253, 250, 0.92);
+  color: #163791d9;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  cursor: default;
+}
+
+.buttonMessageOption::before {
+  content: "↳ ";
+  opacity: 0.75;
 }
 
 @media (max-width: 640px) {

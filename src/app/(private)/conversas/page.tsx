@@ -71,6 +71,10 @@ type Mensagem = {
   favorita?: boolean;
   metadata_json?: {
     tipo_original_whatsapp?: string | null;
+    botoes?: Array<{
+      id?: string | null;
+      titulo?: string | null;
+    }> | null;
     media_id?: string | null;
     mime_type?: string | null;
     sha256?: string | null;
@@ -1108,11 +1112,13 @@ function TranscricaoAudioBox({
         disabled={carregando}
         className={styles.audioTranscriptionToggle}
       >
-        {carregando
-          ? "Transcrevendo..."
-          : aberta
-          ? "Ocultar transcrição"
-          : "Ver transcrição"}
+      {carregando
+        ? "Transcrevendo..."
+        : aberta
+        ? "Ocultar transcrição"
+        : texto.trim()
+        ? "Ver transcrição"
+        : "Gerar transcrição"}
       </button>
 
       {erro && <p className={styles.messageText}>{erro}</p>}
@@ -2040,6 +2046,31 @@ export default function ConversasPage() {
           <p className={styles.messageText}>
             <TextoComEmoji texto={`Tipo técnico: ${tipoNaoSuportado}`} />
           </p>
+        </div>
+      );
+    }
+
+    if (msg.tipo_mensagem === "botao") {
+      const botoes = msg.metadata_json?.botoes || [];
+
+      return (
+        <div>
+          <p className={styles.messageText}>
+            <TextoComEmoji texto={msg.conteudo} />
+          </p>
+
+          {botoes.length > 0 && (
+            <div className={styles.buttonMessageOptions}>
+              {botoes.map((botao, index) => (
+                <div
+                  key={`${botao.id || botao.titulo || "botao"}-${index}`}
+                  className={styles.buttonMessageOption}
+                >
+                  <TextoComEmoji texto={botao.titulo || botao.id || "Opção"} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
@@ -4618,7 +4649,7 @@ const templateFooterTexto = useMemo(() => {
     const timeout = window.setTimeout(() => {
       setMensagemSucesso("");
       setErro("");
-    }, 4000);
+    }, 8000);
 
     return () => {
       window.clearTimeout(timeout);

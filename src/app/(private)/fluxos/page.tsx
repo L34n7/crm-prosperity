@@ -75,6 +75,15 @@ type MidiaOpcao = {
   tamanho_bytes: number | null;
 };
 
+type TemplateWhatsappOpcao = {
+  id: string;
+  nome: string;
+  idioma: string;
+  status: string;
+  categoria?: string | null;
+  integracao_whatsapp_id: string;
+};
+
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
@@ -104,6 +113,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "enviar_botoes") return "Botões";
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Captura";
+  if (tipo === "agendar_disparo") return "Agendar disparo";
   return tipo;
 }
 
@@ -119,6 +129,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "enviar_botoes") return styles.nodeBotoes;
   if (tipo === "avaliacao") return styles.nodeAvaliacao;
   if (tipo === "capturar_resposta") return styles.nodePergunta;
+  if (tipo === "agendar_disparo") return styles.nodeAvaliacao;
   return styles.nodePadrao;
 }
 
@@ -134,6 +145,7 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "enviar_audio") return "Novo áudio";
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Capturar resposta";
+  if (tipo === "agendar_disparo") return "Agendar disparo";
   return "Novo bloco";
 }
 
@@ -396,6 +408,15 @@ export default function FluxosPage() {
   const [notificacaoMensagemNode, setNotificacaoMensagemNode] = useState("");
   const [notificarEmailNode, setNotificarEmailNode] = useState(false);
 
+  const [templatesWhatsapp, setTemplatesWhatsapp] = useState<TemplateWhatsappOpcao[]>([]);
+  const [carregandoTemplatesWhatsapp, setCarregandoTemplatesWhatsapp] = useState(false);
+
+  const [agendarDisparoTemplateIdNode, setAgendarDisparoTemplateIdNode] = useState("");
+  const [agendarDisparoQuantidadeNode, setAgendarDisparoQuantidadeNode] = useState("32");
+  const [agendarDisparoUnidadeNode, setAgendarDisparoUnidadeNode] =
+    useState<"horas" | "dias">("horas");
+  const [agendarDisparoVariaveisNode, setAgendarDisparoVariaveisNode] = useState("");
+
   const nodeEditado = useMemo(() => {
     return nodes.find((node) => node.id === editandoNodeId) || null;
   }, [nodes, editandoNodeId]);
@@ -404,6 +425,28 @@ export default function FluxosPage() {
     return edges.find((edge) => edge.id === editandoEdgeId) || null;
   }, [edges, editandoEdgeId]);
 
+
+  async function carregarTemplatesWhatsapp() {
+    try {
+      setCarregandoTemplatesWhatsapp(true);
+
+      const res = await fetch("/api/whatsapp/templates?status=APPROVED", {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar templates.");
+      }
+
+      setTemplatesWhatsapp(json.templates || json.data || []);
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao carregar templates.");
+    } finally {
+      setCarregandoTemplatesWhatsapp(false);
+    }
+  }
 
   async function carregarSetores() {
     try {
@@ -608,6 +651,7 @@ export default function FluxosPage() {
     carregarFluxos();
     carregarSetores();
     carregarMidias();
+    carregarTemplatesWhatsapp();
   }, []);
 
   useEffect(() => {
@@ -847,6 +891,13 @@ async function criarFluxoRapido() {
               notificar_excesso_tentativas: true,
               notificar_email_excesso_tentativas: true,
             }
+          : tipoNo === "agendar_disparo"
+          ? {
+              template_id: "",
+              tempo_quantidade: 32,
+              tempo_unidade: "horas",
+              variaveis: [],
+            }
           : {},
           delay_segundos: null,
     };
@@ -1036,6 +1087,24 @@ function abrirEdicaoNo(node: Node) {
 
   setNotificarEmailNode(Boolean(configuracaoJson?.notificar_email));
 
+  setAgendarDisparoTemplateIdNode(
+    String(configuracaoJson?.template_id || "")
+  );
+
+  setAgendarDisparoQuantidadeNode(
+    String(configuracaoJson?.tempo_quantidade || 32)
+  );
+
+  setAgendarDisparoUnidadeNode(
+    configuracaoJson?.tempo_unidade === "dias" ? "dias" : "horas"
+  );
+
+  setAgendarDisparoVariaveisNode(
+    Array.isArray(configuracaoJson?.variaveis)
+      ? configuracaoJson.variaveis.join("\n")
+      : ""
+  );
+
   if (Array.isArray(configuracaoJson?.opcoes)) {
     setOpcoesNode(configuracaoJson.opcoes);
   } else {
@@ -1156,6 +1225,19 @@ function aplicarEdicaoNo() {
         tipoFinal === "capturar_resposta"
       ) {
         configuracao_json.mensagem = mensagemNode;
+      }
+
+      if (tipoFinal === "agendar_disparo") {
+        configuracao_json.template_id = agendarDisparoTemplateIdNode;
+        configuracao_json.tempo_quantidade = Math.max(
+          1,
+          Number(agendarDisparoQuantidadeNode || 1)
+        );
+        configuracao_json.tempo_unidade = agendarDisparoUnidadeNode;
+        configuracao_json.variaveis = agendarDisparoVariaveisNode
+          .split("\n")
+          .map((item) => item.trim())
+          .filter(Boolean);
       }
 
       if (tipoFinal === "pergunta_opcoes") {
@@ -1944,6 +2026,22 @@ function validarFluxoAntesDeAtivar() {
       }
     }
 
+    if (tipoNo === "agendar_disparo") {
+      if (!String(config.template_id || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp.`;
+      }
+
+      const quantidade = Number(config.tempo_quantidade || 0);
+
+      if (!Number.isFinite(quantidade) || quantidade <= 0) {
+        return `O bloco "${node.data?.titulo}" precisa ter um tempo válido para agendar o disparo.`;
+      }
+
+      if (!["horas", "dias"].includes(String(config.tempo_unidade || ""))) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma unidade válida.`;
+      }
+    }
+
     if (
       tipoNo === "transferir_setor" &&
       !String(config.setor_id || "").trim()
@@ -2416,6 +2514,17 @@ useEffect(() => {
                         className={styles.headerDropdownItem}
                         onClick={() => {
                           setMenuHeaderAberto(false);
+                          adicionarNo("agendar_disparo");
+                        }}
+                      >
+                        + Agendar disparo
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
                           adicionarNo("avaliacao");
                         }}
                       >
@@ -2641,6 +2750,13 @@ useEffect(() => {
                           ) {
                             setMidiaUrlNode("");
                           }
+                          if (novoTipo === "agendar_disparo") {
+                            setMensagemNode("");
+                            setSetorDestino("");
+                            setOpcoesNode([]);
+                            setBotoesNode([]);
+                            setMidiaUrlNode("");
+                          }
                         }}
                       >
                         <option value="enviar_texto">Mensagem</option>
@@ -2652,6 +2768,7 @@ useEffect(() => {
                         <option value="enviar_video">Vídeo</option>
                         <option value="enviar_audio">Áudio</option>
                         <option value="enviar_botoes">Pergunta com Botões</option>
+                        <option value="agendar_disparo">Agendar disparo</option>
                         <option value="avaliacao">Avaliação</option>
                       </select>
                     </label>
@@ -3098,6 +3215,87 @@ useEffect(() => {
                     </div>
                   )}
 
+                  {tipoNodeEdicao === "agendar_disparo" && (
+                    <div className={styles.optionsBox}>
+                      <div>
+                        <span className={styles.label}>Configuração do disparo</span>
+                        <p className={styles.help}>
+                          Este bloco não envia mensagem comum. Ele agenda um template WhatsApp para ser enviado depois.
+                        </p>
+                      </div>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Template WhatsApp</span>
+
+                        <select
+                          className={styles.input}
+                          value={agendarDisparoTemplateIdNode}
+                          onChange={(e) => setAgendarDisparoTemplateIdNode(e.target.value)}
+                          disabled={carregandoTemplatesWhatsapp}
+                        >
+                          <option value="">
+                            {carregandoTemplatesWhatsapp
+                              ? "Carregando templates..."
+                              : "Selecione um template aprovado"}
+                          </option>
+
+                          {templatesWhatsapp.map((template) => (
+                            <option key={template.id} value={template.id}>
+                              {template.nome} - {template.idioma}
+                            </option>
+                          ))}
+                        </select>
+
+                        <span className={styles.help}>
+                          Apenas templates aprovados devem ser usados para disparos após 24h.
+                        </span>
+                      </label>
+
+                      <div className={styles.optionRow}>
+                        <label className={styles.field}>
+                          <span className={styles.label}>Enviar após</span>
+
+                          <input
+                            type="number"
+                            min={1}
+                            className={styles.input}
+                            value={agendarDisparoQuantidadeNode}
+                            onChange={(e) => setAgendarDisparoQuantidadeNode(e.target.value)}
+                          />
+                        </label>
+
+                        <label className={styles.field}>
+                          <span className={styles.label}>Unidade</span>
+
+                          <select
+                            className={styles.input}
+                            value={agendarDisparoUnidadeNode}
+                            onChange={(e) =>
+                              setAgendarDisparoUnidadeNode(e.target.value as "horas" | "dias")
+                            }
+                          >
+                            <option value="horas">Horas</option>
+                            <option value="dias">Dias</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Variáveis do template</span>
+
+                        <textarea
+                          className={styles.textarea}
+                          value={agendarDisparoVariaveisNode}
+                          onChange={(e) => setAgendarDisparoVariaveisNode(e.target.value)}
+                          placeholder={"Uma variável por linha.\nEx:\n{{nome}}\n{{telefone}}"}
+                        />
+
+                        <span className={styles.help}>
+                          Use uma variável por linha. Na próxima etapa, o motor vai substituir esses valores antes de enviar.
+                        </span>
+                      </label>
+                    </div>
+                  )}
                   {tipoNodeEdicao === "transferir_setor" && (
                     <label className={styles.field}>
                       <span className={styles.label}>Setor destino</span>
@@ -3121,7 +3319,7 @@ useEffect(() => {
                     </label>
                   )}
                   
-                  {tipoNodeEdicao !== "inicio" && (
+                  {tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (
                     <label className={styles.delayField}>
                       <div className={styles.delayTopRow}>
                         <span className={styles.label}>Delay antes de enviar:</span>
