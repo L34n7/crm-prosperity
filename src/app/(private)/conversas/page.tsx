@@ -1792,9 +1792,7 @@ export default function ConversasPage() {
           : "audio");
 
       const transcricaoAudio =
-        msg.metadata_json?.transcricao_audio?.trim() ||
-        msg.conteudo?.trim() ||
-        "";
+        msg.metadata_json?.transcricao_audio?.trim() || "";
 
       return (
         <div>
