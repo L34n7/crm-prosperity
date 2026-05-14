@@ -1297,6 +1297,147 @@
   gap: 12px;
 }
 
+.agendarDisparoCostAlert {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+}
+
+.agendarDisparoCostAlertIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #ffedd5;
+  color: #c2410c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.agendarDisparoCostAlertContent {
+  display: grid;
+  gap: 4px;
+}
+
+.agendarDisparoCostAlertContent strong {
+  font-size: 14px;
+  color: #9a3412;
+}
+
+.agendarDisparoCostAlertContent p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #9a3412;
+}
+
+.warningList {
+  margin: 10px 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.warningList li {
+  color: #92400e;
+  font-size: 14px;
+}
+
+
+.agendarDisparoCostPreviewCard {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  border-radius: 18px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.costPreviewTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.costPreviewLabel {
+  font-size: 11px;
+  font-weight: 900;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.costPreviewCategory {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.costPreviewValue {
+  font-size: 22px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.costPreviewMeta {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.costPreviewHelp,
+.costPreviewMuted {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.modalCostPreviewBox {
+  margin-top: 14px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  border-radius: 16px;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.modalCostPreviewBox span {
+  font-size: 11px;
+  font-weight: 900;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.modalCostPreviewBox strong {
+  font-size: 24px;
+  color: #0f172a;
+}
+
+.modalCostPreviewBox small {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+
 @keyframes dash-flow {
   to {
     stroke-dashoffset: -12;

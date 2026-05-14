@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   MessageSquare,
@@ -69,6 +69,31 @@ function isActivePath(pathname: string, href: string) {
 export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const [disparosPendentes, setDisparosPendentes] = useState(0);
+
+  useEffect(() => {
+    async function carregarDisparosPendentes() {
+      try {
+        const res = await fetch("/api/disparos-agendados/pendentes", {
+          cache: "no-store",
+        });
+
+        const json = await res.json();
+
+        if (res.ok && json.ok) {
+          setDisparosPendentes(Number(json.quantidade || 0));
+        }
+      } catch {
+        setDisparosPendentes(0);
+      }
+    }
+
+    carregarDisparosPendentes();
+
+    const intervalo = window.setInterval(carregarDisparosPendentes, 60_000);
+
+    return () => window.clearInterval(intervalo);
+  }, []);
 
   function persistSidebarState(nextValue: boolean) {
     localStorage.setItem("crm-sidebar-collapsed", String(nextValue));
@@ -130,6 +155,12 @@ export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
                 >
                   <span className={styles.linkIcon}>
                     <Icon size={18} strokeWidth={2} />
+
+                    {item.href === "/disparos-agendados" && disparosPendentes > 0 && (
+                      <span className={styles.notificationDot}>
+                        {disparosPendentes > 9 ? "9+" : disparosPendentes}
+                      </span>
+                    )}
                   </span>
 
                   {!collapsed && (

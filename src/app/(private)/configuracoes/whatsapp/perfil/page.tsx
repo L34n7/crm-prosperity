@@ -460,16 +460,6 @@ export default function WhatsappPerfilPage() {
                 title="O nome de exibição do WhatsApp passa por revisão do Meta."
             />
             </label>
-            <label className={styles.fieldLabel}>
-                Sobre
-                <input
-                className={styles.input}
-                value={about}
-                onChange={(e) => setAbout(e.target.value)}
-                maxLength={139}
-                placeholder="Ex: Atendimento oficial da empresa"
-                />
-            </label>
 
             <label className={styles.fieldLabel}>
                 Categoria

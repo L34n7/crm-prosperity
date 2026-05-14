@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import Header from "@/components/Header";
 import styles from "./conversas.module.css";
 import { can } from "@/lib/permissoes/frontend";
@@ -22,6 +23,12 @@ type Conversa = {
   protocolo?: string | null;
   ultima_mensagem?: string | null;
   unread_count?: number | null;
+  tem_disparo_agendado_pendente?: boolean;
+  disparo_agendado_pendente?: {
+    id: string;
+    executar_em: string;
+    template_nome: string | null;
+  } | null;
   setor_id?: string | null;
   responsavel_id?: string | null;
   favorita?: boolean;
@@ -352,6 +359,17 @@ function formatarDataCompleta(data?: string | null) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatarDataCurtaDisparo(data?: string | null) {
+  if (!data) return "";
+
+  return new Date(data).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -4940,12 +4958,18 @@ const templateFooterTexto = useMemo(() => {
 
                         <div className={styles.conversationPreviewRow}>
                           <p className={styles.previewLine}>{getPreviewConversa(c)}</p>
+                            {c.tem_disparo_agendado_pendente && (
+                              <div className={styles.scheduledDisparoMiniBadge}>
+                                ⏰ Disparo agendado
+                              </div>
+                            )}
 
                           <div className={styles.unreadSlot}>
                             {unreadCount > 0 && (
                               <span className={styles.unreadBadge}>{unreadCount}</span>
                             )}
                           </div>
+                          
                         </div>
 
                         <div className={styles.conversationBottomLine}>
@@ -5027,6 +5051,18 @@ const templateFooterTexto = useMemo(() => {
                         </div>
 
                         <div className={styles.chatHeaderAlerts}>
+                          {conversaSelecionada?.tem_disparo_agendado_pendente && (
+                            <Link
+                              href={`/disparos-agendados`}
+                              className={`${styles.alertChip} ${styles.alertChipSchedule} ${styles.alertChipScheduleLink}`}
+                            >
+                              ⏰ Disparo agendado para{" "}
+                              {formatarDataCurtaDisparo(
+                                conversaSelecionada.disparo_agendado_pendente?.executar_em
+                              )}
+                            </Link>
+                          )}
+                          
                           {alertaSemResponsavel && (
                             <span className={`${styles.alertChip} ${styles.alertChipWarn}`}>
                               Sem responsável

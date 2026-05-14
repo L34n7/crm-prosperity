@@ -4233,9 +4233,42 @@
   cursor: default;
 }
 
+.scheduledDisparoMiniBadge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.alertChipSchedule {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
 .buttonMessageOption::before {
   content: "↳ ";
   opacity: 0.75;
+}
+
+.alertChipScheduleLink {
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.alertChipScheduleLink:hover {
+  background: #ffedd5;
+  border-color: #fdba74;
+  transform: translateY(-1px);
 }
 
 @media (max-width: 640px) {

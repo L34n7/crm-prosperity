@@ -288,6 +288,14 @@ export async function GET(request: Request) {
 
   let listasPorConversa = new Map<string, { id: string; nome: string }[]>();
   let protocolosAtivosPorConversa = new Map<string, string>();
+  let disparosPendentesPorConversa = new Map<
+    string,
+    {
+      id: string;
+      executar_em: string;
+      template_nome: string | null;
+    }
+  >();
   let ultimaMensagemPorConversa = new Map<string, MensagemListaRow>();
   let unreadCountPorConversa = new Map<string, number>();
   let leituraPorConversa = new Map<string, string | null>();
@@ -425,16 +433,56 @@ export async function GET(request: Request) {
     }
   }
 
-  conversas = conversas.map((conversa) => ({
-    ...conversa,
-    favorita: favoritosSet.has(conversa.id),
-    listas: listasPorConversa.get(conversa.id) ?? [],
-    protocolo: protocolosAtivosPorConversa.get(conversa.id) ?? null,
-    ultima_mensagem: getPreviewUltimaMensagem(
-      ultimaMensagemPorConversa.get(conversa.id) ?? null
-    ),
-    unread_count: unreadCountPorConversa.get(conversa.id) ?? 0,
-  }));
+  if (conversaIds.length > 0) {
+    const { data: disparosPendentes, error: disparosPendentesError } =
+      await supabaseAdmin
+        .from("automacao_agendamentos")
+        .select("id, conversa_id:payload_json->>conversa_id, executar_em, payload_json")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("tipo_agendamento", "disparo_template")
+        .eq("status", "pendente")
+        .in("payload_json->>conversa_id", conversaIds)
+        .order("executar_em", { ascending: true });
+
+    if (disparosPendentesError) {
+      return NextResponse.json(
+        { ok: false, error: disparosPendentesError.message },
+        { status: 500 }
+      );
+    }
+
+    for (const disparo of disparosPendentes || []) {
+      const conversaId = String((disparo as any).conversa_id || "");
+
+      if (!conversaId) continue;
+
+      if (!disparosPendentesPorConversa.has(conversaId)) {
+        disparosPendentesPorConversa.set(conversaId, {
+          id: disparo.id,
+          executar_em: disparo.executar_em,
+          template_nome:
+            (disparo.payload_json as any)?.template_nome || null,
+        });
+      }
+    }
+  }
+
+  conversas = conversas.map((conversa) => {
+    const disparoPendente = disparosPendentesPorConversa.get(conversa.id) || null;
+
+    return {
+      ...conversa,
+      favorita: favoritosSet.has(conversa.id),
+      listas: listasPorConversa.get(conversa.id) ?? [],
+      protocolo: protocolosAtivosPorConversa.get(conversa.id) ?? null,
+      ultima_mensagem: getPreviewUltimaMensagem(
+        ultimaMensagemPorConversa.get(conversa.id) ?? null
+      ),
+      unread_count: unreadCountPorConversa.get(conversa.id) ?? 0,
+      tem_disparo_agendado_pendente: !!disparoPendente,
+      disparo_agendado_pendente: disparoPendente,
+    };
+  });
 
   if (isAdministrador(usuario)) {
     return NextResponse.json({

@@ -248,6 +248,35 @@
   padding: 8px 18px;
 }
 
+.linkIcon {
+  position: relative;
+}
+
+.notificationDot {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+
+  border-radius: 999px;
+  background: #efbc44;
+  color: #111111;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.35);
+}
+
+
 @media (max-width: 1024px) {
   .sidebar {
     width: 84px;

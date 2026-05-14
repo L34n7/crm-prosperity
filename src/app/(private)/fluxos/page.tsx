@@ -82,6 +82,7 @@ type TemplateWhatsappOpcao = {
   status: string;
   categoria?: string | null;
   integracao_whatsapp_id: string;
+  payload?: any;
 };
 
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
@@ -336,6 +337,12 @@ export default function FluxosPage() {
   const [confirmandoExclusaoConexao, setConfirmandoExclusaoConexao] =
     useState(false);
   
+  const [mostrarModalCustoAgendamento, setMostrarModalCustoAgendamento] =
+    useState(false);
+
+  const [acaoPendenteAplicarNo, setAcaoPendenteAplicarNo] =
+    useState<(() => void) | null>(null);
+
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [carregandoSetores, setCarregandoSetores] = useState(false);
   const [menuHeaderAberto, setMenuHeaderAberto] = useState(false);
@@ -416,6 +423,26 @@ export default function FluxosPage() {
   const [agendarDisparoUnidadeNode, setAgendarDisparoUnidadeNode] =
     useState<"horas" | "dias">("horas");
   const [agendarDisparoVariaveisNode, setAgendarDisparoVariaveisNode] = useState("");
+  const [previewCustoAgendarDisparo, setPreviewCustoAgendarDisparo] = useState<{
+    categoria: string;
+    totalSelecionados: number;
+    totalIsentos: number;
+    totalCobrados: number;
+    valorUnitarioUsd: number;
+    valorTotalUsd: number;
+    cotacaoUsdBrl: number;
+    valorTotalBrlEstimado: number;
+    valorTotalBrlMin: number;
+    valorTotalBrlMax: number;
+    margemMinPercent: number;
+    margemMaxPercent: number;
+    fonteCotacao?: string;
+    cotacaoDataHora?: string | null;
+    cotacaoFallback?: boolean;
+  } | null>(null);
+
+  const [loadingPreviewCustoAgendarDisparo, setLoadingPreviewCustoAgendarDisparo] =
+    useState(false);
 
   const nodeEditado = useMemo(() => {
     return nodes.find((node) => node.id === editandoNodeId) || null;
@@ -425,6 +452,13 @@ export default function FluxosPage() {
     return edges.find((edge) => edge.id === editandoEdgeId) || null;
   }, [edges, editandoEdgeId]);
 
+  const templateAgendarDisparoSelecionado = useMemo(() => {
+    return (
+      templatesWhatsapp.find(
+        (template) => template.id === agendarDisparoTemplateIdNode
+      ) || null
+    );
+  }, [templatesWhatsapp, agendarDisparoTemplateIdNode]);
 
   async function carregarTemplatesWhatsapp() {
     try {
@@ -445,6 +479,64 @@ export default function FluxosPage() {
       setErro(error?.message || "Erro ao carregar templates.");
     } finally {
       setCarregandoTemplatesWhatsapp(false);
+    }
+  }
+
+  async function calcularPreviewCustoAgendarDisparo(categoria: string) {
+    try {
+      const categoriaFinal = String(categoria || "").trim();
+
+      if (!categoriaFinal) {
+        setPreviewCustoAgendarDisparo(null);
+        return;
+      }
+
+      setLoadingPreviewCustoAgendarDisparo(true);
+
+      const res = await fetch("/api/whatsapp/disparos/custo-preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          categoria: categoriaFinal,
+          contatos: [
+            {
+              id: "estimativa-agendamento-fluxo",
+              telefone: "5500000000000",
+            },
+          ],
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao calcular custo estimado.");
+      }
+
+      setPreviewCustoAgendarDisparo({
+        categoria: String(json.categoria || ""),
+        totalSelecionados: Number(json.totalSelecionados || 0),
+        totalIsentos: Number(json.totalIsentos || 0),
+        totalCobrados: Number(json.totalCobrados || 0),
+        valorUnitarioUsd: Number(json.valorUnitarioUsd || 0),
+        valorTotalUsd: Number(json.valorTotalUsd || 0),
+        cotacaoUsdBrl: Number(json.cotacaoUsdBrl || 0),
+        valorTotalBrlEstimado: Number(json.valorTotalBrlEstimado || 0),
+        valorTotalBrlMin: Number(json.valorTotalBrlMin || 0),
+        valorTotalBrlMax: Number(json.valorTotalBrlMax || 0),
+        margemMinPercent: Number(json.margemMinPercent || 0),
+        margemMaxPercent: Number(json.margemMaxPercent || 0),
+        fonteCotacao: json.fonteCotacao || "",
+        cotacaoDataHora: json.cotacaoDataHora || null,
+        cotacaoFallback: Boolean(json.cotacaoFallback),
+      });
+    } catch (error: any) {
+      setPreviewCustoAgendarDisparo(null);
+      setErro(error?.message || "Erro ao calcular custo estimado.");
+    } finally {
+      setLoadingPreviewCustoAgendarDisparo(false);
     }
   }
 
@@ -1201,6 +1293,19 @@ function removerOpcaoPergunta(index: number) {
 }
 
 function aplicarEdicaoNo() {
+  if (tipoNodeEdicao === "agendar_disparo") {
+    setAcaoPendenteAplicarNo(() => () => {
+      aplicarEdicaoNoInterno();
+    });
+
+    setMostrarModalCustoAgendamento(true);
+    return;
+  }
+
+  aplicarEdicaoNoInterno();
+}
+
+function aplicarEdicaoNoInterno() {
   if (!editandoNodeId) return;
 
   setNodes((atuais) =>
@@ -2156,10 +2261,31 @@ useEffect(() => {
   function handleClick() {
     setMenuFluxo(null);
   }
-
   window.addEventListener("click", handleClick);
   return () => window.removeEventListener("click", handleClick);
 }, []);
+
+useEffect(() => {
+  if (tipoNodeEdicao !== "agendar_disparo") {
+    setPreviewCustoAgendarDisparo(null);
+    return;
+  }
+
+  const categoria = String(
+    templateAgendarDisparoSelecionado?.categoria || ""
+  ).toLowerCase();
+
+  if (!categoria) {
+    setPreviewCustoAgendarDisparo(null);
+    return;
+  }
+
+  calcularPreviewCustoAgendarDisparo(categoria);
+}, [
+  tipoNodeEdicao,
+  templateAgendarDisparoSelecionado?.id,
+  templateAgendarDisparoSelecionado?.categoria,
+]);
 
   return (
     <>
@@ -3217,6 +3343,19 @@ useEffect(() => {
 
                   {tipoNodeEdicao === "agendar_disparo" && (
                     <div className={styles.optionsBox}>
+                      <div className={styles.agendarDisparoCostAlert}>
+                        <div className={styles.agendarDisparoCostAlertIcon}>⚠</div>
+
+                        <div className={styles.agendarDisparoCostAlertContent}>
+                          <strong>Este disparo gera custos</strong>
+
+                          <p>
+                            O envio será feito usando template oficial do WhatsApp e poderá gerar
+                            cobrança da Meta quando o disparo ocorrer.
+                          </p>
+                        </div>
+                      </div>
+
                       <div>
                         <span className={styles.label}>Configuração do disparo</span>
                         <p className={styles.help}>
@@ -3293,9 +3432,46 @@ useEffect(() => {
                         <span className={styles.help}>
                           Use uma variável por linha. Na próxima etapa, o motor vai substituir esses valores antes de enviar.
                         </span>
+
+                        <div className={styles.agendarDisparoCostPreviewCard}>
+                          <div className={styles.costPreviewTop}>
+                            <span className={styles.costPreviewLabel}>Estimativa de custo Meta</span>
+
+                            <span className={styles.costPreviewCategory}>
+                              {templateAgendarDisparoSelecionado?.categoria || "Categoria"}
+                            </span>
+                          </div>
+
+                          {loadingPreviewCustoAgendarDisparo ? (
+                            <p className={styles.costPreviewMuted}>Calculando estimativa...</p>
+                          ) : previewCustoAgendarDisparo ? (
+                            <>
+                              <strong className={styles.costPreviewValue}>
+                                R$ {previewCustoAgendarDisparo.valorTotalBrlMin.toFixed(2)} ~ R${" "}
+                                {previewCustoAgendarDisparo.valorTotalBrlMax.toFixed(2)}
+                              </strong>
+
+                              <p className={styles.costPreviewMeta}>
+                                USD: US$ {previewCustoAgendarDisparo.valorTotalUsd.toFixed(4)} ·
+                                Cobrado: {previewCustoAgendarDisparo.totalCobrados} contato
+                              </p>
+
+                              <p className={styles.costPreviewHelp}>
+                                Esta é uma estimativa para 1 contato. A cobrança real pode variar
+                                conforme categoria do template, país do contato, cotação, impostos e
+                                regras da Meta.
+                              </p>
+                            </>
+                          ) : (
+                            <p className={styles.costPreviewMuted}>
+                              Selecione um template aprovado para visualizar a estimativa.
+                            </p>
+                          )}
+                        </div>
                       </label>
                     </div>
                   )}
+
                   {tipoNodeEdicao === "transferir_setor" && (
                     <label className={styles.field}>
                       <span className={styles.label}>Setor destino</span>
@@ -4356,6 +4532,96 @@ useEffect(() => {
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {mostrarModalCustoAgendamento && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalCard}>
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Confirmação</p>
+                  <h3 className={styles.modalTitle}>
+                    Confirmar agendamento de disparo
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.closePanelButton}
+                  onClick={() => {
+                    setMostrarModalCustoAgendamento(false);
+                    setAcaoPendenteAplicarNo(null);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className={styles.modalBody}>
+                <div className={styles.warningBox}>
+                  <strong>Este bloco agenda um disparo oficial do WhatsApp.</strong>
+
+                  <p>Quando o disparo ocorrer:</p>
+
+                  <ul className={styles.warningList}>
+                    <li>Poderá abrir uma nova janela de conversa</li>
+                    <li>Poderá gerar cobrança da Meta</li>
+                    <li>O envio será realizado automaticamente</li>
+                  </ul>
+
+                  {previewCustoAgendarDisparo && (
+                    <div className={styles.modalCostPreviewBox}>
+                      <span>Estimativa para 1 contato</span>
+
+                      <strong>
+                        R$ {previewCustoAgendarDisparo.valorTotalBrlMin.toFixed(2)} ~ R${" "}
+                        {previewCustoAgendarDisparo.valorTotalBrlMax.toFixed(2)}
+                      </strong>
+
+                      <small>
+                        Categoria: {previewCustoAgendarDisparo.categoria} · USD: US${" "}
+                        {previewCustoAgendarDisparo.valorTotalUsd.toFixed(4)}
+                      </small>
+                    </div>
+                  )}
+
+                  <p>
+                    Use esse recurso apenas quando fizer sentido para recuperação ou
+                    continuidade do atendimento.
+                  </p>
+                </div>
+              </div>
+
+              <div className={styles.modalFooter}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => {
+                    setMostrarModalCustoAgendamento(false);
+                    setAcaoPendenteAplicarNo(null);
+                  }}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={() => {
+                    setMostrarModalCustoAgendamento(false);
+
+                    if (acaoPendenteAplicarNo) {
+                      acaoPendenteAplicarNo();
+                    }
+
+                    setAcaoPendenteAplicarNo(null);
+                  }}
+                >
+                  Continuar e aplicar
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
