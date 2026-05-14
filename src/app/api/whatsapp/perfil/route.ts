@@ -60,6 +60,8 @@ async function buscarIntegracao(
 export async function GET(req: NextRequest) {
   try {
     const contexto = await getUsuarioContexto();
+    console.log("[PERFIL] CONTEXTO:", contexto);
+    console.log("[PERFIL] EMPRESA:", contexto.ok ? contexto.usuario.empresa_id : null);
 
     if (!contexto.ok) {
       return jsonErro(contexto.error, contexto.status);
