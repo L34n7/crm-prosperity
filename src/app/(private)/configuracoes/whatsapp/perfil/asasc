@@ -1,0 +1,471 @@
+.pageContent {
+  padding: 24px;
+  min-height: calc(100vh - 54px);
+  background: #f8fafc;
+}
+
+.whatsappShell {
+  max-width: 760px;
+  margin: 0 auto;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+
+.chatSidebar,
+.previewPanel {
+  display: none;
+}
+
+.editorPanel {
+  background: #ffffff;
+}
+
+.editorTop {
+  padding: 24px 28px 10px;
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.editorTop h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.editorTop span {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.formArea {
+  padding: 18px 28px 28px;
+  display: grid;
+  gap: 16px;
+}
+
+.profileHero {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 18px;
+}
+
+.photoUpload {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.photoUpload input {
+  display: none;
+}
+
+.photoUploadPreview {
+  width: 150px;
+  height: 150px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+}
+
+.photoUploadPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photoUpload strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.fieldLabel,
+.fieldLabelFull {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #334155;
+}
+
+.fieldLabelFull {
+  grid-column: 1 / -1;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  padding: 11px 14px;
+  font-size: 14px;
+  outline: none;
+}
+
+.textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.input:focus,
+.textarea:focus {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+}
+
+.noticeBox {
+  border: 1px solid #fde68a;
+  background: #fffbea;
+  color: #92400e;
+  border-radius: 16px;
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.alertArea {
+  padding: 12px 28px 0;
+  display: grid;
+  gap: 10px;
+}
+
+.successAlert,
+.errorAlert {
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.successAlert {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.errorAlert {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.saveArea {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.saveButton {
+  border: none;
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.saveButton:hover {
+  background: #000000;
+  transform: translateY(-1px);
+}
+
+.saveButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cropOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.cropModal {
+  width: 100%;
+  max-width: 520px;
+  background: #ffffff;
+  border-radius: 24px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.cropHeader {
+  padding: 20px 22px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cropHeader h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #0f172a;
+}
+
+.cropHeader p {
+  margin: 5px 0 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.cropHeader button {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: none;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.cropArea {
+  padding: 26px;
+  display: flex;
+  justify-content: center;
+  background: #f8fafc;
+}
+
+.cropCircle {
+  width: 280px;
+  height: 280px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+  border: 4px solid #ffffff;
+  box-shadow: 0 0 0 1px #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cropCircle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center;
+}
+
+.cropControls {
+  padding: 18px 22px;
+  display: grid;
+  gap: 14px;
+}
+
+.cropControls label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #334155;
+}
+
+.cropControls input[type="range"] {
+  width: 100%;
+}
+
+.cropFooter {
+  padding: 18px 22px 22px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.secondaryButton {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.secondaryButton:hover {
+  background: #f8fafc;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 23, 42, 0.52);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modalCard {
+  width: 100%;
+  max-width: 620px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.modalHeader {
+  padding: 22px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  background: #fbfdff;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 22px;
+  color: #0f172a;
+}
+
+.modalSubtitle {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.closeButton,
+.ghostButton {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  padding: 11px 15px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.closeButton:hover,
+.ghostButton:hover {
+  background: #f8fafc;
+}
+
+.cropBody {
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.cropPreview {
+  width: 260px;
+  height: 260px;
+  margin: 0 auto;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+  border: 4px solid #ffffff;
+  box-shadow: 0 0 0 1px #cbd5e1;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.cropPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.modalActions {
+  padding: 16px 22px 22px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.primaryButton {
+  border: none;
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: 14px;
+  padding: 11px 15px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primaryButton:hover {
+  background: #000000;
+}
+
+@media (max-width: 720px) {
+  .pageContent {
+    padding: 12px;
+  }
+
+  .whatsappShell {
+    border-radius: 18px;
+  }
+
+  .editorTop {
+    padding: 22px 18px 8px;
+  }
+
+  .formArea {
+    padding: 16px 18px 22px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .saveArea {
+    justify-content: stretch;
+  }
+
+  .saveButton {
+    width: 100%;
+  }
+}
