@@ -7,10 +7,10 @@ const supabaseAdmin = getSupabaseAdmin();
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const mensagemId = params.id;
+    const { id: mensagemId } = await context.params;
 
     const { data: mensagem, error } = await supabaseAdmin
       .from("mensagens")
