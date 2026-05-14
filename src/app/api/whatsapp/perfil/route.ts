@@ -91,11 +91,20 @@ export async function GET(req: NextRequest) {
 
     const integracoes = await buscarIntegracao(empresaId, null);
 
+    const integracoesComToken = integracoes.filter((item) => extrairToken(item));
+
     const integracaoSelecionada =
-      integracoes.find((item) => item.id === integracaoId) ||
-      integracoes.find((item) => item.status === "ativa") ||
-      integracoes[0] ||
+      integracoesComToken.find((item) => item.id === integracaoId) ||
+      integracoesComToken.find((item) => item.status === "ativa") ||
+      integracoesComToken[0] ||
       null;
+
+    if (!integracaoSelecionada) {
+      return jsonErro(
+        "Nenhuma integração com token configurado foi encontrada. Verifique a coluna token_ref e a variável na Vercel.",
+        400
+      );
+    }
 
     if (!integracaoSelecionada) {
       return NextResponse.json({
@@ -149,15 +158,15 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      integracoes: integracoes.map((item) => ({
-        id: item.id,
-        nome_conexao: item.nome_conexao,
-        numero: item.numero,
-        status: item.status,
-        phone_number_id: item.phone_number_id,
-        verified_name: item.verified_name,
-        phone_number_display_name: item.phone_number_display_name,
-      })),
+        integracoes: integracoesComToken.map((item) => ({
+          id: item.id,
+          nome_conexao: item.nome_conexao,
+          numero: item.numero,
+          status: item.status,
+          phone_number_id: item.phone_number_id,
+          verified_name: item.verified_name,
+          phone_number_display_name: item.phone_number_display_name,
+        })),
       integracao: {
         id: integracaoSelecionada.id,
         nome_conexao: integracaoSelecionada.nome_conexao,
