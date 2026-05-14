@@ -473,7 +473,7 @@ function getStatusEnvioLabel(status: Mensagem["status_envio"]) {
     case "lida":
       return "✓✓";
     case "falha":
-      return "!";
+      return "!! não entregue";
     default:
       return "";
   }

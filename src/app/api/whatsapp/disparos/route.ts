@@ -363,7 +363,7 @@ async function registrarLogDisparo(params: {
   templateNome: string | null;
   templateIdioma: string | null;
   mensagem: string | null;
-  status: "sucesso" | "falha";
+  status: "sucesso" | "falha" | "processando";
   erro: string | null;
   statusHttp: number | null;
   messageId: string | null;
@@ -852,8 +852,8 @@ export async function POST(req: NextRequest) {
               nome_contato: nomeContatoFinal,
               ok: false,
               status: response.status,
-              status_disparo: "falha",
-              status_label: "Falhou",
+              status_disparo: "processando",
+              status_label: "Aguardando confirmação",
               template_nome: template.nome,
               mensagem_template: mensagemTemplate,
               message_id: null,

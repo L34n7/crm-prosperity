@@ -89,6 +89,10 @@ type ResultadoDisparo = {
   conversa_id?: string | null;
   conversa_protocolo_id?: string | null;
   erro?: string | null;
+  erro_amigavel?: string | null;
+  erro_tecnico?: string | null;
+  metadata_json?: any;
+  origem_historico?: string | null;
 };
 
 type ContatoOpcao = {
@@ -184,6 +188,90 @@ function getTemplateStatusLabel(status: string | null | undefined) {
   }
 }
 
+function normalizarMetadataJson(metadata: any) {
+  if (!metadata) return null;
+
+  if (typeof metadata === "string") {
+    try {
+      return JSON.parse(metadata);
+    } catch {
+      return null;
+    }
+  }
+
+  return metadata;
+}
+
+function obterFeedbackErroDisparo(item: ResultadoDisparo) {
+  if (item.ok) return null;
+
+  const metadata = normalizarMetadataJson(item.metadata_json);
+
+  const erroMeta =
+    metadata?.whatsapp_status?.raw_status?.errors?.[0] ||
+    metadata?.meta_response?.error ||
+    null;
+
+  const codigo = Number(erroMeta?.code || 0);
+
+  const mensagemTecnica =
+    item.erro_tecnico ||
+    item.erro ||
+    metadata?.whatsapp_status?.error_message ||
+    erroMeta?.message ||
+    erroMeta?.title ||
+    "Falha ao enviar mensagem.";
+
+  switch (codigo) {
+    case 131042:
+      return {
+        titulo: "Falha por pendência financeira na Meta",
+        descricao:
+          "A conta WhatsApp Business possui pendências financeiras na Meta. Para regularizar, acesse o Gerenciador de Negócios da Meta, vá em Cobrança/Pagamentos, selecione a conta WhatsApp Business e quite o valor pendente. Depois da confirmação do pagamento, tente enviar o disparo novamente.",        detalhe: mensagemTecnica,
+      };
+
+    case 131026:
+      return {
+        titulo: "Número indisponível no WhatsApp",
+        descricao:
+          "O número do destinatário pode estar inválido, bloqueado ou indisponível para receber mensagens pelo WhatsApp.",
+        detalhe: mensagemTecnica,
+      };
+
+    case 470:
+      return {
+        titulo: "Janela de atendimento encerrada",
+        descricao:
+          "A janela de 24 horas com este contato foi encerrada. Para iniciar uma nova conversa, envie um template aprovado.",
+        detalhe: mensagemTecnica,
+      };
+
+    case 368:
+      return {
+        titulo: "Conta temporariamente bloqueada pela Meta",
+        descricao:
+          "A Meta bloqueou temporariamente o envio de mensagens desta conta WhatsApp.",
+        detalhe: mensagemTecnica,
+      };
+
+    default:
+      if (item.erro_amigavel) {
+        return {
+          titulo: "Falha no envio",
+          descricao: item.erro_amigavel,
+          detalhe: mensagemTecnica,
+        };
+      }
+
+      return {
+        titulo: "Falha no envio",
+        descricao: mensagemTecnica,
+        detalhe: mensagemTecnica,
+      };
+  }
+}
+
+
 function getTemplateStatusClass(status: string | null | undefined) {
   if (!status) return styles.badgeGray;
 
@@ -229,6 +317,8 @@ function formatarDataHora(data?: string | null) {
   }
 }
 
+const ITENS_HISTORICO_POR_PAGINA = 7;
+
 export default function DisparosWhatsAppPage() {
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
 
@@ -255,9 +345,14 @@ export default function DisparosWhatsAppPage() {
   const [erro, setErro] = useState("");
   const [resultado, setResultado] = useState<ResultadoDisparo[]>([]);
   const [mensagensExpandidas, setMensagensExpandidas] = useState<string[]>([]);
+  const [paginaHistorico, setPaginaHistorico] = useState(1);
 
   const [modalConfirmacaoAberto, setModalConfirmacaoAberto] = useState(false);
   const [confirmacaoCobranca, setConfirmacaoCobranca] = useState(false);
+
+  const [filtroHistorico, setFiltroHistorico] = useState<
+    "todos" | "sucesso" | "falha" | "processando"
+  >("todos");
 
   const [previewCusto, setPreviewCusto] = useState<{
     categoria: string;
@@ -488,6 +583,54 @@ export default function DisparosWhatsAppPage() {
     return resultado.filter((item) => !item.ok).length;
   }, [resultado]);
 
+  const totalProcessando = useMemo(() => {
+    return resultado.filter((item) => item.status_disparo === "processando").length;
+  }, [resultado]);
+
+  const resultadoFiltrado = useMemo(() => {
+    if (filtroHistorico === "todos") return resultado;
+
+    return resultado.filter((item) => {
+      if (filtroHistorico === "falha") {
+        return item.status_disparo === "falha";
+      }
+
+      if (filtroHistorico === "processando") {
+        return item.status_disparo === "processando";
+      }
+
+      if (filtroHistorico === "sucesso") {
+        return item.status_disparo === "sucesso";
+      }
+
+      return true;
+    });
+  }, [resultado, filtroHistorico]);
+
+  const totalPaginasHistorico = useMemo(() => {
+    return Math.max(
+      1,
+      Math.ceil(resultadoFiltrado.length / ITENS_HISTORICO_POR_PAGINA)
+    );
+  }, [resultadoFiltrado.length]);
+
+  const resultadoHistoricoPaginado = useMemo(() => {
+    const inicio = (paginaHistorico - 1) * ITENS_HISTORICO_POR_PAGINA;
+    const fim = inicio + ITENS_HISTORICO_POR_PAGINA;
+
+    return resultadoFiltrado.slice(inicio, fim);
+  }, [resultadoFiltrado, paginaHistorico]);
+
+  const primeiroItemHistorico =
+    resultadoFiltrado.length === 0
+      ? 0
+      : (paginaHistorico - 1) * ITENS_HISTORICO_POR_PAGINA + 1;
+
+  const ultimoItemHistorico = Math.min(
+    paginaHistorico * ITENS_HISTORICO_POR_PAGINA,
+    resultadoFiltrado.length
+  );
+
   function adicionarContato(contato: ContatoOpcao) {
     const telefone = limparNumero(contato.telefone);
 
@@ -610,9 +753,20 @@ export default function DisparosWhatsAppPage() {
       const sucesso = listaResultado.filter((item: ResultadoDisparo) => item.ok).length;
       const falha = listaResultado.filter((item: ResultadoDisparo) => !item.ok).length;
 
-      setMensagem(`Disparo concluído. Sucesso: ${sucesso}. Falhas: ${falha}.`);
+      setMensagem(
+        `Disparo enviado para a Meta. Aguardando confirmação de entrega pelo WhatsApp. Aceitos: ${sucesso}. Falhas imediatas: ${falha}.`
+      );
 
       await carregarHistorico();
+
+      setTimeout(() => {
+        carregarHistorico();
+      }, 5000);
+
+      setTimeout(() => {
+        carregarHistorico();
+      }, 12000);
+
     } catch (error: any) {
       setErro(error?.message || "Erro ao realizar disparo.");
     } finally {
@@ -738,6 +892,10 @@ export default function DisparosWhatsAppPage() {
 
     calcularPreviewCusto(categoria, contatosSelecionados);
   }, [templateSelecionado, contatosSelecionados]);
+
+  useEffect(() => {
+    setPaginaHistorico(1);
+  }, [resultado.length, filtroHistorico]);
 
   return (
     <>
@@ -1143,31 +1301,52 @@ export default function DisparosWhatsAppPage() {
             </div>
 
             <div className={styles.resultsSummary}>
-              <div className={styles.summaryCard}>
+              <button
+                type="button"
+                className={styles.summaryCard}
+                onClick={() => setFiltroHistorico("todos")}
+              >
                 <span className={styles.summaryLabel}>Total</span>
                 <strong className={styles.summaryValue}>{resultado.length}</strong>
-              </div>
+              </button>
 
-              <div className={styles.summaryCard}>
-                <span className={styles.summaryLabel}>Sucesso</span>
+              <button
+                type="button"
+                className={styles.summaryCard}
+                onClick={() => setFiltroHistorico("sucesso")}
+              >
+                <span className={styles.summaryLabel}>Entregues</span>
                 <strong className={styles.summaryValue}>{totalSucesso}</strong>
-              </div>
+              </button>
 
-              <div className={styles.summaryCard}>
+              <button
+                type="button"
+                className={styles.summaryCard}
+                onClick={() => setFiltroHistorico("processando")}
+              >
+                <span className={styles.summaryLabel}>Aguardando</span>
+                <strong className={styles.summaryValue}>{totalProcessando}</strong>
+              </button>
+
+              <button
+                type="button"
+                className={styles.summaryCard}
+                onClick={() => setFiltroHistorico("falha")}
+              >
                 <span className={styles.summaryLabel}>Falhas</span>
                 <strong className={styles.summaryValue}>{totalFalha}</strong>
-              </div>
+              </button>
             </div>
 
             {loadingHistorico ? (
               <div className={styles.emptyState}>Carregando histórico...</div>
-            ) : resultado.length === 0 ? (
+            ) : resultadoFiltrado.length === 0 ? (
               <div className={styles.emptyState}>
-                Nenhum disparo realizado ainda nesta tela.
+                Nenhum disparo encontrado para este filtro.
               </div>
             ) : (
               <div className={styles.resultsList}>
-                {resultado.map((item, index) => (
+                {resultadoHistoricoPaginado.map((item, index) => (
                   <div
                     key={item.id || `${item.numero}-${index}`}
                     className={`${styles.resultItem} ${
@@ -1181,8 +1360,18 @@ export default function DisparosWhatsAppPage() {
                       </strong>
 
                       <p className={styles.resultCompactMeta}>
-                        Template: {item.template_nome || "-"}
-                        {item.created_at ? ` • ${formatarDataHora(item.created_at)}` : ""}
+                        Template: {item.template_nome}
+                        {" • "}
+                        {formatarDataHora(item.created_at)}
+
+                        {item.origem_historico === "agendado" ? (
+                          <>
+                            {" • "}
+                            <span className={styles.badgeAgendado}>
+                              ⏰ Disparo agendado
+                            </span>
+                          </>
+                        ) : null}
                       </p>
                     </div>
 
@@ -1221,13 +1410,68 @@ export default function DisparosWhatsAppPage() {
                       })()
                     ) : null}
 
-                    {item.erro ? (
-                      <p className={styles.resultCompactError}>
-                        Erro: {item.erro}
-                      </p>
-                    ) : null}
+                    {(() => {
+                      const feedbackErro = obterFeedbackErroDisparo(item);
+
+                      if (!feedbackErro) return null;
+
+                      return (
+                        <div className={styles.resultErrorFeedback}>
+                          <strong className={styles.resultErrorTitle}>
+                            {feedbackErro.titulo}
+                          </strong>
+
+                          <p className={styles.resultErrorDescription}>
+                            {feedbackErro.descricao}
+                          </p>
+
+                          {feedbackErro.detalhe ? (
+                            <p className={styles.resultErrorDetail}>
+                              Detalhe técnico: {feedbackErro.detalhe}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
+                
+                {resultadoFiltrado.length > ITENS_HISTORICO_POR_PAGINA ? (
+                  <div className={styles.paginationBar}>
+                    <span className={styles.paginationInfo}>
+                      Exibindo {primeiroItemHistorico} a {ultimoItemHistorico} de{" "}
+                      {resultadoFiltrado.length} disparos
+                    </span>
+
+                    <div className={styles.paginationActions}>
+                      <button
+                        type="button"
+                        className={styles.paginationButton}
+                        onClick={() => setPaginaHistorico((prev) => Math.max(1, prev - 1))}
+                        disabled={paginaHistorico <= 1}
+                      >
+                        Anterior
+                      </button>
+
+                      <span className={styles.paginationCurrent}>
+                        Página {paginaHistorico} de {totalPaginasHistorico}
+                      </span>
+
+                      <button
+                        type="button"
+                        className={styles.paginationButton}
+                        onClick={() =>
+                          setPaginaHistorico((prev) =>
+                            Math.min(totalPaginasHistorico, prev + 1)
+                          )
+                        }
+                        disabled={paginaHistorico >= totalPaginasHistorico}
+                      >
+                        Próxima
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
           </section>
