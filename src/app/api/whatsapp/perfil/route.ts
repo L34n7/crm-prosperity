@@ -106,15 +106,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    if (!integracaoSelecionada) {
-      return NextResponse.json({
-        ok: true,
-        integracoes: [],
-        integracao: null,
-        perfil: null,
-      });
-    }
-
     if (!integracaoSelecionada.phone_number_id) {
       return jsonErro("Essa integração não possui phone_number_id.", 400);
     }
@@ -156,6 +147,26 @@ export async function GET(req: NextRequest) {
 
     const perfil = Array.isArray(metaJson?.data) ? metaJson.data[0] : metaJson;
 
+    let phoneJson: any = null;
+
+    const phoneRes = await fetch(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${integracaoSelecionada.phone_number_id}?fields=verified_name,display_phone_number,name_status,new_name_status`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      }
+    );
+
+    phoneJson = await phoneRes.json();
+
+    if (!phoneRes.ok) {
+      console.warn("[WHATSAPP PHONE INFO ERROR]", phoneJson);
+      phoneJson = null;
+    }
+
     return NextResponse.json({
       ok: true,
         integracoes: integracoesComToken.map((item) => ({
@@ -173,9 +184,22 @@ export async function GET(req: NextRequest) {
         numero: integracaoSelecionada.numero,
         status: integracaoSelecionada.status,
         phone_number_id: integracaoSelecionada.phone_number_id,
-        verified_name: integracaoSelecionada.verified_name,
+
+        verified_name:
+          phoneJson?.verified_name ||
+          integracaoSelecionada.verified_name ||
+          null,
+
         phone_number_display_name:
-          integracaoSelecionada.phone_number_display_name,
+          phoneJson?.verified_name ||
+          integracaoSelecionada.phone_number_display_name ||
+          null,
+
+        display_phone_number:
+          phoneJson?.display_phone_number || integracaoSelecionada.numero,
+
+        name_status: phoneJson?.name_status || null,
+        new_name_status: phoneJson?.new_name_status || null,
       },
       perfil,
     });

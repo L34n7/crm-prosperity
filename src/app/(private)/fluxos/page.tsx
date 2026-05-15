@@ -130,7 +130,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "enviar_botoes") return styles.nodeBotoes;
   if (tipo === "avaliacao") return styles.nodeAvaliacao;
   if (tipo === "capturar_resposta") return styles.nodePergunta;
-  if (tipo === "agendar_disparo") return styles.nodeAvaliacao;
+  if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
   return styles.nodePadrao;
 }
 

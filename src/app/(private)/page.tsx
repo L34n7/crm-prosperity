@@ -102,8 +102,6 @@ export default async function HomePage() {
         title="Dashboard"
         subtitle="Visão inicial do sistema com acesso rápido aos principais módulos."
       />
-
-
         <div className={styles.pageContent}>
           <section className={styles.heroGrid}>
             <div className={styles.heroCard}>
@@ -163,37 +161,37 @@ export default async function HomePage() {
               </div>
             </div>
           </section>
-        </div>
 
-        <section className={styles.modulesCard}>
-          <div className={styles.modulesHeader}>
-            <div>
-              <p className={styles.cardLabel}>Acesso rápido</p>
-              <h2 className={styles.cardTitle}>Módulos do sistema</h2>
+          <section className={styles.modulesCard}>
+            <div className={styles.modulesHeader}>
+              <div>
+                <p className={styles.cardLabel}>Acesso rápido</p>
+                <h2 className={styles.cardTitle}>Módulos do sistema</h2>
+              </div>
+
+              <p className={styles.modulesDescription}>
+                Navegação mais organizada para o painel administrativo.
+              </p>
             </div>
 
-            <p className={styles.modulesDescription}>
-              Navegação mais organizada para o painel administrativo.
-            </p>
-          </div>
+            <div className={styles.modulesGrid}>
+              {modulos.map((modulo) => (
+                <Link
+                  key={modulo.href}
+                  href={modulo.href}
+                  className={styles.moduleItem}
+                >
+                  <div>
+                    <h3 className={styles.moduleTitle}>{modulo.titulo}</h3>
+                    <p className={styles.moduleText}>{modulo.descricao}</p>
+                  </div>
 
-          <div className={styles.modulesGrid}>
-            {modulos.map((modulo) => (
-              <Link
-                key={modulo.href}
-                href={modulo.href}
-                className={styles.moduleItem}
-              >
-                <div>
-                  <h3 className={styles.moduleTitle}>{modulo.titulo}</h3>
-                  <p className={styles.moduleText}>{modulo.descricao}</p>
-                </div>
-
-                <span className={styles.openTag}>Abrir</span>
-              </Link>
-            ))}
-          </div>
-        </section>
+                  <span className={styles.openTag}>Abrir</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        </div>
     </>
   );
 }

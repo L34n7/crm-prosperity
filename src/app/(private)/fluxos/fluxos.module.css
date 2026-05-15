@@ -527,6 +527,15 @@
   );
 }
 
+.nodeAgendarDisparo {
+  border-color: #fdb0b0;
+  background: linear-gradient(
+    135deg,
+    #faa7a7 0%,
+    #ffec72 80%
+  );
+}
+
 .nodePadrao {
   border-color: #e2e8f0;
   background: #ffffff;

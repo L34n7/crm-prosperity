@@ -12,6 +12,9 @@ type Integracao = {
   phone_number_id: string | null;
   verified_name: string | null;
   phone_number_display_name: string | null;
+  display_phone_number?: string | null;
+  name_status?: string | null;
+  new_name_status?: string | null;
 };
 
 type PerfilWhatsapp = {
@@ -73,9 +76,8 @@ export default function WhatsappPerfilPage() {
   }, [integracoes, integracaoId]);
 
   const nomePerfil =
-    integracaoSelecionada?.verified_name ||
     integracaoSelecionada?.phone_number_display_name ||
-    integracaoSelecionada?.nome_conexao ||
+    integracaoSelecionada?.verified_name ||
     "Empresa";
 
   async function carregarPerfil(id?: string) {
@@ -459,6 +461,17 @@ export default function WhatsappPerfilPage() {
                 readOnly
                 title="O nome de exibição do WhatsApp passa por revisão do Meta."
             />
+            </label>
+
+            <label className={styles.fieldLabel}>
+              Sobre
+              <input
+                className={styles.input}
+                value={about}
+                onChange={(e) => setAbout(e.target.value)}
+                maxLength={139}
+                placeholder="Ex: Atendimento oficial da empresa"
+              />
             </label>
 
             <label className={styles.fieldLabel}>
