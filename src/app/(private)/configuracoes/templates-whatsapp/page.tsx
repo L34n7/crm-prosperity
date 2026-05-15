@@ -440,13 +440,6 @@ export default function TemplatesWhatsAppPage() {
       />
 
       <div className={styles.pageContent}>
-        {(mensagem || erro) && (
-          <>
-            {mensagem ? <div className={styles.successAlert}>{mensagem}</div> : null}
-            {erro ? <div className={styles.errorAlert}>{erro}</div> : null}
-          </>
-        )}
-
         <div className={styles.layout}>
           <div className={styles.formCard}>
             <div className={styles.cardHeader}>
@@ -687,7 +680,12 @@ export default function TemplatesWhatsAppPage() {
                     <strong>Language:</strong> {language}
                   </span>
                 </div>
-
+        {(mensagem || erro) && (
+          <>
+            {mensagem ? <div className={styles.successAlert}>{mensagem}</div> : null}
+            {erro ? <div className={styles.errorAlert}>{erro}</div> : null}
+          </>
+        )}
                 <div className={styles.actions}>
                   <button type="submit" disabled={submitting} className={styles.primaryButton}>
                     {submitting ? "Sending..." : "Create template"}
