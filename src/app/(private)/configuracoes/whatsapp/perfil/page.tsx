@@ -57,19 +57,23 @@ export default function WhatsappPerfilPage() {
   const [vertical, setVertical] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
   const [previewFoto, setPreviewFoto] = useState("");
-    const [cropAberto, setCropAberto] = useState(false);
-    const [imagemOriginal, setImagemOriginal] = useState("");
-    const [zoom, setZoom] = useState(1);
-    const [posX, setPosX] = useState(0);
-    const [posY, setPosY] = useState(0);
-    const [arrastando, setArrastando] = useState(false);
-    const [dragInicio, setDragInicio] = useState({ x: 0, y: 0 });
-    const [posInicio, setPosInicio] = useState({ x: 0, y: 0 });
-    
+  const [cropAberto, setCropAberto] = useState(false);
+  const [imagemOriginal, setImagemOriginal] = useState("");
+  const [zoom, setZoom] = useState(1);
+  const [posX, setPosX] = useState(0);
+  const [posY, setPosY] = useState(0);
+  const [arrastando, setArrastando] = useState(false);
+  const [dragInicio, setDragInicio] = useState({ x: 0, y: 0 });
+  const [posInicio, setPosInicio] = useState({ x: 0, y: 0 });
+  
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
+
+  const [modalNomeAberto, setModalNomeAberto] = useState(false);
+  const [novoNomeExibicao, setNovoNomeExibicao] = useState("");
+  const [salvandoNome, setSalvandoNome] = useState(false);
 
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
@@ -101,9 +105,28 @@ export default function WhatsappPerfilPage() {
         throw new Error(json.error || "Erro ao carregar perfil.");
       }
 
-      setIntegracoes(json.integracoes || []);
+      const listaIntegracoes = json.integracoes || [];
+      const integracaoAtualizada = json.integracao || null;
 
-      const novaIntegracaoId = json.integracao?.id || "";
+      const listaComNomeAtualizado = listaIntegracoes.map((item: Integracao) => {
+        if (item.id !== integracaoAtualizada?.id) {
+          return item;
+        }
+
+        return {
+          ...item,
+          verified_name: integracaoAtualizada.verified_name,
+          phone_number_display_name: integracaoAtualizada.phone_number_display_name,
+          display_phone_number: integracaoAtualizada.display_phone_number,
+          name_status: integracaoAtualizada.name_status,
+          new_name_status: integracaoAtualizada.new_name_status,
+        };
+      });
+
+      setIntegracoes(listaComNomeAtualizado);
+
+      const novaIntegracaoId = integracaoAtualizada?.id || "";
+
       setIntegracaoId(novaIntegracaoId);
 
       const novoPerfil = json.perfil || null;
@@ -163,6 +186,44 @@ export default function WhatsappPerfilPage() {
       setErro(error?.message || "Erro ao salvar perfil.");
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function solicitarAlteracaoNome() {
+    try {
+      setSalvandoNome(true);
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch("/api/whatsapp/perfil/nome", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          integracao_id: integracaoId,
+          novo_nome: novoNomeExibicao,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao solicitar alteração do nome.");
+      }
+
+      setSucesso(
+        "Solicitação de alteração do nome enviada ao Meta. A aprovação pode levar algum tempo."
+      );
+
+      setModalNomeAberto(false);
+      setNovoNomeExibicao("");
+
+      await carregarPerfil(integracaoId);
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao solicitar alteração do nome.");
+    } finally {
+      setSalvandoNome(false);
     }
   }
 
@@ -419,8 +480,7 @@ export default function WhatsappPerfilPage() {
             <div className={styles.editorTop}>
               <div>
                 <p className={styles.eyebrow}>Editar perfil</p>
-                <h1>Informações públicas</h1>
-                <span>Altere os dados e veja a prévia ao lado.</span>
+                <h1>Perfil Whatsapp Business</h1>
               </div>
             </div>
 
@@ -436,7 +496,27 @@ export default function WhatsappPerfilPage() {
               className={styles.formArea}
               onSubmit={salvarPerfil}
             >
+
             <div className={styles.profileHero}>
+              {integracoes.length > 1 && (
+                <div className={styles.integracaoSwitcher}>
+                  <select
+                    className={styles.integracaoSelect}
+                    value={integracaoId}
+                    onChange={(e) => carregarPerfil(e.target.value)}
+                    disabled={carregando}
+                  >
+                    {integracoes.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.phone_number_display_name ||
+                          item.verified_name ||
+                          item.nome_conexao}{" "}
+                        • {item.numero}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             <label className={styles.photoUpload}>
                 <input
                 type="file"
@@ -449,18 +529,37 @@ export default function WhatsappPerfilPage() {
                 </div>
 
                 <strong>Alterar foto</strong>
+                <div className={styles.numeroIntegracao}>
+                  {integracaoSelecionada?.display_phone_number ||
+                    integracaoSelecionada?.numero ||
+                    "Número não identificado"}
+                </div>
             </label>
             </div>
 
             <div className={styles.formGrid}>
             <label className={styles.fieldLabelFull}>
-            Nome de exibição
-            <input
-                className={styles.input}
-                value={nomePerfil}
-                readOnly
-                title="O nome de exibição do WhatsApp passa por revisão do Meta."
-            />
+              Nome de exibição
+              <div className={styles.nameRow}>
+                <input
+                  className={styles.input}
+                  value={nomePerfil}
+                  readOnly
+                  title="O nome de exibição do WhatsApp passa por revisão do Meta."
+                />
+
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => {
+                    setNovoNomeExibicao(nomePerfil === "Empresa" ? "" : nomePerfil);
+                    setModalNomeAberto(true);
+                  }}
+                  disabled={!integracaoId}
+                >
+                  Alterar nome
+                </button>
+              </div>
             </label>
 
             <label className={styles.fieldLabel}>
@@ -506,7 +605,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Ex: Contagem - MG"
+                placeholder="Insira o edenreço comercial"
                 />
             </label>
 
@@ -516,7 +615,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="contato@empresa.com"
+                placeholder="Insira o email comercial"
                 />
             </label>
 
@@ -642,6 +741,72 @@ export default function WhatsappPerfilPage() {
         </div>
         </div>
     </div>
+    )}
+
+    {modalNomeAberto && (
+      <div
+        className={styles.modalOverlay}
+        onClick={() => setModalNomeAberto(false)}
+      >
+        <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.modalHeader}>
+            <div>
+              <h2 className={styles.modalTitle}>Alterar nome de exibição</h2>
+              <p className={styles.modalSubtitle}>
+                Esse nome pode passar por revisão do Meta antes de aparecer para os
+                clientes.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className={styles.closeButton}
+              onClick={() => setModalNomeAberto(false)}
+            >
+              Fechar
+            </button>
+          </div>
+
+          <div className={styles.modalBody}>
+            <label className={styles.fieldLabel}>
+              Novo nome
+              <input
+                className={styles.input}
+                value={novoNomeExibicao}
+                onChange={(e) => setNovoNomeExibicao(e.target.value)}
+                placeholder="Ex: Leandro Buygain"
+                maxLength={150}
+              />
+            </label>
+
+            <div className={styles.noticeBox}>
+              Use um nome que represente claramente sua empresa. Evite emojis,
+              slogans, termos como “Oficial” ou “Verificado” e nomes genéricos.
+              Após aprovação, pode ser necessário registrar novamente o número.
+            </div>
+          </div>
+
+          <div className={styles.modalActions}>
+            <button
+              type="button"
+              className={styles.ghostButton}
+              onClick={() => setModalNomeAberto(false)}
+              disabled={salvandoNome}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={solicitarAlteracaoNome}
+              disabled={salvandoNome || novoNomeExibicao.trim().length < 3}
+            >
+              {salvandoNome ? "Enviando..." : "Solicitar alteração"}
+            </button>
+          </div>
+        </div>
+      </div>
     )}
     </>
   );

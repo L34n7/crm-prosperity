@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 
 type TemplateButton = {
   type?: string;
@@ -290,38 +291,75 @@ async function executarDisparoAgendado(agendamento: any) {
   const empresaId = agendamento.empresa_id;
   const execucaoId = agendamento.execucao_id || null;
 
-  const conversaId = String(payload.conversa_id || "").trim();
+  const conversaIdPayload = String(payload.conversa_id || "").trim();
+  const contatoIdPayload = String(payload.contato_id || "").trim();
   const templateId = String(payload.template_id || "").trim();
 
-  if (!conversaId) {
-    throw new Error("Agendamento sem conversa_id no payload.");
+  if (!conversaIdPayload && !contatoIdPayload) {
+    throw new Error("Agendamento sem conversa_id ou contato_id no payload.");
   }
 
   if (!templateId) {
     throw new Error("Agendamento sem template_id no payload.");
   }
 
-  const { data: conversa, error: conversaError } = await supabaseAdmin
-    .from("conversas")
-    .select(`
-      id,
-      empresa_id,
-      contato_id,
-      integracao_whatsapp_id,
-      contatos (
-        id,
-        nome,
-        telefone,
-        email,
-        empresa
-      )
-    `)
-    .eq("id", conversaId)
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
+  let conversa: any = null;
 
-  if (conversaError || !conversa) {
-    throw new Error("Conversa não encontrada.");
+  if (conversaIdPayload) {
+    const { data, error } = await supabaseAdmin
+      .from("conversas")
+      .select(`
+        id,
+        empresa_id,
+        contato_id,
+        integracao_whatsapp_id,
+        contatos (
+          id,
+          nome,
+          telefone,
+          email,
+          empresa
+        )
+      `)
+      .eq("id", conversaIdPayload)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (error || !data) {
+      throw new Error("Conversa não encontrada.");
+    }
+
+    conversa = data;
+  } else {
+    const { data: contato, error: contatoError } = await supabaseAdmin
+      .from("contatos")
+      .select("id, nome, telefone, email, empresa")
+      .eq("id", contatoIdPayload)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (contatoError || !contato) {
+      throw new Error("Contato não encontrado.");
+    }
+
+    const integracaoWhatsappIdPayload = String(
+      payload.integracao_whatsapp_id || ""
+    ).trim();
+
+    if (!integracaoWhatsappIdPayload) {
+      throw new Error("Agendamento sem integracao_whatsapp_id no payload.");
+    }
+
+    const conversaCriada = await findOrCreateWhatsAppConversation({
+      empresaId,
+      contatoId: contato.id,
+      integracaoWhatsappId: integracaoWhatsappIdPayload,
+    });
+
+    conversa = {
+      ...conversaCriada,
+      contatos: contato,
+    };
   }
 
   const contato = Array.isArray(conversa.contatos)

@@ -4691,8 +4691,8 @@ const templateFooterTexto = useMemo(() => {
   return (
     <>
       <Header
-        title="Conversas"
-        subtitle="Atendimento com visual mais limpo, foco na operação e contexto do contato."
+        title="Conversations"
+        subtitle="Customer support with a clean interface, focused on operation and contact context."
       />
 
       <div className={styles.pageContent}>
@@ -4705,9 +4705,9 @@ const templateFooterTexto = useMemo(() => {
             <div className={styles.sidebarHeader}>
               <div className={styles.sidebarTopRow}>
                 <div>
-                  <h2 className={styles.sidebarTitle}>Conversas</h2>
+                  <h2 className={styles.sidebarTitle}>Conversations</h2>
                   <p className={styles.sidebarCount}>
-                    {conversasFiltradas.length} conversa(s)
+                    {conversasFiltradas.length} conversation(s)
                   </p>
                 </div>
 
@@ -4717,7 +4717,7 @@ const templateFooterTexto = useMemo(() => {
                     onClick={() => setFiltrosAbertos((prev) => !prev)}
                     className={styles.iconButton}
                   >
-                    {filtrosAbertos ? "Ocultar filtros" : "Mostrar filtros"}
+                    {filtrosAbertos ? "Hide filters" : "Show filters"}
                   </button>
 
                   <button
@@ -4725,13 +4725,13 @@ const templateFooterTexto = useMemo(() => {
                     onClick={() => carregarConversas()}
                     className={styles.iconButton}
                   >
-                    Atualizar
+                    Update
                   </button>
                 </div>
               </div>
 
               <input
-                placeholder="Buscar por nome, telefone, assunto ou protocolo"
+                placeholder="Search by name, phone, subject or protocol"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
                 className={styles.searchInput}
@@ -4745,15 +4745,15 @@ const templateFooterTexto = useMemo(() => {
                       onChange={(e) => setStatusFiltro(e.target.value)}
                       className={styles.filterSelect}
                     >
-                      <option value="Todas">Todas</option>
-                      <option value="aberta">Abertas</option>
-                      <option value="fila">Fila</option>
+                      <option value="Todas">All</option>
+                      <option value="aberta">Open</option>
+                      <option value="fila">Queue</option>
                       <option value="bot">Bot</option>
-                      <option value="em_atendimento">Em atendimento</option>
-                      <option value="aguardando_cliente">Aguardando cliente</option>
-                      <option value="encerrado_manual">Encerradas manualmente</option>
-                      <option value="encerrado_24h">Encerradas por 24h</option>
-                      <option value="encerrado_aut">Encerradas pela automação</option>
+                      <option value="em_atendimento">In Progress</option>
+                      <option value="aguardando_cliente">Waiting for Customer</option>
+                      <option value="encerrado_manual">Manually Closed</option>
+                      <option value="encerrado_24h">Closed by 24h</option>
+                      <option value="encerrado_aut">Closed by Automation</option>
                     </select>
 
                     <select
@@ -4761,7 +4761,7 @@ const templateFooterTexto = useMemo(() => {
                       onChange={(e) => setCanalFiltro(e.target.value)}
                       className={styles.filterSelect}
                     >
-                      <option value="todos">Todos os canais</option>
+                      <option value="todos">All channels</option>
                       <option value="whatsapp">WhatsApp</option>
                       <option value="instagram">Instagram</option>
                       <option value="facebook">Facebook</option>
@@ -4774,7 +4774,7 @@ const templateFooterTexto = useMemo(() => {
                       onChange={(e) => setSetorFiltro(e.target.value)}
                       className={styles.filterSelect}
                     >
-                      <option value="todos">Todos os setores</option>
+                      <option value="todos">All departments</option>
                       {setoresUnicos.map((setor) => (
                         <option key={setor.id} value={setor.id}>
                           {setor.nome}
@@ -4787,7 +4787,7 @@ const templateFooterTexto = useMemo(() => {
                       onChange={(e) => setResponsavelFiltro(e.target.value)}
                       className={styles.filterSelect}
                     >
-                      <option value="todos">Todos os responsáveis</option>
+                      <option value="todos">All representatives</option>
                       {responsaveisUnicos.map((responsavel) => (
                         <option key={responsavel.id} value={responsavel.id}>
                           {responsavel.nome}
@@ -4801,7 +4801,7 @@ const templateFooterTexto = useMemo(() => {
                       }`}
                       onClick={() => setChipRapido("fila")}
                     >
-                      Fila
+                      Queue
                     </button>
 
                     <button
@@ -4810,7 +4810,7 @@ const templateFooterTexto = useMemo(() => {
                       }`}
                       onClick={() => setChipRapido("nao_lidas")}
                     >
-                      Não lidas
+                      Unread
                     </button>    
                     
                     <button
@@ -4819,7 +4819,7 @@ const templateFooterTexto = useMemo(() => {
                       }`}
                       onClick={() => setChipRapido("urgentes")}
                     >
-                      Urgentes
+                      Urgent
                     </button>
 
                     <button
@@ -4828,7 +4828,7 @@ const templateFooterTexto = useMemo(() => {
                       }`}
                       onClick={() => setChipRapido("favoritos")}
                     >
-                      Favoritos
+                      Favorites
                     </button>
                   </div>
                 </>
@@ -4844,7 +4844,7 @@ const templateFooterTexto = useMemo(() => {
                     setChipRapido("robo");
                     setListaFiltroId(null);
                   }}
-                  title="Conversas com atendimento do bot"
+                  title="Conversations with bot assistance"
                   type="button"
                 >
                   <span className={styles.quickChipRobotIconWrap}>
@@ -4872,7 +4872,7 @@ const templateFooterTexto = useMemo(() => {
                     setListaFiltroId(null);
                   }}
                 >
-                  Todas
+                  All
                 </button>
 
                 <button
@@ -4881,7 +4881,7 @@ const templateFooterTexto = useMemo(() => {
                   }`}
                   onClick={() => setChipRapido("minhas")}
                 >
-                  Minhas
+                  My Conversations
                 </button>
 
                 <button
@@ -4890,7 +4890,7 @@ const templateFooterTexto = useMemo(() => {
                   }`}
                   onClick={() => setChipRapido("sem_responsavel")}
                 >
-                  Sem atendente
+                  No Representative
                 </button>
 
                 {listasEmpresa.map((lista) => (
@@ -4912,9 +4912,9 @@ const templateFooterTexto = useMemo(() => {
 
             <div className={styles.sidebarBody}>
               {loadingConversas ? (
-                <div className={styles.emptyListState}>Carregando conversas...</div>
+                <div className={styles.emptyListState}>Loading conversations...</div>
               ) : conversasFiltradas.length === 0 ? (
-                <div className={styles.emptyListState}>Nenhuma conversa encontrada.</div>
+                <div className={styles.emptyListState}>No conversations found.</div>
               ) : (
                 conversasFiltradas.map((c) => {
                   const ativo = conversaSelecionada?.id === c.id;
@@ -4945,7 +4945,7 @@ const templateFooterTexto = useMemo(() => {
                                   ★
                                 </span>
                               )}
-                              {c.contatos?.nome || "Sem nome"}
+                              {c.contatos?.nome || "Unnamed"}
                             </p>
 
                             <EtiquetaCor etiqueta={c.etiquetas} />
@@ -4960,7 +4960,7 @@ const templateFooterTexto = useMemo(() => {
                           <p className={styles.previewLine}>{getPreviewConversa(c)}</p>
                             {c.tem_disparo_agendado_pendente && (
                               <div className={styles.scheduledDisparoMiniBadge}>
-                                ⏰ Disparo agendado
+                                ⏰ Scheduled Message
                               </div>
                             )}
 
@@ -5034,17 +5034,17 @@ const templateFooterTexto = useMemo(() => {
                               <div className={styles.chatTitleRow}>
                                 <h2 className={styles.chatTitle}>
                                   {conversaSelecionada.favorita && (
-                                    <span className={styles.favoriteStar} title="Conversa favorita">
+                                    <span className={styles.favoriteStar} title="Favorite conversation">
                                       ★
                                     </span>
                                   )}
-                                  {conversaSelecionada.contatos?.nome || "Sem nome"}
+                                  {conversaSelecionada.contatos?.nome || "No name"}
                                 </h2>
 
                                 <EtiquetaCor etiqueta={conversaSelecionada.etiquetas} />
                               </div>
                               <p className={styles.chatSubtitle}>
-                                {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                                {conversaSelecionada.contatos?.telefone || "No phone number"}
                               </p>
                             </div>
                           </button>
@@ -5056,7 +5056,7 @@ const templateFooterTexto = useMemo(() => {
                               href={`/disparos-agendados`}
                               className={`${styles.alertChip} ${styles.alertChipSchedule} ${styles.alertChipScheduleLink}`}
                             >
-                              ⏰ Disparo agendado para{" "}
+                              ⏰ Scheduled Message for{" "}
                               {formatarDataCurtaDisparo(
                                 conversaSelecionada.disparo_agendado_pendente?.executar_em
                               )}
@@ -5065,25 +5065,25 @@ const templateFooterTexto = useMemo(() => {
                           
                           {alertaSemResponsavel && (
                             <span className={`${styles.alertChip} ${styles.alertChipWarn}`}>
-                              Sem responsável
+                              No representative
                             </span>
                           )}
 
                           {alertaClienteAguardando && (
                             <span className={`${styles.alertChip} ${styles.alertChipInfo}`}>
-                              Aguardando cliente
+                              Waiting for customer
                             </span>
                           )}
 
                           {alertaPrioridadeAlta && (
                             <span className={`${styles.alertChip} ${styles.alertChipDanger}`}>
-                              Prioridade alta
+                              High priority
                             </span>
                           )}
 
                           {alertaParadaMuitoTempo && (
                             <span className={`${styles.alertChip} ${styles.alertChipWarn}`}>
-                              Conversa parada há muito tempo
+                              Conversation paused for a long time
                             </span>
                           )}
                         </div>
@@ -5093,7 +5093,7 @@ const templateFooterTexto = useMemo(() => {
                     <div className={styles.chatHeaderActions}>
                       {conversaEncerradaManual ? (
                         <button className={styles.primaryButton} onClick={reabrirConversa}>
-                          Reabrir
+                          Reopen
                         </button>
                       ) : conversaEncerrada ? null : (
                         <>
@@ -5102,7 +5102,7 @@ const templateFooterTexto = useMemo(() => {
                             <button
                               type="button"
                               className={styles.noteShortcutButton}
-                              title="Abrir notas"
+                              title="Open notes"
                               onClick={async () => {
                                 setPainelDireitoAberto(true);
                                 setAbaPainelDireito("notas");
@@ -5119,7 +5119,7 @@ const templateFooterTexto = useMemo(() => {
                               onClick={assumirConversa}
                               disabled={assumindo}
                             >
-                              {assumindo ? "Assumindo..." : "Assumir"}
+                              {assumindo ? "Taking over..." : "Take over"}
                             </button>
                           )}
 
@@ -5128,7 +5128,7 @@ const templateFooterTexto = useMemo(() => {
                               type="button"
                               className={styles.moreButton}
                               onClick={() => setMenuContatoAberto((prev) => !prev)}
-                              title="Mais opções"
+                              title="More options"
                             >
                               ⋮
                             </button>
@@ -5144,7 +5144,7 @@ const templateFooterTexto = useMemo(() => {
                                     setMenuContatoAberto(false);
                                   }}
                                 >
-                                  Dados do contato
+                                  Contact Information
                                 </button>
 
                                 <button
@@ -5156,8 +5156,8 @@ const templateFooterTexto = useMemo(() => {
                                   }}
                                 >
                                   {conversaSelecionada?.favorita
-                                    ? "★ Remover dos favoritos"
-                                    : "✰ Adicionar aos favoritos"}
+                                    ? "★ Remove from favorites"
+                                    : "✰ Add to favorites"}
                                 </button>
 
                                 <button
@@ -5170,7 +5170,7 @@ const templateFooterTexto = useMemo(() => {
                                     await carregarListasDaConversa();
                                   }}
                                 >
-                                  Adicionar à lista
+                                  Add to List
                                 </button>
 
                                 <button
@@ -5183,7 +5183,7 @@ const templateFooterTexto = useMemo(() => {
                                     await carregarEtiquetasEmpresa();
                                   }}
                                 >
-                                  Etiquetas
+                                  Tags
                                 </button>
 
                                 <div className={styles.headerDropdownDivider} />
@@ -5197,7 +5197,7 @@ const templateFooterTexto = useMemo(() => {
                                     setMenuContatoAberto(false);
                                   }}
                                 >
-                                  Detalhes
+                                  Details
                                 </button>
 
                                 <button
@@ -5210,7 +5210,7 @@ const templateFooterTexto = useMemo(() => {
                                     await carregarProtocolosDaConversa();
                                   }}
                                 >
-                                  Histórico
+                                  History
                                 </button>
 
                                 <button
@@ -5224,7 +5224,7 @@ const templateFooterTexto = useMemo(() => {
                                   }}
                                 >
                                   <span className={styles.dropdownItemContent}>
-                                    <span>Notas</span>
+                                    <span>Notes</span>
                                     {quantidadeNotas > 0 && (
                                       <span className={styles.dropdownBadge}>
                                         {quantidadeNotas}
@@ -5243,7 +5243,7 @@ const templateFooterTexto = useMemo(() => {
                                   }}
                                 >
                                   <span className={styles.dropdownItemContent}>
-                                    <span>Mensagens favoritas</span>
+                                    <span>Favorited Messages</span>
                                     {quantidadeMensagensFavoritas > 0 && (
                                       <span className={styles.dropdownBadge}>
                                         {quantidadeMensagensFavoritas}
@@ -5269,7 +5269,7 @@ const templateFooterTexto = useMemo(() => {
                                       await abrirAtribuir();
                                     }}
                                   >
-                                    Atribuir
+                                    Assign
                                   </button>
                                 )}
 
@@ -5288,7 +5288,7 @@ const templateFooterTexto = useMemo(() => {
                                       abrirTransferir();
                                     }}
                                   >
-                                    Transferir
+                                    Transfer
                                   </button>
                                 )}
 
@@ -5301,7 +5301,7 @@ const templateFooterTexto = useMemo(() => {
                                       abrirEncerrar();
                                     }}
                                   >
-                                    Encerrar
+                                    Close
                                   </button>
                                 )}
                               </div>
@@ -5317,7 +5317,7 @@ const templateFooterTexto = useMemo(() => {
                       {acaoAberta === "transferir" && (
                         <>
                           <div className={styles.actionPanelHeader}>
-                            <h3 className={styles.actionPanelTitle}>Transferir conversa</h3>
+                            <h3 className={styles.actionPanelTitle}>Transfer Conversation</h3>
                               <button
                                 className={styles.textButton}
                                 onClick={() => setAcaoAberta(null)}
@@ -5327,13 +5327,13 @@ const templateFooterTexto = useMemo(() => {
                           </div>
 
                           <div className={styles.actionPanelBody}>
-                            <label className={styles.actionLabel}>Novo setor</label>
+                            <label className={styles.actionLabel}>New Department</label>
                             <select
                               value={novoSetorId}
                               onChange={(e) => setNovoSetorId(e.target.value)}
                               className={styles.actionSelect}
                             >
-                              <option value="">Selecione um setor</option>
+                              <option value="">Select a department</option>
                               {setoresDisponiveisParaTransferencia.map((setor) => (
                                 <option key={setor.id} value={setor.id}>
                                   {setor.nome}
@@ -5347,14 +5347,14 @@ const templateFooterTexto = useMemo(() => {
                                 onClick={() => setAcaoAberta(null)}
                                 disabled={salvandoAcao}
                               >
-                                Cancelar
+                                Cancel
                               </button>
                               <button
                                 className={styles.primaryButton}
                                 onClick={confirmarTransferencia}
                                 disabled={salvandoAcao}
                               >
-                                {salvandoAcao ? "Salvando..." : "Confirmar"}
+                                {salvandoAcao ? "Saving..." : "Confirm"}
                               </button>
                             </div>
                           </div>
@@ -5364,7 +5364,7 @@ const templateFooterTexto = useMemo(() => {
                       {acaoAberta === "atribuir" && (
                         <>
                           <div className={styles.actionPanelHeader}>
-                            <h3 className={styles.actionPanelTitle}>Atribuir responsável</h3>
+                            <h3 className={styles.actionPanelTitle}>Assign Responsible</h3>
                             <button
                               className={styles.textButton}
                               onClick={() => setAcaoAberta(null)}
@@ -5374,13 +5374,13 @@ const templateFooterTexto = useMemo(() => {
                           </div>
 
                           <div className={styles.actionPanelBody}>
-                            <label className={styles.actionLabel}>Novo responsável</label>
+                            <label className={styles.actionLabel}>New Responsible</label>
                             <select
                               value={novoResponsavelId}
                               onChange={(e) => setNovoResponsavelId(e.target.value)}
                               className={styles.actionSelect}
                             >
-                              <option value="">Selecione um responsável</option>
+                              <option value="">Select a responsible</option>
                               {usuariosFiltradosPorSetor.map((usuario) => (
                                 <option key={usuario.id} value={usuario.id}>
                                   {usuario.nome}
@@ -5394,14 +5394,14 @@ const templateFooterTexto = useMemo(() => {
                                 onClick={() => setAcaoAberta(null)}
                                 disabled={salvandoAcao}
                               >
-                                Cancelar
+                                Cancel
                               </button>
                               <button
                                 className={styles.primaryButton}
                                 onClick={confirmarAtribuicao}
                                 disabled={salvandoAcao}
                               >
-                                {salvandoAcao ? "Salvando..." : "Confirmar"}
+                                {salvandoAcao ? "Saving..." : "Confirm"}
                               </button>
                             </div>
                           </div>
@@ -5411,7 +5411,7 @@ const templateFooterTexto = useMemo(() => {
                       {acaoAberta === "encerrar" && (
                         <>
                           <div className={styles.actionPanelHeader}>
-                            <h3 className={styles.actionPanelTitle}>Encerrar conversa</h3>
+                            <h3 className={styles.actionPanelTitle}>Close Conversation</h3>
                             <button
                               className={styles.textButton}
                               onClick={() => setAcaoAberta(null)}
@@ -5422,7 +5422,7 @@ const templateFooterTexto = useMemo(() => {
 
                           <div className={styles.actionPanelBody}>
                             <p className={styles.actionText}>
-                              Tem certeza que deseja encerrar esta conversa?
+                              Are you sure you want to close this conversation?
                             </p>
 
                             <div className={styles.actionButtons}>
@@ -5431,14 +5431,14 @@ const templateFooterTexto = useMemo(() => {
                                 onClick={() => setAcaoAberta(null)}
                                 disabled={salvandoAcao}
                               >
-                                Cancelar
+                                Cancel
                               </button>
                               <button
                                 className={styles.dangerButton}
                                 onClick={confirmarEncerramento}
                                 disabled={salvandoAcao}
                               >
-                                {salvandoAcao ? "Encerrando..." : "Confirmar"}
+                                {salvandoAcao ? "Closing..." : "Confirm"}
                               </button>
                             </div>
                           </div>
@@ -5459,17 +5459,17 @@ const templateFooterTexto = useMemo(() => {
                                 disabled={carregandoMaisHistorico}
                                 className={`${styles.secondaryButton} ${styles.timelineHistoryMoreButton}`}
                               >
-                                {carregandoMaisHistorico ? "Carregando..." : "Ver mais"}
+                                {carregandoMaisHistorico ? "Loading..." : "View more"}
                               </button>
                             </div>
                           )}
                           {loadingMensagens ? (
                             <div className={styles.timelineInfo}>
-                              Carregando mensagens...
+                              Loading messages...
                             </div>
                           ) : mensagens.length === 0 ? (
                             <div className={styles.emptyTimelineCard}>
-                              Nenhuma mensagem cadastrada nessa conversa ainda.
+                              No messages registered in this conversation yet.
                             </div>
                           ) : (
                             <div className={styles.messagesStack}>
@@ -5525,7 +5525,7 @@ const templateFooterTexto = useMemo(() => {
                                               </span>
 
                                               {isAutomatic && (
-                                                <span className={styles.automaticBadge}>automática</span>
+                                                <span className={styles.automaticBadge}>automatic</span>
                                               )}
                                             </div>
                                           )}
@@ -5545,8 +5545,8 @@ const templateFooterTexto = useMemo(() => {
                                               onClick={() => alternarMensagemFavorita(msg)}
                                               title={
                                                 msg.favorita
-                                                  ? "Remover dos favoritos"
-                                                  : "Adicionar aos favoritos"
+                                                  ? "Remove from favorites"
+                                                  : "Add to favorites"
                                               }
                                             >
                                               ☆
@@ -5578,8 +5578,7 @@ const templateFooterTexto = useMemo(() => {
                                     {mensagemTemMidiaExpiravel(msg) && (
                                       <div className={styles.expiringMediaNoticeRow}>
                                         <div className={styles.expiringMediaNoticeBadge}>
-                                          ~ Esta mídia pode expirar em até 7 dias. Para manter o acesso, faça o
-                                          download enquanto estiver disponível.
+                                          ~ This media may expire within 7 days. To keep access, download it while it is available.
                                         </div>
                                       </div>
                                     )}
@@ -5596,8 +5595,8 @@ const templateFooterTexto = useMemo(() => {
                             !conversaComBotAtivo &&
                             janela24hAberta && (
                               <div className={styles.timelineInfoSmall}>
-                                Você só poderá responder quando a conversa estiver sob sua
-                                responsabilidade.
+                                You will only be able to respond when the conversation is under your
+                                responsibility.
                               </div>
                             )}
 
@@ -5650,7 +5649,7 @@ const templateFooterTexto = useMemo(() => {
                             >
                               <div className={styles.filePreviewHeader}>
                                 <div className={styles.filePreviewLabel}>
-                                  {getTipoArquivoSelecionado(arquivoEnvio)} selecionado
+                                  {getTipoArquivoSelecionado(arquivoEnvio)} selected
                                 </div>
 
                                 <button
@@ -5670,7 +5669,7 @@ const templateFooterTexto = useMemo(() => {
                                     }
                                   }}
                                 >
-                                  Remover
+                                  Remove
                                 </button>
                               </div>
 
@@ -5691,7 +5690,7 @@ const templateFooterTexto = useMemo(() => {
                                     className={styles.filePreviewVideo}
                                   >
                                     <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
-                                    Seu navegador não suporta vídeo.
+                                    Your browser does not support video.
                                   </video>
                                 </div>
                               )}
@@ -5699,7 +5698,7 @@ const templateFooterTexto = useMemo(() => {
                               {arquivoSelecionadoEhAudio(arquivoEnvio) && arquivoEnvioPreviewUrl && (
                                 <div className={styles.audioPreviewCard}>
                                   <div className={styles.audioPreviewTop}>
-                                    <div className={styles.audioPreviewBadge}>Áudio</div>
+                                    <div className={styles.audioPreviewBadge}>Audio</div>
                                     <span className={styles.audioPreviewFileName}>
                                       {arquivoEnvio.name}
                                     </span>
@@ -5708,7 +5707,7 @@ const templateFooterTexto = useMemo(() => {
                                   <div className={styles.audioPreviewPlayerWrap}>
                                     <audio controls className={styles.audioPreviewPlayer}>
                                       <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
-                                      Seu navegador não suporta áudio.
+                                      Your browser does not support audio.
                                     </audio>
                                   </div>
                                 </div>
@@ -5731,8 +5730,8 @@ const templateFooterTexto = useMemo(() => {
                               <video ref={videoRef} autoPlay playsInline className={styles.cameraVideo} />
 
                               <div className={styles.cameraActions}>
-                                <button onClick={capturarFoto}>📸 Tirar foto</button>
-                                <button onClick={fecharCamera}>Cancelar</button>
+                                <button onClick={capturarFoto}>📸 Take photo</button>
+                                <button onClick={fecharCamera}>Cancel</button>
                               </div>
 
                               <canvas ref={canvasRef} style={{ display: "none" }} />
@@ -5741,14 +5740,14 @@ const templateFooterTexto = useMemo(() => {
 
                           {!conversaEncerrada && gravandoAudio && (
                             <div className={styles.timelineInfoSmall}>
-                              Gravando áudio... <strong>{formatarDuracaoGravacao(duracaoGravacao)}</strong>
+                              Recording audio... <strong>{formatarDuracaoGravacao(duracaoGravacao)}</strong>
                             </div>
                           )}
 
 
                         {!composerPronto ? (
                           <div className={styles.timelineInfoSmall}>
-                            Carregando informações da conversa...
+                            Loading conversation information...
                           </div>
                           ) : conversaComBotAtivo ? (
                             <div className={styles.botStopArea}>
@@ -5758,12 +5757,12 @@ const templateFooterTexto = useMemo(() => {
 
                                   <div>
                                     <strong className={styles.botStopTitle}>
-                                      Automação em andamento
+                                      Automation in progress
                                     </strong>
 
                                     <p className={styles.botStopText}>
-                                      Esta conversa está com o bot ativo. Para assumir o atendimento
-                                      manualmente, clique em "Parar automação".
+                                      This conversation is with the bot active. To take over the attendance
+                                      manually, click on "Stop automation".
                                     </p>
                                   </div>
                                 </div>
@@ -5774,7 +5773,7 @@ const templateFooterTexto = useMemo(() => {
                                   onClick={assumirConversa}
                                   disabled={assumindo}
                                 >
-                                  {assumindo ? "Parando automação..." : "Parar automação"}
+                                  {assumindo ? "Stopping automation..." : "Stop automation"}
                                 </button>
                               </div>
                             </div>
@@ -5824,8 +5823,8 @@ const templateFooterTexto = useMemo(() => {
                                     }}
                                   >
                                     {disparoIndividualAberto
-                                      ? "Ocultar disparo individual"
-                                      : "Fazer disparo individual"}
+                                      ? "Hide individual broadcast"
+                                      : "Send individual broadcast"}
                                   </button>
                                 </div>
                               </div>
@@ -5835,9 +5834,9 @@ const templateFooterTexto = useMemo(() => {
                                   <div className={styles.disparoFormCard}>
                                     <div className={styles.disparoFormHeader}>
                                       <div>
-                                        <h4 className={styles.disparoFormTitle}>Disparo individual</h4>
+                                        <h4 className={styles.disparoFormTitle}>Individual broadcast</h4>
                                         <p className={styles.disparoFormSubtitle}>
-                                          Selecione um template aprovado e envie para este contato.
+                                          Select an approved template and send it to this contact.
                                         </p>
                                       </div>
                                     </div>
@@ -5858,8 +5857,8 @@ const templateFooterTexto = useMemo(() => {
                                       >
                                         <option value="">
                                           {carregandoTemplatesWhatsapp
-                                            ? "Carregando templates..."
-                                            : "Selecionar template"}
+                                            ? "Loading templates..."
+                                            : "Select template"}
                                         </option>
 
                                         {templatesWhatsapp.map((t) => (
@@ -5876,7 +5875,7 @@ const templateFooterTexto = useMemo(() => {
                                           window.location.href = "/configuracoes/templates-whatsapp";
                                         }}
                                       >
-                                        + Novo
+                                        + New
                                       </button>
                                     </div>
 
@@ -5886,7 +5885,7 @@ const templateFooterTexto = useMemo(() => {
                                           <input
                                             key={i}
                                             className={styles.disparoInput}
-                                            placeholder={`Parâmetro ${i + 1}`}
+                                            placeholder={`Parameter ${i + 1}`}
                                             value={parametros[i] || ""}
                                             onChange={(e) => atualizarParametro(i, e.target.value)}
                                           />
@@ -5896,12 +5895,12 @@ const templateFooterTexto = useMemo(() => {
 
                                     <div className={styles.disparoQuickBottomRow}>
                                       <div className={styles.disparoQuickTarget}>
-                                        <span className={styles.disparoQuickTargetLabel}>Destino</span>
+                                        <span className={styles.disparoQuickTargetLabel}>Destination</span>
                                         <strong className={styles.disparoQuickTargetName}>
-                                          {conversaSelecionada.contatos?.nome || "Contato"}
+                                          {conversaSelecionada.contatos?.nome || "Contact"}
                                         </strong>
                                         <span className={styles.disparoQuickTargetPhone}>
-                                          {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                                          {conversaSelecionada.contatos?.telefone || "No phone number"}
                                         </span>
                                       </div>
 
@@ -5915,14 +5914,14 @@ const templateFooterTexto = useMemo(() => {
                                           !conversaSelecionada?.contatos?.telefone
                                         }
                                       >
-                                        {enviandoDisparoIndividual ? "Enviando..." : "Enviar"}
+                                        {enviandoDisparoIndividual ? "Sending..." : "Send"}
                                       </button>
                                     </div>
 
                                     {templateSelecionado && (
                                       <div className={styles.disparoCustoBox}>
                                         <div className={styles.disparoCustoHeader}>
-                                          <span className={styles.disparoCustoEyebrow}>Estimativa de cobrança</span>
+                                          <span className={styles.disparoCustoEyebrow}>Estimate for billing</span>
 
                                           <span className={styles.disparoCustoCategoria}>
                                             {String(previewCustoDisparoIndividual?.categoria || templateSelecionado?.categoria || "-").toUpperCase()}
@@ -5932,7 +5931,7 @@ const templateFooterTexto = useMemo(() => {
                                         <div className={styles.disparoCustoMain}>
                                           <div className={styles.disparoCustoValorPrincipal}>
                                             {loadingPreviewCustoDisparoIndividual ? (
-                                              "Calculando..."
+                                              "Calculating..."
                                             ) : (
                                               `R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMin ?? 0).toFixed(2)} ~ R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMax ?? 0).toFixed(2)}`
                                             )}
@@ -5945,20 +5944,20 @@ const templateFooterTexto = useMemo(() => {
                                             </span>
 
                                             <span>
-                                              <strong>Cobrados:</strong>{" "}
+                                              <strong>Charged:</strong>{" "}
                                               {previewCustoDisparoIndividual?.totalCobrados ?? 0}
                                             </span>
 
                                             <span>
-                                              <strong>Isentos:</strong>{" "}
+                                              <strong>Exempt:</strong>{" "}
                                               {previewCustoDisparoIndividual?.totalIsentos ?? 0}
                                             </span>
                                           </div>
                                         </div>
 
                                         <div className={styles.disparoCustoAviso}>
-                                          A cobrança pode ser realizada pela Meta na forma de pagamento cadastrada na conta comercial.
-                                          O valor final pode variar conforme dólar, impostos, IOF, taxas e regras de faturamento.
+                                          The charge may be processed by Meta using the payment method linked to the business account.
+                                          The final amount may vary according to exchange rate, taxes, IOF, fees, and billing rules.
                                         </div>
                                       </div>
                                     )}
@@ -5968,13 +5967,13 @@ const templateFooterTexto = useMemo(() => {
                                     <div className={styles.disparoTemplatePreviewHeader}>
                                       <div>
                                         <h4 className={styles.disparoTemplatePreviewName}>
-                                          {templateSelecionado?.nome || "Template não selecionado"}
+                                          {templateSelecionado?.nome || "Template not selected"}
                                         </h4>
 
                                         <p className={styles.disparoTemplatePreviewMeta}>
-                                          Categoria:{" "}
+                                          Category:{" "}
                                           <strong>
-                                            {templateSelecionado?.categoria || "Não informada"}
+                                            {templateSelecionado?.categoria || "NNot specified"}
                                           </strong>
                                           {" • "}
                                           Idioma:{" "}
@@ -5987,7 +5986,7 @@ const templateFooterTexto = useMemo(() => {
                                       </div>
 
                                       <span className={styles.disparoTemplateStatusBadge}>
-                                        Aprovado
+                                        Approved
                                       </span>
                                     </div>
 
@@ -6013,9 +6012,8 @@ const templateFooterTexto = useMemo(() => {
                                     </div>
 
                                     <div className={styles.disparoTemplateHintBox}>
-                                      Este template usa <strong>{quantidadeParametrosBody}</strong> variável(is).
-                                      No modelo atual, se existir variável, o sistema envia os valores preenchidos
-                                      nos parâmetros acima.
+                                        This template uses <strong>{quantidadeParametrosBody}</strong> variable(s).
+                                        In the current model, when variables exist, the system sends the values filled in the parameters above.
                                     </div>
                                   </div>
                                 </div>
@@ -6031,7 +6029,7 @@ const templateFooterTexto = useMemo(() => {
                                       type="button"
                                       className={styles.toolButton}
                                       onClick={() => setMenuAnexoAberto((prev) => !prev)}
-                                      title="Anexos"
+                                      title="Attachments"
                                     >
                                       ＋
                                     </button>
@@ -6047,7 +6045,7 @@ const templateFooterTexto = useMemo(() => {
                                           }}
                                         >
                                           <span className={styles.attachmentMenuIcon}>📎</span>
-                                          <span>Documento</span>
+                                          <span>Document</span>
                                         </button>
 
                                         <button
@@ -6059,7 +6057,7 @@ const templateFooterTexto = useMemo(() => {
                                           }}
                                         >
                                           <span className={styles.attachmentMenuIcon}>🖼️</span>
-                                          <span>Foto ou vídeo</span>
+                                          <span>Photo or Video</span>
                                         </button>
 
                                         <button
@@ -6071,7 +6069,7 @@ const templateFooterTexto = useMemo(() => {
                                           }}
                                         >
                                           <span className={styles.attachmentMenuIcon}>🎵</span>
-                                          <span>Áudio</span>
+                                          <span>Audio</span>
                                         </button>
                                       </div>
                                     )}
@@ -6085,7 +6083,7 @@ const templateFooterTexto = useMemo(() => {
                                       }`}
                                       onClick={() => setEmojiAberto((prev) => !prev)}
                                       title="Emoji"
-                                      aria-label="Abrir emojis"
+                                      aria-label="Open emojis"
                                     >
                                       <span className={styles.emojiButtonIcon}>😊</span>
                                     </button>
@@ -6111,12 +6109,12 @@ const templateFooterTexto = useMemo(() => {
                                     suppressContentEditableWarning
                                     data-placeholder={
                                       !podeEnviarMensagem
-                                        ? "Você não pode responder esta conversa"
+                                        ? "You cannot reply to this conversation"
                                         : arquivoEnvio
-                                        ? "Digite uma legenda..."
+                                        ? "Enter a caption..."
                                         : gravandoAudio
-                                        ? "Gravando áudio..."
-                                        : "Digite uma mensagem"
+                                        ? "Recording audio..."
+                                        : "Enter a message"
                                     }
                                     onInput={(e) => {
                                       const texto = (e.currentTarget as HTMLDivElement).textContent || "";
@@ -6152,7 +6150,7 @@ const templateFooterTexto = useMemo(() => {
                                     type="button"
                                     onClick={abrirCamera}
                                     className={styles.toolButton}
-                                    title="Câmera"
+                                    title="CCamera"
                                   >
                                     📷
                                   </button>
@@ -6169,7 +6167,7 @@ const templateFooterTexto = useMemo(() => {
                                     }}
                                     disabled={!podeEnviarMensagem || enviando}
                                     className={styles.toolButton}
-                                    title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
+                                    title={gravandoAudio ? "Stop recording" : "Record audio"}
                                   >
                                     {gravandoAudio ? "⏹" : "🎤"}
                                   </button>
@@ -6191,13 +6189,13 @@ const templateFooterTexto = useMemo(() => {
                                     }
                                     className={styles.sendButton}
                                   >
-                                    {enviando ? "Enviando..." : arquivoEnvio ? "Enviar" : "Enviar"}
+                                    {enviando ? "Sending..." : arquivoEnvio ? "Send" : "Send"}
                                   </button>
                                 </div>
                               </div>
 
                               <p className={styles.footerHint}>
-                                Enter envia • Shift + Enter quebra linha
+                                Enter sends • Shift + Enter breaks line
                               </p>
                             </>
                           )}
@@ -6219,7 +6217,7 @@ const templateFooterTexto = useMemo(() => {
                               setAbaPainelDireito("contato");
                               await limparFiltroDeProtocolo();
                             }}
-                            title="Voltar para contatos"
+                            title="Back to contacts"
                           >
                             ←
                           </button>
@@ -6227,21 +6225,21 @@ const templateFooterTexto = useMemo(() => {
 
                         <div className={styles.rightPanelTitleWrap}>
                           <h3 className={styles.rightPanelTitle}>
-                            {abaPainelDireito === "contato"
-                              ? "Dados do contato"
-                              : abaPainelDireito === "detalhes"
-                              ? "Detalhes"
-                              : abaPainelDireito === "historico"
-                              ? "Histórico"
-                              : abaPainelDireito === "notas"
-                              ? "Notas"
-                              : abaPainelDireito === "listas"
-                              ? "Listas"
-                              : abaPainelDireito === "etiquetas"
-                              ? "Etiquetas"
-                              : abaPainelDireito === "midia_docs_links"
-                              ? "Mídia, links e docs"
-                              : "Mensagens favoritas"}
+                              {abaPainelDireito === "contato"
+                                ? "Contact details"
+                                : abaPainelDireito === "detalhes"
+                                ? "Details"
+                                : abaPainelDireito === "historico"
+                                ? "History"
+                                : abaPainelDireito === "notas"
+                                ? "Notes"
+                                : abaPainelDireito === "listas"
+                                ? "Lists"
+                                : abaPainelDireito === "etiquetas"
+                                ? "Tags"
+                                : abaPainelDireito === "midia_docs_links"
+                                ? "Media, links and docs"
+                                : "Favorite messages"}
                           </h3>
 
                           {abaPainelDireito === "midia_docs_links" && (
@@ -6249,16 +6247,15 @@ const templateFooterTexto = useMemo(() => {
                               <button
                                 type="button"
                                 className={styles.mediaExpiryInfoButton}
-                                title="Informação sobre expiração da mídia"
+                                title="Information about media expiration"
                               >
                                 i
                               </button>
 
                               <div className={styles.mediaExpiryInfoTooltip}>
-                                As mídias recebidas pelo WhatsApp podem expirar em até 7 dias.
-                                Para continuar acessando imagens, vídeos, áudios e arquivos depois
-                                desse período, faça o download enquanto a mídia ainda estiver
-                                disponível.
+                                  Media received through WhatsApp may expire within 7 days.
+                                  To keep access to images, videos, audio, and files after that period,
+                                  download the media while it is still available.
                               </div>
                             </div>
                           )}
@@ -6281,14 +6278,14 @@ const templateFooterTexto = useMemo(() => {
                         <div className={styles.panelSectionStack}>
                           <div className={styles.detailCardGrid}>
                             <div className={styles.detailCard}>
-                              <span className={styles.detailLabel}>Assunto</span>
+                              <span className={styles.detailLabel}>Subject</span>
                               <strong className={styles.detailValue}>
-                                {conversaSelecionada.assunto || "Sem assunto"}
+                                {conversaSelecionada.assunto || "No subject"}
                               </strong>
                             </div>
 
                             <div className={styles.detailCard}>
-                              <span className={styles.detailLabel}>Canal</span>
+                              <span className={styles.detailLabel}>Channel</span>
                               <strong className={styles.detailValue}>
                                 {getCanalLabel(conversaSelecionada.canal)}
                               </strong>
@@ -6302,37 +6299,37 @@ const templateFooterTexto = useMemo(() => {
                             </div>
 
                             <div className={styles.detailCard}>
-                              <span className={styles.detailLabel}>Setor</span>
+                              <span className={styles.detailLabel}>Sector</span>
                               <strong className={styles.detailValue}>
-                                {conversaSelecionada.setores?.nome || "Sem setor"}
+                                {conversaSelecionada.setores?.nome || "No sector"}
                               </strong>
                             </div>
 
                             <div className={styles.detailCard}>
-                              <span className={styles.detailLabel}>Responsável</span>
+                              <span className={styles.detailLabel}>Responsible</span>
                               <strong className={styles.detailValue}>
                                 {conversaSelecionada.responsavel?.nome ||
-                                  "Sem responsável"}
+                                  "No responsible"}
                               </strong>
                             </div>
 
                             <div className={styles.detailCard}>
-                              <span className={styles.detailLabel}>Prioridade</span>
+                              <span className={styles.detailLabel}>Priority</span>
                               <strong className={styles.detailValue}>
                                 {getPrioridadeLabel(conversaSelecionada.prioridade)}
                               </strong>
                             </div>
 
                             <div className={styles.detailCard}>
-                              <span className={styles.detailLabel}>Origem</span>
+                              <span className={styles.detailLabel}>Origin</span>
                               <strong className={styles.detailValue}>
                                 {conversaSelecionada.origem_atendimento ||
-                                  "Não informada"}
+                                  "NNot informed"}
                               </strong>
                             </div>
 
                             <div className={styles.detailCard}>
-                              <span className={styles.detailLabel}>Última atividade</span>
+                              <span className={styles.detailLabel}>Last activity</span>
                               <strong className={styles.detailValue}>
                                 {formatarDataCompleta(conversaSelecionada.last_message_at)}
                               </strong>
@@ -6349,11 +6346,11 @@ const templateFooterTexto = useMemo(() => {
                             </div>
 
                             <h4 className={styles.whatsContactName}>
-                              {conversaSelecionada.contatos?.nome || "Sem nome"}
+                              {conversaSelecionada.contatos?.nome || "No name"}
                             </h4>
 
                             <p className={styles.whatsContactPhone}>
-                              {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                              {conversaSelecionada.contatos?.telefone || "No phone"}
                             </p>
 
                             <div className={styles.whatsContactActions}>
@@ -6366,7 +6363,7 @@ const templateFooterTexto = useMemo(() => {
                                 }}
                               >
                                 <span className={styles.whatsContactActionIcon}>◈</span>
-                                <span className={styles.whatsContactActionText}>Detalhes</span>
+                                <span className={styles.whatsContactActionText}>Details</span>
                               </button>
 
                               <button 
@@ -6375,23 +6372,23 @@ const templateFooterTexto = useMemo(() => {
                                 onClick={baixarConversaPDF}
                                 >
                                 <span className={styles.whatsContactActionIcon}>↗</span>
-                                <span className={styles.whatsContactActionText}>Compartilhar</span>
+                                <span className={styles.whatsContactActionText}>Share</span>
                               </button>
                             </div>
                           </div>
 
                           <div className={styles.whatsContactSection}>
                             <div className={styles.whatsSectionHeader}>
-                              <span>Informações do contato</span>
+                              <span>Contact Information</span>
                             </div>
 
                             <div className={styles.whatsInfoList}>
                               <div className={styles.whatsInfoRow}>
-                                <span className={styles.whatsInfoLabel}>PROTOCOLO</span>
+                                <span className={styles.whatsInfoLabel}>PROTOCOL</span>
 
                                 <div className={styles.protocolRow}>
                                   <strong className={styles.whatsInfoValue}>
-                                    {conversaSelecionada.protocolo || "Não gerado"}
+                                    {conversaSelecionada.protocolo || "NNot generated"}
                                   </strong>
 
                                   <button
@@ -6403,15 +6400,15 @@ const templateFooterTexto = useMemo(() => {
                                     }}
                                     className={styles.protocolSmallButton}
                                   >
-                                    Ver outros
+                                    View others
                                   </button>
                                 </div>
                               </div>
 
                               <div className={styles.whatsInfoRow}>
-                                <span className={styles.whatsInfoLabel}>Telefone</span>
+                                <span className={styles.whatsInfoLabel}>Phone</span>
                                 <strong className={styles.whatsInfoValue}>
-                                  {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                                  {conversaSelecionada.contatos?.telefone || "No phone"}
                                 </strong>
                               </div>
 
@@ -6425,7 +6422,7 @@ const templateFooterTexto = useMemo(() => {
                               />
 
                               <CampoContatoEditavel
-                                label="EMPRESA"
+                                label="COMPANY"
                                 valorInicial={conversaSelecionada.contatos?.empresa || ""}
                                 editando={editandoCampo === "empresa"}
                                 onEditar={() => setEditandoCampo("empresa")}
@@ -6434,7 +6431,7 @@ const templateFooterTexto = useMemo(() => {
                               />
 
                               <CampoContatoEditavel
-                                label="OBSERVAÇÕES"
+                                label="NOTES"
                                 valorInicial={conversaSelecionada.contatos?.observacoes || ""}
                                 editando={editandoCampo === "observacoes"}
                                 multiline
@@ -6461,7 +6458,7 @@ const templateFooterTexto = useMemo(() => {
                               <span className={styles.whatsListActionLeft}>
                                 <span className={styles.whatsListActionIcon}>🖼️</span>
                                 <span className={styles.whatsListActionLabel}>
-                                  Mídia, links e docs
+                                  Media, links and docs
                                 </span>
                               </span>
                               <span className={styles.whatsListActionRight}>
@@ -6482,7 +6479,7 @@ const templateFooterTexto = useMemo(() => {
                               <span className={styles.whatsListActionLeft}>
                                 <span className={styles.whatsListActionIcon}>⭐</span>
                                 <span className={styles.whatsListActionLabel}>
-                                  Mensagens favoritas
+                                  Favorited Messages
                                 </span>
                               </span>
 
@@ -6503,7 +6500,7 @@ const templateFooterTexto = useMemo(() => {
                             >
                               <span className={styles.whatsListActionLeft}>
                                 <span className={styles.whatsListActionIcon}>ℹ️</span>
-                                <span className={styles.whatsListActionLabel}>Detalhes</span>
+                                <span className={styles.whatsListActionLabel}>Details</span>
                               </span>
                             </button>
 
@@ -6515,7 +6512,7 @@ const templateFooterTexto = useMemo(() => {
                             >
                               <span className={styles.whatsListActionLeft}>
                                 <span className={styles.whatsListActionIcon}>🕓</span>
-                                <span className={styles.whatsListActionLabel}>Histórico</span>
+                                <span className={styles.whatsListActionLabel}>History</span>
                               </span>
                             </button>
 
@@ -6531,7 +6528,7 @@ const templateFooterTexto = useMemo(() => {
                             >
                               <span className={styles.whatsListActionLeft}>
                                 <span className={styles.whatsListActionIcon}>📝</span>
-                                <span className={styles.whatsListActionLabel}>Notas</span>
+                                <span className={styles.whatsListActionLabel}>Notes</span>
                               </span>
 
                               {quantidadeNotas > 0 && (
@@ -6552,7 +6549,7 @@ const templateFooterTexto = useMemo(() => {
                             >
                               <span className={styles.whatsListActionLeft}>
                                 <span className={styles.whatsListActionIcon}>🏷️</span>
-                                <span className={styles.whatsListActionLabel}>Etiquetas</span>
+                                <span className={styles.whatsListActionLabel}>Labels</span>
                               </span>
 
                               {conversaSelecionada.etiquetas ? (
@@ -6562,14 +6559,14 @@ const templateFooterTexto = useMemo(() => {
                                   mostrarTooltip={false}
                                 />
                               ) : (
-                                <span className={styles.whatsListActionRight}>Sem</span>
+                                <span className={styles.whatsListActionRight}>No</span>
                               )}
                             </button>
                           </div>
 
                           <div className={styles.whatsContactSection}>
                             <div className={styles.whatsSectionHeader}>
-                              <span>Ações</span>
+                              <span>Actions</span>
                             </div>
 
                             <div className={styles.whatsActionList}>
@@ -6582,8 +6579,8 @@ const templateFooterTexto = useMemo(() => {
                                 }}
                               >
                                 {conversaSelecionada?.favorita
-                                      ? "★ Remover dos favoritos"
-                                      : "✰ Adicionar aos favoritos"}
+                                      ? "★ Remove from favorites"
+                                      : "✰ Add to favorites"}
                               </button>
 
                               <button
@@ -6596,7 +6593,7 @@ const templateFooterTexto = useMemo(() => {
                                   await carregarListasDaConversa();
                                 }}
                               >
-                                ⊞ Adicionar à lista
+                                ⊞ Add to list
                               </button>
 
                               {podeTransferir && (

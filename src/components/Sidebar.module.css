@@ -166,6 +166,15 @@
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
 }
 
+.linkWhatsappActive {
+  background: #eeeeee;
+  color: #0f172a;
+}
+
+.linkWhatsappActive .linkIcon {
+  color: #0f172a;
+}
+
 .linkIcon {
   width: 36px;
   min-width: 36px;
@@ -276,6 +285,57 @@
   box-shadow: 0 4px 10px rgba(239, 68, 68, 0.35);
 }
 
+.whatsappSidebarAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid #ffffff;
+  background: #f8fafc;
+  display: block;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.linkWhatsappPerfil {
+  margin-bottom: 15px;
+  padding: 12px 3px;
+  border-radius: 22px;
+  min-height: 30px;
+  align-items: center;
+}
+
+.linkWhatsappPerfil:hover {
+  background: #f8fafc;
+}
+
+
+.linkWhatsappPerfil .linkIcon {
+  width: 58px;
+  min-width: 58px;
+  height: 30px;
+}
+
+.linkWhatsappPerfil .whatsappSidebarAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  object-fit: cover;
+  border:2px solid #ffffff;
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.16),
+    0 0 0 1px #e2e8f0;
+  transition: transform 0.2s ease;
+}
+
+.linkWhatsappPerfil:hover .whatsappSidebarAvatar {
+  transform: scale(1.04);
+}
+
+.linkWhatsappPerfil .linkText {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
 
 @media (max-width: 1024px) {
   .sidebar {

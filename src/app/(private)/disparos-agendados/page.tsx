@@ -146,6 +146,75 @@ function renderizarTextoTemplate(payload: Record<string, any>) {
   return partes.join("\n\n").trim() || "Não foi possível gerar a prévia do template.";
 }
 
+
+function extrairPreviewTemplateCompleto(payload: any) {
+  const components = Array.isArray(payload?.components)
+    ? payload.components
+    : [];
+
+  const header = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+
+  const body = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "BODY"
+  );
+
+  const footer = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "FOOTER"
+  );
+
+  const buttons = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "BUTTONS"
+  );
+
+  const partes: string[] = [];
+
+  if (header?.text) {
+    partes.push(header.text);
+  }
+
+  if (body?.text) {
+    partes.push(body.text);
+  }
+
+  if (footer?.text) {
+    partes.push(footer.text);
+  }
+
+  if (Array.isArray(buttons?.buttons) && buttons.buttons.length > 0) {
+    const textosBotoes = buttons.buttons
+      .map((button: any) => {
+        const texto = button.text || button.phone_number || button.url;
+
+        return texto ? `• ${texto}` : null;
+      })
+      .filter(Boolean);
+
+    if (textosBotoes.length > 0) {
+      partes.push(`Botões:\n${textosBotoes.join("\n")}`);
+    }
+  }
+
+  return partes.join("\n\n");
+}
+
+function limparNumero(valor: string | null | undefined) {
+  return String(valor || "").replace(/\D/g, "");
+}
+
+function formatarTelefone(numero: string | null | undefined) {
+  const limpo = limparNumero(numero);
+
+  if (!limpo) return "Sem telefone";
+  return limpo;
+}
+
+function contatoTemTelefoneValido(contato: any) {
+  const telefone = limparNumero(contato.telefone);
+  return telefone.length >= 10;
+}
+
 export default function DisparosAgendadosPage() {
   const [disparos, setDisparos] = useState<DisparoAgendado[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -162,6 +231,28 @@ export default function DisparosAgendadosPage() {
     useState<DisparoAgendado | null>(null);
 
   const [cancelando, setCancelando] = useState(false);
+  const [modalNovoDisparo, setModalNovoDisparo] = useState(false);
+  const [integracoes, setIntegracoes] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
+
+  const [integracaoSelecionada, setIntegracaoSelecionada] = useState("");
+  const [templateSelecionado, setTemplateSelecionado] = useState("");
+
+  const [agendamentoData, setAgendamentoData] = useState("");
+  const [agendamentoHora, setAgendamentoHora] = useState("");
+
+  const [loadingModal, setLoadingModal] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [contatos, setContatos] = useState<any[]>([]);
+  const [contatosSelecionados, setContatosSelecionados] = useState<any[]>([]);
+  const [buscaContato, setBuscaContato] = useState("");
+  const [salvandoDisparo, setSalvandoDisparo] = useState(false);
+
+  const [loadingContatos, setLoadingContatos] = useState(false);
+  const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
+  const [origemFiltro, setOrigemFiltro] = useState("");
+  const [origensDisponiveis, setOrigensDisponiveis] = useState<string[]>([]);
+
 
   async function carregarDisparos() {
     try {
@@ -231,9 +322,207 @@ export default function DisparosAgendadosPage() {
     }
   }
 
+  async function carregarDadosModalDisparo() {
+    try {
+      setLoadingModal(true);
+
+      const [resIntegracoes] = await Promise.all([
+        fetch("/api/integracoes-whatsapp/listar", { cache: "no-store" })
+      ]);
+
+      const jsonIntegracoes = await resIntegracoes.json();
+
+      if (jsonIntegracoes.ok) {
+        setIntegracoes(jsonIntegracoes.data || []);
+      }
+
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoadingModal(false);
+    }
+  }
+
+  async function carregarContatos(busca = "", origem = "") {
+    try {
+      setLoadingContatos(true);
+      setErro("");
+
+      const params = new URLSearchParams();
+
+      if (busca.trim()) {
+        params.set("busca", busca.trim());
+      }
+
+      if (origem.trim()) {
+        params.set("origem", origem.trim());
+      }
+
+      params.set("pagina", "1");
+      params.set("limite", "2000");
+
+      const res = await fetch(`/api/contatos?${params.toString()}`, {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || "Erro ao carregar contatos.");
+      }
+
+      const lista = Array.isArray(json.contatos) ? json.contatos : [];
+
+      setContatos(lista);
+      setOrigensDisponiveis(Array.isArray(json.origens) ? json.origens : []);
+      setTotalContatosDisponiveis(Number(json.total || 0));
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao carregar contatos.");
+    } finally {
+      setLoadingContatos(false);
+    }
+  }
+
+  async function carregarTemplates(integracaoId: string) {
+    try {
+      if (!integracaoId) {
+        setTemplates([]);
+        return;
+      }
+
+      setLoadingTemplates(true);
+      setErro("");
+
+      const res = await fetch(
+        `/api/whatsapp/templates?integracao_whatsapp_id=${encodeURIComponent(
+          integracaoId
+        )}`,
+        { cache: "no-store" }
+      );
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar templates.");
+      }
+
+      const lista = Array.isArray(json.data) ? json.data : [];
+
+      const aprovados = lista.filter(
+        (item: any) => String(item.status || "").toUpperCase() === "APPROVED"
+      );
+
+      setTemplates(aprovados);
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao carregar templates.");
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }
+
+
+  async function criarDisparoAgendado() {
+    try {
+      if (!integracaoSelecionada) {
+        throw new Error("Selecione uma integração.");
+      }
+
+      if (!templateSelecionado) {
+        throw new Error("Selecione um template.");
+      }
+
+      if (!agendamentoData || !agendamentoHora) {
+        throw new Error("Selecione data e hora.");
+      }
+
+      if (contatosSelecionados.length === 0) {
+        throw new Error("Selecione pelo menos um contato.");
+      }
+
+      setSalvandoDisparo(true);
+      setErro("");
+      setSucesso("");
+
+      const executar_em = new Date(
+        `${agendamentoData}T${agendamentoHora}:00`
+      ).toISOString();
+
+      const res = await fetch(
+        "/api/disparos-agendados/criar",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            integracao_whatsapp_id: integracaoSelecionada,
+            template_id: templateSelecionado,
+            executar_em,
+            contatos: contatosSelecionados.map((contato) => ({
+              id: contato.id,
+              nome: contato.nome,
+              telefone: contato.telefone,
+            })),
+          }),
+        }
+      );
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(
+          json.error || "Erro ao criar disparo."
+        );
+      }
+
+      setSucesso("Disparo agendado com sucesso.");
+
+      setModalNovoDisparo(false);
+
+      setIntegracaoSelecionada("");
+      setTemplateSelecionado("");
+      setAgendamentoData("");
+      setAgendamentoHora("");
+      setContatosSelecionados([]);
+      setBuscaContato("");
+
+      await carregarDisparos();
+    } catch (error: any) {
+      setErro(
+        error?.message ||
+        "Erro ao criar disparo."
+      );
+    } finally {
+      setSalvandoDisparo(false);
+    }
+  }
+
   useEffect(() => {
     carregarDisparos();
   }, [filtroStatus]);
+
+
+  useEffect(() => {
+    setTemplateSelecionado("");
+
+    if (integracaoSelecionada) {
+      carregarTemplates(integracaoSelecionada);
+    } else {
+      setTemplates([]);
+    }
+  }, [integracaoSelecionada]);
+
+
+  useEffect(() => {
+    if (!modalNovoDisparo) return;
+
+    const timer = setTimeout(() => {
+      carregarContatos(buscaContato, origemFiltro);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [buscaContato, origemFiltro, modalNovoDisparo]);
+
 
   const metricas = useMemo(() => {
     const total = disparos.length;
@@ -249,6 +538,73 @@ export default function DisparosAgendadosPage() {
     };
   }, [disparos]);
 
+  const contatosDisponiveis = useMemo(() => {
+    const idsSelecionados = new Set(
+      contatosSelecionados.map((item) => item.id)
+    );
+
+    return contatos.filter((item) => !idsSelecionados.has(item.id));
+  }, [contatos, contatosSelecionados]);
+
+  const contatosDisponiveisValidos = useMemo(() => {
+    return contatosDisponiveis.filter(contatoTemTelefoneValido);
+  }, [contatosDisponiveis]);
+
+  function adicionarContato(contato: any) {
+    const telefone = limparNumero(contato.telefone);
+
+    if (!telefone || telefone.length < 10) {
+      setErro("Este contato não possui telefone válido para disparo.");
+      return;
+    }
+
+    setErro("");
+
+    setContatosSelecionados((prev) => {
+      if (prev.some((item) => item.id === contato.id)) return prev;
+      return [...prev, contato];
+    });
+  }
+
+  function adicionarTodosDisponiveis() {
+    const mapaSelecionados = new Set(
+      contatosSelecionados.map((item) => item.id)
+    );
+
+    const novos = contatosDisponiveisValidos.filter(
+      (item) => !mapaSelecionados.has(item.id)
+    );
+
+    if (novos.length === 0) {
+      setErro("Nenhum contato válido disponível para adicionar.");
+      return;
+    }
+
+    setErro("");
+    setContatosSelecionados((prev) => [...prev, ...novos]);
+  }
+
+  function removerContato(contatoId: string) {
+    setContatosSelecionados((prev) =>
+      prev.filter((item) => item.id !== contatoId)
+    );
+  }
+
+  function limparSelecao() {
+    setContatosSelecionados([]);
+    setErro("");
+  }
+
+    const templateAtual =
+      templates.find(
+        (item) => item.id === templateSelecionado
+      ) || null;
+
+    const previewTemplate = templateAtual
+      ? extrairPreviewTemplateCompleto(templateAtual.payload) ||
+        "Template sem conteúdo para prévia."
+      : "Selecione um template.";
+   
   return (
     <>
       <Header
@@ -321,6 +677,18 @@ export default function DisparosAgendadosPage() {
                 Visualize disparos criados pelos blocos de automação.
               </p>
             </div>
+
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={async () => {
+                setModalNovoDisparo(true);
+                await carregarDadosModalDisparo();
+                await carregarContatos("", "");
+              }}
+            >
+              + Novo disparo
+            </button>
 
             <div className={styles.headerActions}>
               <button
@@ -413,14 +781,23 @@ export default function DisparosAgendadosPage() {
                           </p>
 
                           {disparo.envio_status === "falha" && disparo.envio_erro_amigavel ? (
-                            <div className={styles.envioErroBox}>
-                              <strong>Falha no envio</strong>
-                              <p>{disparo.envio_erro_amigavel}</p>
+                            <details
+                              className={styles.envioErroDetails}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <summary className={styles.envioErroSummary}>
+                                <span>Falha no envio</span>
+                                <small>Ver detalhes</small>
+                              </summary>
 
-                              {disparo.envio_erro_tecnico ? (
-                                <small>Detalhe técnico: {disparo.envio_erro_tecnico}</small>
-                              ) : null}
-                            </div>
+                              <div className={styles.envioErroBox}>
+                                <p>{disparo.envio_erro_amigavel}</p>
+
+                                {disparo.envio_erro_tecnico ? (
+                                  <small>Detalhe técnico: {disparo.envio_erro_tecnico}</small>
+                                ) : null}
+                              </div>
+                            </details>
                           ) : null}
                         </div>
                       </div>
@@ -474,35 +851,47 @@ export default function DisparosAgendadosPage() {
               </button>
             </div>
 
-            <div className={styles.detailsBody}>
-              <div className={styles.detailGroup}>
-                <span>Status</span>
-                <strong className={statusClass(disparoSelecionado.status)}>
-                  {statusLabel(disparoSelecionado.status)}
-                </strong>
-              </div>
+            <div className={styles.detailsSection}>
+              <h4 className={styles.detailsSectionTitle}>Resumo</h4>
 
-              <div className={styles.detailGroup}>
-                <span>Status do envio WhatsApp</span>
-                <strong className={envioStatusClass(disparoSelecionado.envio_status)}>
-                  {disparoSelecionado.envio_label || "Ainda não enviado"}
-                </strong>
-              </div>
+              <div className={styles.detailsGrid}>
+                <div className={styles.detailGroup}>
+                  <span>Status</span>
+                  <strong className={statusClass(disparoSelecionado.status)}>
+                    {statusLabel(disparoSelecionado.status)}
+                  </strong>
+                </div>
 
-              <div className={styles.detailGroup}>
-                <span>Template</span>
-                <strong>{disparoSelecionado.payload_json?.template_nome || "-"}</strong>
-              </div>
+                <div className={styles.detailGroup}>
+                  <span>Status do envio</span>
+                  <strong className={envioStatusClass(disparoSelecionado.envio_status)}>
+                    {disparoSelecionado.envio_label || "Ainda não enviado"}
+                  </strong>
+                </div>
 
-              <div className={styles.detailGroup}>
-                <span>Idioma</span>
-                <strong>{disparoSelecionado.payload_json?.template_idioma || "-"}</strong>
+                <div className={styles.detailGroup}>
+                  <span>Template</span>
+                  <strong>{disparoSelecionado.payload_json?.template_nome || "-"}</strong>
+                </div>
+
+                <div className={styles.detailGroup}>
+                  <span>Idioma</span>
+                  <strong>{disparoSelecionado.payload_json?.template_idioma || "-"}</strong>
+                </div>
               </div>
+            </div>
+
+            <div className={styles.detailsSection}>
+              <h4 className={styles.detailsSectionTitle}>Destino</h4>
 
               <div className={styles.detailGroup}>
                 <span>Número</span>
                 <strong>{disparoSelecionado.payload_json?.numero_destino || "-"}</strong>
               </div>
+            </div>
+
+            <div className={styles.detailsSection}>
+              <h4 className={styles.detailsSectionTitle}>Origem da automação</h4>
 
               <div className={styles.detailGroup}>
                 <span>Fluxo</span>
@@ -517,43 +906,53 @@ export default function DisparosAgendadosPage() {
                     "-"}
                 </strong>
               </div>
+            </div>
 
-              <div className={styles.detailGroup}>
-                <span>Criado em</span>
-                <strong>{formatarData(disparoSelecionado.created_at)}</strong>
+            <div className={styles.detailsSection}>
+              <h4 className={styles.detailsSectionTitle}>Datas</h4>
+
+              <div className={styles.detailsGrid}>
+                <div className={styles.detailGroup}>
+                  <span>Criado em</span>
+                  <strong>{formatarData(disparoSelecionado.created_at)}</strong>
+                </div>
+
+                <div className={styles.detailGroup}>
+                  <span>Agendado para</span>
+                  <strong>{formatarData(disparoSelecionado.executar_em)}</strong>
+                </div>
+
+                <div className={styles.detailGroup}>
+                  <span>Executado em</span>
+                  <strong>{formatarData(disparoSelecionado.executed_at)}</strong>
+                </div>
               </div>
+            </div>
 
-              <div className={styles.detailGroup}>
-                <span>Agendado para</span>
-                <strong>{formatarData(disparoSelecionado.executar_em)}</strong>
-              </div>
+            {disparoSelecionado.envio_status === "falha" &&
+            disparoSelecionado.envio_erro_amigavel ? (
+              <details className={styles.envioErroDetailsSelect}>
+                <summary className={styles.envioErroSummary}>
+                  <span>Falha no envio</span>
+                  <small>Ver detalhes</small>
+                </summary>
 
-              <div className={styles.detailGroup}>
-                <span>Executado em</span>
-                <strong>{formatarData(disparoSelecionado.executed_at)}</strong>
-              </div>
-
-              {disparoSelecionado.envio_status === "falha" &&
-                disparoSelecionado.envio_erro_amigavel ? (
                 <div className={styles.envioErroBox}>
-                  <strong>Falha no envio</strong>
                   <p>{disparoSelecionado.envio_erro_amigavel}</p>
 
                   {disparoSelecionado.envio_erro_tecnico ? (
-                    <small>
-                      Detalhe técnico: {disparoSelecionado.envio_erro_tecnico}
-                    </small>
+                    <small>Detalhe técnico: {disparoSelecionado.envio_erro_tecnico}</small>
                   ) : null}
                 </div>
-              ) : null}
+              </details>
+            ) : null}
 
-              <div className={styles.payloadBox}>
-                <span>Prévia do template</span>
+            <div className={styles.payloadBox}>
+              <span>Prévia do template</span>
 
-                <pre>
-                  {renderizarTextoTemplate(disparoSelecionado.payload_json || {})}
-                </pre>
-              </div>
+              <pre>
+                {renderizarTextoTemplate(disparoSelecionado.payload_json || {})}
+              </pre>
 
               {disparoSelecionado.status === "pendente" && (
                 <button
@@ -567,6 +966,390 @@ export default function DisparosAgendadosPage() {
             </div>
           </aside>
         )}
+
+        {modalNovoDisparo ? (
+          <div
+            className={styles.modalOverlay}
+            onClick={() => setModalNovoDisparo(false)}
+          >
+            <div
+              className={`${styles.modalCard} ${styles.modalDisparoCard}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>WhatsApp</p>
+
+                  <h2 className={styles.modalTitle}>
+                    Agendar disparo
+                  </h2>
+
+                  <p className={styles.modalSubtitle}>
+                    Crie um disparo agendado manual de template WhatsApp.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.closePanelButton}
+                  onClick={() => setModalNovoDisparo(false)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className={styles.modalBody}>
+                {loadingModal ? (
+                  <div className={styles.emptyState}>
+                    Carregando dados do disparo...
+                  </div>
+                ) : (
+                <div className={styles.disparoModalGrid}>
+                  <div className={styles.disparoModalMain}>
+                    <div className={styles.formSection}>
+                      <div className={styles.formSectionHeader}>
+                        <h3>Configurações</h3>
+                        <p>Selecione integração, template e agendamento.</p>
+                      </div>
+
+                      <div className={styles.formGrid}>
+                        <div className={styles.fieldGroup}>
+                          <label className={styles.label}>
+                            Integração WhatsApp
+                          </label>
+
+                          <select
+                            className={styles.input}
+                            value={integracaoSelecionada}
+                            onChange={(e) => {
+                              setIntegracaoSelecionada(e.target.value);
+                              setTemplateSelecionado("");
+                            }}
+                          >
+                            <option value="">Selecionar integração</option>
+
+                            {integracoes.map((integracao) => (
+                              <option
+                                key={integracao.id}
+                                value={integracao.id}
+                              >
+                              {integracao.nome_conexao
+                                ? `${integracao.nome_conexao} • ${integracao.numero || "Sem número"}`
+                                : integracao.numero || "Integração sem nome"}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className={styles.fieldGroup}>
+                          <label className={styles.label}>
+                            Template
+                          </label>
+
+                          <select
+                            className={styles.input}
+                            value={templateSelecionado}
+                            onChange={(e) => setTemplateSelecionado(e.target.value)}
+                          >
+                            <option value="">Selecionar template</option>
+
+                            {integracaoSelecionada && !loadingTemplates && templates.length === 0 && (
+                              <option value="" disabled>
+                                Nenhum template aprovado para esta integração
+                              </option>
+                            )}
+
+                            {templates.map((template) => (
+                              <option
+                                key={template.id}
+                                value={template.id}
+                              >
+                                {template.nome} • {template.idioma}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className={styles.fieldGroup}>
+                          <label className={styles.label}>
+                            Data
+                          </label>
+
+                        <input
+                          type="date"
+                          className={styles.input}
+                          value={agendamentoData}
+                          onChange={(e) => setAgendamentoData(e.target.value)}
+                        />
+                        </div>
+
+                        <div className={styles.fieldGroup}>
+                          <label className={styles.label}>
+                            Hora
+                          </label>
+
+                          <input
+                            type="time"
+                            className={styles.input}
+                            value={agendamentoHora}
+                            onChange={(e) => setAgendamentoHora(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={styles.formSection}>
+                      <div className={styles.formSectionHeader}>
+                        <h3>Destinatários</h3>
+                        <p>Selecione quem receberá o disparo.</p>
+                      </div>
+
+                      <div className={styles.contactsSelector}>
+                        <div className={styles.contactsList}>
+                          <div className={styles.searchRow}>
+                            <div className={styles.searchFilters}>
+                              <div className={styles.field}>
+                                <label className={styles.label}>Buscar contatos salvos</label>
+                                <input
+                                  value={buscaContato}
+                                  onChange={(e) => setBuscaContato(e.target.value)}
+                                  className={styles.input}
+                                  placeholder="Busque por nome, telefone, email, campanha..."
+                                />
+                              </div>
+
+                              <div className={styles.field}>
+                                <label className={styles.label}>Filtrar por origem</label>
+                                <select
+                                  value={origemFiltro}
+                                  onChange={(e) => setOrigemFiltro(e.target.value)}
+                                  className={styles.input}
+                                >
+                                  <option value="">Todas as origens</option>
+                                  {origensDisponiveis.map((origem) => (
+                                    <option key={origem} value={origem}>
+                                      {origem}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className={styles.inlineActions}>
+                              <button
+                                type="button"
+                                className={styles.secondaryButton}
+                                onClick={adicionarTodosDisponiveis}
+                                disabled={loadingContatos || contatosDisponiveisValidos.length === 0}
+                              >
+                                Adicionar todos filtrados
+                              </button>
+
+                              <button
+                                type="button"
+                                className={styles.secondaryButton}
+                                onClick={() => {
+                                  setBuscaContato("");
+                                  setOrigemFiltro("");
+                                  limparSelecao();
+                                }}
+                                disabled={
+                                  contatosSelecionados.length === 0 &&
+                                  !buscaContato &&
+                                  !origemFiltro
+                                }
+                              >
+                                Limpar filtros
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className={styles.contactsSection}>
+                            <div className={styles.contactsColumn}>
+                              <div className={styles.contactsHeader}>
+                                <h3 className={styles.contactsTitle}>Contatos disponíveis</h3>
+                                <span className={styles.contactsCount}>
+                                  {loadingContatos ? "..." : totalContatosDisponiveis}
+                                </span>
+                              </div>
+
+                              <div className={styles.contactsList}>
+                                {loadingContatos ? (
+                                  <div className={styles.emptyMiniState}>Carregando contatos...</div>
+                                ) : contatosDisponiveis.length === 0 ? (
+                                  <div className={styles.emptyMiniState}>
+                                    Nenhum contato disponível.
+                                  </div>
+                                ) : (
+                                  contatosDisponiveis.map((contato) => {
+                                    const telefoneValido = contatoTemTelefoneValido(contato);
+
+                                    return (
+                                      <div key={contato.id} className={styles.contactCard}>
+                                        <div className={styles.contactMain}>
+                                          <strong className={styles.contactName}>
+                                            {contato.nome || contato.telefone || "Sem nome"}
+                                          </strong>
+
+                                          <p className={styles.contactMeta}>
+                                            {formatarTelefone(contato.telefone)}
+                                          </p>
+
+                                          {contato.email ? (
+                                            <p className={styles.contactMeta}>{contato.email}</p>
+                                          ) : null}
+
+                                          <div className={styles.contactBadges}>
+                                            {contato.origem ? (
+                                              <span className={styles.contactBadge}>
+                                                {contato.origem}
+                                              </span>
+                                            ) : null}
+
+                                            {contato.status_lead ? (
+                                              <span className={styles.contactBadge}>
+                                                {contato.status_lead}
+                                              </span>
+                                            ) : null}
+
+                                            {contato.campanha ? (
+                                              <span className={styles.contactBadge}>
+                                                {contato.campanha}
+                                              </span>
+                                            ) : null}
+
+                                            {!telefoneValido ? (
+                                              <span className={styles.contactBadgeWarning}>
+                                                Sem telefone válido
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        </div>
+
+                                        <button
+                                          type="button"
+                                          className={styles.secondaryButton}
+                                          onClick={() => adicionarContato(contato)}
+                                          disabled={!telefoneValido}
+                                        >
+                                          Adicionar
+                                        </button>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+
+                            <div className={styles.contactsColumn}>
+                              <div className={styles.contactsHeader}>
+                                <h3 className={styles.contactsTitle}>Selecionados para agendamento</h3>
+                                <span className={styles.contactsCount}>
+                                  {contatosSelecionados.length}
+                                </span>
+                              </div>
+
+                              <div className={styles.contactsList}>
+                                {contatosSelecionados.length === 0 ? (
+                                  <div className={styles.emptyMiniState}>
+                                    Nenhum contato selecionado.
+                                  </div>
+                                ) : (
+                                  contatosSelecionados.map((contato) => (
+                                    <div key={contato.id} className={styles.contactCardSelected}>
+                                      <div className={styles.contactMain}>
+                                        <strong className={styles.contactName}>
+                                          {contato.nome || contato.telefone || "Sem nome"}
+                                        </strong>
+
+                                        <p className={styles.contactMeta}>
+                                          {formatarTelefone(contato.telefone)}
+                                        </p>
+
+                                        {contato.email ? (
+                                          <p className={styles.contactMeta}>{contato.email}</p>
+                                        ) : null}
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        className={styles.removeButton}
+                                        onClick={() => removerContato(contato.id)}
+                                      >
+                                        Remover
+                                      </button>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <aside className={styles.disparoPreviewSidebar}>
+                    <div className={styles.previewCard}>
+                      <div className={styles.previewHeader}>
+                        <span className={styles.previewBadge}>
+                          Prévia
+                        </span>
+
+                        <strong>Template WhatsApp</strong>
+                      </div>
+
+                      <div className={styles.templatePreviewBox}>
+                        <pre className={styles.templatePreviewText}>
+                          {previewTemplate}
+                        </pre>
+                      </div>
+                    </div>
+
+                    <div className={styles.scheduleCard}>
+                      <span className={styles.scheduleLabel}>
+                        Agendamento
+                      </span>
+
+                      <strong className={styles.scheduleDate}>
+                        {agendamentoData && agendamentoHora
+                          ? `${agendamentoData} às ${agendamentoHora}`
+                          : "Nenhuma data selecionada"}
+                      </strong>
+
+                      <p className={styles.scheduleDescription}>
+                        O disparo será enviado automaticamente
+                        na data configurada.
+                      </p>
+                    </div>
+                  </aside>
+                </div>
+                )}
+              </div>
+
+              <div className={styles.modalFooter}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setModalNovoDisparo(false)}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={criarDisparoAgendado}
+                  disabled={salvandoDisparo}
+                >
+                  {salvandoDisparo
+                    ? "Agendando..."
+                    : "Agendar disparo"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {disparoParaCancelar && (
           <div className={styles.modalOverlay}>

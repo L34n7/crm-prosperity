@@ -18,6 +18,7 @@ import {
   FileText,
   GitBranch,
   PlugZap,
+  MessageCircle,
 } from "lucide-react";
 import styles from "./Sidebar.module.css";
 
@@ -29,6 +30,12 @@ type MenuItem = {
 
 type SidebarProps = {
   initialCollapsed?: boolean;
+};
+
+type WhatsappSidebarPerfil = {
+  nome: string;
+  foto: string;
+  numero: string;
 };
 
 const menuItems: MenuItem[] = [
@@ -70,7 +77,9 @@ export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [disparosPendentes, setDisparosPendentes] = useState(0);
-
+  const [whatsappPerfil, setWhatsappPerfil] =
+    useState<WhatsappSidebarPerfil | null>(null);
+    
   useEffect(() => {
     async function carregarDisparosPendentes() {
       try {
@@ -93,6 +102,37 @@ export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
     const intervalo = window.setInterval(carregarDisparosPendentes, 60_000);
 
     return () => window.clearInterval(intervalo);
+  }, []);
+
+  useEffect(() => {
+    async function carregarPerfilWhatsapp() {
+      try {
+        const res = await fetch("/api/whatsapp/perfil", {
+          cache: "no-store",
+        });
+
+        const json = await res.json();
+
+        if (res.ok && json.ok) {
+          setWhatsappPerfil({
+            nome:
+              json.integracao?.phone_number_display_name ||
+              json.integracao?.verified_name ||
+              json.integracao?.nome_conexao ||
+              "WhatsApp",
+            foto: json.perfil?.profile_picture_url || "",
+            numero:
+              json.integracao?.display_phone_number ||
+              json.integracao?.numero ||
+              "",
+          });
+        }
+      } catch {
+        setWhatsappPerfil(null);
+      }
+    }
+
+    carregarPerfilWhatsapp();
   }, []);
 
   function persistSidebarState(nextValue: boolean) {
@@ -143,6 +183,10 @@ export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
 
           <nav className={styles.nav}>
             {menuItems.map((item) => {
+              if (item.href === "/configuracoes/whatsapp/perfil") {
+                return null;
+              }
+
               const active = isActivePath(pathname, item.href);
               const Icon = item.icon;
 
@@ -153,10 +197,19 @@ export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
                   className={`${styles.link} ${active ? styles.linkActive : ""}`}
                   title={collapsed ? item.label : undefined}
                 >
-                  <span className={styles.linkIcon}>
+                <span className={styles.linkIcon}>
+                  {item.href === "/configuracoes/whatsapp/perfil" &&
+                  whatsappPerfil?.foto ? (
+                    <img
+                      src={whatsappPerfil.foto}
+                      alt={whatsappPerfil.nome}
+                      className={styles.whatsappSidebarAvatar}
+                    />
+                  ) : (
                     <Icon size={18} strokeWidth={2} />
+                  )}
 
-                    {item.href === "/disparos-agendados" && disparosPendentes > 0 && (
+                  {item.href === "/disparos-agendados" && disparosPendentes > 0 && (
                       <span className={styles.notificationDot}>
                         {disparosPendentes > 9 ? "9+" : disparosPendentes}
                       </span>
@@ -174,6 +227,32 @@ export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
       </div>
 
       <div className={styles.sidebarBottom}>
+      <Link
+        href="/configuracoes/whatsapp/perfil"
+        className={`${styles.link} ${styles.linkWhatsappPerfil} ${
+          pathname === "/configuracoes/whatsapp/perfil"
+            ? styles.linkWhatsappActive
+            : ""
+        }`}
+      >
+        <span className={styles.linkIcon}>
+          {whatsappPerfil?.foto ? (
+            <img
+              src={whatsappPerfil.foto}
+              alt={whatsappPerfil.nome}
+              className={styles.whatsappSidebarAvatar}
+            />
+          ) : (
+            <MessageCircle size={18} strokeWidth={2} />
+          )}
+        </span>
+
+        {!collapsed && (
+          <span className={styles.linkText}>
+            Perfil WhatsApp
+          </span>
+        )}
+      </Link>
         <button
           type="button"
           onClick={toggleSidebar}
