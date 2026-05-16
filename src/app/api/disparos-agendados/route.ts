@@ -186,9 +186,9 @@ export async function GET(request: NextRequest) {
           : statusEnvio === "entregue" || statusEnvio === "lida"
           ? "sucesso"
           : statusEnvio === "enviada"
-          ? "processando"
+          ? "executado"
           : item.status === "executado"
-          ? "processando"
+          ? "executado"
           : null;
 
       const envioLabel =
@@ -196,8 +196,8 @@ export async function GET(request: NextRequest) {
           ? "Falhou"
           : envioStatus === "sucesso"
           ? "Entregue"
-          : envioStatus === "processando"
-          ? "Aguardando confirmação"
+          : envioStatus === "executado"
+          ? "Executado"
           : "Ainda não enviado";
 
       return {

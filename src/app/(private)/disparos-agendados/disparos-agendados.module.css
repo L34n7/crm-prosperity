@@ -374,6 +374,18 @@
   border-color: #e2e8f0;
 }
 
+.badgeYellow {
+  background: #fff5eb;
+  color: #95846cd8;
+  border-color: #ffe4be;
+}
+
+.badgeCancel {
+  background: #fff1f1;
+  color: #9f6969;
+  border-color: #ffd5d5;
+}
+
 .badgeRed {
   background: #fef2f2;
   color: #b91c1c;
@@ -404,7 +416,7 @@
   top: 82px;
   right: 28px;
   z-index: 70;
-  width: 390px;
+  width: 430px;
   max-width: calc(100% - 56px);
   max-height: calc(100vh - 110px);
   padding: 18px;
@@ -461,6 +473,23 @@
   gap: 4px;
 }
 
+.detailGroupPrev {
+  border: 1px solid #edf2f7;
+  background: #fcfcfd;
+  border-radius: 10px;
+  display: grid;
+  margin-bottom: 10px;
+}
+
+.detailGroupPrev span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 10px 14px 10px;
+}
+
 .detailGroup span,
 .payloadBox span {
   font-size: 11px;
@@ -476,6 +505,7 @@
   color: #1e293b;
   line-height: 1.4;
   word-break: break-word;
+  padding: 5px 10px;
 }
 
 .payloadBox {
@@ -486,6 +516,7 @@
   padding: 12px;
   display: grid;
   gap: 8px;
+  margin-bottom: 10px;
 }
 
 .payloadBox span {
@@ -533,15 +564,16 @@
 .modalCard {
   width: 100%;
   max-width: 620px;
+  max-height: calc(100vh - 48px);
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 24px;
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .modalHeader {
-  padding: 22px;
+  padding: 16px 20px;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
@@ -557,13 +589,13 @@
 }
 
 .modalBody {
-  padding: 22px 22px 15px 22px;
+  padding: 16px 20px 12px 20px;
   display: grid;
   gap: 16px;
 }
 
 .modalFooter {
-  padding: 16px 22px 22px;
+  padding: 12px 20px 16px;
   border-top: 1px solid #e2e8f0;
   display: flex;
   justify-content: flex-end;
@@ -694,9 +726,10 @@
   gap: 10px;
 }
 
-
 .modalDisparoCard {
   max-width: 1180px;
+  width: min(1180px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
 }
 
 .modalSubtitle {
@@ -720,10 +753,11 @@
 .formSection {
   border: 1px solid #edf2f7;
   background: #ffffff;
-  border-radius: 22px;
-  padding: 18px;
+  border-radius: 18px;
+  padding: 14px;
   display: grid;
-  gap: 18px;
+  gap: 12px;
+  margin-top: -5px;
 }
 
 .formSectionHeader h3 {
@@ -749,6 +783,12 @@
   gap: 7px;
 }
 
+.field{
+  display: grid;
+  gap: 7px;   
+  margin-top: -5px;
+}
+
 .label {
   font-size: 12px;
   font-weight: 700;
@@ -763,12 +803,19 @@
   gap: 16px;
 }
 
-.previewCard,
+.previewCard{
+  position: relative;
+  border: 1px solid #edf2f7;
+  background: #ffffff;
+  margin-top: -5px;
+}
+
 .scheduleCard {
   border: 1px solid #edf2f7;
   background: #ffffff;
   border-radius: 22px;
   padding: 18px;
+  margin-top: -5px;
 }
 
 .previewHeader {
@@ -778,11 +825,18 @@
 }
 
 .previewBadge {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  z-index: 2;
+
   width: fit-content;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border-radius: 999px;
+
   background: #eff6ff;
   color: #1d4ed8;
+
   font-size: 11px;
   font-weight: 800;
 }
@@ -832,11 +886,24 @@
   gap: 12px;
 }
 
-.contactsList {
-  max-height: 320px;
-  overflow-y: auto;
+.contactsSearchRow {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 12px;
+  align-items: end;
+}
+
+.inlineActions{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.contactsList {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  padding: 12px;
 }
 
 .contactItem,
@@ -883,8 +950,8 @@
 .contactsSection {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 20px;
+  gap: 12px;
+  align-items: start;
 }
 
 .contactsColumn {
@@ -892,6 +959,8 @@
   border-radius: 16px;
   background: #ffffff;
   overflow: hidden;
+  min-height: 260px;
+  margin-top: -5px;
 }
 
 .contactsHeader {
@@ -901,6 +970,12 @@
   padding: 14px 16px;
   border-bottom: 1px solid #e5e7eb;
   background: #f8fafc;
+}
+
+.contactsHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .contactsTitle {
@@ -923,23 +998,40 @@
   font-weight: 800;
 }
 
-.contactsList {
-  max-height: 280px;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.contactsMiniButton {
+  border: none;
+  background: transparent;
+  color: #64748b;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  padding: 0;
+  margin-right: 10px;
+  line-height: 1;
+
+  transition: 0.2s ease;
+}
+
+.contactsMiniButton:hover:not(:disabled) {
+  color: #0f172a;
+}
+
+.contactsMiniButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .contactCard,
 .contactCardSelected {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 14px;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 12px;
   border: 1px solid #e5e7eb;
   background: #ffffff;
 }
@@ -957,7 +1049,7 @@
 .contactName {
   display: block;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   color: #0f172a;
   word-break: break-word;
 }
@@ -999,6 +1091,143 @@
   border: 1px dashed #cbd5e1;
   border-radius: 14px;
   background: #f8fafc;
+}
+
+.disparoCustoBox {
+  border: 1px solid #bfdbfe;
+  background: linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%);
+  border-radius: 18px;
+  padding: 14px;
+  margin-top: -5px;
+}
+
+.disparoCustoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.disparoCustoEyebrow {
+  font-size: 11px;
+  font-weight: 900;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.disparoCustoCategoria {
+  border-radius: 999px;
+  background: #e0ecff;
+  color: #1d4ed8;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.disparoCustoMain {
+  display: grid;
+  gap: 6px;
+}
+
+.disparoCustoValorPrincipal {
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.disparoCustoMetaLinha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.disparoCustoAviso {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #bfdbfe;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.whatsappPreviewArea {
+  border-radius: 0px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 20px 20px, rgba(15, 23, 42, 0.04) 2px, transparent 2px),
+    radial-gradient(circle at 70px 70px, rgba(15, 23, 42, 0.035) 2px, transparent 2px),
+    #efe7dc;
+  background-size: 90px 90px;
+}
+
+.whatsappBubble {
+  position: relative;
+  max-width: 100%;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 8px 10px 28px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.whatsappPreviewTitle {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.whatsappPreviewText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #0f172a;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.whatsappPreviewMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.whatsappPreviewMeta p{
+  font-size: 12px;
+  margin-bottom: 0px;
+}
+
+.whatsappPreviewFooter {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.whatsappPreviewTime {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.whatsappPreviewButton {
+  margin: 8px -10px -28px;
+  padding: 10px 8px;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #047857;
+  background: #ffffff;
+}
+
+.whatsappPreviewButton + .whatsappPreviewButton {
+  margin-top: 28px;
 }
 
 @media (max-width: 1080px) {

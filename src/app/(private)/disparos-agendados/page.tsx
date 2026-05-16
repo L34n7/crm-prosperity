@@ -59,16 +59,16 @@ function statusLabel(status: string) {
 function statusClass(status: string) {
   if (status === "pendente") return `${styles.badge} ${styles.badgeBlue}`;
   if (status === "executado") return `${styles.badge} ${styles.badgeGreen}`;
-  if (status === "cancelado") return `${styles.badge} ${styles.badgeGray}`;
+  if (status === "cancelado") return `${styles.badge} ${styles.badgeCancel}`;
   if (status === "erro") return `${styles.badge} ${styles.badgeRed}`;
-  return `${styles.badge} ${styles.badgeGray}`;
+  return `${styles.badge} ${styles.badgeCancel}`;
 }
 
 function envioStatusClass(status?: string | null) {
   if (status === "falha") return `${styles.badge} ${styles.badgeRed}`;
   if (status === "sucesso") return `${styles.badge} ${styles.badgeGreen}`;
   if (status === "processando") return `${styles.badge} ${styles.badgeBlue}`;
-  return `${styles.badge} ${styles.badgeGray}`;
+  return `${styles.badge} ${styles.badgeYellow}`;
 }
 
 function renderizarTextoTemplate(payload: Record<string, any>) {
@@ -113,10 +113,6 @@ function renderizarTextoTemplate(payload: Record<string, any>) {
     (item: any) => item.type === "FOOTER"
   );
 
-  const buttons = templatePayload.components.find(
-    (item: any) => item.type === "BUTTONS"
-  );
-
   if (header?.text) {
     partes.push(`📌 ${substituirVariaveis(header.text)}`);
   }
@@ -127,20 +123,6 @@ function renderizarTextoTemplate(payload: Record<string, any>) {
 
   if (footer?.text) {
     partes.push(substituirVariaveis(footer.text));
-  }
-
-  const quickReplies =
-    buttons?.buttons
-      ?.filter((button: any) => button?.type === "QUICK_REPLY")
-      ?.map((button: any) => button.text)
-      ?.filter(Boolean) || [];
-
-  if (quickReplies.length > 0) {
-    partes.push(
-      `Botões:\n${quickReplies
-        .map((item: string, index: number) => `${index + 1}. ${item}`)
-        .join("\n")}`
-    );
   }
 
   return partes.join("\n\n").trim() || "Não foi possível gerar a prévia do template.";
@@ -180,20 +162,6 @@ function extrairPreviewTemplateCompleto(payload: any) {
 
   if (footer?.text) {
     partes.push(footer.text);
-  }
-
-  if (Array.isArray(buttons?.buttons) && buttons.buttons.length > 0) {
-    const textosBotoes = buttons.buttons
-      .map((button: any) => {
-        const texto = button.text || button.phone_number || button.url;
-
-        return texto ? `• ${texto}` : null;
-      })
-      .filter(Boolean);
-
-    if (textosBotoes.length > 0) {
-      partes.push(`Botões:\n${textosBotoes.join("\n")}`);
-    }
   }
 
   return partes.join("\n\n");
@@ -253,6 +221,26 @@ export default function DisparosAgendadosPage() {
   const [origemFiltro, setOrigemFiltro] = useState("");
   const [origensDisponiveis, setOrigensDisponiveis] = useState<string[]>([]);
 
+  const [erroModal, setErroModal] = useState("");
+  const [previewCusto, setPreviewCusto] = useState<{
+    categoria: string;
+    totalSelecionados: number;
+    totalIsentos: number;
+    totalCobrados: number;
+    valorUnitarioUsd: number;
+    valorTotalUsd: number;
+    cotacaoUsdBrl: number;
+    valorTotalBrlEstimado: number;
+    valorTotalBrlMin: number;
+    valorTotalBrlMax: number;
+    margemMinPercent: number;
+    margemMaxPercent: number;
+    fonteCotacao?: string;
+    cotacaoDataHora?: string | null;
+    cotacaoFallback?: boolean;
+  } | null>(null);
+
+  const [loadingPreviewCusto, setLoadingPreviewCusto] = useState(false);
 
   async function carregarDisparos() {
     try {
@@ -420,23 +408,28 @@ export default function DisparosAgendadosPage() {
     }
   }
 
-
   async function criarDisparoAgendado() {
     try {
+      setErroModal("");
+
       if (!integracaoSelecionada) {
-        throw new Error("Selecione uma integração.");
+        setErroModal("Selecione uma integração.");
+        return;
       }
 
       if (!templateSelecionado) {
-        throw new Error("Selecione um template.");
+        setErroModal("Selecione um template.");
+        return;
       }
 
       if (!agendamentoData || !agendamentoHora) {
-        throw new Error("Selecione data e hora.");
+        setErroModal("Selecione data e hora.");
+        return;
       }
 
       if (contatosSelecionados.length === 0) {
-        throw new Error("Selecione pelo menos um contato.");
+        setErroModal("Selecione pelo menos um contato.");
+        return;
       }
 
       setSalvandoDisparo(true);
@@ -461,7 +454,7 @@ export default function DisparosAgendadosPage() {
             contatos: contatosSelecionados.map((contato) => ({
               id: contato.id,
               nome: contato.nome,
-              telefone: contato.telefone,
+              telefone: limparNumero(contato.telefone),
             })),
           }),
         }
@@ -488,10 +481,10 @@ export default function DisparosAgendadosPage() {
 
       await carregarDisparos();
     } catch (error: any) {
-      setErro(
-        error?.message ||
-        "Erro ao criar disparo."
-      );
+        setErroModal(
+          error?.message ||
+          "Erro ao criar disparo."
+        );
     } finally {
       setSalvandoDisparo(false);
     }
@@ -595,15 +588,89 @@ export default function DisparosAgendadosPage() {
     setErro("");
   }
 
-    const templateAtual =
-      templates.find(
-        (item) => item.id === templateSelecionado
-      ) || null;
+  async function calcularPreviewCustoAgendamento(
+    categoria: string,
+    contatosLista: any[]
+  ) {
+    try {
+      if (!categoria || contatosLista.length === 0) {
+        setPreviewCusto(null);
+        return;
+      }
 
-    const previewTemplate = templateAtual
-      ? extrairPreviewTemplateCompleto(templateAtual.payload) ||
-        "Template sem conteúdo para prévia."
-      : "Selecione um template.";
+      setLoadingPreviewCusto(true);
+
+      const res = await fetch("/api/whatsapp/disparos/custo-preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          categoria,
+          contatos: contatosLista.map((contato) => ({
+            id: contato.id,
+            telefone: limparNumero(contato.telefone),
+          })),
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao calcular custo do agendamento.");
+      }
+
+      setPreviewCusto({
+        categoria: String(json.categoria || ""),
+        totalSelecionados: Number(json.totalSelecionados || 0),
+        totalIsentos: Number(json.totalIsentos || 0),
+        totalCobrados: Number(json.totalCobrados || 0),
+        valorUnitarioUsd: Number(json.valorUnitarioUsd || 0),
+        valorTotalUsd: Number(json.valorTotalUsd || 0),
+        cotacaoUsdBrl: Number(json.cotacaoUsdBrl || 0),
+        valorTotalBrlEstimado: Number(json.valorTotalBrlEstimado || 0),
+        valorTotalBrlMin: Number(json.valorTotalBrlMin || 0),
+        valorTotalBrlMax: Number(json.valorTotalBrlMax || 0),
+        margemMinPercent: Number(json.margemMinPercent || 0),
+        margemMaxPercent: Number(json.margemMaxPercent || 0),
+        fonteCotacao: json.fonteCotacao || "",
+        cotacaoDataHora: json.cotacaoDataHora || null,
+        cotacaoFallback: Boolean(json.cotacaoFallback),
+      });
+    } catch (error: any) {
+      setPreviewCusto(null);
+      setErro(error?.message || "Erro ao calcular custo do agendamento.");
+    } finally {
+      setLoadingPreviewCusto(false);
+    }
+  }
+
+  const templateAtual =
+    templates.find(
+      (item) => item.id === templateSelecionado
+    ) || null;
+
+  const previewTemplate = templateAtual
+    ? extrairPreviewTemplateCompleto(templateAtual.payload) ||
+      "Template sem conteúdo para prévia."
+    : "Selecione um template.";
+
+
+  useEffect(() => {
+    const categoria = String(templateAtual?.categoria || "").toLowerCase();
+
+    if (!modalNovoDisparo || !categoria || contatosSelecionados.length === 0) {
+      setPreviewCusto(null);
+      return;
+    }
+
+    calcularPreviewCustoAgendamento(categoria, contatosSelecionados);
+  }, [
+    modalNovoDisparo,
+    templateAtual?.id,
+    templateAtual?.categoria,
+    contatosSelecionados,
+  ]);
    
   return (
     <>
@@ -678,19 +745,7 @@ export default function DisparosAgendadosPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={async () => {
-                setModalNovoDisparo(true);
-                await carregarDadosModalDisparo();
-                await carregarContatos("", "");
-              }}
-            >
-              + Novo disparo
-            </button>
-
-            <div className={styles.headerActions}>
+          <div className={styles.headerActions}>
               <button
                 type="button"
                 className={styles.secondaryButton}
@@ -698,6 +753,19 @@ export default function DisparosAgendadosPage() {
                 disabled={carregando}
               >
                 {carregando ? "Atualizando..." : "Atualizar"}
+              </button>
+                
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={async () => {
+                  setModalNovoDisparo(true);
+                  setErroModal("");
+                  await carregarDadosModalDisparo();
+                  await carregarContatos("", "");
+                }}
+              >
+                + Novo disparo
               </button>
             </div>
           </header>
@@ -765,11 +833,9 @@ export default function DisparosAgendadosPage() {
                               {templateNome}
                             </strong>
 
-                            {disparo.envio_status ? (
-                              <span className={envioStatusClass(disparo.envio_status)}>
-                                {disparo.envio_label || "Status do envio"}
-                              </span>
-                            ) : null}
+                            <span className={statusClass(disparo.status)}>
+                              {statusLabel(disparo.status)}
+                            </span>
                           </div>
 
                           <p className={styles.disparoMeta}>
@@ -947,23 +1013,49 @@ export default function DisparosAgendadosPage() {
               </details>
             ) : null}
 
-            <div className={styles.payloadBox}>
+            <div className={styles.detailGroupPrev}>
               <span>Prévia do template</span>
 
-              <pre>
-                {renderizarTextoTemplate(disparoSelecionado.payload_json || {})}
-              </pre>
+              <div className={styles.whatsappPreviewArea}>
+                <div className={styles.whatsappBubble}>
+                  <strong className={styles.whatsappPreviewTitle}>
+                    {disparoSelecionado.payload_json?.template_nome || "Template WhatsApp"}
+                  </strong>
 
-              {disparoSelecionado.status === "pendente" && (
-                <button
-                  type="button"
-                  className={styles.dangerButtonFull}
-                  onClick={() => setDisparoParaCancelar(disparoSelecionado)}
-                >
-                  Cancelar disparo
-                </button>
-              )}
+                  <p className={styles.whatsappPreviewText}>
+                    {renderizarTextoTemplate(disparoSelecionado.payload_json || {})}
+                  </p>
+
+                  <div className={styles.whatsappPreviewMeta}>
+                    <p className={styles.whatsappPreviewFooter}>
+                      Equipe de atendimento
+                    </p>
+
+                    <p className={styles.whatsappPreviewTime}>
+                      {formatarData(disparoSelecionado.executar_em)}
+                    </p>
+                  </div>
+
+                  {disparoSelecionado.payload_json?.template_payload?.components
+                    ?.find((item: any) => String(item.type || "").toUpperCase() === "BUTTONS")
+                    ?.buttons?.map((botao: any, index: number) => (
+                      <div key={index} className={styles.whatsappPreviewButton}>
+                        ↩ {botao.text || "Botão"}
+                      </div>
+                    ))}
+                </div>
+              </div>
             </div>
+
+            {disparoSelecionado.status === "pendente" && (
+              <button
+                type="button"
+                className={styles.dangerButtonFull}
+                onClick={() => setDisparoParaCancelar(disparoSelecionado)}
+              >
+                Cancelar disparo
+              </button>
+            )}
           </aside>
         )}
 
@@ -992,13 +1084,21 @@ export default function DisparosAgendadosPage() {
                 <button
                   type="button"
                   className={styles.closePanelButton}
-                  onClick={() => setModalNovoDisparo(false)}
+                  onClick={() => {
+                    setErroModal("");
+                    setModalNovoDisparo(false);
+                  }}
                 >
                   ×
                 </button>
               </div>
 
               <div className={styles.modalBody}>
+                {erroModal && (
+                  <div className={styles.errorAlert}>
+                    {erroModal}
+                  </div>
+                )}
                 {loadingModal ? (
                   <div className={styles.emptyState}>
                     Carregando dados do disparo...
@@ -1104,186 +1204,200 @@ export default function DisparosAgendadosPage() {
                         <p>Selecione quem receberá o disparo.</p>
                       </div>
 
-                      <div className={styles.contactsSelector}>
+                        <div className={styles.contactsSearchRow}>
+                          <div className={styles.field}>
+                            <label className={styles.label}>Buscar contatos salvos</label>
+                            <input
+                              value={buscaContato}
+                              onChange={(e) => setBuscaContato(e.target.value)}
+                              className={styles.input}
+                              placeholder="Busque por nome, telefone, email, campanha..."
+                            />
+                          </div>
+
+                          <div className={styles.field}>
+                            <label className={styles.label}>Filtrar por origem</label>
+                            <select
+                              value={origemFiltro}
+                              onChange={(e) => setOrigemFiltro(e.target.value)}
+                              className={styles.input}
+                            >
+                              <option value="">Todas as origens</option>
+                              {origensDisponiveis.map((origem) => (
+                                <option key={origem} value={origem}>
+                                  {origem}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                    </div>
+
+                    <div className={styles.contactsSection}>
+                      <div className={styles.contactsColumn}>
+                        <div className={styles.contactsHeader}>
+                          <h3 className={styles.contactsTitle}>
+                            Disponíveis
+                          </h3>
+
+                          <div className={styles.contactsHeaderActions}>
+                            <button
+                              type="button"
+                              className={styles.contactsMiniButton}
+                              onClick={adicionarTodosDisponiveis}
+                              disabled={contatosDisponiveisValidos.length === 0}
+                            >
+                              Add todos
+                            </button>
+
+                            <span className={styles.contactsCount}>
+                              {contatosDisponiveis.length}
+                            </span>
+                          </div>
+                        </div>
+
                         <div className={styles.contactsList}>
-                          <div className={styles.searchRow}>
-                            <div className={styles.searchFilters}>
-                              <div className={styles.field}>
-                                <label className={styles.label}>Buscar contatos salvos</label>
-                                <input
-                                  value={buscaContato}
-                                  onChange={(e) => setBuscaContato(e.target.value)}
-                                  className={styles.input}
-                                  placeholder="Busque por nome, telefone, email, campanha..."
-                                />
-                              </div>
-
-                              <div className={styles.field}>
-                                <label className={styles.label}>Filtrar por origem</label>
-                                <select
-                                  value={origemFiltro}
-                                  onChange={(e) => setOrigemFiltro(e.target.value)}
-                                  className={styles.input}
-                                >
-                                  <option value="">Todas as origens</option>
-                                  {origensDisponiveis.map((origem) => (
-                                    <option key={origem} value={origem}>
-                                      {origem}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
+                          {loadingContatos ? (
+                            <div className={styles.emptyMiniState}>Carregando contatos...</div>
+                          ) : contatosDisponiveis.length === 0 ? (
+                            <div className={styles.emptyMiniState}>
+                              Nenhum contato disponível.
                             </div>
+                          ) : (
+                            contatosDisponiveis.map((contato) => {
+                              const telefoneValido = contatoTemTelefoneValido(contato);
 
-                            <div className={styles.inlineActions}>
-                              <button
-                                type="button"
-                                className={styles.secondaryButton}
-                                onClick={adicionarTodosDisponiveis}
-                                disabled={loadingContatos || contatosDisponiveisValidos.length === 0}
-                              >
-                                Adicionar todos filtrados
-                              </button>
+                              return (
+                                <div key={contato.id} className={styles.contactCard}>
+                                  <div className={styles.contactMain}>
+                                    <strong className={styles.contactName}>
+                                      {contato.nome || contato.telefone || "Sem nome"}
+                                    </strong>
 
-                              <button
-                                type="button"
-                                className={styles.secondaryButton}
-                                onClick={() => {
-                                  setBuscaContato("");
-                                  setOrigemFiltro("");
-                                  limparSelecao();
-                                }}
-                                disabled={
-                                  contatosSelecionados.length === 0 &&
-                                  !buscaContato &&
-                                  !origemFiltro
-                                }
-                              >
-                                Limpar filtros
-                              </button>
-                            </div>
-                          </div>
+                                    <p className={styles.contactMeta}>
+                                      {formatarTelefone(contato.telefone)}
+                                    </p>
 
-                          <div className={styles.contactsSection}>
-                            <div className={styles.contactsColumn}>
-                              <div className={styles.contactsHeader}>
-                                <h3 className={styles.contactsTitle}>Contatos disponíveis</h3>
-                                <span className={styles.contactsCount}>
-                                  {loadingContatos ? "..." : totalContatosDisponiveis}
-                                </span>
-                              </div>
+                                    {contato.email ? (
+                                      <p className={styles.contactMeta}>{contato.email}</p>
+                                    ) : null}
 
-                              <div className={styles.contactsList}>
-                                {loadingContatos ? (
-                                  <div className={styles.emptyMiniState}>Carregando contatos...</div>
-                                ) : contatosDisponiveis.length === 0 ? (
-                                  <div className={styles.emptyMiniState}>
-                                    Nenhum contato disponível.
-                                  </div>
-                                ) : (
-                                  contatosDisponiveis.map((contato) => {
-                                    const telefoneValido = contatoTemTelefoneValido(contato);
+                                    <div className={styles.contactBadges}>
+                                      {contato.origem ? (
+                                        <span className={styles.contactBadge}>
+                                          {contato.origem}
+                                        </span>
+                                      ) : null}
 
-                                    return (
-                                      <div key={contato.id} className={styles.contactCard}>
-                                        <div className={styles.contactMain}>
-                                          <strong className={styles.contactName}>
-                                            {contato.nome || contato.telefone || "Sem nome"}
-                                          </strong>
+                                      {contato.status_lead ? (
+                                        <span className={styles.contactBadge}>
+                                          {contato.status_lead}
+                                        </span>
+                                      ) : null}
 
-                                          <p className={styles.contactMeta}>
-                                            {formatarTelefone(contato.telefone)}
-                                          </p>
+                                      {contato.campanha ? (
+                                        <span className={styles.contactBadge}>
+                                          {contato.campanha}
+                                        </span>
+                                      ) : null}
 
-                                          {contato.email ? (
-                                            <p className={styles.contactMeta}>{contato.email}</p>
-                                          ) : null}
-
-                                          <div className={styles.contactBadges}>
-                                            {contato.origem ? (
-                                              <span className={styles.contactBadge}>
-                                                {contato.origem}
-                                              </span>
-                                            ) : null}
-
-                                            {contato.status_lead ? (
-                                              <span className={styles.contactBadge}>
-                                                {contato.status_lead}
-                                              </span>
-                                            ) : null}
-
-                                            {contato.campanha ? (
-                                              <span className={styles.contactBadge}>
-                                                {contato.campanha}
-                                              </span>
-                                            ) : null}
-
-                                            {!telefoneValido ? (
-                                              <span className={styles.contactBadgeWarning}>
-                                                Sem telefone válido
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                        </div>
-
-                                        <button
-                                          type="button"
-                                          className={styles.secondaryButton}
-                                          onClick={() => adicionarContato(contato)}
-                                          disabled={!telefoneValido}
-                                        >
-                                          Adicionar
-                                        </button>
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            </div>
-
-                            <div className={styles.contactsColumn}>
-                              <div className={styles.contactsHeader}>
-                                <h3 className={styles.contactsTitle}>Selecionados para agendamento</h3>
-                                <span className={styles.contactsCount}>
-                                  {contatosSelecionados.length}
-                                </span>
-                              </div>
-
-                              <div className={styles.contactsList}>
-                                {contatosSelecionados.length === 0 ? (
-                                  <div className={styles.emptyMiniState}>
-                                    Nenhum contato selecionado.
-                                  </div>
-                                ) : (
-                                  contatosSelecionados.map((contato) => (
-                                    <div key={contato.id} className={styles.contactCardSelected}>
-                                      <div className={styles.contactMain}>
-                                        <strong className={styles.contactName}>
-                                          {contato.nome || contato.telefone || "Sem nome"}
-                                        </strong>
-
-                                        <p className={styles.contactMeta}>
-                                          {formatarTelefone(contato.telefone)}
-                                        </p>
-
-                                        {contato.email ? (
-                                          <p className={styles.contactMeta}>{contato.email}</p>
-                                        ) : null}
-                                      </div>
-
-                                      <button
-                                        type="button"
-                                        className={styles.removeButton}
-                                        onClick={() => removerContato(contato.id)}
-                                      >
-                                        Remover
-                                      </button>
+                                      {!telefoneValido ? (
+                                        <span className={styles.contactBadgeWarning}>
+                                          Sem telefone válido
+                                        </span>
+                                      ) : null}
                                     </div>
-                                  ))
-                                )}
-                              </div>
-                            </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() => adicionarContato(contato)}
+                                    disabled={!telefoneValido}
+                                  >
+                                    Adicionar
+                                  </button>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={styles.contactsColumn}>
+                        <div className={styles.contactsHeader}>
+                          <h3 className={styles.contactsTitle}>
+                            Selecionados
+                          </h3>
+
+                          <div className={styles.contactsHeaderActions}>
+                            <button
+                              type="button"
+                              className={styles.contactsMiniButton}
+                              onClick={() => setContatosSelecionados([])}
+                              disabled={contatosSelecionados.length === 0}
+                            >
+                              Remover todos
+                            </button>
+
+                            <span className={styles.contactsCount}>
+                              {contatosSelecionados.length}
+                            </span>
                           </div>
+                        </div>
+
+                        <div className={styles.contactsList}>
+                          {contatosSelecionados.length === 0 ? (
+                            <div className={styles.emptyMiniState}>
+                              Nenhum contato selecionado.
+                            </div>
+                          ) : (
+                            contatosSelecionados.map((contato) => (
+                              <div key={contato.id} className={styles.contactCardSelected}>
+                                  <div className={styles.contactMain}>
+                                    <strong className={styles.contactName}>
+                                      {contato.nome || contato.telefone || "Sem nome"}
+                                    </strong>
+
+                                    <p className={styles.contactMeta}>
+                                      {formatarTelefone(contato.telefone)}
+                                    </p>
+
+                                    {contato.email ? (
+                                      <p className={styles.contactMeta}>{contato.email}</p>
+                                    ) : null}
+
+                                    <div className={styles.contactBadges}>
+                                      {contato.origem ? (
+                                        <span className={styles.contactBadge}>
+                                          {contato.origem}
+                                        </span>
+                                      ) : null}
+
+                                      {contato.status_lead ? (
+                                        <span className={styles.contactBadge}>
+                                          {contato.status_lead}
+                                        </span>
+                                      ) : null}
+
+                                      {contato.campanha ? (
+                                        <span className={styles.contactBadge}>
+                                          {contato.campanha}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                <button
+                                  type="button"
+                                  className={styles.secondaryButton}
+                                  onClick={() => removerContato(contato.id)}
+                                >
+                                  Remover
+                                </button>
+                              </div>
+                            ))
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1291,18 +1405,38 @@ export default function DisparosAgendadosPage() {
 
                   <aside className={styles.disparoPreviewSidebar}>
                     <div className={styles.previewCard}>
-                      <div className={styles.previewHeader}>
-                        <span className={styles.previewBadge}>
-                          Prévia
-                        </span>
+                      <span className={styles.previewBadge}>Prévia</span>
 
-                        <strong>Template WhatsApp</strong>
-                      </div>
+                      <div className={styles.whatsappPreviewArea}>
+                        <div className={styles.whatsappBubble}>
+                          <strong className={styles.whatsappPreviewTitle}>
+                            {templateAtual?.nome || "Template WhatsApp"}
+                          </strong>
 
-                      <div className={styles.templatePreviewBox}>
-                        <pre className={styles.templatePreviewText}>
-                          {previewTemplate}
-                        </pre>
+                          <p className={styles.whatsappPreviewText}>
+                            {templateAtual
+                              ? previewTemplate
+                              : "Selecione um template para visualizar a mensagem."}
+                          </p>
+
+                          <div className={styles.whatsappPreviewMeta}>
+                            <span className={styles.whatsappPreviewFooter}>
+                              Equipe de atendimento
+                            </span>
+
+                            <span className={styles.whatsappPreviewTime}>
+                              {agendamentoHora || "--:--"}
+                            </span>
+                          </div>
+
+                          {templateAtual?.payload?.components
+                            ?.find((item: any) => item.type === "BUTTONS")
+                            ?.buttons?.map((botao: any, index: number) => (
+                              <div key={index} className={styles.whatsappPreviewButton}>
+                                ↩ {botao.text || "Botão"}
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     </div>
 
@@ -1322,6 +1456,52 @@ export default function DisparosAgendadosPage() {
                         na data configurada.
                       </p>
                     </div>
+                                        
+                    {templateAtual && contatosSelecionados.length > 0 && (
+                      <div className={styles.disparoCustoBox}>
+                        <div className={styles.disparoCustoHeader}>
+                          <span className={styles.disparoCustoEyebrow}>
+                            Estimativa de cobrança
+                          </span>
+
+                          <span className={styles.disparoCustoCategoria}>
+                            {String(previewCusto?.categoria || templateAtual?.categoria || "-").toUpperCase()}
+                          </span>
+                        </div>
+
+                        <div className={styles.disparoCustoMain}>
+                          <div className={styles.disparoCustoValorPrincipal}>
+                            {loadingPreviewCusto
+                              ? "Calculando..."
+                              : `R$ ${(previewCusto?.valorTotalBrlMin ?? 0).toFixed(2)} ~ R$ ${(previewCusto?.valorTotalBrlMax ?? 0).toFixed(2)}`}
+                          </div>
+
+                          <div className={styles.disparoCustoMetaLinha}>
+                            <span>
+                              <strong>USD:</strong>{" "}
+                              {`US$ ${(previewCusto?.valorTotalUsd ?? 0).toFixed(4)}`}
+                            </span>
+
+                            <span>
+                              <strong>Cobrados:</strong>{" "}
+                              {previewCusto?.totalCobrados ?? 0}
+                            </span>
+
+                            <span>
+                              <strong>Isentos:</strong>{" "}
+                              {previewCusto?.totalIsentos ?? 0}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className={styles.disparoCustoAviso}>
+                          A cobrança pode ser processada pela Meta usando o método de pagamento
+                          vinculado à conta empresarial. O valor final pode variar conforme câmbio,
+                          impostos, IOF, taxas e regras de cobrança.
+                        </div>
+                      </div>
+                    )}
+
                   </aside>
                 </div>
                 )}
@@ -1353,7 +1533,7 @@ export default function DisparosAgendadosPage() {
 
         {disparoParaCancelar && (
           <div className={styles.modalOverlay}>
-            <div className={styles.modalCard}>
+            <div className={`${styles.modalCard} ${styles.modalDisparoCard}`}>
               <div className={styles.modalHeader}>
                 <div>
                   <p className={styles.eyebrow}>Cancelar disparo</p>
@@ -1371,7 +1551,7 @@ export default function DisparosAgendadosPage() {
 
               <div className={styles.modalBody}>
                 <div className={styles.warningBox}>
-                  <strong>Esse disparo não será enviado.</strong>
+                  <strong>Cancelando esse disparo não será enviado.</strong>
                   <p>
                     O template{" "}
                     <strong>
