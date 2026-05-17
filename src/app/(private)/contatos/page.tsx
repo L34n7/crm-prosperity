@@ -110,6 +110,7 @@ export default function ContatosPage() {
   const [mensagemImportacao, setMensagemImportacao] = useState("");
 
   const [opcoesOrigem, setOpcoesOrigem] = useState<string[]>([]);
+  const [opcoesCampanha, setOpcoesCampanha] = useState<string[]>([]);
   const [filtroOrigem, setFiltroOrigem] = useState("");
   const [filtroCampanha, setFiltroCampanha] = useState("");
   const [filtroTelefoneRevisar, setFiltroTelefoneRevisar] = useState(false);
@@ -120,6 +121,9 @@ export default function ContatosPage() {
   const [totalContatos, setTotalContatos] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [filtrosAvancadosAbertos, setFiltrosAvancadosAbertos] = useState(false);
+  const [modalExcluirAberto, setModalExcluirAberto] = useState(false);
+  const [contatoParaExcluir, setContatoParaExcluir] = useState<Contato | null>(null);
+  const [excluindoContato, setExcluindoContato] = useState(false);
 
   const [abaPreviewImportacao, setAbaPreviewImportacao] = useState<
     "alertas" | "validos" | "duplicados_banco" | "duplicados_arquivo" | "invalidos"
@@ -544,9 +548,9 @@ export default function ContatosPage() {
     carregarContatos();
   }
 
-  async function carregarOpcoesOrigem() {
+  async function carregarOpcoesFiltros() {
     try {
-      const res = await fetch("/api/contatos/opcoes");
+      const res = await fetch("/api/contatos/opcoes", { cache: "no-store" });
       const data = await res.json();
 
       if (!res.ok) {
@@ -554,7 +558,10 @@ export default function ContatosPage() {
       }
 
       const origens = Array.isArray(data.origens) ? data.origens : [];
+      const campanhas = Array.isArray(data.campanhas) ? data.campanhas : [];
+
       setOpcoesOrigem(origens);
+      setOpcoesCampanha(campanhas);
     } catch {
       // pode deixar silencioso
     }
@@ -562,6 +569,49 @@ export default function ContatosPage() {
 
   function toggleExpandir(contatoId: string) {
     setExpandidoId((atual) => (atual === contatoId ? null : contatoId));
+  }
+
+  function abrirModalExcluir(contato: Contato) {
+    setErro("");
+    setMensagem("");
+    setContatoParaExcluir(contato);
+    setModalExcluirAberto(true);
+  }
+
+  function fecharModalExcluir() {
+    if (excluindoContato) return;
+
+    setModalExcluirAberto(false);
+    setContatoParaExcluir(null);
+  }
+
+  async function excluirContato() {
+    if (!contatoParaExcluir) return;
+
+    setExcluindoContato(true);
+    setErro("");
+    setMensagem("");
+
+    try {
+      const res = await fetch(`/api/contatos/${contatoParaExcluir.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao excluir contato.");
+        return;
+      }
+
+      setMensagem(data.message || "Contato excluído com sucesso.");
+      fecharModalExcluir();
+      await carregarContatos();
+    } catch {
+      setErro("Erro ao excluir contato.");
+    } finally {
+      setExcluindoContato(false);
+    }
   }
 
   useEffect(() => {
@@ -622,7 +672,7 @@ export default function ContatosPage() {
   ]);
 
   useEffect(() => {
-    carregarOpcoesOrigem();
+    carregarOpcoesFiltros();
   }, []);
 
   return (
@@ -697,12 +747,25 @@ export default function ContatosPage() {
 
               <div className={styles.field}>
                 <label className={styles.label}>Campanha</label>
-                <input
-                  className={styles.input}
+                <select
+                  className={styles.select}
                   value={filtroCampanha}
                   onChange={(e) => setFiltroCampanha(e.target.value)}
-                  placeholder="Nome da campanha"
-                />
+                >
+                  <option value="">Todas</option>
+
+                  {opcoesCampanha.length === 0 ? (
+                    <option value="" disabled>
+                      Sem campanhas
+                    </option>
+                  ) : (
+                    opcoesCampanha.map((campanha) => (
+                      <option key={campanha} value={campanha}>
+                        {campanha}
+                      </option>
+                    ))
+                  )}
+                </select>
               </div>
 
               <div className={styles.field}>
@@ -1028,6 +1091,15 @@ export default function ContatosPage() {
                               >
                                 Cancelar
                               </button>
+                              
+                              <button
+                                type="button"
+                                onClick={() => abrirModalExcluir(contato)}
+                                className={styles.dangerButton}
+                              >
+                                Excluir
+                              </button>
+
                             </div>
                           </div>
                         ) : (
@@ -1118,6 +1190,70 @@ export default function ContatosPage() {
           </div>
         </section>
       </div>
+
+      {modalExcluirAberto && contatoParaExcluir && (
+        <div
+          className={styles.modalOverlay}
+          onClick={fecharModalExcluir}
+        >
+          <div
+            className={styles.modalCard}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.eyebrow}>Atenção</p>
+                <h2 className={styles.modalTitle}>Excluir contato</h2>
+                <p className={styles.cardDescription}>
+                  Esta ação não poderá ser desfeita.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={fecharModalExcluir}
+                className={styles.modalCloseButton}
+                aria-label="Fechar modal"
+                disabled={excluindoContato}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.deleteWarningBox}>
+              <strong>
+                Tem certeza que deseja excluir este contato?
+              </strong>
+
+              <p>
+                Ao excluir o contato{" "}
+                <strong>{contatoParaExcluir.nome || contatoParaExcluir.telefone}</strong>,
+                a <strong>conversa</strong> vinculada a ele e <strong> todas as mensagens </strong> também serão excluídas.
+              </p>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                onClick={excluirContato}
+                disabled={excluindoContato}
+                className={styles.dangerButton}
+              >
+                {excluindoContato ? "Excluindo..." : "Sim, excluir contato"}
+              </button>
+
+              <button
+                type="button"
+                onClick={fecharModalExcluir}
+                disabled={excluindoContato}
+                className={styles.secondaryButton}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalCriarAberto && (
         <div

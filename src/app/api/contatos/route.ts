@@ -163,7 +163,7 @@ export async function GET(request: Request) {
     }
 
     if (campanha) {
-      queryLote = queryLote.ilike("campanha", `%${campanha}%`);
+      queryLote = queryLote.eq("campanha", campanha);
     }
 
     if (telefoneRevisar === "true") {
@@ -237,6 +237,20 @@ export async function GET(request: Request) {
     )
   ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
+  const { data: campanhasData } = await supabaseAdmin
+    .from("contatos")
+    .select("campanha")
+    .eq("empresa_id", usuario.empresa_id)
+    .not("campanha", "is", null);
+
+  const campanhas = Array.from(
+    new Set(
+      (campanhasData || [])
+        .map((item) => String(item.campanha || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
   return NextResponse.json({
     ok: true,
     contatos: data ?? [],
@@ -245,8 +259,10 @@ export async function GET(request: Request) {
     limite,
     totalPaginas: Math.max(1, Math.ceil((count ?? 0) / limite)),
     origens, 
+    campanhas,
   });
 }
+
 
 export async function POST(request: Request) {
   const resultado = await getUsuarioContexto();

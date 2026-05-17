@@ -9,6 +9,9 @@ import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendAutomationNotificationEmail } from "@/lib/email/send-automation-notification-email";
 import { interpretarConexaoComIA } from "@/lib/ia/interpretar-conexao";
+import { interpretarArquivoComIA } from "@/lib/ia/interpretar-arquivo";
+import { baixarMidiaWhatsapp } from "@/lib/whatsapp/download-arquivo";
+import { salvarArquivoAnaliseStorage } from "@/lib/automacoes/salvar-arquivo-analise";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -422,6 +425,62 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
             execucaoId: execucaoExistente.id,
           };
         }
+      }
+
+      if (noAtual.tipo_no === "interpretar_arquivo_ia") {
+        const resultadoAnalise = await registrarInterpretacaoArquivoAutomacao({
+          empresaId,
+          conversaId,
+          execucao: execucaoExistente,
+          no: noAtual,
+          input,
+          numeroDestino,
+        });
+
+        if (!resultadoAnalise.ok) {
+          return resultadoAnalise;
+        }
+
+        if (!resultadoAnalise.valido && !resultadoAnalise.excedeuTentativas) {
+          return {
+            ok: true,
+            status: "arquivo_invalido_aguardando_novo_envio",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+
+        if (resultadoAnalise.excedeuTentativas) {
+          await executarAcaoExcessoTentativas({
+            empresaId,
+            conversaId,
+            execucao: execucaoExistente,
+            no: noAtual,
+            numeroDestino,
+            tipo: "resposta_invalida",
+          });
+
+          return {
+            ok: true,
+            status: "arquivo_tentativas_excedidas",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+
+        await seguirParaProximoNo({
+          empresaId,
+          conversaId,
+          execucaoId: execucaoExistente.id,
+          fluxoId: execucaoExistente.fluxo_id,
+          noAtualId: execucaoExistente.no_atual_id,
+          mensagemTexto: resultadoAnalise.status,
+          numeroDestino,
+        });
+
+        return {
+          ok: true,
+          status: "arquivo_interpretado",
+          execucaoId: execucaoExistente.id,
+        };
       }
 
       if (noAtual.tipo_no === "capturar_resposta") {
@@ -1180,6 +1239,44 @@ export async function executarNo(params: {
     return;
   }
 
+  if (no.tipo_no === "interpretar_arquivo_ia") {
+    const mensagem =
+      String(no.configuracao_json?.mensagem || "").trim() ||
+      "Envie o arquivo para análise.";
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagem,
+      execucaoId,
+      noId: no.id,
+    });
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "aguardando",
+        no_atual_id: no.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "aguardando_arquivo_ia",
+      descricao: "Automação aguardando arquivo para interpretação com IA.",
+      entrada: no.configuracao_json,
+      saida: {},
+    });
+
+    return;
+  }
+
   if (no.tipo_no === "capturar_resposta") {
     const mensagem =
       String(no.configuracao_json?.mensagem || "").trim() ||
@@ -1750,6 +1847,171 @@ async function registrarCapturaRespostaAutomacao(params: {
     valido: true,
     excedeuTentativas: false,
   };
+}
+
+
+async function registrarInterpretacaoArquivoAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+  execucao: any;
+  no: any;
+  input: AutomationEngineInput;
+  numeroDestino: string;
+}) {
+  const { empresaId, conversaId, execucao, no, input, numeroDestino } = params;
+
+  const config = no.configuracao_json || {};
+  const instrucaoIa = String(config.instrucao_ia || "").trim();
+  const chave = String(config.salvar_variavel || "analise_arquivo").trim().toLowerCase();
+  const maxTentativas = Math.max(1, Number(config.max_tentativas_invalidas || 3));
+
+  const mensagemErro =
+    String(config.mensagem_erro || "").trim() ||
+    "Não consegui interpretar o arquivo. Envie uma imagem ou PDF legível.";
+
+  const tipoMensagem = input.mensagemTipo;
+  const mediaId = String(input.mediaId || "").trim();
+
+  if (!["imagem", "documento"].includes(String(tipoMensagem)) || !mediaId) {
+    const tentativa = await registrarTentativaBloco({
+      empresaId,
+      execucao,
+      no,
+      tipo: "resposta_invalida",
+    });
+
+    if (tentativa.excedeu) {
+      return { ok: true, valido: false, excedeuTentativas: true };
+    }
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagemErro,
+      execucaoId: execucao.id,
+      noId: no.id,
+    });
+
+    return { ok: true, valido: false, excedeuTentativas: false };
+  }
+
+  try {
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+
+    if (!accessToken) {
+      throw new Error("WHATSAPP_ACCESS_TOKEN não configurado.");
+    }
+
+    const arquivo = await baixarMidiaWhatsapp({
+      mediaId,
+      accessToken,
+    });
+
+    const arquivoSalvo = await salvarArquivoAnaliseStorage({
+      empresaId,
+      execucaoId: execucao.id,
+      noId: no.id,
+      mediaId,
+      buffer: arquivo.buffer,
+      mimeType: arquivo.mimeType || input.mimeType || null,
+    });
+
+    const arquivoUrl = arquivoSalvo.signedUrl;
+
+    const resultado = await interpretarArquivoComIA({
+      instrucao: instrucaoIa,
+      arquivoUrl,
+      mimeType: arquivo.mimeType || input.mimeType,
+    });
+
+    await supabaseAdmin.from("automacao_arquivo_analises").insert({
+      empresa_id: empresaId,
+      execucao_id: execucao.id,
+      fluxo_id: execucao.fluxo_id,
+      no_id: no.id,
+      conversa_id: conversaId,
+      contato_id: execucao.contato_id || null,
+      tipo_arquivo: tipoMensagem,
+      mime_type: arquivo.mimeType || input.mimeType || null,
+      media_id: mediaId,
+      arquivo_url: arquivoSalvo.storagePath,
+      instrucao_ia: instrucaoIa,
+      sucesso: resultado.sucesso === true,
+      status: resultado.status || "erro",
+      motivo: resultado.motivo || null,
+      dados_extraidos: resultado.dados_extraidos || {},
+      resultado_json: resultado,
+    });
+
+    await supabaseAdmin.from("automacao_variaveis").upsert(
+      {
+        empresa_id: empresaId,
+        execucao_id: execucao.id,
+        contato_id: execucao.contato_id,
+        chave,
+        valor: String(resultado.status || ""),
+        metadata_json: {
+          resultado,
+          arquivo: {
+            media_id: mediaId,
+            mime_type: arquivo.mimeType || input.mimeType || null,
+            arquivo_url: arquivoSalvo.storagePath,
+          },
+        },
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "empresa_id,execucao_id,chave",
+      }
+    );
+
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "arquivo_ia_interpretado",
+      descricao: "Arquivo interpretado pela IA.",
+      entrada: {
+        instrucao_ia: instrucaoIa,
+        media_id: mediaId,
+        tipo_mensagem: tipoMensagem,
+      },
+      saida: resultado,
+    });
+
+    return {
+      ok: true,
+      valido: true,
+      excedeuTentativas: false,
+      status: resultado.status || (resultado.sucesso ? "aprovado" : "reprovado"),
+      resultado,
+    };
+  } catch (error: any) {
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "erro_interpretar_arquivo_ia",
+      descricao: "Erro ao interpretar arquivo com IA.",
+      entrada: {
+        media_id: mediaId,
+        instrucao_ia: instrucaoIa,
+      },
+      saida: {
+        erro: error?.message || String(error),
+      },
+    });
+
+    return {
+      ok: true,
+      valido: true,
+      excedeuTentativas: false,
+      status: "erro",
+    };
+  }
 }
 
 export async function executarAcaoExcessoTentativas(params: {

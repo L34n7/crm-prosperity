@@ -52,6 +52,53 @@ export async function GET(req: NextRequest) {
   }
 }
 
+function tipoMensagemParaAutomacao(tipoMensagem: string) {
+  if (tipoMensagem === "imagem") return "imagem";
+  if (tipoMensagem === "documento") return "documento";
+  if (tipoMensagem === "audio") return "audio";
+  if (tipoMensagem === "video") return "video";
+  return "texto";
+}
+
+function extrairMediaId(message: any, metadataJson: any) {
+  return (
+    metadataJson?.media_id ||
+    metadataJson?.image?.id ||
+    metadataJson?.document?.id ||
+    metadataJson?.audio?.id ||
+    metadataJson?.video?.id ||
+    message.rawMessage?.image?.id ||
+    message.rawMessage?.document?.id ||
+    message.rawMessage?.audio?.id ||
+    message.rawMessage?.video?.id ||
+    null
+  );
+}
+
+function extrairMimeType(message: any, metadataJson: any) {
+  return (
+    metadataJson?.mime_type ||
+    metadataJson?.image?.mime_type ||
+    metadataJson?.document?.mime_type ||
+    metadataJson?.audio?.mime_type ||
+    metadataJson?.video?.mime_type ||
+    message.rawMessage?.image?.mime_type ||
+    message.rawMessage?.document?.mime_type ||
+    message.rawMessage?.audio?.mime_type ||
+    message.rawMessage?.video?.mime_type ||
+    null
+  );
+}
+
+function extrairArquivoNome(message: any, metadataJson: any) {
+  return (
+    metadataJson?.filename ||
+    metadataJson?.document?.filename ||
+    message.rawMessage?.document?.filename ||
+    null
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as WhatsAppWebhookBody;
@@ -369,18 +416,44 @@ export async function POST(req: NextRequest) {
             }
           | null = null;
 
+        const mediaId = extrairMediaId(message, metadataJson);
+        const mimeType = extrairMimeType(message, metadataJson);
+        const arquivoNome = extrairArquivoNome(message, metadataJson);
+
+        const ehArquivoParaAutomacao = ["imagem", "documento"].includes(
+          message.tipoMensagem
+        );
+
         const podeRodarAutomacao =
           !savedMessage.duplicated &&
-          ["texto", "botao", "audio"].includes(message.tipoMensagem) &&
-          !!textoAutomacao.trim();
+          (
+            (
+              ["texto", "botao", "audio"].includes(message.tipoMensagem) &&
+              !!textoAutomacao.trim()
+            ) ||
+            (
+              ehArquivoParaAutomacao &&
+              !!mediaId
+            )
+          );
 
         if (podeRodarAutomacao) {
           automationResult = await processAutomationEngine({
             empresaId: integration.empresa_id,
             conversaId: conversation.id,
             contatoId: contact.id,
-            mensagemTexto: textoAutomacao,
+            mensagemTexto:
+              textoAutomacao ||
+              arquivoNome ||
+              message.conteudo ||
+              "arquivo_recebido",
             numeroDestino: message.from,
+
+            mensagemTipo: tipoMensagemParaAutomacao(message.tipoMensagem),
+            mediaId,
+            mimeType,
+            arquivoNome,
+            mensagemId: savedMessage.messageId,
           });
         }
 

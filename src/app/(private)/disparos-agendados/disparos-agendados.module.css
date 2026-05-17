@@ -1,8 +1,8 @@
 .pageContent {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   gap: 14px;
-  padding: 10px 24px 24px 24px;
+  padding: 10px 304px 24px 304px;
   height: calc(100vh - 54px);
   min-height: 720px;
 }
@@ -30,8 +30,8 @@
 }
 
 .eyebrow {
-  margin: 0 0 5px;
-  font-size: 12px;
+  margin: 0 0 6px;
+  font-size: 11px;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
@@ -42,7 +42,7 @@
 .editorTitle {
   margin: 0;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 700;
   color: #0f172a;
 }
 
@@ -92,7 +92,7 @@
   border-radius: 16px;
   padding: 13px 14px;
   text-align: left;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
   transition: 0.2s ease;
@@ -244,7 +244,7 @@
 }
 
 .metricCard span {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
   color: #64748b;
   text-transform: uppercase;
@@ -252,9 +252,9 @@
 }
 
 .metricCard strong {
-  font-size: 28px;
+  font-size: 18px;
   font-weight: 900;
-  color: #0f172a;
+  color: #0f172abf;
 }
 
 .listArea {
@@ -888,7 +888,7 @@
 
 .contactsSearchRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 220px 220px;
   gap: 12px;
   align-items: end;
 }
@@ -1310,5 +1310,9 @@
     left: 12px;
     width: auto;
     max-width: none;
+  }
+
+  .contactsSearchRow {
+    grid-template-columns: 1fr;
   }
 }

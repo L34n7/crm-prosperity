@@ -263,8 +263,8 @@
 
 .notificationDot {
   position: absolute;
-  top: -8px;
-  right: -10px;
+  top: -10px;
+  right: -12px;
 
   min-width: 18px;
   height: 18px;

@@ -104,6 +104,12 @@ function getStatusClass(status: string | null | undefined) {
   }
 }
 
+function normalizarStatus(status: string | null | undefined) {
+  return String(status || "")
+    .trim()
+    .toUpperCase();
+}
+
 function getComponent(
   payload: WhatsAppTemplate["payload"],
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS"
@@ -191,6 +197,13 @@ export default function TemplatesWhatsAppPage() {
   const [quickReply2, setQuickReply2] = useState("");
   const [quickReply3, setQuickReply3] = useState("");
 
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const ITENS_POR_PAGINA = 7;
+    
+  const [filtroStatus, setFiltroStatus] = useState<
+    "todos" | "approved" | "pending" | "rejected"
+  >("todos");
+
   async function carregarIntegracoes() {
     try {
       setLoadingIntegracoes(true);
@@ -276,7 +289,40 @@ export default function TemplatesWhatsAppPage() {
 
     return { total, aprovados, pendentes, rejeitados };
   }, [templates]);
+  
+  const templatesFiltradosPorStatus = useMemo(() => {
+    if (filtroStatus === "todos") return templates;
 
+    return templates.filter((template) => {
+      const status = template.status?.toUpperCase();
+
+      if (filtroStatus === "approved") {
+        return status === "APPROVED";
+      }
+
+      if (filtroStatus === "pending") {
+        return status === "PENDING";
+      }
+
+      if (filtroStatus === "rejected") {
+        return status === "REJECTED" || status === "ERRO_ENVIO";
+      }
+
+      return true;
+    });
+  }, [templates, filtroStatus]);
+  
+
+  const totalPaginasTemplates = Math.ceil(
+    templatesFiltradosPorStatus.length / ITENS_POR_PAGINA
+  );
+
+  const templatesPaginados = templatesFiltradosPorStatus.slice(
+    (paginaAtual - 1) * ITENS_POR_PAGINA,
+    paginaAtual * ITENS_POR_PAGINA
+  );
+  
+  
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -451,375 +497,237 @@ export default function TemplatesWhatsAppPage() {
             </div>
 
             <form onSubmit={handleSubmit} className={styles.form}>
-              <div className={styles.topGrid}>
-                <div className={styles.field}>
-                  <label className={styles.label}>WhatsApp Integration</label>
-                  <select
-                    value={integracaoId}
-                    onChange={(e) => setIntegracaoId(e.target.value)}
-                    className={styles.input}
-                    required
-                  >
-                    <option value="">
-                      {loadingIntegracoes ? "Loading..." : "Select an integration"}
-                    </option>
-
-                    {integracoes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.nome_conexao}
-                        {item.numero ? ` - ${item.numero}` : ""}
-                      </option>
-                    ))}
-                  </select>
-
-                  {integracaoSelecionada ? (
-                    <div className={styles.infoBox}>
-                      <div>
-                        <strong>Status:</strong>{" "}
-                        {formatarStatusIntegracao(integracaoSelecionada.status)}
-                      </div>
-                      <div>
-                        <strong>WABA ID:</strong> {integracaoSelecionada.waba_id || "-"}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className={styles.field}>
-                  <label className={styles.label}>Template Name</label>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className={styles.input}
-                    placeholder="e.g., notification_of_initiated_service"
-                    required
-                  />
-                  <p className={styles.help}>
-                    Use a simple name, without spaces. The backend will normalize it automatically.
-                  </p>
-                </div>
-              </div>
-
-              <div className={styles.topGrid}>
-                <div className={styles.field}>
-                  <label className={styles.label}>Category</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as "UTILITY" | "MARKETING")}
-                    className={styles.input}
-                  >
-                    <option value="UTILITY">UTILITY</option>
-                    <option value="MARKETING">MARKETING</option>
-                  </select>
-                  <p className={styles.help}>
-                    UTILITY for operational communication. MARKETING for campaigns and promotion.
-                  </p>
-                </div>
-
-                <div className={styles.field}>
-                  <label className={styles.label}>Language</label>
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className={styles.input}
-                  >
-                    <option value="pt_BR">Português (Brasil)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Header</label>
-                <input
-                  value={headerText}
-                  onChange={(e) => setHeaderText(e.target.value)}
-                  className={styles.input}
-                  placeholder="Opcional"
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Body</label>
-                <textarea
-                  value={bodyText}
-                  onChange={(e) => setBodyText(e.target.value)}
-                  rows={7}
-                  className={styles.textarea}
-                  placeholder="Enter the main content of the template"
-                  required
-                />
-                <p className={styles.help}>
-                  Use variables like {"{{1}}"} and {"{{2}}"}. Avoid leaving variables at the beginning or end of the sentence.
-                </p>
-              </div>
-
-              <div className={styles.topGrid}>
-                <div className={styles.field}>
-                  <label className={styles.label}>Example Variable 1</label>
-                  <input
-                    value={bodyExample1}
-                    onChange={(e) => setBodyExample1(e.target.value)}
-                    className={styles.input}
-                    placeholder="e.g., John"
-                  />
-                </div>
-
-                <div className={styles.field}>
-                  <label className={styles.label}>Example Variable 2</label>
-                  <input
-                    value={bodyExample2}
-                    onChange={(e) => setBodyExample2(e.target.value)}
-                    className={styles.input}
-                    placeholder="Ex: ABC-123456"
-                  />
-                </div>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Footer</label>
-                <input
-                  value={footerText}
-                  onChange={(e) => setFooterText(e.target.value)}
-                  className={styles.input}
-                  placeholder="Opcional"
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Quick replies</label>
-
-                <div className={styles.topGrid}>
-                  <input
-                    value={quickReply1}
-                    onChange={(e) => setQuickReply1(e.target.value)}
-                    className={styles.input}
-                    placeholder="Quick reply 1"
-                  />
-
-                  <input
-                    value={quickReply2}
-                    onChange={(e) => setQuickReply2(e.target.value)}
-                    className={styles.input}
-                    placeholder="Quick reply 2"
-                  />
-                </div>
-
-                <input
-                  value={quickReply3}
-                  onChange={(e) => setQuickReply3(e.target.value)}
-                  className={styles.input}
-                  placeholder="Quick reply 3"
-                />
-
-                <p className={styles.help}>
-                    Optional. You can add up to 3 quick replies.
-                </p>
-              </div>
-
-              <div className={styles.previewCard}>
-                <div className={styles.previewHeader}>
-                  <div>
-                    <h3 className={styles.previewTitle}>Preview of the template</h3>
-                    <p className={styles.previewSubtitle}>
-                      Review the content before submitting for approval.
-                    </p>
-                  </div>
-
-                  <span className={`${styles.badge} ${styles.badgeBlue}`}>
-                    Variables detected: {totalVariaveisBody}
-                  </span>
-                </div>
-
-                <div className={styles.previewGrid}>
-                  <div className={styles.previewBlock}>
-                    <span className={styles.previewLabel}>Header</span>
-                    <p className={styles.previewText}>{headerText.trim() || "Não informado"}</p>
-                  </div>
-
-                  <div className={styles.previewBlock}>
-                    <span className={styles.previewLabel}>Body</span>
-                    <p className={styles.previewText}>{bodyText.trim() || "Não informado"}</p>
-                  </div>
-
-                  <div className={styles.previewBlock}>
-                    <span className={styles.previewLabel}>Footer</span>
-                    <p className={styles.previewText}>{footerText.trim() || "Não informado"}</p>
-                  </div>
-
-                  <div className={styles.previewBlock}>
-                    <span className={styles.previewLabel}>Quick replies</span>
-
-                    {quickRepliesPreview.length > 0 ? (
-                      <div className={styles.quickRepliesList}>
-                        {quickRepliesPreview.map((item, index) => (
-                          <span
-                            key={`${item}-${index}`}
-                            className={`${styles.badge} ${styles.badgeGray}`}
+              <div className={styles.creatorGrid}>
+                  <div className={styles.formFields}>
+                      <div className={styles.topGrid}>
+                        <div className={styles.field}>
+                          <label className={styles.label}>WhatsApp Integration</label>
+                          <select
+                            value={integracaoId}
+                            onChange={(e) => setIntegracaoId(e.target.value)}
+                            className={styles.input}
+                            required
                           >
-                            {item}
-                          </span>
-                        ))}
+                            <option value="">
+                              {loadingIntegracoes ? "Loading..." : "Select an integration"}
+                            </option>
+
+                            {integracoes.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.nome_conexao}
+                                {item.numero ? ` - ${item.numero}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className={styles.field}>
+                          <label className={styles.label}>Language</label>
+                          <select
+                            value={language}
+                            onChange={(e) => setLanguage(e.target.value)}
+                            className={styles.input}
+                          >
+                            <option value="pt_BR">Português (Brasil)</option>
+                          </select>
+                        </div>
                       </div>
-                    ) : (
-                      <p className={styles.previewText}>No quick replies added.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
 
-              <div className={styles.submitBar}>
-                <div className={styles.submitInfo}>
-                  <span>
-                    <strong>Integration:</strong>{" "}
-                    {integracaoSelecionada?.nome_conexao || "NNot selected"}
-                  </span>
-                  <span>
-                    <strong>Category:</strong> {category}
-                  </span>
-                  <span>
-                    <strong>Language:</strong> {language}
-                  </span>
-                </div>
-        {(mensagem || erro) && (
-          <>
-            {mensagem ? <div className={styles.successAlert}>{mensagem}</div> : null}
-            {erro ? <div className={styles.errorAlert}>{erro}</div> : null}
-          </>
-        )}
-                <div className={styles.actions}>
-                  <button type="submit" disabled={submitting} className={styles.primaryButton}>
-                    {submitting ? "Sending..." : "Create template"}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-
-          <div className={styles.resultsCard}>
-            <div className={styles.cardHeader}>
-              <p className={styles.eyebrow}>Registered templates</p>
-              <h2 className={styles.cardTitle}>Template list</h2>
-              <p className={styles.cardSubtitle}>
-                Track status, content, and sync the connection with Meta.
-              </p>
-            </div>
-
-            <div className={styles.resultsSummary}>
-              <div className={styles.summaryCard}>
-                <span className={styles.summaryLabel}>Total</span>
-                <span className={styles.summaryValue}>{resumoTemplates.total}</span>
-              </div>
-
-              <div className={styles.summaryCard}>
-                <span className={styles.summaryLabel}>Approved</span>
-                <span className={styles.summaryValue}>{resumoTemplates.aprovados}</span>
-              </div>
-
-              <div className={styles.summaryCard}>
-                <span className={styles.summaryLabel}>Pending / Rejected</span>
-                <span className={styles.summaryValueSmall}>
-                  {resumoTemplates.pendentes} pending • {resumoTemplates.rejeitados} with error/rejection
-                </span>
-              </div>
-            </div>
-
-            <div className={styles.inlineBlock}>
-              <div className={styles.searchRow}>
-                <div className={styles.field}>
-                  <label className={styles.label}>Filter by integration</label>
-                  <select
-                    value={filtroIntegracao}
-                    onChange={(e) => setFiltroIntegracao(e.target.value)}
-                    className={styles.input}
-                  >
-                    <option value="">All integrations</option>
-                    {integracoes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.nome_conexao}
-                        {item.numero ? ` - ${item.numero}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className={styles.inlineActions}>
-                  <button
-                    type="button"
-                    onClick={() => carregarTemplates(filtroIntegracao)}
-                    className={styles.secondaryButton}
-                  >
-                    Update list
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={sincronizarTemplatesMeta}
-                    className={styles.primaryButton}
-                    disabled={sincronizando}
-                  >
-                    {sincronizando ? "Synchronizing..." : "Synchronize with Meta"}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {loadingTemplates ? (
-              <div className={styles.emptyState}>Loading templates...</div>
-            ) : templates.length === 0 ? (
-              <div className={styles.emptyState}>No templates found.</div>
-            ) : (
-              <div className={styles.resultsList}>
-                {templates.map((template) => {
-                  const header = extrairHeader(template.payload);
-                  const body = extrairBody(template.payload);
-                  const footer = extrairFooter(template.payload);
-                  const quickReplies = extrairQuickReplies(template.payload);
-
-                  return (
-                    <div key={template.id} className={styles.compactTemplateCard}>
-                      <div className={styles.compactTemplateTop}>
-                        <div className={styles.compactTemplateMain}>
-                          <div className={styles.compactTemplateTitleRow}>
-                            <h3 className={styles.compactTemplateTitle}>{template.nome}</h3>
-                            <span className={getStatusClass(template.status)}>
-                              {getStatusLabel(template.status)}
-                            </span>
-                          </div>
-
-                          <p className={styles.compactTemplateMeta}>
-                            Category: {template.categoria} • Language: {template.idioma} • Meta ID:{" "}
-                            {template.meta_template_id || "-"} • Created on:{" "}
-                            {formatarData(template.created_at)}
+                      <div className={styles.topGrid}>
+                        <div className={styles.field}>
+                          <label className={styles.label}>Template Name</label>
+                          <input
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className={styles.input}
+                            placeholder="e.g., notification_of_initiated_service"
+                            required
+                          />
+                          <p className={styles.help}>
+                            Use a simple name, without spaces. The backend will normalize it automatically.
+                          </p>
+                        </div>
+                        
+                        <div className={styles.field}>
+                          <label className={styles.label}>Category</label>
+                          <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value as "UTILITY" | "MARKETING")}
+                            className={styles.input}
+                          >
+                            <option value="UTILITY">UTILITY</option>
+                            <option value="MARKETING">MARKETING</option>
+                          </select>
+                          <p className={styles.help}>
+                            UTILITY for operational communication. MARKETING for campaigns and promotion.
                           </p>
                         </div>
                       </div>
-
-                      {header ? (
-                        <div className={styles.compactBlock}>
-                          <span className={styles.compactLabel}>Header</span>
-                          <p className={styles.compactText}>{header}</p>
-                        </div>
-                      ) : null}
-
-                      <div className={styles.compactBlock}>
-                        <span className={styles.compactLabel}>Body</span>
-                        <p className={styles.compactText}>{body || "NNot provided"}</p>
+                      
+                      <div className={styles.field}>
+                        <label className={styles.label}>Header</label>
+                        <input
+                          value={headerText}
+                          onChange={(e) => setHeaderText(e.target.value)}
+                          className={styles.input}
+                          placeholder="Opcional"
+                        />
                       </div>
 
-                      {(footer || quickReplies.length > 0) && (
-                        <div className={styles.compactFooterRow}>
-                          {footer ? (
-                            <div className={styles.compactMiniBlock}>
-                              <span className={styles.compactLabel}>Footer</span>
-                              <p className={styles.compactText}>{footer}</p>
-                            </div>
-                          ) : null}
+                      <div className={styles.field}>
+                        <label className={styles.label}>Body</label>
+                        <textarea
+                          value={bodyText}
+                          onChange={(e) => setBodyText(e.target.value)}
+                          rows={7}
+                          className={styles.textarea}
+                          placeholder="Enter the main content of the template"
+                          required
+                        />
+                        <p className={styles.help}>
+                          Use variables like {"{{1}}"} and {"{{2}}"}. Avoid leaving variables at the beginning or end of the sentence.
+                        </p>
+                      </div>
 
-                          {quickReplies.length > 0 ? (
-                            <div className={styles.compactMiniBlock}>
-                              <span className={styles.compactLabel}>Quick replies</span>
+                      <div className={styles.topGrid}>
+                        <div className={styles.field}>
+                          <label className={styles.label}>Example Variable 1</label>
+                          <input
+                            value={bodyExample1}
+                            onChange={(e) => setBodyExample1(e.target.value)}
+                            className={styles.input}
+                            placeholder="e.g., John"
+                          />
+                        </div>
+
+                        <div className={styles.field}>
+                          <label className={styles.label}>Example Variable 2</label>
+                          <input
+                            value={bodyExample2}
+                            onChange={(e) => setBodyExample2(e.target.value)}
+                            className={styles.input}
+                            placeholder="Ex: ABC-123456"
+                          />
+                        </div>
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.label}>Footer</label>
+                        <input
+                          value={footerText}
+                          onChange={(e) => setFooterText(e.target.value)}
+                          className={styles.input}
+                          placeholder="Opcional"
+                        />
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.label}>Quick replies</label>
+
+                        <div className={styles.topGrid}>
+                          <input
+                            value={quickReply1}
+                            onChange={(e) => setQuickReply1(e.target.value)}
+                            className={styles.input}
+                            placeholder="Quick reply 1"
+                          />
+
+                          <input
+                            value={quickReply2}
+                            onChange={(e) => setQuickReply2(e.target.value)}
+                            className={styles.input}
+                            placeholder="Quick reply 2"
+                          />
+                        </div>
+
+                        <input
+                          value={quickReply3}
+                          onChange={(e) => setQuickReply3(e.target.value)}
+                          className={styles.input}
+                          placeholder="Quick reply 3"
+                        />
+
+                        <p className={styles.help}>
+                            Optional. You can add up to 3 quick replies.
+                        </p>
+                      </div>
+                    </div>
+
+                    <aside className={styles.previewSidebar}>
+                      <div className={styles.whatsappPreviewCard}>
+                        <div className={styles.previewTopLine}>
+                          <strong>WhatsApp Preview</strong>
+                        </div>
+
+                        <div className={styles.whatsappPreviewArea}>
+                          <div className={styles.whatsappBubble}>
+                            {headerText.trim() ? (
+                              <strong className={styles.whatsappPreviewTitle}>
+                                {headerText.trim()}
+                              </strong>
+                            ) : null}
+
+                            <p className={styles.whatsappPreviewText}>
+                              {bodyText.trim() || "Enter the template body to preview the WhatsApp message."}
+                            </p>
+
+                            <div className={styles.whatsappPreviewMeta}>
+                              <span className={styles.whatsappPreviewFooter}>
+                                {footerText.trim() || "Equipe de atendimento"}
+                              </span>
+
+                              <span className={styles.whatsappPreviewTime}>
+                                {new Date().toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+
+                            {quickRepliesPreview.map((texto, index) => (
+                              <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
+                                ↩ {texto}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className={styles.previewCard}>
+                        <div className={styles.previewHeader}>
+                          <div>
+                            <h3 className={styles.previewTitle}>Template Structure</h3>
+                            <p className={styles.previewSubtitle}>
+                              Review the content before submitting for approval.
+                            </p>
+                          </div>
+                          <span className={`${styles.badge} ${styles.badgeBlue}`}>
+                            Variables detected: {totalVariaveisBody}
+                          </span>
+                        </div>
+
+                        <div className={styles.previewGrid}>
+                          <div className={styles.previewBlock}>
+                            <span className={styles.previewLabel}>Header</span>
+                            <p className={styles.previewText}>{headerText.trim() || "Não informado"}</p>
+                          </div>
+
+                          <div className={styles.previewBlock}>
+                            <span className={styles.previewLabel}>Body</span>
+                            <p className={styles.previewText}>{bodyText.trim() || "Não informado"}</p>
+                          </div>
+
+                          <div className={styles.previewBlock}>
+                            <span className={styles.previewLabel}>Footer</span>
+                            <p className={styles.previewText}>{footerText.trim() || "Não informado"}</p>
+                          </div>
+
+                          <div className={styles.previewBlock}>
+                            <span className={styles.previewLabel}>Quick replies</span>
+
+                            {quickRepliesPreview.length > 0 ? (
                               <div className={styles.quickRepliesList}>
-                                {quickReplies.map((item, index) => (
+                                {quickRepliesPreview.map((item, index) => (
                                   <span
                                     key={`${item}-${index}`}
                                     className={`${styles.badge} ${styles.badgeGray}`}
@@ -828,28 +736,257 @@ export default function TemplatesWhatsAppPage() {
                                   </span>
                                 ))}
                               </div>
+                            ) : (
+                              <p className={styles.previewText}>No quick replies added.</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </aside>
+                </div>
+
+                <div className={styles.submitBar}>
+                  <div className={styles.submitInfo}>
+                    <span>
+                      <strong>Integration:</strong>{" "}
+                      {integracaoSelecionada?.nome_conexao || "Not selected"}
+                    </span>
+                    <span>
+                      <strong>Category:</strong> {category}
+                    </span>
+                    <span>
+                      <strong>Language:</strong> {language}
+                    </span>
+                  </div>
+
+                  {(mensagem || erro) && (
+                    <>
+                      {mensagem ? <div className={styles.successAlert}>{mensagem}</div> : null}
+                      {erro ? <div className={styles.errorAlert}>{erro}</div> : null}
+                    </>
+                  )}
+                    
+                  <div className={styles.actions}>
+                    <button type="submit" disabled={submitting} className={styles.primaryButton}>
+                      {submitting ? "Sending..." : "Create template"}
+                    </button>
+                  </div>
+                </div>
+            </form>
+          </div>
+
+          <div className={styles.resultsCard}>
+              <div className={styles.cardHeader}>
+                <p className={styles.eyebrow}>Registered templates</p>
+                <h2 className={styles.cardTitle}>Template list</h2>
+                <p className={styles.cardSubtitle}>
+                  Track status, content, and sync the connection with Meta.
+                </p>
+              </div>
+
+              <div className={styles.resultsSummary}>
+                <button
+                  type="button"
+                  className={`${styles.summaryCard} ${
+                    filtroStatus === "todos" ? styles.summaryCardActive : ""
+                  }`}
+                  onClick={() => setFiltroStatus("todos")}
+                >
+                  <span className={styles.summaryLabel}>Total</span>
+                  <span className={styles.summaryValue}>{resumoTemplates.total}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.summaryCard} ${
+                    filtroStatus === "approved" ? styles.summaryCardActive : ""
+                  }`}
+                  onClick={() => setFiltroStatus("approved")}
+                >
+                  <span className={styles.summaryLabel}>Approved</span>
+                  <span className={styles.summaryValue}>{resumoTemplates.aprovados}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.summaryCard} ${
+                    filtroStatus === "pending" ? styles.summaryCardActive : ""
+                  }`}
+                  onClick={() => setFiltroStatus("pending")}
+                >
+                  <span className={styles.summaryLabel}>Pending</span>
+                  <span className={styles.summaryValue}>{resumoTemplates.pendentes}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.summaryCard} ${
+                    filtroStatus === "rejected" ? styles.summaryCardActive : ""
+                  }`}
+                  onClick={() => setFiltroStatus("rejected")}
+                >
+                  <span className={styles.summaryLabel}>Rejected</span>
+                  <span className={styles.summaryValue}>{resumoTemplates.rejeitados}</span>
+                </button>
+              </div>
+
+              <div className={styles.inlineBlock}>
+                <div className={styles.searchRow}>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Filter by integration</label>
+                    <select
+                      value={filtroIntegracao}
+                      onChange={(e) => {
+                        setFiltroIntegracao(e.target.value);
+                        setPaginaAtual(1);
+                      }}
+                      className={styles.input}
+                    >
+                      <option value="">All integrations</option>
+                      {integracoes.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.nome_conexao}
+                          {item.numero ? ` - ${item.numero}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={styles.inlineActions}>
+                    <button
+                      type="button"
+                      onClick={() => carregarTemplates(filtroIntegracao)}
+                      className={styles.secondaryButton}
+                    >
+                      Update list
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={sincronizarTemplatesMeta}
+                      className={styles.primaryButton}
+                      disabled={sincronizando}
+                    >
+                      {sincronizando ? "Synchronizing..." : "Synchronize with Meta"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+                {loadingTemplates ? (
+                  <div className={styles.emptyState}>Loading templates...</div>
+                ) : templatesFiltradosPorStatus.length === 0 ? (
+                  <div className={styles.emptyState}>No templates found.</div>
+                ) : (
+                  <div className={styles.resultsList}>
+                    {templatesPaginados.map((template) => {
+                      const header = extrairHeader(template.payload);
+                      const body = extrairBody(template.payload);
+                      const footer = extrairFooter(template.payload);
+                      const quickReplies = extrairQuickReplies(template.payload);
+
+                      return (
+                        <div key={template.id} className={styles.compactTemplateCard}>
+                          <div className={styles.compactTemplateTop}>
+                            <div className={styles.compactTemplateMain}>
+                              <div className={styles.compactTemplateTitleRow}>
+                                <h3 className={styles.compactTemplateTitle}>{template.nome}</h3>
+                                <span className={getStatusClass(template.status)}>
+                                  {getStatusLabel(template.status)}
+                                </span>
+                              </div>
+
+                              <p className={styles.compactTemplateMeta}>
+                                Category: {template.categoria} • Language: {template.idioma} • Meta ID:{" "}
+                                {template.meta_template_id || "-"} • Created on:{" "}
+                                {formatarData(template.created_at)}
+                              </p>
+                            </div>
+                          </div>
+
+                          {header ? (
+                            <div className={styles.compactBlock}>
+                              <span className={styles.compactLabel}>Header</span>
+                              <p className={styles.compactText}>{header}</p>
                             </div>
                           ) : null}
+
+                          <div className={styles.compactBlock}>
+                            <span className={styles.compactLabel}>Body</span>
+                            <p className={styles.compactText}>{body || "Not provided"}</p>
+                          </div>
+
+                          {(footer || quickReplies.length > 0) && (
+                            <div className={styles.compactFooterRow}>
+                              {footer ? (
+                                <div className={styles.compactMiniBlock}>
+                                  <span className={styles.compactLabel}>Footer</span>
+                                  <p className={styles.compactText}>{footer}</p>
+                                </div>
+                              ) : null}
+
+                              {quickReplies.length > 0 ? (
+                                <div className={styles.compactMiniBlock}>
+                                  <span className={styles.compactLabel}>Quick replies</span>
+                                  <div className={styles.quickRepliesList}>
+                                    {quickReplies.map((item, index) => (
+                                      <span
+                                        key={`${item}-${index}`}
+                                        className={`${styles.badge} ${styles.badgeGray}`}
+                                      >
+                                        {item}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          )}
+
+                          {template.quality_rating ? (
+                            <p className={styles.resultText}>
+                              <strong>Quality:</strong> {template.quality_rating}
+                            </p>
+                          ) : null}
+
+                          {template.rejeicao_motivo ? (
+                            <p className={styles.resultCompactError}>
+                              <strong>Reason for rejection:</strong> {template.rejeicao_motivo}
+                            </p>
+                          ) : null}
                         </div>
-                      )}
+                      );
+                    })}
+                  </div>
+                )}
+            </div>
+            {totalPaginasTemplates > 1 && (
+              <div className={styles.pagination}>
+                <button
+                  type="button"
+                  className={styles.paginationButton}
+                  disabled={paginaAtual === 1}
+                  onClick={() => setPaginaAtual((prev) => Math.max(prev - 1, 1))}
+                >
+                  Previous
+                </button>
 
-                      {template.quality_rating ? (
-                        <p className={styles.resultText}>
-                          <strong>Quality:</strong> {template.quality_rating}
-                        </p>
-                      ) : null}
+                <span className={styles.paginationInfo}>
+                  Page {paginaAtual} of {totalPaginasTemplates}
+                </span>
 
-                      {template.rejeicao_motivo ? (
-                        <p className={styles.resultCompactError}>
-                          <strong>Reason for rejection:</strong> {template.rejeicao_motivo}
-                        </p>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                <button
+                  type="button"
+                  className={styles.paginationButton}
+                  disabled={paginaAtual >= totalPaginasTemplates}
+                  onClick={() =>
+                    setPaginaAtual((prev) => Math.min(prev + 1, totalPaginasTemplates))
+                  }
+                >
+                  Next
+                </button>
               </div>
             )}
-          </div>
         </div>
       </div>
     </>

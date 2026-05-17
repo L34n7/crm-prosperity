@@ -220,6 +220,8 @@ export default function DisparosAgendadosPage() {
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [origemFiltro, setOrigemFiltro] = useState("");
   const [origensDisponiveis, setOrigensDisponiveis] = useState<string[]>([]);
+  const [campanhaFiltro, setCampanhaFiltro] = useState("");
+  const [campanhasDisponiveis, setCampanhasDisponiveis] = useState<string[]>([]);
 
   const [erroModal, setErroModal] = useState("");
   const [previewCusto, setPreviewCusto] = useState<{
@@ -331,7 +333,7 @@ export default function DisparosAgendadosPage() {
     }
   }
 
-  async function carregarContatos(busca = "", origem = "") {
+  async function carregarContatos(busca = "", origem = "", campanha = "") {
     try {
       setLoadingContatos(true);
       setErro("");
@@ -344,6 +346,10 @@ export default function DisparosAgendadosPage() {
 
       if (origem.trim()) {
         params.set("origem", origem.trim());
+      }
+
+      if (campanha.trim()) {
+        params.set("campanha", campanha.trim());
       }
 
       params.set("pagina", "1");
@@ -363,6 +369,9 @@ export default function DisparosAgendadosPage() {
 
       setContatos(lista);
       setOrigensDisponiveis(Array.isArray(json.origens) ? json.origens : []);
+      setCampanhasDisponiveis(
+        Array.isArray(json.campanhas) ? json.campanhas : []
+      );
       setTotalContatosDisponiveis(Number(json.total || 0));
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar contatos.");
@@ -510,11 +519,11 @@ export default function DisparosAgendadosPage() {
     if (!modalNovoDisparo) return;
 
     const timer = setTimeout(() => {
-      carregarContatos(buscaContato, origemFiltro);
+      carregarContatos(buscaContato, origemFiltro, campanhaFiltro);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [buscaContato, origemFiltro, modalNovoDisparo]);
+  }, [buscaContato, origemFiltro, campanhaFiltro, modalNovoDisparo]);
 
 
   const metricas = useMemo(() => {
@@ -762,7 +771,8 @@ export default function DisparosAgendadosPage() {
                   setModalNovoDisparo(true);
                   setErroModal("");
                   await carregarDadosModalDisparo();
-                  await carregarContatos("", "");
+                  setCampanhaFiltro("");
+                  await carregarContatos("", "", "");
                 }}
               >
                 + Novo disparo
@@ -1222,12 +1232,39 @@ export default function DisparosAgendadosPage() {
                               onChange={(e) => setOrigemFiltro(e.target.value)}
                               className={styles.input}
                             >
-                              <option value="">Todas as origens</option>
+                            <option value="">
+                              {origensDisponiveis.length > 0
+                                ? "Todas as origens"
+                                : "Sem origens"}
+                            </option>
+
                               {origensDisponiveis.map((origem) => (
                                 <option key={origem} value={origem}>
                                   {origem}
                                 </option>
                               ))}
+                            </select>
+                          </div>
+
+                          <div className={styles.field}>
+                            <label className={styles.label}>Filtrar por campanha</label>
+
+                            <select
+                              value={campanhaFiltro}
+                              onChange={(e) => setCampanhaFiltro(e.target.value)}
+                              className={styles.input}
+                            >
+                            <option value="">
+                              {campanhasDisponiveis.length > 0
+                                ? "Todas as campanhas"
+                                : "Sem campanhas"}
+                            </option>
+
+                            {campanhasDisponiveis.map((campanha) => (
+                              <option key={campanha} value={campanha}>
+                                {campanha}
+                              </option>
+                            ))}
                             </select>
                           </div>
                         </div>

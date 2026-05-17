@@ -4,6 +4,12 @@ export type AutomationEngineInput = {
   contatoId: string;
   mensagemTexto: string;
   numeroDestino: string;
+
+  mensagemTipo?: "texto" | "imagem" | "documento" | "audio" | "video";
+  mediaId?: string | null;
+  mimeType?: string | null;
+  arquivoNome?: string | null;
+  mensagemId?: string | null;
 };
 
 export type AutomacaoFluxo = {
@@ -32,7 +38,7 @@ export type AutomacaoNo = {
   titulo: string;
   descricao: string | null;
   configuracao_json: Record<string, any>;
-  delay_segundos: number;
+  delay_segundos: number | null;
   ativo: boolean;
 };
 

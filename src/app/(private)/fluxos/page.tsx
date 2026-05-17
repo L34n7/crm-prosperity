@@ -115,6 +115,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Captura";
   if (tipo === "agendar_disparo") return "Agendar disparo";
+  if (tipo === "interpretar_arquivo_ia") return "Interpretar arquivo IA";
   return tipo;
 }
 
@@ -131,6 +132,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "avaliacao") return styles.nodeAvaliacao;
   if (tipo === "capturar_resposta") return styles.nodePergunta;
   if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
+  if (tipo === "interpretar_arquivo_ia") return styles.nodePergunta;
   return styles.nodePadrao;
 }
 
@@ -147,6 +149,7 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Capturar resposta";
   if (tipo === "agendar_disparo") return "Agendar disparo";
+  if (tipo === "interpretar_arquivo_ia") return "Interpretar arquivo IA";
   return "Novo bloco";
 }
 
@@ -204,7 +207,8 @@ function tipoNoEsperaResposta(tipoNo: string) {
   return (
     tipoNo === "pergunta_opcoes" ||
     tipoNo === "enviar_botoes" ||
-    tipoNo === "capturar_resposta"
+    tipoNo === "capturar_resposta" ||
+    tipoNo === "interpretar_arquivo_ia"
   );
 }
 
@@ -406,7 +410,6 @@ export default function FluxosPage() {
     useState("Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.");
   const [notificarExcessoTentativasNode, setNotificarExcessoTentativasNode] =
     useState(true);
-
   const [notificarEmailExcessoTentativasNode, setNotificarEmailExcessoTentativasNode] =
     useState(true);
 
@@ -417,6 +420,11 @@ export default function FluxosPage() {
 
   const [templatesWhatsapp, setTemplatesWhatsapp] = useState<TemplateWhatsappOpcao[]>([]);
   const [carregandoTemplatesWhatsapp, setCarregandoTemplatesWhatsapp] = useState(false);
+
+  const [arquivoInstrucaoIaNode, setArquivoInstrucaoIaNode] = useState("");
+  const [arquivoSalvarVariavelNode, setArquivoSalvarVariavelNode] =
+    useState("analise_arquivo");
+  const [arquivoMensagemErroNode, setArquivoMensagemErroNode] = useState("");
 
   const [agendarDisparoTemplateIdNode, setAgendarDisparoTemplateIdNode] = useState("");
   const [agendarDisparoQuantidadeNode, setAgendarDisparoQuantidadeNode] = useState("32");
@@ -990,6 +998,23 @@ async function criarFluxoRapido() {
               tempo_unidade: "horas",
               variaveis: [],
             }
+          : tipoNo === "interpretar_arquivo_ia"
+          ? {
+              mensagem: "Envie o arquivo para análise.",
+              instrucao_ia:
+                "Analise o arquivo enviado e responda se ele atende ao critério solicitado.",
+              tipos_aceitos: ["imagem", "documento"],
+              salvar_variavel: "analise_arquivo",
+              max_tentativas_invalidas: 3,
+              max_tentativas_sem_resposta: 3,
+              acao_excesso_tentativas: "transferir_atendimento",
+              mensagem_erro:
+                "Não consegui interpretar o arquivo. Envie uma imagem ou PDF legível.",
+              mensagem_excesso_tentativas:
+                "Não consegui validar o arquivo automaticamente. Vou te encaminhar para um atendente.",
+              notificar_excesso_tentativas: true,
+              notificar_email_excesso_tentativas: true,
+            }
           : {},
           delay_segundos: null,
     };
@@ -1090,124 +1115,139 @@ function offsetLabelConexao(edgeId: string) {
     setBotoesNode((atuais) => atuais.filter((_, i) => i !== index));
   }
 
-function abrirEdicaoNo(node: Node) {
-  const configuracaoJson = node.data?.configuracao_json as
-    | Record<string, any>
-    | undefined;
+  function abrirEdicaoNo(node: Node) {
+    const configuracaoJson = node.data?.configuracao_json as
+      | Record<string, any>
+      | undefined;
 
-  setEditandoNodeId(node.id);
-  setTipoNodeEdicao(String(node.data?.tipo_no || ""));
-  setEditandoEdgeId(null);
+    setEditandoNodeId(node.id);
+    setTipoNodeEdicao(String(node.data?.tipo_no || ""));
+    setEditandoEdgeId(null);
 
-  setTituloNode(String(node.data?.titulo || ""));
-  setMensagemNode(String(configuracaoJson?.mensagem || ""));
-  setDelayNode(
-    node.data?.delay_segundos !== null &&
-    node.data?.delay_segundos !== undefined
-      ? String(node.data.delay_segundos)
-      : ""
-  );
-  setSolicitarComentarioNode(
-    Boolean(configuracaoJson?.solicitar_comentario)
-  );
+    setTituloNode(String(node.data?.titulo || ""));
+    setMensagemNode(String(configuracaoJson?.mensagem || ""));
+    setDelayNode(
+      node.data?.delay_segundos !== null &&
+      node.data?.delay_segundos !== undefined
+        ? String(node.data.delay_segundos)
+        : ""
+    );
+    setSolicitarComentarioNode(
+      Boolean(configuracaoJson?.solicitar_comentario)
+    );
 
-  setMensagemComentarioNode(
-    String(configuracaoJson?.mensagem_comentario || "")
-  );
+    setMensagemComentarioNode(
+      String(configuracaoJson?.mensagem_comentario || "")
+    );
 
-  setNotaMinimaNode(
-    String(configuracaoJson?.nota_minima ?? 1)
-  );
+    setNotaMinimaNode(
+      String(configuracaoJson?.nota_minima ?? 1)
+    );
 
-  setNotaMaximaNode(
-    String(configuracaoJson?.nota_maxima ?? 5)
-  );
+    setNotaMaximaNode(
+      String(configuracaoJson?.nota_maxima ?? 5)
+    );
 
-  setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
-  setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
-  setSetorDestino(configuracaoJson?.setor_id || "");
-  setConfirmandoExclusaoNo(false);
-  
-  setCapturaVariavelNode(String(configuracaoJson?.variavel || "nome"));
-  setCapturaTipoNode(String(configuracaoJson?.tipo_captura || "nome"));
-  setCapturaMensagemErroNode(
-    String(
-      configuracaoJson?.mensagem_erro ||
-        "Não consegui identificar essa informação. Por favor, envie novamente."
-    )
-  );
-  setCapturaMaxTentativasNode(String(configuracaoJson?.max_tentativas || 3));
-  setMaxTentativasInvalidasNode(
-    String(configuracaoJson?.max_tentativas_invalidas || 3)
-  );
+    setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
+    setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
+    setSetorDestino(configuracaoJson?.setor_id || "");
+    setConfirmandoExclusaoNo(false);
+    
+    setCapturaVariavelNode(String(configuracaoJson?.variavel || "nome"));
+    setCapturaTipoNode(String(configuracaoJson?.tipo_captura || "nome"));
+    setCapturaMensagemErroNode(
+      String(
+        configuracaoJson?.mensagem_erro ||
+          "Não consegui identificar essa informação. Por favor, envie novamente."
+      )
+    );
+    setCapturaMaxTentativasNode(String(configuracaoJson?.max_tentativas || 3));
+    setMaxTentativasInvalidasNode(
+      String(configuracaoJson?.max_tentativas_invalidas || 3)
+    );
 
-  setMaxTentativasSemRespostaNode(
-    String(configuracaoJson?.max_tentativas_sem_resposta || 3)
-  );
+    setMaxTentativasSemRespostaNode(
+      String(configuracaoJson?.max_tentativas_sem_resposta || 3)
+    );
 
-  setAcaoExcessoTentativasNode(
-    String(configuracaoJson?.acao_excesso_tentativas || "transferir_atendimento")
-  );
-  setSetorExcessoTentativasNode(
-    String(configuracaoJson?.setor_excesso_tentativas || "")
-  );
+    setAcaoExcessoTentativasNode(
+      String(configuracaoJson?.acao_excesso_tentativas || "transferir_atendimento")
+    );
+    setSetorExcessoTentativasNode(
+      String(configuracaoJson?.setor_excesso_tentativas || "")
+    );
 
-  setMensagemExcessoTentativasNode(
-    String(
-      configuracaoJson?.mensagem_excesso_tentativas ||
-        "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente."
-    )
-  );
+    setMensagemExcessoTentativasNode(
+      String(
+        configuracaoJson?.mensagem_excesso_tentativas ||
+          "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente."
+      )
+    );
 
-  setNotificarExcessoTentativasNode(
-    configuracaoJson?.notificar_excesso_tentativas !== false
-  );
+    setNotificarExcessoTentativasNode(
+      configuracaoJson?.notificar_excesso_tentativas !== false
+    );
 
-  setNotificarEmailExcessoTentativasNode(
-    configuracaoJson?.notificar_email_excesso_tentativas !== false
-  );
-  
-  setNotificarAoChegarNode(Boolean(configuracaoJson?.notificar_ao_chegar));
+    setNotificarEmailExcessoTentativasNode(
+      configuracaoJson?.notificar_email_excesso_tentativas !== false
+    );
+    
+    setNotificarAoChegarNode(Boolean(configuracaoJson?.notificar_ao_chegar));
 
-  setNotificacaoTituloNode(
-    String(configuracaoJson?.notificacao_titulo || "")
-  );
+    setNotificacaoTituloNode(
+      String(configuracaoJson?.notificacao_titulo || "")
+    );
 
-  setNotificacaoMensagemNode(
-    String(configuracaoJson?.notificacao_mensagem || "")
-  );
+    setNotificacaoMensagemNode(
+      String(configuracaoJson?.notificacao_mensagem || "")
+    );
 
-  setNotificarEmailNode(Boolean(configuracaoJson?.notificar_email));
+    setNotificarEmailNode(Boolean(configuracaoJson?.notificar_email));
 
-  setAgendarDisparoTemplateIdNode(
-    String(configuracaoJson?.template_id || "")
-  );
+    setAgendarDisparoTemplateIdNode(
+      String(configuracaoJson?.template_id || "")
+    );
 
-  setAgendarDisparoQuantidadeNode(
-    String(configuracaoJson?.tempo_quantidade || 32)
-  );
+    setAgendarDisparoQuantidadeNode(
+      String(configuracaoJson?.tempo_quantidade || 32)
+    );
 
-  setAgendarDisparoUnidadeNode(
-    configuracaoJson?.tempo_unidade === "dias" ? "dias" : "horas"
-  );
+    setAgendarDisparoUnidadeNode(
+      configuracaoJson?.tempo_unidade === "dias" ? "dias" : "horas"
+    );
 
-  setAgendarDisparoVariaveisNode(
-    Array.isArray(configuracaoJson?.variaveis)
-      ? configuracaoJson.variaveis.join("\n")
-      : ""
-  );
+    setAgendarDisparoVariaveisNode(
+      Array.isArray(configuracaoJson?.variaveis)
+        ? configuracaoJson.variaveis.join("\n")
+        : ""
+    );
 
-  if (Array.isArray(configuracaoJson?.opcoes)) {
-    setOpcoesNode(configuracaoJson.opcoes);
-  } else {
-    setOpcoesNode([]);
+    setArquivoInstrucaoIaNode(
+      String(configuracaoJson?.instrucao_ia || "")
+    );
+
+    setArquivoSalvarVariavelNode(
+      String(configuracaoJson?.salvar_variavel || "analise_arquivo")
+    );
+
+    setArquivoMensagemErroNode(
+      String(
+        configuracaoJson?.mensagem_erro ||
+          "Não consegui interpretar o arquivo. Envie uma imagem ou PDF legível."
+      )
+    );
+
+    if (Array.isArray(configuracaoJson?.opcoes)) {
+      setOpcoesNode(configuracaoJson.opcoes);
+    } else {
+      setOpcoesNode([]);
+    }
+    if (Array.isArray(configuracaoJson?.botoes)) {
+      setBotoesNode(configuracaoJson.botoes);
+    } else {
+      setBotoesNode([]);
+    }
   }
-  if (Array.isArray(configuracaoJson?.botoes)) {
-    setBotoesNode(configuracaoJson.botoes);
-  } else {
-    setBotoesNode([]);
-  }
-}
 
 function abrirEdicaoConexao(edge: Edge) {
     const data = edge.data as
@@ -1327,7 +1367,8 @@ function aplicarEdicaoNoInterno() {
         tipoFinal === "transferir_setor" ||
         tipoFinal === "encerrar" ||
         tipoFinal === "avaliacao" ||
-        tipoFinal === "capturar_resposta"
+        tipoFinal === "capturar_resposta" ||
+        tipoFinal === "interpretar_arquivo_ia"
       ) {
         configuracao_json.mensagem = mensagemNode;
       }
@@ -1357,7 +1398,8 @@ function aplicarEdicaoNoInterno() {
         tipoFinal === "pergunta_opcoes" ||
         tipoFinal === "enviar_botoes" ||
         tipoFinal === "capturar_resposta" ||
-        tipoFinal === "avaliacao"
+        tipoFinal === "avaliacao" ||
+        tipoFinal === "interpretar_arquivo_ia"
       ) {
         configuracao_json.max_tentativas_invalidas = Math.max(
           1,
@@ -1429,6 +1471,16 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.mensagem_erro =
           capturaMensagemErroNode.trim() ||
           "Não consegui identificar essa informação. Por favor, envie novamente.";
+      }
+
+      if (tipoFinal === "interpretar_arquivo_ia") {
+        configuracao_json.instrucao_ia = arquivoInstrucaoIaNode.trim();
+        configuracao_json.tipos_aceitos = ["imagem", "documento"];
+        configuracao_json.salvar_variavel =
+          arquivoSalvarVariavelNode.trim().toLowerCase() || "analise_arquivo";
+        configuracao_json.mensagem_erro =
+          arquivoMensagemErroNode.trim() ||
+          "Não consegui interpretar o arquivo. Envie uma imagem ou PDF legível.";
       }
 
         configuracao_json.notificar_ao_chegar = notificarAoChegarNode;
@@ -2147,6 +2199,16 @@ function validarFluxoAntesDeAtivar() {
       }
     }
 
+    if (tipoNo === "interpretar_arquivo_ia") {
+      if (!String(config.mensagem || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem solicitando o arquivo.`;
+      }
+
+      if (!String(config.instrucao_ia || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma instrução para IA.`;
+      }
+    }
+
     if (
       tipoNo === "transferir_setor" &&
       !String(config.setor_id || "").trim()
@@ -2657,6 +2719,17 @@ useEffect(() => {
                         + Avaliação
                       </button>
 
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          adicionarNo("interpretar_arquivo_ia");
+                        }}
+                      >
+                        + Interpretar arquivo IA
+                      </button>
+
                       <div className={styles.headerDropdownDivider} />
 
                       <button
@@ -2896,6 +2969,7 @@ useEffect(() => {
                         <option value="enviar_botoes">Pergunta com Botões</option>
                         <option value="agendar_disparo">Agendar disparo</option>
                         <option value="avaliacao">Avaliação</option>
+                        <option value="interpretar_arquivo_ia">Interpretar arquivo IA</option>
                       </select>
                     </label>
                   )}
@@ -3468,6 +3542,46 @@ useEffect(() => {
                             </p>
                           )}
                         </div>
+                      </label>
+                    </div>
+                  )}
+
+                  {tipoNodeEdicao === "interpretar_arquivo_ia" && (
+                    <div className={styles.optionsBox}>
+                      <label className={styles.field}>
+                        <span className={styles.label}>Instrução para IA</span>
+
+                        <textarea
+                          className={styles.textarea}
+                          value={arquivoInstrucaoIaNode}
+                          onChange={(e) => setArquivoInstrucaoIaNode(e.target.value)}
+                          placeholder="Ex: Interprete se este arquivo é um comprovante de pagamento no valor mínimo de R$ 150,00."
+                        />
+
+                        <span className={styles.help}>
+                          Explique o que a IA deve verificar no arquivo enviado pelo cliente.
+                        </span>
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Salvar resultado na variável</span>
+
+                        <input
+                          className={styles.input}
+                          value={arquivoSalvarVariavelNode}
+                          onChange={(e) => setArquivoSalvarVariavelNode(e.target.value)}
+                          placeholder="analise_arquivo"
+                        />
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Mensagem quando inválido</span>
+
+                        <textarea
+                          className={styles.textarea}
+                          value={arquivoMensagemErroNode}
+                          onChange={(e) => setArquivoMensagemErroNode(e.target.value)}
+                        />
                       </label>
                     </div>
                   )}

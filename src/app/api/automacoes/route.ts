@@ -499,6 +499,8 @@ export async function PUT(req: NextRequest) {
           rotulo: conexao.rotulo,
           ordem: conexao.ordem,
           ativo: true,
+          usar_ia: conexao.usar_ia === true,
+          descricao_ia: conexao.descricao_ia || null,
         };
       })
       .filter(Boolean);

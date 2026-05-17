@@ -341,6 +341,9 @@ export default function DisparosWhatsAppPage() {
   const [origemFiltro, setOrigemFiltro] = useState("");
   const [origensDisponiveis, setOrigensDisponiveis] = useState<string[]>([]);
 
+  const [campanhaFiltro, setCampanhaFiltro] = useState("");
+  const [campanhasDisponiveis, setCampanhasDisponiveis] = useState<string[]>([]);
+
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
   const [resultado, setResultado] = useState<ResultadoDisparo[]>([]);
@@ -453,7 +456,7 @@ export default function DisparosWhatsAppPage() {
     }
   }
 
-  async function carregarContatos(busca = "", origem = "") {
+  async function carregarContatos(busca = "", origem = "", campanha = "") {
     try {
       setLoadingContatos(true);
       setErro("");
@@ -466,6 +469,10 @@ export default function DisparosWhatsAppPage() {
 
       if (origem.trim()) {
         params.set("origem", origem.trim());
+      }
+
+      if (campanha.trim()) {
+        params.set("campanha", campanha.trim());
       }
 
       params.set("pagina", "1");
@@ -484,6 +491,9 @@ export default function DisparosWhatsAppPage() {
       const lista = Array.isArray(json.contatos) ? json.contatos : [];
       setContatos(lista);
       setOrigensDisponiveis(Array.isArray(json.origens) ? json.origens : []);
+      setCampanhasDisponiveis(
+        Array.isArray(json.campanhas) ? json.campanhas : []
+      );
       setTotalContatosDisponiveis(Number(json.total || 0));
 
     } catch (error: any) {
@@ -518,17 +528,17 @@ export default function DisparosWhatsAppPage() {
   useEffect(() => {
     carregarUsuarioLogado();
     carregarIntegracoes();
-    carregarContatos("", "");
+    carregarContatos("", "", "");
     carregarHistorico();
   }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      carregarContatos(buscaContato, origemFiltro);
+      carregarContatos(buscaContato, origemFiltro, campanhaFiltro);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [buscaContato, origemFiltro]);
+  }, [buscaContato, origemFiltro, campanhaFiltro]);
 
   useEffect(() => {
     setTemplateId("");
@@ -924,130 +934,67 @@ export default function DisparosWhatsAppPage() {
                   <div className={styles.errorAlert}>
                     You do not have permission to access this feature.
                   </div>
-                </div>
+                </div> 
               ) : (
               <form onSubmit={handleSubmit} className={styles.form}>
-                <div className={styles.topGrid}>
+                <div className={styles.setupPreviewGrid}>
                   <div className={styles.field}>
-                    <label className={styles.label}>WhatsApp Integration</label>
-                    <select
-                      value={integracaoId}
-                      onChange={(e) => setIntegracaoId(e.target.value)}
-                      className={styles.input}
-                    >
-                      <option value="">Select a connection</option>
-                      {integracoes.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.nome_conexao} {item.numero ? `- ${item.numero}` : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <div className={styles.setupColumn}>
+                      <div className={styles.field}>
+                        <label className={styles.label}>WhatsApp Integration</label>
+                        <select
+                          value={integracaoId}
+                          onChange={(e) => setIntegracaoId(e.target.value)}
+                          className={styles.input}
+                        >
+                          <option value="">Select a connection</option>
+                          {integracoes.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.nome_conexao} {item.numero ? `- ${item.numero}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                    {integracaoSelecionada ? (
-                      <div className={styles.infoBox}>
+                      <div className={styles.field}>
+                        <label className={styles.label}>Approved template</label>
+                        <select
+                          value={templateId}
+                          onChange={(e) => setTemplateId(e.target.value)}
+                          className={styles.input}
+                          disabled={!integracaoId || loadingTemplates}
+                        >
+                          <option value="">
+                            {!integracaoId
+                              ? "Select a connection first"
+                              : loadingTemplates
+                              ? "Loading templates..."
+                              : "Select a template"}
+                          </option>
+
+                          {templates.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.nome} - {getTemplateStatusLabel(item.status)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    
+                    {templateSelecionado ? (
+                      <div className={styles.templateInfoBox}>
                         <div>
-                          <strong>Status:</strong>{" "}
-                          {formatarStatusIntegracao(integracaoSelecionada.status)}
+                          <strong>Category:</strong> {templateSelecionado.categoria || "-"}
                         </div>
+
+                        <div className={styles.templateInfoDivider} />
+
                         <div>
-                          <strong>WABA ID:</strong> {integracaoSelecionada.waba_id || "-"}
+                          <strong>Language:</strong> {templateSelecionado.idioma || "-"}
                         </div>
                       </div>
                     ) : null}
-                  </div>
-
-                  <div className={styles.field}>
-                    <label className={styles.label}>Approved template</label>
-                    <select
-                      value={templateId}
-                      onChange={(e) => setTemplateId(e.target.value)}
-                      className={styles.input}
-                      disabled={!integracaoId || loadingTemplates}
-                    >
-                      <option value="">
-                        {!integracaoId
-                          ? "Select a connection first"
-                          : loadingTemplates
-                          ? "Loading templates..."
-                          : "Select a template"}
-                      </option>
-
-                      {templates.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.nome} - {getTemplateStatusLabel(item.status)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {templateSelecionado ? (
-                  <div className={styles.previewCard}>
-                    <div className={styles.previewHeader}>
-                      <div>
-                        <h3 className={styles.previewTitle}>
-                          {templateSelecionado.nome}
-                        </h3>
-                        <p className={styles.previewSubtitle}>
-                          Category: {templateSelecionado.categoria} • Language:{" "}
-                          {templateSelecionado.idioma}
-                        </p>
-                      </div>
-
-                      <span
-                        className={`${styles.badge} ${getTemplateStatusClass(
-                          templateSelecionado.status
-                        )}`}
-                      >
-                        {getTemplateStatusLabel(templateSelecionado.status)}
-                      </span>
-                    </div>
-
-                    <div className={styles.previewGrid}>
-                      {extrairHeader(templateSelecionado.payload) ? (
-                        <div className={styles.previewBlock}>
-                          <span className={styles.previewLabel}>Header</span>
-                          <p className={styles.previewText}>
-                            {extrairHeader(templateSelecionado.payload)}
-                          </p>
-                        </div>
-                      ) : null}
-
-                      <div className={styles.previewBlock}>
-                        <span className={styles.previewLabel}>Body</span>
-                        <p className={styles.previewText}>
-                          {extrairBody(templateSelecionado.payload)}
-                        </p>
-                      </div>
-
-                      {extrairFooter(templateSelecionado.payload) ? (
-                        <div className={styles.previewBlock}>
-                          <span className={styles.previewLabel}>Footer</span>
-                          <p className={styles.previewText}>
-                            {extrairFooter(templateSelecionado.payload)}
-                          </p>
-                        </div>
-                      ) : null}
-
-                      {extrairQuickReplies(templateSelecionado.payload).length > 0 ? (
-                        <div className={styles.previewBlock}>
-                          <span className={styles.previewLabel}>Quick replies</span>
-                          <div className={styles.quickRepliesList}>
-                            {extrairQuickReplies(templateSelecionado.payload).map(
-                              (texto, index) => (
-                                <span
-                                  key={`${texto}-${index}`}
-                                  className={styles.contactBadge}
-                                >
-                                  {texto}
-                                </span>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-
+                    
                       <div className={styles.templateHint}>
                         This template uses <strong>{totalVariaveis}</strong> variable(s).
                         In the current send, when variables exist, the system fills:
@@ -1055,7 +1002,52 @@ export default function DisparosWhatsAppPage() {
                         <strong> {" {{2}}"}</strong> with campaign, lead status, or phone number.
                       </div>
                   </div>
-                ) : null}
+
+                  <aside className={styles.previewSideCard}>
+                    <div className={styles.previewTopLine}>
+                      <strong>Preview</strong>
+                    </div>
+
+                    {templateSelecionado ? (
+                      <>
+                        <div className={styles.whatsappPreviewArea}>
+                          <div className={styles.whatsappBubble}>
+                            <strong className={styles.whatsappPreviewTitle}>
+                              {extrairHeader(templateSelecionado.payload) || templateSelecionado.nome}
+                            </strong>
+
+                            <p className={styles.whatsappPreviewText}>
+                              {extrairBody(templateSelecionado.payload)}
+                            </p>
+
+                            <div className={styles.whatsappPreviewMeta}>
+                              <span className={styles.whatsappPreviewFooter}>
+                                {extrairFooter(templateSelecionado.payload) || "Equipe de atendimento"}
+                              </span>
+
+                              <span className={styles.whatsappPreviewTime}>
+                                {new Date().toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+
+                            {extrairQuickReplies(templateSelecionado.payload).map((texto, index) => (
+                              <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
+                                ↩ {texto}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className={styles.previewEmptyState}>
+                        Select an approved template to preview the WhatsApp message.
+                      </div>
+                    )}
+                  </aside>
+                </div>
 
                 <div className={styles.searchRow}>
                   <div className={styles.searchFilters}>
@@ -1076,12 +1068,42 @@ export default function DisparosWhatsAppPage() {
                         onChange={(e) => setOrigemFiltro(e.target.value)}
                         className={styles.input}
                       >
-                        <option value="">All sources</option>
-                        {origensDisponiveis.map((origem) => (
-                          <option key={origem} value={origem}>
-                            {origem}
-                          </option>
-                        ))}
+                      {origensDisponiveis.length > 0 ? (
+                        <>
+                          <option value="">All sources</option>
+
+                          {origensDisponiveis.map((origem) => (
+                            <option key={origem} value={origem}>
+                              {origem}
+                            </option>
+                          ))}
+                        </>
+                      ) : (
+                        <option value="">No sources found</option>
+                      )}
+                      </select>
+                    </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label}>Filter by campaign</label>
+                      <select
+                        value={campanhaFiltro}
+                        onChange={(e) => setCampanhaFiltro(e.target.value)}
+                        className={styles.input}
+                      >
+                        {campanhasDisponiveis.length > 0 ? (
+                          <>
+                            <option value="">All campaigns</option>
+
+                            {campanhasDisponiveis.map((campanha) => (
+                              <option key={campanha} value={campanha}>
+                                {campanha}
+                              </option>
+                            ))}
+                          </>
+                        ) : (
+                          <option value="">No campaigns found</option>
+                        )}
                       </select>
                     </div>
                   </div>
@@ -1102,9 +1124,15 @@ export default function DisparosWhatsAppPage() {
                       onClick={() => {
                         setBuscaContato("");
                         setOrigemFiltro("");
+                        setCampanhaFiltro("");
                         limparSelecao();
                       }}
-                      disabled={contatosSelecionados.length === 0 && !buscaContato && !origemFiltro}
+                      disabled={
+                        contatosSelecionados.length === 0 &&
+                        !buscaContato &&
+                        !origemFiltro &&
+                        !campanhaFiltro
+                      }
                     >
                       Clear filters
                     </button>
@@ -1216,6 +1244,27 @@ export default function DisparosWhatsAppPage() {
                               {contato.email ? (
                                 <p className={styles.contactMeta}>{contato.email}</p>
                               ) : null}
+
+
+                              <div className={styles.contactBadges}>
+                                {contato.origem ? (
+                                  <span className={styles.contactBadge}>
+                                    {contato.origem}
+                                  </span>
+                                ) : null}
+
+                                {contato.status_lead ? (
+                                  <span className={styles.contactBadge}>
+                                    {contato.status_lead}
+                                  </span>
+                                ) : null}
+
+                                {contato.campanha ? (
+                                  <span className={styles.contactBadge}>
+                                    {contato.campanha}
+                                  </span>
+                                ) : null}
+                              </div>
                             </div>
 
                             <button
@@ -1296,46 +1345,62 @@ export default function DisparosWhatsAppPage() {
                 <p className={styles.cardSubtitle}>
                   Saved discharges are always visible here.
                 </p>
-              </div>
+              </div> 
             </div>
 
-            <div className={styles.resultsSummary}>
-              <button
-                type="button"
-                className={styles.summaryCard}
-                onClick={() => setFiltroHistorico("todos")}
-              >
-                <span className={styles.summaryLabel}>Total</span>
-                <strong className={styles.summaryValue}>{resultado.length}</strong>
-              </button>
+          <div className={styles.resultsSummary}>
+            <button
+              type="button"
+              className={
+                filtroHistorico === "todos"
+                  ? `${styles.summaryCard} ${styles.summaryCardActive}`
+                  : styles.summaryCard
+              }
+              onClick={() => setFiltroHistorico("todos")}
+            >
+              <span className={styles.summaryLabel}>Total</span>
+              <strong className={styles.summaryValue}>{resultado.length}</strong>
+            </button>
 
-              <button
-                type="button"
-                className={styles.summaryCard}
-                onClick={() => setFiltroHistorico("sucesso")}
-              >
-                <span className={styles.summaryLabel}>Delivered</span>
-                <strong className={styles.summaryValue}>{totalSucesso}</strong>
-              </button>
+            <button
+              type="button"
+              className={
+                filtroHistorico === "sucesso"
+                  ? `${styles.summaryCard} ${styles.summaryCardActive}`
+                  : styles.summaryCard
+              }
+              onClick={() => setFiltroHistorico("sucesso")}
+            >
+              <span className={styles.summaryLabel}>Delivered</span>
+              <strong className={styles.summaryValue}>{totalSucesso}</strong>
+            </button>
 
-              <button
-                type="button"
-                className={styles.summaryCard}
-                onClick={() => setFiltroHistorico("processando")}
-              >
-                <span className={styles.summaryLabel}>Pending</span>
-                <strong className={styles.summaryValue}>{totalProcessando}</strong>
-              </button>
+            <button
+              type="button"
+              className={
+                filtroHistorico === "processando"
+                  ? `${styles.summaryCard} ${styles.summaryCardActive}`
+                  : styles.summaryCard
+              }
+              onClick={() => setFiltroHistorico("processando")}
+            >
+              <span className={styles.summaryLabel}>Pending</span>
+              <strong className={styles.summaryValue}>{totalProcessando}</strong>
+            </button>
 
-              <button
-                type="button"
-                className={styles.summaryCard}
-                onClick={() => setFiltroHistorico("falha")}
-              >
-                <span className={styles.summaryLabel}>Failed</span>
-                <strong className={styles.summaryValue}>{totalFalha}</strong>
-              </button>
-            </div>
+            <button
+              type="button"
+              className={
+                filtroHistorico === "falha"
+                  ? `${styles.summaryCard} ${styles.summaryCardActive}`
+                  : styles.summaryCard
+              }
+              onClick={() => setFiltroHistorico("falha")}
+            >
+              <span className={styles.summaryLabel}>Failed</span>
+              <strong className={styles.summaryValue}>{totalFalha}</strong>
+            </button>
+          </div>
 
             {loadingHistorico ? (
               <div className={styles.emptyState}>Loading history...</div>

@@ -205,3 +205,106 @@ if (Object.keys(payload).length === 0) {
     contato: data,
   });
 }
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const resultado = await getUsuarioContexto();
+
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status }
+      );
+    }
+
+    const { usuario } = resultado;
+    const { id: contatoId } = await context.params;
+
+    const supabase = getSupabaseAdmin();
+
+    const { data: contato, error: contatoError } = await supabase
+      .from("contatos")
+      .select("id, empresa_id")
+      .eq("id", contatoId)
+      .eq("empresa_id", usuario.empresa_id)
+      .single();
+
+    if (contatoError || !contato) {
+      return NextResponse.json(
+        { ok: false, error: "Contato não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    const { data: conversas, error: conversasError } = await supabase
+      .from("conversas")
+      .select("id")
+      .eq("contato_id", contatoId)
+      .eq("empresa_id", usuario.empresa_id);
+
+    if (conversasError) {
+      return NextResponse.json(
+        { ok: false, error: "Erro ao buscar conversas do contato." },
+        { status: 500 }
+      );
+    }
+
+    const conversaIds = (conversas || []).map((conversa) => conversa.id);
+
+    if (conversaIds.length > 0) {
+      const { error: mensagensError } = await supabase
+        .from("mensagens")
+        .delete()
+        .in("conversa_id", conversaIds)
+        .eq("empresa_id", usuario.empresa_id);
+
+      if (mensagensError) {
+        return NextResponse.json(
+          { ok: false, error: "Erro ao excluir mensagens do contato." },
+          { status: 500 }
+        );
+      }
+
+      const { error: excluirConversasError } = await supabase
+        .from("conversas")
+        .delete()
+        .in("id", conversaIds)
+        .eq("empresa_id", usuario.empresa_id);
+
+      if (excluirConversasError) {
+        return NextResponse.json(
+          { ok: false, error: "Erro ao excluir conversas do contato." },
+          { status: 500 }
+        );
+      }
+    }
+
+    const { error: excluirContatoError } = await supabase
+      .from("contatos")
+      .delete()
+      .eq("id", contatoId)
+      .eq("empresa_id", usuario.empresa_id);
+
+    if (excluirContatoError) {
+      return NextResponse.json(
+        { ok: false, error: "Erro ao excluir contato." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: "Contato, conversa e mensagens excluídos com sucesso.",
+    });
+  } catch (error) {
+    console.error("Erro ao excluir contato:", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Erro interno ao excluir contato." },
+      { status: 500 }
+    );
+  }
+}
