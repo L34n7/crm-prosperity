@@ -27,24 +27,8 @@ function extrairJson(texto: string) {
   }
 }
 
-export async function interpretarArquivoComIA(params: {
-  instrucao: string;
-  arquivoUrl: string;
-  mimeType?: string | null;
-}): Promise<ResultadoInterpretacaoArquivo> {
-  const { instrucao, arquivoUrl, mimeType } = params;
-
-  if (!arquivoUrl) {
-    return {
-      sucesso: false,
-      status: "erro",
-      motivo: "Arquivo sem URL para análise.",
-      dados_extraidos: {},
-      confianca: 0,
-    };
-  }
-
-  const prompt = `
+function montarPrompt(instrucao: string) {
+  return `
 Você é uma IA de análise de arquivos recebidos no WhatsApp.
 
 Instrução do usuário:
@@ -68,24 +52,56 @@ Regras:
 - Não invente dados.
 - Se for comprovante, extraia valor, data, pagador, recebedor, banco e id_transacao quando possível.
 `.trim();
+}
+
+export async function interpretarArquivoComIA(params: {
+  instrucao: string;
+  arquivoUrl: string;
+  mimeType?: string | null;
+}): Promise<ResultadoInterpretacaoArquivo> {
+  const { instrucao, arquivoUrl, mimeType } = params;
+
+  if (!arquivoUrl) {
+    return {
+      sucesso: false,
+      status: "erro",
+      motivo: "Arquivo sem URL para análise.",
+      dados_extraidos: {},
+      confianca: 0,
+    };
+  }
+
+  const prompt = montarPrompt(instrucao);
+  const mime = String(mimeType || "").toLowerCase();
+  const ehPdf = mime.includes("pdf");
 
   try {
+    const content: any[] = [
+      {
+        type: "input_text",
+        text: prompt,
+      },
+    ];
+
+    if (ehPdf) {
+      content.push({
+        type: "input_file",
+        file_url: arquivoUrl,
+      });
+    } else {
+      content.push({
+        type: "input_image",
+        image_url: arquivoUrl,
+        detail: "low",
+      });
+    }
+
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       input: [
         {
           role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: prompt,
-            },
-            {
-              type: "input_image",
-              image_url: arquivoUrl,
-              detail: "low",
-            },
-          ],
+          content,
         },
       ],
     });
@@ -109,9 +125,11 @@ Regras:
       String(json.status || "")
     );
 
+    const status = statusPermitido ? json.status : "erro";
+
     return {
-      sucesso: json.sucesso === true && json.status === "aprovado",
-      status: statusPermitido ? json.status : "erro",
+      sucesso: json.sucesso === true && status === "aprovado",
+      status,
       motivo: String(json.motivo || "Análise concluída."),
       dados_extraidos:
         json.dados_extraidos && typeof json.dados_extraidos === "object"

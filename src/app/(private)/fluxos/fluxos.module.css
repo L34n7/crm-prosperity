@@ -536,6 +536,17 @@
   );
 }
 
+.nodeArquivoIA {
+  border: 1px solid #a9d0ff;
+  background: linear-gradient(
+    135deg,
+    #b380ffd7 0%,
+    #b1e7fb 60%,
+    #b8ecff 70%,
+    #fb88ff 110%
+  );
+}
+
 .nodePadrao {
   border-color: #e2e8f0;
   background: #ffffff;
@@ -1195,7 +1206,21 @@
     135deg,
     #ddfff8 0%,
     #fff1ff 100%
-  );  border-radius: 16px;
+  );  
+  border-radius: 16px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.arquivoIABox{
+  border: 1px solid #b4fafe;
+  background: linear-gradient(
+    135deg,
+    #ddfff8 0%,
+    #fff1ff 100%
+  );  
+  border-radius: 16px;
   padding: 14px;
   display: grid;
   gap: 12px;

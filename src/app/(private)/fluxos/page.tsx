@@ -115,7 +115,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Captura";
   if (tipo === "agendar_disparo") return "Agendar disparo";
-  if (tipo === "interpretar_arquivo_ia") return "Interpretar arquivo IA";
+  if (tipo === "interpretar_arquivo_ia") return "Inter. arquivo IA";
   return tipo;
 }
 
@@ -132,7 +132,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "avaliacao") return styles.nodeAvaliacao;
   if (tipo === "capturar_resposta") return styles.nodePergunta;
   if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
-  if (tipo === "interpretar_arquivo_ia") return styles.nodePergunta;
+  if (tipo === "interpretar_arquivo_ia") return styles.nodeArquivoIA;
   return styles.nodePadrao;
 }
 
@@ -422,8 +422,6 @@ export default function FluxosPage() {
   const [carregandoTemplatesWhatsapp, setCarregandoTemplatesWhatsapp] = useState(false);
 
   const [arquivoInstrucaoIaNode, setArquivoInstrucaoIaNode] = useState("");
-  const [arquivoSalvarVariavelNode, setArquivoSalvarVariavelNode] =
-    useState("analise_arquivo");
   const [arquivoMensagemErroNode, setArquivoMensagemErroNode] = useState("");
 
   const [agendarDisparoTemplateIdNode, setAgendarDisparoTemplateIdNode] = useState("");
@@ -1226,10 +1224,6 @@ function offsetLabelConexao(edgeId: string) {
       String(configuracaoJson?.instrucao_ia || "")
     );
 
-    setArquivoSalvarVariavelNode(
-      String(configuracaoJson?.salvar_variavel || "analise_arquivo")
-    );
-
     setArquivoMensagemErroNode(
       String(
         configuracaoJson?.mensagem_erro ||
@@ -1476,8 +1470,7 @@ function aplicarEdicaoNoInterno() {
       if (tipoFinal === "interpretar_arquivo_ia") {
         configuracao_json.instrucao_ia = arquivoInstrucaoIaNode.trim();
         configuracao_json.tipos_aceitos = ["imagem", "documento"];
-        configuracao_json.salvar_variavel =
-          arquivoSalvarVariavelNode.trim().toLowerCase() || "analise_arquivo";
+        configuracao_json.salvar_variavel = "analise_arquivo";
         configuracao_json.mensagem_erro =
           arquivoMensagemErroNode.trim() ||
           "Não consegui interpretar o arquivo. Envie uma imagem ou PDF legível.";
@@ -3001,6 +2994,7 @@ useEffect(() => {
                     "encerrar",
                     "avaliacao",
                     "capturar_resposta",
+                    "interpretar_arquivo_ia",
                   ].includes(tipoNodeEdicao) && (
                     <label className={styles.field}>
                       <span className={styles.label}>
@@ -3020,6 +3014,8 @@ useEffect(() => {
                           ? "Mensagem de encerramento (opcional)"
                           : tipoNodeEdicao === "avaliacao"
                           ? "Pergunta de avaliação"
+                          : tipoNodeEdicao === "interpretar_arquivo_ia"
+                          ? "Mensagem solicitando o arquivo"
                           : "Mensagem"}
                       </span>
 
@@ -3547,7 +3543,7 @@ useEffect(() => {
                   )}
 
                   {tipoNodeEdicao === "interpretar_arquivo_ia" && (
-                    <div className={styles.optionsBox}>
+                    <div className={styles.arquivoIABox}>
                       <label className={styles.field}>
                         <span className={styles.label}>Instrução para IA</span>
 
@@ -3564,17 +3560,6 @@ useEffect(() => {
                       </label>
 
                       <label className={styles.field}>
-                        <span className={styles.label}>Salvar resultado na variável</span>
-
-                        <input
-                          className={styles.input}
-                          value={arquivoSalvarVariavelNode}
-                          onChange={(e) => setArquivoSalvarVariavelNode(e.target.value)}
-                          placeholder="analise_arquivo"
-                        />
-                      </label>
-
-                      <label className={styles.field}>
                         <span className={styles.label}>Mensagem quando inválido</span>
 
                         <textarea
@@ -3583,6 +3568,26 @@ useEffect(() => {
                           onChange={(e) => setArquivoMensagemErroNode(e.target.value)}
                         />
                       </label>
+                      <div className={styles.warningBox}>
+                        <strong>Como usar as conexões deste bloco</strong>
+
+                        <p>
+                          Após interpretar o arquivo, a IA retorna um status para o fluxo seguir.
+                          Crie conexões saindo deste bloco.
+                        </p>
+
+                        <ul className={styles.warningList}>
+                          <li>
+                            <strong>aprovado</strong> — quando o arquivo atende à instrução.
+                          </li>
+                          <li>
+                            <strong>reprovado</strong> — quando o arquivo não atende à instrução.
+                          </li>
+                          <li>
+                            <strong>erro</strong> — quando o arquivo está ilegível ou não pôde ser analisado.
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                   )}
 
@@ -3710,6 +3715,7 @@ useEffect(() => {
                     "enviar_botoes",
                     "capturar_resposta",
                     "avaliacao",
+                    "interpretar_arquivo_ia",
                   ].includes(tipoNodeEdicao) && (
                     <div className={styles.tentativasBox}>
                       <div>
