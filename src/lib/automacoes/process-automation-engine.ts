@@ -1919,10 +1919,17 @@ async function registrarInterpretacaoArquivoAutomacao(params: {
 
     const arquivoUrl = arquivoSalvo.signedUrl;
 
+    const camposExtracao = Array.isArray(config.campos_extracao)
+      ? config.campos_extracao
+          .map((campo: any) => String(campo || "").trim())
+          .filter(Boolean)
+      : [];
+
     const resultado = await interpretarArquivoComIA({
       instrucao: instrucaoIa,
       arquivoUrl,
       mimeType: arquivo.mimeType || input.mimeType,
+      camposExtracao,
     });
 
     await supabaseAdmin.from("automacao_arquivo_analises").insert({
@@ -1965,6 +1972,54 @@ async function registrarInterpretacaoArquivoAutomacao(params: {
         onConflict: "empresa_id,execucao_id,chave",
       }
     );
+
+    const motivoAnalise = String(resultado.motivo || "");
+    const confiancaAnalise = String(resultado.confianca || "");
+    const dadosExtraidos = resultado.dados_extraidos || {};
+
+    const variaveisDaAnalise = [
+      {
+        empresa_id: empresaId,
+        execucao_id: execucao.id,
+        contato_id: execucao.contato_id,
+        chave: `${chave}_motivo`,
+        valor: motivoAnalise,
+        metadata_json: {
+          origem: "interpretar_arquivo_ia",
+          variavel_pai: chave,
+        },
+        updated_at: new Date().toISOString(),
+      },
+      {
+        empresa_id: empresaId,
+        execucao_id: execucao.id,
+        contato_id: execucao.contato_id,
+        chave: `${chave}_confianca`,
+        valor: confiancaAnalise,
+        metadata_json: {
+          origem: "interpretar_arquivo_ia",
+          variavel_pai: chave,
+        },
+        updated_at: new Date().toISOString(),
+      },
+      ...Object.entries(dadosExtraidos).map(([campo, valor]) => ({
+        empresa_id: empresaId,
+        execucao_id: execucao.id,
+        contato_id: execucao.contato_id,
+        chave: `${chave}_${campo}`.toLowerCase(),
+        valor: String(valor ?? ""),
+        metadata_json: {
+          origem: "interpretar_arquivo_ia",
+          variavel_pai: chave,
+          campo_extraido: campo,
+        },
+        updated_at: new Date().toISOString(),
+      })),
+    ];
+
+    await supabaseAdmin.from("automacao_variaveis").upsert(variaveisDaAnalise, {
+      onConflict: "empresa_id,execucao_id,chave",
+    });
 
     await registrarLog({
       empresaId,

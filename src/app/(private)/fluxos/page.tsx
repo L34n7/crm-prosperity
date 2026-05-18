@@ -399,6 +399,7 @@ export default function FluxosPage() {
   const [capturaTipoNode, setCapturaTipoNode] = useState("nome");
   const [capturaMensagemErroNode, setCapturaMensagemErroNode] = useState("");
   const [capturaMaxTentativasNode, setCapturaMaxTentativasNode] = useState("3");
+  const [arquivoCamposExtracaoNode, setArquivoCamposExtracaoNode] = useState("");
 
   const [maxTentativasInvalidasNode, setMaxTentativasInvalidasNode] = useState("3");
   const [maxTentativasSemRespostaNode, setMaxTentativasSemRespostaNode] = useState("3");
@@ -1231,6 +1232,12 @@ function offsetLabelConexao(edgeId: string) {
       )
     );
 
+    setArquivoCamposExtracaoNode(
+      Array.isArray(configuracaoJson?.campos_extracao)
+        ? configuracaoJson.campos_extracao.join("\n")
+        : ""
+    );
+
     if (Array.isArray(configuracaoJson?.opcoes)) {
       setOpcoesNode(configuracaoJson.opcoes);
     } else {
@@ -1474,6 +1481,20 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.mensagem_erro =
           arquivoMensagemErroNode.trim() ||
           "Não consegui interpretar o arquivo. Envie uma imagem ou PDF legível.";
+
+        configuracao_json.campos_extracao = arquivoCamposExtracaoNode
+          .split("\n")
+          .map((campo) =>
+            campo
+              .trim()
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^a-z0-9_]/g, "_")
+              .replace(/_+/g, "_")
+              .replace(/^_|_$/g, "")
+          )
+          .filter(Boolean);
       }
 
         configuracao_json.notificar_ao_chegar = notificarAoChegarNode;
@@ -3556,6 +3577,23 @@ useEffect(() => {
 
                         <span className={styles.help}>
                           Explique o que a IA deve verificar no arquivo enviado pelo cliente.
+                        </span>
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Campos para extrair</span>
+
+                        <textarea
+                          className={styles.textarea}
+                          value={arquivoCamposExtracaoNode}
+                          onChange={(e) => setArquivoCamposExtracaoNode(e.target.value)}
+                          placeholder={`valor\nbanco\npagador\ndata\nid_transacao`}
+                        />
+
+                        <span className={styles.help}>
+                          Informe uma variável por linha. A IA só poderá retornar esses campos.
+                          Exemplo: valor, banco, pagador. Depois você poderá usar como
+                          {" "}{"{{analise_arquivo_valor}}"}.
                         </span>
                       </label>
 

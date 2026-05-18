@@ -27,12 +27,33 @@ function extrairJson(texto: string) {
   }
 }
 
-function montarPrompt(instrucao: string) {
+function montarPrompt(instrucao: string, camposExtracao: string[]) {
+  const camposValidos = camposExtracao
+    .map((campo) => String(campo || "").trim())
+    .filter(Boolean);
+
+  const instrucaoCampos =
+    camposValidos.length > 0
+      ? `
+Campos permitidos em dados_extraidos:
+${camposValidos.map((campo) => `- ${campo}`).join("\n")}
+
+Regras dos campos:
+- Use SOMENTE os campos listados acima dentro de dados_extraidos.
+- Não crie campos novos.
+- Se não encontrar uma informação, retorne o campo com valor vazio.
+`
+      : `
+Não extraia campos específicos em dados_extraidos, a menos que seja indispensável.
+`;
+
   return `
 Você é uma IA de análise de arquivos recebidos no WhatsApp.
 
 Instrução do usuário:
 ${instrucao}
+
+${instrucaoCampos}
 
 Analise o arquivo e responda SOMENTE em JSON válido neste formato:
 
@@ -50,7 +71,6 @@ Regras:
 - Use "reprovado" se o arquivo não atender à instrução.
 - Use "erro" se estiver ilegível, inacessível ou inconclusivo.
 - Não invente dados.
-- Se for comprovante, extraia valor, data, pagador, recebedor, banco e id_transacao quando possível.
 `.trim();
 }
 
@@ -58,8 +78,9 @@ export async function interpretarArquivoComIA(params: {
   instrucao: string;
   arquivoUrl: string;
   mimeType?: string | null;
+  camposExtracao?: string[];
 }): Promise<ResultadoInterpretacaoArquivo> {
-  const { instrucao, arquivoUrl, mimeType } = params;
+  const { instrucao, arquivoUrl, mimeType, camposExtracao = [] } = params;
 
   if (!arquivoUrl) {
     return {
@@ -71,7 +92,7 @@ export async function interpretarArquivoComIA(params: {
     };
   }
 
-  const prompt = montarPrompt(instrucao);
+  const prompt = montarPrompt(instrucao, camposExtracao);
   const mime = String(mimeType || "").toLowerCase();
   const ehPdf = mime.includes("pdf");
 
@@ -127,14 +148,28 @@ export async function interpretarArquivoComIA(params: {
 
     const status = statusPermitido ? json.status : "erro";
 
+    const dadosExtraidosBrutos =
+      json.dados_extraidos && typeof json.dados_extraidos === "object"
+        ? json.dados_extraidos
+        : {};
+
+    const camposPermitidos = camposExtracao
+      .map((campo) => String(campo || "").trim())
+      .filter(Boolean);
+
+    const dadosExtraidosFiltrados =
+      camposPermitidos.length > 0
+        ? camposPermitidos.reduce((acc: Record<string, any>, campo) => {
+            acc[campo] = dadosExtraidosBrutos[campo] ?? "";
+            return acc;
+          }, {})
+        : dadosExtraidosBrutos;
+        
     return {
       sucesso: json.sucesso === true && status === "aprovado",
       status,
       motivo: String(json.motivo || "Análise concluída."),
-      dados_extraidos:
-        json.dados_extraidos && typeof json.dados_extraidos === "object"
-          ? json.dados_extraidos
-          : {},
+      dados_extraidos: dadosExtraidosFiltrados,
       confianca: Number(json.confianca || 0),
     };
   } catch (error: any) {
