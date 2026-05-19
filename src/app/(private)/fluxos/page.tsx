@@ -85,6 +85,16 @@ type TemplateWhatsappOpcao = {
   payload?: any;
 };
 
+type AgendaOpcao = {
+  id: string;
+  nome: string;
+  timezone: string;
+  duracao_minutos: number;
+  intervalo_minutos: number;
+  janela_dias: number;
+  status: string;
+};
+
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
@@ -115,6 +125,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Captura";
   if (tipo === "agendar_disparo") return "Agendar disparo";
+  if (tipo === "agendar_horario") return "Agendar horario";
   if (tipo === "interpretar_arquivo_ia") return "Inter. arquivo IA";
   return tipo;
 }
@@ -130,8 +141,9 @@ function corTipoNo(tipo: string) {
   if (tipo === "enviar_audio") return styles.nodeAudio;
   if (tipo === "enviar_botoes") return styles.nodeBotoes;
   if (tipo === "avaliacao") return styles.nodeAvaliacao;
-  if (tipo === "capturar_resposta") return styles.nodePergunta;
+  if (tipo === "capturar_resposta") return styles.nodeCaptura;
   if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
+  if (tipo === "agendar_horario") return styles.nodeAgenda;
   if (tipo === "interpretar_arquivo_ia") return styles.nodeArquivoIA;
   return styles.nodePadrao;
 }
@@ -149,6 +161,7 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Capturar resposta";
   if (tipo === "agendar_disparo") return "Agendar disparo";
+  if (tipo === "agendar_horario") return "Agendar horario";
   if (tipo === "interpretar_arquivo_ia") return "Interpretar arquivo IA";
   return "Novo bloco";
 }
@@ -219,7 +232,7 @@ function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {
 }
 
 function rotuloPadraoPorTipoNo(tipoNo: string) {
-  return tipoNoEsperaResposta(tipoNo) ? "Condição" : "Sempre seguir";
+  return tipoNoEsperaResposta(tipoNo) ? "Nova condição" : "Sempre seguir";
 }
 
 function dbNoParaReactFlow(no: AutomacaoNo): Node {
@@ -392,6 +405,7 @@ export default function FluxosPage() {
   const [valorCondicao, setValorCondicao] = useState("");
   const [tipoCondicaoConexao, setTipoCondicaoConexao] =
     useState("resposta_contem");
+  const [nomeConexaoEditadoManual, setNomeConexaoEditadoManual] = useState(false);
 
   const [usarIaConexao, setUsarIaConexao] = useState(false);
   const [descricaoIaConexao, setDescricaoIaConexao] = useState("");
@@ -421,6 +435,8 @@ export default function FluxosPage() {
 
   const [templatesWhatsapp, setTemplatesWhatsapp] = useState<TemplateWhatsappOpcao[]>([]);
   const [carregandoTemplatesWhatsapp, setCarregandoTemplatesWhatsapp] = useState(false);
+  const [agendasOpcoes, setAgendasOpcoes] = useState<AgendaOpcao[]>([]);
+  const [carregandoAgendasOpcoes, setCarregandoAgendasOpcoes] = useState(false);
 
   const [arquivoInstrucaoIaNode, setArquivoInstrucaoIaNode] = useState("");
   const [arquivoMensagemErroNode, setArquivoMensagemErroNode] = useState("");
@@ -430,6 +446,13 @@ export default function FluxosPage() {
   const [agendarDisparoUnidadeNode, setAgendarDisparoUnidadeNode] =
     useState<"horas" | "dias">("horas");
   const [agendarDisparoVariaveisNode, setAgendarDisparoVariaveisNode] = useState("");
+  const [agendaIdNode, setAgendaIdNode] = useState("");
+  const [agendaQuantidadeOpcoesNode, setAgendaQuantidadeOpcoesNode] = useState("6");
+  const [agendaJanelaDiasNode, setAgendaJanelaDiasNode] = useState("14");
+  const [agendaMensagemSemHorariosNode, setAgendaMensagemSemHorariosNode] =
+    useState("No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.");
+  const [agendaMensagemConfirmacaoNode, setAgendaMensagemConfirmacaoNode] =
+    useState("Perfeito, seu horario ficou agendado para {{agenda_data}} as {{agenda_hora}}.");
   const [previewCustoAgendarDisparo, setPreviewCustoAgendarDisparo] = useState<{
     categoria: string;
     totalSelecionados: number;
@@ -467,6 +490,10 @@ export default function FluxosPage() {
     );
   }, [templatesWhatsapp, agendarDisparoTemplateIdNode]);
 
+  const agendaSelecionadaNode = useMemo(() => {
+    return agendasOpcoes.find((agenda) => agenda.id === agendaIdNode) || null;
+  }, [agendasOpcoes, agendaIdNode]);
+
   async function carregarTemplatesWhatsapp() {
     try {
       setCarregandoTemplatesWhatsapp(true);
@@ -486,6 +513,28 @@ export default function FluxosPage() {
       setErro(error?.message || "Erro ao carregar templates.");
     } finally {
       setCarregandoTemplatesWhatsapp(false);
+    }
+  }
+
+  async function carregarAgendasOpcoes() {
+    try {
+      setCarregandoAgendasOpcoes(true);
+
+      const res = await fetch("/api/agendas/opcoes", {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar agendas.");
+      }
+
+      setAgendasOpcoes(json.agendas || []);
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao carregar agendas.");
+    } finally {
+      setCarregandoAgendasOpcoes(false);
     }
   }
 
@@ -698,6 +747,10 @@ export default function FluxosPage() {
   function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {
     const ehSempreSeguir = conexao.condicao_json?.tipo === "sempre";
     const offsetY = offsetLabelConexao(conexao.id);
+    const usarIA = conexao.usar_ia === true;
+
+    const labelConexao =
+      conexao.rotulo || conexao.condicao_json?.valor || "";
     return {
       id: conexao.id,
       source: conexao.no_origem_id,
@@ -711,7 +764,9 @@ export default function FluxosPage() {
       animated: true,
       label: ehSempreSeguir
         ? ""
-        : conexao.rotulo || conexao.condicao_json?.valor || "",
+        : usarIA
+        ? `✨ ${labelConexao}`
+        : labelConexao,
 
       labelStyle: {
         fill: "#0f172a",
@@ -751,6 +806,7 @@ export default function FluxosPage() {
     carregarSetores();
     carregarMidias();
     carregarTemplatesWhatsapp();
+    carregarAgendasOpcoes();
   }, []);
 
   useEffect(() => {
@@ -997,6 +1053,25 @@ async function criarFluxoRapido() {
               tempo_unidade: "horas",
               variaveis: [],
             }
+          : tipoNo === "agendar_horario"
+          ? {
+              agenda_id: "",
+              mensagem:
+                "Encontrei estes horarios disponiveis. Responda com o numero da opcao desejada:",
+              quantidade_opcoes: 6,
+              janela_dias: 14,
+              mensagem_sem_horarios:
+                "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.",
+              mensagem_confirmacao:
+                "Perfeito, seu horario ficou agendado para {{agenda_data}} as {{agenda_hora}}.",
+              max_tentativas_invalidas: 3,
+              max_tentativas_sem_resposta: 3,
+              acao_excesso_tentativas: "transferir_atendimento",
+              mensagem_excesso_tentativas:
+                "Nao consegui continuar o agendamento automatico. Vou te encaminhar para um atendente.",
+              notificar_excesso_tentativas: true,
+              notificar_email_excesso_tentativas: true,
+            }
           : tipoNo === "interpretar_arquivo_ia"
           ? {
               mensagem: "Envie o arquivo para análise.",
@@ -1221,6 +1296,24 @@ function offsetLabelConexao(edgeId: string) {
         : ""
     );
 
+    setAgendaIdNode(String(configuracaoJson?.agenda_id || ""));
+    setAgendaQuantidadeOpcoesNode(
+      String(configuracaoJson?.quantidade_opcoes || 6)
+    );
+    setAgendaJanelaDiasNode(String(configuracaoJson?.janela_dias || 14));
+    setAgendaMensagemSemHorariosNode(
+      String(
+        configuracaoJson?.mensagem_sem_horarios ||
+          "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente."
+      )
+    );
+    setAgendaMensagemConfirmacaoNode(
+      String(
+        configuracaoJson?.mensagem_confirmacao ||
+          "Perfeito, seu horario ficou agendado para {{agenda_data}} as {{agenda_hora}}."
+      )
+    );
+
     setArquivoInstrucaoIaNode(
       String(configuracaoJson?.instrucao_ia || "")
     );
@@ -1281,6 +1374,15 @@ function abrirEdicaoConexao(edge: Edge) {
   setRotuloConexao(String(data?.rotulo || ""));
   setValorCondicao(String(condicao.valor || ""));
   setConfirmandoExclusaoConexao(false);
+
+  const rotuloAtual = String(data?.rotulo || "").trim();
+  const valorAtual = String(condicao.valor || "").trim();
+
+  setNomeConexaoEditadoManual(
+    !!rotuloAtual &&
+      rotuloAtual !== "Nova condição" &&
+      rotuloAtual !== valorAtual
+  );
 
   setUsarIaConexao(Boolean(data?.usar_ia));
   setDescricaoIaConexao(String(data?.descricao_ia || ""));
@@ -1369,6 +1471,7 @@ function aplicarEdicaoNoInterno() {
         tipoFinal === "encerrar" ||
         tipoFinal === "avaliacao" ||
         tipoFinal === "capturar_resposta" ||
+        tipoFinal === "agendar_horario" ||
         tipoFinal === "interpretar_arquivo_ia"
       ) {
         configuracao_json.mensagem = mensagemNode;
@@ -1387,6 +1490,24 @@ function aplicarEdicaoNoInterno() {
           .filter(Boolean);
       }
 
+      if (tipoFinal === "agendar_horario") {
+        configuracao_json.agenda_id = agendaIdNode;
+        configuracao_json.quantidade_opcoes = Math.max(
+          1,
+          Math.min(10, Number(agendaQuantidadeOpcoesNode || 6))
+        );
+        configuracao_json.janela_dias = Math.max(
+          1,
+          Math.min(60, Number(agendaJanelaDiasNode || 14))
+        );
+        configuracao_json.mensagem_sem_horarios =
+          agendaMensagemSemHorariosNode.trim() ||
+          "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.";
+        configuracao_json.mensagem_confirmacao =
+          agendaMensagemConfirmacaoNode.trim() ||
+          "Perfeito, seu horario ficou agendado para {{agenda_data}} as {{agenda_hora}}.";
+      }
+
       if (tipoFinal === "pergunta_opcoes") {
         configuracao_json.opcoes = opcoesNode;
       }
@@ -1399,6 +1520,7 @@ function aplicarEdicaoNoInterno() {
         tipoFinal === "pergunta_opcoes" ||
         tipoFinal === "enviar_botoes" ||
         tipoFinal === "capturar_resposta" ||
+        tipoFinal === "agendar_horario" ||
         tipoFinal === "avaliacao" ||
         tipoFinal === "interpretar_arquivo_ia"
       ) {
@@ -1483,7 +1605,7 @@ function aplicarEdicaoNoInterno() {
           "Não consegui interpretar o arquivo. Envie uma imagem ou PDF legível.";
 
         configuracao_json.campos_extracao = arquivoCamposExtracaoNode
-          .split("\n")
+          .split(",")
           .map((campo) =>
             campo
               .trim()
@@ -1532,7 +1654,15 @@ function aplicarEdicaoConexao() {
 
       const ehSempreSeguir = tipoCondicaoConexao === "sempre";
       const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
+      const labelBase = ehTimeout
+        ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
+        : rotuloConexao || valorCondicao || "Condição";
 
+      const labelFinal =
+        usarIaConexao && !ehSempreSeguir
+          ? `✨ ${labelBase}`
+          : labelBase;
+          
       let condicaoJson: Record<string, any> = {};
 
       if (ehSempreSeguir) {
@@ -1581,11 +1711,7 @@ function aplicarEdicaoConexao() {
 
       return {
         ...edge,
-        label: ehSempreSeguir
-          ? ""
-          : ehTimeout
-          ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
-          : rotuloConexao || valorCondicao || "Condição",
+        label: ehSempreSeguir ? "" : labelFinal,
 
         data: {
           ...(edge.data || {}),
@@ -2213,6 +2339,22 @@ function validarFluxoAntesDeAtivar() {
       }
     }
 
+    if (tipoNo === "agendar_horario") {
+      if (!String(config.agenda_id || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma agenda.`;
+      }
+
+      if (!String(config.mensagem || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para oferecer horarios.`;
+      }
+
+      const quantidadeOpcoes = Number(config.quantidade_opcoes || 0);
+
+      if (!Number.isFinite(quantidadeOpcoes) || quantidadeOpcoes <= 0) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma quantidade valida de horarios.`;
+      }
+    }
+
     if (tipoNo === "interpretar_arquivo_ia") {
       if (!String(config.mensagem || "").trim()) {
         return `O bloco "${node.data?.titulo}" precisa ter uma mensagem solicitando o arquivo.`;
@@ -2727,6 +2869,17 @@ useEffect(() => {
                         className={styles.headerDropdownItem}
                         onClick={() => {
                           setMenuHeaderAberto(false);
+                          adicionarNo("agendar_horario");
+                        }}
+                      >
+                        + Agendar horario
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
                           adicionarNo("avaliacao");
                         }}
                       >
@@ -2970,6 +3123,19 @@ useEffect(() => {
                             setBotoesNode([]);
                             setMidiaUrlNode("");
                           }
+
+                          if (novoTipo === "agendar_horario") {
+                            setSetorDestino("");
+                            setOpcoesNode([]);
+                            setBotoesNode([]);
+                            setMidiaUrlNode("");
+
+                            if (!mensagemNode.trim()) {
+                              setMensagemNode(
+                                "Encontrei estes horarios disponiveis. Responda com o numero da opcao desejada:"
+                              );
+                            }
+                          }
                         }}
                       >
                         <option value="enviar_texto">Mensagem</option>
@@ -2982,6 +3148,7 @@ useEffect(() => {
                         <option value="enviar_audio">Áudio</option>
                         <option value="enviar_botoes">Pergunta com Botões</option>
                         <option value="agendar_disparo">Agendar disparo</option>
+                        <option value="agendar_horario">Agendar horario</option>
                         <option value="avaliacao">Avaliação</option>
                         <option value="interpretar_arquivo_ia">Interpretar arquivo IA</option>
                       </select>
@@ -3015,6 +3182,7 @@ useEffect(() => {
                     "encerrar",
                     "avaliacao",
                     "capturar_resposta",
+                    "agendar_horario",
                     "interpretar_arquivo_ia",
                   ].includes(tipoNodeEdicao) && (
                     <label className={styles.field}>
@@ -3035,6 +3203,8 @@ useEffect(() => {
                           ? "Mensagem de encerramento (opcional)"
                           : tipoNodeEdicao === "avaliacao"
                           ? "Pergunta de avaliação"
+                          : tipoNodeEdicao === "agendar_horario"
+                          ? "Mensagem para oferecer horarios"
                           : tipoNodeEdicao === "interpretar_arquivo_ia"
                           ? "Mensagem solicitando o arquivo"
                           : "Mensagem"}
@@ -3563,6 +3733,100 @@ useEffect(() => {
                     </div>
                   )}
 
+                  {tipoNodeEdicao === "agendar_horario" && (
+                    <div className={styles.optionsBox}>
+                      <div>
+                        <span className={styles.label}>Agenda automatica</span>
+                        <p className={styles.help}>
+                          O cliente recebe opcoes de horario e confirma respondendo o numero.
+                        </p>
+                      </div>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Agenda</span>
+
+                        <select
+                          className={styles.input}
+                          value={agendaIdNode}
+                          onChange={(e) => setAgendaIdNode(e.target.value)}
+                          disabled={carregandoAgendasOpcoes}
+                        >
+                          <option value="">
+                            {carregandoAgendasOpcoes
+                              ? "Carregando agendas..."
+                              : "Selecione uma agenda ativa"}
+                          </option>
+
+                          {agendasOpcoes.map((agenda) => (
+                            <option key={agenda.id} value={agenda.id}>
+                              {agenda.nome} - {agenda.duracao_minutos}min
+                            </option>
+                          ))}
+                        </select>
+
+                        {agendaSelecionadaNode && (
+                          <span className={styles.help}>
+                            Timezone: {agendaSelecionadaNode.timezone} · Janela padrao:{" "}
+                            {agendaSelecionadaNode.janela_dias} dias
+                          </span>
+                        )}
+                      </label>
+
+                      <div className={styles.optionRow}>
+                        <label className={styles.field}>
+                          <span className={styles.label}>Opcoes enviadas</span>
+
+                          <input
+                            type="number"
+                            min={1}
+                            max={10}
+                            className={styles.input}
+                            value={agendaQuantidadeOpcoesNode}
+                            onChange={(e) => setAgendaQuantidadeOpcoesNode(e.target.value)}
+                          />
+                        </label>
+
+                        <label className={styles.field}>
+                          <span className={styles.label}>Buscar por dias</span>
+
+                          <input
+                            type="number"
+                            min={1}
+                            max={60}
+                            className={styles.input}
+                            value={agendaJanelaDiasNode}
+                            onChange={(e) => setAgendaJanelaDiasNode(e.target.value)}
+                          />
+                        </label>
+                      </div>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Mensagem sem horarios</span>
+
+                        <textarea
+                          className={styles.textarea}
+                          value={agendaMensagemSemHorariosNode}
+                          onChange={(e) => setAgendaMensagemSemHorariosNode(e.target.value)}
+                        />
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Mensagem de confirmacao</span>
+
+                        <textarea
+                          className={styles.textarea}
+                          value={agendaMensagemConfirmacaoNode}
+                          onChange={(e) => setAgendaMensagemConfirmacaoNode(e.target.value)}
+                        />
+
+                        <span className={styles.help}>
+                          Variaveis: {"{{agenda_data}}"}, {"{{agenda_hora}}"},{" "}
+                          {"{{agenda_nome}}"} e {"{{agenda_label}}"}.
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
                   {tipoNodeEdicao === "interpretar_arquivo_ia" && (
                     <div className={styles.arquivoIABox}>
                       <label className={styles.field}>
@@ -3587,13 +3851,16 @@ useEffect(() => {
                           className={styles.textarea}
                           value={arquivoCamposExtracaoNode}
                           onChange={(e) => setArquivoCamposExtracaoNode(e.target.value)}
-                          placeholder={`valor\nbanco\npagador\ndata\nid_transacao`}
+                          placeholder="valor, banco, pagador, data, id_transacao"
                         />
 
                         <span className={styles.help}>
-                          Informe uma variável por linha. A IA só poderá retornar esses campos.
+                          Informe as variáveis separadas por vírgula, palavras sem acentos. A IA só poderá retornar esses campos.
                           Exemplo: valor, banco, pagador. Depois você poderá usar como
                           {" "}{"{{analise_arquivo_valor}}"}.
+                        </span>
+                        <span className={styles.help}>
+                          Váriaveis fixas: {"{{analise_arquivo}}"} {"{{analise_arquivo_motivo}}"}
                         </span>
                       </label>
 
@@ -3752,6 +4019,7 @@ useEffect(() => {
                     "pergunta_opcoes",
                     "enviar_botoes",
                     "capturar_resposta",
+                    "agendar_horario",
                     "avaliacao",
                     "interpretar_arquivo_ia",
                   ].includes(tipoNodeEdicao) && (
@@ -3945,7 +4213,10 @@ useEffect(() => {
                       <input
                         className={styles.input}
                         value={tipoCondicaoConexao === "sempre" ? "Sempre seguir" : rotuloConexao}
-                        onChange={(e) => setRotuloConexao(e.target.value)}
+                        onChange={(e) => {
+                          setNomeConexaoEditadoManual(true);
+                          setRotuloConexao(e.target.value);
+                        }}
                         placeholder="Ex: Opção 1, Sim, Comercial"
                         disabled={tipoCondicaoConexao === "sempre"}
                       />
@@ -4097,6 +4368,10 @@ useEffect(() => {
                             const novoValor = e.target.value;
 
                             setValorCondicao(novoValor);
+
+                            if (!nomeConexaoEditadoManual) {
+                              setRotuloConexao(novoValor);
+                            }
 
                             if (!descricaoIaConexao.trim()) {
                               setDescricaoIaConexao(

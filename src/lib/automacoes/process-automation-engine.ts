@@ -12,6 +12,11 @@ import { interpretarConexaoComIA } from "@/lib/ia/interpretar-conexao";
 import { interpretarArquivoComIA } from "@/lib/ia/interpretar-arquivo";
 import { baixarMidiaWhatsapp } from "@/lib/whatsapp/download-arquivo";
 import { salvarArquivoAnaliseStorage } from "@/lib/automacoes/salvar-arquivo-analise";
+import {
+  existeConflitoAgenda,
+  formatarSlotAgenda,
+  listarSlotsDisponiveis,
+} from "@/lib/agendas/agenda-service";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -425,6 +430,62 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
             execucaoId: execucaoExistente.id,
           };
         }
+      }
+
+      if (noAtual.tipo_no === "agendar_horario") {
+        const agendamentoRegistrado = await registrarEscolhaAgendaAutomacao({
+          empresaId,
+          conversaId,
+          execucao: execucaoExistente,
+          no: noAtual,
+          mensagemTexto,
+          numeroDestino,
+        });
+
+        if (!agendamentoRegistrado.ok) {
+          return agendamentoRegistrado;
+        }
+
+        if (!agendamentoRegistrado.valido && !agendamentoRegistrado.excedeuTentativas) {
+          return {
+            ok: true,
+            status: "agenda_escolha_invalida_aguardando_nova_resposta",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+
+        if (agendamentoRegistrado.excedeuTentativas) {
+          await executarAcaoExcessoTentativas({
+            empresaId,
+            conversaId,
+            execucao: execucaoExistente,
+            no: noAtual,
+            numeroDestino,
+            tipo: "resposta_invalida",
+          });
+
+          return {
+            ok: true,
+            status: "agenda_tentativas_excedidas",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+
+        await seguirParaProximoNo({
+          empresaId,
+          conversaId,
+          execucaoId: execucaoExistente.id,
+          fluxoId: execucaoExistente.fluxo_id,
+          noAtualId: execucaoExistente.no_atual_id,
+          mensagemTexto: "agendado",
+          numeroDestino,
+        });
+
+        return {
+          ok: true,
+          status: "agenda_agendamento_registrado",
+          execucaoId: execucaoExistente.id,
+        };
       }
 
       if (noAtual.tipo_no === "interpretar_arquivo_ia") {
@@ -1010,6 +1071,164 @@ export async function executarNo(params: {
       fluxoId,
       noAtualId: no.id,
       mensagemTexto,
+      numeroDestino,
+    });
+
+    return;
+  }
+
+  if (no.tipo_no === "agendar_horario") {
+    const config = no.configuracao_json || {};
+    const agendaId = String(config.agenda_id || "").trim();
+
+    if (!agendaId) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agenda_erro_configuracao",
+        descricao: "Bloco Agendar horario sem agenda configurada.",
+        entrada: config,
+        saida: {},
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        mensagemTexto: "sem_agenda",
+        numeroDestino,
+      });
+
+      return;
+    }
+
+    const resultadoSlots = await listarSlotsDisponiveis({
+      supabase: supabaseAdmin,
+      empresaId,
+      agendaId,
+      janelaDias: Number(config.janela_dias || 14),
+      limite: Number(config.quantidade_opcoes || 6),
+    });
+
+    if (resultadoSlots.slots.length === 0) {
+      const mensagemSemHorarios =
+        String(config.mensagem_sem_horarios || "").trim() ||
+        "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.";
+
+      await enviarMensagemAutomacao({
+        empresaId,
+        conversaId,
+        numeroDestino,
+        conteudo: mensagemSemHorarios,
+        execucaoId,
+        noId: no.id,
+      });
+
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agenda_sem_horarios",
+        descricao: "Nenhum horario disponivel foi encontrado para a agenda.",
+        entrada: config,
+        saida: {
+          agenda_id: agendaId,
+        },
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        mensagemTexto: "sem_horarios",
+        numeroDestino,
+      });
+
+      return;
+    }
+
+    const mensagemBase =
+      String(config.mensagem || "").trim() ||
+      "Encontrei estes horarios disponiveis. Responda com o numero da opcao desejada:";
+
+    const mensagemOpcoes = [
+      mensagemBase,
+      "",
+      ...resultadoSlots.slots.map((slot) => `${slot.indice}. ${slot.label}`),
+    ].join("\n");
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagemOpcoes,
+      execucaoId,
+      noId: no.id,
+    });
+
+    const { data: execucaoAtual } = await supabaseAdmin
+      .from("automacao_execucoes")
+      .select("metadata_json")
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    const metadataAtual = execucaoAtual?.metadata_json || {};
+    const agendaOpcoes = metadataAtual.agenda_opcoes || {};
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        no_atual_id: no.id,
+        status: "aguardando",
+        metadata_json: {
+          ...metadataAtual,
+          agenda_opcoes: {
+            ...agendaOpcoes,
+            [no.id]: resultadoSlots.slots.map((slot) => ({
+              indice: slot.indice,
+              inicio_at: slot.inicio_at,
+              fim_at: slot.fim_at,
+              label: slot.label,
+              data_label: slot.data_label,
+              hora_label: slot.hora_label,
+              agenda_id: agendaId,
+            })),
+          },
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "agenda_horarios_oferecidos",
+      descricao: "Horarios de agenda enviados ao cliente.",
+      entrada: config,
+      saida: {
+        agenda_id: agendaId,
+        total_opcoes: resultadoSlots.slots.length,
+        opcoes: resultadoSlots.slots,
+      },
+    });
+
+    await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
       numeroDestino,
     });
 
@@ -1846,6 +2065,368 @@ async function registrarCapturaRespostaAutomacao(params: {
     ok: true,
     valido: true,
     excedeuTentativas: false,
+  };
+}
+
+function extrairIndiceOpcaoAgenda(mensagemTexto: string) {
+  const texto = String(mensagemTexto || "").trim();
+  const match = texto.match(/\d+/);
+
+  if (!match) return null;
+
+  const indice = Number(match[0]);
+
+  return Number.isFinite(indice) && indice > 0 ? indice : null;
+}
+
+function substituirVariaveisAgenda(
+  texto: string,
+  valores: Record<string, string>
+) {
+  return String(texto || "").replace(/\{\{\s*([^}]+)\s*\}\}/g, (match, chaveRaw) => {
+    const chave = String(chaveRaw || "").trim().toLowerCase();
+
+    return valores[chave] ?? match;
+  });
+}
+
+async function reenviarOpcoesAgenda(params: {
+  empresaId: string;
+  conversaId: string;
+  execucao: any;
+  no: any;
+  numeroDestino: string;
+  mensagemInicial: string;
+}) {
+  const { empresaId, conversaId, execucao, no, numeroDestino, mensagemInicial } =
+    params;
+
+  const config = no.configuracao_json || {};
+  const agendaId = String(config.agenda_id || "").trim();
+
+  if (!agendaId) return false;
+
+  const resultadoSlots = await listarSlotsDisponiveis({
+    supabase: supabaseAdmin,
+    empresaId,
+    agendaId,
+    janelaDias: Number(config.janela_dias || 14),
+    limite: Number(config.quantidade_opcoes || 6),
+  });
+
+  if (resultadoSlots.slots.length === 0) {
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo:
+        String(config.mensagem_sem_horarios || "").trim() ||
+        "No momento nao encontrei horarios disponiveis.",
+      execucaoId: execucao.id,
+      noId: no.id,
+    });
+
+    return false;
+  }
+
+  const mensagemOpcoes = [
+    mensagemInicial,
+    "",
+    ...resultadoSlots.slots.map((slot) => `${slot.indice}. ${slot.label}`),
+  ].join("\n");
+
+  await enviarMensagemAutomacao({
+    empresaId,
+    conversaId,
+    numeroDestino,
+    conteudo: mensagemOpcoes,
+    execucaoId: execucao.id,
+    noId: no.id,
+  });
+
+  const metadataAtual = execucao.metadata_json || {};
+  const agendaOpcoes = metadataAtual.agenda_opcoes || {};
+
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      status: "aguardando",
+      metadata_json: {
+        ...metadataAtual,
+        agenda_opcoes: {
+          ...agendaOpcoes,
+          [no.id]: resultadoSlots.slots.map((slot) => ({
+            indice: slot.indice,
+            inicio_at: slot.inicio_at,
+            fim_at: slot.fim_at,
+            label: slot.label,
+            data_label: slot.data_label,
+            hora_label: slot.hora_label,
+            agenda_id: agendaId,
+          })),
+        },
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", execucao.id)
+    .eq("empresa_id", empresaId);
+
+  return true;
+}
+
+async function registrarEscolhaAgendaAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+  execucao: any;
+  no: any;
+  mensagemTexto: string;
+  numeroDestino: string;
+}) {
+  const { empresaId, conversaId, execucao, no, mensagemTexto, numeroDestino } =
+    params;
+
+  const config = no.configuracao_json || {};
+  const agendaId = String(config.agenda_id || "").trim();
+  const metadataAtual = execucao.metadata_json || {};
+  const agendaOpcoes = metadataAtual.agenda_opcoes || {};
+  const opcoes = Array.isArray(agendaOpcoes[no.id]) ? agendaOpcoes[no.id] : [];
+  const indiceEscolhido = extrairIndiceOpcaoAgenda(mensagemTexto);
+  const opcaoEscolhida = opcoes.find(
+    (opcao: any) => Number(opcao.indice) === indiceEscolhido
+  );
+
+  if (!agendaId || !opcaoEscolhida) {
+    const tentativa = await registrarTentativaBloco({
+      empresaId,
+      execucao,
+      no,
+      tipo: "resposta_invalida",
+    });
+
+    if (tentativa.excedeu) {
+      await registrarLog({
+        empresaId,
+        execucaoId: execucao.id,
+        fluxoId: execucao.fluxo_id,
+        noId: no.id,
+        tipoEvento: "agenda_tentativas_excedidas",
+        descricao: "Cliente excedeu tentativas ao escolher horario da agenda.",
+        entrada: {
+          mensagemTexto,
+        },
+        saida: {},
+      });
+
+      return { ok: true, valido: false, excedeuTentativas: true };
+    }
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo:
+        String(config.mensagem_opcao_invalida || "").trim() ||
+        "Nao encontrei essa opcao. Responda com o numero de um dos horarios listados.",
+      execucaoId: execucao.id,
+      noId: no.id,
+    });
+
+    return { ok: true, valido: false, excedeuTentativas: false };
+  }
+
+  const inicioAt = String(opcaoEscolhida.inicio_at || "");
+  const fimAt = String(opcaoEscolhida.fim_at || "");
+
+  const conflito = await existeConflitoAgenda({
+    supabase: supabaseAdmin,
+    empresaId,
+    agendaId,
+    inicioAt,
+    fimAt,
+  });
+
+  if (conflito) {
+    const reenviou = await reenviarOpcoesAgenda({
+      empresaId,
+      conversaId,
+      execucao,
+      no,
+      numeroDestino,
+      mensagemInicial:
+        "Esse horario acabou de ficar indisponivel. Escolha uma das novas opcoes:",
+    });
+
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "agenda_horario_conflito",
+      descricao: "Horario escolhido ja estava ocupado ao confirmar.",
+      entrada: {
+        opcaoEscolhida,
+      },
+      saida: {
+        reenviou_opcoes: reenviou,
+      },
+    });
+
+    return { ok: true, valido: false, excedeuTentativas: false };
+  }
+
+  const { data: contato } = execucao.contato_id
+    ? await supabaseAdmin
+        .from("contatos")
+        .select("id, nome, telefone, email")
+        .eq("id", execucao.contato_id)
+        .eq("empresa_id", empresaId)
+        .maybeSingle()
+    : { data: null };
+
+  const { data: agenda } = await supabaseAdmin
+    .from("agenda_calendarios")
+    .select("id, nome, timezone")
+    .eq("id", agendaId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  const labels = formatarSlotAgenda(
+    inicioAt,
+    fimAt,
+    agenda?.timezone || "America/Sao_Paulo"
+  );
+
+  const { data: agendamento, error: agendamentoError } = await supabaseAdmin
+    .from("agenda_agendamentos")
+    .insert({
+      empresa_id: empresaId,
+      agenda_id: agendaId,
+      contato_id: execucao.contato_id || null,
+      conversa_id: conversaId,
+      conversa_protocolo_id: execucao.conversa_protocolo_id || null,
+      automacao_execucao_id: execucao.id,
+      automacao_fluxo_id: execucao.fluxo_id,
+      automacao_no_id: no.id,
+      titulo: agenda?.nome || no.titulo || "Agendamento",
+      nome_cliente: contato?.nome || null,
+      telefone_cliente: contato?.telefone || numeroDestino || null,
+      email_cliente: contato?.email || null,
+      inicio_at: inicioAt,
+      fim_at: fimAt,
+      status: "agendado",
+      origem: "automacao",
+      metadata_json: {
+        escolha_cliente: mensagemTexto,
+        opcao_escolhida: opcaoEscolhida,
+        agenda_nome: agenda?.nome || null,
+      },
+    })
+    .select("*")
+    .single();
+
+  if (agendamentoError || !agendamento) {
+    console.error("[AUTOMATION_ENGINE] Erro ao criar agendamento:", agendamentoError);
+
+    return {
+      ok: false,
+      valido: false,
+      excedeuTentativas: false,
+      error: "Erro ao criar agendamento.",
+    };
+  }
+
+  const valoresAgenda = {
+    agenda_agendamento_id: agendamento.id,
+    agenda_nome: agenda?.nome || "",
+    agenda_data: labels.data_label,
+    agenda_hora: labels.hora_label,
+    agenda_inicio_at: inicioAt,
+    agenda_fim_at: fimAt,
+    agenda_label: labels.label,
+  };
+
+  const chavesAgenda = Object.keys(valoresAgenda);
+
+  await supabaseAdmin
+    .from("automacao_variaveis")
+    .delete()
+    .eq("empresa_id", empresaId)
+    .eq("execucao_id", execucao.id)
+    .in("chave", chavesAgenda);
+
+  await supabaseAdmin.from("automacao_variaveis").insert(
+    Object.entries(valoresAgenda).map(([chave, valor]) => ({
+      empresa_id: empresaId,
+      execucao_id: execucao.id,
+      contato_id: execucao.contato_id || null,
+      chave,
+      valor,
+      metadata_json: {
+        origem: "agendar_horario",
+        agendamento_id: agendamento.id,
+      },
+      updated_at: new Date().toISOString(),
+    }))
+  );
+
+  const mensagemConfirmacao = substituirVariaveisAgenda(
+    String(config.mensagem_confirmacao || "").trim() ||
+      "Perfeito, seu horario ficou agendado para {{agenda_data}} as {{agenda_hora}}.",
+    valoresAgenda
+  );
+
+  await enviarMensagemAutomacao({
+    empresaId,
+    conversaId,
+    numeroDestino,
+    conteudo: mensagemConfirmacao,
+    execucaoId: execucao.id,
+    noId: no.id,
+  });
+
+  const proximasOpcoes = {
+    ...(metadataAtual.agenda_opcoes || {}),
+    [no.id]: [],
+  };
+
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      metadata_json: {
+        ...metadataAtual,
+        agenda_opcoes: proximasOpcoes,
+        agenda_agendamento_id: agendamento.id,
+        agenda_status: "agendado",
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", execucao.id)
+    .eq("empresa_id", empresaId);
+
+  await registrarLog({
+    empresaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    noId: no.id,
+    tipoEvento: "agenda_agendamento_criado",
+    descricao: "Agendamento criado automaticamente pelo fluxo.",
+    entrada: {
+      mensagemTexto,
+      opcaoEscolhida,
+    },
+    saida: {
+      agendamento_id: agendamento.id,
+      inicio_at: inicioAt,
+      fim_at: fimAt,
+      agenda_id: agendaId,
+    },
+  });
+
+  return {
+    ok: true,
+    valido: true,
+    excedeuTentativas: false,
+    agendamentoId: agendamento.id,
   };
 }
 

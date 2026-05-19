@@ -943,7 +943,7 @@ export default function DisparosWhatsAppPage() {
                       <div className={styles.field}>
                         <label className={styles.label}>WhatsApp Integration</label>
                         <select
-                          value={integracaoId}
+                          value={integracaoId} 
                           onChange={(e) => setIntegracaoId(e.target.value)}
                           className={styles.input}
                         >

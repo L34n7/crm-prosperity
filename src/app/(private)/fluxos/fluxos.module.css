@@ -488,6 +488,15 @@
   background: #ffedd7;
 }
 
+.nodeCaptura {
+  border-color: #92ff8a;
+  background: linear-gradient(
+    135deg,
+    #baffb6 0%,
+    #ffe090 100%
+  );
+}
+
 .nodeTransferir {
   border-color: #cdc2fa;
   background: #e6e1ff;
@@ -533,6 +542,15 @@
     135deg,
     #faa7a7c6 0%,
     #ffec72c6 80%
+  );
+}
+
+.nodeAgenda {
+  border-color: #a3daff;
+  background: linear-gradient(
+    135deg,
+    #9dfeeb 0%,
+    #7ec7f8 100%
   );
 }
 
