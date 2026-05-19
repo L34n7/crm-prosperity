@@ -9,6 +9,19 @@ export type AgendaSlot = {
   hora_label: string;
 };
 
+export type PreferenciaHorarioAgenda = {
+  tipo: "a_partir_de" | "antes_de" | "periodo" | "exato" | "por_volta";
+  inicio_minutos?: number | null;
+  fim_minutos?: number | null;
+  hora_minutos?: number | null;
+  periodo?: "manha" | "tarde" | "noite" | null;
+};
+
+export type InterpretacaoDataHorarioAgenda = {
+  data: string | null;
+  preferencia: PreferenciaHorarioAgenda | null;
+};
+
 type LocalParts = {
   year: number;
   month: number;
@@ -58,6 +71,16 @@ function parseHora(valor: string) {
   return hora * 60 + minuto;
 }
 
+function removerAcentos(valor: string) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function normalizarTextoAgenda(valor: string) {
+  return removerAcentos(valor).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function localParts(date: Date, timezone: string): LocalParts {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
@@ -97,12 +120,31 @@ function adicionarDias(
   };
 }
 
+function adicionarMeses(
+  parts: Pick<LocalParts, "year" | "month" | "day">,
+  meses: number
+) {
+  const date = new Date(Date.UTC(parts.year, parts.month - 1 + meses, parts.day));
+
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+  };
+}
+
 function diaSemanaLocal(parts: Pick<LocalParts, "year" | "month" | "day">) {
   return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
 }
 
 export function dataLocalDeIso(iso: string, timezone: string) {
   return ymdKey(localParts(new Date(iso), timezone));
+}
+
+export function minutosLocaisDeIso(iso: string, timezone: string) {
+  const parts = localParts(new Date(iso), timezone);
+
+  return parts.hour * 60 + parts.minute;
 }
 
 export function zonedTimeToUtc(params: {
@@ -172,6 +214,292 @@ export function formatarSlotAgenda(
     hora_label: horaInicio,
     label: `${dataLabel} às ${horaInicio} (${horaFim})`,
   };
+}
+
+function interpretarDataNumerica(
+  texto: string,
+  hojeLocal: Pick<LocalParts, "year" | "month" | "day">
+) {
+  const dataCompleta = texto.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/);
+
+  if (dataCompleta) {
+    const dia = Number(dataCompleta[1]);
+    const mes = Number(dataCompleta[2]);
+    const anoRaw = Number(dataCompleta[3]);
+    const ano = anoRaw < 100 ? 2000 + anoRaw : anoRaw;
+
+    if (dia >= 1 && dia <= 31 && mes >= 1 && mes <= 12) {
+      return ymdKey({ year: ano, month: mes, day: dia });
+    }
+  }
+
+  const dataSemAno = texto.match(/\b(\d{1,2})[\/.-](\d{1,2})\b/);
+
+  if (dataSemAno) {
+    const dia = Number(dataSemAno[1]);
+    const mes = Number(dataSemAno[2]);
+
+    if (dia >= 1 && dia <= 31 && mes >= 1 && mes <= 12) {
+      let ano = hojeLocal.year;
+
+      if (
+        mes < hojeLocal.month ||
+        (mes === hojeLocal.month && dia < hojeLocal.day)
+      ) {
+        ano += 1;
+      }
+
+      return ymdKey({ year: ano, month: mes, day: dia });
+    }
+  }
+
+  const diaMes = texto.match(/\bdia\s+(\d{1,2})\b/);
+
+  if (diaMes) {
+    const dia = Number(diaMes[1]);
+
+    if (dia >= 1 && dia <= 31) {
+      const dataBase =
+        dia < hojeLocal.day ? adicionarMeses(hojeLocal, 1) : hojeLocal;
+
+      return ymdKey({
+        year: dataBase.year,
+        month: dataBase.month,
+        day: dia,
+      });
+    }
+  }
+
+  const numeroSolto = texto.match(/^\s*(\d{1,2})\s*$/);
+
+  if (numeroSolto) {
+    const dia = Number(numeroSolto[1]);
+
+    if (dia >= 8 && dia <= 31) {
+      const dataBase =
+        dia < hojeLocal.day ? adicionarMeses(hojeLocal, 1) : hojeLocal;
+
+      return ymdKey({
+        year: dataBase.year,
+        month: dataBase.month,
+        day: dia,
+      });
+    }
+  }
+
+  return null;
+}
+
+function interpretarDataRelativa(
+  texto: string,
+  hojeLocal: Pick<LocalParts, "year" | "month" | "day">
+) {
+  if (/\bhoje\b/.test(texto)) {
+    return ymdKey(hojeLocal);
+  }
+
+  if (/\bdepois de amanha\b/.test(texto)) {
+    return ymdKey(adicionarDias(hojeLocal, 2));
+  }
+
+  if (/\bamanha\b/.test(texto)) {
+    return ymdKey(adicionarDias(hojeLocal, 1));
+  }
+
+  const diasSemana = [
+    ["domingo", "dom"],
+    ["segunda", "seg"],
+    ["terca", "ter"],
+    ["quarta", "qua"],
+    ["quinta", "qui"],
+    ["sexta", "sex"],
+    ["sabado", "sab"],
+  ];
+
+  for (let indice = 0; indice < diasSemana.length; indice++) {
+    const aliases = diasSemana[indice];
+    const encontrou = aliases.some((alias) =>
+      new RegExp(`\\b${alias}(?:-feira)?\\b`).test(texto)
+    );
+
+    if (!encontrou) continue;
+
+    const hojeSemana = diaSemanaLocal(hojeLocal);
+    let distancia = (indice - hojeSemana + 7) % 7;
+
+    if (distancia === 0 || /\bproxim[ao]\b/.test(texto)) {
+      distancia = distancia || 7;
+    }
+
+    return ymdKey(adicionarDias(hojeLocal, distancia));
+  }
+
+  return null;
+}
+
+function horaMatchParaMinutos(match: RegExpMatchArray | null) {
+  if (!match) return null;
+
+  const hora = Number(match[1]);
+  const minuto = Number(match[2] || 0);
+
+  if (hora < 0 || hora > 23 || minuto < 0 || minuto > 59) {
+    return null;
+  }
+
+  return hora * 60 + minuto;
+}
+
+function extrairHoraPorPadrao(texto: string, padrao: RegExp) {
+  return horaMatchParaMinutos(texto.match(padrao));
+}
+
+function interpretarPreferenciaHorario(texto: string): PreferenciaHorarioAgenda | null {
+  if (/\b(manha|pela manha|de manha)\b/.test(texto)) {
+    return {
+      tipo: "periodo",
+      inicio_minutos: 8 * 60,
+      fim_minutos: 12 * 60,
+      periodo: "manha",
+    };
+  }
+
+  if (/\b(tarde|pela tarde|a tarde|de tarde)\b/.test(texto)) {
+    return {
+      tipo: "periodo",
+      inicio_minutos: 12 * 60,
+      fim_minutos: 18 * 60,
+      periodo: "tarde",
+    };
+  }
+
+  if (/\b(noite|pela noite|a noite|de noite)\b/.test(texto)) {
+    return {
+      tipo: "periodo",
+      inicio_minutos: 18 * 60,
+      fim_minutos: 22 * 60,
+      periodo: "noite",
+    };
+  }
+
+  if (/\b(a partir|partir|depois|apos)\b/.test(texto)) {
+    const hora = extrairHoraPorPadrao(
+      texto,
+      /\b(?:a partir|partir|depois|apos)\s+(?:das|de|as)?\s*(\d{1,2})(?:[:h]\s*(\d{2}))?\s*(?:h|hr|hrs|horas)?\b/
+    );
+
+    if (hora == null) return null;
+
+    return {
+      tipo: "a_partir_de",
+      inicio_minutos: hora,
+      hora_minutos: hora,
+    };
+  }
+
+  if (/\b(antes|ate)\b/.test(texto)) {
+    const hora = extrairHoraPorPadrao(
+      texto,
+      /\b(?:antes|ate)\s+(?:das|de|as)?\s*(\d{1,2})(?:[:h]\s*(\d{2}))?\s*(?:h|hr|hrs|horas)?\b/
+    );
+
+    if (hora == null) return null;
+
+    return {
+      tipo: "antes_de",
+      fim_minutos: hora,
+      hora_minutos: hora,
+    };
+  }
+
+  if (/\b(por volta|perto|proximo)\b/.test(texto)) {
+    const hora = extrairHoraPorPadrao(
+      texto,
+      /\b(?:por volta|perto|proximo)\s+(?:das|de|as)?\s*(\d{1,2})(?:[:h]\s*(\d{2}))?\s*(?:h|hr|hrs|horas)?\b/
+    );
+
+    if (hora == null) return null;
+
+    return {
+      tipo: "por_volta",
+      hora_minutos: hora,
+    };
+  }
+
+  if (/\b(as|às)\b/.test(String(texto))) {
+    const hora = extrairHoraPorPadrao(
+      texto,
+      /\b(?:as|às)\s*(\d{1,2})(?:[:h]\s*(\d{2}))?\s*(?:h|hr|hrs|horas)?\b/
+    );
+
+    if (hora == null) return null;
+
+    return {
+      tipo: "exato",
+      hora_minutos: hora,
+    };
+  }
+
+  return null;
+}
+
+export function interpretarDataHorarioAgenda(
+  mensagem: string,
+  timezone = "America/Sao_Paulo"
+): InterpretacaoDataHorarioAgenda {
+  const texto = normalizarTextoAgenda(mensagem);
+  const hojeLocal = localParts(new Date(), timezone);
+  const data =
+    interpretarDataNumerica(texto, hojeLocal) ||
+    interpretarDataRelativa(texto, hojeLocal);
+
+  return {
+    data,
+    preferencia: interpretarPreferenciaHorario(texto),
+  };
+}
+
+export function filtrarSlotsPorPreferencia(
+  slots: AgendaSlot[],
+  preferencia: PreferenciaHorarioAgenda | null | undefined,
+  timezone = "America/Sao_Paulo"
+) {
+  if (!preferencia) return slots;
+
+  let filtrados = slots.filter((slot) => {
+    const minutos = minutosLocaisDeIso(slot.inicio_at, timezone);
+
+    if (
+      preferencia.inicio_minutos != null &&
+      minutos < preferencia.inicio_minutos
+    ) {
+      return false;
+    }
+
+    if (preferencia.fim_minutos != null && minutos >= preferencia.fim_minutos) {
+      return false;
+    }
+
+    if (preferencia.tipo === "exato" && preferencia.hora_minutos != null) {
+      return minutos === preferencia.hora_minutos;
+    }
+
+    return true;
+  });
+
+  if (preferencia.tipo === "por_volta" && preferencia.hora_minutos != null) {
+    filtrados = [...slots].sort((a, b) => {
+      const aMinutos = minutosLocaisDeIso(a.inicio_at, timezone);
+      const bMinutos = minutosLocaisDeIso(b.inicio_at, timezone);
+
+      return (
+        Math.abs(aMinutos - Number(preferencia.hora_minutos)) -
+        Math.abs(bMinutos - Number(preferencia.hora_minutos))
+      );
+    });
+  }
+
+  return filtrados;
 }
 
 export async function existeConflitoAgenda(params: {

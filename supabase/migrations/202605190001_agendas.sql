@@ -1,5 +1,5 @@
 -- Agenda comercial para marcação automática pelo WhatsApp.
--- Execute esta migration antes de ativar blocos do tipo `agendar_horario`.
+-- Execute esta migration antes de ativar os blocos modulares de agenda.
 
 CREATE TABLE IF NOT EXISTS public.agenda_calendarios (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -110,7 +110,6 @@ ALTER TABLE public.automacao_nos
         'avaliacao'::text,
         'capturar_resposta'::text,
         'agendar_disparo'::text,
-        'agendar_horario'::text,
         'interpretar_arquivo_ia'::text
       ]
     )

@@ -125,7 +125,11 @@ function labelTipoNo(tipo: string) {
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Captura";
   if (tipo === "agendar_disparo") return "Agendar disparo";
-  if (tipo === "agendar_horario") return "Agendar horario";
+  if (tipo === "agenda_buscar_agendamento") return "Buscar agenda";
+  if (tipo === "agenda_escolher_horario") return "Escolher horario";
+  if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
+  if (tipo === "agenda_remarcar_agendamento") return "Remarcar";
+  if (tipo === "agenda_cancelar_agendamento") return "Cancelar agenda";
   if (tipo === "interpretar_arquivo_ia") return "Inter. arquivo IA";
   return tipo;
 }
@@ -143,7 +147,11 @@ function corTipoNo(tipo: string) {
   if (tipo === "avaliacao") return styles.nodeAvaliacao;
   if (tipo === "capturar_resposta") return styles.nodeCaptura;
   if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
-  if (tipo === "agendar_horario") return styles.nodeAgenda;
+  if (tipo === "agenda_buscar_agendamento") return styles.nodeAgendaBuscar;
+  if (tipo === "agenda_escolher_horario") return styles.nodeAgendaEscolher;
+  if (tipo === "agenda_criar_agendamento") return styles.nodeAgendaCriar;
+  if (tipo === "agenda_remarcar_agendamento") return styles.nodeAgendaRemarcar;
+  if (tipo === "agenda_cancelar_agendamento") return styles.nodeAgendaCancelar;
   if (tipo === "interpretar_arquivo_ia") return styles.nodeArquivoIA;
   return styles.nodePadrao;
 }
@@ -161,7 +169,11 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Capturar resposta";
   if (tipo === "agendar_disparo") return "Agendar disparo";
-  if (tipo === "agendar_horario") return "Agendar horario";
+  if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";
+  if (tipo === "agenda_escolher_horario") return "Escolher horario";
+  if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
+  if (tipo === "agenda_remarcar_agendamento") return "Remarcar agendamento";
+  if (tipo === "agenda_cancelar_agendamento") return "Cancelar agendamento";
   if (tipo === "interpretar_arquivo_ia") return "Interpretar arquivo IA";
   return "Novo bloco";
 }
@@ -221,6 +233,7 @@ function tipoNoEsperaResposta(tipoNo: string) {
     tipoNo === "pergunta_opcoes" ||
     tipoNo === "enviar_botoes" ||
     tipoNo === "capturar_resposta" ||
+    tipoNo === "agenda_escolher_horario" ||
     tipoNo === "interpretar_arquivo_ia"
   );
 }
@@ -451,8 +464,14 @@ export default function FluxosPage() {
   const [agendaJanelaDiasNode, setAgendaJanelaDiasNode] = useState("14");
   const [agendaMensagemSemHorariosNode, setAgendaMensagemSemHorariosNode] =
     useState("No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.");
-  const [agendaMensagemConfirmacaoNode, setAgendaMensagemConfirmacaoNode] =
-    useState("Perfeito, seu horario ficou agendado para {{agenda_data}} as {{agenda_hora}}.");
+  const [agendaMensagemListarHorariosNode, setAgendaMensagemListarHorariosNode] =
+    useState("Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:");
+  const [agendaMensagemConflitoNode, setAgendaMensagemConflitoNode] =
+    useState("Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.");
+  const [agendaStatusAgendamentoNode, setAgendaStatusAgendamentoNode] =
+    useState("agendado");
+  const [agendaMotivoCancelamentoNode, setAgendaMotivoCancelamentoNode] =
+    useState("Cancelado pelo cliente via automacao");
   const [previewCustoAgendarDisparo, setPreviewCustoAgendarDisparo] = useState<{
     categoria: string;
     totalSelecionados: number;
@@ -489,10 +508,6 @@ export default function FluxosPage() {
       ) || null
     );
   }, [templatesWhatsapp, agendarDisparoTemplateIdNode]);
-
-  const agendaSelecionadaNode = useMemo(() => {
-    return agendasOpcoes.find((agenda) => agenda.id === agendaIdNode) || null;
-  }, [agendasOpcoes, agendaIdNode]);
 
   async function carregarTemplatesWhatsapp() {
     try {
@@ -1053,17 +1068,26 @@ async function criarFluxoRapido() {
               tempo_unidade: "horas",
               variaveis: [],
             }
-          : tipoNo === "agendar_horario"
+          : tipoNo === "agenda_buscar_agendamento"
+          ? {
+              agenda_id: "",
+              status_busca: ["agendado", "confirmado"],
+              mensagem_encontrado:
+                "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.",
+              mensagem_nao_encontrado:
+                "Nao encontrei nenhum agendamento futuro no seu contato.",
+            }
+          : tipoNo === "agenda_escolher_horario"
           ? {
               agenda_id: "",
               mensagem:
-                "Encontrei estes horarios disponiveis. Responda com o numero da opcao desejada:",
+                "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.",
+              mensagem_listar_horarios:
+                "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:",
               quantidade_opcoes: 6,
               janela_dias: 14,
               mensagem_sem_horarios:
-                "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.",
-              mensagem_confirmacao:
-                "Perfeito, seu horario ficou agendado para {{agenda_data}} as {{agenda_hora}}.",
+                "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.",
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
@@ -1071,6 +1095,30 @@ async function criarFluxoRapido() {
                 "Nao consegui continuar o agendamento automatico. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
               notificar_email_excesso_tentativas: true,
+            }
+          : tipoNo === "agenda_criar_agendamento"
+          ? {
+              agenda_id: "",
+              status_inicial: "agendado",
+              mensagem:
+                "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato.",
+              mensagem_conflito:
+                "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.",
+            }
+          : tipoNo === "agenda_remarcar_agendamento"
+          ? {
+              status_final: "agendado",
+              mensagem:
+                "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}.",
+              mensagem_conflito:
+                "Esse novo horario acabou de ficar indisponivel. Vamos escolher outro horario.",
+            }
+          : tipoNo === "agenda_cancelar_agendamento"
+          ? {
+              status_final: "cancelado",
+              motivo: "Cancelado pelo cliente via automacao",
+              mensagem:
+                "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar.",
             }
           : tipoNo === "interpretar_arquivo_ia"
           ? {
@@ -1199,7 +1247,13 @@ function offsetLabelConexao(edgeId: string) {
     setEditandoEdgeId(null);
 
     setTituloNode(String(node.data?.titulo || ""));
-    setMensagemNode(String(configuracaoJson?.mensagem || ""));
+    setMensagemNode(
+      String(
+        String(node.data?.tipo_no || "") === "agenda_buscar_agendamento"
+          ? configuracaoJson?.mensagem_encontrado || configuracaoJson?.mensagem || ""
+          : configuracaoJson?.mensagem || ""
+      )
+    );
     setDelayNode(
       node.data?.delay_segundos !== null &&
       node.data?.delay_segundos !== undefined
@@ -1307,10 +1361,29 @@ function offsetLabelConexao(edgeId: string) {
           "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente."
       )
     );
-    setAgendaMensagemConfirmacaoNode(
+    setAgendaMensagemListarHorariosNode(
       String(
-        configuracaoJson?.mensagem_confirmacao ||
-          "Perfeito, seu horario ficou agendado para {{agenda_data}} as {{agenda_hora}}."
+        configuracaoJson?.mensagem_listar_horarios ||
+          "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
+      )
+    );
+    setAgendaMensagemConflitoNode(
+      String(
+        configuracaoJson?.mensagem_conflito ||
+          "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario."
+      )
+    );
+    setAgendaStatusAgendamentoNode(
+      String(
+        configuracaoJson?.status_inicial ||
+          configuracaoJson?.status_final ||
+          "agendado"
+      )
+    );
+    setAgendaMotivoCancelamentoNode(
+      String(
+        configuracaoJson?.motivo ||
+          "Cancelado pelo cliente via automacao"
       )
     );
 
@@ -1471,7 +1544,11 @@ function aplicarEdicaoNoInterno() {
         tipoFinal === "encerrar" ||
         tipoFinal === "avaliacao" ||
         tipoFinal === "capturar_resposta" ||
-        tipoFinal === "agendar_horario" ||
+        tipoFinal === "agenda_buscar_agendamento" ||
+        tipoFinal === "agenda_escolher_horario" ||
+        tipoFinal === "agenda_criar_agendamento" ||
+        tipoFinal === "agenda_remarcar_agendamento" ||
+        tipoFinal === "agenda_cancelar_agendamento" ||
         tipoFinal === "interpretar_arquivo_ia"
       ) {
         configuracao_json.mensagem = mensagemNode;
@@ -1490,8 +1567,25 @@ function aplicarEdicaoNoInterno() {
           .filter(Boolean);
       }
 
-      if (tipoFinal === "agendar_horario") {
+      if (tipoFinal === "agenda_buscar_agendamento") {
         configuracao_json.agenda_id = agendaIdNode;
+        configuracao_json.status_busca = ["agendado", "confirmado"];
+        configuracao_json.mensagem_encontrado =
+          mensagemNode.trim() ||
+          "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.";
+        configuracao_json.mensagem_nao_encontrado =
+          agendaMensagemSemHorariosNode.trim() ||
+          "Nao encontrei nenhum agendamento futuro no seu contato.";
+      }
+
+      if (tipoFinal === "agenda_escolher_horario") {
+        configuracao_json.agenda_id = agendaIdNode;
+        configuracao_json.mensagem =
+          mensagemNode.trim() ||
+          "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.";
+        configuracao_json.mensagem_listar_horarios =
+          agendaMensagemListarHorariosNode.trim() ||
+          "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:";
         configuracao_json.quantidade_opcoes = Math.max(
           1,
           Math.min(10, Number(agendaQuantidadeOpcoesNode || 6))
@@ -1502,10 +1596,41 @@ function aplicarEdicaoNoInterno() {
         );
         configuracao_json.mensagem_sem_horarios =
           agendaMensagemSemHorariosNode.trim() ||
-          "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.";
-        configuracao_json.mensagem_confirmacao =
-          agendaMensagemConfirmacaoNode.trim() ||
-          "Perfeito, seu horario ficou agendado para {{agenda_data}} as {{agenda_hora}}.";
+          "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.";
+      }
+
+      if (tipoFinal === "agenda_criar_agendamento") {
+        configuracao_json.agenda_id = agendaIdNode;
+        configuracao_json.status_inicial =
+          agendaStatusAgendamentoNode === "confirmado" ? "confirmado" : "agendado";
+        configuracao_json.mensagem =
+          mensagemNode.trim() ||
+          "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato.";
+        configuracao_json.mensagem_conflito =
+          agendaMensagemConflitoNode.trim() ||
+          "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.";
+      }
+
+      if (tipoFinal === "agenda_remarcar_agendamento") {
+        configuracao_json.status_final =
+          agendaStatusAgendamentoNode === "confirmado" ? "confirmado" : "agendado";
+        configuracao_json.mensagem =
+          mensagemNode.trim() ||
+          "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}.";
+        configuracao_json.mensagem_conflito =
+          agendaMensagemConflitoNode.trim() ||
+          "Esse novo horario acabou de ficar indisponivel. Vamos escolher outro horario.";
+      }
+
+      if (tipoFinal === "agenda_cancelar_agendamento") {
+        configuracao_json.status_final =
+          agendaStatusAgendamentoNode === "faltou" ? "faltou" : "cancelado";
+        configuracao_json.motivo =
+          agendaMotivoCancelamentoNode.trim() ||
+          "Cancelado pelo cliente via automacao";
+        configuracao_json.mensagem =
+          mensagemNode.trim() ||
+          "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar.";
       }
 
       if (tipoFinal === "pergunta_opcoes") {
@@ -1520,7 +1645,7 @@ function aplicarEdicaoNoInterno() {
         tipoFinal === "pergunta_opcoes" ||
         tipoFinal === "enviar_botoes" ||
         tipoFinal === "capturar_resposta" ||
-        tipoFinal === "agendar_horario" ||
+        tipoFinal === "agenda_escolher_horario" ||
         tipoFinal === "avaliacao" ||
         tipoFinal === "interpretar_arquivo_ia"
       ) {
@@ -2339,20 +2464,18 @@ function validarFluxoAntesDeAtivar() {
       }
     }
 
-    if (tipoNo === "agendar_horario") {
-      if (!String(config.agenda_id || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma agenda.`;
-      }
+    if (
+      tipoNo === "agenda_escolher_horario" &&
+      !String(config.agenda_id || "").trim()
+    ) {
+      return `O bloco "${node.data?.titulo}" precisa ter uma agenda.`;
+    }
 
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para oferecer horarios.`;
-      }
-
-      const quantidadeOpcoes = Number(config.quantidade_opcoes || 0);
-
-      if (!Number.isFinite(quantidadeOpcoes) || quantidadeOpcoes <= 0) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma quantidade valida de horarios.`;
-      }
+    if (
+      tipoNo === "agenda_escolher_horario" &&
+      !String(config.mensagem || "").trim()
+    ) {
+      return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para pedir o dia.`;
     }
 
     if (tipoNo === "interpretar_arquivo_ia") {
@@ -2863,17 +2986,73 @@ useEffect(() => {
                       >
                         + Agendar disparo
                       </button>
+                      
+                      <div className={styles.headerSubmenuWrapper}>
+                        <button
+                          type="button"
+                          className={`${styles.headerDropdownItem} ${styles.headerSubmenuTrigger}`}
+                        >
+                          <span>+ Agendar Dia/hora</span>
+                          <span className={styles.headerSubmenuArrow}>‹</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("agendar_horario");
-                        }}
-                      >
-                        + Agendar horario
-                      </button>
+                        <div className={styles.headerSubmenuLeft}>
+                          <button
+                            type="button"
+                            className={styles.headerDropdownItem}
+                            onClick={() => {
+                              setMenuHeaderAberto(false);
+                              adicionarNo("agenda_buscar_agendamento");
+                            }}
+                          >
+                            + Buscar agendamento
+                          </button>
+
+                          <button
+                            type="button"
+                            className={styles.headerDropdownItem}
+                            onClick={() => {
+                              setMenuHeaderAberto(false);
+                              adicionarNo("agenda_escolher_horario");
+                            }}
+                          >
+                            + Escolher horário
+                          </button>
+
+                          <button
+                            type="button"
+                            className={styles.headerDropdownItem}
+                            onClick={() => {
+                              setMenuHeaderAberto(false);
+                              adicionarNo("agenda_criar_agendamento");
+                            }}
+                          >
+                            + Criar agendamento
+                          </button>
+
+                          <button
+                            type="button"
+                            className={styles.headerDropdownItem}
+                            onClick={() => {
+                              setMenuHeaderAberto(false);
+                              adicionarNo("agenda_remarcar_agendamento");
+                            }}
+                          >
+                            + Remarcar agendamento
+                          </button>
+
+                          <button
+                            type="button"
+                            className={styles.headerDropdownItem}
+                            onClick={() => {
+                              setMenuHeaderAberto(false);
+                              adicionarNo("agenda_cancelar_agendamento");
+                            }}
+                          >
+                            + Cancelar agendamento
+                          </button>
+                        </div>
+                      </div>
 
                       <button
                         type="button"
@@ -3124,16 +3303,38 @@ useEffect(() => {
                             setMidiaUrlNode("");
                           }
 
-                          if (novoTipo === "agendar_horario") {
+                          if (novoTipo.startsWith("agenda_")) {
                             setSetorDestino("");
                             setOpcoesNode([]);
                             setBotoesNode([]);
                             setMidiaUrlNode("");
 
-                            if (!mensagemNode.trim()) {
+                            if (novoTipo === "agenda_escolher_horario") {
                               setMensagemNode(
-                                "Encontrei estes horarios disponiveis. Responda com o numero da opcao desejada:"
+                                "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira."
                               );
+                              setAgendaMensagemListarHorariosNode(
+                                "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
+                              );
+                            }
+
+                            if (novoTipo === "agenda_criar_agendamento") {
+                              setMensagemNode(
+                                "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato."
+                              );
+                            }
+
+                            if (novoTipo === "agenda_remarcar_agendamento") {
+                              setMensagemNode(
+                                "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}."
+                              );
+                            }
+
+                            if (novoTipo === "agenda_cancelar_agendamento") {
+                              setMensagemNode(
+                                "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar."
+                              );
+                              setAgendaStatusAgendamentoNode("cancelado");
                             }
                           }
                         }}
@@ -3148,7 +3349,11 @@ useEffect(() => {
                         <option value="enviar_audio">Áudio</option>
                         <option value="enviar_botoes">Pergunta com Botões</option>
                         <option value="agendar_disparo">Agendar disparo</option>
-                        <option value="agendar_horario">Agendar horario</option>
+                        <option value="agenda_buscar_agendamento">Agenda: Buscar agendamento</option>
+                        <option value="agenda_escolher_horario">Agenda: Escolher horario</option>
+                        <option value="agenda_criar_agendamento">Agenda: Criar agendamento</option>
+                        <option value="agenda_remarcar_agendamento">Agenda: Remarcar agendamento</option>
+                        <option value="agenda_cancelar_agendamento">Agenda: Cancelar agendamento</option>
                         <option value="avaliacao">Avaliação</option>
                         <option value="interpretar_arquivo_ia">Interpretar arquivo IA</option>
                       </select>
@@ -3182,7 +3387,11 @@ useEffect(() => {
                     "encerrar",
                     "avaliacao",
                     "capturar_resposta",
-                    "agendar_horario",
+                    "agenda_buscar_agendamento",
+                    "agenda_escolher_horario",
+                    "agenda_criar_agendamento",
+                    "agenda_remarcar_agendamento",
+                    "agenda_cancelar_agendamento",
                     "interpretar_arquivo_ia",
                   ].includes(tipoNodeEdicao) && (
                     <label className={styles.field}>
@@ -3203,8 +3412,16 @@ useEffect(() => {
                           ? "Mensagem de encerramento (opcional)"
                           : tipoNodeEdicao === "avaliacao"
                           ? "Pergunta de avaliação"
-                          : tipoNodeEdicao === "agendar_horario"
-                          ? "Mensagem para oferecer horarios"
+                          : tipoNodeEdicao === "agenda_buscar_agendamento"
+                          ? "Mensagem quando encontrar"
+                          : tipoNodeEdicao === "agenda_escolher_horario"
+                          ? "Mensagem para pedir o dia"
+                          : tipoNodeEdicao === "agenda_criar_agendamento"
+                          ? "Mensagem depois de criar"
+                          : tipoNodeEdicao === "agenda_remarcar_agendamento"
+                          ? "Mensagem depois de remarcar"
+                          : tipoNodeEdicao === "agenda_cancelar_agendamento"
+                          ? "Mensagem depois de cancelar"
                           : tipoNodeEdicao === "interpretar_arquivo_ia"
                           ? "Mensagem solicitando o arquivo"
                           : "Mensagem"}
@@ -3733,97 +3950,185 @@ useEffect(() => {
                     </div>
                   )}
 
-                  {tipoNodeEdicao === "agendar_horario" && (
+                  {tipoNodeEdicao.startsWith("agenda_") && (
                     <div className={styles.optionsBox}>
                       <div>
-                        <span className={styles.label}>Agenda automatica</span>
+                        <span className={styles.label}>Bloco de agenda</span>
                         <p className={styles.help}>
-                          O cliente recebe opcoes de horario e confirma respondendo o numero.
+                          Use junto com Pergunta, Condicoes e Mensagens para montar agendamento, remarcacao ou cancelamento.
                         </p>
                       </div>
 
-                      <label className={styles.field}>
-                        <span className={styles.label}>Agenda</span>
-
-                        <select
-                          className={styles.input}
-                          value={agendaIdNode}
-                          onChange={(e) => setAgendaIdNode(e.target.value)}
-                          disabled={carregandoAgendasOpcoes}
-                        >
-                          <option value="">
-                            {carregandoAgendasOpcoes
-                              ? "Carregando agendas..."
-                              : "Selecione uma agenda ativa"}
-                          </option>
-
-                          {agendasOpcoes.map((agenda) => (
-                            <option key={agenda.id} value={agenda.id}>
-                              {agenda.nome} - {agenda.duracao_minutos}min
-                            </option>
-                          ))}
-                        </select>
-
-                        {agendaSelecionadaNode && (
-                          <span className={styles.help}>
-                            Timezone: {agendaSelecionadaNode.timezone} · Janela padrao:{" "}
-                            {agendaSelecionadaNode.janela_dias} dias
+                      {[
+                        "agenda_buscar_agendamento",
+                        "agenda_escolher_horario",
+                        "agenda_criar_agendamento",
+                      ].includes(tipoNodeEdicao) && (
+                        <label className={styles.field}>
+                          <span className={styles.label}>
+                            {tipoNodeEdicao === "agenda_criar_agendamento"
+                              ? "Agenda alternativa"
+                              : "Agenda"}
                           </span>
-                        )}
-                      </label>
 
-                      <div className={styles.optionRow}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>Opcoes enviadas</span>
-
-                          <input
-                            type="number"
-                            min={1}
-                            max={10}
+                          <select
                             className={styles.input}
-                            value={agendaQuantidadeOpcoesNode}
-                            onChange={(e) => setAgendaQuantidadeOpcoesNode(e.target.value)}
+                            value={agendaIdNode}
+                            onChange={(e) => setAgendaIdNode(e.target.value)}
+                            disabled={carregandoAgendasOpcoes}
+                          >
+                            <option value="">
+                              {tipoNodeEdicao === "agenda_buscar_agendamento"
+                                ? "Qualquer agenda"
+                                : carregandoAgendasOpcoes
+                                ? "Carregando agendas..."
+                                : "Selecione uma agenda ativa"}
+                            </option>
+
+                            {agendasOpcoes.map((agenda) => (
+                              <option key={agenda.id} value={agenda.id}>
+                                {agenda.nome} - {agenda.duracao_minutos}min
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+
+                      {tipoNodeEdicao === "agenda_escolher_horario" && (
+                        <>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Mensagem ao listar horarios</span>
+                            <textarea
+                              className={styles.textarea}
+                              value={agendaMensagemListarHorariosNode}
+                              onChange={(e) =>
+                                setAgendaMensagemListarHorariosNode(e.target.value)
+                              }
+                            />
+                            <span className={styles.help}>
+                              Variaveis: {"{{agenda_data_nova}}"} e {"{{agenda_nome_nova}}"}.
+                            </span>
+                          </label>
+
+                          <div className={styles.optionRow}>
+                            <label className={styles.field}>
+                              <span className={styles.label}>Opcoes enviadas</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={10}
+                                className={styles.input}
+                                value={agendaQuantidadeOpcoesNode}
+                                onChange={(e) =>
+                                  setAgendaQuantidadeOpcoesNode(e.target.value)
+                                }
+                              />
+                            </label>
+
+                            <label className={styles.field}>
+                              <span className={styles.label}>Buscar por dias</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={60}
+                                className={styles.input}
+                                value={agendaJanelaDiasNode}
+                                onChange={(e) => setAgendaJanelaDiasNode(e.target.value)}
+                              />
+                            </label>
+                          </div>
+
+                          <label className={styles.field}>
+                            <span className={styles.label}>Mensagem sem horarios</span>
+                            <textarea
+                              className={styles.textarea}
+                              value={agendaMensagemSemHorariosNode}
+                              onChange={(e) =>
+                                setAgendaMensagemSemHorariosNode(e.target.value)
+                              }
+                            />
+                          </label>
+                        </>
+                      )}
+
+                      {tipoNodeEdicao === "agenda_buscar_agendamento" && (
+                        <label className={styles.field}>
+                          <span className={styles.label}>Mensagem quando nao encontrar</span>
+                          <textarea
+                            className={styles.textarea}
+                            value={agendaMensagemSemHorariosNode}
+                            onChange={(e) =>
+                              setAgendaMensagemSemHorariosNode(e.target.value)
+                            }
                           />
                         </label>
+                      )}
 
-                        <label className={styles.field}>
-                          <span className={styles.label}>Buscar por dias</span>
+                      {["agenda_criar_agendamento", "agenda_remarcar_agendamento"].includes(
+                        tipoNodeEdicao
+                      ) && (
+                        <>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Status do agendamento</span>
+                            <select
+                              className={styles.input}
+                              value={agendaStatusAgendamentoNode}
+                              onChange={(e) =>
+                                setAgendaStatusAgendamentoNode(e.target.value)
+                              }
+                            >
+                              <option value="agendado">Agendado</option>
+                              <option value="confirmado">Confirmado</option>
+                            </select>
+                          </label>
 
-                          <input
-                            type="number"
-                            min={1}
-                            max={60}
-                            className={styles.input}
-                            value={agendaJanelaDiasNode}
-                            onChange={(e) => setAgendaJanelaDiasNode(e.target.value)}
-                          />
-                        </label>
-                      </div>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Mensagem se horario indisponivel</span>
+                            <textarea
+                              className={styles.textarea}
+                              value={agendaMensagemConflitoNode}
+                              onChange={(e) =>
+                                setAgendaMensagemConflitoNode(e.target.value)
+                              }
+                            />
+                          </label>
+                        </>
+                      )}
 
-                      <label className={styles.field}>
-                        <span className={styles.label}>Mensagem sem horarios</span>
+                      {tipoNodeEdicao === "agenda_cancelar_agendamento" && (
+                        <>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Status final</span>
+                            <select
+                              className={styles.input}
+                              value={agendaStatusAgendamentoNode}
+                              onChange={(e) =>
+                                setAgendaStatusAgendamentoNode(e.target.value)
+                              }
+                            >
+                              <option value="cancelado">Cancelado</option>
+                              <option value="faltou">Faltou</option>
+                            </select>
+                          </label>
 
-                        <textarea
-                          className={styles.textarea}
-                          value={agendaMensagemSemHorariosNode}
-                          onChange={(e) => setAgendaMensagemSemHorariosNode(e.target.value)}
-                        />
-                      </label>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Motivo</span>
+                            <input
+                              className={styles.input}
+                              value={agendaMotivoCancelamentoNode}
+                              onChange={(e) =>
+                                setAgendaMotivoCancelamentoNode(e.target.value)
+                              }
+                            />
+                          </label>
+                        </>
+                      )}
 
-                      <label className={styles.field}>
-                        <span className={styles.label}>Mensagem de confirmacao</span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={agendaMensagemConfirmacaoNode}
-                          onChange={(e) => setAgendaMensagemConfirmacaoNode(e.target.value)}
-                        />
-
-                        <span className={styles.help}>
-                          Variaveis: {"{{agenda_data}}"}, {"{{agenda_hora}}"},{" "}
-                          {"{{agenda_nome}}"} e {"{{agenda_label}}"}.
-                        </span>
-                      </label>
+                      <span className={styles.help}>
+                        Variaveis principais: {"{{agenda_data}}"}, {"{{agenda_hora}}"},{" "}
+                        {"{{agenda_data_nova}}"}, {"{{agenda_hora_nova}}"} e{" "}
+                        {"{{agenda_agendamento_id}}"}.
+                      </span>
                     </div>
                   )}
 
@@ -4019,7 +4324,7 @@ useEffect(() => {
                     "pergunta_opcoes",
                     "enviar_botoes",
                     "capturar_resposta",
-                    "agendar_horario",
+                    "agenda_escolher_horario",
                     "avaliacao",
                     "interpretar_arquivo_ia",
                   ].includes(tipoNodeEdicao) && (
