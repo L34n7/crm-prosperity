@@ -4,6 +4,32 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function obterMensagemErro(error: unknown, fallback = "Erro interno.") {
+  return error instanceof Error ? error.message : fallback;
+}
+
+async function desvincularAgendamentosDoFluxo(params: {
+  fluxoId: string;
+  empresaId: string;
+  usuarioId: string;
+}) {
+  const { error } = await supabaseAdmin
+    .from("agenda_agendamentos")
+    .update({
+      automacao_execucao_id: null,
+      automacao_fluxo_id: null,
+      automacao_no_id: null,
+      updated_at: new Date().toISOString(),
+      updated_by: params.usuarioId,
+    })
+    .eq("empresa_id", params.empresaId)
+    .eq("automacao_fluxo_id", params.fluxoId);
+
+  if (error) {
+    throw new Error(`Erro ao desvincular agendamentos do fluxo: ${error.message}`);
+  }
+}
+
 export async function GET() {
   try {
     const resultadoContexto = await getUsuarioContexto();
@@ -50,9 +76,9 @@ export async function GET() {
       ok: true,
       fluxos: data || [],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      { ok: false, error: obterMensagemErro(error) },
       { status: 500 }
     );
   }
@@ -162,9 +188,9 @@ export async function POST(req: NextRequest) {
       ok: true,
       fluxo: data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      { ok: false, error: obterMensagemErro(error) },
       { status: 500 }
     );
   }
@@ -200,7 +226,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const atualizacao: Record<string, any> = {
+    const atualizacao: Record<string, string | boolean | null> = {
       updated_at: new Date().toISOString(),
       atualizado_por: usuario.id,
     };
@@ -273,9 +299,9 @@ export async function PATCH(req: NextRequest) {
       ok: true,
       fluxo: data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      { ok: false, error: obterMensagemErro(error) },
       { status: 500 }
     );
   }
@@ -313,6 +339,41 @@ export async function DELETE(req: NextRequest) {
     }
 
     if (definitivo) {
+      const { data: fluxoArquivado, error: fluxoArquivadoError } =
+        await supabaseAdmin
+          .from("automacao_fluxos")
+          .select("id")
+          .eq("id", id)
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("status", "arquivado")
+          .maybeSingle();
+
+      if (fluxoArquivadoError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Erro ao validar fluxo para exclusao definitiva: ${fluxoArquivadoError.message}`,
+          },
+          { status: 500 }
+        );
+      }
+
+      if (!fluxoArquivado) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Fluxo arquivado nao encontrado para exclusao definitiva.",
+          },
+          { status: 404 }
+        );
+      }
+
+      await desvincularAgendamentosDoFluxo({
+        fluxoId: id,
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+      });
+
       const { error } = await supabaseAdmin
         .from("automacao_fluxos")
         .delete()
@@ -354,9 +415,9 @@ export async function DELETE(req: NextRequest) {
       ok: true,
       definitivo: false,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      { ok: false, error: obterMensagemErro(error) },
       { status: 500 }
     );
   }
@@ -522,9 +583,9 @@ export async function PUT(req: NextRequest) {
       ok: true,
       fluxo: novoFluxo,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      { ok: false, error: obterMensagemErro(error) },
       { status: 500 }
     );
   }

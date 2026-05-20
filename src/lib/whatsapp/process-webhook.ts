@@ -16,6 +16,13 @@ import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function perf(label: string, inicio: number, extra?: Record<string, any>) {
+  console.log(`[PERF] ${label}`, {
+    tempo_ms: Date.now() - inicio,
+    ...(extra || {}),
+  });
+}
+
 function tipoMensagemParaAutomacao(tipoMensagem: string) {
   if (tipoMensagem === "imagem") return "imagem";
   if (tipoMensagem === "documento") return "documento";
@@ -64,6 +71,7 @@ function extrairArquivoNome(message: any, metadataJson: any) {
 }
 
 export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
+  const inicioProcessamentoWebhook = Date.now();
   if (body.object !== "whatsapp_business_account") {
     throw new Error("Evento nao e do WhatsApp.");
   }
@@ -137,10 +145,17 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
   }
 
   for (const message of incomingMessages) {
+    const inicioMensagem = Date.now();
     try {
+      const inicioIntegracao = Date.now();
+
       const integration = await findWhatsAppIntegrationByPhoneNumberId(
         message.phoneNumberId
       );
+
+      perf("PROCESS / buscar integração", inicioIntegracao, {
+        phoneNumberId: message.phoneNumberId,
+      });
 
       if (!integration) {
         console.warn(
@@ -174,16 +189,28 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         continue;
       }
 
+      const inicioContato = Date.now();
+
       const contact = await findOrCreateWhatsAppContact({
         empresaId: integration.empresa_id,
         phone: message.from,
         profileName: message.profileName,
       });
 
+      perf("PROCESS / buscar ou criar contato", inicioContato, {
+        contatoId: contact.id,
+      });
+
+      const inicioConversa = Date.now();
+
       const conversation = await findOrCreateWhatsAppConversation({
         empresaId: integration.empresa_id,
         contatoId: contact.id,
         integracaoWhatsappId: integration.id,
+      });
+
+      perf("PROCESS / buscar ou criar conversa", inicioConversa, {
+        conversaId: conversation.id,
       });
 
       const conversaEmAtendimentoHumano =
@@ -360,8 +387,10 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           !!textoAutomacao.trim()) ||
           (ehArquivoParaAutomacao && !!mediaId));
 
-      if (podeRodarAutomacao) {
-        automationResult = await processAutomationEngine({
+        if (podeRodarAutomacao) {
+          const inicioAutomacao = Date.now();
+
+          automationResult = await processAutomationEngine({
           empresaId: integration.empresa_id,
           conversaId: conversation.id,
           contatoId: contact.id,
@@ -376,6 +405,11 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           mimeType,
           arquivoNome,
           mensagemId: savedMessage.messageId,
+        });
+
+        perf("PROCESS / automação total", inicioAutomacao, {
+          status: automationResult?.status ?? null,
+          execucaoId: automationResult?.execucaoId ?? null,
         });
       }
 
@@ -400,6 +434,11 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         "[WEBHOOK WHATSAPP] Erro ao processar mensagem individual:",
         messageError
       );
+
+      perf("PROCESS / mensagem total", inicioMensagem, {
+        messageId: message.messageId,
+        tipoMensagem: message.tipoMensagem,
+      });
 
       processedResults.push({
         messageId: message.messageId,

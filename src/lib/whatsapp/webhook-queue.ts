@@ -9,6 +9,13 @@ import { processWhatsAppWebhookBody } from "@/lib/whatsapp/process-webhook";
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function perf(label: string, inicio: number, extra?: Record<string, any>) {
+  console.log(`[PERF] ${label}`, {
+    tempo_ms: Date.now() - inicio,
+    ...(extra || {}),
+  });
+}
+
 type ProcessarFilaParams = {
   limite?: number;
   maxTentativas?: number;
@@ -59,6 +66,7 @@ function erroParaTexto(error: unknown) {
 }
 
 export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
+  const inicioEnfileirar = Date.now();
   const incomingMessages = extractIncomingMessages(body);
   const incomingStatuses = extractMessageStatuses(body);
   const bodyHash = calcularBodyHash(body);
@@ -81,6 +89,13 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
     .single();
 
   if (!error && data) {
+
+    perf("FILA / webhook salvo no banco", inicioEnfileirar, {
+      eventId: data.id,
+      incomingMessages: incomingMessages.length,
+      incomingStatuses: incomingStatuses.length,
+    });
+
     return {
       evento: data,
       duplicado: false,
@@ -167,6 +182,7 @@ async function reivindicarEvento(evento: any, maxTentativas: number) {
 export async function processarFilaWebhooksWhatsapp(
   params: ProcessarFilaParams = {}
 ) {
+  const inicioProcessarFila = Date.now();
   const limite = normalizarInteiro(
     params.limite ?? process.env.WHATSAPP_WEBHOOK_QUEUE_BATCH_LIMIT,
     10,
@@ -201,11 +217,16 @@ export async function processarFilaWebhooksWhatsapp(
     throw new Error(`Erro ao buscar fila de webhooks: ${error.message}`);
   }
 
+  perf("FILA / buscar eventos pendentes", inicioProcessarFila, {
+    encontrados: eventos?.length || 0,
+  });
+
   let processados = 0;
   let erros = 0;
   let ignorados = 0;
 
   for (const evento of eventos || []) {
+    const inicioEventoFila = Date.now();
     const eventoReivindicado = await reivindicarEvento(evento, maxTentativas);
 
     if (!eventoReivindicado) {
@@ -217,6 +238,11 @@ export async function processarFilaWebhooksWhatsapp(
       const resultado = await processWhatsAppWebhookBody(
         eventoReivindicado.body_json as WhatsAppWebhookBody
       );
+
+      perf("FILA / evento processado", inicioEventoFila, {
+        eventId: eventoReivindicado.id,
+      });
+
       const agora = new Date().toISOString();
 
       const { error: updateError } = await supabaseAdmin

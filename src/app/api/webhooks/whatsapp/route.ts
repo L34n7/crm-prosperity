@@ -13,6 +13,13 @@ export const runtime = "nodejs";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
+function perf(label: string, inicio: number, extra?: Record<string, any>) {
+  console.log(`[PERF] ${label}`, {
+    tempo_ms: Date.now() - inicio,
+    ...(extra || {}),
+  });
+}
+
 function limiteProcessamentoInline() {
   const numero = Number(process.env.WHATSAPP_WEBHOOK_INLINE_BATCH_LIMIT ?? 3);
 
@@ -56,9 +63,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const inicioPost = Date.now();
+
   try {
     const body = (await req.json()) as WhatsAppWebhookBody;
 
+    perf("WEBHOOK / body lido", inicioPost);
+    
     if (body.object !== "whatsapp_business_account") {
       return NextResponse.json(
         { success: false, error: "Evento nao e do WhatsApp" },
@@ -85,7 +96,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const inicioFila = Date.now();
+
     const eventoFila = await enfileirarWebhookWhatsapp(body);
+
+    perf("WEBHOOK / enfileirar", inicioFila, {
+      duplicado: eventoFila.duplicado,
+      eventId: eventoFila.evento?.id ?? null,
+    });    
+
     const inlineLimit = limiteProcessamentoInline();
 
     if (inlineLimit > 0) {
@@ -107,6 +126,11 @@ export async function POST(req: NextRequest) {
         }
       });
     }
+
+    perf("WEBHOOK / resposta 200", inicioPost, {
+      incomingMessages: incomingMessages.length,
+      incomingStatuses: incomingStatuses.length,
+    });
 
     return NextResponse.json(
       {

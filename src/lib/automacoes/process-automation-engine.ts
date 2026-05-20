@@ -23,6 +23,13 @@ import {
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function perf(label: string, inicio: number, extra?: Record<string, any>) {
+  console.log(`[PERF] ${label}`, {
+    tempo_ms: Date.now() - inicio,
+    ...(extra || {}),
+  });
+}
+
 function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
 }
@@ -4942,6 +4949,8 @@ async function enviarMensagemAutomacao(params: {
   const { empresaId, conversaId, numeroDestino, execucaoId, noId } =
     params;
 
+  const inicioEnvioAutomacao = Date.now();
+
   let conteudo = params.conteudo;
 
   const conteudoComVariaveis = await substituirVariaveisMensagem({
@@ -4949,6 +4958,13 @@ async function enviarMensagemAutomacao(params: {
     execucaoId,
     texto: conteudo,
   });
+
+  perf("SEND / substituir variáveis", inicioEnvioAutomacao, {
+    conversaId,
+    noId,
+  });
+
+  const inicioBuscarConversaEnvio = Date.now();
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
@@ -4973,6 +4989,10 @@ async function enviarMensagemAutomacao(params: {
     throw new Error("Conversa não encontrada para envio da automação.");
   }
 
+  perf("SEND / buscar conversa e integração", inicioBuscarConversaEnvio, {
+    conversaId,
+  });
+
   const integracao = Array.isArray(conversa.integracoes_whatsapp)
     ? conversa.integracoes_whatsapp[0]
     : conversa.integracoes_whatsapp;
@@ -4990,8 +5010,14 @@ async function enviarMensagemAutomacao(params: {
     throw new Error("WHATSAPP_ACCESS_TOKEN não configurado.");
   }
 
+  const inicioJanela24h = Date.now();
+
   const permissaoEnvio = await canSendFreeformWhatsAppMessage({
     conversaId,
+  });
+
+  perf("SEND / verificar janela 24h", inicioJanela24h, {
+    podeEnviar: permissaoEnvio.podeEnviarMensagemLivre,
   });
 
   if (!permissaoEnvio.podeEnviarMensagemLivre) {
@@ -5023,6 +5049,8 @@ async function enviarMensagemAutomacao(params: {
     };
   }
 
+  const inicioMeta = Date.now();
+
   const envio = await sendWhatsAppTextMessage({
     phoneNumberId,
     accessToken,
@@ -5030,10 +5058,18 @@ async function enviarMensagemAutomacao(params: {
     body: conteudoComVariaveis,
   });
 
+  perf("SEND / Meta WhatsApp API", inicioMeta, {
+    ok: envio.ok,
+    status: envio.status,
+    messageId: envio.messageId,
+  });
+
   const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
     empresaId,
     conversaId,
   });
+
+  const inicioSalvarMensagemBot = Date.now();
 
   const { data: mensagemSalva, error: mensagemError } = await supabaseAdmin
     .from("mensagens")
@@ -5060,6 +5096,15 @@ async function enviarMensagemAutomacao(params: {
   if (mensagemError) {
     throw new Error(`Erro ao salvar mensagem da automação: ${mensagemError.message}`);
   }
+
+  perf("SEND / salvar mensagem bot no banco", inicioSalvarMensagemBot, {
+    mensagemId: mensagemSalva?.id,
+  });
+
+  perf("SEND / total enviar mensagem automação", inicioEnvioAutomacao, {
+    ok: envio.ok,
+    mensagemId: mensagemSalva?.id,
+  });
 
   return {
     ok: envio.ok,
