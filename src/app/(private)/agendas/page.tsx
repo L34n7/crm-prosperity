@@ -747,43 +747,6 @@ export default function AgendasPage() {
         </aside>
 
         <section className={styles.mainPanel}>
-          <div className={styles.editorHeader}>
-            <div>
-              <p className={styles.eyebrow}>Calendario</p>
-              <h2 className={styles.editorTitle}>
-                {agendaSelecionada?.nome || "Selecione uma agenda"}
-              </h2>
-              {agendaSelecionada && (
-                <p className={styles.editorSubtitle}>
-                  {agendaSelecionada.duracao_minutos}min por horario | intervalo de{" "}
-                  {agendaSelecionada.intervalo_minutos}min
-                </p>
-              )}
-            </div>
-
-            <div className={styles.headerActions}>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() =>
-                  agendaSelecionadaId && carregarDetalhesAgenda(agendaSelecionadaId)
-                }
-                disabled={!agendaSelecionadaId}
-              >
-                Atualizar
-              </button>
-
-              <button
-                type="button"
-                className={styles.primaryButton}
-                onClick={abrirModalConfiguracoes}
-                disabled={!agendaSelecionadaId}
-              >
-                Configuracoes
-              </button>
-            </div>
-          </div>
-
           <div className={styles.alertArea}>
             {erro && <div className={styles.errorAlert}>{erro}</div>}
             {sucesso && <div className={styles.successAlert}>{sucesso}</div>}
@@ -805,14 +768,36 @@ export default function AgendasPage() {
 
                 <strong>{mesLabel(mesAtual)}</strong>
 
-                <button
-                  type="button"
-                  className={styles.iconButton}
-                  onClick={() => irMes(1)}
-                  aria-label="Proximo mes"
-                >
-                  <ChevronRight size={18} />
-                </button>
+                <div className={styles.calendarToolbarRight}>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() =>
+                      agendaSelecionadaId && carregarDetalhesAgenda(agendaSelecionadaId)
+                    }
+                    disabled={!agendaSelecionadaId}
+                  >
+                    Atualizar
+                  </button>
+
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={abrirModalConfiguracoes}
+                    disabled={!agendaSelecionadaId}
+                  >
+                    Configurações
+                  </button>
+
+                  <button
+                    type="button"
+                    className={styles.iconButton}
+                    onClick={() => irMes(1)}
+                    aria-label="Proximo mes"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
               </div>
 
               <div className={styles.weekHeader}>
@@ -876,27 +861,6 @@ export default function AgendasPage() {
             </div>
 
             <div className={styles.dayPanelBody}>
-              <section className={styles.daySection}>
-                <div className={styles.daySectionHeader}>
-                  <strong>Horarios livres</strong>
-                  <span>{slotsDia.length}</span>
-                </div>
-
-                {carregandoDia ? (
-                  <div className={styles.emptyMini}>Carregando horarios...</div>
-                ) : slotsDia.length === 0 ? (
-                  <div className={styles.emptyMini}>Sem horarios livres.</div>
-                ) : (
-                  <div className={styles.slotList}>
-                    {slotsDia.map((slot) => (
-                      <div key={slot.inicio_at} className={styles.slotItem}>
-                        <span>{slot.hora_label}</span>
-                        <strong>{slot.label}</strong>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
 
               <section className={styles.daySection}>
                 <div className={styles.daySectionHeader}>
@@ -951,6 +915,29 @@ export default function AgendasPage() {
                   </div>
                 )}
               </section>
+              
+              <section className={styles.daySection}>
+                <div className={styles.daySectionHeader}>
+                  <strong>Horarios livres</strong>
+                  <span>{slotsDia.length}</span>
+                </div>
+
+                {carregandoDia ? (
+                  <div className={styles.emptyMini}>Carregando horarios...</div>
+                ) : slotsDia.length === 0 ? (
+                  <div className={styles.emptyMini}>Sem horarios livres.</div>
+                ) : (
+                  <div className={styles.slotList}>
+                    {slotsDia.map((slot) => (
+                      <div key={slot.inicio_at} className={styles.slotItem}>
+                        <span>{slot.hora_label}</span>
+                        <strong>{slot.label}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
             </div>
           </aside>
         )}

@@ -467,6 +467,8 @@ export default function FluxosPage() {
   const [agendaJanelaDiasNode, setAgendaJanelaDiasNode] = useState("14");
   const [agendaMensagemSemHorariosNode, setAgendaMensagemSemHorariosNode] =
     useState("No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.");
+  const [agendaMensagemDataInvalidaNode, setAgendaMensagemDataInvalidaNode] =
+    useState("Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.");
   const [agendaMensagemListarAgendamentosNode, setAgendaMensagemListarAgendamentosNode] =
     useState("Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:");
   const [agendaMensagemListarHorariosNode, setAgendaMensagemListarHorariosNode] =
@@ -1103,6 +1105,8 @@ async function criarFluxoRapido() {
                 "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:",
               quantidade_opcoes: 6,
               janela_dias: 14,
+              mensagem_data_invalida:
+                "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.",
               mensagem_sem_horarios:
                 "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.",
               max_tentativas_invalidas: 3,
@@ -1381,6 +1385,12 @@ function offsetLabelConexao(edgeId: string) {
           "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente."
       )
     );
+    setAgendaMensagemDataInvalidaNode(
+      String(
+        configuracaoJson?.mensagem_data_invalida ||
+          "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}."
+      )
+    );
     setAgendaMensagemListarAgendamentosNode(
       String(
         configuracaoJson?.mensagem_listar_agendamentos ||
@@ -1629,6 +1639,9 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.mensagem_preferencia_indisponivel =
           agendaMensagemPreferenciaIndisponivelNode.trim() ||
           "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:";
+        configuracao_json.mensagem_data_invalida =
+          agendaMensagemDataInvalidaNode.trim() ||
+          "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.";
         configuracao_json.quantidade_opcoes = Math.max(
           1,
           Math.min(10, Number(agendaQuantidadeOpcoesNode || 6))
@@ -3371,6 +3384,9 @@ useEffect(() => {
                               setAgendaMensagemPreferenciaIndisponivelNode(
                                 "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
                               );
+                              setAgendaMensagemDataInvalidaNode(
+                                "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}."
+                              );
                             }
 
                             if (novoTipo === "agenda_criar_agendamento") {
@@ -4078,6 +4094,21 @@ useEffect(() => {
                               Variaveis: {"{{agenda_data_nova}}"},{" "}
                               {"{{agenda_hora_solicitada}}"} e{" "}
                               {"{{agenda_preferencia_solicitada}}"}.
+                            </span>
+                          </label>
+
+                          <label className={styles.field}>
+                            <span className={styles.label}>Mensagem para data passada</span>
+                            <textarea
+                              className={styles.textarea}
+                              value={agendaMensagemDataInvalidaNode}
+                              onChange={(e) =>
+                                setAgendaMensagemDataInvalidaNode(e.target.value)
+                              }
+                            />
+                            <span className={styles.help}>
+                              Variaveis: {"{{agenda_data_informada}}"} e{" "}
+                              {"{{agenda_data_sugestao_ano}}"}.
                             </span>
                           </label>
 

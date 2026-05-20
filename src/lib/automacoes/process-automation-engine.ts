@@ -2347,6 +2347,57 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
   );
   const dataEscolhida = dataForcada || interpretacao.data;
 
+  if (!dataForcada && interpretacao.data_invalida_motivo) {
+    const mensagemDataInvalida = substituirVariaveisAgenda(
+      String(config.mensagem_data_invalida || "").trim() ||
+        "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.",
+      {
+        agenda_data_informada: interpretacao.data_informada || "",
+        agenda_data_sugestao_ano: interpretacao.data_sugestao_ano || "",
+        agenda_nome_nova: agenda?.nome || "",
+      }
+    );
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagemDataInvalida,
+      execucaoId: execucao.id,
+      noId: no.id,
+    });
+
+    await salvarEstadoExecucaoAgenda({
+      empresaId,
+      execucaoId: execucao.id,
+      metadataAtual,
+      status: "aguardando",
+      noAtualId: no.id,
+      patch: {
+        agenda_estado: {
+          ...agendaEstado,
+          [no.id]: {
+            etapa: "aguardando_data",
+            agenda_id: agendaId,
+            data_invalida_motivo: interpretacao.data_invalida_motivo,
+            data_informada: interpretacao.data_informada,
+          },
+        },
+      },
+    });
+
+    await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      numeroDestino,
+    });
+
+    return { ok: true, aguardando: true };
+  }
+
   if (!dataEscolhida) {
     const mensagemPedirData =
       String(config.mensagem || "").trim() ||

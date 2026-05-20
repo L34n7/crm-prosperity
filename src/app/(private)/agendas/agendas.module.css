@@ -324,29 +324,43 @@
 
 .calendarShell {
   margin: 14px;
-  padding: 18px;
+  padding: 16px;
   border: 1px solid #e2e8f0;
   border-radius: 22px;
-  background: #f0f1f3;
+  background: #f8fafc;
   display: grid;
-  gap: 14px;
+  gap: 12px;
   min-height: 0;
   flex: 1;
 }
 
 .calendarToolbar {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  grid-template-columns: 42px 1fr auto;
   align-items: center;
   gap: 12px;
 }
 
 .calendarToolbar strong {
+  position: absolute;
   text-align: center;
+  justify-self: center;
+  white-space: nowrap;
+  left: 50%;
   color: #0f172a;
   font-size: 20px;
   font-weight: 900;
   text-transform: capitalize;
+  transform: translateX(-50%);
+}
+
+.calendarToolbarRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .weekHeader,
@@ -370,24 +384,22 @@
 }
 
 .calendarGrid {
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
 }
 
 .calendarDay {
-  aspect-ratio: 1.10;
-  min-height: 86px;
+  min-height: 108px;
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
+  border-radius: 14px;
   background: #ffffff;
   color: #0f172a;
-  padding: 6px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
   cursor: pointer;
-  transition: 0.2s ease;
+  transition: 0.18s ease;
 }
 
 .calendarDay:hover {
@@ -413,16 +425,17 @@
 }
 
 .dayNumber {
-  padding: 4px;
-  font-size: 15px;
-  font-weight: 900;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .dayMarker {
-  margin-bottom: 35px;
+  margin-top: auto;
   max-width: 100%;
-  min-height: 20px;
-  padding: 0 7px;
+  min-height: 22px;
+  padding: 0 8px;
   border-radius: 999px;
   background: #eff6ff;
   color: #1d4ed8;
@@ -430,7 +443,7 @@
   display: inline-flex;
   align-items: center;
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 800;
   white-space: nowrap;
 }
 

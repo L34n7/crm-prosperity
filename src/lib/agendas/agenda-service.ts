@@ -20,6 +20,9 @@ export type PreferenciaHorarioAgenda = {
 export type InterpretacaoDataHorarioAgenda = {
   data: string | null;
   preferencia: PreferenciaHorarioAgenda | null;
+  data_invalida_motivo?: "data_passada" | "data_passada_sem_ano" | null;
+  data_informada?: string | null;
+  data_sugestao_ano?: string | null;
 };
 
 type LocalParts = {
@@ -61,6 +64,31 @@ function pad2(numero: number) {
 
 function ymdKey(parts: Pick<LocalParts, "year" | "month" | "day">) {
   return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
+}
+
+function dataRealValida(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() + 1 === month &&
+    date.getUTCDate() === day
+  );
+}
+
+function compararYmd(
+  a: Pick<LocalParts, "year" | "month" | "day">,
+  b: Pick<LocalParts, "year" | "month" | "day">
+) {
+  return ymdKey(a).localeCompare(ymdKey(b));
+}
+
+function dataLabelDiaMes(dia: number, mes: number) {
+  return `${pad2(dia)}/${pad2(mes)}`;
+}
+
+function dataLabelCompleta(dia: number, mes: number, ano: number) {
+  return `${dataLabelDiaMes(dia, mes)}/${ano}`;
 }
 
 function parseHora(valor: string) {
@@ -228,6 +256,12 @@ function interpretarDataNumerica(
   texto: string,
   hojeLocal: Pick<LocalParts, "year" | "month" | "day">
 ) {
+  const semData = {
+    data: null,
+    data_invalida_motivo: null,
+    data_informada: null,
+    data_sugestao_ano: null,
+  };
   const dataCompleta = texto.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/);
 
   if (dataCompleta) {
@@ -236,8 +270,28 @@ function interpretarDataNumerica(
     const anoRaw = Number(dataCompleta[3]);
     const ano = anoRaw < 100 ? 2000 + anoRaw : anoRaw;
 
-    if (dia >= 1 && dia <= 31 && mes >= 1 && mes <= 12) {
-      return ymdKey({ year: ano, month: mes, day: dia });
+    if (
+      dia >= 1 &&
+      dia <= 31 &&
+      mes >= 1 &&
+      mes <= 12 &&
+      dataRealValida(ano, mes, dia)
+    ) {
+      const data = { year: ano, month: mes, day: dia };
+
+      if (compararYmd(data, hojeLocal) < 0) {
+        return {
+          data: null,
+          data_invalida_motivo: "data_passada" as const,
+          data_informada: dataLabelCompleta(dia, mes, ano),
+          data_sugestao_ano: dataLabelCompleta(dia, mes, hojeLocal.year + 1),
+        };
+      }
+
+      return {
+        ...semData,
+        data: ymdKey(data),
+      };
     }
   }
 
@@ -247,17 +301,28 @@ function interpretarDataNumerica(
     const dia = Number(dataSemAno[1]);
     const mes = Number(dataSemAno[2]);
 
-    if (dia >= 1 && dia <= 31 && mes >= 1 && mes <= 12) {
-      let ano = hojeLocal.year;
+    if (
+      dia >= 1 &&
+      dia <= 31 &&
+      mes >= 1 &&
+      mes <= 12 &&
+      dataRealValida(hojeLocal.year, mes, dia)
+    ) {
+      const data = { year: hojeLocal.year, month: mes, day: dia };
 
-      if (
-        mes < hojeLocal.month ||
-        (mes === hojeLocal.month && dia < hojeLocal.day)
-      ) {
-        ano += 1;
+      if (compararYmd(data, hojeLocal) < 0) {
+        return {
+          data: null,
+          data_invalida_motivo: "data_passada_sem_ano" as const,
+          data_informada: dataLabelDiaMes(dia, mes),
+          data_sugestao_ano: dataLabelCompleta(dia, mes, hojeLocal.year + 1),
+        };
       }
 
-      return ymdKey({ year: ano, month: mes, day: dia });
+      return {
+        ...semData,
+        data: ymdKey(data),
+      };
     }
   }
 
@@ -270,11 +335,14 @@ function interpretarDataNumerica(
       const dataBase =
         dia < hojeLocal.day ? adicionarMeses(hojeLocal, 1) : hojeLocal;
 
-      return ymdKey({
-        year: dataBase.year,
-        month: dataBase.month,
-        day: dia,
-      });
+      return {
+        ...semData,
+        data: ymdKey({
+          year: dataBase.year,
+          month: dataBase.month,
+          day: dia,
+        }),
+      };
     }
   }
 
@@ -287,15 +355,18 @@ function interpretarDataNumerica(
       const dataBase =
         dia < hojeLocal.day ? adicionarMeses(hojeLocal, 1) : hojeLocal;
 
-      return ymdKey({
-        year: dataBase.year,
-        month: dataBase.month,
-        day: dia,
-      });
+      return {
+        ...semData,
+        data: ymdKey({
+          year: dataBase.year,
+          month: dataBase.month,
+          day: dia,
+        }),
+      };
     }
   }
 
-  return null;
+  return semData;
 }
 
 function interpretarDataRelativa(
@@ -457,13 +528,17 @@ export function interpretarDataHorarioAgenda(
 ): InterpretacaoDataHorarioAgenda {
   const texto = normalizarTextoAgenda(mensagem);
   const hojeLocal = localParts(new Date(), timezone);
+  const resultadoNumerico = interpretarDataNumerica(texto, hojeLocal);
   const data =
-    interpretarDataNumerica(texto, hojeLocal) ||
+    resultadoNumerico.data ||
     interpretarDataRelativa(texto, hojeLocal);
 
   return {
     data,
     preferencia: interpretarPreferenciaHorario(texto),
+    data_invalida_motivo: resultadoNumerico.data_invalida_motivo,
+    data_informada: resultadoNumerico.data_informada,
+    data_sugestao_ano: resultadoNumerico.data_sugestao_ano,
   };
 }
 
