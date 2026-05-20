@@ -2748,7 +2748,81 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
     };
   }
 
-  const interpretacao = interpretarDataHorarioAgenda(mensagemTexto);
+  const agendaIdConfigurada = String(
+    config.agenda_id || metadataAtual.agenda_estado?.[no.id]?.agenda_id || ""
+  ).trim();
+  const agendaConfigurada = await obterAgendaAutomacao(
+    empresaId,
+    agendaIdConfigurada
+  );
+  const interpretacao = interpretarDataHorarioAgenda(
+    mensagemTexto,
+    agendaConfigurada?.timezone || "America/Sao_Paulo"
+  );
+
+  if (interpretacao.data_invalida_motivo) {
+    const agendaEstado = metadataAtual.agenda_estado || {};
+    const mensagemDataInvalida = substituirVariaveisAgenda(
+      String(config.mensagem_data_invalida || "").trim() ||
+        "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.",
+      {
+        agenda_data_informada: interpretacao.data_informada || "",
+        agenda_data_sugestao_ano: interpretacao.data_sugestao_ano || "",
+        agenda_nome_nova: agendaConfigurada?.nome || "",
+      }
+    );
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagemDataInvalida,
+      execucaoId: execucao.id,
+      noId: no.id,
+    });
+
+    await salvarEstadoExecucaoAgenda({
+      empresaId,
+      execucaoId: execucao.id,
+      metadataAtual,
+      status: "aguardando",
+      noAtualId: no.id,
+      patch: {
+        agenda_estado: {
+          ...agendaEstado,
+          [no.id]: {
+            etapa: "aguardando_data",
+            agenda_id: agendaIdConfigurada,
+            data_invalida_motivo: interpretacao.data_invalida_motivo,
+            data_informada: interpretacao.data_informada,
+          },
+        },
+      },
+    });
+
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "agenda_data_invalida",
+      descricao: "Cliente informou uma data passada durante a escolha de horario.",
+      entrada: {
+        mensagemTexto,
+      },
+      saida: {
+        motivo: interpretacao.data_invalida_motivo,
+        data_informada: interpretacao.data_informada,
+      },
+    });
+
+    return {
+      ok: true,
+      valido: false,
+      aguardando: true,
+      excedeuTentativas: false,
+    };
+  }
 
   if (interpretacao.data) {
     await enviarOpcoesEscolhaHorarioAgenda({
