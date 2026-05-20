@@ -188,14 +188,22 @@ export function formatarSlotAgenda(
   const inicio = new Date(inicioAt);
   const fim = new Date(fimAt);
 
-  const dataLabel = new Intl.DateTimeFormat("pt-BR", {
+  const diaSemanaLabel = new Intl.DateTimeFormat("pt-BR", {
     timeZone: timezone,
-    weekday: "short",
+    weekday: "long",
+  })
+    .format(inicio)
+    .replace("-feira", "");
+
+  const dataCurtaLabel = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: timezone,
     day: "2-digit",
     month: "2-digit",
   })
     .format(inicio)
     .replace(".", "");
+
+  const dataLabel = `${diaSemanaLabel}, ${dataCurtaLabel}`;
 
   const horaInicio = new Intl.DateTimeFormat("pt-BR", {
     timeZone: timezone,

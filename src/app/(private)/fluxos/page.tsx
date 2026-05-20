@@ -466,6 +466,12 @@ export default function FluxosPage() {
     useState("No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.");
   const [agendaMensagemListarHorariosNode, setAgendaMensagemListarHorariosNode] =
     useState("Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:");
+  const [
+    agendaMensagemPreferenciaIndisponivelNode,
+    setAgendaMensagemPreferenciaIndisponivelNode,
+  ] = useState(
+    "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
+  );
   const [agendaMensagemConflitoNode, setAgendaMensagemConflitoNode] =
     useState("Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.");
   const [agendaStatusAgendamentoNode, setAgendaStatusAgendamentoNode] =
@@ -1084,6 +1090,8 @@ async function criarFluxoRapido() {
                 "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.",
               mensagem_listar_horarios:
                 "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:",
+              mensagem_preferencia_indisponivel:
+                "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:",
               quantidade_opcoes: 6,
               janela_dias: 14,
               mensagem_sem_horarios:
@@ -1367,6 +1375,12 @@ function offsetLabelConexao(edgeId: string) {
           "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
       )
     );
+    setAgendaMensagemPreferenciaIndisponivelNode(
+      String(
+        configuracaoJson?.mensagem_preferencia_indisponivel ||
+          "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
+      )
+    );
     setAgendaMensagemConflitoNode(
       String(
         configuracaoJson?.mensagem_conflito ||
@@ -1586,6 +1600,9 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.mensagem_listar_horarios =
           agendaMensagemListarHorariosNode.trim() ||
           "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:";
+        configuracao_json.mensagem_preferencia_indisponivel =
+          agendaMensagemPreferenciaIndisponivelNode.trim() ||
+          "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:";
         configuracao_json.quantidade_opcoes = Math.max(
           1,
           Math.min(10, Number(agendaQuantidadeOpcoesNode || 6))
@@ -3316,6 +3333,9 @@ useEffect(() => {
                               setAgendaMensagemListarHorariosNode(
                                 "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
                               );
+                              setAgendaMensagemPreferenciaIndisponivelNode(
+                                "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
+                              );
                             }
 
                             if (novoTipo === "agenda_criar_agendamento") {
@@ -4010,6 +4030,22 @@ useEffect(() => {
                             </span>
                           </label>
 
+                          <label className={styles.field}>
+                            <span className={styles.label}>Mensagem se horario pedido estiver ocupado</span>
+                            <textarea
+                              className={styles.textarea}
+                              value={agendaMensagemPreferenciaIndisponivelNode}
+                              onChange={(e) =>
+                                setAgendaMensagemPreferenciaIndisponivelNode(e.target.value)
+                              }
+                            />
+                            <span className={styles.help}>
+                              Variaveis: {"{{agenda_data_nova}}"},{" "}
+                              {"{{agenda_hora_solicitada}}"} e{" "}
+                              {"{{agenda_preferencia_solicitada}}"}.
+                            </span>
+                          </label>
+
                           <div className={styles.optionRow}>
                             <label className={styles.field}>
                               <span className={styles.label}>Opcoes enviadas</span>
@@ -4052,8 +4088,9 @@ useEffect(() => {
                       )}
 
                       {tipoNodeEdicao === "agenda_buscar_agendamento" && (
+                        <>
                         <label className={styles.field}>
-                          <span className={styles.label}>Mensagem quando nao encontrar</span>
+                          <span className={styles.label}>Mensagem quando não encontrar</span>
                           <textarea
                             className={styles.textarea}
                             value={agendaMensagemSemHorariosNode}
@@ -4062,6 +4099,14 @@ useEffect(() => {
                             }
                           />
                         </label>
+
+                        <p className={styles.help}>
+                          Este bloco escolhe a proxima conexao usando respostas internas.
+                          Crie conexoes do tipo Exata com os valores: encontrado,
+                          nao_encontrado e, se quiser tratar falhas, erro. Exemplo:
+                          encontrado continua o fluxo; nao_encontrado vai para Transferir.
+                        </p>
+                        </>
                       )}
 
                       {["agenda_criar_agendamento", "agenda_remarcar_agendamento"].includes(
@@ -4083,7 +4128,7 @@ useEffect(() => {
                           </label>
 
                           <label className={styles.field}>
-                            <span className={styles.label}>Mensagem se horario indisponivel</span>
+                            <span className={styles.label}>Mensagem sem horário indisponivel</span>
                             <textarea
                               className={styles.textarea}
                               value={agendaMensagemConflitoNode}

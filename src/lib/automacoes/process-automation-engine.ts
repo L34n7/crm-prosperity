@@ -18,6 +18,7 @@ import {
   formatarSlotAgenda,
   interpretarDataHorarioAgenda,
   listarSlotsDisponiveis,
+  type PreferenciaHorarioAgenda,
 } from "@/lib/agendas/agenda-service";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -2008,12 +2009,76 @@ function substituirVariaveisAgenda(
   });
 }
 
-function formatarDataCurtaAgenda(data: string) {
+function formatarDataAgenda(data: string, timezone = "America/Sao_Paulo") {
   const [ano, mes, dia] = String(data || "").split("-").map(Number);
 
   if (!ano || !mes || !dia) return data;
 
-  return `${String(dia).padStart(2, "0")}/${String(mes).padStart(2, "0")}`;
+  const dataUtcMeioDia = new Date(Date.UTC(ano, mes - 1, dia, 12, 0, 0));
+  const diaSemana = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: timezone,
+    weekday: "long",
+  })
+    .format(dataUtcMeioDia)
+    .replace("-feira", "");
+
+  const dataCurta = `${String(dia).padStart(2, "0")}/${String(mes).padStart(2, "0")}`;
+
+  return `${diaSemana}, ${dataCurta}`;
+}
+
+function formatarMinutosAgenda(minutos: number | null | undefined) {
+  if (minutos == null || !Number.isFinite(Number(minutos))) return "";
+
+  const hora = Math.floor(Number(minutos) / 60);
+  const minuto = Number(minutos) % 60;
+
+  return `${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
+}
+
+function descreverPreferenciaAgenda(
+  preferencia: PreferenciaHorarioAgenda | null | undefined
+) {
+  if (!preferencia) return "";
+
+  if (preferencia.tipo === "periodo" && preferencia.periodo) {
+    return `no periodo da ${preferencia.periodo}`;
+  }
+
+  if (preferencia.tipo === "a_partir_de") {
+    return `a partir das ${formatarMinutosAgenda(preferencia.hora_minutos)}`;
+  }
+
+  if (preferencia.tipo === "antes_de") {
+    return `antes das ${formatarMinutosAgenda(preferencia.hora_minutos)}`;
+  }
+
+  if (preferencia.tipo === "por_volta") {
+    return `por volta das ${formatarMinutosAgenda(preferencia.hora_minutos)}`;
+  }
+
+  if (preferencia.tipo === "exato") {
+    return `para as ${formatarMinutosAgenda(preferencia.hora_minutos)}`;
+  }
+
+  return "";
+}
+
+function ordenarSlotsAlternativosAgenda(
+  slots: any[],
+  preferencia: PreferenciaHorarioAgenda | null | undefined,
+  timezone: string
+) {
+  if (preferencia?.hora_minutos == null) return slots;
+
+  return filtrarSlotsPorPreferencia(
+    slots,
+    {
+      tipo: "por_volta",
+      hora_minutos: preferencia.hora_minutos,
+    },
+    timezone
+  );
 }
 
 function normalizarSlotsAgenda(slots: any[]) {
@@ -2248,16 +2313,43 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
     interpretacao.preferencia,
     timezone
   );
-  const slots = normalizarSlotsAgenda(slotsFiltrados.slice(0, limite));
-  const dataLabel = slots[0]?.data_label || formatarDataCurtaAgenda(dataEscolhida);
+  const preferenciaNaoAtendida =
+    Boolean(interpretacao.preferencia) &&
+    resultadoSlots.slots.length > 0 &&
+    slotsFiltrados.length === 0;
+  const slotsParaEnviar = preferenciaNaoAtendida
+    ? ordenarSlotsAlternativosAgenda(
+        resultadoSlots.slots,
+        interpretacao.preferencia,
+        timezone
+      )
+    : slotsFiltrados;
+  const slots = normalizarSlotsAgenda(slotsParaEnviar.slice(0, limite));
+  const dataLabel =
+    slots[0]?.data_label || formatarDataAgenda(dataEscolhida, timezone);
+  const horaSolicitada = formatarMinutosAgenda(
+    interpretacao.preferencia?.hora_minutos
+  );
+  const preferenciaSolicitada = descreverPreferenciaAgenda(
+    interpretacao.preferencia
+  );
 
   if (!slots.length) {
+    const mensagemPadrao =
+      interpretacao.preferencia?.hora_minutos != null
+        ? "O horario das {{agenda_hora_solicitada}} nao esta livre em {{agenda_data_nova}} e nao encontrei outros horarios nesse dia. Me diga outro dia ou horario."
+        : "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.";
+    const mensagemBaseSemHorarios =
+      interpretacao.preferencia?.hora_minutos != null
+        ? mensagemPadrao
+        : String(config.mensagem_sem_horarios || "").trim() || mensagemPadrao;
     const mensagemSemHorarios = substituirVariaveisAgenda(
-      String(config.mensagem_sem_horarios || "").trim() ||
-        "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.",
+      mensagemBaseSemHorarios,
       {
         agenda_data_nova: dataLabel,
         agenda_nome_nova: agenda?.nome || "",
+        agenda_hora_solicitada: horaSolicitada,
+        agenda_preferencia_solicitada: preferenciaSolicitada,
       }
     );
 
@@ -2292,12 +2384,28 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
     return { ok: true, aguardando: true };
   }
 
+  const mensagemPreferenciaIndisponivel =
+    preferenciaNaoAtendida
+      ? substituirVariaveisAgenda(
+          String(config.mensagem_preferencia_indisponivel || "").trim() ||
+            "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:",
+          {
+            agenda_data_nova: dataLabel,
+            agenda_nome_nova: agenda?.nome || "",
+            agenda_hora_solicitada: horaSolicitada,
+            agenda_preferencia_solicitada: preferenciaSolicitada,
+          }
+        )
+      : "";
   const mensagemListar = substituirVariaveisAgenda(
-    String(mensagemInicial || config.mensagem_listar_horarios || "").trim() ||
+    mensagemPreferenciaIndisponivel ||
+      String(mensagemInicial || config.mensagem_listar_horarios || "").trim() ||
       "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:",
     {
       agenda_data_nova: dataLabel,
       agenda_nome_nova: agenda?.nome || "",
+      agenda_hora_solicitada: horaSolicitada,
+      agenda_preferencia_solicitada: preferenciaSolicitada,
     }
   );
 
@@ -4536,6 +4644,12 @@ async function enviarBotoesAutomacao({
   execucaoId: string;
   noId: string;
 }) {
+  const mensagemComVariaveis = await substituirVariaveisMensagem({
+    empresaId,
+    execucaoId,
+    texto: mensagem,
+  });
+
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
       .select(
@@ -4583,7 +4697,7 @@ async function enviarBotoesAutomacao({
     interactive: {
       type: "button",
       body: {
-        text: mensagem,
+        text: mensagemComVariaveis,
       },
       action: {
         buttons: botoes.slice(0, 3).map((botao) => ({
@@ -4626,7 +4740,7 @@ async function enviarBotoesAutomacao({
       conversa_protocolo_id: protocoloAtivo.id,
       remetente_tipo: "bot",
       remetente_id: null,
-      conteudo: mensagem,
+      conteudo: mensagemComVariaveis,
       tipo_mensagem: "botao",
       origem: "automatica",
       status_envio: response.ok ? "enviada" : "erro",

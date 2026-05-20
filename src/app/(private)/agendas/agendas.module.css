@@ -297,7 +297,7 @@
 }
 
 .alertArea {
-  padding: 12px 18px 0;
+  padding: 0px 18px 0;
   display: grid;
   gap: 10px;
 }
@@ -375,13 +375,13 @@
 }
 
 .calendarDay {
-  aspect-ratio: 1.15;
+  aspect-ratio: 1.10;
   min-height: 86px;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
   background: #ffffff;
   color: #0f172a;
-  padding: 10px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -393,7 +393,7 @@
 .calendarDay:hover {
   border-color: #38bdf8;
   background: #f0f9ff;
-  transform: translateY(-1px);
+  transform: translateY(-3px);
 }
 
 .calendarDayMuted {
@@ -413,21 +413,23 @@
 }
 
 .dayNumber {
+  padding: 4px;
   font-size: 15px;
   font-weight: 900;
 }
 
 .dayMarker {
+  margin-bottom: 35px;
   max-width: 100%;
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 20px;
+  padding: 0 7px;
   border-radius: 999px;
   background: #eff6ff;
   color: #1d4ed8;
   border: 1px solid #bfdbfe;
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   white-space: nowrap;
 }

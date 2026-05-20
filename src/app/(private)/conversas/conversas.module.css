@@ -2823,7 +2823,7 @@
 .mediaExpiryInfoTooltip {
   position: absolute;
   top: calc(100% + 10px);
-  left: -15px0;
+  left: -150px;
   width: 290px;
   padding: 12px 14px;
   border-radius: 12px;
