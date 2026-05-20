@@ -435,6 +435,63 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         }
       }
 
+      if (noAtual.tipo_no === "agenda_buscar_agendamento") {
+        const agendamentoSelecionado =
+          await registrarEscolhaAgendamentoAgendaAutomacao({
+            empresaId,
+            conversaId,
+            execucao: execucaoExistente,
+            no: noAtual,
+            mensagemTexto,
+            numeroDestino,
+          });
+
+        if (!agendamentoSelecionado.ok) {
+          return agendamentoSelecionado;
+        }
+
+        if (agendamentoSelecionado.aguardando) {
+          return {
+            ok: true,
+            status: "agenda_aguardando_escolha_agendamento",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+
+        if (agendamentoSelecionado.excedeuTentativas) {
+          await executarAcaoExcessoTentativas({
+            empresaId,
+            conversaId,
+            execucao: execucaoExistente,
+            no: noAtual,
+            numeroDestino,
+            tipo: "resposta_invalida",
+          });
+
+          return {
+            ok: true,
+            status: "agenda_tentativas_excedidas",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+
+        await seguirParaProximoNo({
+          empresaId,
+          conversaId,
+          execucaoId: execucaoExistente.id,
+          fluxoId: execucaoExistente.fluxo_id,
+          noAtualId: execucaoExistente.no_atual_id,
+          mensagemTexto: "encontrado",
+          numeroDestino,
+        });
+
+        return {
+          ok: true,
+          status: "agenda_agendamento_selecionado",
+          execucaoId: execucaoExistente.id,
+        };
+      }
+
       if (noAtual.tipo_no === "agenda_escolher_horario") {
         const slotRegistrado = await registrarEscolhaSlotAgendaAutomacao({
           empresaId,
@@ -2179,6 +2236,43 @@ function valoresAgendamentoAgenda(agendamento: any, agenda: any | null) {
   };
 }
 
+async function montarOpcoesAgendamentosAgenda(
+  empresaId: string,
+  agendamentos: any[]
+) {
+  const cacheAgendas = new Map<string, any | null>();
+  const opcoes = [];
+
+  for (const [index, agendamento] of agendamentos.entries()) {
+    const agendaId = String(agendamento.agenda_id || "");
+
+    if (!cacheAgendas.has(agendaId)) {
+      cacheAgendas.set(agendaId, await obterAgendaAutomacao(empresaId, agendaId));
+    }
+
+    const agenda = cacheAgendas.get(agendaId) || null;
+    const valores = valoresAgendamentoAgenda(agendamento, agenda);
+
+    opcoes.push({
+      indice: index + 1,
+      id: agendamento.id,
+      agenda_id: agendamento.agenda_id,
+      titulo: agendamento.titulo,
+      status: agendamento.status,
+      inicio_at: agendamento.inicio_at,
+      fim_at: agendamento.fim_at,
+      agenda_nome: valores.agenda_nome,
+      data_label: valores.agenda_data,
+      hora_label: valores.agenda_hora,
+      label: `${valores.agenda_data} as ${valores.agenda_hora}${
+        valores.agenda_nome ? ` - ${valores.agenda_nome}` : ""
+      }`,
+    });
+  }
+
+  return opcoes;
+}
+
 async function salvarEstadoExecucaoAgenda(params: {
   empresaId: string;
   execucaoId: string;
@@ -2672,6 +2766,138 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
   };
 }
 
+async function registrarEscolhaAgendamentoAgendaAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+  execucao: any;
+  no: any;
+  mensagemTexto: string;
+  numeroDestino: string;
+}) {
+  const { empresaId, conversaId, execucao, no, mensagemTexto, numeroDestino } =
+    params;
+
+  const config = no.configuracao_json || {};
+  const metadataAtual = execucao.metadata_json || {};
+  const opcoesPorNo = metadataAtual.agenda_agendamentos_opcoes || {};
+  const opcoes = Array.isArray(opcoesPorNo[no.id]) ? opcoesPorNo[no.id] : [];
+  const indiceEscolhido = extrairIndiceOpcaoAgenda(mensagemTexto);
+  const opcaoEscolhida = opcoes.find(
+    (opcao: any) => Number(opcao.indice) === indiceEscolhido
+  );
+
+  if (opcaoEscolhida) {
+    const agenda = await obterAgendaAutomacao(
+      empresaId,
+      String(opcaoEscolhida.agenda_id || "")
+    );
+    const valores = valoresAgendamentoAgenda(opcaoEscolhida, agenda);
+    const proximasOpcoes = {
+      ...opcoesPorNo,
+      [no.id]: [],
+    };
+
+    await salvarVariaveisAutomacao({
+      empresaId,
+      execucao,
+      valores: {
+        ...valores,
+        agenda_encontrado: "true",
+      },
+      origem: "agenda_buscar_agendamento",
+      metadata: {
+        agendamento_id: opcaoEscolhida.id,
+      },
+    });
+
+    await salvarEstadoExecucaoAgenda({
+      empresaId,
+      execucaoId: execucao.id,
+      metadataAtual,
+      patch: {
+        agenda_agendamentos_opcoes: proximasOpcoes,
+        agenda_agendamento_id: opcaoEscolhida.id,
+        agenda_status: opcaoEscolhida.status || "",
+        variaveis: {
+          ...(metadataAtual.variaveis || {}),
+          ...valores,
+          agenda_encontrado: "true",
+        },
+      },
+    });
+
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "agenda_agendamento_selecionado",
+      descricao: "Cliente escolheu qual agendamento deseja seguir no fluxo.",
+      entrada: {
+        mensagemTexto,
+      },
+      saida: {
+        agendamento_id: opcaoEscolhida.id,
+        agenda_id: opcaoEscolhida.agenda_id,
+      },
+    });
+
+    return {
+      ok: true,
+      valido: true,
+      aguardando: false,
+      excedeuTentativas: false,
+    };
+  }
+
+  const tentativa = await registrarTentativaBloco({
+    empresaId,
+    execucao,
+    no,
+    tipo: "resposta_invalida",
+  });
+
+  if (tentativa.excedeu) {
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "agenda_agendamento_escolha_tentativas_excedidas",
+      descricao: "Cliente excedeu tentativas ao escolher agendamento.",
+      entrada: {
+        mensagemTexto,
+      },
+      saida: {},
+    });
+
+    return {
+      ok: true,
+      valido: false,
+      aguardando: false,
+      excedeuTentativas: true,
+    };
+  }
+
+  await enviarMensagemAutomacao({
+    empresaId,
+    conversaId,
+    numeroDestino,
+    conteudo:
+      String(config.mensagem_opcao_invalida || "").trim() ||
+      "Nao encontrei essa opcao. Responda com o numero do agendamento.",
+    execucaoId: execucao.id,
+    noId: no.id,
+  });
+
+  return {
+    ok: true,
+    valido: false,
+    aguardando: true,
+    excedeuTentativas: false,
+  };
+}
+
 async function buscarAgendamentoAutomacao(params: {
   empresaId: string;
   conversaId: string;
@@ -2687,6 +2913,11 @@ async function buscarAgendamentoAutomacao(params: {
   const statusBusca = Array.isArray(config.status_busca)
     ? config.status_busca
     : ["agendado", "confirmado"];
+  const listarParaEscolha = config.listar_para_escolha === true;
+  const quantidadeOpcoes = Math.max(
+    1,
+    Math.min(10, Number(config.quantidade_opcoes || 6))
+  );
 
   const { data: execucao } = await supabaseAdmin
     .from("automacao_execucoes")
@@ -2702,7 +2933,7 @@ async function buscarAgendamentoAutomacao(params: {
     .in("status", statusBusca)
     .gte("inicio_at", new Date().toISOString())
     .order("inicio_at", { ascending: true })
-    .limit(1);
+    .limit(listarParaEscolha ? quantidadeOpcoes : 1);
 
   if (agendaId) {
     query = query.eq("agenda_id", agendaId);
@@ -2743,15 +2974,8 @@ async function buscarAgendamentoAutomacao(params: {
     return;
   }
 
-  const agendamento = data?.[0] || null;
-  const agenda = agendamento
-    ? await obterAgendaAutomacao(empresaId, agendamento.agenda_id)
-    : null;
-  const valores = agendamento
-    ? valoresAgendamentoAgenda(agendamento, agenda)
-    : {
-        agenda_encontrado: "false",
-      };
+  const agendamentos = data || [];
+  const agendamento = agendamentos[0] || null;
   const { data: execucaoAtual } = await supabaseAdmin
     .from("automacao_execucoes")
     .select("metadata_json, contato_id")
@@ -2760,6 +2984,94 @@ async function buscarAgendamentoAutomacao(params: {
     .maybeSingle();
   const metadataAtual = execucaoAtual?.metadata_json || {};
 
+  if (listarParaEscolha && agendamentos.length > 0) {
+    const opcoes = await montarOpcoesAgendamentosAgenda(empresaId, agendamentos);
+    const mensagemBase =
+      String(config.mensagem_listar_agendamentos || "").trim() ||
+      "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:";
+    const mensagemOpcoes = [
+      mensagemBase,
+      "",
+      ...opcoes.map((opcao) => `${opcao.indice}. ${opcao.label}`),
+    ].join("\n");
+    const opcoesPorNo = metadataAtual.agenda_agendamentos_opcoes || {};
+
+    await salvarVariaveisAutomacao({
+      empresaId,
+      execucao: {
+        id: execucaoId,
+        contato_id: execucaoAtual?.contato_id || null,
+      },
+      valores: {
+        agenda_encontrado: "true",
+      },
+      origem: "agenda_buscar_agendamento",
+      metadata: {
+        total_agendamentos: String(opcoes.length),
+      },
+    });
+
+    await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagemOpcoes,
+      execucaoId,
+      noId: no.id,
+    });
+
+    await salvarEstadoExecucaoAgenda({
+      empresaId,
+      execucaoId,
+      metadataAtual,
+      status: "aguardando",
+      noAtualId: no.id,
+      patch: {
+        agenda_agendamentos_opcoes: {
+          ...opcoesPorNo,
+          [no.id]: opcoes,
+        },
+        variaveis: {
+          ...(metadataAtual.variaveis || {}),
+          agenda_encontrado: "true",
+        },
+      },
+    });
+
+    await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      numeroDestino,
+    });
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "agenda_agendamentos_oferecidos",
+      descricao: "Agendamentos futuros enviados para o cliente escolher.",
+      entrada: config,
+      saida: {
+        total_opcoes: opcoes.length,
+        opcoes,
+      },
+    });
+
+    return;
+  }
+
+  const agenda = agendamento
+    ? await obterAgendaAutomacao(empresaId, agendamento.agenda_id)
+    : null;
+  const valores = agendamento
+    ? valoresAgendamentoAgenda(agendamento, agenda)
+    : {
+        agenda_encontrado: "false",
+      };
   await salvarVariaveisAutomacao({
     empresaId,
     execucao: {

@@ -233,6 +233,7 @@ function tipoNoEsperaResposta(tipoNo: string) {
     tipoNo === "pergunta_opcoes" ||
     tipoNo === "enviar_botoes" ||
     tipoNo === "capturar_resposta" ||
+    tipoNo === "agenda_buscar_agendamento" ||
     tipoNo === "agenda_escolher_horario" ||
     tipoNo === "interpretar_arquivo_ia"
   );
@@ -460,10 +461,14 @@ export default function FluxosPage() {
     useState<"horas" | "dias">("horas");
   const [agendarDisparoVariaveisNode, setAgendarDisparoVariaveisNode] = useState("");
   const [agendaIdNode, setAgendaIdNode] = useState("");
+  const [agendaListarAgendamentosNode, setAgendaListarAgendamentosNode] =
+    useState(false);
   const [agendaQuantidadeOpcoesNode, setAgendaQuantidadeOpcoesNode] = useState("6");
   const [agendaJanelaDiasNode, setAgendaJanelaDiasNode] = useState("14");
   const [agendaMensagemSemHorariosNode, setAgendaMensagemSemHorariosNode] =
     useState("No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.");
+  const [agendaMensagemListarAgendamentosNode, setAgendaMensagemListarAgendamentosNode] =
+    useState("Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:");
   const [agendaMensagemListarHorariosNode, setAgendaMensagemListarHorariosNode] =
     useState("Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:");
   const [
@@ -1078,8 +1083,12 @@ async function criarFluxoRapido() {
           ? {
               agenda_id: "",
               status_busca: ["agendado", "confirmado"],
+              listar_para_escolha: true,
+              quantidade_opcoes: 6,
               mensagem_encontrado:
                 "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.",
+              mensagem_listar_agendamentos:
+                "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:",
               mensagem_nao_encontrado:
                 "Nao encontrei nenhum agendamento futuro no seu contato.",
             }
@@ -1359,6 +1368,9 @@ function offsetLabelConexao(edgeId: string) {
     );
 
     setAgendaIdNode(String(configuracaoJson?.agenda_id || ""));
+    setAgendaListarAgendamentosNode(
+      configuracaoJson?.listar_para_escolha === true
+    );
     setAgendaQuantidadeOpcoesNode(
       String(configuracaoJson?.quantidade_opcoes || 6)
     );
@@ -1367,6 +1379,12 @@ function offsetLabelConexao(edgeId: string) {
       String(
         configuracaoJson?.mensagem_sem_horarios ||
           "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente."
+      )
+    );
+    setAgendaMensagemListarAgendamentosNode(
+      String(
+        configuracaoJson?.mensagem_listar_agendamentos ||
+          "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:"
       )
     );
     setAgendaMensagemListarHorariosNode(
@@ -1584,9 +1602,17 @@ function aplicarEdicaoNoInterno() {
       if (tipoFinal === "agenda_buscar_agendamento") {
         configuracao_json.agenda_id = agendaIdNode;
         configuracao_json.status_busca = ["agendado", "confirmado"];
+        configuracao_json.listar_para_escolha = agendaListarAgendamentosNode;
+        configuracao_json.quantidade_opcoes = Math.max(
+          1,
+          Math.min(10, Number(agendaQuantidadeOpcoesNode || 6))
+        );
         configuracao_json.mensagem_encontrado =
           mensagemNode.trim() ||
           "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.";
+        configuracao_json.mensagem_listar_agendamentos =
+          agendaMensagemListarAgendamentosNode.trim() ||
+          "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:";
         configuracao_json.mensagem_nao_encontrado =
           agendaMensagemSemHorariosNode.trim() ||
           "Nao encontrei nenhum agendamento futuro no seu contato.";
@@ -1662,6 +1688,7 @@ function aplicarEdicaoNoInterno() {
         tipoFinal === "pergunta_opcoes" ||
         tipoFinal === "enviar_botoes" ||
         tipoFinal === "capturar_resposta" ||
+        tipoFinal === "agenda_buscar_agendamento" ||
         tipoFinal === "agenda_escolher_horario" ||
         tipoFinal === "avaliacao" ||
         tipoFinal === "interpretar_arquivo_ia"
@@ -3326,6 +3353,14 @@ useEffect(() => {
                             setBotoesNode([]);
                             setMidiaUrlNode("");
 
+                            if (novoTipo === "agenda_buscar_agendamento") {
+                              setAgendaListarAgendamentosNode(true);
+                              setAgendaQuantidadeOpcoesNode("6");
+                              setAgendaMensagemListarAgendamentosNode(
+                                "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:"
+                              );
+                            }
+
                             if (novoTipo === "agenda_escolher_horario") {
                               setMensagemNode(
                                 "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira."
@@ -4089,6 +4124,52 @@ useEffect(() => {
 
                       {tipoNodeEdicao === "agenda_buscar_agendamento" && (
                         <>
+                          <label className={styles.switchField}>
+                            <input
+                              type="checkbox"
+                              checked={agendaListarAgendamentosNode}
+                              onChange={(e) =>
+                                setAgendaListarAgendamentosNode(e.target.checked)
+                              }
+                            />
+
+                            <div>
+                              <strong>Listar agendamentos para escolha</strong>
+                              <p>
+                                Envia os agendamentos futuros e aguarda o contato responder o numero.
+                              </p>
+                            </div>
+                          </label>
+
+                          {agendaListarAgendamentosNode && (
+                            <>
+                              <label className={styles.field}>
+                                <span className={styles.label}>Mensagem ao listar agendamentos</span>
+                                <textarea
+                                  className={styles.textarea}
+                                  value={agendaMensagemListarAgendamentosNode}
+                                  onChange={(e) =>
+                                    setAgendaMensagemListarAgendamentosNode(e.target.value)
+                                  }
+                                />
+                              </label>
+
+                              <label className={styles.field}>
+                                <span className={styles.label}>Agendamentos enviados</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={10}
+                                  className={styles.input}
+                                  value={agendaQuantidadeOpcoesNode}
+                                  onChange={(e) =>
+                                    setAgendaQuantidadeOpcoesNode(e.target.value)
+                                  }
+                                />
+                              </label>
+                            </>
+                          )}
+
                         <label className={styles.field}>
                           <span className={styles.label}>Mensagem quando não encontrar</span>
                           <textarea
@@ -4369,6 +4450,7 @@ useEffect(() => {
                     "pergunta_opcoes",
                     "enviar_botoes",
                     "capturar_resposta",
+                    "agenda_buscar_agendamento",
                     "agenda_escolher_horario",
                     "avaliacao",
                     "interpretar_arquivo_ia",
