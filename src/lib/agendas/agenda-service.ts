@@ -9,6 +9,13 @@ export type AgendaSlot = {
   hora_label: string;
 };
 
+export type AgendaSlotsDisponiveisResultado = {
+  agenda: AgendaCalendario | null;
+  slots: AgendaSlot[];
+  tem_disponibilidade_no_periodo: boolean;
+  dias_sem_disponibilidade: string[];
+};
+
 export type PreferenciaHorarioAgenda = {
   tipo: "a_partir_de" | "antes_de" | "periodo" | "exato" | "por_volta";
   inicio_minutos?: number | null;
@@ -623,7 +630,7 @@ export async function listarSlotsDisponiveis(params: {
   data?: string | null;
   janelaDias?: number | null;
   limite?: number | null;
-}) {
+}): Promise<AgendaSlotsDisponiveisResultado> {
   const { data: agendaRaw, error: agendaError } = await params.supabase
     .from("agenda_calendarios")
     .select(
@@ -643,6 +650,8 @@ export async function listarSlotsDisponiveis(params: {
     return {
       agenda: agenda || null,
       slots: [] as AgendaSlot[],
+      tem_disponibilidade_no_periodo: false,
+      dias_sem_disponibilidade: [],
     };
   }
 
@@ -677,6 +686,8 @@ export async function listarSlotsDisponiveis(params: {
     return {
       agenda,
       slots: [] as AgendaSlot[],
+      tem_disponibilidade_no_periodo: false,
+      dias_sem_disponibilidade: [],
     };
   }
 
@@ -725,6 +736,8 @@ export async function listarSlotsDisponiveis(params: {
   }));
 
   const slots: AgendaSlot[] = [];
+  let temDisponibilidadeNoPeriodo = false;
+  const diasSemDisponibilidade: string[] = [];
 
   for (let diaOffset = 0; diaOffset < totalDias; diaOffset++) {
     const dia = adicionarDias(primeiroDia, diaOffset);
@@ -733,6 +746,12 @@ export async function listarSlotsDisponiveis(params: {
     const janelas = disponibilidades.filter(
       (item: AgendaDisponibilidade) => Number(item.dia_semana) === diaSemana
     );
+
+    if (janelas.length > 0) {
+      temDisponibilidadeNoPeriodo = true;
+    } else {
+      diasSemDisponibilidade.push(data);
+    }
 
     for (const janela of janelas) {
       const inicioJanela = parseHora(janela.hora_inicio);
@@ -789,5 +808,7 @@ export async function listarSlotsDisponiveis(params: {
       ...slot,
       indice: index + 1,
     })),
+    tem_disponibilidade_no_periodo: temDisponibilidadeNoPeriodo,
+    dias_sem_disponibilidade: diasSemDisponibilidade,
   };
 }

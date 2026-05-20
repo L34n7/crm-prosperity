@@ -2480,12 +2480,19 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
   );
 
   if (!slots.length) {
+    const semExpedienteNoDia =
+      dataEscolhida &&
+      resultadoSlots.dias_sem_disponibilidade?.includes(dataEscolhida);
     const mensagemPadrao =
-      interpretacao.preferencia?.hora_minutos != null
+      semExpedienteNoDia
+        ? "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis."
+        : interpretacao.preferencia?.hora_minutos != null
         ? "O horario das {{agenda_hora_solicitada}} nao esta livre em {{agenda_data_nova}} e nao encontrei outros horarios nesse dia. Me diga outro dia ou horario."
         : "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.";
     const mensagemBaseSemHorarios =
-      interpretacao.preferencia?.hora_minutos != null
+      semExpedienteNoDia
+        ? String(config.mensagem_sem_expediente || "").trim() || mensagemPadrao
+        : interpretacao.preferencia?.hora_minutos != null
         ? mensagemPadrao
         : String(config.mensagem_sem_horarios || "").trim() || mensagemPadrao;
     const mensagemSemHorarios = substituirVariaveisAgenda(

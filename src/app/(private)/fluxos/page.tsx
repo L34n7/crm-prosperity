@@ -467,6 +467,8 @@ export default function FluxosPage() {
   const [agendaJanelaDiasNode, setAgendaJanelaDiasNode] = useState("14");
   const [agendaMensagemSemHorariosNode, setAgendaMensagemSemHorariosNode] =
     useState("No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.");
+  const [agendaMensagemSemExpedienteNode, setAgendaMensagemSemExpedienteNode] =
+    useState("Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis.");
   const [agendaMensagemDataInvalidaNode, setAgendaMensagemDataInvalidaNode] =
     useState("Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.");
   const [agendaMensagemListarAgendamentosNode, setAgendaMensagemListarAgendamentosNode] =
@@ -1109,6 +1111,8 @@ async function criarFluxoRapido() {
                 "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.",
               mensagem_sem_horarios:
                 "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.",
+              mensagem_sem_expediente:
+                "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis.",
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
@@ -1385,6 +1389,12 @@ function offsetLabelConexao(edgeId: string) {
           "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente."
       )
     );
+    setAgendaMensagemSemExpedienteNode(
+      String(
+        configuracaoJson?.mensagem_sem_expediente ||
+          "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis."
+      )
+    );
     setAgendaMensagemDataInvalidaNode(
       String(
         configuracaoJson?.mensagem_data_invalida ||
@@ -1653,6 +1663,9 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.mensagem_sem_horarios =
           agendaMensagemSemHorariosNode.trim() ||
           "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.";
+        configuracao_json.mensagem_sem_expediente =
+          agendaMensagemSemExpedienteNode.trim() ||
+          "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis.";
       }
 
       if (tipoFinal === "agenda_criar_agendamento") {
@@ -3387,6 +3400,9 @@ useEffect(() => {
                               setAgendaMensagemDataInvalidaNode(
                                 "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}."
                               );
+                              setAgendaMensagemSemExpedienteNode(
+                                "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis."
+                              );
                             }
 
                             if (novoTipo === "agenda_criar_agendamento") {
@@ -4081,6 +4097,34 @@ useEffect(() => {
                             </span>
                           </label>
 
+                          <div className={styles.optionRow}>
+                            <label className={styles.field}>
+                              <span className={styles.label}>Opcoes enviadas</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={10}
+                                className={styles.input}
+                                value={agendaQuantidadeOpcoesNode}
+                                onChange={(e) =>
+                                  setAgendaQuantidadeOpcoesNode(e.target.value)
+                                }
+                              />
+                            </label>
+
+                            <label className={styles.field}>
+                              <span className={styles.label}>Buscar por dias</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={60}
+                                className={styles.input}
+                                value={agendaJanelaDiasNode}
+                                onChange={(e) => setAgendaJanelaDiasNode(e.target.value)}
+                              />
+                            </label>
+                          </div>
+
                           <label className={styles.field}>
                             <span className={styles.label}>Mensagem se horario pedido estiver ocupado</span>
                             <textarea
@@ -4112,34 +4156,6 @@ useEffect(() => {
                             </span>
                           </label>
 
-                          <div className={styles.optionRow}>
-                            <label className={styles.field}>
-                              <span className={styles.label}>Opcoes enviadas</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={10}
-                                className={styles.input}
-                                value={agendaQuantidadeOpcoesNode}
-                                onChange={(e) =>
-                                  setAgendaQuantidadeOpcoesNode(e.target.value)
-                                }
-                              />
-                            </label>
-
-                            <label className={styles.field}>
-                              <span className={styles.label}>Buscar por dias</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={60}
-                                className={styles.input}
-                                value={agendaJanelaDiasNode}
-                                onChange={(e) => setAgendaJanelaDiasNode(e.target.value)}
-                              />
-                            </label>
-                          </div>
-
                           <label className={styles.field}>
                             <span className={styles.label}>Mensagem sem horarios</span>
                             <textarea
@@ -4149,6 +4165,21 @@ useEffect(() => {
                                 setAgendaMensagemSemHorariosNode(e.target.value)
                               }
                             />
+                          </label>
+
+                          <label className={styles.field}>
+                            <span className={styles.label}>Mensagem sem expediente</span>
+                            <textarea
+                              className={styles.textarea}
+                              value={agendaMensagemSemExpedienteNode}
+                              onChange={(e) =>
+                                setAgendaMensagemSemExpedienteNode(e.target.value)
+                              }
+                            />
+                            <span className={styles.help}>
+                              Use quando o dia pedido nao tem horario configurado na agenda.
+                              Variavel: {"{{agenda_data_nova}}"}.
+                            </span>
                           </label>
                         </>
                       )}
