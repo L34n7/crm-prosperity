@@ -35,6 +35,26 @@ export async function sendWhatsAppTextMessage({
     throw new Error("Texto da mensagem é obrigatório");
   }
 
+if (process.env.WHATSAPP_TEST_MODE === "true") {
+  const delaySimulado = Number(process.env.WHATSAPP_TEST_META_DELAY_MS || 700);
+
+  await new Promise((resolve) => setTimeout(resolve, delaySimulado));
+
+  return {
+    ok: true,
+    status: 200,
+    messageId: `test_wamid_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2)}`,
+    raw: {
+      test_mode: true,
+      to,
+      body: body.trim(),
+    },
+    error: null,
+  };
+}
+
   const response = await fetch(
     `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
     {
