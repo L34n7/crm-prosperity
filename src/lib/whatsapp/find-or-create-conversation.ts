@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export type WhatsAppConversation = {
@@ -45,37 +46,10 @@ function formatarDataProtocolo(data: Date) {
 }
 
 async function gerarProtocolo(empresaId: string) {
-  const supabaseAdmin = getSupabaseAdmin();
   const hoje = new Date();
   const dataBase = formatarDataProtocolo(hoje);
-  const prefixo = `ATD-${dataBase}-`;
 
-  const { data, error } = await supabaseAdmin
-    .from("conversa_protocolos")
-    .select("protocolo")
-    .eq("empresa_id", empresaId)
-    .like("protocolo", `${prefixo}%`)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (error) {
-    throw new Error(`Erro ao gerar protocolo: ${error.message}`);
-  }
-
-  const ultimoProtocolo = data?.[0]?.protocolo || null;
-
-  let sequencial = 1;
-
-  if (ultimoProtocolo) {
-    const ultimaParte = ultimoProtocolo.split("-").pop() || "0";
-    const ultimoNumero = Number(ultimaParte);
-
-    if (!Number.isNaN(ultimoNumero)) {
-      sequencial = ultimoNumero + 1;
-    }
-  }
-
-  return `${prefixo}${String(sequencial).padStart(6, "0")}`;
+  return `ATD-${dataBase}-${randomUUID()}`;
 }
 
 async function garantirProtocoloAtivo(conversa: WhatsAppConversation) {
