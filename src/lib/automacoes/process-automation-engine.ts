@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type {
   AutomationEngineInput,
@@ -343,17 +344,49 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     };
   }  
 
-  const { data: execucaoExistente, error: execucaoError } = await supabaseAdmin
+  const { data: execucoesExistentes, error: execucaoError } = await supabaseAdmin
     .from("automacao_execucoes")
     .select("*")
     .eq("empresa_id", empresaId)
     .eq("conversa_id", conversaId)
     .in("status", ["rodando", "aguardando"])
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(5);
 
   if (execucaoError) {
     console.error("[AUTOMATION_ENGINE] Erro ao buscar execução:", execucaoError);
     return { ok: false, error: "Erro ao buscar execução." };
+  }
+
+  const execucaoExistente = execucoesExistentes?.[0] || null;
+
+  const execucoesDuplicadas = (execucoesExistentes || []).slice(1);
+
+  if (execucoesDuplicadas.length > 0) {
+    const agora = new Date().toISOString();
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "cancelado",
+        finished_at: agora,
+        updated_at: agora,
+        metadata_json: {
+          motivo_cancelamento: "execucao_duplicada_concorrencia",
+          cancelado_em: agora,
+        },
+      })
+      .eq("empresa_id", empresaId)
+      .in(
+        "id",
+        execucoesDuplicadas.map((execucao) => execucao.id)
+      );
+
+    console.warn("[AUTOMATION_ENGINE] Execuções duplicadas canceladas", {
+      conversaId,
+      mantida: execucaoExistente?.id,
+      canceladas: execucoesDuplicadas.map((execucao) => execucao.id),
+    });
   }
 
   if (execucaoExistente) {
@@ -5459,7 +5492,7 @@ async function buscarOuCriarProtocoloAutomacao(params: {
   }
 
   const now = new Date().toISOString();
-  const protocoloTexto = `AUTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const protocoloTexto = `AUTO-${crypto.randomUUID()}`;
 
   const { data: novoProtocolo, error: novoProtocoloError } =
     await supabaseAdmin
