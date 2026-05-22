@@ -6,7 +6,6 @@ import {
 } from "@/lib/whatsapp/meta";
 import {
   enfileirarWebhookWhatsapp,
-  processarFilaWebhooksWhatsapp,
   processarWebhookWhatsappPorId,
 } from "@/lib/whatsapp/webhook-queue";
 import { salvarMensagensRecebidasRapido } from "@/lib/whatsapp/save-incoming-message-fast";
@@ -20,14 +19,6 @@ function perf(label: string, inicio: number, extra?: Record<string, any>) {
     tempo_ms: Date.now() - inicio,
     ...(extra || {}),
   });
-}
-
-function limiteProcessamentoInline() {
-  const numero = Number(process.env.WHATSAPP_WEBHOOK_INLINE_BATCH_LIMIT ?? 0);
-
-  if (!Number.isFinite(numero)) return 3;
-
-  return Math.max(0, Math.min(10, Math.floor(numero)));
 }
 
 export async function GET(req: NextRequest) {
@@ -130,40 +121,25 @@ export async function POST(req: NextRequest) {
       eventId: eventoFila.evento?.id ?? null,
     });    
 
-    const inlineLimit = limiteProcessamentoInline();
-
-    after(async () => {
-      try {
-        if (eventoFila.evento?.id) {
-          const resultadoAtual =
-            await processarWebhookWhatsappPorId(
-              eventoFila.evento.id
-            );
+    if (incomingMessages.length > 0 && eventoFila.evento?.id && !eventoFila.duplicado) {
+      after(async () => {
+        try {
+          const resultadoAtual = await processarWebhookWhatsappPorId(
+            eventoFila.evento!.id
+          );
 
           console.log(
-            "[WEBHOOK WHATSAPP] Evento atual processado:",
+            "[WEBHOOK WHATSAPP] Mensagem atual processada:",
             resultadoAtual
           );
-        }
-
-        if (inlineLimit > 0) {
-          const resultadoFila =
-            await processarFilaWebhooksWhatsapp({
-              limite: inlineLimit,
-            });
-
-          console.log(
-            "[WEBHOOK WHATSAPP] Pendentes processados:",
-            resultadoFila
+        } catch (error) {
+          console.error(
+            "[WEBHOOK WHATSAPP] Erro ao processar mensagem atual:",
+            error
           );
         }
-      } catch (error) {
-        console.error(
-          "[WEBHOOK WHATSAPP] Erro no processamento inline:",
-          error
-        );
-      }
-    });
+      });
+    }
 
     perf("WEBHOOK / resposta 200", inicioPost, {
       incomingMessages: incomingMessages.length,

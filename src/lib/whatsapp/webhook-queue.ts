@@ -218,7 +218,7 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
     };
   }
 
-  const { error: lockError } = await supabaseAdmin
+  const { data: eventoTravado, error: lockError } = await supabaseAdmin
     .from("whatsapp_webhook_eventos")
     .update({
       status: "processando",
@@ -227,13 +227,12 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", evento.id)
-    .eq("status", "pendente");
+    .eq("status", "pendente")
+    .select("*")
+    .maybeSingle();
 
   if (lockError) {
-    console.error(
-      "[WEBHOOK QUEUE] Erro ao travar evento:",
-      lockError
-    );
+    console.error("[WEBHOOK QUEUE] Erro ao travar evento:", lockError);
 
     return {
       ok: false,
@@ -241,9 +240,17 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
     };
   }
 
+  if (!eventoTravado) {
+    return {
+      ok: true,
+      ignorado: true,
+      motivo: "Evento já foi travado/processado por outro worker.",
+    };
+  }
+
   try {
     const resultado = await processWhatsAppWebhookBody(
-      evento.body_json as WhatsAppWebhookBody
+      eventoTravado.body_json as WhatsAppWebhookBody
     );
 
     await supabaseAdmin
