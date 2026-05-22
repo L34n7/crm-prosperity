@@ -179,6 +179,124 @@ async function reivindicarEvento(evento: any, maxTentativas: number) {
   return data;
 }
 
+export async function processarWebhookWhatsappPorId(eventoId: string) {
+  const inicioTotal = Date.now();
+
+  if (!eventoId) {
+    return {
+      ok: false,
+      error: "eventoId obrigatório.",
+    };
+  }
+
+  const supabaseAdmin = getSupabaseAdmin();
+
+  const { data: evento, error } = await supabaseAdmin
+    .from("whatsapp_webhook_eventos")
+    .select("*")
+    .eq("id", eventoId)
+    .eq("status", "pendente")
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "[WEBHOOK QUEUE] Erro ao buscar evento por ID:",
+      error
+    );
+
+    return {
+      ok: false,
+      error: error.message,
+    };
+  }
+
+  if (!evento) {
+    return {
+      ok: true,
+      ignorado: true,
+      motivo: "Evento não encontrado ou já processado.",
+    };
+  }
+
+  const { error: lockError } = await supabaseAdmin
+    .from("whatsapp_webhook_eventos")
+    .update({
+      status: "processando",
+      locked_at: new Date().toISOString(),
+      tentativas: (evento.tentativas || 0) + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", evento.id)
+    .eq("status", "pendente");
+
+  if (lockError) {
+    console.error(
+      "[WEBHOOK QUEUE] Erro ao travar evento:",
+      lockError
+    );
+
+    return {
+      ok: false,
+      error: lockError.message,
+    };
+  }
+
+  try {
+    const resultado = await processWhatsAppWebhookBody(
+      evento.body_json as WhatsAppWebhookBody
+    );
+
+    await supabaseAdmin
+      .from("whatsapp_webhook_eventos")
+      .update({
+        status: "processado",
+        processed_at: new Date().toISOString(),
+        resultado_json: resultado || {},
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", evento.id);
+
+    console.log("[WEBHOOK QUEUE] Evento processado por ID", {
+      eventoId: evento.id,
+      tempo_ms: Date.now() - inicioTotal,
+    });
+
+    return {
+      ok: true,
+      processado: true,
+      eventoId: evento.id,
+      tempo_ms: Date.now() - inicioTotal,
+    };
+  } catch (error) {
+    console.error(
+      "[WEBHOOK QUEUE] Erro ao processar evento por ID:",
+      error
+    );
+
+    await supabaseAdmin
+      .from("whatsapp_webhook_eventos")
+      .update({
+        status: "erro",
+        erro:
+          error instanceof Error
+            ? error.message
+            : "Erro desconhecido.",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", evento.id);
+
+    return {
+      ok: false,
+      processado: false,
+      eventoId: evento.id,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Erro desconhecido.",
+    };
+  }
+}
+
 export async function processarFilaWebhooksWhatsapp(
   params: ProcessarFilaParams = {}
 ) {

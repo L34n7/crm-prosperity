@@ -7,7 +7,9 @@ import {
 import {
   enfileirarWebhookWhatsapp,
   processarFilaWebhooksWhatsapp,
+  processarWebhookWhatsappPorId,
 } from "@/lib/whatsapp/webhook-queue";
+import { salvarMensagensRecebidasRapido } from "@/lib/whatsapp/save-incoming-message-fast";
 
 export const runtime = "nodejs";
 
@@ -100,6 +102,29 @@ export async function POST(req: NextRequest) {
 
     const eventoFila = await enfileirarWebhookWhatsapp(body);
 
+    const inicioSalvarRapido = Date.now();
+
+    let resultadoSalvarRapido: any = null;
+
+    if (incomingMessages.length > 0) {
+      try {
+        resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
+
+        perf("WEBHOOK / salvar mensagens rápido", inicioSalvarRapido, {
+          salvas: resultadoSalvarRapido.salvas,
+          duplicadas: resultadoSalvarRapido.duplicadas,
+          ignoradas: resultadoSalvarRapido.ignoradas,
+          erros: resultadoSalvarRapido.erros,
+        });
+      } catch (error) {
+        console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido:", error);
+
+        perf("WEBHOOK / salvar mensagens rápido erro", inicioSalvarRapido, {
+          erro: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     perf("WEBHOOK / enfileirar", inicioFila, {
       duplicado: eventoFila.duplicado,
       eventId: eventoFila.evento?.id ?? null,
@@ -107,25 +132,38 @@ export async function POST(req: NextRequest) {
 
     const inlineLimit = limiteProcessamentoInline();
 
-    if (inlineLimit > 0) {
-      after(async () => {
-        try {
-          const resultado = await processarFilaWebhooksWhatsapp({
-            limite: inlineLimit,
-          });
+    after(async () => {
+      try {
+        if (eventoFila.evento?.id) {
+          const resultadoAtual =
+            await processarWebhookWhatsappPorId(
+              eventoFila.evento.id
+            );
 
           console.log(
-            "[WEBHOOK WHATSAPP] Processamento em background finalizado:",
-            resultado
-          );
-        } catch (error) {
-          console.error(
-            "[WEBHOOK WHATSAPP] Erro no processamento em background:",
-            error
+            "[WEBHOOK WHATSAPP] Evento atual processado:",
+            resultadoAtual
           );
         }
-      });
-    }
+
+        if (inlineLimit > 0) {
+          const resultadoFila =
+            await processarFilaWebhooksWhatsapp({
+              limite: inlineLimit,
+            });
+
+          console.log(
+            "[WEBHOOK WHATSAPP] Pendentes processados:",
+            resultadoFila
+          );
+        }
+      } catch (error) {
+        console.error(
+          "[WEBHOOK WHATSAPP] Erro no processamento inline:",
+          error
+        );
+      }
+    });
 
     perf("WEBHOOK / resposta 200", inicioPost, {
       incomingMessages: incomingMessages.length,
@@ -136,6 +174,7 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         queued: true,
+        fastSaved: resultadoSalvarRapido,
         duplicated: eventoFila.duplicado,
         eventId: eventoFila.evento?.id ?? null,
         totals: {

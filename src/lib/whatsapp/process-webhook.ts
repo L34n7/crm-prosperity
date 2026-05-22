@@ -70,6 +70,58 @@ function extrairArquivoNome(message: any, metadataJson: any) {
   );
 }
 
+async function buscarMensagemExistentePorExternaId(
+  mensagemExternaId: string
+) {
+  if (!mensagemExternaId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("mensagens")
+    .select("id, conversa_id, metadata_json")
+    .eq("mensagem_externa_id", mensagemExternaId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "[WEBHOOK WHATSAPP] Erro ao buscar mensagem existente:",
+      error
+    );
+
+    return null;
+  }
+
+  return data || null;
+}
+
+async function marcarMensagemAutomacaoProcessada(params: {
+  mensagemId: string | null | undefined;
+  automationResult: any;
+}) {
+  const { mensagemId, automationResult } = params;
+
+  if (!mensagemId) return;
+
+  const { data: mensagemAtual } = await supabaseAdmin
+    .from("mensagens")
+    .select("metadata_json")
+    .eq("id", mensagemId)
+    .maybeSingle();
+
+  const metadataAtual = mensagemAtual?.metadata_json || {};
+
+  await supabaseAdmin
+    .from("mensagens")
+    .update({
+      metadata_json: {
+        ...metadataAtual,
+        automacao_processada: true,
+        automacao_processada_em: new Date().toISOString(),
+        automacao_resultado: automationResult || null,
+      },
+    })
+    .eq("id", mensagemId);
+}
+
 export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
   const inicioProcessamentoWebhook = Date.now();
   if (body.object !== "whatsapp_business_account") {
@@ -309,10 +361,21 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
       const savedMessage = await saveIncomingWhatsAppMessage(payloadSalvarMensagem);
 
+      const mensagemExistente = savedMessage.duplicated
+        ? await buscarMensagemExistentePorExternaId(message.messageId)
+        : null;
+
+      const mensagemInternaId =
+        savedMessage.messageId || mensagemExistente?.id || null;
+
+      const automacaoJaProcessada =
+        mensagemExistente?.metadata_json?.automacao_processada === true;
+
+
       if (
         deveTranscreverAudioAutomaticamente &&
         audioSemTranscricao &&
-        !savedMessage.duplicated
+        !automacaoJaProcessada
       ) {
         const phoneNumberId =
           integration.phone_number_id ||
@@ -382,14 +445,13 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
       );
 
       const podeRodarAutomacao =
-        !savedMessage.duplicated &&
+        !automacaoJaProcessada &&
         ((["texto", "botao", "audio"].includes(message.tipoMensagem) &&
           !!textoAutomacao.trim()) ||
           (ehArquivoParaAutomacao && !!mediaId));
 
         if (podeRodarAutomacao) {
           const inicioAutomacao = Date.now();
-
           automationResult = await processAutomationEngine({
           empresaId: integration.empresa_id,
           conversaId: conversation.id,
@@ -404,12 +466,19 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           mediaId,
           mimeType,
           arquivoNome,
-          mensagemId: savedMessage.messageId,
+          mensagemId: mensagemInternaId,
         });
 
         perf("PROCESS / automação total", inicioAutomacao, {
           status: automationResult?.status ?? null,
           execucaoId: automationResult?.execucaoId ?? null,
+        });
+      }
+
+      if (podeRodarAutomacao) {
+        await marcarMensagemAutomacaoProcessada({
+          mensagemId: mensagemInternaId,
+          automationResult,
         });
       }
 
@@ -421,7 +490,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         contactId: contact.id,
         conversationId: conversation.id,
         conversaProtocoloId: protocoloAtivo?.id ?? null,
-        savedMessageId: savedMessage.messageId,
+        savedMessageId: mensagemInternaId,
         tipoMensagem: message.tipoMensagem,
         automationOk: automationResult?.ok ?? false,
         automationStatus: automationResult?.status ?? null,
