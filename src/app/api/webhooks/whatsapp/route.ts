@@ -93,28 +93,6 @@ export async function POST(req: NextRequest) {
 
     const eventoFila = await enfileirarWebhookWhatsapp(body);
 
-    const inicioSalvarRapido = Date.now();
-
-    let resultadoSalvarRapido: any = null;
-
-    if (incomingMessages.length > 0) {
-      try {
-        resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
-
-        perf("WEBHOOK / salvar mensagens rápido", inicioSalvarRapido, {
-          salvas: resultadoSalvarRapido.salvas,
-          duplicadas: resultadoSalvarRapido.duplicadas,
-          ignoradas: resultadoSalvarRapido.ignoradas,
-          erros: resultadoSalvarRapido.erros,
-        });
-      } catch (error) {
-        console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido:", error);
-
-        perf("WEBHOOK / salvar mensagens rápido erro", inicioSalvarRapido, {
-          erro: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
 
     perf("WEBHOOK / enfileirar", inicioFila, {
       duplicado: eventoFila.duplicado,
@@ -123,6 +101,21 @@ export async function POST(req: NextRequest) {
 
     if (incomingMessages.length > 0 && eventoFila.evento?.id && !eventoFila.duplicado) {
       after(async () => {
+        try {
+          const inicioSalvarRapido = Date.now();
+
+          const resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
+
+          perf("WEBHOOK / salvar mensagens rápido after", inicioSalvarRapido, {
+            salvas: resultadoSalvarRapido.salvas,
+            duplicadas: resultadoSalvarRapido.duplicadas,
+            ignoradas: resultadoSalvarRapido.ignoradas,
+            erros: resultadoSalvarRapido.erros,
+          });
+        } catch (error) {
+          console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido after:", error);
+        }
+
         try {
           const resultadoAtual = await processarWebhookWhatsappPorId(
             eventoFila.evento!.id
@@ -150,7 +143,6 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         queued: true,
-        fastSaved: resultadoSalvarRapido,
         duplicated: eventoFila.duplicado,
         eventId: eventoFila.evento?.id ?? null,
         totals: {
