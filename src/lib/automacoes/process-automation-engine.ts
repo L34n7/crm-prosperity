@@ -867,6 +867,18 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     .single();
 
   if (criarExecucaoError) {
+    if (criarExecucaoError.code === "23505") {
+      console.warn("[AUTOMATION_ENGINE] Execução ativa já existe para esta conversa", {
+        empresaId,
+        conversaId,
+      });
+
+      return {
+        ok: true,
+        status: "execucao_ativa_existente_concorrencia",
+      };
+    }
+
     console.error(
       "[AUTOMATION_ENGINE] Erro ao criar execução:",
       criarExecucaoError
