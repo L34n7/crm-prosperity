@@ -925,6 +925,38 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   };
 }
 
+async function tentarTravarExecucaoNo(params: {
+  empresaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  noId: string;
+}) {
+  const { empresaId, execucaoId, fluxoId, noId } = params;
+
+  const { error } = await supabaseAdmin
+    .from("automacao_execucao_logs")
+    .insert({
+      empresa_id: empresaId,
+      execucao_id: execucaoId,
+      fluxo_id: fluxoId,
+      no_id: noId,
+      tipo_evento: "lock_execucao_no",
+      descricao: "Trava de idempotência para impedir execução duplicada do nó.",
+      entrada_json: {},
+      saida_json: {},
+    });
+
+  if (error) {
+    if (error.code === "23505") {
+      return false;
+    }
+
+    throw error;
+  }
+
+  return true;
+}
+
 export async function executarNo(params: {
   empresaId: string;
   conversaId: string;
@@ -940,6 +972,25 @@ export async function executarNo(params: {
     noId: no.id,
     tipoNo: no.tipo_no,
   });
+
+  if (no.tipo_no !== "inicio") {
+    const podeExecutar = await tentarTravarExecucaoNo({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+    });
+
+    if (!podeExecutar) {
+      console.warn("[AUTOMATION_ENGINE] Nó já executado. Ignorando duplicado.", {
+        execucaoId,
+        noId: no.id,
+        tipoNo: no.tipo_no,
+      });
+
+      return;
+    }
+  }
 
   await registrarNotificacaoChegadaNoBloco({
     empresaId,

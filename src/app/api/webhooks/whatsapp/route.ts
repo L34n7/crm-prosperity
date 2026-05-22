@@ -23,7 +23,7 @@ function perf(label: string, inicio: number, extra?: Record<string, any>) {
 }
 
 function limiteProcessamentoInline() {
-  const numero = Number(process.env.WHATSAPP_WEBHOOK_INLINE_BATCH_LIMIT ?? 3);
+  const numero = Number(process.env.WHATSAPP_WEBHOOK_INLINE_BATCH_LIMIT ?? 0);
 
   if (!Number.isFinite(numero)) return 3;
 
