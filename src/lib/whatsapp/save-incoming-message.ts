@@ -119,12 +119,27 @@ export async function saveIncomingWhatsAppMessage({
     .select("id")
     .single();
 
-  if (insertError || !insertedMessage) {
-    throw new Error(
-      `Erro ao inserir mensagem: ${
-        insertError?.message ?? "sem retorno do banco"
-      }`
-    );
+  if (insertError) {
+    if (insertError.code === "23505" && mensagemExternaId) {
+      const { data: existingMessage } = await supabaseAdmin
+        .from("mensagens")
+        .select("id")
+        .eq("mensagem_externa_id", mensagemExternaId)
+        .maybeSingle();
+
+      if (existingMessage) {
+        return {
+          duplicated: true,
+          messageId: existingMessage.id,
+        };
+      }
+    }
+
+    throw new Error(`Erro ao inserir mensagem: ${insertError.message}`);
+  }
+
+  if (!insertedMessage) {
+    throw new Error("Erro ao inserir mensagem: sem retorno do banco");
   }
 
   const { error: updateConversationError } = await supabaseAdmin

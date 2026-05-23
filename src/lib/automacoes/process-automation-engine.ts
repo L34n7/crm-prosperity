@@ -259,6 +259,64 @@ function condicaoCombinaComMensagem(
   return false;
 }
 
+
+type FluxoRuntimeCache = {
+  nosPorId: Map<string, AutomacaoNo>;
+  conexoesPorOrigem: Map<string, any[]>;
+};
+
+async function carregarFluxoRuntimeCache(params: {
+  empresaId: string;
+  fluxoId: string;
+}): Promise<FluxoRuntimeCache> {
+  const { empresaId, fluxoId } = params;
+
+  const [{ data: nos, error: nosError }, { data: conexoes, error: conexoesError }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("automacao_nos")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("fluxo_id", fluxoId)
+        .eq("ativo", true),
+
+      supabaseAdmin
+        .from("automacao_conexoes")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("fluxo_id", fluxoId)
+        .eq("ativo", true)
+        .order("ordem", { ascending: true }),
+    ]);
+
+  if (nosError) {
+    throw new Error(`Erro ao carregar nós do fluxo: ${nosError.message}`);
+  }
+
+  if (conexoesError) {
+    throw new Error(`Erro ao carregar conexões do fluxo: ${conexoesError.message}`);
+  }
+
+  const nosPorId = new Map<string, AutomacaoNo>();
+  const conexoesPorOrigem = new Map<string, any[]>();
+
+  for (const no of nos || []) {
+    nosPorId.set(no.id, no);
+  }
+
+  for (const conexao of conexoes || []) {
+    const lista = conexoesPorOrigem.get(conexao.no_origem_id) || [];
+    lista.push(conexao);
+    conexoesPorOrigem.set(conexao.no_origem_id, lista);
+  }
+
+  return {
+    nosPorId,
+    conexoesPorOrigem,
+  };
+}
+
+
 export async function processAutomationEngine(input: AutomationEngineInput) {
   const { empresaId, conversaId, contatoId, mensagemTexto, numeroDestino } = input;
 
@@ -396,6 +454,11 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
       status: execucaoExistente.status,
     });
 
+    const runtimeCache = await carregarFluxoRuntimeCache({
+      empresaId,
+      fluxoId: execucaoExistente.fluxo_id,
+    });
+
     const { data: noAtual, error: noAtualError } = await supabaseAdmin
       .from("automacao_nos")
       .select("*")
@@ -443,6 +506,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           noAtualId: execucaoExistente.no_atual_id,
           mensagemTexto,
           numeroDestino,
+          runtimeCache,
         });
 
         return {
@@ -523,6 +587,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           noAtualId: execucaoExistente.no_atual_id,
           mensagemTexto: "encontrado",
           numeroDestino,
+          runtimeCache,
         });
 
         return {
@@ -579,6 +644,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           noAtualId: execucaoExistente.no_atual_id,
           mensagemTexto: "slot_escolhido",
           numeroDestino,
+          runtimeCache,
         });
 
         return {
@@ -635,6 +701,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           noAtualId: execucaoExistente.no_atual_id,
           mensagemTexto: resultadoAnalise.status,
           numeroDestino,
+          runtimeCache,
         });
 
         return {
@@ -691,6 +758,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           noAtualId: execucaoExistente.no_atual_id,
           mensagemTexto,
           numeroDestino,
+          runtimeCache,
         });
 
         return {
@@ -710,6 +778,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         noAtualId: execucaoExistente.no_atual_id,
         mensagemTexto,
         numeroDestino,
+        runtimeCache,
       });
     } else {
       await executarNo({
@@ -720,6 +789,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         no: noAtual,
         mensagemTexto,
         numeroDestino,
+        runtimeCache,
       });
     }
 
@@ -907,6 +977,11 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     },
   });
 
+  const runtimeCache = await carregarFluxoRuntimeCache({
+    empresaId,
+    fluxoId: fluxo.id,
+  });
+
   await executarNo({
     empresaId,
     conversaId,
@@ -915,6 +990,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     no: noInicial,
     mensagemTexto,
     numeroDestino,
+    runtimeCache,
   });
 
   return {
@@ -965,8 +1041,18 @@ export async function executarNo(params: {
   no: AutomacaoNo;
   mensagemTexto?: string;
   numeroDestino: string;
+  runtimeCache?: FluxoRuntimeCache;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, no, mensagemTexto, numeroDestino } = params;
+  const {
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    no,
+    mensagemTexto,
+    numeroDestino,
+    runtimeCache,
+  } = params;
 
   console.log("[AUTOMATION_ENGINE] Executando nó", {
     noId: no.id,
@@ -1029,6 +1115,7 @@ export async function executarNo(params: {
       noAtualId: no.id,
       mensagemTexto,
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -1059,6 +1146,7 @@ export async function executarNo(params: {
         noAtualId: no.id,
         mensagemTexto,
         numeroDestino,
+        runtimeCache,
       });
 
       return;
@@ -1124,6 +1212,7 @@ export async function executarNo(params: {
         noAtualId: no.id,
         mensagemTexto,
         numeroDestino,
+        runtimeCache,
       });
 
       return;
@@ -1153,6 +1242,7 @@ export async function executarNo(params: {
         noAtualId: no.id,
         mensagemTexto,
         numeroDestino,
+        runtimeCache,
       });
 
       return;
@@ -1235,6 +1325,7 @@ export async function executarNo(params: {
       noAtualId: no.id,
       mensagemTexto,
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -1248,6 +1339,7 @@ export async function executarNo(params: {
       fluxoId,
       no,
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -1283,6 +1375,7 @@ export async function executarNo(params: {
       fluxoId,
       no,
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -1296,6 +1389,7 @@ export async function executarNo(params: {
       fluxoId,
       no,
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -1309,6 +1403,7 @@ export async function executarNo(params: {
       fluxoId,
       no,
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -1339,15 +1434,19 @@ export async function executarNo(params: {
       saida: { mensagem },
     });
 
-    const { data: conexoesDoNo } = await supabaseAdmin
-      .from("automacao_conexoes")
-      .select("id, condicao_json")
-      .eq("empresa_id", empresaId)
-      .eq("fluxo_id", fluxoId)
-      .eq("no_origem_id", no.id)
-      .eq("ativo", true);
+    const conexoesDoNo = runtimeCache
+      ? runtimeCache.conexoesPorOrigem.get(no.id) || []
+      : (
+          await supabaseAdmin
+            .from("automacao_conexoes")
+            .select("id, condicao_json")
+            .eq("empresa_id", empresaId)
+            .eq("fluxo_id", fluxoId)
+            .eq("no_origem_id", no.id)
+            .eq("ativo", true)
+        ).data || [];
 
-    const precisaAguardarResposta = (conexoesDoNo || []).some((c) =>
+    const precisaAguardarResposta = conexoesDoNo.some((c) =>
       condicaoPrecisaDeResposta(c.condicao_json)
     );
 
@@ -1372,6 +1471,7 @@ export async function executarNo(params: {
       fluxoId,
       noAtualId: no.id,
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -1448,6 +1548,7 @@ export async function executarNo(params: {
         fluxoId,
         noAtualId: no.id,
         numeroDestino,
+        runtimeCache,
       });
 
       return;
@@ -1640,6 +1741,7 @@ export async function executarNo(params: {
         fluxoId,
         noAtualId: no.id,
         numeroDestino,
+        runtimeCache,
       });
 
       return;
@@ -1703,6 +1805,7 @@ export async function executarNo(params: {
       fluxoId,
       noAtualId: no.id,
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -3140,8 +3243,9 @@ async function buscarAgendamentoAutomacao(params: {
   fluxoId: string;
   no: any;
   numeroDestino: string;
+  runtimeCache?: FluxoRuntimeCache;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, no, numeroDestino } =
+  const { empresaId, conversaId, execucaoId, fluxoId, no, numeroDestino, runtimeCache,} =
     params;
   const config = no.configuracao_json || {};
   const agendaId = String(config.agenda_id || "").trim();
@@ -3204,6 +3308,7 @@ async function buscarAgendamentoAutomacao(params: {
       noAtualId: no.id,
       mensagemTexto: "erro",
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -3379,6 +3484,7 @@ async function buscarAgendamentoAutomacao(params: {
     noAtualId: no.id,
     mensagemTexto: agendamento ? "encontrado" : "nao_encontrado",
     numeroDestino,
+    runtimeCache,
   });
 }
 
@@ -3389,8 +3495,9 @@ async function criarAgendamentoAutomacao(params: {
   fluxoId: string;
   no: any;
   numeroDestino: string;
+  runtimeCache?: FluxoRuntimeCache;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, no, numeroDestino } =
+  const { empresaId, conversaId, execucaoId, fluxoId, no, numeroDestino, runtimeCache, } =
     params;
   const config = no.configuracao_json || {};
   const { data: execucao } = await supabaseAdmin
@@ -3415,6 +3522,7 @@ async function criarAgendamentoAutomacao(params: {
       noAtualId: no.id,
       mensagemTexto: "sem_slot",
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -3450,6 +3558,7 @@ async function criarAgendamentoAutomacao(params: {
       noAtualId: no.id,
       mensagemTexto: "conflito",
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -3556,6 +3665,7 @@ async function criarAgendamentoAutomacao(params: {
     noAtualId: no.id,
     mensagemTexto: "agendado",
     numeroDestino,
+    runtimeCache,
   });
 }
 
@@ -3566,8 +3676,9 @@ async function remarcarAgendamentoAutomacao(params: {
   fluxoId: string;
   no: any;
   numeroDestino: string;
+  runtimeCache?: FluxoRuntimeCache;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, no, numeroDestino } =
+  const { empresaId, conversaId, execucaoId, fluxoId, no, numeroDestino, runtimeCache, } =
     params;
   const config = no.configuracao_json || {};
   const { data: execucao } = await supabaseAdmin
@@ -3594,6 +3705,7 @@ async function remarcarAgendamentoAutomacao(params: {
       noAtualId: no.id,
       mensagemTexto: "sem_dados",
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -3628,6 +3740,7 @@ async function remarcarAgendamentoAutomacao(params: {
       noAtualId: no.id,
       mensagemTexto: "conflito",
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -3707,6 +3820,7 @@ async function remarcarAgendamentoAutomacao(params: {
     noAtualId: no.id,
     mensagemTexto: "remarcado",
     numeroDestino,
+    runtimeCache,
   });
 }
 
@@ -3717,8 +3831,9 @@ async function cancelarAgendamentoAutomacao(params: {
   fluxoId: string;
   no: any;
   numeroDestino: string;
+  runtimeCache?: FluxoRuntimeCache;
 }) {
-  const { empresaId, conversaId, execucaoId, fluxoId, no, numeroDestino } =
+  const { empresaId, conversaId, execucaoId, fluxoId, no, numeroDestino, runtimeCache, } =
     params;
   const config = no.configuracao_json || {};
   const { data: execucao } = await supabaseAdmin
@@ -3741,6 +3856,7 @@ async function cancelarAgendamentoAutomacao(params: {
       noAtualId: no.id,
       mensagemTexto: "nao_encontrado",
       numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -3820,6 +3936,7 @@ async function cancelarAgendamentoAutomacao(params: {
     noAtualId: no.id,
     mensagemTexto: statusFinal,
     numeroDestino,
+    runtimeCache,
   });
 }
 
@@ -4281,6 +4398,7 @@ async function seguirParaProximoNo(params: {
   noAtualId: string;
   mensagemTexto?: string;
   numeroDestino: string;
+  runtimeCache?: FluxoRuntimeCache;
 }) {
   const {
     empresaId,
@@ -4290,20 +4408,29 @@ async function seguirParaProximoNo(params: {
     noAtualId,
     mensagemTexto,
     numeroDestino,
+    runtimeCache,
   } = params;
 
-  const { data: conexoes, error } = await supabaseAdmin
-    .from("automacao_conexoes")
-    .select("*")
-    .eq("empresa_id", empresaId)
-    .eq("fluxo_id", fluxoId)
-    .eq("no_origem_id", noAtualId)
-    .eq("ativo", true)
-    .order("ordem", { ascending: true });
+  let conexoes: any[] = [];
 
-  if (error) {
-    console.error("[AUTOMATION] erro conexões", error);
-    return;
+  if (runtimeCache) {
+    conexoes = runtimeCache.conexoesPorOrigem.get(noAtualId) || [];
+  } else {
+    const { data, error } = await supabaseAdmin
+      .from("automacao_conexoes")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("fluxo_id", fluxoId)
+      .eq("no_origem_id", noAtualId)
+      .eq("ativo", true)
+      .order("ordem", { ascending: true });
+
+    if (error) {
+      console.error("[AUTOMATION] erro conexões", error);
+      return;
+    }
+
+    conexoes = data || [];
   }
 
   if (!conexoes || conexoes.length === 0) {
@@ -4527,12 +4654,20 @@ async function seguirParaProximoNo(params: {
       .eq("empresa_id", empresaId);
   }
 
-  const { data: proximoNo } = await supabaseAdmin
-    .from("automacao_nos")
-    .select("*")
-    .eq("id", conexaoEscolhida.no_destino_id)
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
+  let proximoNo: AutomacaoNo | null = null;
+
+  if (runtimeCache) {
+    proximoNo = runtimeCache.nosPorId.get(conexaoEscolhida.no_destino_id) || null;
+  } else {
+    const { data } = await supabaseAdmin
+      .from("automacao_nos")
+      .select("*")
+      .eq("id", conexaoEscolhida.no_destino_id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    proximoNo = data || null;
+  }
 
   if (!proximoNo) return;
 
@@ -4572,6 +4707,7 @@ async function seguirParaProximoNo(params: {
     no: proximoNo,
     mensagemTexto,
     numeroDestino,
+    runtimeCache,
   });
 }
 
