@@ -10,7 +10,6 @@ import {
 } from "@/lib/whatsapp/webhook-queue";
 import { salvarMensagensRecebidasRapido } from "@/lib/whatsapp/save-incoming-message-fast";
 import { qstash } from "@/lib/qstash/client";
-
 export const runtime = "nodejs";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
@@ -100,29 +99,27 @@ export async function POST(req: NextRequest) {
       eventId: eventoFila.evento?.id ?? null,
     });    
 
-    if (incomingMessages.length > 0 && eventoFila.evento?.id && !eventoFila.duplicado) {
-      after(async () => {
-        try {
-          const resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
+    const qstashWorkerUrl = process.env.QSTASH_WORKER_URL;
 
-          perf("WEBHOOK / salvar mensagens rápido after", inicioPost, {
-            salvas: resultadoSalvarRapido.salvas,
-            duplicadas: resultadoSalvarRapido.duplicadas,
-            ignoradas: resultadoSalvarRapido.ignoradas,
-            erros: resultadoSalvarRapido.erros,
-          });
-        } catch (error) {
-          console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido after:", error);
-        }
-      });
+    if (!qstashWorkerUrl) {
+      console.error("[QSTASH] QSTASH_WORKER_URL não configurada.");
+    } else {
+      try {
+        await qstash.publishJSON({
+          url: qstashWorkerUrl,
+          body: {
+            eventoId: eventoFila.evento.id,
+          },
+          retries: 3,
+        });
 
-      await qstash.publishJSON({
-        url: process.env.QSTASH_WORKER_URL!,
-        body: {
+        console.log("[QSTASH] Evento publicado com sucesso", {
           eventoId: eventoFila.evento.id,
-        },
-        retries: 3,
-      });
+          url: qstashWorkerUrl,
+        });
+      } catch (error) {
+        console.error("[QSTASH] Erro ao publicar evento:", error);
+      }
     }
 
     perf("WEBHOOK / resposta 200", inicioPost, {
