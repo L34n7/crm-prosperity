@@ -80,10 +80,21 @@ export async function saveIncomingWhatsAppMessage({
     }
   }
 
-  const createdAt =
+  const agora = new Date();
+
+  const timestampDate =
     timestamp && !Number.isNaN(Number(timestamp))
-      ? new Date(Number(timestamp) * 1000).toISOString()
-      : new Date().toISOString();
+      ? new Date(Number(timestamp) * 1000)
+      : null;
+
+  const timestampValido =
+    timestampDate &&
+    timestampDate.getTime() <= agora.getTime() + 10_000 &&
+    timestampDate.getTime() >= agora.getTime() - 24 * 60 * 60 * 1000;
+
+  const createdAt = timestampValido
+    ? timestampDate.toISOString()
+    : agora.toISOString();
 
   const { data: insertedMessage, error: insertError } = await supabaseAdmin
     .from("mensagens")
@@ -98,7 +109,11 @@ export async function saveIncomingWhatsAppMessage({
       origem: "recebida",
       status_envio: statusEnvio,
       mensagem_externa_id: mensagemExternaId,
-      metadata_json: metadataJson,
+      metadata_json: {
+        ...(metadataJson || {}),
+        timestamp_original_whatsapp: timestamp || null,
+        timestamp_usado_created_at: timestampValido ? "whatsapp" : "servidor",
+      },
       created_at: createdAt,
     })
     .select("id")
