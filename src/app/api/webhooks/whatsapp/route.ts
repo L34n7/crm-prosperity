@@ -99,37 +99,12 @@ export async function POST(req: NextRequest) {
       eventId: eventoFila.evento?.id ?? null,
     });    
 
-    if (incomingMessages.length > 0 && eventoFila.evento?.id && !eventoFila.duplicado) {
+    if (incomingMessages.length > 0 && !eventoFila.duplicado) {
       after(async () => {
         try {
-          const inicioSalvarRapido = Date.now();
-
-          const resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
-
-          perf("WEBHOOK / salvar mensagens rápido after", inicioSalvarRapido, {
-            salvas: resultadoSalvarRapido.salvas,
-            duplicadas: resultadoSalvarRapido.duplicadas,
-            ignoradas: resultadoSalvarRapido.ignoradas,
-            erros: resultadoSalvarRapido.erros,
-          });
+          await salvarMensagensRecebidasRapido(body);
         } catch (error) {
           console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido after:", error);
-        }
-
-        try {
-          const resultadoAtual = await processarWebhookWhatsappPorId(
-            eventoFila.evento!.id
-          );
-
-          console.log(
-            "[WEBHOOK WHATSAPP] Mensagem atual processada:",
-            resultadoAtual
-          );
-        } catch (error) {
-          console.error(
-            "[WEBHOOK WHATSAPP] Erro ao processar mensagem atual:",
-            error
-          );
         }
       });
     }
