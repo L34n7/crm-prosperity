@@ -11,35 +11,73 @@ const receiver = new Receiver({
 });
 
 export async function POST(request: Request) {
-  const bodyText = await request.text();
+  try {
+    const bodyText = await request.text();
 
-  const isValid = await receiver.verify({
-    signature: request.headers.get("upstash-signature") || "",
-    body: bodyText,
-  });
+    const isValid = await receiver.verify({
+      signature: request.headers.get("upstash-signature") || "",
+      body: bodyText,
+    });
 
-  if (!isValid) {
+    if (!isValid) {
+      return NextResponse.json(
+        { ok: false, error: "Assinatura inválida" },
+        { status: 401 }
+      );
+    }
+
+    const body = JSON.parse(bodyText) as {
+      eventoId?: string;
+    };
+
+    if (!body.eventoId) {
+      return NextResponse.json(
+        { ok: false, error: "eventoId ausente" },
+        { status: 400 }
+      );
+    }
+
+    const resultado: any = await processarWebhookWhatsappPorId(
+      body.eventoId
+    );
+
+    const errorCount = Number(
+      resultado?.totals?.errorCount || 0
+    );
+
+    const resultadoOk =
+      resultado?.success === true &&
+      errorCount === 0;
+
+    if (!resultadoOk) {
+      console.error("[QSTASH WORKER] Processamento com erro", {
+        eventoId: body.eventoId,
+        resultado,
+      });
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Webhook processado com erro interno.",
+          resultado,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      resultado,
+    });
+  } catch (error: any) {
+    console.error("[QSTASH WORKER] Erro fatal", error);
+
     return NextResponse.json(
-      { ok: false, error: "Assinatura inválida" },
-      { status: 401 }
+      {
+        ok: false,
+        error: error?.message || "Erro fatal no worker.",
+      },
+      { status: 500 }
     );
   }
-
-  const body = JSON.parse(bodyText) as {
-    eventoId?: string;
-  };
-
-  if (!body.eventoId) {
-    return NextResponse.json(
-      { ok: false, error: "eventoId ausente" },
-      { status: 400 }
-    );
-  }
-
-  const resultado = await processarWebhookWhatsappPorId(body.eventoId);
-
-  return NextResponse.json({
-    ok: true,
-    resultado,
-  });
 }

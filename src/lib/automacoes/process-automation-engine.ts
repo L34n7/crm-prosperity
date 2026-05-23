@@ -5669,40 +5669,45 @@ async function buscarOuCriarProtocoloAutomacao(params: {
 }) {
   const { empresaId, conversaId } = params;
 
-  const { data: protocolosAtivos, error: protocoloError } = await supabaseAdmin
-    .from("conversa_protocolos")
-    .select("id, protocolo, ativo, created_at")
-    .eq("empresa_id", empresaId)
-    .eq("conversa_id", conversaId)
-    .eq("ativo", true)
-    .order("created_at", { ascending: false })
-    .limit(5);
+  async function buscarProtocoloAtivo() {
+    const { data, error } = await supabaseAdmin
+      .from("conversa_protocolos")
+      .select("id, protocolo, ativo, created_at")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .eq("ativo", true)
+      .order("created_at", { ascending: false })
+      .limit(5);
 
-  if (protocoloError) {
-    throw new Error(
-      `Erro ao buscar protocolo ativo da conversa: ${protocoloError.message}`
-    );
-  }
+    if (error) {
+      throw new Error(
+        `Erro ao buscar protocolo ativo da conversa: ${error.message}`
+      );
+    }
 
-  const protocoloAtivo = protocolosAtivos?.[0] || null;
+    const protocoloAtivo = data?.[0] || null;
 
-  if (protocoloAtivo) {
-    if ((protocolosAtivos || []).length > 1) {
-      const idsParaDesativar = protocolosAtivos
-        .slice(1)
-        .map((p) => p.id);
+    if (protocoloAtivo && (data || []).length > 1) {
+      const idsParaDesativar = data.slice(1).map((p) => p.id);
 
       await supabaseAdmin
         .from("conversa_protocolos")
         .update({
           ativo: false,
           closed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq("empresa_id", empresaId)
         .in("id", idsParaDesativar);
     }
 
     return protocoloAtivo;
+  }
+
+  const protocoloExistente = await buscarProtocoloAtivo();
+
+  if (protocoloExistente) {
+    return protocoloExistente;
   }
 
   const now = new Date().toISOString();
@@ -5723,6 +5728,14 @@ async function buscarOuCriarProtocoloAutomacao(params: {
       .single();
 
   if (novoProtocoloError) {
+    if (novoProtocoloError.code === "23505") {
+      const protocoloCriadoPorOutroProcesso = await buscarProtocoloAtivo();
+
+      if (protocoloCriadoPorOutroProcesso) {
+        return protocoloCriadoPorOutroProcesso;
+      }
+    }
+
     throw new Error(
       `Erro ao criar protocolo da automação: ${novoProtocoloError.message}`
     );
