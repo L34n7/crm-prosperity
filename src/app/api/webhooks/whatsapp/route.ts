@@ -9,6 +9,7 @@ import {
   processarWebhookWhatsappPorId,
 } from "@/lib/whatsapp/webhook-queue";
 import { salvarMensagensRecebidasRapido } from "@/lib/whatsapp/save-incoming-message-fast";
+import { qstash } from "@/lib/qstash/client";
 
 export const runtime = "nodejs";
 
@@ -102,11 +103,9 @@ export async function POST(req: NextRequest) {
     if (incomingMessages.length > 0 && eventoFila.evento?.id && !eventoFila.duplicado) {
       after(async () => {
         try {
-          const inicioSalvarRapido = Date.now();
-
           const resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
 
-          perf("WEBHOOK / salvar mensagens rápido after", inicioSalvarRapido, {
+          perf("WEBHOOK / salvar mensagens rápido after", inicioPost, {
             salvas: resultadoSalvarRapido.salvas,
             duplicadas: resultadoSalvarRapido.duplicadas,
             ignoradas: resultadoSalvarRapido.ignoradas,
@@ -115,22 +114,14 @@ export async function POST(req: NextRequest) {
         } catch (error) {
           console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido after:", error);
         }
+      });
 
-        try {
-          const resultadoAtual = await processarWebhookWhatsappPorId(
-            eventoFila.evento!.id
-          );
-
-          console.log(
-            "[WEBHOOK WHATSAPP] Mensagem atual processada:",
-            resultadoAtual
-          );
-        } catch (error) {
-          console.error(
-            "[WEBHOOK WHATSAPP] Erro ao processar mensagem atual:",
-            error
-          );
-        }
+      await qstash.publishJSON({
+        url: process.env.QSTASH_WORKER_URL!,
+        body: {
+          eventoId: eventoFila.evento.id,
+        },
+        retries: 3,
       });
     }
 
