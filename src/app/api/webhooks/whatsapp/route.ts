@@ -4,12 +4,10 @@ import {
   extractMessageStatuses,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
-import {
-  enfileirarWebhookWhatsapp,
-  processarWebhookWhatsappPorId,
-} from "@/lib/whatsapp/webhook-queue";
+import { enfileirarWebhookWhatsapp } from "@/lib/whatsapp/webhook-queue";
 import { salvarMensagensRecebidasRapido } from "@/lib/whatsapp/save-incoming-message-fast";
 import { qstash } from "@/lib/qstash/client";
+
 export const runtime = "nodejs";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
@@ -99,26 +97,43 @@ export async function POST(req: NextRequest) {
       eventId: eventoFila.evento?.id ?? null,
     });    
 
-    const qstashWorkerUrl = process.env.QSTASH_WORKER_URL;
+    if (incomingMessages.length > 0 && eventoFila.evento?.id && !eventoFila.duplicado) {
+      after(async () => {
+        try {
+          const resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
 
-    if (!qstashWorkerUrl) {
-      console.error("[QSTASH] QSTASH_WORKER_URL não configurada.");
-    } else {
-      try {
-        await qstash.publishJSON({
-          url: qstashWorkerUrl,
-          body: {
+          perf("WEBHOOK / salvar mensagens rápido after", inicioPost, {
+            salvas: resultadoSalvarRapido.salvas,
+            duplicadas: resultadoSalvarRapido.duplicadas,
+            ignoradas: resultadoSalvarRapido.ignoradas,
+            erros: resultadoSalvarRapido.erros,
+          });
+        } catch (error) {
+          console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido after:", error);
+        }
+      });
+
+      const qstashWorkerUrl = process.env.QSTASH_WORKER_URL;
+
+      if (!qstashWorkerUrl) {
+        console.error("[QSTASH] QSTASH_WORKER_URL não configurada.");
+      } else {
+        try {
+          await qstash.publishJSON({
+            url: qstashWorkerUrl,
+            body: {
+              eventoId: eventoFila.evento.id,
+            },
+            retries: 3,
+          });
+
+          console.log("[QSTASH] Evento publicado com sucesso", {
             eventoId: eventoFila.evento.id,
-          },
-          retries: 3,
-        });
-
-        console.log("[QSTASH] Evento publicado com sucesso", {
-          eventoId: eventoFila.evento.id,
-          url: qstashWorkerUrl,
-        });
-      } catch (error) {
-        console.error("[QSTASH] Erro ao publicar evento:", error);
+            url: qstashWorkerUrl,
+          });
+        } catch (error) {
+          console.error("[QSTASH] Erro ao publicar evento:", error);
+        }
       }
     }
 
