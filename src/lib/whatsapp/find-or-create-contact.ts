@@ -69,12 +69,33 @@ export async function findOrCreateWhatsAppContact({
     .select("*")
     .single();
 
-  if (insertError || !newContact) {
-    throw new Error(
-      `Erro ao criar contato automaticamente: ${
-        insertError?.message ?? "sem retorno do banco"
-      }`
-    );
+  if (insertError) {
+    if (insertError.code === "23505") {
+      const { data: contatoExistenteAposConflito, error: buscarAposConflitoError } =
+        await supabaseAdmin
+          .from("contatos")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .eq("telefone", telefone)
+          .limit(1)
+          .maybeSingle();
+
+      if (buscarAposConflitoError || !contatoExistenteAposConflito) {
+        throw new Error(
+          `Contato já existia, mas não foi possível buscar após conflito: ${
+            buscarAposConflitoError?.message ?? "sem retorno do banco"
+          }`
+        );
+      }
+
+      return contatoExistenteAposConflito as WhatsAppContact;
+    }
+
+    throw new Error(`Erro ao criar contato automaticamente: ${insertError.message}`);
+  }
+
+  if (!newContact) {
+    throw new Error("Erro ao criar contato automaticamente: sem retorno do banco");
   }
 
   return newContact as WhatsAppContact;

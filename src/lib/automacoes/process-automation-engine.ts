@@ -5669,24 +5669,39 @@ async function buscarOuCriarProtocoloAutomacao(params: {
 }) {
   const { empresaId, conversaId } = params;
 
-  const { data: protocoloAtivo, error: protocoloAtivoError } =
-    await supabaseAdmin
-      .from("conversa_protocolos")
-      .select("id, protocolo, ativo")
-      .eq("empresa_id", empresaId)
-      .eq("conversa_id", conversaId)
-      .eq("ativo", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  const { data: protocolosAtivos, error: protocoloError } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .select("id, protocolo, ativo, created_at")
+    .eq("empresa_id", empresaId)
+    .eq("conversa_id", conversaId)
+    .eq("ativo", true)
+    .order("created_at", { ascending: false })
+    .limit(5);
 
-  if (protocoloAtivoError) {
+  if (protocoloError) {
     throw new Error(
-      `Erro ao buscar protocolo ativo da conversa: ${protocoloAtivoError.message}`
+      `Erro ao buscar protocolo ativo da conversa: ${protocoloError.message}`
     );
   }
 
+  const protocoloAtivo = protocolosAtivos?.[0] || null;
+
   if (protocoloAtivo) {
+    if ((protocolosAtivos || []).length > 1) {
+      const idsParaDesativar = protocolosAtivos
+        .slice(1)
+        .map((p) => p.id);
+
+      await supabaseAdmin
+        .from("conversa_protocolos")
+        .update({
+          ativo: false,
+          closed_at: new Date().toISOString(),
+        })
+        .eq("empresa_id", empresaId)
+        .in("id", idsParaDesativar);
+    }
+
     return protocoloAtivo;
   }
 
