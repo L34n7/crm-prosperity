@@ -4,7 +4,11 @@ import {
   extractMessageStatuses,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
-import { enfileirarWebhookWhatsapp } from "@/lib/whatsapp/webhook-queue";
+import {
+  enfileirarWebhookWhatsapp,
+  processarWebhookWhatsappPorId,
+  contarMensagensWebhookNoMesmoSegundo,
+} from "@/lib/whatsapp/webhook-queue";
 import { salvarMensagensRecebidasRapido } from "@/lib/whatsapp/save-incoming-message-fast";
 import { qstash } from "@/lib/qstash/client";
 
@@ -97,43 +101,82 @@ export async function POST(req: NextRequest) {
       eventId: eventoFila.evento?.id ?? null,
     });    
 
-    if (incomingMessages.length > 0 && eventoFila.evento?.id && !eventoFila.duplicado) {
-      after(async () => {
-        try {
-          const resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
+    if (eventoFila.evento?.id && !eventoFila.duplicado) {
+      if (incomingMessages.length > 0) {
+        after(async () => {
+          try {
+            const resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
 
-          perf("WEBHOOK / salvar mensagens rápido after", inicioPost, {
-            salvas: resultadoSalvarRapido.salvas,
-            duplicadas: resultadoSalvarRapido.duplicadas,
-            ignoradas: resultadoSalvarRapido.ignoradas,
-            erros: resultadoSalvarRapido.erros,
+            perf("WEBHOOK / salvar mensagens rápido after", inicioPost, {
+              salvas: resultadoSalvarRapido.salvas,
+              duplicadas: resultadoSalvarRapido.duplicadas,
+              ignoradas: resultadoSalvarRapido.ignoradas,
+              erros: resultadoSalvarRapido.erros,
+            });
+          } catch (error) {
+            console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido after:", error);
+          }
+        });
+      }
+
+      const limiteQstash = Number(
+        process.env.WHATSAPP_QSTASH_THRESHOLD_MESSAGES_PER_SECOND || 10
+      );
+
+      const volumeSegundo = await contarMensagensWebhookNoMesmoSegundo(
+        eventoFila.evento.created_at
+      );
+
+      const deveUsarQstash =
+        incomingMessages.length > 0 &&
+        volumeSegundo.totalMensagens > limiteQstash;
+
+      if (deveUsarQstash) {
+        const qstashWorkerUrl = process.env.QSTASH_WORKER_URL;
+
+        if (!qstashWorkerUrl) {
+          console.error("[QSTASH] QSTASH_WORKER_URL não configurada.");
+
+          after(async () => {
+            await processarWebhookWhatsappPorId(eventoFila.evento!.id);
           });
-        } catch (error) {
-          console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido after:", error);
-        }
-      });
+        } else {
+          try {
+            await qstash.publishJSON({
+              url: qstashWorkerUrl,
+              body: {
+                eventoId: eventoFila.evento.id,
+              },
+              retries: 3,
+            });
 
-      const qstashWorkerUrl = process.env.QSTASH_WORKER_URL;
-
-      if (!qstashWorkerUrl) {
-        console.error("[QSTASH] QSTASH_WORKER_URL não configurada.");
-      } else {
-        try {
-          await qstash.publishJSON({
-            url: qstashWorkerUrl,
-            body: {
+            console.log("[QSTASH] Evento publicado por pico de mensagens", {
               eventoId: eventoFila.evento.id,
-            },
-            retries: 3,
-          });
+              totalMensagensNoSegundo: volumeSegundo.totalMensagens,
+              limiteQstash,
+            });
+          } catch (error) {
+            console.error("[QSTASH] Erro ao publicar evento. Processando direto:", error);
 
-          console.log("[QSTASH] Evento publicado com sucesso", {
-            eventoId: eventoFila.evento.id,
-            url: qstashWorkerUrl,
-          });
-        } catch (error) {
-          console.error("[QSTASH] Erro ao publicar evento:", error);
+            after(async () => {
+              await processarWebhookWhatsappPorId(eventoFila.evento!.id);
+            });
+          }
         }
+      } else {
+        after(async () => {
+          try {
+            await processarWebhookWhatsappPorId(eventoFila.evento!.id);
+
+            console.log("[WEBHOOK WHATSAPP] Evento processado direto na Vercel", {
+              eventoId: eventoFila.evento.id,
+              totalMensagensNoSegundo: volumeSegundo.totalMensagens,
+              limiteQstash,
+            });
+          } catch (error) {
+            console.error("[WEBHOOK WHATSAPP] Erro ao processar direto:", error);
+          }
+        });
       }
     }
 
