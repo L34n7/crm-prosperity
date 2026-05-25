@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       resultado?.processado === true;
 
     if (!resultadoOk) {
-      console.error("[QSTASH WORKER] Processamento com erro", {
+      console.warn("[QSTASH WORKER] Evento já processado", {
         eventoId: body.eventoId,
         resultado,
       });

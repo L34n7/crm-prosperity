@@ -83,49 +83,70 @@ async function enviarMensagem(index) {
   };
 }
 
-async function executarEmLotes() {
-  console.log("Iniciando teste:", {
+async function executarEmRodadas() {
+  console.log("Iniciando teste em rodadas:", {
     WEBHOOK_URL,
     PHONE_NUMBER_ID,
     TOTAL,
-    CONCURRENCY,
+    mensagensPorSegundo: CONCURRENCY,
     TEXTO,
   });
 
   const resultados = [];
-  let atual = 0;
-
-  async function worker() {
-    while (atual < TOTAL) {
-      const index = atual + 1;
-      atual++;
-
-      try {
-        const resultado = await enviarMensagem(index);
-        resultados.push(resultado);
-
-        console.log(
-          `[TESTE] mensagem ${index}/${TOTAL}`,
-          resultado.ok ? "OK" : "ERRO",
-          `${resultado.tempo_ms}ms`
-        );
-      } catch (error) {
-        resultados.push({
-          index,
-          ok: false,
-          error: error.message,
-        });
-
-        console.error(`[TESTE] mensagem ${index}/${TOTAL} ERRO`, error);
-      }
-    }
-  }
-
   const inicioTotal = Date.now();
 
-  await Promise.all(
-    Array.from({ length: CONCURRENCY }, () => worker())
-  );
+  let enviadas = 0;
+  let rodada = 1;
+
+  while (enviadas < TOTAL) {
+    const quantidadeRodada = Math.min(CONCURRENCY, TOTAL - enviadas);
+
+    console.log(`\n[RODADA ${rodada}] Enviando ${quantidadeRodada} mensagens simultâneas...`);
+
+    const inicioRodada = Date.now();
+
+    const promessas = Array.from({ length: quantidadeRodada }, (_, i) => {
+      const index = enviadas + i + 1;
+      return enviarMensagem(index);
+    });
+
+    const resultadosRodada = await Promise.allSettled(promessas);
+
+    for (const item of resultadosRodada) {
+      if (item.status === "fulfilled") {
+        resultados.push(item.value);
+
+        console.log(
+          `[TESTE] mensagem ${item.value.index}/${TOTAL}`,
+          item.value.ok ? "OK" : "ERRO",
+          `${item.value.tempo_ms}ms`
+        );
+      } else {
+        resultados.push({
+          ok: false,
+          error: item.reason?.message || String(item.reason),
+        });
+
+        console.error("[TESTE] ERRO", item.reason);
+      }
+    }
+
+    enviadas += quantidadeRodada;
+
+    const tempoRodada = Date.now() - inicioRodada;
+
+    console.log(`[RODADA ${rodada}] Finalizada em ${tempoRodada}ms`);
+
+    rodada++;
+
+    if (enviadas < TOTAL) {
+      const espera = Math.max(0, 1000 - tempoRodada);
+
+      console.log(`[AGUARDANDO] ${espera}ms para fechar 1 segundo...`);
+
+      await new Promise((resolve) => setTimeout(resolve, espera));
+    }
+  }
 
   const tempoTotal = Date.now() - inicioTotal;
 
@@ -145,4 +166,4 @@ async function executarEmLotes() {
   });
 }
 
-executarEmLotes();
+executarEmRodadas();
