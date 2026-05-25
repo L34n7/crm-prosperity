@@ -368,6 +368,9 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
       const mensagemInternaId =
         savedMessage.messageId || mensagemExistente?.id || null;
 
+      const conversaIdParaProcessar =
+        mensagemExistente?.conversa_id || conversation.id;
+
       const automacaoJaProcessada =
         mensagemExistente?.metadata_json?.automacao_processada === true;
 
@@ -453,8 +456,8 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         if (podeRodarAutomacao) {
           const inicioAutomacao = Date.now();
           automationResult = await processAutomationEngine({
-          empresaId: integration.empresa_id,
-          conversaId: conversation.id,
+            empresaId: integration.empresa_id,
+            conversaId: conversaIdParaProcessar,
           contatoId: contact.id,
           mensagemTexto:
             textoAutomacao ||
@@ -488,7 +491,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         duplicated: savedMessage.duplicated,
         integrationId: integration.id,
         contactId: contact.id,
-        conversationId: conversation.id,
+        conversationId: conversaIdParaProcessar,
         conversaProtocoloId: protocoloAtivo?.id ?? null,
         savedMessageId: mensagemInternaId,
         tipoMensagem: message.tipoMensagem,

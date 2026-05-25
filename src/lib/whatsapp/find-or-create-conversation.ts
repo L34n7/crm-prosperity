@@ -55,19 +55,27 @@ async function gerarProtocolo(empresaId: string) {
 async function garantirProtocoloAtivo(conversa: WhatsAppConversation) {
   const supabaseAdmin = getSupabaseAdmin();
 
-  const { data: protocoloAtivo, error: protocoloError } = await supabaseAdmin
-    .from("conversa_protocolos")
-    .select("id")
-    .eq("conversa_id", conversa.id)
-    .eq("ativo", true)
-    .limit(1)
-    .maybeSingle();
+  async function buscarProtocoloAtivo() {
+    const { data, error } = await supabaseAdmin
+      .from("conversa_protocolos")
+      .select("id")
+      .eq("empresa_id", conversa.empresa_id)
+      .eq("conversa_id", conversa.id)
+      .eq("ativo", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (protocoloError) {
-    throw new Error(
-      `Erro ao verificar protocolo ativo da conversa: ${protocoloError.message}`
-    );
+    if (error) {
+      throw new Error(
+        `Erro ao verificar protocolo ativo da conversa: ${error.message}`
+      );
+    }
+
+    return data;
   }
+
+  const protocoloAtivo = await buscarProtocoloAtivo();
 
   if (protocoloAtivo) {
     return protocoloAtivo;
@@ -91,12 +99,22 @@ async function garantirProtocoloAtivo(conversa: WhatsAppConversation) {
     .select("id")
     .single();
 
-  if (error || !data) {
+  if (error) {
+    if (error.code === "23505") {
+      const protocoloCriadoPorOutroProcesso = await buscarProtocoloAtivo();
+
+      if (protocoloCriadoPorOutroProcesso) {
+        return protocoloCriadoPorOutroProcesso;
+      }
+    }
+
     throw new Error(
-      `Erro ao garantir protocolo ativo da conversa: ${
-        error?.message ?? "sem retorno do banco"
-      }`
+      `Erro ao garantir protocolo ativo da conversa: ${error.message}`
     );
+  }
+
+  if (!data) {
+    throw new Error("Erro ao garantir protocolo ativo da conversa: sem retorno do banco");
   }
 
   return data;
@@ -262,34 +280,50 @@ export async function findOrCreateWhatsAppConversation({
     .select("*")
     .single();
 
-  if (insertError || !newConversation) {
+  if (insertError) {
+    if (insertError.code === "23505") {
+      const { data: conversaCriadaPorOutroProcesso, error: buscarError } =
+        await supabaseAdmin
+          .from("conversas")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .eq("contato_id", contatoId)
+          .eq("integracao_whatsapp_id", integracaoWhatsappId)
+          .eq("canal", "whatsapp")
+          .in("status", [
+            "aberta",
+            "bot",
+            "fila",
+            "em_atendimento",
+            "aguardando_cliente",
+          ])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+      if (buscarError) {
+        throw new Error(
+          `Erro ao buscar conversa criada por outro processo: ${buscarError.message}`
+        );
+      }
+
+      if (conversaCriadaPorOutroProcesso) {
+        const conversa = conversaCriadaPorOutroProcesso as WhatsAppConversation;
+        await garantirProtocoloAtivo(conversa);
+        return conversa;
+      }
+    }
+
     throw new Error(
-      `Erro ao criar conversa automaticamente: ${
-        insertError?.message ?? "sem retorno do banco"
-      }`
+      `Erro ao criar conversa automaticamente: ${insertError.message}`
     );
   }
 
-  const protocoloGerado = await gerarProtocolo(empresaId);
-
-  const { error: insertProtocoloError } = await supabaseAdmin
-    .from("conversa_protocolos")
-    .insert({
-      empresa_id: empresaId,
-      conversa_id: newConversation.id,
-      protocolo: protocoloGerado,
-      tipo: "abertura",
-      ativo: true,
-      started_at: now,
-      created_at: now,
-      updated_at: now,
-    });
-
-  if (insertProtocoloError) {
-    throw new Error(
-      `Conversa criada, mas houve erro ao criar protocolo: ${insertProtocoloError.message}`
-    );
+  if (!newConversation) {
+    throw new Error("Erro ao criar conversa automaticamente: sem retorno do banco");
   }
+
+  await garantirProtocoloAtivo(newConversation as WhatsAppConversation);
 
   return newConversation as WhatsAppConversation;
 }
