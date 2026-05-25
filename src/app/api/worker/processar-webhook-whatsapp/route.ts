@@ -41,13 +41,9 @@ export async function POST(request: Request) {
       body.eventoId
     );
 
-    const errorCount = Number(
-      resultado?.totals?.errorCount || 0
-    );
-
     const resultadoOk =
-      resultado?.success === true &&
-      errorCount === 0;
+      resultado?.ok === true &&
+      resultado?.processado === true;
 
     if (!resultadoOk) {
       console.error("[QSTASH WORKER] Processamento com erro", {

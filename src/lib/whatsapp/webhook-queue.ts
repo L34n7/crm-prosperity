@@ -426,3 +426,37 @@ export async function processarFilaWebhooksWhatsapp(
     maxTentativas,
   };
 }
+
+export async function contarMensagensWebhookNoMesmoSegundo(createdAt?: string | null) {
+  const dataBase = createdAt ? new Date(createdAt) : new Date();
+
+  dataBase.setMilliseconds(0);
+
+  const inicioSegundo = dataBase.toISOString();
+  const fimSegundo = new Date(dataBase.getTime() + 1000).toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_webhook_eventos")
+    .select("metadata_json")
+    .gte("created_at", inicioSegundo)
+    .lt("created_at", fimSegundo);
+
+  if (error) {
+    console.error("[WEBHOOK QUEUE] Erro ao contar mensagens no segundo:", error);
+
+    return {
+      totalMensagens: 0,
+      erro: error.message,
+    };
+  }
+
+  const totalMensagens = (data || []).reduce((total, item: any) => {
+    return total + Number(item.metadata_json?.incoming_messages || 0);
+  }, 0);
+
+  return {
+    totalMensagens,
+    inicioSegundo,
+    fimSegundo,
+  };
+}
