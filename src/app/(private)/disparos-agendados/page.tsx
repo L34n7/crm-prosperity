@@ -629,17 +629,35 @@ export default function DisparosAgendadosPage() {
         throw new Error(json.error || "Erro ao calcular custo do agendamento.");
       }
 
+      const totalCobrados = Number(json.totalCobrados || 0);
+      const valorTotalUsd = Number(json.valorTotalUsd || 0);
+
+      const valorTotalBrlEstimado =
+        totalCobrados <= 0 || valorTotalUsd <= 0
+          ? 0
+          : Number(json.valorTotalBrlEstimado || 0);
+
+      const valorTotalBrlMin =
+        totalCobrados <= 0 || valorTotalUsd <= 0
+          ? 0
+          : Math.max(0, Number(json.valorTotalBrlMin || 0));
+
+      const valorTotalBrlMax =
+        totalCobrados <= 0 || valorTotalUsd <= 0
+          ? 0
+          : Math.max(0, Number(json.valorTotalBrlMax || 0));
+
       setPreviewCusto({
         categoria: String(json.categoria || ""),
         totalSelecionados: Number(json.totalSelecionados || 0),
         totalIsentos: Number(json.totalIsentos || 0),
-        totalCobrados: Number(json.totalCobrados || 0),
+        totalCobrados,
         valorUnitarioUsd: Number(json.valorUnitarioUsd || 0),
-        valorTotalUsd: Number(json.valorTotalUsd || 0),
+        valorTotalUsd,
         cotacaoUsdBrl: Number(json.cotacaoUsdBrl || 0),
-        valorTotalBrlEstimado: Number(json.valorTotalBrlEstimado || 0),
-        valorTotalBrlMin: Number(json.valorTotalBrlMin || 0),
-        valorTotalBrlMax: Number(json.valorTotalBrlMax || 0),
+        valorTotalBrlEstimado,
+        valorTotalBrlMin,
+        valorTotalBrlMax,
         margemMinPercent: Number(json.margemMinPercent || 0),
         margemMaxPercent: Number(json.margemMaxPercent || 0),
         fonteCotacao: json.fonteCotacao || "",

@@ -9,7 +9,6 @@ import {
   processarWebhookWhatsappPorId,
   contarMensagensWebhookNoMesmoSegundo,
 } from "@/lib/whatsapp/webhook-queue";
-import { salvarMensagensRecebidasRapido } from "@/lib/whatsapp/save-incoming-message-fast";
 import { qstash } from "@/lib/qstash/client";
 
 export const runtime = "nodejs";
@@ -102,23 +101,6 @@ export async function POST(req: NextRequest) {
     });    
 
     if (eventoFila.evento?.id && !eventoFila.duplicado) {
-      if (incomingMessages.length > 0) {
-        after(async () => {
-          try {
-            const resultadoSalvarRapido = await salvarMensagensRecebidasRapido(body);
-
-            perf("WEBHOOK / salvar mensagens rápido after", inicioPost, {
-              salvas: resultadoSalvarRapido.salvas,
-              duplicadas: resultadoSalvarRapido.duplicadas,
-              ignoradas: resultadoSalvarRapido.ignoradas,
-              erros: resultadoSalvarRapido.erros,
-            });
-          } catch (error) {
-            console.error("[WEBHOOK WHATSAPP] Erro no salvamento rápido after:", error);
-          }
-        });
-      }
-
       const limiteQstash = Number(
         process.env.WHATSAPP_QSTASH_THRESHOLD_MESSAGES_PER_SECOND || 10
       );

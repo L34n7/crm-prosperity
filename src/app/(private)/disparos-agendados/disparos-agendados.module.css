@@ -569,7 +569,9 @@
   border: 1px solid #e2e8f0;
   border-radius: 24px;
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .modalHeader {
@@ -592,6 +594,9 @@
   padding: 16px 20px 12px 20px;
   display: grid;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .modalFooter {
@@ -743,11 +748,13 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 22px;
+  min-height: 0;
 }
 
 .disparoModalMain {
   display: grid;
   gap: 18px;
+  min-height: 0;
 }
 
 .formSection {
@@ -900,6 +907,9 @@
 }
 
 .contactsList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -959,8 +969,11 @@
   border-radius: 16px;
   background: #ffffff;
   overflow: hidden;
-  min-height: 260px;
+  height: 260px;
+  min-height: 0;
   margin-top: -5px;
+  display: flex;
+  flex-direction: column;
 }
 
 .contactsHeader {

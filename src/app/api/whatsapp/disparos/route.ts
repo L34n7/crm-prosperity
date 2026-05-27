@@ -277,7 +277,6 @@ async function reativarConversaParaDisparo(params: {
       responsavel_id: params.usuarioId,
       bot_ativo: false,
       closed_at: null,
-      last_message_at: now,
       updated_at: now,
     })
     .eq("id", params.conversaId);

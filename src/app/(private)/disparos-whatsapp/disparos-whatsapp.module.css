@@ -778,10 +778,10 @@
 }
 
 .modalBody {
-  padding: 20px 22px;
+  padding: 10px 22px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .modalSection {

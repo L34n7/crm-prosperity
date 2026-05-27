@@ -150,6 +150,141 @@ function getPreviewUltimaMensagem(mensagem?: MensagemListaRow | null) {
   }
 }
 
+function getNumeroParam(
+  searchParams: URLSearchParams,
+  nome: string,
+  padrao: number,
+  minimo: number,
+  maximo: number
+) {
+  const valor = Number(searchParams.get(nome));
+
+  if (!Number.isFinite(valor)) return padrao;
+
+  return Math.min(Math.max(Math.floor(valor), minimo), maximo);
+}
+
+function limparTermoBusca(valor: string) {
+  return valor
+    .trim()
+    .replace(/[%_]/g, "")
+    .replace(/[()]/g, "")
+    .slice(0, 80);
+}
+
+function isUuid(valor: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    valor
+  );
+}
+
+const STATUS_ENCERRADOS_24H_CHECK = [
+  "encerrado_manual",
+  "encerrado_24h",
+  "encerrado_aut",
+];
+
+async function encerrarConversasExpiradas24h(params: {
+  empresaId: string;
+}) {
+  const { empresaId } = params;
+
+  const agora = new Date();
+  const agoraIso = agora.toISOString();
+
+  const limite24h = new Date(
+    agora.getTime() - 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const { data: conversasExpiradas, error: buscarError } = await supabaseAdmin
+    .from("conversas")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .not("last_inbound_message_at", "is", null)
+    .lt("last_inbound_message_at", limite24h)
+    .not("status", "in", `(${STATUS_ENCERRADOS_24H_CHECK.join(",")})`)
+    .limit(200);
+
+  if (buscarError) {
+    console.error("[CONVERSAS] Erro ao buscar conversas expiradas 24h:", buscarError);
+    return;
+  }
+
+  const conversaIds = (conversasExpiradas || []).map((item) => item.id);
+
+  if (conversaIds.length === 0) {
+    return;
+  }
+
+  const { error: atualizarError } = await supabaseAdmin
+    .from("conversas")
+    .update({
+      status: "encerrado_24h",
+      bot_ativo: false,
+      closed_at: agoraIso,
+      updated_at: agoraIso,
+    })
+    .eq("empresa_id", empresaId)
+    .in("id", conversaIds);
+
+  if (atualizarError) {
+    console.error("[CONVERSAS] Erro ao encerrar conversas expiradas 24h:", atualizarError);
+    return;
+  }
+
+  const { data: execucoesAtivas } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .in("conversa_id", conversaIds)
+    .in("status", ["rodando", "aguardando"]);
+
+  const execucaoIds = (execucoesAtivas || []).map((item) => item.id);
+
+  if (execucaoIds.length > 0) {
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "cancelado",
+        finished_at: agoraIso,
+        updated_at: agoraIso,
+        metadata_json: {
+          motivo_cancelamento: "janela_24h_expirada",
+          cancelado_em: agoraIso,
+        },
+      })
+      .eq("empresa_id", empresaId)
+      .in("id", execucaoIds);
+
+    await supabaseAdmin
+      .from("automacao_agendamentos")
+      .update({
+        status: "cancelado",
+        updated_at: agoraIso,
+      })
+      .eq("empresa_id", empresaId)
+      .in("execucao_id", execucaoIds)
+      .eq("status", "pendente");
+  }
+
+  await supabaseAdmin
+    .from("conversa_protocolos")
+    .update({
+      ativo: false,
+      closed_at: agoraIso,
+      updated_at: agoraIso,
+    })
+    .eq("empresa_id", empresaId)
+    .in("conversa_id", conversaIds)
+    .eq("ativo", true);
+
+  console.log("[CONVERSAS] Conversas encerradas por 24h:", {
+    empresaId,
+    quantidade: conversaIds.length,
+  });
+}
+
+
 export async function GET(request: Request) {
   const resultado = await getUsuarioContexto();
 
@@ -170,11 +305,20 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+
   const status = searchParams.get("status");
   const prioridade = searchParams.get("prioridade");
   const contatoId = searchParams.get("contato_id");
   const setorId = searchParams.get("setor_id");
   const responsavelId = searchParams.get("responsavel_id");
+
+  const busca = searchParams.get("busca")?.trim() || "";
+  const canal = searchParams.get("canal")?.trim() || "";
+  const chip = searchParams.get("chip")?.trim() || "";
+  const listaId = searchParams.get("lista_id")?.trim() || "";
+
+  const limit = getNumeroParam(searchParams, "limit", 20, 1, 50);
+  const offset = getNumeroParam(searchParams, "offset", 0, 0, 100000);
 
   if (!usuario.empresa_id) {
     return NextResponse.json(
@@ -183,7 +327,9 @@ export async function GET(request: Request) {
     );
   }
 
-  await encerrarConversasExpiradas(usuario.empresa_id);
+  await encerrarConversasExpiradas24h({
+    empresaId: usuario.empresa_id,
+  });
 
   let query = supabaseAdmin
     .from("conversas")
@@ -220,7 +366,8 @@ export async function GET(request: Request) {
     `)
     .eq("empresa_id", usuario.empresa_id)
     .order("last_message_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
 
   if (status) {
     if (!isStatusValido(status)) {
@@ -244,16 +391,152 @@ export async function GET(request: Request) {
     query = query.eq("prioridade", prioridade);
   }
 
+  if (canal && canal !== "todos") {
+    query = query.eq("canal", canal);
+  }
+
   if (contatoId) {
     query = query.eq("contato_id", contatoId);
   }
 
-  if (setorId) {
+  if (setorId && setorId !== "todos") {
     query = query.eq("setor_id", setorId);
   }
 
-  if (responsavelId) {
+  if (responsavelId && responsavelId !== "todos") {
     query = query.eq("responsavel_id", responsavelId);
+  }
+
+  if (chip === "fila") {
+    query = query.eq("status", "fila");
+  }
+
+  if (chip === "robo") {
+    query = query.eq("bot_ativo", true);
+  }
+
+  if (chip === "sem_responsavel") {
+    query = query.is("responsavel_id", null);
+  }
+
+  if (chip === "urgentes") {
+    query = query.in("prioridade", ["alta", "urgente"]);
+  }
+
+  if (chip === "minhas") {
+    query = query.eq("responsavel_id", usuario.id);
+  }
+
+  if (busca) {
+    const termo = limparTermoBusca(busca);
+
+    if (termo) {
+      const { data: contatosEncontrados, error: contatosBuscaError } =
+        await supabaseAdmin
+          .from("contatos")
+          .select("id")
+          .eq("empresa_id", usuario.empresa_id)
+          .or(
+            [
+              `nome.ilike.%${termo}%`,
+              `telefone.ilike.%${termo}%`,
+              `email.ilike.%${termo}%`,
+              `empresa.ilike.%${termo}%`,
+            ].join(",")
+          )
+          .limit(500);
+
+      if (contatosBuscaError) {
+        return NextResponse.json(
+          { ok: false, error: contatosBuscaError.message },
+          { status: 500 }
+        );
+      }
+
+      const contatoIdsBusca = (contatosEncontrados ?? [])
+        .map((item) => item.id)
+        .filter(Boolean);
+
+      const filtrosOr: string[] = [
+        `assunto.ilike.%${termo}%`,
+      ];
+
+      if (isUuid(termo)) {
+        filtrosOr.push(`id.eq.${termo}`);
+      }
+
+      if (contatoIdsBusca.length > 0) {
+        filtrosOr.push(`contato_id.in.(${contatoIdsBusca.join(",")})`);
+      }
+
+      query = query.or(filtrosOr.join(","));
+    }
+  }
+
+  if (chip === "favoritos") {
+    const { data: favoritosFiltro, error: favoritosFiltroError } =
+      await supabaseAdmin
+        .from("conversas_favoritas")
+        .select("conversa_id")
+        .eq("usuario_id", usuario.id)
+        .eq("empresa_id", usuario.empresa_id);
+
+    if (favoritosFiltroError) {
+      return NextResponse.json(
+        { ok: false, error: favoritosFiltroError.message },
+        { status: 500 }
+      );
+    }
+
+    const idsFavoritos = (favoritosFiltro ?? []).map((item) => item.conversa_id);
+
+    if (idsFavoritos.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        conversas: [],
+        pagination: {
+          limit,
+          offset,
+          returned: 0,
+          hasMore: false,
+        },
+      });
+    }
+
+    query = query.in("id", idsFavoritos);
+  }
+
+  if (listaId) {
+    const { data: itensListaFiltro, error: itensListaFiltroError } =
+      await supabaseAdmin
+        .from("conversas_listas_itens")
+        .select("conversa_id")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("lista_id", listaId);
+
+    if (itensListaFiltroError) {
+      return NextResponse.json(
+        { ok: false, error: itensListaFiltroError.message },
+        { status: 500 }
+      );
+    }
+
+    const idsLista = (itensListaFiltro ?? []).map((item) => item.conversa_id);
+
+    if (idsLista.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        conversas: [],
+        pagination: {
+          limit,
+          offset,
+          returned: 0,
+          hasMore: false,
+        },
+      });
+    }
+
+    query = query.in("id", idsLista);
   }
 
   const { data, error } = await query;
@@ -376,6 +659,12 @@ export async function GET(request: Request) {
       );
     }
 
+    const limiteMensagensPorConversaParaLista = 30;
+    const limiteMensagensLista = Math.min(
+      conversaIds.length * limiteMensagensPorConversaParaLista,
+      1200
+    );
+
     const { data: mensagensLista, error: mensagensListaError } = await supabaseAdmin
       .from("mensagens")
       .select(`
@@ -391,7 +680,8 @@ export async function GET(request: Request) {
       `)
       .in("conversa_id", conversaIds)
       .eq("empresa_id", usuario.empresa_id)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(limiteMensagensLista);
 
     if (mensagensListaError) {
       return NextResponse.json(
@@ -488,6 +778,12 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       conversas,
+      pagination: {
+        limit,
+        offset,
+        returned: conversas.length,
+        hasMore: conversas.length === limit,
+      },
     });
   }
 
@@ -499,6 +795,12 @@ export async function GET(request: Request) {
       return NextResponse.json({
         ok: true,
         conversas: [],
+        pagination: {
+          limit,
+          offset,
+          returned: 0,
+          hasMore: false,
+        },
       });
     }
 
@@ -510,6 +812,12 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       conversas,
+      pagination: {
+        limit,
+        offset,
+        returned: conversas.length,
+        hasMore: conversas.length === limit,
+      },
     });
   }
 
@@ -528,5 +836,11 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     conversas,
+    pagination: {
+      limit,
+      offset,
+      returned: conversas.length,
+      hasMore: conversas.length === limit,
+    },
   });
 }

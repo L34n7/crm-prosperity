@@ -86,6 +86,7 @@ export async function GET(request: Request) {
     const inicio = searchParams.get("inicio");
     const fim = searchParams.get("fim");
     const antesDe = searchParams.get("antes_de");
+    const exportar = searchParams.get("exportar") === "true";
     const limiteParam = Number(searchParams.get("limite") || 30);
     const limite = Number.isFinite(limiteParam)
       ? Math.min(Math.max(limiteParam, 1), 100)
@@ -136,6 +137,64 @@ export async function GET(request: Request) {
         { ok: false, error: "Você não pode acessar as mensagens desta conversa" },
         { status: 403 }
       );
+    }
+
+    if (exportar) {
+      const todasMensagens: any[] = [];
+      const tamanhoLote = 1000;
+      let pagina = 0;
+
+      while (true) {
+        const inicioRange = pagina * tamanhoLote;
+        const fimRange = inicioRange + tamanhoLote - 1;
+
+        const { data: lote, error: exportarError } = await supabaseAdmin
+          .from("mensagens")
+          .select(`
+            id,
+            conversa_id,
+            conversa_protocolo_id,
+            remetente_tipo,
+            remetente_id,
+            conteudo,
+            tipo_mensagem,
+            origem,
+            status_envio,
+            created_at,
+            metadata_json
+          `)
+          .eq("conversa_id", conversaId)
+          .order("created_at", { ascending: true })
+          .range(inicioRange, fimRange);
+
+        if (exportarError) {
+          return NextResponse.json(
+            { ok: false, error: exportarError.message },
+            { status: 500 }
+          );
+        }
+
+        const mensagensLote = lote || [];
+        todasMensagens.push(...mensagensLote);
+
+        if (mensagensLote.length < tamanhoLote) {
+          break;
+        }
+
+        pagina += 1;
+
+        if (pagina >= 20) {
+          break;
+        }
+      }
+
+      return NextResponse.json({
+        ok: true,
+        mensagens: todasMensagens,
+        temMaisHistorico: false,
+        modo: "exportar",
+        total: todasMensagens.length,
+      });
     }
 
     let queryMensagens = supabaseAdmin
@@ -220,12 +279,12 @@ export async function GET(request: Request) {
 
     if (error) {
       return NextResponse.json(
-        { ok: false, error: error.message },
+        { error: error.message },
         { status: 500 }
       );
     }
 
-    const mensagens = data ?? [];
+    const mensagens = data || [];
 
     let temMaisHistorico = false;
 

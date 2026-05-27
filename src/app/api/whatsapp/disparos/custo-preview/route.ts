@@ -126,9 +126,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const contatosRecebidos = Array.isArray(body?.contatos) ? body.contatos : [];
+    const contatosRecebidos = Array.isArray(body?.contatos)
+      ? body.contatos
+      : [];
 
-    const { cotacao, fonte, dataHora, fallback } = await obterCotacaoUsdBrlAtual();
+    const { cotacao, fonte, dataHora, fallback } =
+      await obterCotacaoUsdBrlAtual();
 
     if (contatosRecebidos.length === 0) {
       return NextResponse.json({
@@ -172,14 +175,10 @@ export async function POST(request: Request) {
         empresa_id,
         contato_id,
         status,
+        last_inbound_message_at,
         contatos:contato_id (
           id,
           telefone
-        ),
-        conversa_protocolos (
-          id,
-          ativo,
-          closed_at
         )
       `)
       .eq("empresa_id", usuario.empresa_id);
@@ -191,33 +190,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const STATUS_NAO_ISENTO = [
-      "encerrado_manual",
-      "encerrado_24h",
-      "encerrado_aut",
-    ];
-
-    const telefonesComProtocoloAtivo = new Set<string>();
+    const telefonesDentroDaJanela24h = new Set<string>();
 
     for (const conversa of conversasData || []) {
       const telefoneContato = (conversa as any)?.contatos?.telefone || "";
       const telefoneNormalizado = normalizarNumeroComparacao(telefoneContato);
-      const statusConversa = String((conversa as any)?.status || "").trim();
+      const lastInboundMessageAt =
+        (conversa as any)?.last_inbound_message_at || null;
 
       if (!telefoneNormalizado) continue;
       if (!telefonesSelecionados.includes(telefoneNormalizado)) continue;
-      if (STATUS_NAO_ISENTO.includes(statusConversa)) continue;
+      if (!lastInboundMessageAt) continue;
 
-      const protocolos = Array.isArray((conversa as any)?.conversa_protocolos)
-        ? (conversa as any).conversa_protocolos
-        : [];
+      const dataUltimaMensagemContato = new Date(lastInboundMessageAt).getTime();
 
-      const temProtocoloAtivo = protocolos.some(
-        (protocolo: any) => protocolo?.ativo === true
-      );
+      if (Number.isNaN(dataUltimaMensagemContato)) continue;
 
-      if (temProtocoloAtivo) {
-        telefonesComProtocoloAtivo.add(telefoneNormalizado);
+      const diffMs = Date.now() - dataUltimaMensagemContato;
+      const dentroDaJanela24h = diffMs <= 24 * 60 * 60 * 1000;
+
+      if (dentroDaJanela24h) {
+        telefonesDentroDaJanela24h.add(telefoneNormalizado);
       }
     }
 
@@ -226,7 +219,7 @@ export async function POST(request: Request) {
     const totalIsentos =
       categoria === "utility"
         ? contatosNormalizados.filter((item) =>
-            telefonesComProtocoloAtivo.has(item.telefoneNormalizado)
+            telefonesDentroDaJanela24h.has(item.telefoneNormalizado)
           ).length
         : 0;
 
@@ -243,13 +236,14 @@ export async function POST(request: Request) {
     let valorTotalBrlMin = valorTotalBrlEstimado * 0.98;
     let valorTotalBrlMax = valorTotalBrlEstimado * 1.04;
 
-    // 🔥 GARANTIR DIFERENÇA MÍNIMA
-    if ((valorTotalBrlMax - valorTotalBrlMin) < 0.02) {
+    if (valorTotalUsd === 0) {
+      valorTotalBrlMin = 0;
+      valorTotalBrlMax = 0;
+    } else if (valorTotalBrlMax - valorTotalBrlMin < 0.02) {
       valorTotalBrlMin = valorTotalBrlEstimado - 0.01;
       valorTotalBrlMax = valorTotalBrlEstimado + 0.01;
     }
 
-    // agora sim arredonda
     valorTotalBrlMin = Number(valorTotalBrlMin.toFixed(2));
     valorTotalBrlMax = Number(valorTotalBrlMax.toFixed(2));
 

@@ -1284,13 +1284,25 @@ export default function ConversasPage() {
 
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+
+  const LIMITE_CONVERSAS = 20;
+  const [temMaisConversas, setTemMaisConversas] = useState(true);
+  const [carregandoMaisConversas, setCarregandoMaisConversas] = useState(false);
+
+  const carregandoMaisConversasRef = useRef(false);
+  const conversasRef = useRef<Conversa[]>([]);
   const [conversaSelecionada, setConversaSelecionada] =
     useState<Conversa | null>(null);
+
+  useEffect(() => {
+    conversasRef.current = conversas;
+  }, [conversas]);
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioOpcao[]>([]);
 
   const [busca, setBusca] = useState("");
+  const [buscaDebounced, setBuscaDebounced] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("Todas");
   const [canalFiltro, setCanalFiltro] = useState("todos");
   const [setorFiltro, setSetorFiltro] = useState("todos");
@@ -2391,65 +2403,168 @@ export default function ConversasPage() {
     } catch {}
   }
 
-  async function carregarConversas(silencioso = false) {
-    try {
-      if (!silencioso) {
-        setLoadingConversas(true);
-      }
+  function montarQueryConversas(offset: number, limit: number) {
+    const params = new URLSearchParams();
 
-      setErro("");
+    params.set("limit", String(limit));
+    params.set("offset", String(offset));
 
-      const res = await fetch("/api/conversas", {
-        cache: "no-store",
-      });
+    if (buscaDebounced) {
+      params.set("busca", buscaDebounced);
+    }
 
-      const data = await res.json();
+    if (statusFiltro !== "Todas") {
+      params.set("status", statusFiltro);
+    }
 
-      if (!res.ok) {
-        setErro(data.error || "Erro ao carregar conversas");
-        return;
-      }
+    if (canalFiltro !== "todos") {
+      params.set("canal", canalFiltro);
+    }
 
-      const lista = data.conversas || [];
-      setConversas(lista);
+    if (setorFiltro !== "todos") {
+      params.set("setor_id", setorFiltro);
+    }
 
-      setConversaSelecionada((atual) => {
-        if (!lista.length) return null;
-        if (!atual) return lista[0];
+    if (responsavelFiltro !== "todos") {
+      params.set("responsavel_id", responsavelFiltro);
+    }
 
-        const encontrada = lista.find((c: Conversa) => c.id === atual.id);
+    if (chipRapido !== "Todas") {
+      params.set("chip", chipRapido);
+    }
 
-        if (!encontrada) {
-          return lista[0];
+    if (listaFiltroId) {
+      params.set("lista_id", listaFiltroId);
+    }
+
+    return params.toString();
+  }
+
+
+    async function carregarConversas(
+      silencioso = false,
+      append = false,
+      limitCustom?: number
+    ) {
+      try {
+        if (append && carregandoMaisConversasRef.current) {
+          return conversasRef.current;
         }
 
-        const mudouVisualPrincipal =
-          encontrada.id !== atual.id ||
-          encontrada.status !== atual.status ||
-          encontrada.prioridade !== atual.prioridade ||
-          encontrada.favorita !== atual.favorita ||
-          encontrada.unread_count !== atual.unread_count ||
-          encontrada.assunto !== atual.assunto ||
-          encontrada.responsavel?.id !== atual.responsavel?.id ||
-          encontrada.setores?.id !== atual.setores?.id ||
-          encontrada.etiqueta_id !== atual.etiqueta_id ||
-          encontrada.etiqueta_cor !== atual.etiqueta_cor ||
-          encontrada.etiquetas?.id !== atual.etiquetas?.id ||
-          encontrada.etiquetas?.nome !== atual.etiquetas?.nome ||
-          encontrada.etiquetas?.descricao !== atual.etiquetas?.descricao ||
-          encontrada.etiquetas?.cor !== atual.etiquetas?.cor;
+        if (!silencioso && !append) {
+          setLoadingConversas(true);
+        }
 
-        return mudouVisualPrincipal ? encontrada : atual;
-      });
+        if (append) {
+          carregandoMaisConversasRef.current = true;
+          setCarregandoMaisConversas(true);
+        }
 
-      return lista;
-    } catch {
-      setErro("Erro ao carregar conversas");
-      return [];
-    } finally {
-      if (!silencioso) {
-        setLoadingConversas(false);
+        setErro("");
+
+        const conversasAtuais = conversasRef.current;
+        const offset = append ? conversasAtuais.length : 0;
+        const limiteBusca = limitCustom || LIMITE_CONVERSAS;
+
+        const queryString = montarQueryConversas(offset, limiteBusca);
+
+        const res = await fetch(`/api/conversas?${queryString}`, {
+          cache: "no-store",
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setErro(data.error || "Erro ao carregar conversas");
+          return conversasAtuais;
+        }
+
+        const listaNova: Conversa[] = data.conversas || [];
+        setTemMaisConversas(Boolean(data.pagination?.hasMore));
+
+        let listaFinal: Conversa[] = [];
+
+        setConversas((atuais) => {
+          const mapa = new Map<string, Conversa>();
+
+          if (append) {
+            atuais.forEach((item) => mapa.set(item.id, item));
+            listaNova.forEach((item) => mapa.set(item.id, item));
+          } else if (silencioso) {
+            atuais.forEach((item) => mapa.set(item.id, item));
+            listaNova.forEach((item) => mapa.set(item.id, item));
+          } else {
+            listaNova.forEach((item) => mapa.set(item.id, item));
+          }
+
+          listaFinal = Array.from(mapa.values()).sort((a, b) => {
+            const aTime = a.last_message_at
+              ? new Date(a.last_message_at).getTime()
+              : 0;
+
+            const bTime = b.last_message_at
+              ? new Date(b.last_message_at).getTime()
+              : 0;
+
+            return bTime - aTime;
+          });
+
+          conversasRef.current = listaFinal;
+          return listaFinal;
+        });
+
+        setConversaSelecionada((atual) => {
+          if (!atual) return atual;
+
+          const encontrada = listaFinal.find((c) => c.id === atual.id);
+
+          if (!encontrada) return atual;
+
+          return encontrada;
+        });
+
+        return listaFinal;
+      } catch {
+        setErro("Erro ao carregar conversas");
+        return conversasRef.current;
+      } finally {
+        if (!silencioso && !append) {
+          setLoadingConversas(false);
+        }
+
+        if (append) {
+          carregandoMaisConversasRef.current = false;
+          setCarregandoMaisConversas(false);
+        }
       }
+    }
+
+  async function atualizarConversasCarregadas() {
+    const quantidadeAtual = Math.max(
+      conversasRef.current.length,
+      LIMITE_CONVERSAS
+    );
+
+    return await carregarConversas(true, false, quantidadeAtual);
+  }
+
+  async function carregarMaisConversas() {
+    if (loadingConversas) return;
+    if (carregandoMaisConversas) return;
+    if (carregandoMaisConversasRef.current) return;
+    if (!temMaisConversas) return;
+
+    await carregarConversas(true, true);
+  }
+
+  function handleScrollListaConversas(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+
+    const chegouPertoDoFim =
+      el.scrollTop + el.clientHeight >= el.scrollHeight - 220;
+
+    if (chegouPertoDoFim) {
+      carregarMaisConversas();
     }
   }
 
@@ -2678,7 +2793,7 @@ export default function ConversasPage() {
       setMensagemSucesso(data.message || "Conversa assumida com sucesso.");
       setAcaoAberta(null);
 
-      await carregarConversas();
+      await atualizarConversasCarregadas();
 
       await carregarMensagens(
         conversaSelecionada.id,
@@ -2748,7 +2863,7 @@ export default function ConversasPage() {
 
       setMensagemSucesso(data.message || "Mensagem enviada com sucesso.");
 
-      const listaAtualizada = await carregarConversas(true);
+      const listaAtualizada = await atualizarConversasCarregadas();
       const conversaAtualizada = listaAtualizada.find(
         (c: Conversa) => c.id === conversaSelecionada.id
       );
@@ -2807,7 +2922,7 @@ export default function ConversasPage() {
       setMensagemSucesso(data.message || sucesso);
       setAcaoAberta(null);
 
-      await carregarConversas();
+      await atualizarConversasCarregadas();
 
       if (conversaSelecionada?.id) {
         await carregarMensagens(
@@ -2861,7 +2976,7 @@ export default function ConversasPage() {
       setMensagemSucesso(data.message || "Conversa transferida com sucesso.");
       setAcaoAberta(null);
 
-      await carregarConversas();
+      await atualizarConversasCarregadas();
 
       await carregarMensagens(
         conversaSelecionada.id,
@@ -2911,7 +3026,7 @@ export default function ConversasPage() {
       setMensagemSucesso(data.message || "Responsável atribuído com sucesso.");
       setAcaoAberta(null);
 
-      await carregarConversas();
+      await atualizarConversasCarregadas();
 
       await carregarMensagens(
         conversaSelecionada.id,
@@ -2999,7 +3114,7 @@ export default function ConversasPage() {
             : "Conversa adicionada aos favoritos.")
       );
 
-      await carregarConversas();
+      await atualizarConversasCarregadas();
 
       if (conversaSelecionada?.id) {
         await carregarMensagens(
@@ -3145,55 +3260,179 @@ export default function ConversasPage() {
     setSelecionandoEtiqueta(false);
   }
 
-  function baixarConversaPDF() {
-  if (!conversaSelecionada || mensagens.length === 0) {
-    alert("Nenhuma conversa para exportar.");
+function escaparHtml(valor?: string | null) {
+  return String(valor || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function getRemetenteExportacao(msg: Mensagem) {
+  switch (msg.remetente_tipo) {
+    case "usuario":
+      return "Você";
+    case "contato":
+      return "Cliente";
+    case "bot":
+      return "Bot";
+    case "ia":
+      return "IA";
+    case "sistema":
+      return "Sistema";
+    default:
+      return msg.remetente_tipo;
+  }
+}
+
+function getConteudoExportacao(msg: Mensagem) {
+  const caption =
+    msg.metadata_json?.caption ||
+    msg.metadata_json?.legenda ||
+    "";
+
+  if (msg.tipo_mensagem === "imagem") {
+    return caption ? `Imagem: ${caption}` : "Imagem recebida/enviada";
+  }
+
+  if (msg.tipo_mensagem === "audio") {
+    const transcricao = msg.metadata_json?.transcricao_audio || "";
+    return transcricao
+      ? `Áudio — transcrição: ${transcricao}`
+      : "Áudio recebido/enviado";
+  }
+
+  if (msg.tipo_mensagem === "video") {
+    return caption ? `Vídeo: ${caption}` : "Vídeo recebido/enviado";
+  }
+
+  if (msg.tipo_mensagem === "documento") {
+    const filename = msg.metadata_json?.filename || "documento";
+    return caption ? `Documento: ${filename} — ${caption}` : `Documento: ${filename}`;
+  }
+
+  if (msg.tipo_mensagem === "localizacao") {
+    const latitude = msg.metadata_json?.location?.latitude;
+    const longitude = msg.metadata_json?.location?.longitude;
+
+    if (latitude != null && longitude != null) {
+      return `Localização compartilhada: ${latitude}, ${longitude}`;
+    }
+
+    return "Localização compartilhada";
+  }
+
+  if (msg.tipo_mensagem === "contato") {
+    return "Contato compartilhado";
+  }
+
+  return msg.conteudo || "";
+}
+
+async function buscarTodasMensagensDaConversa(conversaId: string) {
+  const url = `/api/mensagens?conversa_id=${encodeURIComponent(
+    conversaId
+  )}&exportar=true`;
+
+  const res = await fetch(url, {
+    cache: "no-store",
+  });
+
+  let data: any = null;
+
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error("A API retornou uma resposta inválida ao exportar a conversa.");
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.error || "Erro ao carregar todas as mensagens.");
+  }
+
+  return Array.isArray(data.mensagens) ? data.mensagens : [];
+}
+
+async function baixarConversaPDF() {
+  if (!conversaSelecionada?.id) {
+    alert("Nenhuma conversa selecionada.");
     return;
   }
 
-  const htmlMensagens = mensagens
-    .map((msg) => {
-      const remetente =
-        msg.remetente_tipo === "usuario" ? "Você" : "Cliente";
+  try {
+    setErro("");
+    setMensagemSucesso("");
 
-      const data = new Date(msg.created_at).toLocaleString("pt-BR");
+    const todasMensagens = await buscarTodasMensagensDaConversa(
+      conversaSelecionada.id
+    );
 
-      return `
-        <div style="margin-bottom:12px;">
-          <strong>${remetente}</strong><br/>
-          <span>${msg.conteudo || ""}</span><br/>
-          <small style="color:gray;">${data}</small>
-        </div>
-      `;
-    })
-    .join("");
+    if (todasMensagens.length === 0) {
+      alert("Nenhuma mensagem encontrada para exportar.");
+      return;
+    }
 
-  const html = `
-    <html>
-      <head>
-        <title>Conversa - ${conversaSelecionada.contatos?.nome || ""}</title>
-      </head>
-      <body style="font-family: Arial; padding:20px;">
-        <h2>Conversa com ${conversaSelecionada.contatos?.nome || "Contato"}</h2>
-        <p><strong>Telefone:</strong> ${conversaSelecionada.contatos?.telefone || ""}</p>
-        <hr/>
-        ${htmlMensagens}
-      </body>
-    </html>
-  `;
+    const htmlMensagens = todasMensagens
+      .map((msg: Mensagem) => {
+        const remetente = getRemetenteExportacao(msg);
+        const data = new Date(msg.created_at).toLocaleString("pt-BR");
+        const conteudo = getConteudoExportacao(msg);
 
-  const novaJanela = window.open("", "_blank");
+        return `
+          <div style="margin-bottom:12px; page-break-inside: avoid;">
+            <strong>${escaparHtml(remetente)}</strong><br/>
+            <span style="white-space: pre-wrap;">${escaparHtml(conteudo)}</span><br/>
+            <small style="color:gray;">${escaparHtml(data)}</small>
+          </div>
+        `;
+      })
+      .join("");
 
-  if (!novaJanela) return;
+    const html = `
+      <html>
+        <head>
+          <title>Conversa - ${escaparHtml(conversaSelecionada.contatos?.nome || "")}</title>
+          <meta charset="utf-8" />
+        </head>
+        <body style="font-family: Arial; padding:20px;">
+          <h2>Conversa com ${escaparHtml(
+            conversaSelecionada.contatos?.nome || "Contato"
+          )}</h2>
 
-  novaJanela.document.write(html);
-  novaJanela.document.close();
+          <p><strong>Telefone:</strong> ${escaparHtml(
+            conversaSelecionada.contatos?.telefone || ""
+          )}</p>
 
-  novaJanela.focus();
+          <p><strong>Total de mensagens exportadas:</strong> ${
+            todasMensagens.length
+          }</p>
 
-  setTimeout(() => {
-    novaJanela.print(); // abre opção salvar como PDF
-  }, 500);
+          <hr/>
+
+          ${htmlMensagens}
+        </body>
+      </html>
+    `;
+
+    const novaJanela = window.open("", "_blank");
+
+    if (!novaJanela) {
+      alert("O navegador bloqueou a abertura da janela de exportação.");
+      return;
+    }
+
+    novaJanela.document.write(html);
+    novaJanela.document.close();
+
+    novaJanela.focus();
+
+    setTimeout(() => {
+      novaJanela.print();
+    }, 500);
+  } catch (error: any) {
+    setErro(error?.message || "Erro ao exportar conversa.");
+  }
 }
 
   async function salvarEtiquetaEmpresa() {
@@ -3283,7 +3522,7 @@ export default function ConversasPage() {
       setEtiquetaConfirmandoExclusaoId(null);
 
       await carregarEtiquetasEmpresa();
-      await carregarConversas(true);
+      await atualizarConversasCarregadas();
     } catch {
       setErro("Erro ao excluir etiqueta");
     } finally {
@@ -3318,7 +3557,7 @@ export default function ConversasPage() {
 
       setMensagemSucesso(data.message || "Etiqueta atualizada com sucesso");
 
-      await carregarConversas(true);
+      await atualizarConversasCarregadas();
 
       await carregarMensagens(
         conversaSelecionada.id,
@@ -3528,7 +3767,7 @@ export default function ConversasPage() {
       }
       setMensagemSucesso(data.message || "Mídia enviada com sucesso.");
 
-      const listaAtualizada = await carregarConversas(true);
+      const listaAtualizada = await atualizarConversasCarregadas();
       const conversaAtualizada = listaAtualizada.find(
         (c: Conversa) => c.id === conversaSelecionada.id
       );
@@ -3588,7 +3827,7 @@ export default function ConversasPage() {
       setMensagemSucesso(data.message || "Contato atualizado com sucesso.");
       setEditandoCampo(null);
 
-      await carregarConversas(true);
+      await atualizarConversasCarregadas();
     } catch {
       setErro("Erro ao atualizar contato");
     }
@@ -3774,7 +4013,7 @@ export default function ConversasPage() {
       setMensagemSucesso(data.message || "Disparo enviado com sucesso.");
       setTemplateDisparoBody1("");
 
-      await carregarConversas();
+      await atualizarConversasCarregadas();
 
       await carregarMensagens(
         conversaSelecionada.id,
@@ -4077,82 +4316,7 @@ export default function ConversasPage() {
   }, [conversas]);
 
   const conversasFiltradas = useMemo(() => {
-    let lista = [...conversas];
-
-    if (statusFiltro !== "Todas") {
-      lista = lista.filter((c) => c.status === statusFiltro);
-    }
-
-    if (canalFiltro !== "todos") {
-      lista = lista.filter((c) => (c.canal || "") === canalFiltro);
-    }
-
-    if (setorFiltro !== "todos") {
-      lista = lista.filter((c) => (c.setores?.id || "") === setorFiltro);
-    }
-
-    if (responsavelFiltro !== "todos") {
-      lista = lista.filter((c) => (c.responsavel?.id || "") === responsavelFiltro);
-    }
-
-    if (chipRapido === "minhas" && usuarioId) {
-      lista = lista.filter((c) => {
-        const responsavelAtual =
-          c.responsavel_id || c.responsavel?.id || null;
-        return responsavelAtual === usuarioId;
-      });
-    }
-
-    if (chipRapido === "favoritos") {
-      lista = lista.filter((c) => c.favorita === true);
-    }
-
-    if (chipRapido === "fila") {
-      lista = lista.filter((c) => c.status === "fila");
-    }
-
-    if (chipRapido === "robo") {
-      lista = lista.filter((c) => c.bot_ativo === true);
-    }
-
-    if (chipRapido === "nao_lidas") {
-      lista = lista.filter((c) => (c.unread_count || 0) > 0);
-    }
-
-    if (chipRapido === "sem_responsavel") {
-      lista = lista.filter((c) => !c.responsavel_id && !c.responsavel?.id);
-    }
-
-    if (chipRapido === "urgentes") {
-      lista = lista.filter((c) => c.prioridade === "urgente" || c.prioridade === "alta");
-    }
-
-    if (listaFiltroId) {
-      lista = lista.filter((c) =>
-        Array.isArray(c.listas) &&
-        c.listas.some((item) => item.id === listaFiltroId)
-      );
-    }
-
-    if (busca.trim()) {
-      const termo = busca.toLowerCase();
-
-      lista = lista.filter((c) => {
-        const nome = c.contatos?.nome?.toLowerCase() || "";
-        const telefone = c.contatos?.telefone?.toLowerCase() || "";
-        const assunto = c.assunto?.toLowerCase() || "";
-        const protocolo = c.protocolo?.toLowerCase() || "";
-        const preview = getPreviewConversa(c).toLowerCase();
-
-        return (
-          nome.includes(termo) ||
-          telefone.includes(termo) ||
-          assunto.includes(termo) ||
-          protocolo.includes(termo) ||
-          preview.includes(termo)
-        );
-      });
-    }
+    const lista = [...conversas];
 
     lista.sort((a, b) => {
       const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
@@ -4161,16 +4325,7 @@ export default function ConversasPage() {
     });
 
     return lista;
-  }, [
-    conversas,
-    busca,
-    statusFiltro,
-    canalFiltro,
-    setorFiltro,
-    responsavelFiltro,
-    chipRapido,
-    usuarioId,
-  ]);
+  }, [conversas]);
 
   const mensagensAgrupadas = useMemo(() => {
     const grupos: Array<
@@ -4341,6 +4496,32 @@ const templateFooterTexto = useMemo(() => {
   }, []);
 
   useEffect(() => {
+    conversasRef.current = [];
+    setConversas([]);
+    setTemMaisConversas(true);
+    carregarConversas(true, false);
+  }, [
+    buscaDebounced,
+    statusFiltro,
+    canalFiltro,
+    setorFiltro,
+    responsavelFiltro,
+    chipRapido,
+    listaFiltroId,
+  ]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setBuscaDebounced(busca.trim());
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [busca]);
+
+
+  useEffect(() => {
     if (!conversaSelecionada?.id) {
       setMensagens([]);
       return;
@@ -4397,7 +4578,7 @@ const templateFooterTexto = useMemo(() => {
       if (conversaLidaRef.current !== conversaId) {
         await marcarConversaComoLida(conversaId);
         conversaLidaRef.current = conversaId;
-        await carregarConversas(true);
+        await atualizarConversasCarregadas();
       }
 
       await carregarProtocolosDaConversa();
@@ -4426,10 +4607,9 @@ const templateFooterTexto = useMemo(() => {
       forcarScrollParaFinalRef.current = false;
     }
 
-      const listaAtualizada = await carregarConversas(true);
-      const conversaAtualizada = listaAtualizada.find(
-        (c: Conversa) => c.id === conversaSelecionada.id
-      );
+    if (!carregandoMaisConversasRef.current) {
+      await atualizarConversasCarregadas();
+    }
 
       const inicioHistoricoAtual =
         mensagemMaisAntigaCarregadaRef.current || inicioJanelaHistorico;
@@ -4457,7 +4637,7 @@ const templateFooterTexto = useMemo(() => {
           }
         );
       }
-    }, 5000);
+    }, 15000);
 
       return () => {
         window.clearInterval(interval);
@@ -4472,19 +4652,6 @@ const templateFooterTexto = useMemo(() => {
       fimJanelaHistorico,
     ]);
 
-  useEffect(() => {
-      if (!abaVisivel) return;
-      if (enviando) return;
-      if (editandoCampo) return;
-
-    const interval = window.setInterval(() => {
-      carregarConversas(true);
-    }, 5000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [abaVisivel, enviando]);
 
   useEffect(() => {
     if (restaurarScrollHistoricoRef.current) {
@@ -4722,7 +4889,7 @@ const templateFooterTexto = useMemo(() => {
 
                   <button
                     type="button"
-                    onClick={() => carregarConversas()}
+                    onClick={() => atualizarConversasCarregadas()}
                     className={styles.iconButton}
                   >
                     Update
@@ -4910,13 +5077,17 @@ const templateFooterTexto = useMemo(() => {
               </div>
             </div>
 
-            <div className={styles.sidebarBody}>
+            <div
+              className={styles.sidebarBody}
+              onScroll={handleScrollListaConversas}
+            >
               {loadingConversas ? (
                 <div className={styles.emptyListState}>Loading conversations...</div>
               ) : conversasFiltradas.length === 0 ? (
                 <div className={styles.emptyListState}>No conversations found.</div>
               ) : (
-                conversasFiltradas.map((c) => {
+                <>
+                  {conversasFiltradas.map((c) => {
                   const ativo = conversaSelecionada?.id === c.id;
                   const unreadCount = c.unread_count || 0;
 
@@ -5001,8 +5172,21 @@ const templateFooterTexto = useMemo(() => {
                       </div>
                     </button>
                   );
-                })
-              )}
+                })}
+
+                {carregandoMaisConversas && (
+                  <div className={styles.emptyListState}>
+                    Loading more conversations...
+                  </div>
+                )}
+
+                {!temMaisConversas && conversas.length > 0 && (
+                  <div className={styles.emptyListState}>
+                    All conversations loaded.
+                  </div>
+                )}
+              </>
+            )}
             </div>
           </aside>
 
@@ -7497,7 +7681,7 @@ const templateFooterTexto = useMemo(() => {
 
                                         setMensagemSucesso(data.message || "Lista atualizada com sucesso");
                                         await carregarListasDaConversa();
-                                        await carregarConversas();
+                                        await atualizarConversasCarregadas();
                                       } catch {
                                         setErro("Erro ao atualizar lista");
                                       }
@@ -7606,7 +7790,7 @@ const templateFooterTexto = useMemo(() => {
 
                                             await carregarListasDaConversa();
                                             await carregarListasEmpresa();
-                                            await carregarConversas();
+                                            await atualizarConversasCarregadas();
                                           } catch {
                                             setErro("Erro ao atualizar lista");
                                           }
@@ -7663,7 +7847,7 @@ const templateFooterTexto = useMemo(() => {
 
                                             await carregarListasDaConversa();
                                             await carregarListasEmpresa();
-                                            await carregarConversas();
+                                            await atualizarConversasCarregadas();
                                           } catch {
                                             setErro("Erro ao excluir lista");
                                           }

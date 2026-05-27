@@ -1,9 +1,9 @@
 export const WHATSAPP_TEMPLATE_PRICING = {
   marketing: {
-    usd: 0.0500,
+    usd: 0.0625,
   },
   utility: {
-    usd: 0.0200,
+    usd: 0.0068,
   },
 } as const;
 

@@ -70,6 +70,58 @@ function extrairArquivoNome(message: any, metadataJson: any) {
   );
 }
 
+function timestampWhatsappParaIso(timestamp?: string | number | null) {
+  if (!timestamp) {
+    return new Date().toISOString();
+  }
+
+  const numero = Number(timestamp);
+
+  if (Number.isFinite(numero)) {
+    const milissegundos =
+      numero < 100000000000 ? numero * 1000 : numero;
+
+    const data = new Date(milissegundos);
+
+    if (!Number.isNaN(data.getTime())) {
+      return data.toISOString();
+    }
+  }
+
+  const dataTexto = new Date(String(timestamp));
+
+  if (!Number.isNaN(dataTexto.getTime())) {
+    return dataTexto.toISOString();
+  }
+
+  return new Date().toISOString();
+}
+
+async function atualizarUltimaMensagemRecebidaConversa(params: {
+  empresaId: string;
+  conversaId: string;
+  timestamp?: string | number | null;
+}) {
+  const dataMensagemRecebida = timestampWhatsappParaIso(params.timestamp);
+  const agora = new Date().toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("conversas")
+    .update({
+      last_message_at: dataMensagemRecebida,
+      last_inbound_message_at: dataMensagemRecebida,
+      updated_at: agora,
+    })
+    .eq("empresa_id", params.empresaId)
+    .eq("id", params.conversaId);
+
+  if (error) {
+    throw new Error(
+      `Erro ao atualizar last_inbound_message_at da conversa: ${error.message}`
+    );
+  }
+}
+
 async function buscarMensagemExistentePorExternaId(
   mensagemExternaId: string
 ) {
@@ -263,6 +315,12 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
       perf("PROCESS / buscar ou criar conversa", inicioConversa, {
         conversaId: conversation.id,
+      });
+
+      await atualizarUltimaMensagemRecebidaConversa({
+        empresaId: integration.empresa_id,
+        conversaId: conversation.id,
+        timestamp: message.timestamp,
       });
 
       const conversaEmAtendimentoHumano =
