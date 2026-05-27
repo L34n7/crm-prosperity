@@ -29,6 +29,7 @@ type Fluxo = {
   canal: string;
   fluxo_padrao?: boolean;
   created_at?: string;
+  configuracao_json?: Record<string, any>;
 };
 
 type AutomacaoNo = {
@@ -361,6 +362,23 @@ export default function FluxosPage() {
   const [editandoFluxo, setEditandoFluxo] = useState(false);
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
   const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
+  const [encerrarInatividadeAtivo, setEncerrarInatividadeAtivo] = useState(true);
+  const [encerrarInatividadeQuantidade, setEncerrarInatividadeQuantidade] = useState("23");
+  const [encerrarInatividadeUnidade, setEncerrarInatividadeUnidade] =
+    useState<"minutos" | "horas">("horas");
+  const [encerrarInatividadeMensagem, setEncerrarInatividadeMensagem] = useState(
+    "Como não tivemos retorno, este atendimento será encerrado. Caso precise de ajuda, envie uma nova mensagem."
+  );
+
+  function resetarEncerramentoInatividadePadrao() {
+    setEncerrarInatividadeAtivo(true);
+    setEncerrarInatividadeQuantidade("23");
+    setEncerrarInatividadeUnidade("horas");
+    setEncerrarInatividadeMensagem(
+      "Como não tivemos retorno, este atendimento será encerrado. Caso precise de ajuda, envie uma nova mensagem."
+    );
+  }
+
   const [setorDestino, setSetorDestino] = useState("");
   const [nodeNovoId, setNodeNovoId] = useState<string | null>(null);
   const fluxo = fluxoSelecionado;
@@ -916,9 +934,41 @@ async function criarFluxoRapido() {
       return;
     }
 
-    if (!novoFluxoPadrao && gatilhosNovoFluxo.length === 0) {
-      setErroCriacaoFluxo("Adicione pelo menos um gatilho.");
+    const fluxoPadraoFinal = !jaExisteFluxoPadrao && novoFluxoPadrao;
+
+    const gatilhosValidos = gatilhosNovoFluxo.filter((gatilho) =>
+      String(gatilho.valor || "").trim()
+    );
+
+    if (!fluxoPadraoFinal && gatilhosValidos.length === 0) {
+      setErroCriacaoFluxo(
+        "Adicione pelo menos uma palavra-chave para iniciar o fluxo."
+      );
       return;
+    }
+
+    const quantidadeInformada = Number(encerrarInatividadeQuantidade || 0);
+
+    const segundosInatividade =
+      encerrarInatividadeUnidade === "horas"
+        ? quantidadeInformada * 60 * 60
+        : quantidadeInformada * 60;
+
+    if (encerrarInatividadeAtivo) {
+      if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
+        setErroCriacaoFluxo("Informe um tempo válido para o encerramento por inatividade.");
+        return;
+      }
+
+      if (segundosInatividade < 5 * 60) {
+        setErroCriacaoFluxo("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
+        return;
+      }
+
+      if (segundosInatividade > 23 * 60 * 60) {
+        setErroCriacaoFluxo("O tempo máximo para encerramento por inatividade é de 23 horas.");
+        return;
+      }
     }
 
     const res = await fetch("/api/automacoes", {
@@ -931,7 +981,15 @@ async function criarFluxoRapido() {
         descricao: descricaoNovoFluxo,
         canal: "whatsapp",
         status: "rascunho",
-        fluxo_padrao: novoFluxoPadrao,
+        fluxo_padrao: fluxoPadraoFinal,
+        configuracao_json: {
+          encerramento_inatividade: {
+            ativo: encerrarInatividadeAtivo,
+            tempo_quantidade: quantidadeInformada,
+            tempo_unidade: encerrarInatividadeUnidade,
+            mensagem: encerrarInatividadeMensagem.trim(),
+          },
+        },
       }),
     });
 
@@ -943,8 +1001,8 @@ async function criarFluxoRapido() {
 
     const fluxoCriado = json.fluxo;
 
-    if (!novoFluxoPadrao) {
-      for (const gatilho of gatilhosNovoFluxo) {
+    if (!fluxoPadraoFinal) {
+      for (const gatilho of gatilhosValidos) {
       const gatilhoRes = await fetch(
         `/api/automacoes/${fluxoCriado.id}/gatilhos`,
         {
@@ -976,6 +1034,7 @@ async function criarFluxoRapido() {
     setNovoFluxoPadrao(false);
     setNovoGatilhoValor("");
     setNovoGatilhoCondicao("contem");
+    resetarEncerramentoInatividadePadrao();
     setAbrirCriacao(false);
 
     setSucesso("Fluxo criado com sucesso.");
@@ -1933,14 +1992,63 @@ function abrirEdicaoFluxo() {
   setEditandoFluxo(true);
   setNomeFluxoEdicao(fluxoSelecionado.nome || "");
   setDescricaoFluxoEdicao(fluxoSelecionado.descricao || "");
+
+  const config = fluxoSelecionado.configuracao_json || {};
+  const encerramento = config.encerramento_inatividade || {};
+
+  setEncerrarInatividadeAtivo(Boolean(encerramento.ativo));
+
+  setEncerrarInatividadeQuantidade(
+    String(encerramento.tempo_quantidade || 24)
+  );
+
+  setEncerrarInatividadeUnidade(
+    encerramento.tempo_unidade === "minutos" ? "minutos" : "horas"
+  );
+
+  setEncerrarInatividadeMensagem(
+    String(
+      encerramento.mensagem ||
+        "Como não tivemos retorno, este atendimento será encerrado. Caso precise de ajuda, envie uma nova mensagem."
+    )
+  );
+
   setNovoGatilhoValor("");
   setNovoGatilhoCondicao("contem");
 
-  carregarGatilhosFluxo(fluxoSelecionado.id);
+  if (fluxoSelecionado.fluxo_padrao) {
+    setGatilhosFluxo([]);
+  } else {
+    carregarGatilhosFluxo(fluxoSelecionado.id);
+  }
 }
 
 async function salvarEdicaoFluxo() {
   if (!fluxoSelecionado) return;
+
+  const quantidadeInformada = Number(encerrarInatividadeQuantidade || 0);
+
+  const segundosInatividade =
+    encerrarInatividadeUnidade === "horas"
+      ? quantidadeInformada * 60 * 60
+      : quantidadeInformada * 60;
+
+  if (encerrarInatividadeAtivo) {
+    if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
+      setErro("Informe um tempo válido para o encerramento por inatividade.");
+      return;
+    }
+
+    if (segundosInatividade < 5 * 60) {
+      setErro("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
+      return;
+    }
+
+    if (segundosInatividade > 23 * 60 * 60) {
+      setErro("O tempo máximo para encerramento por inatividade é de 23 horas.");
+      return;
+    }
+  }
 
   try {
     setErro("");
@@ -1955,6 +2063,15 @@ async function salvarEdicaoFluxo() {
         id: fluxoSelecionado.id,
         nome: nomeFluxoEdicao,
         descricao: descricaoFluxoEdicao,
+        configuracao_json: {
+          ...(fluxoSelecionado.configuracao_json || {}),
+          encerramento_inatividade: {
+            ativo: encerrarInatividadeAtivo,
+            tempo_quantidade: quantidadeInformada,
+            tempo_unidade: encerrarInatividadeUnidade,
+            mensagem: encerrarInatividadeMensagem.trim(),
+          },
+        },
       }),
     });
 
@@ -1971,6 +2088,62 @@ async function salvarEdicaoFluxo() {
   } catch (error: any) {
     setErro(error?.message || "Erro ao editar fluxo.");
   }
+}
+
+function obterLimitesInatividade(unidade: "minutos" | "horas") {
+  if (unidade === "horas") {
+    return {
+      min: 1,
+      max: 23,
+    };
+  }
+
+  return {
+    min: 5,
+    max: 1380, // 23 horas em minutos
+  };
+}
+
+function limitarQuantidadeInatividade(
+  valor: string,
+  unidade: "minutos" | "horas"
+) {
+  const somenteNumeros = valor.replace(/\D/g, "");
+
+  if (!somenteNumeros) {
+    return "";
+  }
+
+  const numero = Number(somenteNumeros);
+  const limites = obterLimitesInatividade(unidade);
+
+  if (!Number.isFinite(numero)) {
+    return "";
+  }
+
+  if (numero > limites.max) {
+    return String(limites.max);
+  }
+
+  return String(numero);
+}
+
+function corrigirQuantidadeMinimaInatividade(
+  valor: string,
+  unidade: "minutos" | "horas"
+) {
+  const numero = Number(valor || 0);
+  const limites = obterLimitesInatividade(unidade);
+
+  if (!Number.isFinite(numero) || numero < limites.min) {
+    return String(limites.min);
+  }
+
+  if (numero > limites.max) {
+    return String(limites.max);
+  }
+
+  return String(numero);
 }
 
 async function duplicarFluxo(fluxo: Fluxo) {
@@ -2749,6 +2922,13 @@ useEffect(() => {
               className={styles.newFlowButton}
               onClick={() => {
                 setErroCriacaoFluxo("");
+                setNovoFluxoNome("");
+                setDescricaoNovoFluxo("");
+                setNovoFluxoPadrao(false);
+                setGatilhosNovoFluxo([]);
+                setNovoGatilhoValor("");
+                setNovoGatilhoCondicao("contem");
+                resetarEncerramentoInatividadePadrao();
                 setAbrirCriacao(true);
               }}
             >
@@ -4957,84 +5137,192 @@ useEffect(() => {
                     onChange={(e) => setDescricaoFluxoEdicao(e.target.value)}
                 />
                 </label>
-                <div className={styles.gatilhosBox}>
-                <div>
-                    <p className={styles.modalSectionTitle}>Gatilhos do fluxo</p>
-                    <p className={styles.help}>
-                    Palavras que iniciam este fluxo quando o cliente envia uma mensagem.
-                    </p>
-                </div>
-
-                <div className={styles.gatilhoCreateRow}>
+                <div className={styles.sectionBlock}>
+                  <label className={styles.checkboxRow}>
                     <input
-                    className={styles.input}
-                    value={novoGatilhoValor}
-                    onChange={(e) => setNovoGatilhoValor(e.target.value)}
-                    placeholder="Ex: suporte, login, senha"
+                      type="checkbox"
+                      checked={encerrarInatividadeAtivo}
+                      onChange={(e) => setEncerrarInatividadeAtivo(e.target.checked)}
                     />
 
-                    <div className={styles.gatilhoBottomRow}>
-                    <select
-                        className={styles.input}
-                        value={novoGatilhoCondicao}
-                        onChange={(e) =>
-                        setNovoGatilhoCondicao(e.target.value as GatilhoFluxo["condicao"])
-                        }
-                    >
-                        <option value="contem">Contém a palavra</option>
-                        <option value="exata">Igual exatamente</option>
-                        <option value="inicia_com">Começa com</option>
-                        <option value="regex">Regex</option>
-                    </select>
+                    <span>Encerrar automaticamente por inatividade</span>
+                  </label>
 
-                    <button
-                        type="button"
-                        className={styles.primaryButton}
-                        onClick={criarGatilhoFluxo}
-                    >
-                        Adicionar
-                    </button>
-                    </div>
+                  <p className={styles.helperText}>
+                    Se ativado, o fluxo será encerrado automaticamente quando o contato ficar sem responder pelo tempo definido.
+                    Essa regra tem prioridade sobre conexões “Sem resposta após tempo” maiores.
+                  </p>
+
+                  {encerrarInatividadeAtivo && (
+                    <>
+                      <div className={styles.inlineFields}>
+                        <label className={styles.field}>
+                          <span className={styles.label}>Tempo sem resposta</span>
+
+                          <input
+                            className={styles.input}
+                            type="number"
+                            min={encerrarInatividadeUnidade === "minutos" ? 5 : 1}
+                            max={encerrarInatividadeUnidade === "minutos" ? 1380 : 23}
+                            value={encerrarInatividadeQuantidade}
+                            onChange={(e) =>
+                              setEncerrarInatividadeQuantidade(
+                                limitarQuantidadeInatividade(
+                                  e.target.value,
+                                  encerrarInatividadeUnidade
+                                )
+                              )
+                            }
+                            onBlur={() =>
+                              setEncerrarInatividadeQuantidade(
+                                corrigirQuantidadeMinimaInatividade(
+                                  encerrarInatividadeQuantidade,
+                                  encerrarInatividadeUnidade
+                                )
+                              )
+                            }
+                          />
+                        </label>
+
+                        <label className={styles.field}>
+                          <span className={styles.label}>Unidade</span>
+
+                          <select
+                            className={styles.input}
+                            value={encerrarInatividadeUnidade}
+                            onChange={(e) => {
+                              const novaUnidade =
+                                e.target.value === "minutos" ? "minutos" : "horas";
+
+                              setEncerrarInatividadeUnidade(novaUnidade);
+
+                              setEncerrarInatividadeQuantidade((valorAtual) =>
+                                corrigirQuantidadeMinimaInatividade(valorAtual, novaUnidade)
+                              );
+                            }}
+                          >
+                            <option value="minutos">Minutos</option>
+                            <option value="horas">Horas</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <p className={styles.helperText}>
+                        O tempo mínimo é de 5 minutos e o máximo é de 23 horas.
+                      </p>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Mensagem antes de encerrar</span>
+
+                        <textarea
+                          className={styles.textarea}
+                          value={encerrarInatividadeMensagem}
+                          onChange={(e) => setEncerrarInatividadeMensagem(e.target.value)}
+                          placeholder="Mensagem enviada antes de encerrar o atendimento."
+                        />
+                      </label>
+                    </>
+                  )}
                 </div>
+                {fluxoSelecionado?.fluxo_padrao ? (
+                  <div className={styles.defaultFlowNotice}>
+                    <div className={styles.defaultFlowIcon}>↪</div>
 
-                {gatilhosFluxo.length === 0 ? (
-                    <div className={styles.emptyMini}>
-                    Nenhum gatilho cadastrado para este fluxo.
+                    <div className={styles.defaultFlowContent}>
+                      <div className={styles.defaultFlowTop}>
+                        <strong>Fluxo padrão de fallback</strong>
+                        <span className={styles.defaultFlowBadge}>Padrão</span>
+                      </div>
+
+                      <p>
+                        Este fluxo é iniciado automaticamente quando nenhuma palavra-chave de outro fluxo for encontrada.
+                      </p>
+
+                      <p>
+                        Por isso, ele não usa gatilhos próprios.
+                      </p>
                     </div>
+                  </div>
                 ) : (
-                    <div className={styles.gatilhosList}>
-                    {gatilhosFluxo.map((gatilho) => (
-                        <div key={gatilho.id} className={styles.gatilhoItem}>
-                        <div>
-                            <strong className={styles.gatilhoValor}>{gatilho.valor}</strong>
-                            <p className={styles.gatilhoMeta}>
-                            Condição: {gatilho.condicao} ·{" "}
-                            {gatilho.ativo ? "Ativo" : "Inativo"}
-                            </p>
-                        </div>
-
-                        <div className={styles.gatilhoActions}>
-                            <button
-                            type="button"
-                            className={styles.secondaryButton}
-                            onClick={() => alternarGatilhoFluxo(gatilho)}
-                            >
-                            {gatilho.ativo ? "Desativar" : "Ativar"}
-                            </button>
-
-                            <button
-                            type="button"
-                            className={styles.dangerSmallButton}
-                            onClick={() => removerGatilhoFluxo(gatilho.id)}
-                            >
-                            ×
-                            </button>
-                        </div>
-                        </div>
-                    ))}
+                  <div className={styles.gatilhosBox}>
+                    <div>
+                        <p className={styles.modalSectionTitle}>Gatilhos do fluxo</p>
+                        <p className={styles.help}>
+                        Palavras que iniciam este fluxo quando o cliente envia uma mensagem.
+                        </p>
                     </div>
+
+                    <div className={styles.gatilhoCreateRow}>
+                        <input
+                        className={styles.input}
+                        value={novoGatilhoValor}
+                        onChange={(e) => setNovoGatilhoValor(e.target.value)}
+                        placeholder="Ex: suporte, login, senha"
+                        />
+
+                        <div className={styles.gatilhoBottomRow}>
+                          <select
+                              className={styles.input}
+                              value={novoGatilhoCondicao}
+                              onChange={(e) =>
+                              setNovoGatilhoCondicao(e.target.value as GatilhoFluxo["condicao"])
+                              }
+                          >
+                              <option value="contem">Contém a palavra</option>
+                              <option value="exata">Igual exatamente</option>
+                              <option value="inicia_com">Começa com</option>
+                              <option value="regex">Regex</option>
+                          </select>
+
+                          <button
+                              type="button"
+                              className={styles.primaryButton}
+                              onClick={criarGatilhoFluxo}
+                          >
+                              Adicionar
+                          </button>
+                        </div>
+                    </div>
+
+                    {gatilhosFluxo.length === 0 ? (
+                        <div className={styles.emptyMini}>
+                        Nenhum gatilho cadastrado para este fluxo.
+                        </div>
+                      ) : (
+                          <div className={styles.gatilhosList}>
+                            {gatilhosFluxo.map((gatilho) => (
+                                <div key={gatilho.id} className={styles.gatilhoItem}>
+                                  <div>
+                                      <strong className={styles.gatilhoValor}>{gatilho.valor}</strong>
+                                      <p className={styles.gatilhoMeta}>
+                                      Condição: {gatilho.condicao} ·{" "}
+                                      {gatilho.ativo ? "Ativo" : "Inativo"}
+                                      </p>
+                                  </div>
+
+                                  <div className={styles.gatilhoActions}>
+                                      <button
+                                      type="button"
+                                      className={styles.secondaryButton}
+                                      onClick={() => alternarGatilhoFluxo(gatilho)}
+                                      >
+                                      {gatilho.ativo ? "Desativar" : "Ativar"}
+                                      </button>
+
+                                      <button
+                                      type="button"
+                                      className={styles.dangerSmallButton}
+                                      onClick={() => removerGatilhoFluxo(gatilho.id)}
+                                      >
+                                      ×
+                                      </button>
+                                  </div>
+                                </div>
+                            ))}
+                          </div>
+                        )}
+                  </div>
                 )}
-                </div>
             </div>
 
             <div className={styles.modalFooter}>
@@ -5085,7 +5373,7 @@ useEffect(() => {
                 <p>
                     O fluxo <strong>{fluxoParaArquivar.nome}</strong> ficará com status{" "}
                     <strong>arquivado</strong>. Ele não será executado e poderá ser
-                    restaurado depois.
+                    restaurado depois ou excluido definitivo clicando em apagar. 
                 </p>
                 </div>
             </div>
@@ -5211,6 +5499,94 @@ useEffect(() => {
                     placeholder="Descrição opcional"
                   />
                 </label>
+
+                <div className={styles.sectionBlock}>
+                  <label className={styles.checkboxRow}>
+                    <input
+                      type="checkbox"
+                      checked={encerrarInatividadeAtivo}
+                      onChange={(e) => setEncerrarInatividadeAtivo(e.target.checked)}
+                    />
+
+                    <span>Encerrar automaticamente por inatividade</span>
+                  </label>
+
+                  <p className={styles.helperText}>
+                    Se ativado, o fluxo será encerrado automaticamente quando o contato ficar sem responder pelo tempo definido.
+                    Essa regra tem prioridade sobre conexões “Sem resposta após tempo” maiores.
+                  </p>
+
+                  {encerrarInatividadeAtivo && (
+                    <>
+                      <div className={styles.inlineFields}>
+                        <label className={styles.field}>
+                          <span className={styles.label}>Tempo sem resposta</span>
+
+                          <input
+                            className={styles.input}
+                            type="number"
+                            min={encerrarInatividadeUnidade === "minutos" ? 5 : 1}
+                            max={encerrarInatividadeUnidade === "minutos" ? 1380 : 23}
+                            value={encerrarInatividadeQuantidade}
+                            onChange={(e) =>
+                              setEncerrarInatividadeQuantidade(
+                                limitarQuantidadeInatividade(
+                                  e.target.value,
+                                  encerrarInatividadeUnidade
+                                )
+                              )
+                            }
+                            onBlur={() =>
+                              setEncerrarInatividadeQuantidade(
+                                corrigirQuantidadeMinimaInatividade(
+                                  encerrarInatividadeQuantidade,
+                                  encerrarInatividadeUnidade
+                                )
+                              )
+                            }
+                          />
+                        </label>
+
+                        <label className={styles.field}>
+                          <span className={styles.label}>Unidade</span>
+
+                          <select
+                            className={styles.input}
+                            value={encerrarInatividadeUnidade}
+                            onChange={(e) => {
+                              const novaUnidade =
+                                e.target.value === "minutos" ? "minutos" : "horas";
+
+                              setEncerrarInatividadeUnidade(novaUnidade);
+
+                              setEncerrarInatividadeQuantidade((valorAtual) =>
+                                corrigirQuantidadeMinimaInatividade(valorAtual, novaUnidade)
+                              );
+                            }}
+                          >
+                            <option value="minutos">Minutos</option>
+                            <option value="horas">Horas</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <p className={styles.helperText}>
+                        O tempo mínimo é de 5 minutos e o máximo é de 23 horas.
+                      </p>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Mensagem antes de encerrar</span>
+
+                        <textarea
+                          className={styles.textarea}
+                          value={encerrarInatividadeMensagem}
+                          onChange={(e) => setEncerrarInatividadeMensagem(e.target.value)}
+                          placeholder="Mensagem enviada antes de encerrar o atendimento."
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
 
                 {!jaExisteFluxoPadrao && (
                   <label className={styles.switchField}>

@@ -316,6 +316,161 @@ async function carregarFluxoRuntimeCache(params: {
   };
 }
 
+async function buscarConfiguracaoEncerramentoInatividade(params: {
+  empresaId: string;
+  fluxoId: string;
+}) {
+  const { empresaId, fluxoId } = params;
+
+  const { data: fluxo, error } = await supabaseAdmin
+    .from("automacao_fluxos")
+    .select("configuracao_json")
+    .eq("empresa_id", empresaId)
+    .eq("id", fluxoId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao buscar configuração de inatividade do fluxo:",
+      error
+    );
+
+    return null;
+  }
+
+  const config = fluxo?.configuracao_json || {};
+  const encerramento = config.encerramento_inatividade || {};
+
+  if (encerramento.ativo !== true) {
+    return null;
+  }
+
+  const quantidade = Math.max(1, Number(encerramento.tempo_quantidade || 1));
+  const unidade =
+    encerramento.tempo_unidade === "minutos" ? "minutos" : "horas";
+
+  const segundos =
+    unidade === "horas" ? quantidade * 60 * 60 : quantidade * 60;
+
+  if (!Number.isFinite(segundos)) {
+    return null;
+  }
+
+  if (segundos < 5 * 60) {
+    return null;
+  }
+
+  if (segundos > 23 * 60 * 60) {
+    return null;
+  }
+
+  return {
+    segundos,
+    quantidade,
+    unidade,
+    mensagem: String(encerramento.mensagem || "").trim(),
+  };
+}
+
+
+async function cancelarEncerramentoInatividadePendente(params: {
+  empresaId: string;
+  execucaoId: string;
+}) {
+  const { empresaId, execucaoId } = params;
+
+  const { error } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .update({
+      status: "cancelado",
+    })
+    .eq("empresa_id", empresaId)
+    .eq("execucao_id", execucaoId)
+    .eq("tipo_agendamento", "encerramento_inatividade_fluxo")
+    .eq("status", "pendente");
+
+  if (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao cancelar encerramento por inatividade pendente:",
+      error
+    );
+  }
+}
+
+
+async function agendarEncerramentoInatividadeFluxoSeAtivo(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  noId: string;
+  numeroDestino: string;
+}) {
+  const { empresaId, conversaId, execucaoId, fluxoId, noId, numeroDestino } =
+    params;
+
+  const config = await buscarConfiguracaoEncerramentoInatividade({
+    empresaId,
+    fluxoId,
+  });
+
+  if (!config) return;
+
+  await cancelarEncerramentoInatividadePendente({
+    empresaId,
+    execucaoId,
+  });
+
+  const executarEm = new Date(Date.now() + config.segundos * 1000).toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .insert({
+      empresa_id: empresaId,
+      execucao_id: execucaoId,
+      fluxo_id: fluxoId,
+      no_id: noId,
+      tipo_agendamento: "encerramento_inatividade_fluxo",
+      executar_em: executarEm,
+      status: "pendente",
+      payload_json: {
+        conversa_id: conversaId,
+        numero_destino: numeroDestino,
+        no_atual_id: noId,
+        timeout_segundos: config.segundos,
+        tempo_quantidade: config.quantidade,
+        tempo_unidade: config.unidade,
+        mensagem: config.mensagem,
+      },
+    });
+
+  if (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao agendar encerramento por inatividade:",
+      error
+    );
+
+    return;
+  }
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId,
+    tipoEvento: "encerramento_inatividade_fluxo_agendado",
+    descricao: "Encerramento automático por inatividade do fluxo agendado.",
+    entrada: {
+      tempo_quantidade: config.quantidade,
+      tempo_unidade: config.unidade,
+      timeout_segundos: config.segundos,
+    },
+    saida: {
+      executar_em: executarEm,
+    },
+  });
+}
+
 
 export async function processAutomationEngine(input: AutomationEngineInput) {
   const { empresaId, conversaId, contatoId, mensagemTexto, numeroDestino } = input;
@@ -480,6 +635,11 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         noId: execucaoExistente.no_atual_id,
       });
 
+      await cancelarEncerramentoInatividadePendente({
+        empresaId,
+        execucaoId: execucaoExistente.id,
+      });
+
       if (
         noAtual.tipo_no === "avaliacao" &&
         metadataExecucao.avaliacao_pendente_comentario === true &&
@@ -526,18 +686,35 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           numeroDestino,
         });
 
-        if (!avaliacaoRegistrada.ok) {
-          return avaliacaoRegistrada;
-        }
-
-        if (avaliacaoRegistrada.aguardandoComentario) {
-          return {
-            ok: true,
-            status: "aguardando_comentario_avaliacao",
-            execucaoId: execucaoExistente.id,
-          };
-        }
+      if (!avaliacaoRegistrada.ok) {
+        return avaliacaoRegistrada;
       }
+
+      if ((avaliacaoRegistrada as any).aguardando === true) {
+        return {
+          ok: true,
+          status: "avaliacao_invalida_aguardando_nova_resposta",
+          execucaoId: execucaoExistente.id,
+        };
+      }
+
+      if (avaliacaoRegistrada.aguardandoComentario) {
+        await agendarEncerramentoInatividadeFluxoSeAtivo({
+          empresaId,
+          conversaId,
+          execucaoId: execucaoExistente.id,
+          fluxoId: execucaoExistente.fluxo_id,
+          noId: execucaoExistente.no_atual_id,
+          numeroDestino,
+        });
+
+        return {
+          ok: true,
+          status: "aguardando_comentario_avaliacao",
+          execucaoId: execucaoExistente.id,
+        };
+      }
+    }
 
       if (noAtual.tipo_no === "agenda_buscar_agendamento") {
         const agendamentoSelecionado =
@@ -555,6 +732,15 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         }
 
         if (agendamentoSelecionado.aguardando) {
+          await agendarEncerramentoInatividadeFluxoSeAtivo({
+            empresaId,
+            conversaId,
+            execucaoId: execucaoExistente.id,
+            fluxoId: execucaoExistente.fluxo_id,
+            noId: execucaoExistente.no_atual_id,
+            numeroDestino,
+          });
+
           return {
             ok: true,
             status: "agenda_aguardando_escolha_agendamento",
@@ -612,6 +798,15 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         }
 
         if (slotRegistrado.aguardando) {
+          await agendarEncerramentoInatividadeFluxoSeAtivo({
+            empresaId,
+            conversaId,
+            execucaoId: execucaoExistente.id,
+            fluxoId: execucaoExistente.fluxo_id,
+            noId: execucaoExistente.no_atual_id,
+            numeroDestino,
+          });
+
           return {
             ok: true,
             status: "agenda_aguardando_escolha_horario",
@@ -669,6 +864,15 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         }
 
         if (!resultadoAnalise.valido && !resultadoAnalise.excedeuTentativas) {
+          await agendarEncerramentoInatividadeFluxoSeAtivo({
+            empresaId,
+            conversaId,
+            execucaoId: execucaoExistente.id,
+            fluxoId: execucaoExistente.fluxo_id,
+            noId: execucaoExistente.no_atual_id,
+            numeroDestino,
+          });
+
           return {
             ok: true,
             status: "arquivo_invalido_aguardando_novo_envio",
@@ -726,6 +930,15 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         }
 
         if (!capturaRegistrada.valido && !capturaRegistrada.excedeuTentativas) {
+          await agendarEncerramentoInatividadeFluxoSeAtivo({
+            empresaId,
+            conversaId,
+            execucaoId: execucaoExistente.id,
+            fluxoId: execucaoExistente.fluxo_id,
+            noId: execucaoExistente.no_atual_id,
+            numeroDestino,
+          });
+
           return {
             ok: true,
             status: "captura_invalida_aguardando_nova_resposta",
@@ -1461,6 +1674,15 @@ export async function executarNo(params: {
         .eq("id", execucaoId)
         .eq("empresa_id", empresaId);
 
+      await agendarEncerramentoInatividadeFluxoSeAtivo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        numeroDestino,
+      });
+
       return;
     }
 
@@ -1512,6 +1734,15 @@ export async function executarNo(params: {
       .eq("empresa_id", empresaId);
 
     await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      numeroDestino,
+    });
+
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
       empresaId,
       conversaId,
       execucaoId,
@@ -1597,6 +1828,15 @@ export async function executarNo(params: {
       numeroDestino,
     });
 
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      numeroDestino,
+    });
+
     return;
   }
 
@@ -1634,6 +1874,15 @@ export async function executarNo(params: {
       entrada: no.configuracao_json,
       saida: { mensagem },
     });
+
+      await agendarEncerramentoInatividadeFluxoSeAtivo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        numeroDestino,
+      });
 
     return;
   }
@@ -1673,6 +1922,15 @@ export async function executarNo(params: {
       saida: {},
     });
 
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      numeroDestino,
+    });
+
     return;
   }
 
@@ -1709,6 +1967,15 @@ export async function executarNo(params: {
       descricao: "Automação aguardando resposta para captura.",
       entrada: no.configuracao_json,
       saida: {},
+    });
+
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      numeroDestino,
     });
 
     return;
@@ -2600,6 +2867,15 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
       noId: no.id,
       numeroDestino,
     });
+    
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      numeroDestino,
+    });
 
     return { ok: true, aguardando: true };
   }
@@ -2643,6 +2919,16 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
       noId: no.id,
       numeroDestino,
     });
+
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      numeroDestino,
+    });
+
 
     return { ok: true, aguardando: true };
   }
@@ -2739,6 +3025,24 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
       },
     });
 
+    await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      numeroDestino,
+    });
+
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      numeroDestino,
+    });
+
     return { ok: true, aguardando: true };
   }
 
@@ -2816,6 +3120,15 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
   });
 
   await agendarTimeoutSemRespostaSeExistir({
+    empresaId,
+    conversaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    noId: no.id,
+    numeroDestino,
+  });
+
+  await agendarEncerramentoInatividadeFluxoSeAtivo({
     empresaId,
     conversaId,
     execucaoId: execucao.id,
@@ -3029,6 +3342,15 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
       },
     });
 
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      numeroDestino,
+    });
+
     return {
       ok: true,
       valido: false,
@@ -3094,6 +3416,15 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
       "Nao encontrei essa opcao. Responda com o numero do horario ou me diga outro dia.",
     execucaoId: execucao.id,
     noId: no.id,
+  });
+
+  await agendarEncerramentoInatividadeFluxoSeAtivo({
+    empresaId,
+    conversaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    noId: no.id,
+    numeroDestino,
   });
 
   return {
@@ -3226,6 +3557,15 @@ async function registrarEscolhaAgendamentoAgendaAutomacao(params: {
       "Nao encontrei essa opcao. Responda com o numero do agendamento.",
     execucaoId: execucao.id,
     noId: no.id,
+  });
+
+  await agendarEncerramentoInatividadeFluxoSeAtivo({
+    empresaId,
+    conversaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    noId: no.id,
+    numeroDestino,
   });
 
   return {
@@ -3379,6 +3719,15 @@ async function buscarAgendamentoAutomacao(params: {
     });
 
     await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      numeroDestino,
+    });
+
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
       empresaId,
       conversaId,
       execucaoId,
@@ -4589,6 +4938,15 @@ async function seguirParaProximoNo(params: {
         noId: noAtualId,
       });
 
+      await agendarEncerramentoInatividadeFluxoSeAtivo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noId: noAtualId,
+        numeroDestino,
+      });
+
       await registrarLog({
         empresaId,
         execucaoId,
@@ -4757,9 +5115,19 @@ async function registrarAvaliacaoAutomacao(params: {
       saida: { mensagemErro },
     });
 
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      numeroDestino,
+    });
+
     return {
-      ok: false,
+      ok: true,
       status: "avaliacao_invalida",
+      aguardando: true,
     };
   }
 
@@ -4802,6 +5170,15 @@ async function registrarAvaliacaoAutomacao(params: {
       descricao: "Erro ao salvar avaliação no banco.",
       entrada: { mensagemTexto },
       saida: { error: error.message },
+    });
+
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      numeroDestino,
     });
 
     return {
@@ -5170,7 +5547,7 @@ async function registrarLog(params: {
   });
 }
 
-async function enviarMensagemAutomacao(params: {
+export async function enviarMensagemAutomacao(params: {
   empresaId: string;
   conversaId: string;
   numeroDestino: string;

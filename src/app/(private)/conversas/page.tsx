@@ -3050,7 +3050,53 @@ export default function ConversasPage() {
   }
 
   async function reabrirConversa() {
-    await atualizarConversa({ status: "aberta" }, "Conversa reaberta com sucesso.");
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setAssumindo(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(
+        `/api/conversas/${conversaSelecionada.id}/assumir`,
+        {
+          method: "POST",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao reabrir e assumir conversa.");
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message || "Conversa reaberta e assumida com sucesso."
+      );
+
+      const listaAtualizada = await atualizarConversasCarregadas();
+
+      const conversaAtualizada = listaAtualizada.find(
+        (c: Conversa) => c.id === conversaSelecionada.id
+      );
+
+      if (conversaAtualizada) {
+        setConversaSelecionada(conversaAtualizada);
+      }
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+    } catch {
+      setErro("Erro ao reabrir e assumir conversa.");
+    } finally {
+      setAssumindo(false);
+    }
   }
 
   function abrirTransferir() {
@@ -4210,6 +4256,10 @@ async function baixarConversaPDF() {
   const conversaEncerradaAutomacao =
     conversaSelecionada?.status === "encerrado_aut";
 
+  const podeReabrirConversa =
+    conversaSelecionada?.status === "encerrado_manual" ||
+    conversaSelecionada?.status === "encerrado_aut";
+
   const conversaNaFila = conversaSelecionada?.status === "fila";
   const conversaSemResponsavel = !conversaResponsavelId;
   
@@ -5275,9 +5325,13 @@ const templateFooterTexto = useMemo(() => {
                     </div>
 
                     <div className={styles.chatHeaderActions}>
-                      {conversaEncerradaManual ? (
-                        <button className={styles.primaryButton} onClick={reabrirConversa}>
-                          Reopen
+                      {podeReabrirConversa ? (
+                        <button
+                          className={styles.primaryButton}
+                          onClick={reabrirConversa}
+                          disabled={assumindo}
+                        >
+                          {assumindo ? "Reopening..." : "Reopen and take over"}
                         </button>
                       ) : conversaEncerrada ? null : (
                         <>

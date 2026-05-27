@@ -4,6 +4,7 @@ import {
   executarNo,
   registrarTentativaBloco,
   executarAcaoExcessoTentativas,
+  enviarMensagemAutomacao,
 } from "@/lib/automacoes/process-automation-engine";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -49,7 +50,10 @@ export async function GET(request: Request) {
       .from("automacao_agendamentos")
       .select("*")
       .eq("status", "pendente")
-      .eq("tipo_agendamento", "timeout_sem_resposta")
+      .in("tipo_agendamento", [
+        "timeout_sem_resposta",
+        "encerramento_inatividade_fluxo",
+      ])
       .lte("executar_em", agora)
       .limit(50);
 
@@ -70,13 +74,144 @@ export async function GET(request: Request) {
 
         const payload = agendamento.payload_json || {};
 
+        const { data: agendamentoTravado, error: lockError } = await supabaseAdmin
+          .from("automacao_agendamentos")
+          .update({
+            status: "executando",
+          })
+          .eq("id", agendamento.id)
+          .eq("empresa_id", agendamento.empresa_id)
+          .eq("status", "pendente")
+          .select("id")
+          .maybeSingle();
+
+        if (lockError || !agendamentoTravado) {
+          continue;
+        }
+
+        if (agendamento.tipo_agendamento === "encerramento_inatividade_fluxo") {
+          const { data: execucao } = await supabaseAdmin
+            .from("automacao_execucoes")
+            .select("*")
+            .eq("id", agendamento.execucao_id)
+            .eq("empresa_id", agendamento.empresa_id)
+            .maybeSingle();
+
+          if (
+            !execucao ||
+            execucao.status !== "aguardando" ||
+            execucao.no_atual_id !== agendamento.no_id
+          ) {
+            await supabaseAdmin
+              .from("automacao_agendamentos")
+              .update({
+                status: "cancelado",
+                executed_at: new Date().toISOString(),
+                payload_json: {
+                  ...payload,
+                  motivo_cancelamento: "execucao_nao_estava_mais_aguardando_no_bloco",
+                },
+              })
+              .eq("id", agendamento.id)
+              .eq("empresa_id", agendamento.empresa_id);
+
+            continue;
+          }
+
+          const mensagem = String(payload.mensagem || "").trim();
+
+          if (mensagem) {
+            await enviarMensagemAutomacao({
+              empresaId: agendamento.empresa_id,
+              conversaId: payload.conversa_id,
+              numeroDestino: payload.numero_destino,
+              conteudo: mensagem,
+              execucaoId: agendamento.execucao_id,
+              noId: agendamento.no_id,
+            });
+          }
+
+          const agoraExecucao = new Date().toISOString();
+
+          await supabaseAdmin
+            .from("automacao_execucoes")
+            .update({
+              status: "finalizado",
+              finished_at: agoraExecucao,
+              updated_at: agoraExecucao,
+              metadata_json: {
+                ...(execucao.metadata_json || {}),
+                encerrado_por: "inatividade_fluxo",
+                encerrado_em: agoraExecucao,
+              },
+            })
+            .eq("id", agendamento.execucao_id)
+            .eq("empresa_id", agendamento.empresa_id);
+
+          await supabaseAdmin
+            .from("conversas")
+            .update({
+              status: "encerrado_aut",
+              bot_ativo: false,
+              closed_at: agoraExecucao,
+              updated_at: agoraExecucao,
+            })
+            .eq("id", payload.conversa_id)
+            .eq("empresa_id", agendamento.empresa_id)
+            .eq("status", "bot");
+
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "cancelado",
+              executed_at: agoraExecucao,
+              payload_json: {
+                motivo_cancelamento:
+                  "fluxo_encerrado_por_inatividade_global",
+              },
+            })
+            .eq("empresa_id", agendamento.empresa_id)
+            .eq("execucao_id", agendamento.execucao_id)
+            .eq("tipo_agendamento", "timeout_sem_resposta")
+            .eq("status", "pendente");
+
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "executado",
+              executed_at: agoraExecucao,
+              payload_json: {
+                ...payload,
+                resultado: "fluxo_encerrado_por_inatividade",
+              },
+            })
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
+
+          continue;
+        }
+
         const { data: execucao } = await supabaseAdmin
           .from("automacao_execucoes")
           .select("*")
           .eq("id", agendamento.execucao_id)
-          .single();
+          .eq("empresa_id", agendamento.empresa_id)
+          .maybeSingle();
 
         if (!execucao) {
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "cancelado",
+              executed_at: new Date().toISOString(),
+              payload_json: {
+                ...payload,
+                motivo_cancelamento: "execucao_nao_encontrada",
+              },
+            })
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
+
           continue;
         }
 
@@ -143,7 +278,8 @@ export async function GET(request: Request) {
                   motivo_cancelamento: "fallback_qualquer_ignorado_por_status_especifico",
                 },
               })
-              .eq("id", agendamento.id);
+              .eq("id", agendamento.id)
+              .eq("empresa_id", agendamento.empresa_id);
 
             continue;
           }
@@ -167,32 +303,12 @@ export async function GET(request: Request) {
                 motivo_cancelamento: "status_envio_nao_corresponde",
               },
             })
-            .eq("id", agendamento.id);
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
 
           continue;
         }
-
-        if (
-        statusExigido !== "qualquer" &&
-        statusEnvioAtual !== statusExigido
-        ) {
-        await supabaseAdmin
-            .from("automacao_agendamentos")
-            .update({
-            status: "cancelado",
-            executed_at: new Date().toISOString(),
-            payload_json: {
-                ...payload,
-                status_envio_encontrado: statusEnvioAtual,
-                status_envio_exigido: statusExigido,
-                motivo_cancelamento: "status_envio_nao_corresponde",
-            },
-            })
-            .eq("id", agendamento.id);
-
-        continue;
-        }
-
+          
         const { data: noOrigem } = await supabaseAdmin
           .from("automacao_nos")
           .select("*")
@@ -211,7 +327,8 @@ export async function GET(request: Request) {
                 motivo_erro: "no_origem_timeout_nao_encontrado",
               },
             })
-            .eq("id", agendamento.id);
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
 
           continue;
         }
@@ -254,18 +371,37 @@ export async function GET(request: Request) {
           .from("automacao_nos")
           .select("*")
           .eq("id", payload.no_destino_id)
-          .single();
+          .eq("empresa_id", agendamento.empresa_id)
+          .eq("fluxo_id", agendamento.fluxo_id)
+          .maybeSingle();
 
         if (!proximoNo) {
           await supabaseAdmin
             .from("automacao_agendamentos")
             .update({
               status: "erro",
+              executed_at: new Date().toISOString(),
             })
-            .eq("id", agendamento.id);
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
 
           continue;
         }
+
+        await supabaseAdmin
+          .from("automacao_agendamentos")
+          .update({
+            status: "cancelado",
+            executed_at: new Date().toISOString(),
+            payload_json: {
+              motivo_cancelamento:
+                "timeout_sem_resposta_executado_antes_do_encerramento_global",
+            },
+          })
+          .eq("empresa_id", agendamento.empresa_id)
+          .eq("execucao_id", agendamento.execucao_id)
+          .eq("tipo_agendamento", "encerramento_inatividade_fluxo")
+          .eq("status", "pendente");
 
         await executarNo({
           empresaId: agendamento.empresa_id,
@@ -304,7 +440,8 @@ export async function GET(request: Request) {
           .update({
             status: "erro",
           })
-          .eq("id", agendamento.id);
+          .eq("id", agendamento.id)
+          .eq("empresa_id", agendamento.empresa_id);
       }
     }
 

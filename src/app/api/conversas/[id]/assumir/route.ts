@@ -16,6 +16,8 @@ type ConversaRow = {
   setor_id: string | null;
   responsavel_id: string | null;
   status: string | null;
+  closed_at?: string | null;
+  bot_ativo?: boolean | null;
 };
 
 export async function POST(
@@ -65,7 +67,7 @@ export async function POST(
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
-      .select("id, empresa_id, setor_id, responsavel_id, status")
+      .select("id, empresa_id, setor_id, responsavel_id, status, closed_at, bot_ativo")
       .eq("id", id)
       .maybeSingle<ConversaRow>();
 
@@ -90,6 +92,25 @@ export async function POST(
       );
     }
 
+    const STATUS_REABRIVEIS = ["encerrado_manual", "encerrado_aut"];
+    const STATUS_NAO_REABRIR_MANUALMENTE = ["encerrado_24h"];
+
+    const statusAtual = String(conversa.status || "");
+    const conversaEncerradaReabrivel = STATUS_REABRIVEIS.includes(statusAtual);
+    const conversaEncerrada24h =
+      STATUS_NAO_REABRIR_MANUALMENTE.includes(statusAtual);
+
+    if (conversaEncerrada24h) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Esta conversa foi encerrada por 24h. Para voltar a falar com o contato, envie um template aprovado.",
+        },
+        { status: 400 }
+      );
+    }
+
     if (!isAdministrador(usuario)) {
       const pertenceAoSetor = await usuarioPertenceAoSetor(
         usuario.id,
@@ -110,46 +131,48 @@ export async function POST(
     const conversaJaTemOutroResponsavel =
       !!conversa.responsavel_id && conversa.responsavel_id !== usuario.id;
 
-    if (
-      !politica.permitir_assumir_conversa_em_fila &&
-      conversaEstaEmFila
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "A política atual não permite assumir conversas em fila",
-        },
-        { status: 403 }
-      );
+    if (!conversaEncerradaReabrivel) {
+      if (
+        !politica.permitir_assumir_conversa_em_fila &&
+        conversaEstaEmFila
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "A política atual não permite assumir conversas em fila",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (
+        !politica.permitir_assumir_conversa_sem_responsavel &&
+        conversaSemResponsavel
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "A política atual não permite assumir conversa sem responsável",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (
+        !politica.permitir_assumir_conversa_ja_atribuida &&
+        conversaJaTemOutroResponsavel
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "A política atual não permite assumir conversa já atribuída",
+          },
+          { status: 403 }
+        );
+      }
     }
 
-    if (
-      !politica.permitir_assumir_conversa_sem_responsavel &&
-      conversaSemResponsavel
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "A política atual não permite assumir conversa sem responsável",
-        },
-        { status: 403 }
-      );
-    }
-
-    if (
-      !politica.permitir_assumir_conversa_ja_atribuida &&
-      conversaJaTemOutroResponsavel
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "A política atual não permite assumir conversa já atribuída",
-        },
-        { status: 403 }
-      );
-    }
-
-    if (conversaJaEhMinha) {
+    if (conversaJaEhMinha && !conversaEncerradaReabrivel) {
       return NextResponse.json({
         ok: true,
         message: "A conversa já está sob sua responsabilidade",
@@ -164,6 +187,7 @@ export async function POST(
         responsavel_id: usuario.id,
         status: "em_atendimento",
         bot_ativo: false,
+        closed_at: null,
         origem_atendimento: "manual",
         updated_at: new Date().toISOString(),
       })
@@ -235,7 +259,9 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      message: "Conversa assumida com sucesso",
+      message: conversaEncerradaReabrivel
+        ? "Conversa reaberta e assumida com sucesso"
+        : "Conversa assumida com sucesso",
       conversa: conversaAtualizada,
       politica_aplicada: politica,
     });

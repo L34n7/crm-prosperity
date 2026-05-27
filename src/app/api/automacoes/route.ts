@@ -60,7 +60,8 @@ export async function GET() {
         canal,
         created_at,
         updated_at,
-        fluxo_padrao
+        fluxo_padrao,
+        configuracao_json
       `)
       .eq("empresa_id", usuario.empresa_id)
       .order("created_at", { ascending: false });
@@ -138,6 +139,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const configuracaoPadraoFluxo = {
+      encerramento_inatividade: {
+        ativo: true,
+        tempo_quantidade: 23,
+        tempo_unidade: "horas",
+        mensagem:
+          "Como não tivemos retorno, este atendimento será encerrado. Caso precise de ajuda, envie uma nova mensagem.",
+      },
+    };
+
     const { data, error } = await supabaseAdmin
       .from("automacao_fluxos")
       .insert({
@@ -149,6 +160,13 @@ export async function POST(req: NextRequest) {
         criado_por: usuario.id,
         atualizado_por: usuario.id,
         fluxo_padrao: fluxoPadrao,
+        configuracao_json:
+          body?.configuracao_json && typeof body.configuracao_json === "object"
+            ? {
+                ...configuracaoPadraoFluxo,
+                ...body.configuracao_json,
+              }
+            : configuracaoPadraoFluxo,
       })
       .select("*")
       .single();
@@ -226,7 +244,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const atualizacao: Record<string, string | boolean | null> = {
+    const atualizacao: Record<string, any> = {
       updated_at: new Date().toISOString(),
       atualizado_por: usuario.id,
     };
@@ -248,8 +266,11 @@ export async function PATCH(req: NextRequest) {
       atualizacao.status = String(body.status || "rascunho").trim();
     }
 
-    if (body?.fluxo_padrao !== undefined) {
-      atualizacao.fluxo_padrao = Boolean(body.fluxo_padrao);
+    if (body?.configuracao_json !== undefined) {
+      atualizacao.configuracao_json =
+        body.configuracao_json && typeof body.configuracao_json === "object"
+          ? body.configuracao_json
+          : {};
     }
 
     if (Boolean(body?.fluxo_padrao)) {
@@ -471,6 +492,7 @@ export async function PUT(req: NextRequest) {
         criado_por: usuario.id,
         atualizado_por: usuario.id,
         fluxo_padrao: false,
+        configuracao_json: fluxoOriginal.configuracao_json || {},
       })
       .select("*")
       .single();
