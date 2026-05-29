@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto, type UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 
 function podeGerenciarContatos(usuario: UsuarioContexto) {
@@ -267,6 +271,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const resultado = await getUsuarioContexto();
   const supabaseAdmin = getSupabaseAdmin();
+  const auditMeta = getRequestAuditMetadata(request);
 
   if (!resultado.ok) {
     return NextResponse.json(
@@ -381,6 +386,21 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+
+  await registrarLogAuditoriaSeguro({
+    empresa_id,
+    categoria: "contatos",
+    entidade: "contato",
+    entidade_id: data.id,
+    acao: "contato_criado",
+    descricao: `Contato ${nome || telefone} criado`,
+    usuario_id: usuario.id,
+    usuario_nome: usuario.nome,
+    usuario_email: usuario.email,
+    depois: data,
+    ip: auditMeta.ip,
+    user_agent: auditMeta.user_agent,
+  });
 
   return NextResponse.json({
     ok: true,

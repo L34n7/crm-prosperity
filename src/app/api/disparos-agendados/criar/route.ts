@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
@@ -9,6 +13,7 @@ function somenteDigitos(valor: string) {
 export async function POST(request: NextRequest) {
   try {
     const resultado = await getUsuarioContexto();
+    const auditMeta = getRequestAuditMetadata(request);
 
     if (!resultado.ok) {
       return NextResponse.json(
@@ -176,6 +181,30 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "disparos",
+      entidade: "disparo",
+      entidade_id: disparosCriados?.[0]?.id || usuario.empresa_id,
+      acao: "disparo_agendado_criado",
+      descricao: `${disparosCriados?.length || 0} disparos agendados`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      depois: {
+        quantidade: disparosCriados?.length || 0,
+        executar_em: executarEm,
+        template_id: template.id,
+        template_nome: template.nome,
+        integracao_whatsapp_id: integracaoWhatsappId,
+      },
+      metadata: {
+        disparos_ids: (disparosCriados || []).map((disparo) => disparo.id),
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

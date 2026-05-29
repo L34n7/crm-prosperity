@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FeedbackToast from "@/components/FeedbackToast";
 import styles from "./permissoes.module.css";
 
 type PermissaoItem = {
@@ -227,7 +228,10 @@ export default function PermissoesDoPerfilPage({
         </header>
 
         {erro && <div className={styles.errorAlert}>{erro}</div>}
-        {sucesso && <div className={styles.successAlert}>{sucesso}</div>}
+        <FeedbackToast
+          success={sucesso}
+          onSuccessDismiss={() => setSucesso("")}
+        />
 
         <section className={styles.explainGrid}>
           <div className={styles.explainCard}>

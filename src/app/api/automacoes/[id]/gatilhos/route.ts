@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -75,6 +79,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { id: fluxoId } = await params;
+    const auditMeta = getRequestAuditMetadata(req);
 
     const resultadoContexto = await getUsuarioContexto();
 
@@ -180,6 +185,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "fluxos",
+      entidade: "fluxo",
+      entidade_id: fluxoId,
+      acao: "fluxo_gatilho_criado",
+      descricao: `Gatilho ${valor} criado`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      depois: data,
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
+
     return NextResponse.json({
       ok: true,
       gatilho: data,
@@ -195,6 +215,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   try {
     const { id: fluxoId } = await params;
+    const auditMeta = getRequestAuditMetadata(req);
 
     const resultadoContexto = await getUsuarioContexto();
 
@@ -223,6 +244,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    const { data: gatilhoAntes } = await supabaseAdmin
+      .from("automacao_gatilhos")
+      .select("*")
+      .eq("id", gatilhoId)
+      .eq("fluxo_id", fluxoId)
+      .eq("empresa_id", usuario.empresa_id)
+      .maybeSingle();
 
     const atualizacao: Record<string, any> = {
       updated_at: new Date().toISOString(),
@@ -275,6 +304,27 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     }
 
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "fluxos",
+      entidade: "fluxo",
+      entidade_id: fluxoId,
+      acao:
+        body?.ativo !== undefined
+          ? data.ativo
+            ? "fluxo_gatilho_ativado"
+            : "fluxo_gatilho_desativado"
+          : "fluxo_gatilho_atualizado",
+      descricao: `Gatilho ${data.valor || gatilhoId} atualizado`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: gatilhoAntes,
+      depois: data,
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
+
     return NextResponse.json({
       ok: true,
       gatilho: data,
@@ -290,6 +340,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
     const { id: fluxoId } = await params;
+    const auditMeta = getRequestAuditMetadata(req);
 
     const resultadoContexto = await getUsuarioContexto();
 
@@ -319,6 +370,14 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const { data: gatilhoAntes } = await supabaseAdmin
+      .from("automacao_gatilhos")
+      .select("*")
+      .eq("id", gatilhoId)
+      .eq("fluxo_id", fluxoId)
+      .eq("empresa_id", usuario.empresa_id)
+      .maybeSingle();
+
     const { error } = await supabaseAdmin
       .from("automacao_gatilhos")
       .delete()
@@ -332,6 +391,21 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
         { status: 500 }
       );
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "fluxos",
+      entidade: "fluxo",
+      entidade_id: fluxoId,
+      acao: "fluxo_gatilho_removido",
+      descricao: `Gatilho ${gatilhoAntes?.valor || gatilhoId} removido`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: gatilhoAntes,
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

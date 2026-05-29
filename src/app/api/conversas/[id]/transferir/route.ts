@@ -7,6 +7,10 @@ import {
   isAdministrador,
   podeTransferirConversas,
 } from "@/lib/auth/authorization";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -33,6 +37,7 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
+    const auditMeta = getRequestAuditMetadata(request);
 
     const resultado = await getUsuarioContexto();
 
@@ -243,6 +248,33 @@ export async function POST(
         { status: 500 }
       );
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "conversas",
+      entidade: "conversa",
+      entidade_id: conversa.id,
+      acao: "conversa_transferida",
+      descricao: "Conversa transferida de setor",
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: {
+        setor_id: conversa.setor_id,
+        responsavel_id: conversa.responsavel_id,
+        status: conversa.status,
+      },
+      depois: {
+        setor_id: novoSetorId,
+        responsavel_id:
+          "responsavel_id" in updateData
+            ? updateData.responsavel_id
+            : conversa.responsavel_id,
+        status: "status" in updateData ? updateData.status : conversa.status,
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

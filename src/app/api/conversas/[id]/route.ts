@@ -8,6 +8,10 @@ import {
   podeEncerrarConversas,
   podeTransferirConversas,
 } from "@/lib/auth/authorization";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -243,6 +247,7 @@ export async function PUT(
 ) {
   const { id } = await context.params;
   const resultado = await getUsuarioContexto();
+  const auditMeta = getRequestAuditMetadata(request);
 
   if (!resultado.ok) {
     return NextResponse.json(
@@ -640,6 +645,48 @@ export async function PUT(
       { status: 500 }
     );
   }
+
+  const acao = estaEncerrando
+    ? "conversa_encerrada"
+    : estaReabrindo
+    ? "conversa_reaberta"
+    : mudouSetor
+    ? "conversa_transferida"
+    : mudouResponsavel
+    ? "conversa_atribuida"
+    : "conversa_atualizada";
+
+  await registrarLogAuditoriaSeguro({
+    empresa_id,
+    categoria: "conversas",
+    entidade: "conversa",
+    entidade_id: id,
+    acao,
+    descricao: "Conversa atualizada",
+    usuario_id: usuario.id,
+    usuario_nome: usuario.nome,
+    usuario_email: usuario.email,
+    antes: {
+      contato_id: conversaAtual.contato_id,
+      setor_id: conversaAtual.setor_id,
+      responsavel_id: conversaAtual.responsavel_id,
+      status: conversaAtual.status,
+      prioridade: conversaAtual.prioridade,
+      assunto: conversaAtual.assunto,
+      closed_at: conversaAtual.closed_at ?? null,
+    },
+    depois: {
+      contato_id: data.contato_id,
+      setor_id: data.setor_id,
+      responsavel_id: data.responsavel_id,
+      status: data.status,
+      prioridade: data.prioridade,
+      assunto: data.assunto,
+      closed_at: data.closed_at ?? null,
+    },
+    ip: auditMeta.ip,
+    user_agent: auditMeta.user_agent,
+  });
 
   return NextResponse.json({
     ok: true,

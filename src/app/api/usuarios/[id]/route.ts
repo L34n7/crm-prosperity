@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { podeEditarUsuarios } from "@/lib/auth/authorization";
+import { can } from "@/lib/permissoes/frontend";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 import {
   buscarSetorPrincipalDoUsuario,
   definirSetoresDoUsuario,
@@ -92,6 +97,24 @@ async function validarSetoresDaEmpresa(
   return { ok: true as const };
 }
 
+async function perfilEhAdministrador(params: {
+  empresaId: string;
+  perfilEmpresaId: string;
+}) {
+  const { data, error } = await supabaseAdmin
+    .from("perfis_empresa")
+    .select("id, nome")
+    .eq("id", params.perfilEmpresaId)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Erro ao validar perfil: ${error.message}`);
+  }
+
+  return data?.nome === "Administrador";
+}
+
 export async function PUT(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -118,7 +141,7 @@ export async function PUT(
 
   const { data: usuarioAlvo, error: usuarioAlvoError } = await supabaseAdmin
     .from("usuarios")
-    .select("id, empresa_id, auth_user_id")
+    .select("id, empresa_id, auth_user_id, nome, email, nivel, status, telefone")
     .eq("id", id)
     .maybeSingle();
 
@@ -144,6 +167,7 @@ export async function PUT(
   }
 
   const body = (await request.json()) as UsuarioPayload;
+  const auditMeta = getRequestAuditMetadata(request);
 
   const nome = body?.nome?.trim();
   const perfil_empresa_id = body?.perfil_empresa_id || null;
@@ -164,6 +188,21 @@ export async function PUT(
     return NextResponse.json(
       { ok: false, error: "Perfil dinâmico é obrigatório" },
       { status: 400 }
+    );
+  }
+
+  const promovendoAdministrador = await perfilEhAdministrador({
+    empresaId: empresa_id,
+    perfilEmpresaId: perfil_empresa_id,
+  });
+
+  if (
+    promovendoAdministrador &&
+    !can(usuario.permissoes, "usuarios.promover_admin")
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Sem permissao para promover usuario a administrador" },
+      { status: 403 }
     );
   }
 
@@ -253,6 +292,41 @@ export async function PUT(
 
   const setorPrincipal = await buscarSetorPrincipalDoUsuario(id);
   const setoresIdsSalvos = await listarIdsSetoresDoUsuario(id);
+
+  await registrarLogAuditoriaSeguro({
+    empresa_id,
+    categoria: "usuarios",
+    entidade: "usuario",
+    entidade_id: id,
+    acao: promovendoAdministrador
+      ? "usuario_atualizado_com_perfil_admin"
+      : "usuario_atualizado",
+    descricao: `Usuario ${nome} atualizado`,
+    usuario_id: usuario.id,
+    usuario_nome: usuario.nome,
+    usuario_email: usuario.email,
+    antes: {
+      id: usuarioAlvo.id,
+      nome: usuarioAlvo.nome,
+      email: usuarioAlvo.email,
+      nivel: usuarioAlvo.nivel,
+      status: usuarioAlvo.status,
+      telefone: usuarioAlvo.telefone,
+    },
+    depois: {
+      id,
+      nome,
+      email: usuarioAtualizado.email,
+      perfil_empresa_id,
+      setor_principal_id: setorPrincipal?.setor_id ?? null,
+      setor_ids: setoresIdsSalvos,
+      nivel,
+      status,
+      telefone,
+    },
+    ip: auditMeta.ip,
+    user_agent: auditMeta.user_agent,
+  });
 
   return NextResponse.json({
     ok: true,

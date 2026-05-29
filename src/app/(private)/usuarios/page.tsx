@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Sparkles, X } from "lucide-react";
 import { can } from "@/lib/permissoes/frontend";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./usuarios.module.css";
+
+const CHECKOUT_PLANO_ESSENCIAL =
+  process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL || "";
+const VALOR_PLANO_ESSENCIAL = "R$ 197/mês";
 
 type Setor = {
   id: string;
@@ -120,6 +126,18 @@ function getIniciais(nome: string) {
   return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
 }
 
+function erroEhLimitePlano(mensagem: string) {
+  const texto = mensagem
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return (
+    texto.includes("limite do plano basic") ||
+    texto.includes("maximo 2 usuarios")
+  );
+}
+
 export default function UsuariosPage() {
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
 
@@ -138,6 +156,7 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
+  const [modalPlanoAberto, setModalPlanoAberto] = useState(false);
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
@@ -339,7 +358,14 @@ export default function UsuariosPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErro(data.error || "Erro ao convidar usuário");
+        const mensagemErro = data.error || "Erro ao convidar usuário";
+
+        if (erroEhLimitePlano(mensagemErro)) {
+          setModalPlanoAberto(true);
+          return;
+        }
+
+        setErro(mensagemErro);
         return;
       }
 
@@ -513,6 +539,15 @@ export default function UsuariosPage() {
   const podeVisualizarUsuarios = can(permissoes, "usuarios.visualizar");
   const podeCriarUsuarios = can(permissoes, "usuarios.criar");
   const podeEditarUsuarios = can(permissoes, "usuarios.editar");
+  const podePromoverAdmin = can(permissoes, "usuarios.promover_admin");
+
+  const perfisSelecionaveis = useMemo(
+    () =>
+      podePromoverAdmin
+        ? perfisEmpresa
+        : perfisEmpresa.filter((perfil) => perfil.nome !== "Administrador"),
+    [perfisEmpresa, podePromoverAdmin]
+  );
 
   const setoresSelecionadosCriacao = useMemo(
     () => setores.filter((setor) => setorIds.includes(setor.id)),
@@ -614,7 +649,7 @@ export default function UsuariosPage() {
                   onChange={(e) => setPerfilEmpresaId(e.target.value)}
                 >
                   <option value="">Selecione um perfil</option>
-                  {perfisEmpresa.map((perfilItem) => (
+                  {perfisSelecionaveis.map((perfilItem) => (
                     <option key={perfilItem.id} value={perfilItem.id}>
                       {perfilItem.nome}
                     </option>
@@ -720,7 +755,10 @@ export default function UsuariosPage() {
           </section>
         )}
 
-        {mensagem && <div className={styles.alertSuccess}>{mensagem}</div>}
+        <FeedbackToast
+          success={mensagem}
+          onSuccessDismiss={() => setMensagem("")}
+        />
         {erro && <div className={styles.alertError}>{erro}</div>}
 
         <section className={styles.card}>
@@ -839,7 +877,7 @@ export default function UsuariosPage() {
                                 onChange={(e) => setEditPerfilEmpresaId(e.target.value)}
                               >
                                 <option value="">Selecione um perfil</option>
-                                {perfisEmpresa.map((perfilItem) => (
+                                {perfisSelecionaveis.map((perfilItem) => (
                                   <option key={perfilItem.id} value={perfilItem.id}>
                                     {perfilItem.nome}
                                   </option>
@@ -1037,6 +1075,88 @@ export default function UsuariosPage() {
           )}
         </section>
       </div>
+      {modalPlanoAberto && (
+        <div className={styles.modalOverlay} role="presentation">
+          <div
+            className={styles.upgradeModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upgrade-plan-title"
+          >
+            <button
+              type="button"
+              className={styles.modalCloseButton}
+              onClick={() => setModalPlanoAberto(false)}
+              aria-label="Fechar modal"
+            >
+              <X size={18} />
+            </button>
+
+            <div className={styles.upgradeHeader}>
+              <span className={styles.upgradeIcon}>
+                <Sparkles size={22} />
+              </span>
+              <p className={styles.eyebrow}>Limite do Basic atingido</p>
+              <h2 id="upgrade-plan-title" className={styles.upgradeTitle}>
+                Sua operação já está pronta para o plano Essencial
+              </h2>
+              <p className={styles.upgradeText}>
+                O Basic permite até 2 usuários ativos. Para convidar mais pessoas
+                e manter seu atendimento crescendo com organização, avance para o
+                Essencial, com 6 usuários e 5 milhões de tokens de IA.
+              </p>
+            </div>
+
+            <div className={styles.pricePanel}>
+              <span className={styles.priceLabel}>Plano Essencial</span>
+              <strong className={styles.priceValue}>
+                {VALOR_PLANO_ESSENCIAL}
+              </strong>
+              <span className={styles.priceHint}>
+                Inclui 6 usuários ativos e 5 milhões de tokens de IA.
+              </span>
+            </div>
+
+            <div className={styles.benefitList}>
+              {[
+                "Mais usuários para dividir atendimento e vendas",
+                "Time organizado por setores, perfis e permissões",
+                "Base pronta para escalar conversas no WhatsApp oficial",
+              ].map((beneficio) => (
+                <div key={beneficio} className={styles.benefitItem}>
+                  <CheckCircle2 size={18} />
+                  <span>{beneficio}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => {
+                  if (CHECKOUT_PLANO_ESSENCIAL) {
+                    window.location.href = CHECKOUT_PLANO_ESSENCIAL;
+                    return;
+                  }
+
+                  window.location.href =
+                    "mailto:comercial@crmprosperity.com?subject=Upgrade%20para%20o%20Plano%20Essencial";
+                }}
+              >
+                Ver valor e contratar
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setModalPlanoAberto(false)}
+              >
+                Agora não
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

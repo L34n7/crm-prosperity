@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./whatsapp-perfil.module.css";
 
@@ -487,9 +488,12 @@ export default function WhatsappPerfilPage() {
             {(erro || sucesso) && (
               <div className={styles.alertArea}>
                 {erro && <div className={styles.errorAlert}>{erro}</div>}
-                {sucesso && <div className={styles.successAlert}>{sucesso}</div>}
               </div>
             )}
+            <FeedbackToast
+              success={sucesso}
+              onSuccessDismiss={() => setSucesso("")}
+            />
 
             <form
               id="form-whatsapp-perfil"

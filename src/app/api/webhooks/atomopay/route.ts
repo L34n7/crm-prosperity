@@ -142,6 +142,15 @@ async function criarEmpresa(lead: any, payload: any) {
       status: "ativa",
       timezone: "America/Sao_Paulo",
       observacoes: "Criada automaticamente via webhook",
+      termo_aceite: lead?.termo_aceite ?? false,
+      termo_aceite_em: lead?.termo_aceite_em ?? null,
+      termo_aceite_ip: lead?.termo_aceite_ip ?? null,
+      termo_aceite_user_agent: lead?.termo_aceite_user_agent ?? null,
+      termo_aceite_versao: lead?.termo_aceite_versao ?? null,
+      politica_privacidade_versao: lead?.politica_privacidade_versao ?? null,
+      contrato_responsabilidades_versao:
+        lead?.contrato_responsabilidades_versao ?? null,
+      termo_aceite_texto: lead?.termo_aceite_texto ?? null,
     })
     .select("*")
     .single();

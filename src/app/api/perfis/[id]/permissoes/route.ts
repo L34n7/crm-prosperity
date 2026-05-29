@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { isAdministrador } from "@/lib/auth/authorization";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -160,7 +164,7 @@ export async function PUT(
 
     const { data: perfil, error: perfilError } = await supabaseAdmin
       .from("perfis_empresa")
-      .select("id, empresa_id")
+      .select("id, empresa_id, nome")
       .eq("id", id)
       .maybeSingle();
 
@@ -223,6 +227,15 @@ export async function PUT(
       );
     }
 
+    const { data: permissoesAtuais } = await supabaseAdmin
+      .from("perfil_permissoes")
+      .select("permissao_codigo")
+      .eq("perfil_empresa_id", id);
+
+    const permissoesAntes = (permissoesAtuais || []).map(
+      (item: any) => item.permissao_codigo
+    );
+
     const { error: deleteError } = await supabaseAdmin
       .from("perfil_permissoes")
       .delete()
@@ -252,6 +265,23 @@ export async function PUT(
         );
       }
     }
+
+    const auditMeta = getRequestAuditMetadata(request);
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "permissoes",
+      entidade: "perfil",
+      entidade_id: id,
+      acao: "permissoes_perfil_atualizadas",
+      descricao: `Permissões do perfil ${perfil.nome || id} atualizadas`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: { permissoes: permissoesAntes.sort() },
+      depois: { permissoes: permissoesValidas.sort() },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

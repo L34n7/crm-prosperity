@@ -7,6 +7,10 @@ import {
   isAdministrador,
 } from "@/lib/auth/authorization";
 import { getPoliticaAtendimentoDoUsuario } from "@/lib/configuracoes/politicas-atendimento";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -16,6 +20,7 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
+    const auditMeta = getRequestAuditMetadata(request);
 
     const resultado = await getUsuarioContexto();
 
@@ -184,6 +189,28 @@ export async function POST(
         { status: 500 }
       );
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id!,
+      categoria: "conversas",
+      entidade: "conversa",
+      entidade_id: id,
+      acao: "conversa_atribuida",
+      descricao: "Conversa atribuida a um usuario",
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: {
+        responsavel_id: conversa.responsavel_id ?? null,
+        status: conversa.status ?? null,
+      },
+      depois: {
+        responsavel_id: novoResponsavelId,
+        status: "em_atendimento",
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

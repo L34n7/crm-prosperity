@@ -5,6 +5,10 @@ import {
   type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -45,6 +49,7 @@ function telefoneImportacaoValido(telefone: string) {
 export async function POST(request: Request) {
   try {
     const resultado = await getUsuarioContexto();
+    const auditMeta = getRequestAuditMetadata(request);
 
     if (!resultado.ok) {
       return NextResponse.json(
@@ -163,6 +168,27 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "contatos",
+      entidade: "contato",
+      entidade_id: usuario.empresa_id,
+      acao: "contatos_importados",
+      descricao: `${data?.length || 0} contatos importados`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      depois: {
+        importados: data?.length || 0,
+        ignorados: ignorados.length,
+      },
+      metadata: {
+        contatos_ids: (data || []).map((contato) => contato.id),
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

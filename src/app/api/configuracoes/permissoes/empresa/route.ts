@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { isAdministrador } from "@/lib/auth/authorization";
 import { upsertConfiguracaoEmpresa } from "@/lib/configuracoes/configuracoes-empresa";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 export async function PUT(request: Request) {
   try {
@@ -31,6 +35,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
+    const auditMeta = getRequestAuditMetadata(request);
 
     const data = await upsertConfiguracaoEmpresa({
       empresa_id: usuario.empresa_id,
@@ -60,11 +65,27 @@ export async function PUT(request: Request) {
       permitir_assumir_conversa_ja_atribuida:
         !!body.permitir_assumir_conversa_ja_atribuida,
 
-      atendente_pode_reatribuir: false,
-      supervisor_pode_reatribuir: true,
-      administrador_pode_reatribuir: true,
+      atendente_pode_reatribuir: !!body.atendente_pode_reatribuir,
+      supervisor_pode_reatribuir: !!body.supervisor_pode_reatribuir,
+      administrador_pode_reatribuir: !!body.administrador_pode_reatribuir,
 
-      exigir_mesmo_setor_para_reatribuicao: true,
+      exigir_mesmo_setor_para_reatribuicao:
+        !!body.exigir_mesmo_setor_para_reatribuicao,
+    });
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "permissoes",
+      entidade: "politica_empresa",
+      entidade_id: usuario.empresa_id,
+      acao: "politica_atendimento_atualizada",
+      descricao: "Política de atendimento da empresa atualizada",
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      depois: data,
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
     });
 
     return NextResponse.json({

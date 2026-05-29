@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./permissoes.module.css";
 
@@ -20,6 +21,10 @@ type ConfiguracaoEmpresa = {
   supervisor_pode_atribuir: boolean;
   administrador_pode_atribuir: boolean;
 
+  atendente_pode_reatribuir: boolean;
+  supervisor_pode_reatribuir: boolean;
+  administrador_pode_reatribuir: boolean;
+
   atendente_pode_assumir: boolean;
   supervisor_pode_assumir: boolean;
   administrador_pode_assumir: boolean;
@@ -27,11 +32,13 @@ type ConfiguracaoEmpresa = {
   permitir_assumir_conversa_em_fila: boolean;
   permitir_assumir_conversa_sem_responsavel: boolean;
   permitir_assumir_conversa_ja_atribuida: boolean;
+  exigir_mesmo_setor_para_reatribuicao: boolean;
 };
 
 type ConfiguracaoUsuario = {
   pode_transferir: boolean | null;
   pode_atribuir: boolean | null;
+  pode_reatribuir: boolean | null;
   pode_assumir: boolean | null;
 
   permitir_transferir_sem_assumir: boolean | null;
@@ -39,6 +46,7 @@ type ConfiguracaoUsuario = {
   permitir_assumir_conversa_em_fila: boolean | null;
   permitir_assumir_conversa_sem_responsavel: boolean | null;
   permitir_assumir_conversa_ja_atribuida: boolean | null;
+  exigir_mesmo_setor_para_reatribuicao: boolean | null;
 };
 
 type UsuarioItem = {
@@ -48,15 +56,29 @@ type UsuarioItem = {
   perfis: string[];
   setores: string[];
   configuracao_usuario: ConfiguracaoUsuario;
+  permissoes_herdadas: string[];
+  permissoes_usuario: PermissaoUsuario[];
+};
+
+type PermissaoCatalogo = {
+  codigo: string;
+  descricao: string | null;
+};
+
+type PermissaoUsuario = {
+  permissao_codigo: string;
+  efeito: "permitir" | "bloquear";
 };
 
 type ApiResponse = {
   ok: boolean;
   empresa: ConfiguracaoEmpresa;
+  permissoes_catalogo: PermissaoCatalogo[];
   usuarios: UsuarioItem[];
 };
 
 type OverrideValue = "inherit" | "true" | "false";
+type PermissionOverrideValue = "inherit" | "permitir" | "bloquear";
 
 const overrideToValue = (value: boolean | null | undefined): OverrideValue => {
   if (value === true) return "true";
@@ -68,6 +90,42 @@ const valueToOverride = (value: OverrideValue): boolean | null => {
   if (value === "true") return true;
   if (value === "false") return false;
   return null;
+};
+
+const getGrupoFromCodigo = (codigo: string) => {
+  const prefixo = codigo.split(".")[0] || "outros";
+
+  switch (prefixo) {
+    case "dashboard":
+      return "Dashboard";
+    case "conversas":
+      return "Conversas";
+    case "mensagens":
+      return "Mensagens";
+    case "contatos":
+      return "Contatos";
+    case "usuarios":
+      return "Usuarios";
+    case "empresas":
+      return "Empresas";
+    case "setores":
+      return "Setores";
+    case "perfis":
+      return "Perfis";
+    case "permissoes":
+      return "Permissoes";
+    case "whatsapp":
+    case "whatsapp_templates":
+      return "WhatsApp";
+    case "agendas":
+      return "Agendas";
+    case "fluxos":
+      return "Fluxos";
+    case "auditoria":
+      return "Auditoria";
+    default:
+      return "Outros";
+  }
 };
 
 function CardBoolean({
@@ -151,6 +209,9 @@ export default function PermissoesPage() {
 
   const [empresa, setEmpresa] = useState<ConfiguracaoEmpresa | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioItem[]>([]);
+  const [permissoesCatalogo, setPermissoesCatalogo] = useState<
+    PermissaoCatalogo[]
+  >([]);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
 
   async function carregarDados() {
@@ -170,6 +231,7 @@ export default function PermissoesPage() {
       }
 
       setEmpresa(data.empresa);
+      setPermissoesCatalogo(data.permissoes_catalogo || []);
       setUsuarios(data.usuarios || []);
     } catch {
       setErro("Erro ao carregar configurações");
@@ -230,6 +292,63 @@ export default function PermissoesPage() {
     );
   }
 
+  function atualizarPermissaoUsuario(
+    usuarioId: string,
+    permissaoCodigo: string,
+    valor: PermissionOverrideValue
+  ) {
+    setUsuarios((atual) =>
+      atual.map((usuario) => {
+        if (usuario.id !== usuarioId) return usuario;
+
+        const outras = usuario.permissoes_usuario.filter(
+          (item) => item.permissao_codigo !== permissaoCodigo
+        );
+
+        return {
+          ...usuario,
+          permissoes_usuario:
+            valor === "inherit"
+              ? outras
+              : [
+                  ...outras,
+                  {
+                    permissao_codigo: permissaoCodigo,
+                    efeito: valor,
+                  },
+                ],
+        };
+      })
+    );
+  }
+
+  function getOverridePermissaoUsuario(
+    usuario: UsuarioItem,
+    permissaoCodigo: string
+  ): PermissionOverrideValue {
+    return (
+      usuario.permissoes_usuario.find(
+        (item) => item.permissao_codigo === permissaoCodigo
+      )?.efeito || "inherit"
+    );
+  }
+
+  const gruposPermissoes = useMemo(() => {
+    const map = new Map<string, PermissaoCatalogo[]>();
+
+    for (const permissao of permissoesCatalogo) {
+      const grupo = getGrupoFromCodigo(permissao.codigo);
+      const lista = map.get(grupo) || [];
+      lista.push(permissao);
+      map.set(grupo, lista);
+    }
+
+    return Array.from(map.entries()).map(([grupo, itens]) => ({
+      grupo,
+      itens: itens.sort((a, b) => a.codigo.localeCompare(b.codigo)),
+    }));
+  }, [permissoesCatalogo]);
+
   async function salvarEmpresa() {
     if (!empresa) return;
 
@@ -275,7 +394,10 @@ export default function PermissoesPage() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(usuario.configuracao_usuario),
+          body: JSON.stringify({
+            ...usuario.configuracao_usuario,
+            permissoes_usuario: usuario.permissoes_usuario,
+          }),
         }
       );
 
@@ -306,7 +428,7 @@ export default function PermissoesPage() {
       <>
         <Header
           title="Permissões"
-          subtitle="Configurações de regras de atendimento e exceções por usuário."
+          subtitle="Política de atendimento e permissões individuais por usuário."
         />
         <div className={styles.pageContent}>
           <div className={styles.loadingCard}>Carregando configurações...</div>
@@ -320,7 +442,7 @@ export default function PermissoesPage() {
       <>
         <Header
           title="Permissões"
-          subtitle="Configurações de regras de atendimento e exceções por usuário."
+          subtitle="Política de atendimento e permissões individuais por usuário."
         />
         <div className={styles.pageContent}>
           <div className={styles.errorCard}>
@@ -334,22 +456,25 @@ export default function PermissoesPage() {
   return (
     <>
       <Header
-        title="Permissões e regras"
-        subtitle="Configure o padrão da empresa e personalize exceções específicas por usuário."
+        title="Permissões e política"
+        subtitle="Separe as regras operacionais da empresa das permissões de acesso de cada usuário."
       />
 
       <div className={styles.pageContent}>
         {erro && <div className={styles.errorAlert}>{erro}</div>}
-        {sucesso && <div className={styles.successAlert}>{sucesso}</div>}
+        <FeedbackToast
+          success={sucesso}
+          onSuccessDismiss={() => setSucesso("")}
+        />
 
         <section className={styles.heroCard}>
           <div className={styles.heroText}>
-            <p className={styles.eyebrow}>Configuração central</p>
-            <h2 className={styles.heroTitle}>Padrão da empresa</h2>
+            <p className={styles.eyebrow}>Política de atendimento</p>
+            <h2 className={styles.heroTitle}>Regras padrão da empresa</h2>
             <p className={styles.heroDescription}>
-              Essas regras definem o comportamento padrão da operação para todos
-              os usuários. As exceções individuais devem ser usadas apenas em
-              casos especiais.
+              Essas regras definem como a operação de atendimento se comporta.
+              Elas não são permissões de tela; são limites práticos para
+              assumir, transferir e redistribuir conversas.
             </p>
           </div>
 
@@ -358,23 +483,24 @@ export default function PermissoesPage() {
             onClick={salvarEmpresa}
             disabled={salvandoEmpresa}
           >
-            {salvandoEmpresa ? "Salvando..." : "Salvar padrão da empresa"}
+            {salvandoEmpresa ? "Salvando..." : "Salvar política da empresa"}
           </button>
         </section>
 
         <section className={styles.explainGrid}>
           <div className={styles.explainCard}>
-            <h3 className={styles.explainTitle}>Padrão da empresa</h3>
+            <h3 className={styles.explainTitle}>Política da empresa</h3>
             <p className={styles.explainText}>
-              Define o comportamento geral por perfil, setor e fluxo operacional.
+              Define regras operacionais do atendimento, como transferir,
+              assumir e reatribuir conversas.
             </p>
           </div>
 
           <div className={styles.explainCard}>
-            <h3 className={styles.explainTitle}>Exceção por usuário</h3>
+            <h3 className={styles.explainTitle}>Permissões de acesso</h3>
             <p className={styles.explainText}>
-              Permite liberar ou bloquear ações específicas para pessoas
-              selecionadas.
+              Controlam quais páginas, botões e ações cada perfil ou usuário
+              pode usar.
             </p>
           </div>
         </section>
@@ -479,6 +605,50 @@ export default function PermissoesPage() {
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
             <div>
+              <p className={styles.eyebrow}>Redistribuição</p>
+              <h2 className={styles.sectionTitle}>Reatribuição de responsável</h2>
+              <p className={styles.sectionDescription}>
+                Controle quem pode trocar o responsável de uma conversa que já
+                está atribuída.
+              </p>
+            </div>
+          </div>
+
+          <div className={styles.settingsGrid}>
+            <CardBoolean
+              label="Atendente pode reatribuir"
+              hint="Permite que atendentes troquem o responsável de uma conversa já atribuída."
+              checked={empresa.atendente_pode_reatribuir}
+              onChange={(v) => atualizarEmpresa("atendente_pode_reatribuir", v)}
+            />
+            <CardBoolean
+              label="Supervisor pode reatribuir"
+              hint="Permite que supervisores troquem o responsável de conversas já atribuídas."
+              checked={empresa.supervisor_pode_reatribuir}
+              onChange={(v) => atualizarEmpresa("supervisor_pode_reatribuir", v)}
+            />
+            <CardBoolean
+              label="Administrador pode reatribuir"
+              hint="Permite que administradores troquem responsáveis em conversas atribuídas."
+              checked={empresa.administrador_pode_reatribuir}
+              onChange={(v) =>
+                atualizarEmpresa("administrador_pode_reatribuir", v)
+              }
+            />
+            <CardBoolean
+              label="Exigir mesmo setor para reatribuir"
+              hint="Quando ligado, a reatribuição fica limitada a usuários do mesmo setor."
+              checked={empresa.exigir_mesmo_setor_para_reatribuicao}
+              onChange={(v) =>
+                atualizarEmpresa("exigir_mesmo_setor_para_reatribuicao", v)
+              }
+            />
+          </div>
+        </section>
+
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div>
               <p className={styles.eyebrow}>Posse da conversa</p>
               <h2 className={styles.sectionTitle}>Assumir conversa</h2>
               <p className={styles.sectionDescription}>
@@ -536,11 +706,11 @@ export default function PermissoesPage() {
         <section className={styles.section}>
           <div className={styles.userSectionHeader}>
             <div>
-              <p className={styles.eyebrow}>Exceções</p>
-              <h2 className={styles.sectionTitle}>Exceções por usuário</h2>
+              <p className={styles.eyebrow}>Usuários</p>
+              <h2 className={styles.sectionTitle}>Exceções e permissões individuais</h2>
               <p className={styles.sectionDescription}>
-                Use apenas quando quiser sair do padrão da empresa para uma pessoa
-                específica.
+                Aqui você ajusta duas coisas separadas: exceções da política
+                de atendimento e permissões de acesso por usuário.
               </p>
             </div>
 
@@ -646,6 +816,21 @@ export default function PermissoesPage() {
                           />
 
                           <OverrideSelect
+                            label="Pode reatribuir"
+                            hint="Controla se este usuário pode trocar o responsável de conversa já atribuída."
+                            value={overrideToValue(
+                              usuario.configuracao_usuario.pode_reatribuir
+                            )}
+                            onChange={(v) =>
+                              atualizarUsuario(
+                                usuario.id,
+                                "pode_reatribuir",
+                                valueToOverride(v)
+                              )
+                            }
+                          />
+
+                          <OverrideSelect
                             label="Pode assumir"
                             hint="Controla a ação de assumir conversa para este usuário."
                             value={overrideToValue(
@@ -722,6 +907,106 @@ export default function PermissoesPage() {
                               )
                             }
                           />
+
+                          <OverrideSelect
+                            label="Reatribuir apenas no mesmo setor"
+                            hint="Permite exceção individual para limitar ou liberar reatribuição fora do setor."
+                            value={overrideToValue(
+                              usuario.configuracao_usuario
+                                .exigir_mesmo_setor_para_reatribuicao
+                            )}
+                            onChange={(v) =>
+                              atualizarUsuario(
+                                usuario.id,
+                                "exigir_mesmo_setor_para_reatribuicao",
+                                valueToOverride(v)
+                              )
+                            }
+                          />
+                        </div>
+
+                        <div className={styles.permissionOverrides}>
+                          <div className={styles.permissionOverridesHeader}>
+                            <div>
+                              <h4 className={styles.permissionOverridesTitle}>
+                                Permissões individuais de acesso
+                              </h4>
+                              <p className={styles.permissionOverridesText}>
+                                Herdar usa os perfis. Permitir libera uma ação
+                                só para este usuário. Bloquear remove a ação
+                                mesmo quando o perfil permitir.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className={styles.permissionGroups}>
+                            {gruposPermissoes.map(({ grupo, itens }) => (
+                              <div key={grupo} className={styles.permissionGroup}>
+                                <h5 className={styles.permissionGroupTitle}>
+                                  {grupo}
+                                </h5>
+
+                                <div className={styles.permissionList}>
+                                  {itens.map((permissao) => {
+                                    const herdada =
+                                      usuario.permissoes_herdadas.includes(
+                                        permissao.codigo
+                                      );
+                                    const override =
+                                      getOverridePermissaoUsuario(
+                                        usuario,
+                                        permissao.codigo
+                                      );
+
+                                    return (
+                                      <label
+                                        key={permissao.codigo}
+                                        className={styles.permissionRow}
+                                      >
+                                        <span className={styles.permissionInfo}>
+                                          <span className={styles.permissionCode}>
+                                            {permissao.codigo}
+                                          </span>
+                                          <span
+                                            className={styles.permissionDescription}
+                                          >
+                                            {permissao.descricao ||
+                                              "Sem descricao"}
+                                          </span>
+                                          <span className={styles.permissionState}>
+                                            {herdada
+                                              ? "Herdada do perfil"
+                                              : "Nao herdada"}
+                                          </span>
+                                        </span>
+
+                                        <select
+                                          className={styles.permissionSelect}
+                                          value={override}
+                                          onChange={(e) =>
+                                            atualizarPermissaoUsuario(
+                                              usuario.id,
+                                              permissao.codigo,
+                                              e.target
+                                                .value as PermissionOverrideValue
+                                            )
+                                          }
+                                        >
+                                          <option value="inherit">Herdar</option>
+                                          <option value="permitir">
+                                            Permitir
+                                          </option>
+                                          <option value="bloquear">
+                                            Bloquear
+                                          </option>
+                                        </select>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}

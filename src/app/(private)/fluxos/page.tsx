@@ -15,6 +15,7 @@ import {
   type Edge,
   type Node,
 } from "@xyflow/react";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
@@ -362,6 +363,7 @@ export default function FluxosPage() {
   const [editandoFluxo, setEditandoFluxo] = useState(false);
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
   const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
+  const [erroEdicaoFluxo, setErroEdicaoFluxo] = useState("");
   const [encerrarInatividadeAtivo, setEncerrarInatividadeAtivo] = useState(true);
   const [encerrarInatividadeQuantidade, setEncerrarInatividadeQuantidade] = useState("23");
   const [encerrarInatividadeUnidade, setEncerrarInatividadeUnidade] =
@@ -924,6 +926,7 @@ export default function FluxosPage() {
 async function criarFluxoRapido() {
   try {
     setErro("");
+    setErroEdicaoFluxo("");
     setSucesso("");
     setErroCriacaoFluxo("");
 
@@ -1989,6 +1992,8 @@ function aplicarEdicaoConexao() {
 function abrirEdicaoFluxo() {
   if (!fluxoSelecionado) return;
 
+  setErro("");
+  setErroEdicaoFluxo("");
   setEditandoFluxo(true);
   setNomeFluxoEdicao(fluxoSelecionado.nome || "");
   setDescricaoFluxoEdicao(fluxoSelecionado.descricao || "");
@@ -2035,17 +2040,17 @@ async function salvarEdicaoFluxo() {
 
   if (encerrarInatividadeAtivo) {
     if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
-      setErro("Informe um tempo válido para o encerramento por inatividade.");
+      setErroEdicaoFluxo("Informe um tempo válido para o encerramento por inatividade.");
       return;
     }
 
     if (segundosInatividade < 5 * 60) {
-      setErro("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
+      setErroEdicaoFluxo("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
       return;
     }
 
     if (segundosInatividade > 23 * 60 * 60) {
-      setErro("O tempo máximo para encerramento por inatividade é de 23 horas.");
+      setErroEdicaoFluxo("O tempo máximo para encerramento por inatividade é de 23 horas.");
       return;
     }
   }
@@ -2086,7 +2091,7 @@ async function salvarEdicaoFluxo() {
     setFluxoSelecionado(json.fluxo);
     await carregarFluxos();
   } catch (error: any) {
-    setErro(error?.message || "Erro ao editar fluxo.");
+    setErroEdicaoFluxo(error?.message || "Erro ao editar fluxo.");
   }
 }
 
@@ -3382,12 +3387,15 @@ useEffect(() => {
             </div>
           )}
 
-          {(erro || sucesso) && (
+          {erro && (
           <div className={styles.alertArea}>
             {erro && <div className={styles.errorAlert}>{erro}</div>}
-            {sucesso && <div className={styles.successAlert}>{sucesso}</div>}
           </div>
         )}
+        <FeedbackToast
+          success={sucesso}
+          onSuccessDismiss={() => setSucesso("")}
+        />
 
         <div className={styles.editorBody}>
           <div className={styles.canvasArea}>
@@ -5113,19 +5121,29 @@ useEffect(() => {
                 <button
                 type="button"
                 className={styles.closePanelButton}
-                onClick={() => setEditandoFluxo(false)}
+                onClick={() => {
+                  setErroEdicaoFluxo("");
+                  setEditandoFluxo(false);
+                }}
                 >
                 ×
                 </button>
             </div>
 
             <div className={styles.modalBody}>
+                {erroEdicaoFluxo && (
+                  <div className={styles.errorAlert}>{erroEdicaoFluxo}</div>
+                )}
+
                 <label className={styles.field}>
                 <span className={styles.label}>Nome</span>
                 <input
                     className={styles.input}
                     value={nomeFluxoEdicao}
-                    onChange={(e) => setNomeFluxoEdicao(e.target.value)}
+                    onChange={(e) => {
+                      setErroEdicaoFluxo("");
+                      setNomeFluxoEdicao(e.target.value);
+                    }}
                 />
                 </label>
 
@@ -5329,7 +5347,10 @@ useEffect(() => {
                 <button
                 type="button"
                 className={styles.secondaryButton}
-                onClick={() => setEditandoFluxo(false)}
+                onClick={() => {
+                  setErroEdicaoFluxo("");
+                  setEditandoFluxo(false);
+                }}
                 >
                 Cancelar
                 </button>

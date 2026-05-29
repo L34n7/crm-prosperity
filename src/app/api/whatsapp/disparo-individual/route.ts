@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { can } from "@/lib/permissoes/frontend";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -28,7 +33,10 @@ type UsuarioSetorVinculo = {
 
 type UsuarioContextoMinimo = {
   id: string;
+  nome?: string | null;
+  email?: string | null;
   empresa_id?: string | null;
+  permissoes?: string[];
   setor_principal_id?: string | null;
   setores_ids?: string[];
   usuarios_setores?: UsuarioSetorVinculo[];
@@ -245,6 +253,7 @@ async function atualizarUltimaMensagemConversa(conversaId: string) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const auditMeta = getRequestAuditMetadata(request);
 
     const conversaId = String(body?.conversa_id || "").trim();
     const templateNome = String(body?.template_nome || "").trim();
@@ -276,6 +285,13 @@ export async function POST(request: Request) {
     }
 
     const { usuario } = resultado as { usuario: UsuarioContextoMinimo };
+
+    if (!can(usuario.permissoes, "whatsapp.disparos.individual.enviar")) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão para enviar disparo individual" },
+        { status: 403 }
+      );
+    }
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
@@ -515,6 +531,28 @@ export async function POST(request: Request) {
     }
 
     await atualizarUltimaMensagemConversa(conversa.id);
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "disparos",
+      entidade: "disparo",
+      entidade_id: conversa.id,
+      acao: "disparo_individual_enviado",
+      descricao: `Disparo individual enviado para ${nomeContato}`,
+      usuario_id: usuario.id,
+      usuario_nome: "nome" in usuario ? usuario.nome : null,
+      usuario_email: "email" in usuario ? usuario.email : null,
+      depois: {
+        conversa_id: conversa.id,
+        contato_id: contato?.id || null,
+        template_id: template.id,
+        template_nome: template.nome,
+        mensagem_externa_id: mensagemExternaId,
+        protocolo_id: novoProtocolo.id,
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

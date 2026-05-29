@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./templates-whatsapp.module.css";
 
@@ -761,7 +762,12 @@ export default function TemplatesWhatsAppPage() {
 
                   {(mensagem || erro) && (
                     <>
-                      {mensagem ? <div className={styles.successAlert}>{mensagem}</div> : null}
+                      {mensagem ? (
+                        <FeedbackToast
+                          success={mensagem}
+                          onSuccessDismiss={() => setMensagem("")}
+                        />
+                      ) : null}
                       {erro ? <div className={styles.errorAlert}>{erro}</div> : null}
                     </>
                   )}

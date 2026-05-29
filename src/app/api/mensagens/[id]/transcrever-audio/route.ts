@@ -57,6 +57,12 @@ export async function POST(
     const transcricao = await transcreverAudioComIA({
       audioBuffer,
       fileName: mensagem.metadata_json?.filename || "audio.ogg",
+      empresaId: mensagem.empresa_id,
+      metadata: {
+        origem_evento: "transcricao_manual",
+        mensagem_id: mensagem.id,
+        media_id: mediaId,
+      },
     });
 
     const metadataAtual = mensagem.metadata_json || {};

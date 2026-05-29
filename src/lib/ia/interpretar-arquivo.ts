@@ -1,4 +1,9 @@
 import OpenAI from "openai";
+import {
+  extrairUsoTokensIa,
+  registrarUsoTokensIa,
+  verificarSaldoTokensIa,
+} from "@/lib/ia/tokens";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -79,8 +84,19 @@ export async function interpretarArquivoComIA(params: {
   arquivoUrl: string;
   mimeType?: string | null;
   camposExtracao?: string[];
+  empresaId?: string | null;
+  usuarioId?: string | null;
+  metadata?: Record<string, any>;
 }): Promise<ResultadoInterpretacaoArquivo> {
-  const { instrucao, arquivoUrl, mimeType, camposExtracao = [] } = params;
+  const {
+    instrucao,
+    arquivoUrl,
+    mimeType,
+    camposExtracao = [],
+    empresaId,
+    usuarioId,
+    metadata,
+  } = params;
 
   if (!arquivoUrl) {
     return {
@@ -95,8 +111,13 @@ export async function interpretarArquivoComIA(params: {
   const prompt = montarPrompt(instrucao, camposExtracao);
   const mime = String(mimeType || "").toLowerCase();
   const ehPdf = mime.includes("pdf");
+  const modelo = "gpt-4.1-mini";
 
   try {
+    if (empresaId) {
+      await verificarSaldoTokensIa(empresaId);
+    }
+
     const content: any[] = [
       {
         type: "input_text",
@@ -118,7 +139,7 @@ export async function interpretarArquivoComIA(params: {
     }
 
     const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
+      model: modelo,
       input: [
         {
           role: "user",
@@ -126,6 +147,21 @@ export async function interpretarArquivoComIA(params: {
         },
       ],
     });
+
+    if (empresaId) {
+      await registrarUsoTokensIa({
+        empresaId,
+        usuarioId,
+        origem: "interpretar_arquivo",
+        modelo,
+        uso: extrairUsoTokensIa(response.usage),
+        metadata: {
+          mime_type: mimeType || null,
+          campos_extracao: camposExtracao,
+          ...(metadata || {}),
+        },
+      });
+    }
 
     const texto = response.output_text || "";
     const json = extrairJson(texto);

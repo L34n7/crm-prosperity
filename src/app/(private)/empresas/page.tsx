@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./empresas.module.css";
 
@@ -404,7 +405,10 @@ export default function EmpresasPage() {
           </div>
         </section>
 
-        {mensagem && <div className={styles.alertSuccess}>{mensagem}</div>}
+        <FeedbackToast
+          success={mensagem}
+          onSuccessDismiss={() => setMensagem("")}
+        />
         {erro && <div className={styles.alertError}>{erro}</div>}
 
         <section className={styles.card}>

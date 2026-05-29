@@ -1,4 +1,9 @@
 import OpenAI from "openai";
+import {
+  extrairUsoTokensIa,
+  registrarUsoTokensIa,
+  verificarSaldoTokensIa,
+} from "@/lib/ia/tokens";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -19,9 +24,15 @@ type ResultadoIA = {
 export async function interpretarConexaoComIA({
   mensagemCliente,
   conexoesDisponiveis,
+  empresaId,
+  usuarioId,
+  metadata,
 }: {
   mensagemCliente: string;
   conexoesDisponiveis: ConexaoIA[];
+  empresaId?: string | null;
+  usuarioId?: string | null;
+  metadata?: Record<string, any>;
 }): Promise<ResultadoIA> {
   if (!process.env.OPENAI_API_KEY) {
     console.warn("[IA] OPENAI_API_KEY não configurada.");
@@ -41,8 +52,13 @@ export async function interpretarConexaoComIA({
     };
   }
 
+  if (empresaId) {
+    await verificarSaldoTokensIa(empresaId);
+  }
+
+  const modelo = "gpt-5.4-mini";
   const resposta = await openai.responses.create({
-    model: "gpt-5.4-mini",
+    model: modelo,
     input: [
       {
         role: "system",
@@ -91,6 +107,20 @@ Regras:
       },
     },
   });
+
+  if (empresaId) {
+    await registrarUsoTokensIa({
+      empresaId,
+      usuarioId,
+      origem: "interpretar_conexao",
+      modelo,
+      uso: extrairUsoTokensIa(resposta.usage),
+      metadata: {
+        conexoes_avaliadas: conexoesDisponiveis.length,
+        ...(metadata || {}),
+      },
+    });
+  }
 
   return JSON.parse(resposta.output_text) as ResultadoIA;
 }

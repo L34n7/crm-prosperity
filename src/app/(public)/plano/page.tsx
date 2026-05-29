@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import styles from "./plano.module.css";
 
 type Plano = {
+  slug?: "basico" | "essencial";
   nome: string;
   descricao: string;
+  precoOriginal?: string;
   preco: string;
   observacaoPreco?: string;
   recursos: string[];
-  ativo: boolean;
+  tipo: "checkout" | "cotacao";
   badge?: string;
 };
 
@@ -24,12 +26,16 @@ export default function PlanoPage() {
   const router = useRouter();
   const [planosExpandidos, setPlanosExpandidos] = useState<string[]>([]);
   const [loadingCheckout, setLoadingCheckout] = useState(false);
+  const whatsappComercial =
+    process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975233266";
 
-  async function handleCheckout() {
+  async function handleCheckout(planoSlug: "basico" | "essencial") {
     const leadId = localStorage.getItem("lead_id");
 
     if (!leadId) {
-      alert("Lead não encontrado. Volte para a página inicial e preencha o formulário novamente.");
+      alert(
+        "Lead não encontrado. Volte para a página inicial e preencha o formulário novamente."
+      );
       router.push("/comecar");
       return;
     }
@@ -44,6 +50,7 @@ export default function PlanoPage() {
         },
         body: JSON.stringify({
           lead_id: leadId,
+          plano_slug: planoSlug,
         }),
       });
 
@@ -55,12 +62,20 @@ export default function PlanoPage() {
         return;
       }
 
-      window.location.href = data.checkout_url;
+      window.location.assign(data.checkout_url);
     } catch (error) {
       console.error("Erro ao buscar checkout:", error);
       alert("Erro inesperado ao iniciar o checkout.");
       setLoadingCheckout(false);
     }
+  }
+
+  function abrirCotacaoWhatsApp() {
+    const mensagem = encodeURIComponent(
+      "Olá! Quero fazer uma cotação do plano Profissional do CRM Prosperity."
+    );
+
+    window.location.assign(`https://wa.me/${whatsappComercial}?text=${mensagem}`);
   }
 
   function togglePlanoExpandido(nomePlano: string) {
@@ -73,69 +88,75 @@ export default function PlanoPage() {
 
   const planos: Plano[] = [
     {
-      nome: "Essencial",
+      nome: "Básico",
+      slug: "basico",
       descricao:
-        "Ideal para empresas que querem começar com atendimento profissional no WhatsApp oficial.",
-      preco: "Ativação disponível",
-      observacaoPreco: "O valor será exibido na próxima etapa.",
-      ativo: true,
-      badge: "Mais indicado para começar",
+        "Ideal para quem quer começar com atendimento automatizado, organização profissional e IA integrada desde o primeiro dia.",
+      precoOriginal: "R$ 197/mês",
+      preco: "R$ 137/mês",
+      observacaoPreco: "🔥 Oferta de entrada: economize R$ 60 todos os meses.",
+      tipo: "checkout",
+      badge: "Entrada inteligente",
       recursos: [
-        "1 número de WhatsApp",
         "2 usuários inclusos",
-        "Atendimento automatizado",
-        "Disparo de mensagens",
+        "1 milhão de tokens de IA",
+        "API Oficial do WhatsApp inclusa",
+        "Atendimento automatizado com IA",
+        "Respostas inteligentes em tempo real",
+        "Disparo de mensagens em massa",
         "Fila de atendimento dinâmica",
         "Organização completa do chat",
-        "Relatórios de operação",
+        "Relatórios operacionais",
+        "Painel simples e intuitivo",
       ],
     },
     {
-      nome: "Profissional",
+      nome: "Essencial IA PRO",
+      slug: "essencial",
       descricao:
-        "Para operações em crescimento que precisam de mais canais, mais inteligência e mais produtividade.",
-      preco: "Plano profissional",
-      observacaoPreco: "Prévia da próxima evolução do CRM Prosperity.",
-      ativo: false,
-      badge: "Expansão operacional",
+        "Para equipes que precisam de mais potência, mais automação e mais inteligência artificial para escalar vendas e atendimento.",
+      precoOriginal: "R$ 367/mês",
+      preco: "R$ 267/mês",
+      observacaoPreco: "🔥 Melhor custo-benefício: economize R$ 100 por mês.",
+      tipo: "checkout",
+      badge: "Mais indicado",
       recursos: [
-        "2 números de WhatsApp",
-        "3 usuários inclusos",
-        "Usuário adicional com valor extra",
-        "Atendimento automatizado",
-        "Agente IA de atendimento",
-        "Disparo de mensagens",
-        "Agenda inteligente",
-        "Kanban comercial",
-        "Relatórios dinâmicos",
-        "Assistente IA para chat",
-        "Integração com Instagram e Messenger",
-        "Integração com Meta Ads",
+        "6 usuários inclusos",
+        "5 milhões de tokens de IA",
+        "API Oficial do WhatsApp inclusa",
+        "Atendimento automatizado avançado com IA",
+        "IA treinável para responder clientes",
+        "Respostas automáticas humanizadas",
+        "Disparo inteligente de mensagens",
+        "Segmentação avançada de contatos",
+        "Fila dinâmica e distribuição automática",
+        "Organização completa do atendimento",
+        "Relatórios completos de performance",
+        "Integrações e automações avançadas",
+        "Muito mais velocidade no suporte e nas vendas",
       ],
     },
     {
-      nome: "Elite",
+      nome: "Profissional Enterprise",
       descricao:
-        "Para operações mais robustas que precisam de escala, inteligência avançada e maior capacidade.",
-      preco: "Preço sob consulta",
-      observacaoPreco: "Versão premium para estruturas mais completas.",
-      ativo: false,
-      badge: "Nível avançado",
+        "Estrutura criada para operações maiores que precisam de performance, escala e automações sob medida.",
+      preco: "Sob cotação",
+      observacaoPreco:
+        "Fale com nosso time e monte o plano ideal para sua operação.",
+      tipo: "cotacao",
+      badge: "Escala personalizada",
       recursos: [
-        "Mais números de WhatsApp",
-        "Mais usuários inclusos",
-        "Usuário adicional com valor extra",
-        "Atendimento automatizado",
-        "Agente IA de atendimento",
-        "Disparo de mensagens",
-        "Agenda inteligente",
-        "Kanban comercial",
-        "Relatórios avançados",
-        "Assistente IA para chat",
-        "Agente IA consultor de marketing",
-        "Integração com Instagram e Messenger",
-        "Integração com Meta Ads",
-        "Suporte prioritário",
+        "Usuários sob medida",
+        "Tokens de IA sob medida",
+        "Múltiplos números na API Oficial do WhatsApp",
+        "Estrutura para grandes operações",
+        "IA personalizada para sua empresa",
+        "Automações avançadas",
+        "Disparos e segmentações em escala",
+        "Atendimento multi-equipe",
+        "Acompanhamento comercial personalizado",
+        "Condições ajustadas ao seu volume",
+        "Suporte estratégico prioritário",
       ],
     },
   ];
@@ -154,35 +175,36 @@ export default function PlanoPage() {
           </h1>
 
           <p className={styles.subtitle}>
-            Comece com estrutura profissional no WhatsApp oficial e evolua para
-            recursos mais avançados conforme sua empresa cresce.
+            Básico e Essencial possuem os mesmos recursos principais. A diferença
+            está nos usuários inclusos e no volume de tokens de IA.
           </p>
         </div>
 
         <div className={styles.cards}>
           {planos.map((plano) => {
             const expandido = planosExpandidos.includes(plano.nome);
-            const limiteItens = plano.ativo ? plano.recursos.length : 7;
+            const limiteItens = plano.recursos.length;
             const recursosVisiveis = expandido
               ? plano.recursos
               : plano.recursos.slice(0, limiteItens);
-            const temOcultos = !plano.ativo && plano.recursos.length > limiteItens;
+            const temOcultos = plano.recursos.length > limiteItens;
+            const planoCheckout = plano.tipo === "checkout";
 
             return (
               <article
                 key={plano.nome}
                 className={`${styles.card} ${
-                  plano.ativo ? styles.cardAtivo : styles.cardEmBreve
+                  planoCheckout ? styles.cardAtivo : styles.cardCotacao
                 }`}
               >
-                {!plano.ativo && <div className={styles.cornerSeal}>Em breve</div>}
-
                 <div className={styles.cardTop}>
                   <div className={styles.badgeRow}>
                     {plano.badge ? (
                       <span
                         className={`${styles.miniBadge} ${
-                          plano.ativo ? styles.miniBadgeAtivo : styles.miniBadgeEmBreve
+                          planoCheckout
+                            ? styles.miniBadgeAtivo
+                            : styles.miniBadgeCotacao
                         }`}
                       >
                         {plano.badge}
@@ -196,6 +218,9 @@ export default function PlanoPage() {
                 </div>
 
                 <div className={styles.priceBox}>
+                  {plano.precoOriginal ? (
+                    <div className={styles.oldPrice}>{plano.precoOriginal}</div>
+                  ) : null}
                   <div className={styles.price}>{plano.preco}</div>
                   {plano.observacaoPreco ? (
                     <p className={styles.priceNote}>{plano.observacaoPreco}</p>
@@ -222,17 +247,21 @@ export default function PlanoPage() {
                 ) : null}
 
                 <div className={styles.cardActions}>
-                  {plano.ativo ? (
+                  {planoCheckout ? (
                     <button
                       className={styles.primaryButton}
-                      onClick={handleCheckout}
+                      onClick={() => handleCheckout(plano.slug ?? "basico")}
                       disabled={loadingCheckout}
                     >
                       {loadingCheckout ? "Carregando..." : "Ir para pagamento"}
                     </button>
                   ) : (
-                    <button className={styles.disabledButton} disabled>
-                      Em breve
+                    <button
+                      type="button"
+                      className={styles.quoteButton}
+                      onClick={abrirCotacaoWhatsApp}
+                    >
+                      Fazer cotação
                     </button>
                   )}
                 </div>
@@ -251,10 +280,11 @@ export default function PlanoPage() {
           </button>
 
           <p className={styles.footerText}>
-            O plano <strong>Essencial</strong> já está disponível para contratação.
-            Os demais planos aparecem como prévia da evolução do produto.
-            Após a confirmação do pagamento, sua conta será criada e você receberá
-            as instruções para ativação.
+            Os planos <strong>Básico</strong> e <strong>Essencial IA PRO</strong> incluem os 
+            principais recursos. A diferença está na quantidade de <strong>usuários</strong>, 
+            <strong>tokens de IA</strong> e volume de operação. Para demandas maiores, solicite 
+            uma cotação do <strong>Profissional Enterprise</strong> pelo WhatsApp.
+
           </p>
         </div>
       </section>

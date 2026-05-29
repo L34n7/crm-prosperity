@@ -2,6 +2,7 @@
 
 import React, { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./conversas.module.css";
 import { can } from "@/lib/permissoes/frontend";
@@ -1155,33 +1156,6 @@ function TranscricaoAudioBox({
     </div>
   );
 }
-
-function ChatToast({
-  sucesso,
-  erro,
-}: {
-  sucesso: string;
-  erro: string;
-}) {
-  if (!sucesso && !erro) return null;
-
-  return (
-    <div className={styles.chatToastArea}>
-      {sucesso && (
-        <div className={`${styles.chatToast} ${styles.chatToastSuccess}`}>
-          {sucesso}
-        </div>
-      )}
-
-      {erro && (
-        <div className={`${styles.chatToast} ${styles.chatToastError}`}>
-          {erro}
-        </div>
-      )}
-    </div>
-  );
-}
-
 
 const TextoComEmoji = React.memo(function TextoComEmoji({
   texto,
@@ -5243,7 +5217,12 @@ const templateFooterTexto = useMemo(() => {
           <section className={styles.content}>
             {conversaSelecionada ? (
               <div className={styles.chatShell}>
-                <ChatToast sucesso={mensagemSucesso} erro={erro} />
+                <FeedbackToast
+                  success={mensagemSucesso}
+                  error={erro}
+                  onSuccessDismiss={() => setMensagemSucesso("")}
+                  onErrorDismiss={() => setErro("")}
+                />
                 <div className={styles.chatMainColumn}>
                   <header className={styles.chatHeader}>
                     <div className={styles.chatHeaderLeft}>

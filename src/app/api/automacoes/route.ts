@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -88,6 +92,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const resultadoContexto = await getUsuarioContexto();
+    const auditMeta = getRequestAuditMetadata(req);
 
     if (!resultadoContexto.ok) {
       return NextResponse.json(
@@ -201,6 +206,21 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id!,
+      categoria: "fluxos",
+      entidade: "fluxo",
+      entidade_id: data.id,
+      acao: "fluxo_criado",
+      descricao: `Fluxo ${data.nome} criado`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      depois: data,
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
     
     return NextResponse.json({
       ok: true,
@@ -217,6 +237,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const resultadoContexto = await getUsuarioContexto();
+    const auditMeta = getRequestAuditMetadata(req);
 
     if (!resultadoContexto.ok) {
       return NextResponse.json(
@@ -301,6 +322,13 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    const { data: fluxoAntes } = await supabaseAdmin
+      .from("automacao_fluxos")
+      .select("*")
+      .eq("id", id)
+      .eq("empresa_id", usuario.empresa_id)
+      .maybeSingle();
+
     const { data, error } = await supabaseAdmin
       .from("automacao_fluxos")
       .update(atualizacao)
@@ -315,6 +343,31 @@ export async function PATCH(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    const statusAntes = String(fluxoAntes?.status || "");
+    const statusDepois = String(data.status || "");
+    const acao =
+      statusAntes !== statusDepois && statusDepois === "ativo"
+        ? "fluxo_ativado"
+        : statusAntes !== statusDepois && statusDepois === "pausado"
+        ? "fluxo_pausado"
+        : "fluxo_atualizado";
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id!,
+      categoria: "fluxos",
+      entidade: "fluxo",
+      entidade_id: id,
+      acao,
+      descricao: `Fluxo ${data.nome || id} atualizado`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: fluxoAntes,
+      depois: data,
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,
@@ -331,6 +384,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const resultadoContexto = await getUsuarioContexto();
+    const auditMeta = getRequestAuditMetadata(req);
 
     if (!resultadoContexto.ok) {
       return NextResponse.json(
@@ -409,11 +463,33 @@ export async function DELETE(req: NextRequest) {
         );
       }
 
+      await registrarLogAuditoriaSeguro({
+        empresa_id: usuario.empresa_id,
+        categoria: "fluxos",
+        entidade: "fluxo",
+        entidade_id: id,
+        acao: "fluxo_excluido_definitivo",
+        descricao: "Fluxo excluido definitivamente",
+        usuario_id: usuario.id,
+        usuario_nome: usuario.nome,
+        usuario_email: usuario.email,
+        antes: fluxoArquivado,
+        ip: auditMeta.ip,
+        user_agent: auditMeta.user_agent,
+      });
+
       return NextResponse.json({
         ok: true,
         definitivo: true,
       });
     }
+
+    const { data: fluxoAntes } = await supabaseAdmin
+      .from("automacao_fluxos")
+      .select("*")
+      .eq("id", id)
+      .eq("empresa_id", usuario.empresa_id)
+      .maybeSingle();
 
     const { error } = await supabaseAdmin
       .from("automacao_fluxos")
@@ -432,6 +508,22 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "fluxos",
+      entidade: "fluxo",
+      entidade_id: id,
+      acao: "fluxo_arquivado",
+      descricao: `Fluxo ${fluxoAntes?.nome || id} arquivado`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: fluxoAntes,
+      depois: { status: "arquivado" },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
+
     return NextResponse.json({
       ok: true,
       definitivo: false,
@@ -447,6 +539,7 @@ export async function DELETE(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const resultadoContexto = await getUsuarioContexto();
+    const auditMeta = getRequestAuditMetadata(req);
 
     if (!resultadoContexto.ok) {
       return NextResponse.json(
@@ -600,6 +693,32 @@ export async function PUT(req: NextRequest) {
         );
       }
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id!,
+      categoria: "fluxos",
+      entidade: "fluxo",
+      entidade_id: novoFluxo.id,
+      acao: "fluxo_duplicado",
+      descricao: `Fluxo ${fluxoOriginal.nome} duplicado`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: {
+        fluxo_id: fluxoOriginal.id,
+        nome: fluxoOriginal.nome,
+        nos: nosOriginais?.length || 0,
+        conexoes: conexoesOriginais?.length || 0,
+      },
+      depois: {
+        fluxo_id: novoFluxo.id,
+        nome: novoFluxo.nome,
+        nos: nosDuplicados.length,
+        conexoes: conexoesDuplicadas.length,
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

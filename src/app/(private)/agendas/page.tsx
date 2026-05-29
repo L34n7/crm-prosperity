@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  CalendarPlus,
   ChevronLeft,
   ChevronRight,
   Trash2,
   X,
 } from "lucide-react";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./agendas.module.css";
 
@@ -71,6 +73,16 @@ type ConfigForm = {
   antecedencia_minutos: string;
   janela_dias: string;
   status: string;
+};
+
+type AgendamentoForm = {
+  titulo: string;
+  nome_cliente: string;
+  telefone_cliente: string;
+  email_cliente: string;
+  inicio_at: string;
+  fim_at: string;
+  observacoes: string;
 };
 
 type CalendarDay = {
@@ -154,6 +166,52 @@ function formatarDiaSelecionado(valor?: string | null) {
   }).format(date);
 }
 
+function paraDatetimeLocal(valor?: string | null) {
+  if (!valor) return "";
+
+  const date = new Date(valor);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const ano = date.getFullYear();
+  const mes = pad2(date.getMonth() + 1);
+  const dia = pad2(date.getDate());
+  const hora = pad2(date.getHours());
+  const minuto = pad2(date.getMinutes());
+
+  return `${ano}-${mes}-${dia}T${hora}:${minuto}`;
+}
+
+function criarDatetimeLocalDoDia(data: string, hora = "09:00") {
+  return `${data}T${hora}`;
+}
+
+function somarMinutosDatetimeLocal(valor: string, minutos: number) {
+  const date = new Date(valor);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  date.setMinutes(date.getMinutes() + minutos);
+
+  return paraDatetimeLocal(date.toISOString());
+}
+
+function agendamentoFormPadrao(data?: string | null, duracaoMinutos = 60): AgendamentoForm {
+  const inicio = data ? criarDatetimeLocalDoDia(data, "09:00") : "";
+  const fim = inicio ? somarMinutosDatetimeLocal(inicio, duracaoMinutos) : "";
+
+  return {
+    titulo: "Agendamento",
+    nome_cliente: "",
+    telefone_cliente: "",
+    email_cliente: "",
+    inicio_at: inicio,
+    fim_at: fim,
+    observacoes: "",
+  };
+}
+
+
 function statusLabel(status: string) {
   if (status === "ativo") return "Ativa";
   if (status === "inativo") return "Inativa";
@@ -227,6 +285,12 @@ export default function AgendasPage() {
   const [filtroStatusAgenda, setFiltroStatusAgenda] = useState<
     "todos" | "ativo" | "inativo" | "arquivado"
   >("todos");
+
+  const [modalAgendamentoAberto, setModalAgendamentoAberto] = useState(false);
+  const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
+  const [formAgendamento, setFormAgendamento] = useState<AgendamentoForm>(() =>
+    agendamentoFormPadrao()
+  );
 
   const agendaSelecionada = useMemo(
     () => agendas.find((agenda) => agenda.id === agendaSelecionadaId) || null,
@@ -438,6 +502,107 @@ export default function AgendasPage() {
     setSucesso("");
     setModalConfigAberto(true);
   }
+
+
+  function abrirModalNovoAgendamento(slot?: Slot) {
+    if (!agendaSelecionada) return;
+
+    const dataBase = diaSelecionado || dateKey(new Date());
+
+    const inicio = slot?.inicio_at
+      ? paraDatetimeLocal(slot.inicio_at)
+      : criarDatetimeLocalDoDia(dataBase, "09:00");
+
+    const fim = slot?.fim_at
+      ? paraDatetimeLocal(slot.fim_at)
+      : somarMinutosDatetimeLocal(
+          inicio,
+          agendaSelecionada.duracao_minutos || 60
+        );
+
+    setFormAgendamento({
+      titulo: "Agendamento",
+      nome_cliente: "",
+      telefone_cliente: "",
+      email_cliente: "",
+      inicio_at: inicio,
+      fim_at: fim,
+      observacoes: "",
+    });
+
+    setErro("");
+    setSucesso("");
+    setModalAgendamentoAberto(true);
+  }
+
+  async function salvarAgendamentoManual() {
+    if (!agendaSelecionadaId) return;
+
+    try {
+      setSalvandoAgendamento(true);
+      setErro("");
+      setSucesso("");
+
+      const payload = {
+        titulo: formAgendamento.titulo.trim(),
+        nome_cliente: formAgendamento.nome_cliente.trim(),
+        telefone_cliente: formAgendamento.telefone_cliente.trim(),
+        email_cliente: formAgendamento.email_cliente.trim(),
+        inicio_at: formAgendamento.inicio_at
+          ? new Date(formAgendamento.inicio_at).toISOString()
+          : "",
+        fim_at: formAgendamento.fim_at
+          ? new Date(formAgendamento.fim_at).toISOString()
+          : "",
+        observacoes: formAgendamento.observacoes.trim(),
+      };
+
+      if (!payload.titulo) {
+        throw new Error("Informe o título do agendamento.");
+      }
+
+      if (!payload.nome_cliente && !payload.telefone_cliente) {
+        throw new Error("Informe o nome ou telefone do cliente.");
+      }
+
+      if (!payload.inicio_at || !payload.fim_at) {
+        throw new Error("Informe o início e fim do agendamento.");
+      }
+
+      if (new Date(payload.fim_at).getTime() <= new Date(payload.inicio_at).getTime()) {
+        throw new Error("O horário final precisa ser maior que o horário inicial.");
+      }
+
+      const res = await fetch(`/api/agendas/${agendaSelecionadaId}/agendamentos`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao criar agendamento.");
+      }
+
+      setModalAgendamentoAberto(false);
+      setSucesso("Agendamento criado.");
+
+      const diaCriado = dateKeyFromIso(payload.inicio_at);
+
+      setDiaSelecionado(diaCriado);
+
+      await carregarAgendamentos(agendaSelecionadaId);
+      await carregarSlotsDia(agendaSelecionadaId, diaCriado);
+    } catch (error: unknown) {
+      setErro(mensagemErro(error, "Erro ao criar agendamento."));
+    } finally {
+      setSalvandoAgendamento(false);
+    }
+  }
+
 
   function irMes(delta: number) {
     setMesAtual((atual) => new Date(atual.getFullYear(), atual.getMonth() + delta, 1));
@@ -749,26 +914,36 @@ export default function AgendasPage() {
         <section className={styles.mainPanel}>
           <div className={styles.alertArea}>
             {erro && <div className={styles.errorAlert}>{erro}</div>}
-            {sucesso && <div className={styles.successAlert}>{sucesso}</div>}
           </div>
+          <FeedbackToast
+            success={sucesso}
+            onSuccessDismiss={() => setSucesso("")}
+          />
 
           {!agendaSelecionada ? (
             <div className={styles.emptyState}>Crie ou selecione uma agenda.</div>
           ) : (
             <div className={styles.calendarShell}>
               <div className={styles.calendarToolbar}>
-                <button
-                  type="button"
-                  className={styles.iconButton}
-                  onClick={() => irMes(-1)}
-                  aria-label="Mes anterior"
-                >
-                  <ChevronLeft size={18} />
-                </button>
+                <div className={styles.calendarToolbarLeft}>
+                  <button
+                    type="button"
+                    className={styles.iconButton}
+                    onClick={() => irMes(-1)}
+                    aria-label="Mes anterior"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
 
-                <strong>{mesLabel(mesAtual)}</strong>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={abrirModalConfiguracoes}
+                    disabled={!agendaSelecionadaId}
+                  >
+                    Configurações
+                  </button>
 
-                <div className={styles.calendarToolbarRight}>
                   <button
                     type="button"
                     className={styles.secondaryButton}
@@ -779,14 +954,21 @@ export default function AgendasPage() {
                   >
                     Atualizar
                   </button>
+                </div>
 
+                <div className={styles.calendarToolbarCenter}>
+                  <strong>{mesLabel(mesAtual)}</strong>
+                </div>
+
+                <div className={styles.calendarToolbarRight}>
                   <button
                     type="button"
                     className={styles.primaryButton}
-                    onClick={abrirModalConfiguracoes}
+                    onClick={() => abrirModalNovoAgendamento()}
                     disabled={!agendaSelecionadaId}
                   >
-                    Configurações
+                    <CalendarPlus size={16} />
+                    Criar agendamento
                   </button>
 
                   <button
@@ -850,14 +1032,26 @@ export default function AgendasPage() {
                 <h3>{formatarDiaSelecionado(diaSelecionado)}</h3>
               </div>
 
-              <button
-                type="button"
-                className={styles.closeButton}
-                onClick={() => setDiaSelecionado(null)}
-                aria-label="Fechar dia"
-              >
-                <X size={18} />
-              </button>
+              <div className={styles.dayPanelHeaderActions}>
+                <button
+                  type="button"
+                  className={styles.iconActionButton}
+                  onClick={() => abrirModalNovoAgendamento()}
+                  title="Criar agendamento"
+                  aria-label="Criar agendamento"
+                >
+                  <CalendarPlus size={18} />
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.closeButton}
+                  onClick={() => setDiaSelecionado(null)}
+                  aria-label="Fechar dia"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className={styles.dayPanelBody}>
@@ -929,10 +1123,15 @@ export default function AgendasPage() {
                 ) : (
                   <div className={styles.slotList}>
                     {slotsDia.map((slot) => (
-                      <div key={slot.inicio_at} className={styles.slotItem}>
+                      <button
+                        key={slot.inicio_at}
+                        type="button"
+                        className={styles.slotItemButton}
+                        onClick={() => abrirModalNovoAgendamento(slot)}
+                      >
                         <span>{slot.hora_label}</span>
                         <strong>{slot.label}</strong>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -1153,6 +1352,161 @@ export default function AgendasPage() {
                 disabled={salvandoConfiguracoes}
               >
                 {salvandoConfiguracoes ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalAgendamentoAberto && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalCard}>
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.eyebrow}>Agendamento manual</p>
+                <h3 className={styles.modalTitle}>Criar agendamento</h3>
+              </div>
+
+              <button
+                type="button"
+                className={styles.closeButton}
+                onClick={() => setModalAgendamentoAberto(false)}
+                aria-label="Fechar agendamento"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <div className={styles.configGrid}>
+                <label className={styles.field}>
+                  <span className={styles.label}>Título</span>
+                  <input
+                    className={styles.input}
+                    value={formAgendamento.titulo}
+                    onChange={(event) =>
+                      setFormAgendamento((atual) => ({
+                        ...atual,
+                        titulo: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Nome do cliente</span>
+                  <input
+                    className={styles.input}
+                    value={formAgendamento.nome_cliente}
+                    onChange={(event) =>
+                      setFormAgendamento((atual) => ({
+                        ...atual,
+                        nome_cliente: event.target.value,
+                      }))
+                    }
+                    placeholder="Ex: João Silva"
+                  />
+                </label>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Telefone</span>
+                  <input
+                    className={styles.input}
+                    value={formAgendamento.telefone_cliente}
+                    onChange={(event) =>
+                      setFormAgendamento((atual) => ({
+                        ...atual,
+                        telefone_cliente: event.target.value,
+                      }))
+                    }
+                    placeholder="Ex: 31999999999"
+                  />
+                </label>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>E-mail</span>
+                  <input
+                    className={styles.input}
+                    value={formAgendamento.email_cliente}
+                    onChange={(event) =>
+                      setFormAgendamento((atual) => ({
+                        ...atual,
+                        email_cliente: event.target.value,
+                      }))
+                    }
+                    placeholder="cliente@email.com"
+                  />
+                </label>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Início</span>
+                  <input
+                    type="datetime-local"
+                    className={styles.input}
+                    value={formAgendamento.inicio_at}
+                    onChange={(event) => {
+                      const inicio = event.target.value;
+
+                      setFormAgendamento((atual) => ({
+                        ...atual,
+                        inicio_at: inicio,
+                        fim_at: somarMinutosDatetimeLocal(
+                          inicio,
+                          agendaSelecionada?.duracao_minutos || 60
+                        ),
+                      }));
+                    }}
+                  />
+                </label>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Fim</span>
+                  <input
+                    type="datetime-local"
+                    className={styles.input}
+                    value={formAgendamento.fim_at}
+                    onChange={(event) =>
+                      setFormAgendamento((atual) => ({
+                        ...atual,
+                        fim_at: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className={`${styles.field} ${styles.fullField}`}>
+                  <span className={styles.label}>Observações</span>
+                  <textarea
+                    className={styles.textarea}
+                    value={formAgendamento.observacoes}
+                    onChange={(event) =>
+                      setFormAgendamento((atual) => ({
+                        ...atual,
+                        observacoes: event.target.value,
+                      }))
+                    }
+                    placeholder="Observações internas sobre o agendamento"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setModalAgendamentoAberto(false)}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={salvarAgendamentoManual}
+                disabled={salvandoAgendamento}
+              >
+                {salvandoAgendamento ? "Criando..." : "Criar agendamento"}
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./contatos.module.css";
 
@@ -687,9 +688,10 @@ export default function ContatosPage() {
       {!modalCriarAberto && !modalImportarAberto && erro && (
         <div className={styles.alertError}>{erro}</div>
       )}
-      {!modalCriarAberto && !modalImportarAberto && mensagem && (
-        <div className={styles.alertSuccess}>{mensagem}</div>
-      )}
+      <FeedbackToast
+        success={mensagem}
+        onSuccessDismiss={() => setMensagem("")}
+      />
         
       <section className={styles.card}>
         <div className={styles.cardHeader}>
@@ -1284,7 +1286,6 @@ export default function ContatosPage() {
             </div>
 
             {erroModal && <div className={styles.alertError}>{erroModal}</div>}
-            {mensagem && <div className={styles.alertSuccess}>{mensagem}</div>}
 
             <div className={styles.formGrid}>
               <div className={styles.field}>
@@ -1430,7 +1431,10 @@ export default function ContatosPage() {
             )}
 
             {mensagemImportacao && (
-              <div className={styles.alertSuccess}>{mensagemImportacao}</div>
+              <FeedbackToast
+                success={mensagemImportacao}
+                onSuccessDismiss={() => setMensagemImportacao("")}
+              />
             )}
 
             <div className={styles.formGrid}>

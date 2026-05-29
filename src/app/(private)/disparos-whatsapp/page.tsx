@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./disparos-whatsapp.module.css";
 import { can } from "@/lib/permissoes/frontend";
@@ -1299,7 +1300,12 @@ export default function DisparosWhatsAppPage() {
                   </div>
                 </div>
 
-                {mensagem ? <div className={styles.successAlert}>{mensagem}</div> : null}
+                {mensagem ? (
+                  <FeedbackToast
+                    success={mensagem}
+                    onSuccessDismiss={() => setMensagem("")}
+                  />
+                ) : null}
                 {erro ? <div className={styles.errorAlert}>{erro}</div> : null}
 
                 <div className={styles.submitBar}>

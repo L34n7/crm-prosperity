@@ -24,11 +24,32 @@ function obterCheckoutUrlPorOferta(tipoOferta: string | null) {
   return checkoutPadrao;
 }
 
+function obterCheckoutUrlPorPlano(planoSlug: string | null) {
+  if (planoSlug === "basico") {
+    return process.env.ATOMOPAY_CHECKOUT_URL_BASICO || "";
+  }
+
+  if (planoSlug === "essencial") {
+    return process.env.ATOMOPAY_CHECKOUT_URL_ESSENCIAL || "";
+  }
+
+  return "";
+}
+
+function normalizarPlanoSlug(valor: unknown) {
+  if (valor !== "basico" && valor !== "essencial") {
+    return null;
+  }
+
+  return valor;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
     const leadId = String(body?.lead_id ?? "").trim();
+    const planoSlug = normalizarPlanoSlug(body?.plano_slug);
 
     if (!leadId) {
       throw new Error("Lead não informado.");
@@ -49,7 +70,21 @@ export async function POST(request: Request) {
       throw new Error("Lead não encontrado.");
     }
 
-    const checkoutUrl = obterCheckoutUrlPorOferta(lead.tipo_oferta);
+    if (planoSlug) {
+      const { error: updateError } = await supabase
+        .from("leads_cadastro")
+        .update({ plano_slug: planoSlug, updated_at: new Date().toISOString() })
+        .eq("id", lead.id);
+
+      if (updateError) {
+        console.error("Erro ao atualizar plano do lead:", updateError);
+        throw new Error("Erro ao atualizar plano escolhido.");
+      }
+    }
+
+    const checkoutUrl =
+      obterCheckoutUrlPorPlano(planoSlug) ||
+      obterCheckoutUrlPorOferta(lead.tipo_oferta);
 
     if (!checkoutUrl) {
       throw new Error("Checkout não configurado.");

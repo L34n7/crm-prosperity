@@ -155,6 +155,13 @@ export async function POST(
             inicioDate.getTime() + Number(agenda.duracao_minutos || 60) * 60_000
           ).toISOString();
 
+    if (new Date(fimAt).getTime() <= inicioDate.getTime()) {
+      return NextResponse.json(
+        { ok: false, error: "O horario final precisa ser maior que o inicial." },
+        { status: 400 }
+      );
+    }
+
     const inicioIso = inicioDate.toISOString();
 
     const conflito = await existeConflitoAgenda({
@@ -176,6 +183,13 @@ export async function POST(
     const nomeCliente = String(body?.nome_cliente || "").trim();
     const telefoneCliente = somenteDigitos(body?.telefone_cliente || "");
     const emailCliente = String(body?.email_cliente || "").trim().toLowerCase();
+
+    if (!contatoId && !nomeCliente && !telefoneCliente && !emailCliente) {
+      return NextResponse.json(
+        { ok: false, error: "Informe pelo menos um cliente para o agendamento." },
+        { status: 400 }
+      );
+    }
 
     const { data, error } = await supabase
       .from("agenda_agendamentos")

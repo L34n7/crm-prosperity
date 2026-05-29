@@ -1,5 +1,8 @@
+// C:\Users\leand\Desktop\crm\src\app\api\me\perfil\route.ts
+
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listarPerfisDoUsuario } from "@/lib/permissoes/can";
 import { listarSetoresDoUsuario } from "@/lib/usuarios/setores";
 
@@ -16,9 +19,15 @@ type SetorVinculoBruto = {
   setor_id?: string;
 };
 
+type EmpresaBruta = {
+  id: string;
+  nome_fantasia: string | null;
+};
+
 export async function GET() {
   try {
     const supabase = await createClient();
+    const supabaseAdmin = getSupabaseAdmin();
 
     const {
       data: { user },
@@ -48,13 +57,27 @@ export async function GET() {
     let empresa: { id: string; nome: string | null } | null = null;
 
     if (usuario.empresa_id) {
-      const { data: empresaData } = await supabase
+      const { data: empresaData, error: empresaError } = await supabaseAdmin
         .from("empresas")
-        .select("id, nome")
+        .select("id, nome_fantasia")
         .eq("id", usuario.empresa_id)
-        .single();
+        .maybeSingle<EmpresaBruta>();
 
-      empresa = empresaData ?? null;
+      if (empresaError) {
+        console.error("[API /me/perfil] erro ao buscar empresa:", empresaError);
+
+        return NextResponse.json(
+          { ok: false, error: empresaError.message },
+          { status: 500 }
+        );
+      }
+
+      empresa = empresaData
+        ? {
+            id: empresaData.id,
+            nome: empresaData.nome_fantasia,
+          }
+        : null;
     }
 
     const perfisBrutos = (await listarPerfisDoUsuario(
@@ -83,12 +106,14 @@ export async function GET() {
     let setores: Array<{ id: string; nome: string }> = [];
 
     if (setorIds.length > 0) {
-      const { data: setoresData, error: setoresError } = await supabase
+      const { data: setoresData, error: setoresError } = await supabaseAdmin
         .from("setores")
         .select("id, nome")
         .in("id", setorIds);
 
       if (setoresError) {
+        console.error("[API /me/perfil] erro ao buscar setores:", setoresError);
+
         return NextResponse.json(
           { ok: false, error: setoresError.message },
           { status: 500 }

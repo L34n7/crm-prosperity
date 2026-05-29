@@ -6,6 +6,43 @@ import { upsertConfiguracaoEmpresa } from "@/lib/configuracoes/configuracoes-emp
 
 const supabaseAdmin = getSupabaseAdmin();
 
+type UsuarioPerfilPermissoesRow = {
+  perfil_empresa_id: string;
+  perfis_empresa?: {
+    nome?: string | null;
+  } | null;
+};
+
+type UsuarioSetorPermissoesRow = {
+  setores?: {
+    nome?: string | null;
+  } | null;
+};
+
+type UsuarioPermissoesRow = {
+  id: string;
+  nome: string | null;
+  email: string | null;
+  usuarios_perfis?: UsuarioPerfilPermissoesRow[] | null;
+  usuarios_setores?: UsuarioSetorPermissoesRow[] | null;
+};
+
+type PerfilPermissaoRow = {
+  perfil_empresa_id: string;
+  permissao_codigo: string;
+};
+
+type UsuarioPermissaoRow = {
+  usuario_id: string;
+  permissao_codigo: string;
+  efeito: "permitir" | "bloquear";
+};
+
+type PermissaoOverride = {
+  permissao_codigo: string;
+  efeito: "permitir" | "bloquear";
+};
+
 function defaultEmpresa(empresaId: string) {
   return {
     empresa_id: empresaId,
@@ -75,6 +112,19 @@ export async function GET() {
       empresa = await upsertConfiguracaoEmpresa(defaultEmpresa(usuario.empresa_id));
     }
 
+    const { data: catalogoPermissoes, error: catalogoPermissoesError } =
+      await supabaseAdmin
+        .from("permissoes")
+        .select("codigo, descricao")
+        .order("codigo");
+
+    if (catalogoPermissoesError) {
+      return NextResponse.json(
+        { ok: false, error: catalogoPermissoesError.message },
+        { status: 500 }
+      );
+    }
+
     const { data: usuarios, error: usuariosError } = await supabaseAdmin
       .from("usuarios")
       .select(`
@@ -82,7 +132,9 @@ export async function GET() {
         nome,
         email,
         usuarios_perfis (
+          perfil_empresa_id,
           perfis_empresa (
+            id,
             nome
           )
         ),
@@ -116,31 +168,101 @@ export async function GET() {
       );
     }
 
+    const usuariosRows = (usuarios || []) as UsuarioPermissoesRow[];
+
+    const perfilEmpresaIds = Array.from(
+      new Set(
+        usuariosRows
+          .flatMap((item) =>
+            (item.usuarios_perfis || []).map((p) => p.perfil_empresa_id)
+          )
+          .filter(Boolean)
+      )
+    );
+
+    let perfilPermissoes: PerfilPermissaoRow[] = [];
+
+    if (perfilEmpresaIds.length > 0) {
+      const { data, error } = await supabaseAdmin
+        .from("perfil_permissoes")
+        .select("perfil_empresa_id, permissao_codigo")
+        .in("perfil_empresa_id", perfilEmpresaIds);
+
+      if (error) {
+        return NextResponse.json(
+          { ok: false, error: error.message },
+          { status: 500 }
+        );
+      }
+
+      perfilPermissoes = (data || []) as PerfilPermissaoRow[];
+    }
+
+    const usuarioIds = usuariosRows.map((item) => item.id);
+    let permissoesUsuario: UsuarioPermissaoRow[] = [];
+
+    if (usuarioIds.length > 0) {
+      const { data, error } = await supabaseAdmin
+        .from("usuario_permissoes")
+        .select("usuario_id, permissao_codigo, efeito")
+        .eq("empresa_id", usuario.empresa_id)
+        .in("usuario_id", usuarioIds);
+
+      if (error) {
+        return NextResponse.json(
+          { ok: false, error: error.message },
+          { status: 500 }
+        );
+      }
+
+      permissoesUsuario = (data || []) as UsuarioPermissaoRow[];
+    }
+
+    const permissoesPorPerfil = new Map<string, string[]>();
+
+    for (const item of perfilPermissoes) {
+      const lista = permissoesPorPerfil.get(item.perfil_empresa_id) || [];
+      lista.push(item.permissao_codigo);
+      permissoesPorPerfil.set(item.perfil_empresa_id, lista);
+    }
+
+    const overridesPorUsuario = new Map<string, PermissaoOverride[]>();
+
+    for (const item of permissoesUsuario) {
+      const lista = overridesPorUsuario.get(item.usuario_id) || [];
+      lista.push({
+        permissao_codigo: item.permissao_codigo,
+        efeito: item.efeito,
+      });
+      overridesPorUsuario.set(item.usuario_id, lista);
+    }
+
     const mapConfigUsuario = new Map(
       (configuracoesUsuario || []).map((item) => [item.usuario_id, item])
     );
 
-    const usuariosFormatados = (usuarios || []).map((item: any) => ({
+    const usuariosFormatados = usuariosRows.map((item) => ({
       id: item.id,
       nome: item.nome,
       email: item.email,
       perfis: Array.from(
         new Set(
           (item.usuarios_perfis || [])
-            .map((p: any) => p.perfis_empresa?.nome)
+            .map((p) => p.perfis_empresa?.nome)
             .filter(Boolean)
         )
       ),
       setores: Array.from(
         new Set(
           (item.usuarios_setores || [])
-            .map((s: any) => s.setores?.nome)
+            .map((s) => s.setores?.nome)
             .filter(Boolean)
         )
       ),
       configuracao_usuario: {
         pode_transferir: mapConfigUsuario.get(item.id)?.pode_transferir ?? null,
         pode_atribuir: mapConfigUsuario.get(item.id)?.pode_atribuir ?? null,
+        pode_reatribuir: mapConfigUsuario.get(item.id)?.pode_reatribuir ?? null,
         pode_assumir: mapConfigUsuario.get(item.id)?.pode_assumir ?? null,
         permitir_transferir_sem_assumir:
           mapConfigUsuario.get(item.id)?.permitir_transferir_sem_assumir ?? null,
@@ -150,12 +272,23 @@ export async function GET() {
           mapConfigUsuario.get(item.id)?.permitir_assumir_conversa_sem_responsavel ?? null,
         permitir_assumir_conversa_ja_atribuida:
           mapConfigUsuario.get(item.id)?.permitir_assumir_conversa_ja_atribuida ?? null,
+        exigir_mesmo_setor_para_reatribuicao:
+          mapConfigUsuario.get(item.id)?.exigir_mesmo_setor_para_reatribuicao ?? null,
       },
+      permissoes_herdadas: Array.from(
+        new Set(
+          (item.usuarios_perfis || [])
+            .flatMap((p) => permissoesPorPerfil.get(p.perfil_empresa_id) || [])
+            .filter(Boolean)
+        )
+      ),
+      permissoes_usuario: overridesPorUsuario.get(item.id) || [],
     }));
 
     return NextResponse.json({
       ok: true,
       empresa,
+      permissoes_catalogo: catalogoPermissoes || [],
       usuarios: usuariosFormatados,
     });
   } catch (error) {

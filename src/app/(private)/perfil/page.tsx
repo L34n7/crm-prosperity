@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Cropper, { Area } from "react-easy-crop";
+import FeedbackToast from "@/components/FeedbackToast";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./perfil.module.css";
 import Header from "@/components/Header";
@@ -565,13 +566,11 @@ export default function PerfilPage() {
             <p>Atualize seus dados pessoais e sua foto de perfil.</p>
           </div>
 
-          {(mensagem || erro) && (
-            <div
-              className={`${styles.alert} ${erro ? styles.error : styles.success}`}
-            >
-              {erro || mensagem}
-            </div>
-          )}
+          <FeedbackToast
+            success={mensagem}
+            onSuccessDismiss={() => setMensagem("")}
+          />
+          {erro && <div className={`${styles.alert} ${styles.error}`}>{erro}</div>}
 
           <div className={styles.grid}>
             <section className={`${styles.card} ${styles.sidebar}`}>

@@ -40,6 +40,44 @@
   flex-wrap: wrap;
 }
 
+.tokensBadge {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.tokensBadge:hover {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.tokensLabel {
+  font-weight: 800;
+  color: #2563eb;
+}
+
+.tokensBadge strong {
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.tokensLimit {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .credit {
   font-size: 13px;
   font-weight: 600;
@@ -267,6 +305,27 @@
   color: #64748b;
 }
 
+.notificationHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.markAllReadButton {
+  border: none;
+  background: transparent;
+  color: #8b9aaf;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.markAllReadButton:hover {
+  color: #6e8fd8;
+}
+
 .notificationList {
   max-height: 360px;
   overflow-y: auto;
@@ -326,6 +385,144 @@
   text-align: center;
 }
 
+.notificationViewAllWrapper {
+  padding: 8px 6px 4px;
+  background: #ffffff;
+}
+
+.notificationViewAllButton {
+  width: 100%;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.notificationViewAllButton:hover {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.notificationModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.38);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.notificationModal {
+  width: min(720px, 100%);
+  max-height: min(760px, 90vh);
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notificationModalHeader {
+  padding: 16px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notificationModalHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-shrink: 0;
+}
+
+.notificationModalTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.notificationModalHeader strong {
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.notificationModalHeader span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.notificationModalClose {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notificationModalClose:hover {
+  background: #e2e8f0;
+}
+
+.notificationModalList {
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.notificationModalFooter {
+  padding: 12px 14px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notificationModalFooter span {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.notificationPageButton {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.notificationPageButton:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.notificationPageButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+
 @media (max-width: 768px) {
   .header {
     min-height: auto;
@@ -349,4 +546,27 @@
   .subtitle {
     white-space: normal;
   }
+
+  .notificationDropdown {
+    right: -70px;
+    width: min(340px, calc(100vw - 24px));
+  }
+
+  .notificationModalOverlay {
+    padding: 10px;
+  }
+
+  .notificationModal {
+    max-height: 88vh;
+  }
+
+  .notificationModalFooter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notificationPageButton {
+    width: 100%;
+  }
+
 }

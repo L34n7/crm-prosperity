@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  TEXTO_ACEITE_LGPD,
+  VERSAO_CONTRATO_RESPONSABILIDADES,
+  VERSAO_POLITICA_PRIVACIDADE,
+  VERSAO_TERMOS_SERVICO,
+} from "@/lib/lgpd/termos";
 
 const supabase = getSupabaseAdmin();
 
@@ -41,6 +47,7 @@ export async function POST(request: Request) {
     const email = String(body?.email ?? "").toLowerCase().trim();
     const telefone = String(body?.telefone ?? "").trim();
     const empresa = String(body?.empresa ?? "").trim();
+    const aceiteContrato = body?.aceite_contrato === true;
     const tipoOferta = normalizarTipoOferta(
       body?.tipo_oferta,
       body?.chave_free
@@ -52,6 +59,12 @@ export async function POST(request: Request) {
 
     if (!email) {
       throw new Error("Email é obrigatório.");
+    }
+
+    if (!aceiteContrato) {
+      throw new Error(
+        "Aceite dos termos, da política de privacidade e das responsabilidades LGPD é obrigatório."
+      );
     }
 
     // 🔍 verificar se já existe usuário com esse email
@@ -77,6 +90,16 @@ export async function POST(request: Request) {
         status: "novo",
         plano_slug: "basico",
         tipo_oferta: tipoOferta,
+        termo_aceite: true,
+        termo_aceite_em: new Date().toISOString(),
+        termo_aceite_ip:
+          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+          null,
+        termo_aceite_user_agent: request.headers.get("user-agent") || null,
+        termo_aceite_versao: VERSAO_TERMOS_SERVICO,
+        politica_privacidade_versao: VERSAO_POLITICA_PRIVACIDADE,
+        contrato_responsabilidades_versao: VERSAO_CONTRATO_RESPONSABILIDADES,
+        termo_aceite_texto: TEXTO_ACEITE_LGPD,
       })
       .select("id")
       .single();

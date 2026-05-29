@@ -20,13 +20,32 @@ type PerfilPermissaoRow = {
   permissao_codigo: string;
 };
 
+type UsuarioPermissaoRow = {
+  permissao_codigo: string;
+  efeito: "permitir" | "bloquear";
+};
+
 /**
- * Lista todas as permissões do usuário com base nos perfis vinculados
+ * Lista todas as permissoes finais do usuario:
+ * permissoes herdadas dos perfis + excecoes individuais.
  */
 export async function listarPermissoesDoUsuario(usuarioId: string) {
+  const { data: usuarioBase, error: usuarioError } = await supabaseAdmin
+    .from("usuarios")
+    .select("id, empresa_id")
+    .eq("id", usuarioId)
+    .maybeSingle();
+
+  if (usuarioError) {
+    throw new Error(
+      `Erro ao buscar usuario para permissoes: ${usuarioError.message}`
+    );
+  }
+
   const { data: vinculos, error: vinculosError } = await supabaseAdmin
     .from("usuarios_perfis")
-    .select(`
+    .select(
+      `
       perfil_empresa_id,
       perfis_empresa!inner (
         id,
@@ -34,13 +53,14 @@ export async function listarPermissoesDoUsuario(usuarioId: string) {
         nome,
         ativo
       )
-    `)
+    `
+    )
     .eq("usuario_id", usuarioId)
     .eq("perfis_empresa.ativo", true);
 
   if (vinculosError) {
     throw new Error(
-      `Erro ao listar vínculos de perfis do usuário: ${vinculosError.message}`
+      `Erro ao listar vinculos de perfis do usuario: ${vinculosError.message}`
     );
   }
 
@@ -52,26 +72,55 @@ export async function listarPermissoesDoUsuario(usuarioId: string) {
     ),
   ];
 
-  if (perfilEmpresaIds.length === 0) {
-    return [];
+  const permissoes = new Set<string>();
+
+  if (perfilEmpresaIds.length > 0) {
+    const { data: perfilPermissoes, error: permissoesError } =
+      await supabaseAdmin
+        .from("perfil_permissoes")
+        .select("perfil_empresa_id, permissao_codigo")
+        .in("perfil_empresa_id", perfilEmpresaIds);
+
+    if (permissoesError) {
+      throw new Error(
+        `Erro ao listar permissoes do usuario: ${permissoesError.message}`
+      );
+    }
+
+    for (const item of (perfilPermissoes ?? []) as PerfilPermissaoRow[]) {
+      if (item?.permissao_codigo) {
+        permissoes.add(item.permissao_codigo);
+      }
+    }
   }
 
-  const { data: perfilPermissoes, error: permissoesError } = await supabaseAdmin
-    .from("perfil_permissoes")
-    .select("perfil_empresa_id, permissao_codigo")
-    .in("perfil_empresa_id", perfilEmpresaIds);
+  let overrideQuery = supabaseAdmin
+    .from("usuario_permissoes")
+    .select("permissao_codigo, efeito")
+    .eq("usuario_id", usuarioId);
 
-  if (permissoesError) {
+  if (usuarioBase?.empresa_id) {
+    overrideQuery = overrideQuery.eq("empresa_id", usuarioBase.empresa_id);
+  }
+
+  const { data: usuarioPermissoes, error: usuarioPermissoesError } =
+    await overrideQuery;
+
+  if (usuarioPermissoesError) {
     throw new Error(
-      `Erro ao listar permissões do usuário: ${permissoesError.message}`
+      `Erro ao listar excecoes de permissao do usuario: ${usuarioPermissoesError.message}`
     );
   }
 
-  const permissoes = new Set<string>();
+  for (const item of (usuarioPermissoes ?? []) as UsuarioPermissaoRow[]) {
+    if (!item?.permissao_codigo) continue;
 
-  for (const item of (perfilPermissoes ?? []) as PerfilPermissaoRow[]) {
-    if (item?.permissao_codigo) {
+    if (item.efeito === "permitir") {
       permissoes.add(item.permissao_codigo);
+    }
+
+    if (item.efeito === "bloquear") {
+      permissoes.delete(item.permissao_codigo);
     }
   }
 
@@ -79,7 +128,7 @@ export async function listarPermissoesDoUsuario(usuarioId: string) {
 }
 
 /**
- * Verifica se o usuário possui uma permissão específica
+ * Verifica se o usuario possui uma permissao especifica.
  */
 export async function can(usuarioId: string, permissaoCodigo: string) {
   const permissoes = await listarPermissoesDoUsuario(usuarioId);
@@ -87,12 +136,13 @@ export async function can(usuarioId: string, permissaoCodigo: string) {
 }
 
 /**
- * Lista os perfis dinâmicos do usuário
+ * Lista os perfis dinamicos do usuario.
  */
 export async function listarPerfisDoUsuario(usuarioId: string) {
   const { data, error } = await supabaseAdmin
     .from("usuarios_perfis")
-    .select(`
+    .select(
+      `
       perfil_empresa_id,
       perfis_empresa (
         id,
@@ -103,12 +153,13 @@ export async function listarPerfisDoUsuario(usuarioId: string) {
         created_at,
         updated_at
       )
-    `)
+    `
+    )
     .eq("usuario_id", usuarioId)
     .returns<UsuarioPerfilRow[]>();
 
   if (error) {
-    throw new Error(`Erro ao listar perfis do usuário: ${error.message}`);
+    throw new Error(`Erro ao listar perfis do usuario: ${error.message}`);
   }
 
   return (data ?? []) as UsuarioPerfilRow[];

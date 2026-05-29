@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 export async function PATCH(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -26,6 +30,7 @@ export async function PATCH(
     }
 
     const { id } = await params;
+    const auditMeta = getRequestAuditMetadata(request);
 
     if (!id) {
       return NextResponse.json(
@@ -90,6 +95,22 @@ export async function PATCH(
         { status: 500 }
       );
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "disparos",
+      entidade: "disparo",
+      entidade_id: id,
+      acao: "disparo_agendado_cancelado",
+      descricao: "Disparo agendado cancelado",
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: agendamento,
+      depois: data,
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

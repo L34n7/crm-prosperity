@@ -6,12 +6,20 @@ import {
   podeEditarUsuarios,
   podeVisualizarUsuarios,
 } from "@/lib/auth/authorization";
+import { can } from "@/lib/permissoes/frontend";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 import {
   buscarSetorPrincipalDoUsuario,
   definirSetoresDoUsuario,
   listarIdsSetoresDoUsuario,
 } from "@/lib/usuarios/setores";
 import { definirPerfilDinamicoPorIdDoUsuario } from "@/lib/permissoes/sync-usuarios-perfis";
+import {
+  obterLimitesPlanoPorIdentificador,
+} from "@/lib/planos/limites";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -35,6 +43,22 @@ type PerfilDinamicoRow = {
 type UsuarioPerfilRow = {
   perfil_empresa_id: string;
   perfis_empresa: PerfilDinamicoRow | PerfilDinamicoRow[] | null;
+};
+
+type PlanoEmpresaRow = {
+  id: string;
+  planos:
+    | {
+        id?: string;
+        nome?: string | null;
+        slug?: string | null;
+      }
+    | Array<{
+        id?: string;
+        nome?: string | null;
+        slug?: string | null;
+      }>
+    | null;
 };
 
 function normalizarSetoresEntrada(body: UsuarioPayload) {
@@ -104,6 +128,24 @@ async function validarSetoresDaEmpresa(empresaId: string, setorIds: string[]) {
   return { ok: true as const };
 }
 
+async function perfilEhAdministrador(params: {
+  empresaId: string;
+  perfilEmpresaId: string;
+}) {
+  const { data, error } = await supabaseAdmin
+    .from("perfis_empresa")
+    .select("id, nome")
+    .eq("id", params.perfilEmpresaId)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Erro ao validar perfil: ${error.message}`);
+  }
+
+  return data?.nome === "Administrador";
+}
+
 function normalizarPerfisDinamicos(rows: UsuarioPerfilRow[] | null | undefined) {
   return (rows ?? [])
     .map((item) => {
@@ -121,6 +163,86 @@ function normalizarPerfisDinamicos(rows: UsuarioPerfilRow[] | null | undefined) 
       };
     })
     .filter(Boolean);
+}
+
+function obterLimitesPlanoEmpresa(plano: PlanoEmpresaRow["planos"]) {
+  const planoNormalizado = Array.isArray(plano) ? plano[0] : plano;
+
+  if (!planoNormalizado) return null;
+
+  return (
+    obterLimitesPlanoPorIdentificador(planoNormalizado.slug) ??
+    obterLimitesPlanoPorIdentificador(planoNormalizado.nome)
+  );
+}
+
+async function validarLimiteUsuariosDoPlano(empresaId: string) {
+  const { data: empresa, error: empresaError } = await supabaseAdmin
+    .from("empresas")
+    .select(
+      `
+      id,
+      planos (
+        id,
+        nome,
+        slug
+      )
+    `
+    )
+    .eq("id", empresaId)
+    .maybeSingle();
+
+  if (empresaError) {
+    return {
+      ok: false as const,
+      error: `Erro ao validar plano da empresa: ${empresaError.message}`,
+      status: 500 as const,
+    };
+  }
+
+  if (!empresa) {
+    return {
+      ok: false as const,
+      error: "Empresa nao encontrada",
+      status: 404 as const,
+    };
+  }
+
+  const limitesPlano = obterLimitesPlanoEmpresa(
+    (empresa as PlanoEmpresaRow).planos
+  );
+
+  if (!limitesPlano?.limiteUsuarios) {
+    return { ok: true as const };
+  }
+
+  const { count, error: usuariosError } = await supabaseAdmin
+    .from("usuarios")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_id", empresaId)
+    .eq("status", "ativo");
+
+  if (usuariosError) {
+    return {
+      ok: false as const,
+      error: `Erro ao validar limite de usuarios: ${usuariosError.message}`,
+      status: 500 as const,
+    };
+  }
+
+  if ((count ?? 0) >= limitesPlano.limiteUsuarios) {
+    const nomePlano =
+      limitesPlano.limiteUsuarios === 2 ? "Basic" : "Essencial";
+
+    return {
+      ok: false as const,
+      error:
+        `Limite do plano ${nomePlano} atingido: este plano permite no maximo ${limitesPlano.limiteUsuarios} usuarios ativos.`,
+      status: 403 as const,
+    };
+  }
+
+  return { ok: true as const };
 }
 
 export async function GET() {
@@ -255,6 +377,7 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json()) as UsuarioPayload;
+  const auditMeta = getRequestAuditMetadata(request);
 
   const nome = body?.nome?.trim();
   const email = body?.email?.trim()?.toLowerCase();
@@ -283,6 +406,21 @@ export async function POST(request: Request) {
     );
   }
 
+  const promovendoAdministrador = await perfilEhAdministrador({
+    empresaId: usuario.empresa_id,
+    perfilEmpresaId: perfil_empresa_id,
+  });
+
+  if (
+    promovendoAdministrador &&
+    !can(usuario.permissoes, "usuarios.promover_admin")
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Sem permissao para promover usuario a administrador" },
+      { status: 403 }
+    );
+  }
+
   if (nivel && !["basico", "avancado"].includes(nivel)) {
     return NextResponse.json(
       { ok: false, error: "Nível inválido" },
@@ -303,16 +441,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: empresa } = await supabaseAdmin
-    .from("empresas")
-    .select("id")
-    .eq("id", usuario.empresa_id)
-    .maybeSingle();
+  const validacaoLimitePlano = await validarLimiteUsuariosDoPlano(
+    usuario.empresa_id
+  );
 
-  if (!empresa) {
+  if (!validacaoLimitePlano.ok) {
     return NextResponse.json(
-      { ok: false, error: "Empresa não encontrada" },
-      { status: 404 }
+      { ok: false, error: validacaoLimitePlano.error },
+      { status: validacaoLimitePlano.status }
     );
   }
 
@@ -408,6 +544,29 @@ export async function POST(request: Request) {
   });
 
   const setorIdsSalvos = await listarIdsSetoresDoUsuario(novoUsuario.id);
+
+  await registrarLogAuditoriaSeguro({
+    empresa_id: usuario.empresa_id,
+    categoria: "usuarios",
+    entidade: "usuario",
+    entidade_id: novoUsuario.id,
+    acao: promovendoAdministrador ? "usuario_admin_criado" : "usuario_criado",
+    descricao: `Usuário ${nome} convidado`,
+    usuario_id: usuario.id,
+    usuario_nome: usuario.nome,
+    usuario_email: usuario.email,
+    depois: {
+      id: novoUsuario.id,
+      nome,
+      email,
+      perfil_empresa_id,
+      setor_ids: setorIdsSalvos,
+      nivel,
+      telefone,
+    },
+    ip: auditMeta.ip,
+    user_agent: auditMeta.user_agent,
+  });
 
   return NextResponse.json({
     ok: true,

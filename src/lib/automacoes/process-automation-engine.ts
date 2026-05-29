@@ -4370,6 +4370,15 @@ async function registrarInterpretacaoArquivoAutomacao(params: {
       arquivoUrl,
       mimeType: arquivo.mimeType || input.mimeType,
       camposExtracao,
+      empresaId,
+      metadata: {
+        execucao_id: execucao.id,
+        fluxo_id: execucao.fluxo_id,
+        no_id: no.id,
+        conversa_id: conversaId,
+        contato_id: execucao.contato_id || null,
+        media_id: mediaId,
+      },
     });
 
     await supabaseAdmin.from("automacao_arquivo_analises").insert({
@@ -4825,6 +4834,12 @@ async function seguirParaProximoNo(params: {
                 "Conexão sem nome",
               descricao_ia: conexao.descricao_ia,
             })),
+            empresaId,
+            metadata: {
+              execucao_id: execucaoId,
+              fluxo_id: fluxoId,
+              no_id: noAtualId,
+            },
           });
 
           console.log("[IA CONEXÃO]", resultadoIA);

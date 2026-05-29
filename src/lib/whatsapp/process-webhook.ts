@@ -369,6 +369,13 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
               transcricaoAudio = await transcreverAudioComIA({
                 audioBuffer,
                 fileName: `${mediaId}.ogg`,
+                empresaId: integration.empresa_id,
+                metadata: {
+                  origem_evento: "webhook_whatsapp",
+                  conversa_id: conversation.id,
+                  contato_id: contact.id,
+                  media_id: mediaId,
+                },
               });
 
               if (transcricaoAudio && transcricaoAudio.trim()) {

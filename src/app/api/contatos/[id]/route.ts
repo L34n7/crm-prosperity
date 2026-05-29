@@ -5,6 +5,10 @@ import {
   type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -45,6 +49,7 @@ export async function PUT(
 ) {
   const { id } = await context.params;
   const resultado = await getUsuarioContexto();
+  const auditMeta = getRequestAuditMetadata(request);
 
   if (!resultado.ok) {
     return NextResponse.json(
@@ -199,6 +204,22 @@ if (Object.keys(payload).length === 0) {
     );
   }
 
+  await registrarLogAuditoriaSeguro({
+    empresa_id: usuario.empresa_id,
+    categoria: "contatos",
+    entidade: "contato",
+    entidade_id: id,
+    acao: "contato_atualizado",
+    descricao: `Contato ${data.nome || data.telefone || id} atualizado`,
+    usuario_id: usuario.id,
+    usuario_nome: usuario.nome,
+    usuario_email: usuario.email,
+    antes: contatoAtual,
+    depois: data,
+    ip: auditMeta.ip,
+    user_agent: auditMeta.user_agent,
+  });
+
   return NextResponse.json({
     ok: true,
     message: "Contato atualizado com sucesso",
@@ -222,12 +243,13 @@ export async function DELETE(
 
     const { usuario } = resultado;
     const { id: contatoId } = await context.params;
+    const auditMeta = getRequestAuditMetadata(request);
 
     const supabase = getSupabaseAdmin();
 
     const { data: contato, error: contatoError } = await supabase
       .from("contatos")
-      .select("id, empresa_id")
+      .select("*")
       .eq("id", contatoId)
       .eq("empresa_id", usuario.empresa_id)
       .single();
@@ -294,6 +316,24 @@ export async function DELETE(
         { status: 500 }
       );
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id!,
+      categoria: "contatos",
+      entidade: "contato",
+      entidade_id: contatoId,
+      acao: "contato_excluido",
+      descricao: `Contato ${contato.nome || contato.telefone || contatoId} excluido`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: contato,
+      metadata: {
+        conversas_excluidas: conversaIds.length,
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

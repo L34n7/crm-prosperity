@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./disparos-agendados.module.css";
 
@@ -801,9 +802,12 @@ export default function DisparosAgendadosPage() {
           {(erro || sucesso) && (
             <div className={styles.alertArea}>
               {erro && <div className={styles.errorAlert}>{erro}</div>}
-              {sucesso && <div className={styles.successAlert}>{sucesso}</div>}
             </div>
           )}
+          <FeedbackToast
+            success={sucesso}
+            onSuccessDismiss={() => setSucesso("")}
+          />
 
           <div className={styles.metricsGrid}>
             <div className={styles.metricCard}>

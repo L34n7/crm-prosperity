@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import styles from "./comecar.module.css";
 
 type TipoOferta = "normal" | "vip" | "jv" | "free";
@@ -13,6 +14,7 @@ export default function ComecarPage() {
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [empresa, setEmpresa] = useState("");
+  const [aceiteContrato, setAceiteContrato] = useState(false);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -80,6 +82,13 @@ export default function ComecarPage() {
       return;
     }
 
+    if (!aceiteContrato) {
+      setErro(
+        "Para continuar, confirme que leu e aceitou os termos, a política de privacidade e suas responsabilidades de uso."
+      );
+      return;
+    }
+
     const tipoOferta = obterTipoOfertaDaUrl();
 
     setLoading(true);
@@ -96,6 +105,7 @@ export default function ComecarPage() {
           telefone: telefoneLimpo || null,
           empresa,
           tipo_oferta: tipoOferta,
+          aceite_contrato: aceiteContrato,
           chave_free:
             tipoOferta === "free"
               ? "free_beta_crm_2026_liberado_92xA!kL"
@@ -217,6 +227,28 @@ export default function ComecarPage() {
                 autoComplete="organization"
               />
             </div>
+
+            <label className={styles.consentBox}>
+              <input
+                type="checkbox"
+                checked={aceiteContrato}
+                onChange={(e) => setAceiteContrato(e.target.checked)}
+                className={styles.checkbox}
+              />
+              <span>
+                Declaro que li e aceito os{" "}
+                <Link href="/termos-de-servico" target="_blank">
+                  Termos de Serviço
+                </Link>
+                , a{" "}
+                <Link href="/politica-de-privacidade" target="_blank">
+                  Política de Privacidade
+                </Link>{" "}
+                e estou ciente de que sou responsável pelos dados, contatos,
+                consentimentos e mensagens enviados pela minha empresa na
+                plataforma.
+              </span>
+            </label>
 
             {erro && <p className={styles.error}>{erro}</p>}
 

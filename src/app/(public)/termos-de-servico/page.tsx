@@ -1,62 +1,104 @@
 export default function TermosDeServico() {
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "40px", lineHeight: 1.6 }}>
-      <h1>Termos de Serviço - CRM Prosperity</h1>
+      <h1>Termos de Servico e Contrato de Responsabilidades - CRM Prosperity</h1>
 
       <p>
-        Estes Termos de Serviço regulam o uso da plataforma CRM Prosperity.
-        Ao acessar ou utilizar o sistema, você concorda com estes termos.
+        Estes Termos de Servico regulam o uso da plataforma CRM Prosperity.
+        Ao criar uma conta, contratar, acessar ou utilizar o sistema, o cliente
+        declara que leu, compreendeu e aceitou estes termos, incluindo suas
+        responsabilidades sobre dados pessoais e comunicacoes realizadas pela
+        plataforma.
       </p>
 
-      <h2>1. Descrição do Serviço</h2>
+      <h2>1. Descricao do servico</h2>
       <p>
-        O CRM Prosperity é uma plataforma de gestão de atendimento, automação
-        e comunicação com clientes, incluindo integração com a API oficial do
-        WhatsApp Business fornecida pela Meta Platforms, Inc.
+        O CRM Prosperity e uma plataforma de gestao de atendimento, automacao,
+        contatos, usuarios, setores, conversas, mensagens e comunicacao com
+        clientes, incluindo integracao com a API oficial do WhatsApp Business
+        fornecida pela Meta Platforms, Inc.
       </p>
 
-      <h2>2. Uso da Plataforma</h2>
+      <h2>2. Responsabilidades do cliente</h2>
       <p>
-        O usuário concorda em utilizar a plataforma de forma legal e em
-        conformidade com as políticas da Meta, incluindo as Políticas do
-        WhatsApp Business e diretrizes de envio de mensagens.
+        O cliente e responsavel por todos os dados cadastrados, importados,
+        enviados ou tratados por sua empresa na plataforma. Isso inclui manter
+        dados corretos, usar a plataforma de forma licita, orientar seus
+        usuarios internos e garantir que somente pessoas autorizadas tenham
+        acesso ao ambiente.
       </p>
 
-      <h2>3. Responsabilidade do Usuário</h2>
+      <h2>3. LGPD, base legal e consentimentos</h2>
       <p>
-        O usuário é integralmente responsável pelo conteúdo das mensagens
-        enviadas, bem como pela obtenção de consentimento dos destinatários,
-        quando aplicável.
+        O cliente declara que possui base legal adequada, consentimento quando
+        necessario, ou outra hipotese autorizada pela Lei Geral de Protecao de
+        Dados (Lei 13.709/2018) para cadastrar contatos, importar listas,
+        armazenar historicos, enviar mensagens e realizar atendimentos pela
+        plataforma.
       </p>
-
-      <h2>4. Custos e Cobranças</h2>
       <p>
-        O uso da API do WhatsApp pode gerar cobranças definidas pela Meta,
-        incluindo custos por conversa e envio de mensagens. O CRM Prosperity
-        não define esses valores e não se responsabiliza por variações de
-        preços.
+        O CRM Prosperity atua como fornecedor de tecnologia e operador dos
+        dados tratados em nome do cliente, quando aplicavel. O cliente permanece
+        responsavel pelas finalidades do tratamento, pela origem das bases de
+        contatos e pelo atendimento das solicitacoes dos titulares de dados.
       </p>
 
-      <h2>5. Suspensão e Encerramento</h2>
+      <h2>4. Comunicacoes via WhatsApp e Meta</h2>
       <p>
-        Contas que violarem estes termos ou as políticas da Meta poderão ser
-        suspensas ou encerradas sem aviso prévio.
+        O cliente concorda em cumprir as politicas da Meta e do WhatsApp
+        Business, incluindo regras de opt-in, templates, conteudos permitidos,
+        qualidade da conta, limites de envio e eventuais custos por conversa ou
+        mensagem. O cliente e responsavel pelo conteudo enviado e pelos efeitos
+        comerciais, reputacionais ou legais de suas comunicacoes.
       </p>
 
-      <h2>6. Limitação de Responsabilidade</h2>
+      <h2>5. Usos proibidos</h2>
       <p>
-        O CRM Prosperity não se responsabiliza por perdas decorrentes de uso
-        indevido da plataforma ou de indisponibilidades de serviços de
-        terceiros, incluindo a Meta.
+        E proibido utilizar a plataforma para spam, fraude, conteudo ilegal,
+        abusivo, discriminatorio, enganoso, violacao de direitos de terceiros,
+        venda indevida de dados pessoais ou qualquer atividade que descumpra a
+        legislacao aplicavel, estes termos ou politicas de terceiros integrados.
       </p>
 
-      <h2>7. Alterações</h2>
+      <h2>6. Custos, cobrancas e terceiros</h2>
       <p>
-        Estes termos podem ser atualizados a qualquer momento para refletir
-        mudanças legais ou operacionais.
+        O uso de APIs, provedores de email, meios de pagamento, WhatsApp,
+        Meta ou outros servicos de terceiros pode gerar cobrancas e depender de
+        disponibilidade, analises e regras externas. O CRM Prosperity nao
+        controla precos, politicas, bloqueios ou instabilidades desses servicos.
       </p>
 
-      <p><strong>Última atualização:</strong> 2026</p>
+      <h2>7. Seguranca e acessos</h2>
+      <p>
+        O cliente deve proteger suas credenciais, revisar usuarios e permissoes,
+        remover acessos desnecessarios e comunicar imediatamente qualquer uso
+        indevido, vazamento ou suspeita de incidente envolvendo sua conta.
+      </p>
+
+      <h2>8. Suspensao e encerramento</h2>
+      <p>
+        Contas que violem estes termos, a legislacao aplicavel, politicas da
+        Meta ou regras de uso aceitavel poderao ser suspensas ou encerradas,
+        inclusive para proteger a plataforma, terceiros, titulares de dados ou
+        a reputacao do servico.
+      </p>
+
+      <h2>9. Limitacao de responsabilidade</h2>
+      <p>
+        O CRM Prosperity nao se responsabiliza por perdas decorrentes de uso
+        indevido da plataforma, dados fornecidos pelo cliente, listas sem base
+        legal, mensagens enviadas pelo cliente, indisponibilidades de terceiros
+        ou descumprimento de obrigacoes legais pelo cliente.
+      </p>
+
+      <h2>10. Atualizacoes</h2>
+      <p>
+        Estes termos podem ser atualizados para refletir mudancas legais,
+        operacionais ou de fornecedores integrados. A continuidade de uso apos
+        a atualizacao representa ciencia e aceite da versao vigente.
+      </p>
+
+      <p><strong>Ultima atualizacao:</strong> 29/05/2026</p>
     </main>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./setores.module.css";
 
@@ -320,7 +321,10 @@ export default function SetoresPage() {
           </div>
 
           {erro && <div className={styles.errorAlert}>{erro}</div>}
-          {sucesso && <div className={styles.successAlert}>{sucesso}</div>}
+          <FeedbackToast
+            success={sucesso}
+            onSuccessDismiss={() => setSucesso("")}
+          />
 
           <div className={styles.toolbar}>
             <div className={styles.searchField}>

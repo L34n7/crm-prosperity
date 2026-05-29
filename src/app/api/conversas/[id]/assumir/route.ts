@@ -7,6 +7,10 @@ import {
   podeAssumirConversas,
 } from "@/lib/auth/authorization";
 import { getPoliticaAtendimentoDoUsuario } from "@/lib/configuracoes/politicas-atendimento";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -21,12 +25,13 @@ type ConversaRow = {
 };
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   console.log("[ASSUMIR] rota carregada");
   try {
     const { id } = await context.params;
+    const auditMeta = getRequestAuditMetadata(request);
 
     const resultado = await getUsuarioContexto();
 
@@ -256,6 +261,37 @@ export async function POST(
         .in("execucao_id", execucaoIds)
         .eq("status", "pendente");
     }
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "conversas",
+      entidade: "conversa",
+      entidade_id: id,
+      acao: conversaEncerradaReabrivel
+        ? "conversa_reaberta_assumida"
+        : "conversa_assumida",
+      descricao: conversaEncerradaReabrivel
+        ? "Conversa reaberta e assumida"
+        : "Conversa assumida",
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: {
+        responsavel_id: conversa.responsavel_id,
+        status: conversa.status,
+        closed_at: conversa.closed_at ?? null,
+        bot_ativo: conversa.bot_ativo ?? null,
+      },
+      depois: {
+        responsavel_id: usuario.id,
+        status: "em_atendimento",
+        closed_at: null,
+        bot_ativo: false,
+        execucoes_canceladas: execucaoIds.length,
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
 
     return NextResponse.json({
       ok: true,

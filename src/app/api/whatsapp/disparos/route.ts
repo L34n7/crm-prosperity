@@ -4,6 +4,10 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { isAdministrador } from "@/lib/auth/authorization";
 import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 type DestinatarioEntrada = {
   numero: string;
@@ -536,6 +540,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const resultadoContexto = await getUsuarioContexto();
+    const auditMeta = getRequestAuditMetadata(req);
 
     if (!resultadoContexto.ok) {
       return NextResponse.json(
@@ -969,11 +974,36 @@ export async function POST(req: NextRequest) {
       })
     );
 
+    const sucessos = resultados.filter((item) => item.ok).length;
+    const falhas = resultados.filter((item) => !item.ok).length;
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: empresaId,
+      categoria: "disparos",
+      entidade: "disparo",
+      entidade_id: template.id,
+      acao: "disparo_em_massa_executado",
+      descricao: `${resultados.length} disparos executados`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      depois: {
+        total: resultados.length,
+        sucessos,
+        falhas,
+        template_id: template.id,
+        template_nome: template.nome,
+        integracao_whatsapp_id: integracaoWhatsappId,
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
+
     return NextResponse.json({
       ok: true,
       total: resultados.length,
-      sucessos: resultados.filter((item) => item.ok).length,
-      falhas: resultados.filter((item) => !item.ok).length,
+      sucessos,
+      falhas,
       resultados,
     });
   } catch (error: any) {
