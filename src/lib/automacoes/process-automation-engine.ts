@@ -21,6 +21,7 @@ import {
   listarSlotsDisponiveis,
   type PreferenciaHorarioAgenda,
 } from "@/lib/agendas/agenda-service";
+import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -3950,6 +3951,13 @@ async function criarAgendamentoAutomacao(params: {
     return;
   }
 
+  await sincronizarAgendamentoGoogleCalendar({
+    empresaId,
+    agendamentoId: agendamento.id,
+  }).catch((syncError) =>
+    console.error("[GOOGLE_CALENDAR] Erro ao criar evento da automacao:", syncError)
+  );
+
   const valores = valoresAgendamentoAgenda(agendamento, agenda);
 
   await salvarVariaveisAutomacao({
@@ -4120,6 +4128,13 @@ async function remarcarAgendamentoAutomacao(params: {
     return;
   }
 
+  await sincronizarAgendamentoGoogleCalendar({
+    empresaId,
+    agendamentoId: agendamento.id,
+  }).catch((syncError) =>
+    console.error("[GOOGLE_CALENDAR] Erro ao remarcar evento da automacao:", syncError)
+  );
+
   const agenda = await obterAgendaAutomacao(empresaId, agendaId);
   const valores = valoresAgendamentoAgenda(agendamento, agenda);
 
@@ -4232,6 +4247,13 @@ async function cancelarAgendamentoAutomacao(params: {
     console.error("[AUTOMATION_ENGINE] Erro ao cancelar agendamento:", error);
     return;
   }
+
+  await sincronizarAgendamentoGoogleCalendar({
+    empresaId,
+    agendamentoId: agendamento.id,
+  }).catch((syncError) =>
+    console.error("[GOOGLE_CALENDAR] Erro ao cancelar evento da automacao:", syncError)
+  );
 
   const agenda = await obterAgendaAutomacao(empresaId, agendamento.agenda_id);
   const valores = {

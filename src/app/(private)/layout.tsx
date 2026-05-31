@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { listarPermissoesDoUsuario } from "@/lib/permissoes/can";
 import CrmShell from "@/components/CrmShell";
 
 export default async function PrivateLayout({
@@ -19,16 +20,21 @@ export default async function PrivateLayout({
 
   let profileName = "Usuário";
   let avatarUrl = "";
+  let permissoes: string[] = [];
 
   if (user) {
     const { data: usuarioSistema } = await supabase
       .from("usuarios")
-      .select("nome, avatar_url")
+      .select("id, nome, avatar_url")
       .eq("auth_user_id", user.id)
       .maybeSingle();
 
     profileName = usuarioSistema?.nome || "Usuário";
     avatarUrl = usuarioSistema?.avatar_url || "";
+
+    if (usuarioSistema?.id) {
+      permissoes = await listarPermissoesDoUsuario(usuarioSistema.id);
+    }
   }
 
   return (
@@ -36,6 +42,7 @@ export default async function PrivateLayout({
       initialCollapsed={initialCollapsed}
       profileName={profileName}
       avatarUrl={avatarUrl}
+      permissoes={permissoes}
     >
       {children}
     </CrmShell>

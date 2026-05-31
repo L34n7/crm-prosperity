@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
+import { can } from "@/lib/permissoes/frontend";
 
 export async function GET() {
   const resultado = await getUsuarioContexto();
@@ -21,6 +22,17 @@ export async function GET() {
     );
   }
 
+  const podeVisualizarSaldo =
+    can(usuario.permissoes, "ia.tokens.exibir_header") ||
+    can(usuario.permissoes, "ia.tokens.visualizar_extrato");
+
+  if (!podeVisualizarSaldo) {
+    return NextResponse.json(
+      { ok: false, error: "Sem permissao para visualizar tokens de IA." },
+      { status: 403 }
+    );
+  }
+
   try {
     const saldo = await buscarSaldoTokensIa(usuario.empresa_id);
 
@@ -28,11 +40,14 @@ export async function GET() {
       ok: true,
       saldo,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
       {
         ok: false,
-        error: error?.message || "Erro ao buscar saldo de tokens de IA.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao buscar saldo de tokens de IA.",
       },
       { status: 500 }
     );

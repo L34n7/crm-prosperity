@@ -288,7 +288,6 @@ export async function GET() {
       created_at,
       updated_at
     `)
-    .eq("status", "ativo")
     .eq("empresa_id", usuario.empresa_id)
     .order("nome", { ascending: true });
 
@@ -300,6 +299,34 @@ export async function GET() {
   }
 
   const usuariosBase = data ?? [];
+  const { data: empresa, error: empresaError } = await supabaseAdmin
+    .from("empresas")
+    .select(
+      `
+      id,
+      planos (
+        id,
+        nome,
+        slug
+      )
+    `
+    )
+    .eq("id", usuario.empresa_id)
+    .maybeSingle();
+
+  if (empresaError) {
+    return NextResponse.json(
+      { ok: false, error: `Erro ao carregar plano da empresa: ${empresaError.message}` },
+      { status: 500 }
+    );
+  }
+
+  const limitesPlano = empresa
+    ? obterLimitesPlanoEmpresa((empresa as PlanoEmpresaRow).planos)
+    : null;
+  const quantidadeUsuariosAtivos = usuariosBase.filter(
+    (item) => item.status === "ativo"
+  ).length;
 
   const usuariosEnriquecidos = await Promise.all(
     usuariosBase.map(async (item) => {
@@ -347,6 +374,8 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     usuarios: usuariosFiltrados,
+    quantidade_usuarios_ativos: quantidadeUsuariosAtivos,
+    limite_usuarios_plano: limitesPlano?.limiteUsuarios ?? null,
   });
 }
 

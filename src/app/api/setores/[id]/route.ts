@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { isAdministrador } from "@/lib/auth/authorization";
+import { can } from "@/lib/permissoes/frontend";
 import { registrarLogAuditoria } from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -30,9 +30,9 @@ export async function PUT(
 
     const { usuario } = resultado;
 
-    if (!isAdministrador(usuario)) {
+    if (!can(usuario.permissoes, "setores.editar")) {
       return NextResponse.json(
-        { ok: false, error: "Apenas administradores podem editar setores" },
+        { ok: false, error: "Sem permissao para editar setores" },
         { status: 403 }
       );
     }
@@ -46,7 +46,7 @@ export async function PUT(
 
     const { data: setorAtual, error: setorAtualError } = await supabaseAdmin
       .from("setores")
-      .select("id, empresa_id")
+      .select("id, empresa_id, ativo")
       .eq("id", id)
       .maybeSingle();
 
@@ -76,6 +76,16 @@ export async function PUT(
     const nome = body?.nome?.trim();
     const descricao = body?.descricao?.trim() || null;
     const ativo = body?.ativo ?? true;
+
+    if (
+      setorAtual.ativo !== ativo &&
+      !can(usuario.permissoes, "setores.alterar_status")
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissao para alterar status de setores" },
+        { status: 403 }
+      );
+    }
 
     const { data: setorAntes, error: setorAntesError } = await supabaseAdmin
       .from("setores")

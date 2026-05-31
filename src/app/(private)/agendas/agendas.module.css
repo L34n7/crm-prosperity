@@ -679,6 +679,67 @@
   font-weight: 900;
 }
 
+.googleCalendarCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #f8fbff;
+}
+
+.googleCalendarCard h4 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 17px;
+}
+
+.googleCalendarCard p:not(.eyebrow) {
+  margin: 6px 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.googleCalendarCard small {
+  color: #475569;
+  font-size: 12px;
+}
+
+.googleCalendarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.googleButton {
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.googleButton:hover {
+  background: #eff6ff;
+}
+
+.googleButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .availabilityGrid {
   display: grid;
   gap: 8px;
@@ -858,6 +919,12 @@
   .availabilityRow,
   .appointmentActions {
     grid-template-columns: 1fr;
+  }
+
+  .googleCalendarCard,
+  .googleCalendarActions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .calendarDay {

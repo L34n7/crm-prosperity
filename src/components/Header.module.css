@@ -36,13 +36,14 @@
 .right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .tokensBadge {
   height: 34px;
   padding: 0 10px;
+  margin-right: 10px;
   border: 1px solid #dbeafe;
   border-radius: 10px;
   background: #eff6ff;
@@ -60,6 +61,11 @@
 .tokensBadge:hover {
   background: #dbeafe;
   border-color: #bfdbfe;
+}
+
+.tokensBadgeStatic:hover {
+  background: #eff6ff;
+  border-color: #dbeafe;
 }
 
 .tokensLabel {
@@ -235,6 +241,7 @@
 
 .notificationWrapper {
   position: relative;
+
 }
 
 .notificationButton {
@@ -522,6 +529,173 @@
   cursor: not-allowed;
 }
 
+.tokenAlertOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(15, 23, 42, 0.58);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.tokenAlertCard {
+  position: relative;
+  width: min(620px, 100%);
+  overflow: hidden;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+  display: grid;
+}
+
+.tokenAlertClose {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.tokenAlertClose:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.tokenAlertHero {
+  padding: 26px 28px 24px;
+  background:
+    linear-gradient(135deg, rgba(7, 17, 31, 0.98) 0%, rgba(11, 21, 38, 0.98) 45%, rgba(15, 23, 42, 0.98) 100%);
+}
+
+.tokenAlertEyebrow {
+  width: fit-content;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tokenAlertHero h2 {
+  margin: 5px 0px 0px 0px;
+  color: #ffffff;
+  font-size: 28px;
+  line-height: 1.12;
+  font-weight: 900;
+}
+
+.tokenAlertHero p {
+  margin: 12px 0 0;
+  color: #cbd5e1;
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 520px;
+}
+
+.tokenAlertHero span {
+  color: #cbd5e1;
+  font-size: 11px;
+  line-height: 4.6;
+  max-width: 520px;
+}
+
+.tokenAlertHero strong {
+  color: #ffffff;
+}
+
+.tokenAlertOffers {
+  padding: 18px 22px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tokenAlertOffers div {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px;
+  background: #f8fafc;
+  display: grid;
+  gap: 5px;
+}
+
+.tokenAlertOffers span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tokenAlertOffers strong {
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.tokenAlertOffers small {
+  color: #047857;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.tokenAlertActions {
+  padding: 18px 22px 22px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tokenAlertPrimary,
+.tokenAlertSecondary {
+  min-height: 48px;
+  border-radius: 14px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.tokenAlertPrimary {
+  border: none;
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+  color: #ffffff;
+  box-shadow: 0 14px 30px rgba(29, 78, 216, 0.24);
+}
+
+.tokenAlertPrimary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px rgba(29, 78, 216, 0.3);
+}
+
+.tokenAlertSecondary {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.tokenAlertSecondary:hover {
+  background: #f8fafc;
+}
+
 
 @media (max-width: 768px) {
   .header {
@@ -566,6 +740,27 @@
   }
 
   .notificationPageButton {
+    width: 100%;
+  }
+
+  .tokenAlertCard {
+    grid-template-columns: 1fr;
+  }
+
+  .tokenAlertHero {
+    padding: 24px 20px 22px;
+  }
+
+  .tokenAlertHero h2 {
+    font-size: 24px;
+  }
+
+  .tokenAlertOffers {
+    grid-template-columns: 1fr;
+  }
+
+  .tokenAlertPrimary,
+  .tokenAlertSecondary {
     width: 100%;
   }
 

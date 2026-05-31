@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./empresas.module.css";
 
 type Plano = {
@@ -73,6 +74,12 @@ function getIniciais(nome: string) {
 }
 
 export default function EmpresasPage() {
+  const { permissoes } = useHeaderUser();
+  const podeCriarEmpresas = permissoes.includes("empresas.criar");
+  const podeEditarEmpresas = permissoes.includes("empresas.editar");
+  const podeAlterarStatusEmpresas = permissoes.includes(
+    "empresas.alterar_status"
+  );
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [planos, setPlanos] = useState<Plano[]>([]);
 
@@ -273,7 +280,7 @@ export default function EmpresasPage() {
       />
 
       <div className={styles.pageContent}>
-        <section className={styles.card}>
+        {podeCriarEmpresas && <section className={styles.card}>
           <div className={styles.cardHeader}>
             <div>
               <p className={styles.eyebrow}>Cadastro</p>
@@ -403,7 +410,7 @@ export default function EmpresasPage() {
               {loading ? "Criando..." : "Criar empresa"}
             </button>
           </div>
-        </section>
+        </section>}
 
         <FeedbackToast
           success={mensagem}
@@ -475,7 +482,7 @@ export default function EmpresasPage() {
                       </div>
 
                       <div className={styles.itemRight}>
-                        {!editando && (
+                        {!editando && podeEditarEmpresas && (
                           <button
                             onClick={() => toggleExpandir(empresa.id)}
                             className={styles.secondaryButton}
@@ -576,6 +583,7 @@ export default function EmpresasPage() {
                               <select
                                 className={styles.select}
                                 value={editStatus}
+                                disabled={!podeAlterarStatusEmpresas}
                                 onChange={(e) =>
                                   setEditStatus(e.target.value as StatusEmpresa)
                                 }

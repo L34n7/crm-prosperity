@@ -7,6 +7,7 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import { empresaManteraAdminGerenciador } from "@/lib/permissoes/garantir-admin-gerenciador";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -154,6 +155,25 @@ export async function PUT(
           { status: 400 }
         );
       }
+    }
+
+    const manteraAdminGerenciador = await empresaManteraAdminGerenciador({
+      empresaId: usuario.empresa_id,
+      usuarioAlterado: {
+        usuarioId: id,
+        permissoes: overridesValidos,
+      },
+    });
+
+    if (!manteraAdminGerenciador) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "A empresa precisa manter ao menos um administrador ativo capaz de gerenciar permissoes.",
+        },
+        { status: 400 }
+      );
     }
 
     const data = await upsertConfiguracaoUsuario({

@@ -5,7 +5,10 @@ import {
   CalendarPlus,
   ChevronLeft,
   ChevronRight,
+  Link2,
+  RefreshCw,
   Trash2,
+  Unlink,
   X,
 } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
@@ -89,6 +92,12 @@ type CalendarDay = {
   key: string;
   date: Date;
   currentMonth: boolean;
+};
+
+type GoogleCalendarIntegracao = {
+  conectado: boolean;
+  email?: string | null;
+  ultima_sincronizacao_em?: string | null;
 };
 
 const DIAS = [
@@ -279,6 +288,9 @@ export default function AgendasPage() {
   const [carregando, setCarregando] = useState(true);
   const [carregandoDia, setCarregandoDia] = useState(false);
   const [salvandoConfiguracoes, setSalvandoConfiguracoes] = useState(false);
+  const [googleCalendar, setGoogleCalendar] =
+    useState<GoogleCalendarIntegracao | null>(null);
+  const [carregandoGoogleCalendar, setCarregandoGoogleCalendar] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [busca, setBusca] = useState("");
@@ -501,6 +513,90 @@ export default function AgendasPage() {
     setErro("");
     setSucesso("");
     setModalConfigAberto(true);
+    carregarGoogleCalendar(agendaSelecionada.id);
+  }
+
+  async function carregarGoogleCalendar(agendaId: string) {
+    try {
+      setCarregandoGoogleCalendar(true);
+      const res = await fetch(`/api/agendas/${agendaId}/google-calendar`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao consultar Google Calendar.");
+      }
+
+      setGoogleCalendar(json.integracao || { conectado: false });
+    } catch (error: unknown) {
+      setGoogleCalendar(null);
+      setErro(mensagemErro(error, "Erro ao consultar Google Calendar."));
+    } finally {
+      setCarregandoGoogleCalendar(false);
+    }
+  }
+
+  function vincularGoogleCalendar() {
+    if (!agendaSelecionadaId) return;
+
+    window.location.href = `/api/agendas/${agendaSelecionadaId}/google-calendar?acao=conectar`;
+  }
+
+  async function sincronizarGoogleCalendar() {
+    if (!agendaSelecionadaId) return;
+
+    try {
+      setCarregandoGoogleCalendar(true);
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch(`/api/agendas/${agendaSelecionadaId}/google-calendar`, {
+        method: "POST",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao sincronizar Google Calendar.");
+      }
+
+      setSucesso("Agenda sincronizada com o Google Calendar.");
+      await carregarGoogleCalendar(agendaSelecionadaId);
+
+      if (diaSelecionado) {
+        await carregarSlotsDia(agendaSelecionadaId, diaSelecionado);
+      }
+    } catch (error: unknown) {
+      setErro(mensagemErro(error, "Erro ao sincronizar Google Calendar."));
+    } finally {
+      setCarregandoGoogleCalendar(false);
+    }
+  }
+
+  async function desvincularGoogleCalendar() {
+    if (!agendaSelecionadaId) return;
+
+    try {
+      setCarregandoGoogleCalendar(true);
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch(`/api/agendas/${agendaSelecionadaId}/google-calendar`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao desvincular Google Calendar.");
+      }
+
+      setGoogleCalendar({ conectado: false });
+      setSucesso("Conta Google desvinculada.");
+    } catch (error: unknown) {
+      setErro(mensagemErro(error, "Erro ao desvincular Google Calendar."));
+    } finally {
+      setCarregandoGoogleCalendar(false);
+    }
   }
 
 
@@ -1268,6 +1364,65 @@ export default function AgendasPage() {
                   />
                 </label>
               </div>
+
+              {modoModal === "editar" && (
+                <section className={styles.googleCalendarCard}>
+                  <div>
+                    <p className={styles.eyebrow}>Google Calendar</p>
+                    <h4>Sincronizacao da agenda</h4>
+                    <p>
+                      Vincule sua conta para enviar os agendamentos ao Google e
+                      bloquear horarios ja ocupados no calendario.
+                    </p>
+                    {googleCalendar?.conectado && (
+                      <small>
+                        Conta vinculada: <strong>{googleCalendar.email || "Google"}</strong>
+                        {googleCalendar.ultima_sincronizacao_em &&
+                          ` · Ultima sincronizacao: ${formatarData(
+                            googleCalendar.ultima_sincronizacao_em
+                          )}`}
+                      </small>
+                    )}
+                  </div>
+
+                  <div className={styles.googleCalendarActions}>
+                    {!googleCalendar?.conectado ? (
+                      <button
+                        type="button"
+                        className={styles.googleButton}
+                        onClick={vincularGoogleCalendar}
+                        disabled={carregandoGoogleCalendar}
+                      >
+                        <Link2 size={16} />
+                        {carregandoGoogleCalendar
+                          ? "Consultando..."
+                          : "Vincular conta Google"}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className={styles.googleButton}
+                          onClick={sincronizarGoogleCalendar}
+                          disabled={carregandoGoogleCalendar}
+                        >
+                          <RefreshCw size={16} />
+                          {carregandoGoogleCalendar ? "Sincronizando..." : "Sincronizar agora"}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          onClick={desvincularGoogleCalendar}
+                          disabled={carregandoGoogleCalendar}
+                        >
+                          <Unlink size={16} />
+                          Desvincular
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </section>
+              )}
 
               <div className={styles.modalSectionHeader}>
                 <p className={styles.eyebrow}>Disponibilidade</p>

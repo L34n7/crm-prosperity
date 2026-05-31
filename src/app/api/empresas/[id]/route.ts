@@ -2,15 +2,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getUsuarioContexto,
-  type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
+import { can } from "@/lib/permissoes/frontend";
 
 const supabaseAdmin = getSupabaseAdmin();
-
-function podeGerenciarEmpresas(usuario: UsuarioContexto) {
-  const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
-  return nomesPerfis.includes("Administrador");
-}
 
 export async function PUT(
   request: Request,
@@ -29,7 +24,7 @@ export async function PUT(
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarEmpresas(usuario)) {
+  if (!can(usuario.permissoes, "empresas.editar")) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para editar empresa" },
       { status: 403 }
@@ -80,7 +75,7 @@ export async function PUT(
 
   const { data: empresaAtual } = await supabaseAdmin
     .from("empresas")
-    .select("id")
+    .select("id, status")
     .eq("id", id)
     .maybeSingle();
 
@@ -88,6 +83,16 @@ export async function PUT(
     return NextResponse.json(
       { ok: false, error: "Empresa não encontrada" },
       { status: 404 }
+    );
+  }
+
+  if (
+    empresaAtual.status !== status &&
+    !can(usuario.permissoes, "empresas.alterar_status")
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Sem permissao para alterar status da empresa" },
+      { status: 403 }
     );
   }
 

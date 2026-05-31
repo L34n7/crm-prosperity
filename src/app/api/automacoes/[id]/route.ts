@@ -8,6 +8,123 @@ import {
 
 const supabaseAdmin = getSupabaseAdmin();
 
+type ResumoConexaoAuditoria = {
+  id: string;
+  no_origem_id: string;
+  no_destino_id: string;
+  rotulo: string | null;
+  ordem: number;
+  condicao_json: unknown;
+  usar_ia: boolean;
+  descricao_ia: string | null;
+};
+
+type AlteracaoConexaoAuditoria = {
+  id: string;
+  antes: ResumoConexaoAuditoria | null;
+  depois: ResumoConexaoAuditoria | null;
+};
+
+type ResumoNoAuditoria = {
+  id: string;
+  tipo_no: string;
+  titulo: string | null;
+  descricao: string | null;
+  configuracao_json: unknown;
+  delay_segundos: number | null;
+};
+
+type AlteracaoNoAuditoria = {
+  id: string;
+  antes: ResumoNoAuditoria | null;
+  depois: ResumoNoAuditoria | null;
+};
+
+function resumirConexaoAuditoria(
+  conexao: Record<string, unknown>,
+  index?: number
+): ResumoConexaoAuditoria {
+  return {
+    id: String(conexao.id || ""),
+    no_origem_id: String(conexao.no_origem_id || ""),
+    no_destino_id: String(conexao.no_destino_id || ""),
+    rotulo: conexao.rotulo ? String(conexao.rotulo) : null,
+    ordem: Number(conexao.ordem || (index != null ? index + 1 : 0)),
+    condicao_json: conexao.condicao_json || {},
+    usar_ia: conexao.usar_ia === true,
+    descricao_ia: conexao.descricao_ia
+      ? String(conexao.descricao_ia).trim()
+      : null,
+  };
+}
+
+function listarConexoesAlteradas(
+  conexoesAntes: Record<string, unknown>[],
+  conexoesDepois: Record<string, unknown>[]
+) {
+  const antesPorId = new Map(
+    conexoesAntes.map((conexao) => [conexao.id, resumirConexaoAuditoria(conexao)])
+  );
+  const depoisPorId = new Map(
+    conexoesDepois.map((conexao, index) => [
+      conexao.id,
+      resumirConexaoAuditoria(conexao, index),
+    ])
+  );
+  const ids = new Set([...antesPorId.keys(), ...depoisPorId.keys()]);
+
+  return Array.from(ids)
+    .map((id) => {
+      const antes = antesPorId.get(id) || null;
+      const depois = depoisPorId.get(id) || null;
+
+      return JSON.stringify(antes) === JSON.stringify(depois)
+        ? null
+        : { id, antes, depois };
+    })
+    .filter(
+      (item): item is AlteracaoConexaoAuditoria => item !== null
+    );
+}
+
+function resumirNoAuditoria(no: Record<string, unknown>): ResumoNoAuditoria {
+  return {
+    id: String(no.id || ""),
+    tipo_no: String(no.tipo_no || ""),
+    titulo: no.titulo ? String(no.titulo) : null,
+    descricao: no.descricao ? String(no.descricao) : null,
+    configuracao_json: no.configuracao_json || {},
+    delay_segundos:
+      no.tipo_no === "inicio" || no.delay_segundos == null
+        ? null
+        : Math.max(0, Number(no.delay_segundos)),
+  };
+}
+
+function listarNosAlterados(
+  nosAntes: Record<string, unknown>[],
+  nosDepois: Record<string, unknown>[]
+) {
+  const antesPorId = new Map(
+    nosAntes.map((no) => [no.id, resumirNoAuditoria(no)])
+  );
+  const depoisPorId = new Map(
+    nosDepois.map((no) => [no.id, resumirNoAuditoria(no)])
+  );
+  const ids = new Set([...antesPorId.keys(), ...depoisPorId.keys()]);
+
+  return Array.from(ids)
+    .map((id) => {
+      const antes = antesPorId.get(id) || null;
+      const depois = depoisPorId.get(id) || null;
+
+      return JSON.stringify(antes) === JSON.stringify(depois)
+        ? null
+        : { id, antes, depois };
+    })
+    .filter((item): item is AlteracaoNoAuditoria => item !== null);
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -122,19 +239,28 @@ export async function PUT(
     const [{ data: nosAntes }, { data: conexoesAntes }] = await Promise.all([
       supabaseAdmin
         .from("automacao_nos")
-        .select("id, tipo_no, titulo, ativo")
+        .select(
+          "id, tipo_no, titulo, descricao, configuracao_json, delay_segundos, ativo"
+        )
         .eq("fluxo_id", id)
         .eq("empresa_id", usuario.empresa_id)
         .eq("ativo", true),
       supabaseAdmin
         .from("automacao_conexoes")
-        .select("id, no_origem_id, no_destino_id, ativo")
+        .select(
+          "id, no_origem_id, no_destino_id, rotulo, ordem, condicao_json, usar_ia, descricao_ia, ativo"
+        )
         .eq("fluxo_id", id)
         .eq("empresa_id", usuario.empresa_id)
         .eq("ativo", true),
     ]);
 
     const agora = new Date().toISOString();
+    const conexoesAlteradas = listarConexoesAlteradas(
+      conexoesAntes || [],
+      conexoes
+    );
+    const nosAlterados = listarNosAlterados(nosAntes || [], nos);
 
     await supabaseAdmin
       .from("automacao_conexoes")
@@ -235,10 +361,14 @@ export async function PUT(
       antes: {
         nos: nosAntes?.length || 0,
         conexoes: conexoesAntes?.length || 0,
+        nos_alterados: nosAlterados.map((item) => item.antes),
+        conexoes_alteradas: conexoesAlteradas.map((item) => item.antes),
       },
       depois: {
         nos: nos.length,
         conexoes: conexoes.length,
+        nos_alterados: nosAlterados.map((item) => item.depois),
+        conexoes_alteradas: conexoesAlteradas.map((item) => item.depois),
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,

@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { listarOcupacoesGoogleCalendar } from "@/lib/agendas/google-calendar";
+
 export type AgendaSlot = {
   indice: number;
   inicio_at: string;
@@ -734,6 +736,19 @@ export async function listarSlotsDisponiveis(params: {
     inicio: new Date(item.inicio_at).getTime(),
     fim: new Date(item.fim_at).getTime(),
   }));
+  const ocupacoesGoogle = await listarOcupacoesGoogleCalendar({
+    empresaId: params.empresaId,
+    agendaId: params.agendaId,
+    inicioAt: rangeInicio.toISOString(),
+    fimAt: rangeFim.toISOString(),
+  });
+
+  for (const ocupacao of ocupacoesGoogle) {
+    ocupados.push({
+      inicio: new Date(ocupacao.start).getTime(),
+      fim: new Date(ocupacao.end).getTime(),
+    });
+  }
 
   const slots: AgendaSlot[] = [];
   let temDisponibilidadeNoPeriodo = false;

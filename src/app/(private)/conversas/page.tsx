@@ -2717,7 +2717,7 @@ export default function ConversasPage() {
 
   async function carregarSetores() {
     try {
-      const res = await fetch("/api/setores", { cache: "no-store" });
+      const res = await fetch("/api/setores/opcoes", { cache: "no-store" });
       const data = await res.json();
       if (res.ok) {
         setSetores(data.setores || []);

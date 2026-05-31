@@ -30,6 +30,10 @@ export async function podeEditarUsuarios(usuario: UsuarioAuth) {
   return await can(usuario.id, "usuarios.editar");
 }
 
+export async function podeRemoverUsuarios(usuario: UsuarioAuth) {
+  return await can(usuario.id, "usuarios.remover");
+}
+
 export async function podeVisualizarConversas(usuario: UsuarioAuth) {
   return await can(usuario.id, "conversas.visualizar");
 }

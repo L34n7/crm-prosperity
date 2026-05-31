@@ -6,9 +6,45 @@ import { can } from "@/lib/permissoes/frontend";
 const supabaseAdmin = getSupabaseAdmin();
 
 function getLimit(valor: string | null) {
-  const limit = Number(valor || "100");
-  if (!Number.isFinite(limit)) return 100;
+  const limit = Number(valor || "25");
+  if (!Number.isFinite(limit)) return 25;
   return Math.min(Math.max(Math.trunc(limit), 1), 500);
+}
+
+function getPagina(valor: string | null) {
+  const pagina = Number(valor || "1");
+  if (!Number.isFinite(pagina)) return 1;
+  return Math.max(Math.trunc(pagina), 1);
+}
+
+function getBuscaAcao(valor: string) {
+  const termos = valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[%_]/g, " ")
+    .split(/\s+/)
+    .map((termo) => termo.trim())
+    .filter(Boolean)
+    .map((termo) => {
+      if (termo.length <= 4) return termo;
+      return termo.replace(/(as|os|a|o)$/i, "");
+    });
+
+  return termos.length > 0 ? `%${termos.join("%")}%` : "";
+}
+
+function ocultarDadosPessoaisRedundantes(detalhes: unknown) {
+  if (!detalhes || Array.isArray(detalhes) || typeof detalhes !== "object") {
+    return detalhes;
+  }
+
+  const detalhesPublicos = {
+    ...(detalhes as Record<string, unknown>),
+  };
+  delete detalhesPublicos.usuario_email;
+
+  return detalhesPublicos;
 }
 
 export async function GET(request: Request) {
@@ -47,6 +83,9 @@ export async function GET(request: Request) {
     const dataDe = searchParams.get("data_de");
     const dataAte = searchParams.get("data_ate");
     const limit = getLimit(searchParams.get("limit"));
+    const pagina = getPagina(searchParams.get("pagina"));
+    const inicio = (pagina - 1) * limit;
+    const fim = inicio + limit - 1;
 
     let query = supabaseAdmin
       .from("logs_auditoria")
@@ -64,10 +103,9 @@ export async function GET(request: Request) {
         antes,
         depois,
         metadata,
-        ip,
-        user_agent,
         created_at
-      `
+      `,
+        { count: "exact" }
       )
       .eq("empresa_id", usuario.empresa_id);
 
@@ -75,24 +113,45 @@ export async function GET(request: Request) {
     if (entidade) query = query.eq("entidade", entidade);
     if (entidadeId) query = query.eq("entidade_id", entidadeId);
     if (usuarioId) query = query.eq("usuario_id", usuarioId);
-    if (acao) query = query.eq("acao", acao);
+    if (acao) {
+      const buscaAcao = getBuscaAcao(acao);
+      if (buscaAcao) query = query.ilike("acao", buscaAcao);
+    }
     if (dataDe) query = query.gte("created_at", dataDe);
     if (dataAte) query = query.lte("created_at", dataAte);
 
-    const { data, error } = await query
-      .order("created_at", { ascending: false })
-      .limit(limit);
+    const [
+      { data, error, count },
+      { data: usuarios, error: usuariosError },
+    ] = await Promise.all([
+      query.order("created_at", { ascending: false }).range(inicio, fim),
+      supabaseAdmin
+        .from("usuarios")
+        .select("id, nome, email")
+        .eq("empresa_id", usuario.empresa_id)
+        .order("nome", { ascending: true }),
+    ]);
 
-    if (error) {
+    if (error || usuariosError) {
       return NextResponse.json(
-        { ok: false, error: error.message },
+        { ok: false, error: error?.message || usuariosError?.message },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       ok: true,
-      logs: data || [],
+      logs: (data || []).map((log) => ({
+        ...log,
+        detalhes: ocultarDadosPessoaisRedundantes(log.detalhes),
+      })),
+      usuarios: usuarios || [],
+      paginacao: {
+        pagina,
+        limite: limit,
+        total: count || 0,
+        total_paginas: Math.max(1, Math.ceil((count || 0) / limit)),
+      },
     });
   } catch (error) {
     console.error("Erro ao carregar auditoria:", error);

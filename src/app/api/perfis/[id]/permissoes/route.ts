@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { isAdministrador } from "@/lib/auth/authorization";
+import { can } from "@/lib/permissoes/frontend";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import { empresaManteraAdminGerenciador } from "@/lib/permissoes/garantir-admin-gerenciador";
 
 const supabaseAdmin = getSupabaseAdmin();
+
+type PermissaoCatalogoRow = {
+  codigo: string;
+  descricao?: string | null;
+};
+
+type PerfilPermissaoRow = {
+  permissao_codigo: string;
+};
 
 function getGrupoFromCodigo(codigo: string) {
   const prefixo = codigo.split(".")[0] || "outros";
@@ -50,9 +60,9 @@ export async function GET(
 
     const { usuario } = resultado;
 
-    if (!isAdministrador(usuario)) {
+    if (!can(usuario.permissoes, "perfis.alterar_permissoes")) {
       return NextResponse.json(
-        { ok: false, error: "Apenas administradores podem acessar permissões de perfil" },
+        { ok: false, error: "Sem permissao para acessar permissoes de perfil" },
         { status: 403 }
       );
     }
@@ -100,10 +110,12 @@ export async function GET(
     ]);
 
     const marcadas = new Set(
-      (perfilPermissoes || []).map((item: any) => item.permissao_codigo)
+      ((perfilPermissoes || []) as PerfilPermissaoRow[]).map(
+        (item) => item.permissao_codigo
+      )
     );
 
-    const lista = (permissoes || []).map((item: any) => ({
+    const lista = ((permissoes || []) as PermissaoCatalogoRow[]).map((item) => ({
       codigo: item.codigo,
       descricao: item.descricao,
       grupo: getGrupoFromCodigo(item.codigo),
@@ -148,9 +160,9 @@ export async function PUT(
 
     const { usuario } = resultado;
 
-    if (!isAdministrador(usuario)) {
+    if (!can(usuario.permissoes, "perfis.alterar_permissoes")) {
       return NextResponse.json(
-        { ok: false, error: "Apenas administradores podem alterar permissões de perfil" },
+        { ok: false, error: "Sem permissao para alterar permissoes de perfil" },
         { status: 403 }
       );
     }
@@ -193,9 +205,9 @@ export async function PUT(
     const permissoes = Array.isArray(body?.permissoes) ? body.permissoes : [];
 
     const permissoesValidas = Array.from(
-      new Set(
+      new Set<string>(
         permissoes
-          .filter((item: unknown) => typeof item === "string")
+          .filter((item: unknown): item is string => typeof item === "string")
           .map((item: string) => item.trim())
           .filter(Boolean)
       )
@@ -213,7 +225,9 @@ export async function PUT(
     }
 
     const codigosValidos = new Set(
-      (catalogoPermissoes || []).map((item: any) => item.codigo)
+      ((catalogoPermissoes || []) as PermissaoCatalogoRow[]).map(
+        (item) => item.codigo
+      )
     );
 
     const contemCodigoInvalido = permissoesValidas.some(
@@ -227,14 +241,33 @@ export async function PUT(
       );
     }
 
+    const manteraAdminGerenciador = await empresaManteraAdminGerenciador({
+      empresaId: usuario.empresa_id,
+      perfilAlterado: {
+        perfilEmpresaId: id,
+        permissoes: permissoesValidas,
+      },
+    });
+
+    if (!manteraAdminGerenciador) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "A empresa precisa manter ao menos um administrador ativo capaz de gerenciar permissoes.",
+        },
+        { status: 400 }
+      );
+    }
+
     const { data: permissoesAtuais } = await supabaseAdmin
       .from("perfil_permissoes")
       .select("permissao_codigo")
       .eq("perfil_empresa_id", id);
 
-    const permissoesAntes = (permissoesAtuais || []).map(
-      (item: any) => item.permissao_codigo
-    );
+    const permissoesAntes = (
+      (permissoesAtuais || []) as PerfilPermissaoRow[]
+    ).map((item) => item.permissao_codigo);
 
     const { error: deleteError } = await supabaseAdmin
       .from("perfil_permissoes")

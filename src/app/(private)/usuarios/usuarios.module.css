@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 10px 24px 24px 24px;
+  padding: 10px 304px 24px 304px;
 }
 
 .card {
@@ -183,6 +183,28 @@
   opacity: 0.65;
   cursor: not-allowed;
   transform: none;
+}
+
+.dangerButton {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.dangerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .secondaryButton,
@@ -422,6 +444,14 @@
   grid-column: 1 / -1;
 }
 
+.listHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .modalOverlay {
   position: fixed;
   inset: 0;
@@ -444,6 +474,42 @@
   background: #ffffff;
   padding: 28px;
   box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+
+.userModal {
+  position: relative;
+  width: min(100%, 760px);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 28px;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+
+.deleteModal {
+  position: relative;
+  width: min(100%, 540px);
+  border-radius: 24px;
+  border: 1px solid #fecaca;
+  background: #ffffff;
+  padding: 28px;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+
+.deleteWarningBox {
+  margin-top: 18px;
+  border: 1px solid #fecaca;
+  border-radius: 16px;
+  background: #fff1f2;
+  color: #7f1d1d;
+  padding: 16px;
+}
+
+.deleteWarningBox p {
+  margin: 8px 0 0;
+  line-height: 1.6;
 }
 
 .modalCloseButton {
@@ -631,6 +697,16 @@
   }
 
   .upgradeModal {
+    padding: 22px;
+    border-radius: 20px;
+  }
+
+  .userModal {
+    padding: 22px;
+    border-radius: 20px;
+  }
+
+  .deleteModal {
     padding: 22px;
     border-radius: 20px;
   }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./perfis.module.css";
 
 type Perfil = {
@@ -126,6 +127,14 @@ function formatarMudancasLog(log: LogAuditoria) {
 }
 
 export default function PerfisPage() {
+  const { permissoes } = useHeaderUser();
+  const podeCriarPerfis = permissoes.includes("perfis.criar");
+  const podeEditarPerfis = permissoes.includes("perfis.editar");
+  const podeAlterarStatusPerfis = permissoes.includes("perfis.alterar_status");
+  const podeAlterarPermissoesPerfis = permissoes.includes(
+    "perfis.alterar_permissoes"
+  );
+  const podeVisualizarAuditoria = permissoes.includes("auditoria.visualizar");
   const [perfis, setPerfis] = useState<Perfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -318,9 +327,11 @@ export default function PerfisPage() {
               </p>
             </div>
 
-            <button className={styles.primaryButton} onClick={abrirNovoPerfil}>
-              Novo perfil
-            </button>
+            {podeCriarPerfis && (
+              <button className={styles.primaryButton} onClick={abrirNovoPerfil}>
+                Novo perfil
+              </button>
+            )}
           </div>
 
           {erro && <div className={styles.errorAlert}>{erro}</div>}
@@ -397,26 +408,30 @@ export default function PerfisPage() {
                       </div>
 
                       <div className={styles.itemRight}>
-                        <button
-                          className={styles.secondaryButton}
-                          onClick={() => toggleExpandir(perfil.id)}
-                        >
-                          {expandido ? "Recolher" : "Expandir"}
-                        </button>
+                        {podeVisualizarAuditoria && (
+                          <button
+                            className={styles.secondaryButton}
+                            onClick={() => toggleExpandir(perfil.id)}
+                          >
+                            {expandido ? "Recolher" : "Expandir"}
+                          </button>
+                        )}
 
-                        <button
-                          className={styles.secondaryButton}
-                          onClick={() => abrirEditarPerfil(perfil)}
-                        >
-                          Editar
-                        </button>
+                        {podeEditarPerfis && (
+                          <button
+                            className={styles.secondaryButton}
+                            onClick={() => abrirEditarPerfil(perfil)}
+                          >
+                            Editar
+                          </button>
+                        )}
 
-                        <Link
+                        {podeAlterarPermissoesPerfis && <Link
                           href={`/configuracoes/perfis/${perfil.id}/permissoes`}
                           className={styles.linkButton}
                         >
                           Permissões
-                        </Link>
+                        </Link>}
                       </div>
                     </div>
 
@@ -577,6 +592,7 @@ export default function PerfisPage() {
                   <input
                     type="checkbox"
                     checked={form.ativo}
+                    disabled={!podeAlterarStatusPerfis}
                     onChange={(e) =>
                       setForm((atual) => ({
                         ...atual,

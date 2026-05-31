@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { existeConflitoAgenda } from "@/lib/agendas/agenda-service";
+import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
 
 function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
@@ -221,6 +222,13 @@ export async function POST(
         { status: 500 }
       );
     }
+
+    await sincronizarAgendamentoGoogleCalendar({
+      empresaId: usuario.empresa_id,
+      agendamentoId: data.id,
+    }).catch((syncError) =>
+      console.error("[GOOGLE_CALENDAR] Erro ao sincronizar agendamento manual:", syncError)
+    );
 
     return NextResponse.json({
       ok: true,

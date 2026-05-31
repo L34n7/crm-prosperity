@@ -354,6 +354,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
       let transcricaoAudio: string | null = null;
       let audioSemTranscricao = false;
+      let falhaAoTranscreverAudio = false;
 
       if (message.tipoMensagem === "audio") {
         if (deveTranscreverAudioAutomaticamente) {
@@ -397,6 +398,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           } catch (audioError) {
             textoAutomacao = "";
             audioSemTranscricao = true;
+            falhaAoTranscreverAudio = true;
 
             console.error("[WEBHOOK WHATSAPP] Erro ao transcrever audio:", audioError);
           }
@@ -452,8 +454,9 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
         const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
 
-        const mensagemAvisoAudio =
-          "Nao consegui entender o audio. Pode enviar novamente falando mais claro ou escrever sua resposta?";
+        const mensagemAvisoAudio = falhaAoTranscreverAudio
+          ? "Nao foi possivel ouvir seu audio no momento. Por favor, envie sua resposta por texto."
+          : "Nao consegui entender o audio. Pode enviar novamente falando mais claro ou escrever sua resposta?";
 
         if (phoneNumberId && accessToken) {
           const envioAviso = await sendWhatsAppTextMessage({
@@ -482,7 +485,9 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             status_envio: envioAviso.ok ? "enviada" : "falha",
             mensagem_externa_id: envioAviso.messageId,
             metadata_json: {
-              tipo: "aviso_audio_sem_transcricao",
+              tipo: falhaAoTranscreverAudio
+                ? "aviso_falha_transcricao_audio"
+                : "aviso_audio_sem_transcricao",
               meta_response: envioAviso.raw,
               erro: envioAviso.error,
             },

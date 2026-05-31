@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
 
 export async function PATCH(
   request: NextRequest,
@@ -68,6 +69,13 @@ export async function PATCH(
         { status: 500 }
       );
     }
+
+    await sincronizarAgendamentoGoogleCalendar({
+      empresaId: usuario.empresa_id,
+      agendamentoId: data.id,
+    }).catch((syncError) =>
+      console.error("[GOOGLE_CALENDAR] Erro ao atualizar evento:", syncError)
+    );
 
     return NextResponse.json({
       ok: true,

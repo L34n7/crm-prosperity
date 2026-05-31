@@ -34,3 +34,21 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Google Calendar
+
+To enable calendar sync, apply the Supabase migration
+`supabase/migrations/202605310005_google_calendar_agendas.sql` and configure:
+
+```bash
+GOOGLE_CALENDAR_CLIENT_ID=
+GOOGLE_CALENDAR_CLIENT_SECRET=
+GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY=
+NEXT_PUBLIC_SITE_URL=https://your-domain.example
+```
+
+In the Google Cloud OAuth client, authorize this redirect URI:
+
+```text
+https://your-domain.example/api/integracoes/google-calendar/callback
+```

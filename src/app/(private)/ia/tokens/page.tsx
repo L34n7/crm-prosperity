@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Header from "@/components/Header";
 import styles from "./tokens.module.css";
@@ -215,6 +216,10 @@ export default function ExtratoTokensIaPage() {
                 Filtre por data para ver quais recursos consumiram tokens.
               </p>
             </div>
+
+            <Link href="/ia/tokens/pacotes" className={styles.buyTokensButton}>
+              Comprar tokens
+            </Link>
           </div>
 
           <div className={styles.filtersGrid}>

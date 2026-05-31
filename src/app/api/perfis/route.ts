@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { isAdministrador } from "@/lib/auth/authorization";
+import { can } from "@/lib/permissoes/frontend";
 import { registrarLogAuditoria } from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -24,6 +24,13 @@ export async function GET() {
     }
 
     const { usuario } = resultado;
+
+    if (!can(usuario.permissoes, "perfis.visualizar")) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissao para listar perfis" },
+        { status: 403 }
+      );
+    }
 
     if (!usuario.empresa_id) {
       return NextResponse.json(
@@ -112,9 +119,9 @@ export async function POST(request: Request) {
 
     const { usuario } = resultado;
 
-    if (!isAdministrador(usuario)) {
+    if (!can(usuario.permissoes, "perfis.criar")) {
       return NextResponse.json(
-        { ok: false, error: "Apenas administradores podem criar perfis" },
+        { ok: false, error: "Sem permissao para criar perfis" },
         { status: 403 }
       );
     }
@@ -131,6 +138,13 @@ export async function POST(request: Request) {
     const nome = body?.nome?.trim();
     const descricao = body?.descricao?.trim() || null;
     const ativo = body?.ativo ?? true;
+
+    if (ativo === false && !can(usuario.permissoes, "perfis.alterar_status")) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissao para alterar status de perfis" },
+        { status: 403 }
+      );
+    }
 
     if (!nome) {
       return NextResponse.json(

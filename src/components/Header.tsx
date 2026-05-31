@@ -29,6 +29,7 @@ type SaldoTokensIa = {
   limite_mensal: number | null;
   tokens_usados: number;
   tokens_restantes: number | null;
+  periodo_inicio?: string;
 };
 
 export default function Header({
@@ -48,17 +49,25 @@ export default function Header({
   const [saldoTokensIa, setSaldoTokensIa] = useState<SaldoTokensIa | null>(
     null
   );
+  const [alertaTokensOpen, setAlertaTokensOpen] = useState(false);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notificacoesRef = useRef<HTMLDivElement | null>(null);
 
   const headerUser = useHeaderUser();
+  const podeExibirSaldoTokensIa = headerUser.permissoes.includes(
+    "ia.tokens.exibir_header"
+  );
+  const podeAcessarExtratoTokensIa = headerUser.permissoes.includes(
+    "ia.tokens.visualizar_extrato"
+  );
 
   const nomeFinal = profileName || headerUser.profileName || "Usuário";
   const avatarFinal = avatarUrl || headerUser.avatarUrl || "";
   const letraAvatar = nomeFinal?.trim()?.charAt(0)?.toUpperCase() || "U";
 
   const LIMITE_NOTIFICACOES_POR_PAGINA = 60;
+  const INTERVALO_LEMBRETE_TOKENS_MS = 30 * 60 * 1000;
 
   const notificacoesMenu = notificacoes.slice(0, LIMITE_NOTIFICACOES_POR_PAGINA);
 
@@ -93,6 +102,8 @@ export default function Header({
   }
 
   async function carregarSaldoTokensIa() {
+    if (!podeExibirSaldoTokensIa) return;
+
     try {
       const res = await fetch("/api/ia/tokens", { cache: "no-store" });
       const json = await res.json();
@@ -118,6 +129,32 @@ export default function Header({
     }
 
     return String(valor);
+  }
+
+  function saldoTokensEstaBaixo(saldo: SaldoTokensIa | null) {
+    if (!saldo?.limite_mensal || saldo.tokens_restantes === null) return false;
+    return saldo.tokens_restantes <= saldo.limite_mensal * 0.15;
+  }
+
+  function saldoTokensZerado(saldo: SaldoTokensIa | null) {
+    return saldo?.limite_mensal !== null && Number(saldo?.tokens_restantes ?? 0) <= 0;
+  }
+
+  function fecharAlertaTokens() {
+    if (saldoTokensIa?.periodo_inicio) {
+      const chaveBase = `tokens-low-warning:${saldoTokensIa.periodo_inicio}`;
+
+      window.sessionStorage.setItem(
+        `${chaveBase}:lastPromptAt`,
+        String(Date.now())
+      );
+      window.sessionStorage.setItem(
+        `${chaveBase}:lastRemaining`,
+        String(Number(saldoTokensIa.tokens_restantes ?? 0))
+      );
+    }
+
+    setAlertaTokensOpen(false);
   }
 
   async function marcarTodasNotificacoesComoLidas() {
@@ -216,6 +253,42 @@ export default function Header({
     };
   }, []);
 
+  useEffect(() => {
+    if (!saldoTokensEstaBaixo(saldoTokensIa)) {
+      setAlertaTokensOpen(false);
+      return;
+    }
+
+    const periodo = saldoTokensIa?.periodo_inicio || "atual";
+    const chaveBase = `tokens-low-warning:${periodo}`;
+    const tokensRestantes = Number(saldoTokensIa?.tokens_restantes ?? 0);
+    const ultimoSaldoRegistrado = Number(
+      window.sessionStorage.getItem(`${chaveBase}:lastRemaining`) ?? ""
+    );
+    const ultimoAvisoEm = Number(
+      window.sessionStorage.getItem(`${chaveBase}:lastPromptAt`) ?? ""
+    );
+
+    const houveConsumoDepoisDoUltimoAviso =
+      Number.isFinite(ultimoSaldoRegistrado) &&
+      tokensRestantes < ultimoSaldoRegistrado;
+    const lembreteVenceu =
+      !Number.isFinite(ultimoAvisoEm) ||
+      Date.now() - ultimoAvisoEm >= INTERVALO_LEMBRETE_TOKENS_MS;
+
+    if (houveConsumoDepoisDoUltimoAviso || lembreteVenceu) {
+      window.sessionStorage.setItem(
+        `${chaveBase}:lastPromptAt`,
+        String(Date.now())
+      );
+      window.sessionStorage.setItem(
+        `${chaveBase}:lastRemaining`,
+        String(tokensRestantes)
+      );
+      setAlertaTokensOpen(true);
+    }
+  }, [saldoTokensIa]);
+
   function toggleMenu() {
     setMenuOpen((prev) => !prev);
     setNotificacoesOpen(false);
@@ -258,21 +331,36 @@ export default function Header({
       </div>
 
       <div className={styles.right}>
-        {saldoTokensIa && (
-          <Link
-            href="/ia/tokens"
-            className={styles.tokensBadge}
-            title="Tokens de IA restantes no ciclo mensal"
-          >
-            <span className={styles.tokensLabel}>IA</span>
-            <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>
-            {saldoTokensIa.limite_mensal !== null && (
-              <span className={styles.tokensLimit}>
-                / {formatarTokens(saldoTokensIa.limite_mensal)}
-              </span>
-            )}
-          </Link>
-        )}
+        {podeExibirSaldoTokensIa &&
+          saldoTokensIa &&
+          (podeAcessarExtratoTokensIa ? (
+            <Link
+              href="/ia/tokens"
+              className={styles.tokensBadge}
+              title="Abrir extrato de tokens de IA"
+            >
+              <span className={styles.tokensLabel}>IA</span>
+              <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>
+              {saldoTokensIa.limite_mensal !== null && (
+                <span className={styles.tokensLimit}>
+                  / {formatarTokens(saldoTokensIa.limite_mensal)}
+                </span>
+              )}
+            </Link>
+          ) : (
+            <span
+              className={`${styles.tokensBadge} ${styles.tokensBadgeStatic}`}
+              title="Tokens de IA restantes no ciclo mensal"
+            >
+              <span className={styles.tokensLabel}>IA</span>
+              <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>
+              {saldoTokensIa.limite_mensal !== null && (
+                <span className={styles.tokensLimit}>
+                  / {formatarTokens(saldoTokensIa.limite_mensal)}
+                </span>
+              )}
+            </span>
+          ))}
 
         <div className={styles.notificationWrapper} ref={notificacoesRef}>
           <button
@@ -482,6 +570,74 @@ export default function Header({
           )}
         </div>
       </div>
+
+      {alertaTokensOpen && saldoTokensIa && (
+        <div className={styles.tokenAlertOverlay} role="dialog" aria-modal="true">
+          <div className={styles.tokenAlertCard}>
+            <button
+              type="button"
+              className={styles.tokenAlertClose}
+              onClick={fecharAlertaTokens}
+              aria-label="Fechar aviso de tokens"
+            >
+              x
+            </button>
+
+            <div className={styles.tokenAlertHero}>
+              <span className={styles.tokenAlertEyebrow}>
+                {saldoTokensZerado(saldoTokensIa)
+                  ? "Tokens esgotados"
+                  : "Tokens quase acabando"}
+              </span>
+
+              <h2>
+                {saldoTokensZerado(saldoTokensIa)
+                  ? "Sua IA pode parar no atendimento"
+                  : "Seu saldo de IA esta baixo"}
+              </h2>
+
+              <p>
+                Restam <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>{" "}
+                de <strong>{formatarTokens(saldoTokensIa.limite_mensal)}</strong>.
+                Sem tokens, automacoes podem deixar de interpretar respostas,
+                analisar arquivos e transcrever audios.
+              </p>
+            </div>
+
+            <div className={styles.tokenAlertOffers}>
+              <div>
+                <span>Pacote rapido</span>
+                <strong>1 mi tokens</strong>
+                <small>R$ 25</small>
+              </div>
+
+              <div>
+                <span>Melhor valor</span>
+                <strong>5 mi tokens</strong>
+                <small>R$ 100</small>
+              </div>
+            </div>
+
+            <div className={styles.tokenAlertActions}>
+              <Link
+                href="/ia/tokens/pacotes"
+                className={styles.tokenAlertPrimary}
+                onClick={fecharAlertaTokens}
+              >
+                Comprar tokens
+              </Link>
+
+              <button
+                type="button"
+                className={styles.tokenAlertSecondary}
+                onClick={fecharAlertaTokens}
+              >
+                Ver depois
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

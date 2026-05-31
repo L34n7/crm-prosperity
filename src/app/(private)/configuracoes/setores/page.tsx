@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./setores.module.css";
 
 type Setor = {
@@ -125,6 +126,13 @@ function formatarMudancasLog(log: LogAuditoria) {
 }
 
 export default function SetoresPage() {
+  const { permissoes } = useHeaderUser();
+  const podeCriarSetores = permissoes.includes("setores.criar");
+  const podeEditarSetores = permissoes.includes("setores.editar");
+  const podeAlterarStatusSetores = permissoes.includes(
+    "setores.alterar_status"
+  );
+  const podeVisualizarAuditoria = permissoes.includes("auditoria.visualizar");
   const [setores, setSetores] = useState<Setor[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -315,9 +323,11 @@ export default function SetoresPage() {
               </p>
             </div>
 
-            <button className={styles.primaryButton} onClick={abrirNovoSetor}>
-              Novo setor
-            </button>
+            {podeCriarSetores && (
+              <button className={styles.primaryButton} onClick={abrirNovoSetor}>
+                Novo setor
+              </button>
+            )}
           </div>
 
           {erro && <div className={styles.errorAlert}>{erro}</div>}
@@ -394,19 +404,23 @@ export default function SetoresPage() {
                       </div>
 
                       <div className={styles.itemRight}>
-                        <button
-                          className={styles.secondaryButton}
-                          onClick={() => toggleExpandir(setor.id)}
-                        >
-                          {expandido ? "Recolher" : "Expandir"}
-                        </button>
+                        {podeVisualizarAuditoria && (
+                          <button
+                            className={styles.secondaryButton}
+                            onClick={() => toggleExpandir(setor.id)}
+                          >
+                            {expandido ? "Recolher" : "Expandir"}
+                          </button>
+                        )}
 
-                        <button
-                          className={styles.secondaryButton}
-                          onClick={() => abrirEditarSetor(setor)}
-                        >
-                          Editar
-                        </button>
+                        {podeEditarSetores && (
+                          <button
+                            className={styles.secondaryButton}
+                            onClick={() => abrirEditarSetor(setor)}
+                          >
+                            Editar
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -567,6 +581,7 @@ export default function SetoresPage() {
                   <input
                     type="checkbox"
                     checked={form.ativo}
+                    disabled={!podeAlterarStatusSetores}
                     onChange={(e) =>
                       setForm((atual) => ({
                         ...atual,

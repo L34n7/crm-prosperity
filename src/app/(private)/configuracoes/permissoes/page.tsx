@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./permissoes.module.css";
@@ -121,6 +122,8 @@ const getGrupoFromCodigo = (codigo: string) => {
       return "Agendas";
     case "fluxos":
       return "Fluxos";
+    case "ia":
+      return "Tokens de IA";
     case "auditoria":
       return "Auditoria";
     default:
@@ -405,22 +408,28 @@ export default function PermissoesPage() {
 
       if (!res.ok) {
         setErro(data.error || "Erro ao salvar exceção do usuário");
-        return;
+        return false;
       }
 
       setSucesso(
         `Exceções do usuário ${usuario.nome || "sem nome"} salvas com sucesso.`
       );
       await carregarDados();
+      return true;
     } catch {
       setErro("Erro ao salvar exceção do usuário");
+      return false;
     } finally {
       setSalvandoUsuarioId(null);
     }
   }
 
-  function toggleExpandir(usuarioId: string) {
-    setExpandidoId((atual) => (atual === usuarioId ? null : usuarioId));
+  function abrirEdicao(usuarioId: string) {
+    setExpandidoId(usuarioId);
+  }
+
+  function fecharEdicao() {
+    setExpandidoId(null);
   }
 
   if (loading) {
@@ -764,26 +773,58 @@ export default function PermissoesPage() {
 
                       <div className={styles.userRight}>
                         <button
+                          type="button"
                           className={styles.secondaryButton}
-                          onClick={() => toggleExpandir(usuario.id)}
+                          onClick={() => abrirEdicao(usuario.id)}
                         >
-                          {expandido ? "Recolher" : "Expandir"}
-                        </button>
-
-                        <button
-                          className={styles.secondaryButton}
-                          onClick={() => salvarUsuario(usuario)}
-                          disabled={salvandoUsuarioId === usuario.id}
-                        >
-                          {salvandoUsuarioId === usuario.id
-                            ? "Salvando..."
-                            : "Salvar exceções"}
+                          Editar
                         </button>
                       </div>
                     </div>
 
-                    {expandido && (
-                      <div className={styles.userExpanded}>
+                    {expandido &&
+                      typeof document !== "undefined" &&
+                      createPortal(
+                        <div
+                          className={styles.modalOverlay}
+                          onClick={fecharEdicao}
+                        >
+                          <section
+                            className={styles.modal}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby={`excecoes-${usuario.id}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <div className={styles.modalHeader}>
+                              <div>
+                                <p className={styles.eyebrow}>
+                                  Excecoes e permissoes individuais
+                                </p>
+                                <h3
+                                  id={`excecoes-${usuario.id}`}
+                                  className={styles.modalTitle}
+                                >
+                                  {usuario.nome || usuario.email || "Usuario"}
+                                </h3>
+                                <p className={styles.modalDescription}>
+                                  Ajuste regras operacionais e permissoes de
+                                  acesso especificas para este usuario.
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                className={styles.modalClose}
+                                onClick={fecharEdicao}
+                                aria-label="Fechar edicao de excecoes"
+                              >
+                                x
+                              </button>
+                            </div>
+
+                            <div className={styles.modalBody}>
+                              <div className={styles.userExpanded}>
                         <div className={styles.overrideGrid}>
                           <OverrideSelect
                             label="Pode transferir"
@@ -1008,8 +1049,35 @@ export default function PermissoesPage() {
                             ))}
                           </div>
                         </div>
-                      </div>
-                    )}
+                              </div>
+                            </div>
+
+                            <div className={styles.modalFooter}>
+                              <button
+                                type="button"
+                                className={styles.secondaryButton}
+                                onClick={fecharEdicao}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.primaryButton}
+                                onClick={async () => {
+                                  const salvo = await salvarUsuario(usuario);
+                                  if (salvo) fecharEdicao();
+                                }}
+                                disabled={salvandoUsuarioId === usuario.id}
+                              >
+                                {salvandoUsuarioId === usuario.id
+                                  ? "Salvando..."
+                                  : "Salvar excecoes"}
+                              </button>
+                            </div>
+                          </section>
+                        </div>,
+                        document.body
+                      )}
                   </article>
                 );
               })}

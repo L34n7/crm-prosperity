@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { can } from "@/lib/permissoes/frontend";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -20,6 +21,13 @@ export async function GET(request: Request) {
     return NextResponse.json(
       { ok: false, error: "Usuario sem empresa vinculada." },
       { status: 400 }
+    );
+  }
+
+  if (!can(usuario.permissoes, "ia.tokens.visualizar_extrato")) {
+    return NextResponse.json(
+      { ok: false, error: "Sem permissao para visualizar tokens de IA." },
+      { status: 403 }
     );
   }
 

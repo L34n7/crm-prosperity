@@ -5,11 +5,13 @@ import { createContext, useContext } from "react";
 export type HeaderUser = {
   profileName: string;
   avatarUrl: string;
+  permissoes: string[];
 };
 
 const HeaderUserContext = createContext<HeaderUser>({
   profileName: "Usuário",
   avatarUrl: "",
+  permissoes: [],
 });
 
 export function HeaderUserProvider({

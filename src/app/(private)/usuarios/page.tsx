@@ -9,7 +9,7 @@ import styles from "./usuarios.module.css";
 
 const CHECKOUT_PLANO_ESSENCIAL =
   process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL || "";
-const VALOR_PLANO_ESSENCIAL = "R$ 197/mês";
+const VALOR_PLANO_ESSENCIAL = "R$ 267/mês";
 
 type Setor = {
   id: string;
@@ -46,11 +46,6 @@ type Usuario = {
   usuarios_setores?: UsuarioSetorVinculo[];
   perfis_dinamicos?: PerfilDinamico[];
   permissoes?: string[];
-};
-
-type EmpresaOpcao = {
-  id: string;
-  nome_fantasia: string;
 };
 
 type UsuarioLogado = {
@@ -142,6 +137,10 @@ export default function UsuariosPage() {
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
 
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [quantidadeUsuariosAtivos, setQuantidadeUsuariosAtivos] = useState(0);
+  const [limiteUsuariosPlano, setLimiteUsuariosPlano] = useState<number | null>(
+    null
+  );
   const [setores, setSetores] = useState<Setor[]>([]);
   const [perfisEmpresa, setPerfisEmpresa] = useState<PerfilDinamico[]>([]);
 
@@ -156,7 +155,12 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
+  const [modalNovoUsuarioAberto, setModalNovoUsuarioAberto] = useState(false);
   const [modalPlanoAberto, setModalPlanoAberto] = useState(false);
+  const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<Usuario | null>(
+    null
+  );
+  const [excluindoUsuario, setExcluindoUsuario] = useState(false);
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
@@ -168,10 +172,6 @@ export default function UsuariosPage() {
   const [editSetorPrincipalId, setEditSetorPrincipalId] = useState("");
   const [editTelefone, setEditTelefone] = useState("");
   const [editStatus, setEditStatus] = useState("ativo");
-
-  const [empresas, setEmpresas] = useState<EmpresaOpcao[]>([]);
-  const [empresaId, setEmpresaId] = useState("");
-  const [editEmpresaId, setEditEmpresaId] = useState("");
 
   async function carregarUsuarioLogado() {
     try {
@@ -201,10 +201,16 @@ export default function UsuariosPage() {
     }
 
     setUsuarios(data.usuarios || []);
+    setQuantidadeUsuariosAtivos(Number(data.quantidade_usuarios_ativos || 0));
+    setLimiteUsuariosPlano(
+      typeof data.limite_usuarios_plano === "number"
+        ? data.limite_usuarios_plano
+        : null
+    );
   }
 
   async function carregarSetores() {
-    const res = await fetch("/api/setores", { cache: "no-store" });
+    const res = await fetch("/api/setores/opcoes", { cache: "no-store" });
     const data = await res.json();
 
     if (!res.ok) return;
@@ -213,7 +219,7 @@ export default function UsuariosPage() {
   }
 
   async function carregarPerfis() {
-    const res = await fetch("/api/perfis", { cache: "no-store" });
+    const res = await fetch("/api/perfis/opcoes", { cache: "no-store" });
     const data = await res.json();
 
     if (!res.ok) return;
@@ -233,15 +239,6 @@ export default function UsuariosPage() {
         setEditPerfilEmpresaId(perfilInicial.id);
       }
     }
-  }
-
-  async function carregarEmpresas() {
-    const res = await fetch("/api/empresas/opcoes", { cache: "no-store" });
-    const data = await res.json();
-
-    if (!res.ok) return;
-
-    setEmpresas(data.empresas || []);
   }
 
   function toggleSetorCriacao(setorId: string) {
@@ -351,7 +348,6 @@ export default function UsuariosPage() {
           setor_ids: setorIds,
           setor_principal_id: setorPrincipalId || setorIds[0] || null,
           telefone,
-          empresa_id: empresaId || null,
         }),
       });
 
@@ -361,6 +357,7 @@ export default function UsuariosPage() {
         const mensagemErro = data.error || "Erro ao convidar usuário";
 
         if (erroEhLimitePlano(mensagemErro)) {
+          setModalNovoUsuarioAberto(false);
           setModalPlanoAberto(true);
           return;
         }
@@ -376,7 +373,7 @@ export default function UsuariosPage() {
       setSetorIds([]);
       setSetorPrincipalId("");
       setTelefone("");
-      setEmpresaId("");
+      setModalNovoUsuarioAberto(false);
 
       const perfilAtendente = perfisEmpresa.find(
         (item) => item.nome === "Atendente"
@@ -409,7 +406,6 @@ export default function UsuariosPage() {
     setEditSetorPrincipalId(usuario.setor_principal_id || setoresDoUsuario[0] || "");
     setEditTelefone(usuario.telefone || "");
     setEditStatus(usuario.status);
-    setEditEmpresaId(usuario.empresa_id || "");
     setMensagem("");
     setErro("");
   }
@@ -423,7 +419,6 @@ export default function UsuariosPage() {
     setEditSetorPrincipalId("");
     setEditTelefone("");
     setEditStatus("ativo");
-    setEditEmpresaId("");
   }
 
   async function salvarEdicao() {
@@ -465,7 +460,6 @@ export default function UsuariosPage() {
         setor_principal_id: editSetorPrincipalId || editSetorIds[0] || null,
         telefone: editTelefone,
         status: editStatus,
-        empresa_id: editEmpresaId || null,
       }),
     });
 
@@ -513,7 +507,6 @@ export default function UsuariosPage() {
         setor_principal_id: setorPrincipal,
         telefone: usuario.telefone,
         status: novoStatus,
-        empresa_id: usuario.empresa_id,
       }),
     });
 
@@ -530,6 +523,40 @@ export default function UsuariosPage() {
     carregarUsuarios();
   }
 
+  function fecharModalExcluir() {
+    if (excluindoUsuario) return;
+
+    setUsuarioParaExcluir(null);
+  }
+
+  async function excluirUsuario() {
+    if (!usuarioParaExcluir) return;
+
+    setExcluindoUsuario(true);
+    setErro("");
+    setMensagem("");
+
+    try {
+      const res = await fetch(`/api/usuarios/${usuarioParaExcluir.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao excluir usuário.");
+        return;
+      }
+
+      setMensagem(data.message || "Usuário excluído com sucesso.");
+      setUsuarioParaExcluir(null);
+      await carregarUsuarios();
+    } catch {
+      setErro("Erro ao excluir usuário.");
+    } finally {
+      setExcluindoUsuario(false);
+    }
+  }
+
   function toggleExpandir(usuarioId: string) {
     setExpandidoId((atual) => (atual === usuarioId ? null : usuarioId));
   }
@@ -539,6 +566,7 @@ export default function UsuariosPage() {
   const podeVisualizarUsuarios = can(permissoes, "usuarios.visualizar");
   const podeCriarUsuarios = can(permissoes, "usuarios.criar");
   const podeEditarUsuarios = can(permissoes, "usuarios.editar");
+  const podeRemoverUsuarios = can(permissoes, "usuarios.remover");
   const podePromoverAdmin = can(permissoes, "usuarios.promover_admin");
 
   const perfisSelecionaveis = useMemo(
@@ -564,7 +592,6 @@ export default function UsuariosPage() {
     carregarUsuarios();
     carregarSetores();
     carregarPerfis();
-    carregarEmpresas();
   }, []);
 
   useEffect(() => {
@@ -606,14 +633,31 @@ export default function UsuariosPage() {
       />
 
       <div className={styles.pageContent}>
-        {podeCriarUsuarios && (
-          <section className={styles.card}>
+        {podeCriarUsuarios && modalNovoUsuarioAberto && (
+          <div className={styles.modalOverlay} role="presentation">
+            <section
+              className={styles.userModal}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="new-user-title"
+            >
+              <button
+                type="button"
+                className={styles.modalCloseButton}
+                onClick={() => setModalNovoUsuarioAberto(false)}
+                aria-label="Fechar modal"
+              >
+                <X size={18} />
+              </button>
             <div className={styles.cardHeader}>
               <div>
                 <p className={styles.eyebrow}>Cadastro</p>
-                <h2 className={styles.cardTitle}>Convidar novo usuário</h2>
+                <h2 id="new-user-title" className={styles.cardTitle}>
+                  Convidar novo usuário
+                </h2>
                 <p className={styles.cardDescription}>
-                  Crie usuários com perfil dinâmico, nível, empresa e setores.
+                  Crie um usuário da sua empresa com perfil dinâmico, nível e
+                  setores.
                 </p>
               </div>
             </div>
@@ -667,22 +711,6 @@ export default function UsuariosPage() {
                 >
                   <option value="basico">Básico</option>
                   <option value="avancado">Avançado</option>
-                </select>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Empresa</label>
-                <select
-                  className={styles.select}
-                  value={empresaId}
-                  onChange={(e) => setEmpresaId(e.target.value)}
-                >
-                  <option value="">Selecione uma empresa</option>
-                  {empresas.map((empresa) => (
-                    <option key={empresa.id} value={empresa.id}>
-                      {empresa.nome_fantasia}
-                    </option>
-                  ))}
                 </select>
               </div>
 
@@ -751,8 +779,16 @@ export default function UsuariosPage() {
               >
                 {loading ? "Enviando convite..." : "Convidar usuário"}
               </button>
+              <button
+                type="button"
+                onClick={() => setModalNovoUsuarioAberto(false)}
+                className={styles.secondaryButton}
+              >
+                Cancelar
+              </button>
             </div>
-          </section>
+            </section>
+          </div>
         )}
 
         <FeedbackToast
@@ -771,7 +807,20 @@ export default function UsuariosPage() {
               </p>
             </div>
 
-            <span className={styles.infoBadge}>Sem exibir perfil legado</span>
+            <div className={styles.listHeaderActions}>
+              <span className={styles.infoBadge}>
+                {quantidadeUsuariosAtivos} / {limiteUsuariosPlano ?? "—"} Total usuários
+              </span>
+              {podeCriarUsuarios && (
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={() => setModalNovoUsuarioAberto(true)}
+                >
+                  Novo usuário
+                </button>
+              )}
+            </div>
           </div>
 
           {usuarios.length === 0 ? (
@@ -788,9 +837,6 @@ export default function UsuariosPage() {
 
                 const perfisDinamicos = getNomesPerfisDinamicos(usuario);
                 const perfilPrincipal = getPerfilPrincipal(usuario);
-                const empresaNome =
-                  empresas.find((empresa) => empresa.id === usuario.empresa_id)
-                    ?.nome_fantasia ?? "—";
                 const setorPrincipalNome =
                   setores.find((setor) => setor.id === usuario.setor_principal_id)
                     ?.nome ?? "Sem setor";
@@ -825,9 +871,6 @@ export default function UsuariosPage() {
                               {perfilPrincipal?.nome || "Sem perfil"}
                             </span>
                             <span className={styles.metaItem}>
-                              <strong>Empresa:</strong> {empresaNome}
-                            </span>
-                            <span className={styles.metaItem}>
                               <strong>Setor principal:</strong> {setorPrincipalNome}
                             </span>
                           </div>
@@ -843,6 +886,17 @@ export default function UsuariosPage() {
                             Editar
                           </button>
                         )}
+
+                        {podeRemoverUsuarios &&
+                          usuario.id !== usuarioLogado?.id &&
+                          !editando && (
+                            <button
+                              onClick={() => setUsuarioParaExcluir(usuario)}
+                              className={styles.dangerButton}
+                            >
+                              Excluir
+                            </button>
+                          )}
 
                         {!editando && (
                           <button
@@ -895,22 +949,6 @@ export default function UsuariosPage() {
                               >
                                 <option value="basico">Básico</option>
                                 <option value="avancado">Avançado</option>
-                              </select>
-                            </div>
-
-                            <div className={styles.field}>
-                              <label className={styles.label}>Empresa</label>
-                              <select
-                                className={styles.select}
-                                value={editEmpresaId}
-                                onChange={(e) => setEditEmpresaId(e.target.value)}
-                              >
-                                <option value="">Selecione uma empresa</option>
-                                {empresas.map((empresa) => (
-                                  <option key={empresa.id} value={empresa.id}>
-                                    {empresa.nome_fantasia}
-                                  </option>
-                                ))}
                               </select>
                             </div>
 
@@ -1075,6 +1113,62 @@ export default function UsuariosPage() {
           )}
         </section>
       </div>
+      {usuarioParaExcluir && (
+        <div className={styles.modalOverlay} onClick={fecharModalExcluir}>
+          <section
+            className={styles.deleteModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-user-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className={styles.modalCloseButton}
+              onClick={fecharModalExcluir}
+              aria-label="Fechar modal"
+              disabled={excluindoUsuario}
+            >
+              <X size={18} />
+            </button>
+
+            <p className={styles.eyebrow}>Atenção</p>
+            <h2 id="delete-user-title" className={styles.cardTitle}>
+              Excluir usuário
+            </h2>
+            <p className={styles.cardDescription}>
+              Esta ação não poderá ser desfeita.
+            </p>
+
+            <div className={styles.deleteWarningBox}>
+              <strong>Tem certeza que deseja excluir este usuário?</strong>
+              <p>
+                O acesso de <strong>{usuarioParaExcluir.nome}</strong> será
+                removido. Conversas e registros históricos serão preservados.
+              </p>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                onClick={excluirUsuario}
+                disabled={excluindoUsuario}
+                className={styles.dangerButton}
+              >
+                {excluindoUsuario ? "Excluindo..." : "Sim, excluir usuário"}
+              </button>
+              <button
+                type="button"
+                onClick={fecharModalExcluir}
+                disabled={excluindoUsuario}
+                className={styles.secondaryButton}
+              >
+                Cancelar
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {modalPlanoAberto && (
         <div className={styles.modalOverlay} role="presentation">
           <div

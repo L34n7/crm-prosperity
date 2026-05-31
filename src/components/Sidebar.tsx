@@ -20,6 +20,7 @@ import {
   GitBranch,
   PlugZap,
   MessageCircle,
+  ScrollText,
 } from "lucide-react";
 import styles from "./Sidebar.module.css";
 
@@ -27,10 +28,12 @@ type MenuItem = {
   label: string;
   href: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  permissao?: string;
 };
 
 type SidebarProps = {
   initialCollapsed?: boolean;
+  permissoes?: string[];
 };
 
 type WhatsappSidebarPerfil = {
@@ -49,18 +52,34 @@ const menuItems: MenuItem[] = [
   { label: "Flows", href: "/fluxos", icon: GitBranch },
   { label: "Contacts", href: "/contatos", icon: Contact },
   { label: "Users", href: "/usuarios", icon: Users },
-  { label: "Companies", href: "/empresas", icon: Building2 },
-  { label: "Departments", href: "/setores", icon: Layers3 },
-  { label: "Profile Settings", href: "/configuracoes/perfis", icon: IdCard },
+  {
+    label: "Companies",
+    href: "/empresas",
+    icon: Building2,
+    permissao: "empresas.visualizar",
+  },
+  {
+    label: "Departments Settings",
+    href: "/configuracoes/setores",
+    icon: Layers3,
+    permissao: "setores.visualizar",
+  },
+  {
+    label: "Profile Settings",
+    href: "/configuracoes/perfis",
+    icon: IdCard,
+    permissao: "perfis.visualizar",
+  },
   {
     label: "Permission Settings",
     href: "/configuracoes/permissoes",
     icon: ShieldCheck,
   },
   {
-    label: "Department Settings",
-    href: "/configuracoes/setores",
-    icon: Settings2,
+    label: "Auditoria",
+    href: "/auditoria",
+    icon: ScrollText,
+    permissao: "auditoria.visualizar",
   },
   {
     label: "Environment Setup",
@@ -75,7 +94,10 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
+export default function Sidebar({
+  initialCollapsed = false,
+  permissoes = [],
+}: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [disparosPendentes, setDisparosPendentes] = useState(0);
@@ -186,6 +208,10 @@ export default function Sidebar({ initialCollapsed = false }: SidebarProps) {
           <nav className={styles.nav}>
             {menuItems.map((item) => {
               if (item.href === "/configuracoes/whatsapp/perfil") {
+                return null;
+              }
+
+              if (item.permissao && !permissoes.includes(item.permissao)) {
                 return null;
               }
 

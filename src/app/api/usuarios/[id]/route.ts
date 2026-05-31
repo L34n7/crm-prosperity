@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { podeEditarUsuarios } from "@/lib/auth/authorization";
+import {
+  podeEditarUsuarios,
+  podeRemoverUsuarios,
+} from "@/lib/auth/authorization";
 import { can } from "@/lib/permissoes/frontend";
 import {
   getRequestAuditMetadata,
@@ -24,8 +27,67 @@ type UsuarioPayload = {
   setor_principal_id?: string | null;
   telefone?: string | null;
   status?: "ativo" | "inativo" | "bloqueado";
-  empresa_id?: string | null;
 };
+
+type PerfilAuditoria = {
+  id: string;
+  nome: string;
+};
+
+type SetorAuditoria = {
+  id: string;
+  nome: string;
+};
+
+async function buscarPerfisDoUsuarioParaAuditoria(usuarioId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("usuarios_perfis")
+    .select(
+      `
+      perfil_empresa_id,
+      perfis_empresa (
+        id,
+        nome
+      )
+    `
+    )
+    .eq("usuario_id", usuarioId);
+
+  if (error) {
+    throw new Error(`Erro ao buscar perfis do usuario: ${error.message}`);
+  }
+
+  return (data || []).map((item) => {
+    const perfilRaw = Array.isArray(item.perfis_empresa)
+      ? item.perfis_empresa[0]
+      : item.perfis_empresa;
+
+    return {
+      id: item.perfil_empresa_id,
+      nome: perfilRaw?.nome || item.perfil_empresa_id,
+    };
+  }) as PerfilAuditoria[];
+}
+
+async function buscarSetoresParaAuditoria(setorIds: string[]) {
+  if (setorIds.length === 0) return [];
+
+  const { data, error } = await supabaseAdmin
+    .from("setores")
+    .select("id, nome")
+    .in("id", setorIds);
+
+  if (error) {
+    throw new Error(`Erro ao buscar setores: ${error.message}`);
+  }
+
+  const setoresPorId = new Map((data || []).map((setor) => [setor.id, setor]));
+
+  return setorIds.map((setorId) => ({
+    id: setorId,
+    nome: setoresPorId.get(setorId)?.nome || setorId,
+  })) as SetorAuditoria[];
+}
 
 function normalizarSetoresEntrada(body: UsuarioPayload) {
   const setorIdsBrutos = Array.isArray(body?.setor_ids) ? body.setor_ids : [];
@@ -168,6 +230,11 @@ export async function PUT(
 
   const body = (await request.json()) as UsuarioPayload;
   const auditMeta = getRequestAuditMetadata(request);
+  const [setoresIdsAntes, setorPrincipalAntes, perfisAntes] = await Promise.all([
+    listarIdsSetoresDoUsuario(id),
+    buscarSetorPrincipalDoUsuario(id),
+    buscarPerfisDoUsuarioParaAuditoria(id),
+  ]);
 
   const nome = body?.nome?.trim();
   const perfil_empresa_id = body?.perfil_empresa_id || null;
@@ -292,6 +359,11 @@ export async function PUT(
 
   const setorPrincipal = await buscarSetorPrincipalDoUsuario(id);
   const setoresIdsSalvos = await listarIdsSetoresDoUsuario(id);
+  const [setoresAntes, setoresDepois, perfisDepois] = await Promise.all([
+    buscarSetoresParaAuditoria(setoresIdsAntes),
+    buscarSetoresParaAuditoria(setoresIdsSalvos),
+    buscarPerfisDoUsuarioParaAuditoria(id),
+  ]);
 
   await registrarLogAuditoriaSeguro({
     empresa_id,
@@ -308,18 +380,19 @@ export async function PUT(
     antes: {
       id: usuarioAlvo.id,
       nome: usuarioAlvo.nome,
-      email: usuarioAlvo.email,
       nivel: usuarioAlvo.nivel,
       status: usuarioAlvo.status,
       telefone: usuarioAlvo.telefone,
+      perfis: perfisAntes,
+      setor_principal_id: setorPrincipalAntes?.setor_id ?? null,
+      setores: setoresAntes,
     },
     depois: {
       id,
       nome,
-      email: usuarioAtualizado.email,
-      perfil_empresa_id,
+      perfis: perfisDepois,
       setor_principal_id: setorPrincipal?.setor_id ?? null,
-      setor_ids: setoresIdsSalvos,
+      setores: setoresDepois,
       nivel,
       status,
       telefone,
@@ -337,4 +410,125 @@ export async function PUT(
       setor_ids: setoresIdsSalvos,
     },
   });
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const resultado = await getUsuarioContexto();
+
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status }
+      );
+    }
+
+    const { usuario } = resultado;
+
+    if (!(await podeRemoverUsuarios(usuario))) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão para remover usuários" },
+        { status: 403 }
+      );
+    }
+
+    if (usuario.id === id) {
+      return NextResponse.json(
+        { ok: false, error: "Você não pode excluir sua própria conta" },
+        { status: 400 }
+      );
+    }
+
+    const { data: usuarioAlvo, error: usuarioAlvoError } = await supabaseAdmin
+      .from("usuarios")
+      .select("id, empresa_id, auth_user_id, nome, email, nivel, status, telefone")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (usuarioAlvoError) {
+      return NextResponse.json(
+        { ok: false, error: usuarioAlvoError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!usuarioAlvo) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário não encontrado" },
+        { status: 404 }
+      );
+    }
+
+    if (!usuario.empresa_id || usuarioAlvo.empresa_id !== usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Você não pode excluir este usuário" },
+        { status: 403 }
+      );
+    }
+
+    const [setorIds, perfis] = await Promise.all([
+      listarIdsSetoresDoUsuario(id),
+      buscarPerfisDoUsuarioParaAuditoria(id),
+    ]);
+    const setores = await buscarSetoresParaAuditoria(setorIds);
+
+    const { error: excluirUsuarioError } = await supabaseAdmin
+      .from("usuarios")
+      .delete()
+      .eq("id", id)
+      .eq("empresa_id", usuario.empresa_id);
+
+    if (excluirUsuarioError) {
+      return NextResponse.json(
+        { ok: false, error: `Erro ao excluir usuário: ${excluirUsuarioError.message}` },
+        { status: 500 }
+      );
+    }
+
+    if (usuarioAlvo.auth_user_id) {
+      const { error: excluirAuthError } =
+        await supabaseAdmin.auth.admin.deleteUser(usuarioAlvo.auth_user_id);
+
+      if (excluirAuthError) {
+        console.error("Erro ao excluir acesso de autenticação do usuário:", excluirAuthError);
+      }
+    }
+
+    const auditMeta = getRequestAuditMetadata(request);
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "usuarios",
+      entidade: "usuario",
+      entidade_id: id,
+      acao: "usuario_excluido",
+      descricao: `Usuário ${usuarioAlvo.nome} excluído`,
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      antes: {
+        ...usuarioAlvo,
+        perfis,
+        setores,
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Usuário excluído com sucesso.",
+    });
+  } catch (error) {
+    console.error("Erro ao excluir usuário:", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Erro interno ao excluir usuário." },
+      { status: 500 }
+    );
+  }
 }

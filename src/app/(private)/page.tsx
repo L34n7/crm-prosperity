@@ -56,7 +56,7 @@ const modulos = [
   {
     titulo: "Setores",
     descricao: "Distribua sua operação por setores e equipes.",
-    href: "/setores",
+    href: "/configuracoes/setores",
   },
   {
     titulo: "Permissões",

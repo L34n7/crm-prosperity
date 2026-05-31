@@ -9,6 +9,7 @@ type CrmShellProps = {
   initialCollapsed?: boolean;
   profileName?: string;
   avatarUrl?: string;
+  permissoes?: string[];
 };
 
 export default function CrmShell({
@@ -16,11 +17,15 @@ export default function CrmShell({
   initialCollapsed = false,
   profileName = "Usuário",
   avatarUrl = "",
+  permissoes = [],
 }: CrmShellProps) {
   return (
-    <HeaderUserProvider value={{ profileName, avatarUrl }}>
+    <HeaderUserProvider value={{ profileName, avatarUrl, permissoes }}>
       <div className={styles.shell}>
-        <Sidebar initialCollapsed={initialCollapsed} />
+        <Sidebar
+          initialCollapsed={initialCollapsed}
+          permissoes={permissoes}
+        />
 
         <div className={styles.contentArea}>
           {children}
