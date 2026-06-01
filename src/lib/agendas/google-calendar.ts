@@ -24,8 +24,8 @@ type GoogleIntegracao = {
 };
 
 function configGoogle() {
-  const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+  const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
 
   if (!clientId || !clientSecret) {
     throw new Error("Integracao com Google Calendar ainda nao configurada no servidor.");
