@@ -270,6 +270,28 @@ function mesLabel(mesAtual: Date) {
   }).format(mesAtual);
 }
 
+function feedbackGoogleCalendar(status: string) {
+  if (status === "conectado") {
+    return { sucesso: "Conta Google vinculada e agenda sincronizada.", erro: "" };
+  }
+
+  if (status === "conectado_sync_pendente") {
+    return {
+      sucesso: "Conta Google vinculada. Use Sincronizar agora para repetir a sincronizacao.",
+      erro: "",
+    };
+  }
+
+  if (status === "cancelado") {
+    return { sucesso: "", erro: "A vinculacao com o Google foi cancelada." };
+  }
+
+  return {
+    sucesso: "",
+    erro: "Nao foi possivel concluir a vinculacao com o Google Calendar.",
+  };
+}
+
 export default function AgendasPage() {
   const [agendas, setAgendas] = useState<Agenda[]>([]);
   const [agendaSelecionadaId, setAgendaSelecionadaId] = useState("");
@@ -474,15 +496,10 @@ export default function AgendasPage() {
 
     if (!googleCalendarStatus) return;
 
-    if (googleCalendarStatus === "conectado") {
-      setSucesso("Conta Google vinculada e agenda sincronizada.");
-    } else if (googleCalendarStatus === "conectado_sync_pendente") {
-      setSucesso("Conta Google vinculada. Use Sincronizar agora para repetir a sincronizacao.");
-    } else if (googleCalendarStatus === "cancelado") {
-      setErro("A vinculacao com o Google foi cancelada.");
-    } else {
-      setErro("Nao foi possivel concluir a vinculacao com o Google Calendar.");
-    }
+    const feedback = feedbackGoogleCalendar(googleCalendarStatus);
+
+    setSucesso(feedback.sucesso);
+    setErro(feedback.erro);
 
     params.delete("google_calendar");
     params.delete("google_calendar_etapa");
@@ -538,7 +555,7 @@ export default function AgendasPage() {
     carregarGoogleCalendar(agendaSelecionada.id);
   }
 
-  async function carregarGoogleCalendar(agendaId: string) {
+  const carregarGoogleCalendar = useCallback(async (agendaId: string) => {
     try {
       setCarregandoGoogleCalendar(true);
       const res = await fetch(`/api/agendas/${agendaId}/google-calendar`, {
@@ -557,12 +574,53 @@ export default function AgendasPage() {
     } finally {
       setCarregandoGoogleCalendar(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    function receberResultadoGoogleCalendar(event: MessageEvent) {
+      if (
+        event.origin !== window.location.origin ||
+        event.data?.type !== "google-calendar-oauth"
+      ) {
+        return;
+      }
+
+      const feedback = feedbackGoogleCalendar(String(event.data.status || ""));
+
+      setSucesso(feedback.sucesso);
+      setErro(feedback.erro);
+
+      if (agendaSelecionadaId && feedback.sucesso) {
+        carregarGoogleCalendar(agendaSelecionadaId);
+      }
+    }
+
+    window.addEventListener("message", receberResultadoGoogleCalendar);
+
+    return () => {
+      window.removeEventListener("message", receberResultadoGoogleCalendar);
+    };
+  }, [agendaSelecionadaId, carregarGoogleCalendar]);
 
   function vincularGoogleCalendar() {
     if (!agendaSelecionadaId) return;
 
-    window.location.href = `/api/agendas/${agendaSelecionadaId}/google-calendar?acao=conectar`;
+    const largura = 560;
+    const altura = 720;
+    const esquerda = Math.max(0, window.screenX + (window.outerWidth - largura) / 2);
+    const topo = Math.max(0, window.screenY + (window.outerHeight - altura) / 2);
+    const popup = window.open(
+      `/api/agendas/${agendaSelecionadaId}/google-calendar?acao=conectar`,
+      "google-calendar-oauth",
+      `popup=yes,width=${largura},height=${altura},left=${Math.round(esquerda)},top=${Math.round(topo)}`
+    );
+
+    if (!popup) {
+      setErro("O navegador bloqueou a janela do Google. Permita pop-ups e tente novamente.");
+      return;
+    }
+
+    popup.focus();
   }
 
   async function sincronizarGoogleCalendar() {

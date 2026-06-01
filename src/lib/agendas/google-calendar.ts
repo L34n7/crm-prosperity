@@ -159,6 +159,18 @@ async function trocarToken(body: URLSearchParams) {
   const json = await response.json();
 
   if (!response.ok) {
+    const clientId = String(body.get("client_id") || "");
+    const clientSecret = String(body.get("client_secret") || "");
+
+    console.error("[GOOGLE_CALENDAR] Google recusou a troca de token:", {
+      error: json.error || null,
+      error_description: json.error_description || null,
+      client_id_suffix: clientId.slice(-18),
+      client_secret_length: clientSecret.length,
+      redirect_uri: body.get("redirect_uri") || null,
+      grant_type: body.get("grant_type") || null,
+    });
+
     throw new Error(json.error_description || "Google recusou a autenticacao.");
   }
 
