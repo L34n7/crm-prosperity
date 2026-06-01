@@ -7,7 +7,8 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_API_URL = "https://www.googleapis.com";
 const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.events.freebusy",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
@@ -170,6 +171,10 @@ export async function concluirOAuthGoogleCalendar(params: {
   empresaId: string;
   usuarioId: string;
 }) {
+  if (!params.code) {
+    throw new Error("Google nao retornou o codigo de autorizacao.");
+  }
+
   const { clientId, clientSecret } = configGoogle();
   const tokens = await trocarToken(
     new URLSearchParams({
@@ -190,6 +195,17 @@ export async function concluirOAuthGoogleCalendar(params: {
   });
   const perfil = perfilResponse.ok ? await perfilResponse.json() : {};
   const supabase = getSupabaseAdmin();
+  const { data: agenda } = await supabase
+    .from("agenda_calendarios")
+    .select("id")
+    .eq("id", params.agendaId)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  if (!agenda) {
+    throw new Error("Agenda nao encontrada para concluir a integracao.");
+  }
+
   const { error } = await supabase.from("agenda_google_integracoes").upsert(
     {
       empresa_id: params.empresaId,

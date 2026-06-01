@@ -52,3 +52,15 @@ In the Google Cloud OAuth client, authorize this redirect URI:
 ```text
 https://your-domain.example/api/integracoes/google-calendar/callback
 ```
+
+Declare the following Google Calendar scopes in the OAuth consent screen:
+
+```text
+https://www.googleapis.com/auth/calendar.events
+https://www.googleapis.com/auth/calendar.events.freebusy
+https://www.googleapis.com/auth/userinfo.email
+```
+
+Publishing the OAuth app does not verify it. For a public production app,
+complete the Google OAuth verification process to remove the unverified-app
+warning and the unverified user cap.

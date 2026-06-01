@@ -469,6 +469,28 @@ export default function AgendasPage() {
   }, [carregarAgendas]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const googleCalendarStatus = params.get("google_calendar");
+
+    if (!googleCalendarStatus) return;
+
+    if (googleCalendarStatus === "conectado") {
+      setSucesso("Conta Google vinculada e agenda sincronizada.");
+    } else if (googleCalendarStatus === "conectado_sync_pendente") {
+      setSucesso("Conta Google vinculada. Use Sincronizar agora para repetir a sincronizacao.");
+    } else if (googleCalendarStatus === "cancelado") {
+      setErro("A vinculacao com o Google foi cancelada.");
+    } else {
+      setErro("Nao foi possivel concluir a vinculacao com o Google Calendar.");
+    }
+
+    params.delete("google_calendar");
+    params.delete("google_calendar_etapa");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, []);
+
+  useEffect(() => {
     if (!agendaSelecionadaId) {
       setAgendamentos([]);
       setSlotsDia([]);
