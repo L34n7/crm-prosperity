@@ -68,6 +68,14 @@ type Slot = {
   hora_label: string;
 };
 
+type GoogleCalendarEvento = {
+  id: string;
+  titulo: string;
+  inicio_at: string;
+  fim_at: string;
+  dia_inteiro: boolean;
+};
+
 type ConfigForm = {
   nome: string;
   descricao: string;
@@ -160,6 +168,23 @@ function formatarData(valor?: string | null) {
   } catch {
     return "-";
   }
+}
+
+function formatarHorarioGoogle(evento: GoogleCalendarEvento) {
+  if (evento.dia_inteiro) return "Dia inteiro";
+
+  const inicio = new Date(evento.inicio_at);
+  const fim = new Date(evento.fim_at);
+
+  return `${pad2(inicio.getHours())}:${pad2(inicio.getMinutes())} - ${pad2(
+    fim.getHours()
+  )}:${pad2(fim.getMinutes())}`;
+}
+
+function dateKeyEventoGoogle(evento: GoogleCalendarEvento) {
+  return evento.dia_inteiro
+    ? evento.inicio_at.slice(0, 10)
+    : dateKeyFromIso(evento.inicio_at);
 }
 
 function formatarDiaSelecionado(valor?: string | null) {
@@ -297,6 +322,7 @@ export default function AgendasPage() {
   const [agendaSelecionadaId, setAgendaSelecionadaId] = useState("");
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [slotsDia, setSlotsDia] = useState<Slot[]>([]);
+  const [eventosGoogle, setEventosGoogle] = useState<GoogleCalendarEvento[]>([]);
   const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
   const [mesAtual, setMesAtual] = useState(() => new Date());
 
@@ -360,6 +386,28 @@ export default function AgendasPage() {
       );
   }, [agendamentos, diaSelecionado]);
 
+  const eventosGooglePorDia = useMemo(() => {
+    const mapa = new Map<string, number>();
+
+    for (const evento of eventosGoogle) {
+      const key = dateKeyEventoGoogle(evento);
+      mapa.set(key, (mapa.get(key) || 0) + 1);
+    }
+
+    return mapa;
+  }, [eventosGoogle]);
+
+  const eventosGoogleDoDia = useMemo(() => {
+    if (!diaSelecionado) return [];
+
+    return eventosGoogle
+      .filter((evento) => dateKeyEventoGoogle(evento) === diaSelecionado)
+      .sort(
+        (a, b) =>
+          new Date(a.inicio_at).getTime() - new Date(b.inicio_at).getTime()
+      );
+  }, [diaSelecionado, eventosGoogle]);
+
   const carregarAgendamentos = useCallback(async (agendaId: string) => {
     const res = await fetch(`/api/agendas/${agendaId}/agendamentos?status=todos`, {
       cache: "no-store",
@@ -371,6 +419,27 @@ export default function AgendasPage() {
     }
 
     setAgendamentos(json.agendamentos || []);
+  }, []);
+
+  const carregarEventosGoogle = useCallback(async (agendaId: string, mes: Date) => {
+    const inicio = new Date(mes.getFullYear(), mes.getMonth(), 1);
+    const fim = new Date(mes.getFullYear(), mes.getMonth() + 1, 1);
+    const params = new URLSearchParams({
+      inicio_at: inicio.toISOString(),
+      fim_at: fim.toISOString(),
+    });
+    const res = await fetch(
+      `/api/agendas/${agendaId}/google-calendar/ocupacoes?${params}`,
+      { cache: "no-store" }
+    );
+    const json = await res.json();
+
+    if (!res.ok || !json.ok) {
+      setEventosGoogle([]);
+      return;
+    }
+
+    setEventosGoogle(json.eventos || []);
   }, []);
 
   const carregarSlotsDia = useCallback(
@@ -390,6 +459,10 @@ export default function AgendasPage() {
 
         if (!res.ok || !json.ok) {
           setSlotsDia([]);
+          setErro(
+            json.error ||
+              "Nao foi possivel verificar a disponibilidade desta agenda."
+          );
           return;
         }
 
@@ -520,6 +593,17 @@ export default function AgendasPage() {
   }, [agendaSelecionadaId, carregarDetalhesAgenda]);
 
   useEffect(() => {
+    if (!agendaSelecionadaId) {
+      setEventosGoogle([]);
+      return;
+    }
+
+    carregarEventosGoogle(agendaSelecionadaId, mesAtual).catch(() => {
+      setEventosGoogle([]);
+    });
+  }, [agendaSelecionadaId, carregarEventosGoogle, mesAtual]);
+
+  useEffect(() => {
     if (!agendaSelecionadaId || !diaSelecionado) {
       setSlotsDia([]);
       return;
@@ -592,6 +676,7 @@ export default function AgendasPage() {
 
       if (agendaSelecionadaId && feedback.sucesso) {
         carregarGoogleCalendar(agendaSelecionadaId);
+        carregarEventosGoogle(agendaSelecionadaId, mesAtual);
       }
     }
 
@@ -600,7 +685,7 @@ export default function AgendasPage() {
     return () => {
       window.removeEventListener("message", receberResultadoGoogleCalendar);
     };
-  }, [agendaSelecionadaId, carregarGoogleCalendar]);
+  }, [agendaSelecionadaId, carregarEventosGoogle, carregarGoogleCalendar, mesAtual]);
 
   function vincularGoogleCalendar() {
     if (!agendaSelecionadaId) return;
@@ -642,6 +727,7 @@ export default function AgendasPage() {
 
       setSucesso("Agenda sincronizada com o Google Calendar.");
       await carregarGoogleCalendar(agendaSelecionadaId);
+      await carregarEventosGoogle(agendaSelecionadaId, mesAtual);
 
       if (diaSelecionado) {
         await carregarSlotsDia(agendaSelecionadaId, diaSelecionado);
@@ -1167,6 +1253,7 @@ export default function AgendasPage() {
               <div className={styles.calendarGrid}>
                 {diasCalendario.map((dia) => {
                   const quantidadeMarcados = agendamentosAtivosPorDia.get(dia.key) || 0;
+                  const quantidadeGoogle = eventosGooglePorDia.get(dia.key) || 0;
                   const selecionado = diaSelecionado === dia.key;
                   const hoje = dia.key === dateKey(new Date());
 
@@ -1190,6 +1277,12 @@ export default function AgendasPage() {
                         <span className={styles.dayMarker}>
                           {quantidadeMarcados} marcado
                           {quantidadeMarcados > 1 ? "s" : ""}
+                        </span>
+                      )}
+
+                      {quantidadeGoogle > 0 && (
+                        <span className={styles.dayMarkerGoogle}>
+                          {quantidadeGoogle} Google
                         </span>
                       )}
                     </button>
@@ -1285,7 +1378,32 @@ export default function AgendasPage() {
                   </div>
                 )}
               </section>
-              
+
+              <section className={styles.daySection}>
+                <div className={styles.daySectionHeader}>
+                  <strong>Ocupados no Google</strong>
+                  <span>{eventosGoogleDoDia.length}</span>
+                </div>
+
+                {eventosGoogleDoDia.length === 0 ? (
+                  <div className={styles.emptyMini}>
+                    Nenhum bloqueio externo do Google.
+                  </div>
+                ) : (
+                  <div className={styles.appointmentList}>
+                    {eventosGoogleDoDia.map((evento) => (
+                      <div key={evento.id} className={styles.googleAppointmentItem}>
+                        <div className={styles.appointmentMain}>
+                          <strong>{evento.titulo}</strong>
+                          <span>{formatarHorarioGoogle(evento)}</span>
+                          <small>Evento externo do Google Calendar</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
               <section className={styles.daySection}>
                 <div className={styles.daySectionHeader}>
                   <strong>Horarios livres</strong>

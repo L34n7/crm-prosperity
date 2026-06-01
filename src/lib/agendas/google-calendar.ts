@@ -296,21 +296,56 @@ export async function listarOcupacoesGoogleCalendar(params: {
 
   if (!integracao) return [];
 
-  try {
-    const json = await googleFetch(integracao, "/calendar/v3/freeBusy", {
-      method: "POST",
-      body: JSON.stringify({
-        timeMin: params.inicioAt,
-        timeMax: params.fimAt,
-        items: [{ id: integracao.google_calendar_id }],
-      }),
-    });
+  const json = await googleFetch(integracao, "/calendar/v3/freeBusy", {
+    method: "POST",
+    body: JSON.stringify({
+      timeMin: params.inicioAt,
+      timeMax: params.fimAt,
+      items: [{ id: integracao.google_calendar_id }],
+    }),
+  });
 
-    return json?.calendars?.[integracao.google_calendar_id]?.busy || [];
-  } catch (error) {
-    console.error("[GOOGLE_CALENDAR] Erro ao buscar ocupacoes:", error);
-    return [];
-  }
+  return json?.calendars?.[integracao.google_calendar_id]?.busy || [];
+}
+
+export async function listarEventosExternosGoogleCalendar(params: {
+  empresaId: string;
+  agendaId: string;
+  inicioAt: string;
+  fimAt: string;
+}) {
+  const integracao = await obterIntegracao(params.empresaId, params.agendaId);
+
+  if (!integracao) return [];
+
+  const calendarId = encodeURIComponent(integracao.google_calendar_id);
+  const query = new URLSearchParams({
+    timeMin: params.inicioAt,
+    timeMax: params.fimAt,
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "2500",
+  });
+  const json = await googleFetch(
+    integracao,
+    `/calendar/v3/calendars/${calendarId}/events?${query}`
+  );
+
+  return (json?.items || [])
+    .filter(
+      (evento: any) =>
+        evento.status !== "cancelled" &&
+        evento.transparency !== "transparent" &&
+        !evento.extendedProperties?.private?.crm_agendamento_id
+    )
+    .map((evento: any) => ({
+      id: evento.id,
+      titulo: evento.summary || "Ocupado no Google Calendar",
+      inicio_at: evento.start?.dateTime || evento.start?.date || "",
+      fim_at: evento.end?.dateTime || evento.end?.date || "",
+      dia_inteiro: Boolean(evento.start?.date && !evento.start?.dateTime),
+    }))
+    .filter((evento: any) => evento.inicio_at && evento.fim_at);
 }
 
 export async function sincronizarAgendamentoGoogleCalendar(params: {
