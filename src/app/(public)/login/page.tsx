@@ -32,8 +32,8 @@ export default function LoginPage() {
 
   function traduzirErroLogin(message: string) {
     const mapa: Record<string, string> = {
-      "Invalid login credentials": "Invalid email or password.",
-      "Email not confirmed": "Please confirm your email before signing in.",
+      "Invalid login credentials": "E-mail ou senha inválidos.",
+      "Email not confirmed": "Confirme seu e-mail antes de entrar.",
     };
 
     return mapa[message] || message;
@@ -55,7 +55,7 @@ export default function LoginPage() {
       return;
     }
 
-    setMensagem("Login completed successfully.");
+    setMensagem("Login realizado com sucesso.");
     setLoading(false);
     router.push("/");
     router.refresh();
@@ -70,39 +70,39 @@ export default function LoginPage() {
         <div className={styles.brandPanel}>
           <div className={styles.brandBadge}>CRM</div>
 
-          <p className={styles.eyebrow}>Business platform</p>
+          <p className={styles.eyebrow}>Plataforma empresarial</p>
 
           <h1 className={styles.title}>CRM Prosperity</h1>
 
           <p className={styles.description}>
-            Centralize conversations, contacts, users, departments, and service
-            rules in a professional, organized, and modern experience.
+            Centralize conversas, contatos, usuários, setores e regras de
+            atendimento em uma experiência profissional, organizada e moderna.
           </p>
 
           <div className={styles.featureList}>
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Multi-department support</span>
+              <span>Suporte a múltiplos setores</span>
             </div>
 
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Dynamic profile-based permissions</span>
+              <span>Permissões dinâmicas por perfil</span>
             </div>
 
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Integrated WhatsApp operation</span>
+              <span>Operação integrada com WhatsApp</span>
             </div>
           </div>
         </div>
 
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <p className={styles.cardEyebrow}>Secure access</p>
-            <h2 className={styles.cardTitle}>Sign in to the platform</h2>
+            <p className={styles.cardEyebrow}>Acesso seguro</p>
+            <h2 className={styles.cardTitle}>Entrar na plataforma</h2>
             <p className={styles.cardSubtitle}>
-              Enter your email and password to access the admin dashboard.
+              Informe seu e-mail e senha para acessar o painel administrativo.
             </p>
           </div>
 
@@ -120,7 +120,7 @@ export default function LoginPage() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Password</label>
+              <label className={styles.label}>Senha</label>
               <input
                 type="password"
                 className={styles.input}
@@ -136,7 +136,7 @@ export default function LoginPage() {
               disabled={loading}
               className={styles.submitButton}
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? "Entrando..." : "Entrar"}
             </button>
 
             <div
@@ -158,7 +158,7 @@ export default function LoginPage() {
                   fontWeight: 600,
                 }}
               >
-                I do not have an account yet
+                Ainda não tenho conta
               </Link>
 
               <Link
@@ -170,7 +170,7 @@ export default function LoginPage() {
                   fontWeight: 600,
                 }}
               >
-                Forgot my password
+                Esqueci minha senha
               </Link>
             </div>
           </form>
@@ -178,7 +178,7 @@ export default function LoginPage() {
           {mensagem && (
             <div
               className={`${styles.messageBox} ${
-                mensagem === "Login completed successfully."
+                mensagem === "Login realizado com sucesso."
                   ? styles.messageSuccess
                   : styles.messageError
               }`}

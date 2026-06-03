@@ -152,40 +152,53 @@ function contarVariaveisTemplate(template: WhatsAppTemplate | null) {
 }
 
 function formatarStatusIntegracao(status?: string | null) {
-  if (!status) return "No status";
+  if (!status) return "Sem status";
 
   switch (status.toLowerCase()) {
     case "ativo":
-      return "Active";
+      return "Ativa";
     case "conectado":
-      return "Connected";
+      return "Conectada";
     case "inativo":
-      return "Inactive";
+      return "Inativa";
     default:
       return status;
   }
 }
 
 function getTemplateStatusLabel(status: string | null | undefined) {
-  if (!status) return "No status";
+  if (!status) return "Sem status";
 
   switch (status.toUpperCase()) {
     case "PENDING":
-      return "Under review";
+      return "Em análise";
     case "APPROVED":
-      return "Approved";
+      return "Aprovado";
     case "REJECTED":
-      return "Rejected";
+      return "Rejeitado";
     case "PAUSED":
-      return "Paused";
+      return "Pausado";
     case "DISABLED":
-      return "Disabled";
+      return "Desativado";
     case "ARCHIVED":
-      return "Archived";
+      return "Arquivado";
     case "ERRO_ENVIO":
-      return "Delivery error";
+      return "Erro no envio";
     default:
       return status;
+  }
+}
+
+function formatarCategoriaMeta(categoria: string | null | undefined) {
+  switch (String(categoria || "").toUpperCase()) {
+    case "UTILITY":
+      return "Utilidade";
+    case "MARKETING":
+      return "Marketing";
+    case "AUTHENTICATION":
+      return "Autenticação";
+    default:
+      return categoria || "-";
   }
 }
 
@@ -299,7 +312,7 @@ function limparNumero(valor: string | null | undefined) {
 function formatarTelefone(numero: string | null | undefined) {
   const limpo = limparNumero(numero);
 
-  if (!limpo) return "No phone number";
+  if (!limpo) return "Sem telefone";
   return limpo;
 }
 
@@ -929,8 +942,8 @@ export default function DisparosWhatsAppPage() {
   return (
     <>
       <Header
-        title="WhatsApp Broadcasts"
-        subtitle="Select the WhatsApp connection, approved template, and saved contacts to send messages."
+        title="Disparos WhatsApp"
+        subtitle="Selecione a conexão WhatsApp, o template aprovado e os contatos salvos para enviar mensagens."
       />
 
       <div className={styles.pageContent}>
@@ -938,20 +951,20 @@ export default function DisparosWhatsAppPage() {
           <section className={styles.formCard}>
             <div className={styles.cardHeader}>
               <div>
-                <p className={styles.eyebrow}>Operation</p>
-                <h2 className={styles.cardTitle}>New broadcast</h2>
+                <p className={styles.eyebrow}>Operação</p>
+                <h2 className={styles.cardTitle}>Novo disparo</h2>
                 <p className={styles.cardSubtitle}>
-                  Choose the connection, select the template, and define the contacts.
+                  Escolha a conexão, selecione o template e defina os contatos.
                 </p>
               </div>
             </div>
 
               {loadingUsuario || loadingIntegracoes ? (
-                <div className={styles.emptyState}>Loading data...</div>
+                <div className={styles.emptyState}>Carregando dados...</div>
               ) : !podeDisparar ? (
                 <div className={styles.inlineBlock}>
                   <div className={styles.errorAlert}>
-                    You do not have permission to access this feature.
+                    Você não tem permissão para acessar este recurso.
                   </div>
                 </div> 
               ) : (
@@ -960,13 +973,13 @@ export default function DisparosWhatsAppPage() {
                   <div className={styles.field}>
                     <div className={styles.setupColumn}>
                       <div className={styles.field}>
-                        <label className={styles.label}>WhatsApp Integration</label>
+                        <label className={styles.label}>Integração WhatsApp</label>
                         <select
                           value={integracaoId} 
                           onChange={(e) => setIntegracaoId(e.target.value)}
                           className={styles.input}
                         >
-                          <option value="">Select a connection</option>
+                          <option value="">Selecione uma conexão</option>
                           {integracoes.map((item) => (
                             <option key={item.id} value={item.id}>
                               {item.nome_conexao} {item.numero ? `- ${item.numero}` : ""}
@@ -976,7 +989,7 @@ export default function DisparosWhatsAppPage() {
                       </div>
 
                       <div className={styles.field}>
-                        <label className={styles.label}>Approved template</label>
+                        <label className={styles.label}>Template aprovado</label>
                         <select
                           value={templateId}
                           onChange={(e) => setTemplateId(e.target.value)}
@@ -985,10 +998,10 @@ export default function DisparosWhatsAppPage() {
                         >
                           <option value="">
                             {!integracaoId
-                              ? "Select a connection first"
+                              ? "Selecione uma conexão primeiro"
                               : loadingTemplates
-                              ? "Loading templates..."
-                              : "Select a template"}
+                              ? "Carregando templates..."
+                              : "Selecione um template"}
                           </option>
 
                           {templates.map((item) => (
@@ -1003,28 +1016,28 @@ export default function DisparosWhatsAppPage() {
                     {templateSelecionado ? (
                       <div className={styles.templateInfoBox}>
                         <div>
-                          <strong>Category:</strong> {templateSelecionado.categoria || "-"}
+                          <strong>Categoria:</strong> {formatarCategoriaMeta(templateSelecionado.categoria)}
                         </div>
 
                         <div className={styles.templateInfoDivider} />
 
                         <div>
-                          <strong>Language:</strong> {templateSelecionado.idioma || "-"}
+                          <strong>Idioma:</strong> {templateSelecionado.idioma || "-"}
                         </div>
                       </div>
                     ) : null}
                     
                       <div className={styles.templateHint}>
-                        This template uses <strong>{totalVariaveis}</strong> variable(s).
-                        In the current send, when variables exist, the system fills:
-                        <strong> {" {{1}}"}</strong> with the contact name and
-                        <strong> {" {{2}}"}</strong> with campaign, lead status, or phone number.
+                        Este template usa <strong>{totalVariaveis}</strong> variável(is).
+                        Neste envio, quando existirem variáveis, o sistema preenche:
+                        <strong> {" {{1}}"}</strong> com o nome do contato e
+                        <strong> {" {{2}}"}</strong> com campanha, status do lead ou telefone.
                       </div>
                   </div>
 
                   <aside className={styles.previewSideCard}>
                     <div className={styles.previewTopLine}>
-                      <strong>Preview</strong>
+                      <strong>Prévia</strong>
                     </div>
 
                     {templateSelecionado ? (
@@ -1062,7 +1075,7 @@ export default function DisparosWhatsAppPage() {
                       </>
                     ) : (
                       <div className={styles.previewEmptyState}>
-                        Select an approved template to preview the WhatsApp message.
+                        Selecione um template aprovado para visualizar a mensagem do WhatsApp.
                       </div>
                     )}
                   </aside>
@@ -1071,17 +1084,17 @@ export default function DisparosWhatsAppPage() {
                 <div className={styles.searchRow}>
                   <div className={styles.searchFilters}>
                     <div className={styles.field}>
-                      <label className={styles.label}>Search saved contacts</label>
+                      <label className={styles.label}>Buscar contatos salvos</label>
                       <input
                         value={buscaContato}
                         onChange={(e) => setBuscaContato(e.target.value)}
                         className={styles.input}
-                        placeholder="Search by name, phone, email, campaign..."
+                        placeholder="Busque por nome, telefone, e-mail, campanha..."
                       />
                     </div>
 
                     <div className={styles.field}>
-                      <label className={styles.label}>Filter by source</label>
+                      <label className={styles.label}>Filtrar por origem</label>
                       <select
                         value={origemFiltro}
                         onChange={(e) => setOrigemFiltro(e.target.value)}
@@ -1089,7 +1102,7 @@ export default function DisparosWhatsAppPage() {
                       >
                       {origensDisponiveis.length > 0 ? (
                         <>
-                          <option value="">All sources</option>
+                          <option value="">Todas as origens</option>
 
                           {origensDisponiveis.map((origem) => (
                             <option key={origem} value={origem}>
@@ -1098,13 +1111,13 @@ export default function DisparosWhatsAppPage() {
                           ))}
                         </>
                       ) : (
-                        <option value="">No sources found</option>
+                        <option value="">Nenhuma origem encontrada</option>
                       )}
                       </select>
                     </div>
 
                     <div className={styles.field}>
-                      <label className={styles.label}>Filter by campaign</label>
+                      <label className={styles.label}>Filtrar por campanha</label>
                       <select
                         value={campanhaFiltro}
                         onChange={(e) => setCampanhaFiltro(e.target.value)}
@@ -1112,7 +1125,7 @@ export default function DisparosWhatsAppPage() {
                       >
                         {campanhasDisponiveis.length > 0 ? (
                           <>
-                            <option value="">All campaigns</option>
+                            <option value="">Todas as campanhas</option>
 
                             {campanhasDisponiveis.map((campanha) => (
                               <option key={campanha} value={campanha}>
@@ -1121,7 +1134,7 @@ export default function DisparosWhatsAppPage() {
                             ))}
                           </>
                         ) : (
-                          <option value="">No campaigns found</option>
+                          <option value="">Nenhuma campanha encontrada</option>
                         )}
                       </select>
                     </div>
@@ -1134,7 +1147,7 @@ export default function DisparosWhatsAppPage() {
                       onClick={adicionarTodosDisponiveis}
                       disabled={loadingContatos || contatosDisponiveisValidos.length === 0}
                     >
-                      Add all filtered
+                      Adicionar filtrados
                     </button>
 
                     <button
@@ -1153,7 +1166,7 @@ export default function DisparosWhatsAppPage() {
                         !campanhaFiltro
                       }
                     >
-                      Clear filters
+                      Limpar filtros
                     </button>
                   </div>
                 </div>
@@ -1161,7 +1174,7 @@ export default function DisparosWhatsAppPage() {
                 <div className={styles.contactsSection}>
                   <div className={styles.contactsColumn}>
                     <div className={styles.contactsHeader}>
-                      <h3 className={styles.contactsTitle}>Saved Contacts</h3>
+                      <h3 className={styles.contactsTitle}>Contatos salvos</h3>
                       <span className={styles.contactsCount}>
                         {loadingContatos ? "..." : totalContatosDisponiveis}
                       </span>
@@ -1169,10 +1182,10 @@ export default function DisparosWhatsAppPage() {
 
                     <div className={styles.contactsList}>
                       {loadingContatos ? (
-                        <div className={styles.emptyMiniState}>Loading contacts...</div>
+                        <div className={styles.emptyMiniState}>Carregando contatos...</div>
                       ) : contatosDisponiveis.length === 0 ? (
                         <div className={styles.emptyMiniState}>
-                          No saved contacts available.
+                          Nenhum contato salvo disponível.
                         </div>
                       ) : (
                         contatosDisponiveis.map((contato) => {
@@ -1214,7 +1227,7 @@ export default function DisparosWhatsAppPage() {
 
                                   {!telefoneValido ? (
                                     <span className={styles.contactBadgeWarning}>
-                                      No valid phone number
+                                      Sem telefone válido
                                     </span>
                                   ) : null}
                                 </div>
@@ -1237,7 +1250,7 @@ export default function DisparosWhatsAppPage() {
 
                   <div className={styles.contactsColumn}>
                     <div className={styles.contactsHeader}>
-                      <h3 className={styles.contactsTitle}>Selected for Dismissal</h3>
+                      <h3 className={styles.contactsTitle}>Selecionados para disparo</h3>
                       <span className={styles.contactsCount}>
                         {contatosSelecionados.length}
                       </span>
@@ -1246,14 +1259,14 @@ export default function DisparosWhatsAppPage() {
                     <div className={styles.contactsList}>
                       {contatosSelecionados.length === 0 ? (
                         <div className={styles.emptyMiniState}>
-                          No contacts selected.
+                          Nenhum contato selecionado.
                         </div>
                       ) : (
                         contatosSelecionados.map((contato) => (
                           <div key={contato.id} className={styles.contactCardSelected}>
                             <div className={styles.contactMain}>
                               <strong className={styles.contactName}>
-                                {contato.nome || "Unnamed"}
+                                {contato.nome || "Sem nome"}
                               </strong>
 
                               <p className={styles.contactMeta}>
@@ -1291,7 +1304,7 @@ export default function DisparosWhatsAppPage() {
                               className={styles.removeButton}
                               onClick={() => removerContato(contato.id)}
                             >
-                              Remove
+                              Remover
                             </button>
                           </div>
                         ))
@@ -1311,27 +1324,27 @@ export default function DisparosWhatsAppPage() {
                 <div className={styles.submitBar}>
                   {/* ESQUERDA */}
                   <div className={styles.submitLeft}>
-                    <span>Contacts: {contatosSelecionados.length}</span>
+                    <span>Contatos: {contatosSelecionados.length}</span>
                     <span>Template: {templateSelecionado?.nome}</span>
-                    <span>Variables: {totalVariaveis}</span>
+                    <span>Variáveis: {totalVariaveis}</span>
                   </div>
 
                   {/* CENTRO */}
                   <div className={styles.submitCenter}>
                     <span>
-                      <strong>Category:</strong> {previewCusto?.categoria?.toUpperCase()}
+                      <strong>Categoria:</strong> {formatarCategoriaMeta(previewCusto?.categoria)}
                     </span>
 
                     <span>
-                      <strong>Qty:</strong> {previewCusto?.totalSelecionados}
+                      <strong>Qtd.:</strong> {previewCusto?.totalSelecionados}
                     </span>
 
                     <span>
-                      <strong>Exempt:</strong> {previewCusto?.totalIsentos}
+                      <strong>Isentos:</strong> {previewCusto?.totalIsentos}
                     </span>
 
                     <span>
-                      <strong>Charged:</strong> {previewCusto?.totalCobrados}
+                      <strong>Cobrados:</strong> {previewCusto?.totalCobrados}
                     </span>
 
                     <span>
@@ -1353,7 +1366,7 @@ export default function DisparosWhatsAppPage() {
                       onClick={() => setModalConfirmacaoAberto(true)}
                       disabled={!templateSelecionado || contatosSelecionados.length === 0 || disparando}
                     >
-                      Send messages
+                      Enviar mensagens
                     </button>
                   </div>
                 </div>
@@ -1364,10 +1377,10 @@ export default function DisparosWhatsAppPage() {
           <section className={styles.resultsCard}>
             <div className={styles.cardHeader}>
               <div>
-                <p className={styles.eyebrow}>History</p>
-                <h2 className={styles.cardTitle}>Discharge Results</h2>
+                <p className={styles.eyebrow}>Histórico</p>
+                <h2 className={styles.cardTitle}>Resultados dos disparos</h2>
                 <p className={styles.cardSubtitle}>
-                  Saved discharges are always visible here.
+                  Os disparos salvos ficam sempre visíveis aqui.
                 </p>
               </div> 
             </div>
@@ -1395,7 +1408,7 @@ export default function DisparosWhatsAppPage() {
               }
               onClick={() => setFiltroHistorico("sucesso")}
             >
-              <span className={styles.summaryLabel}>Delivered</span>
+              <span className={styles.summaryLabel}>Entregues</span>
               <strong className={styles.summaryValue}>{totalSucesso}</strong>
             </button>
 
@@ -1408,7 +1421,7 @@ export default function DisparosWhatsAppPage() {
               }
               onClick={() => setFiltroHistorico("processando")}
             >
-              <span className={styles.summaryLabel}>Pending</span>
+              <span className={styles.summaryLabel}>Pendentes</span>
               <strong className={styles.summaryValue}>{totalProcessando}</strong>
             </button>
 
@@ -1421,16 +1434,16 @@ export default function DisparosWhatsAppPage() {
               }
               onClick={() => setFiltroHistorico("falha")}
             >
-              <span className={styles.summaryLabel}>Failed</span>
+              <span className={styles.summaryLabel}>Falhas</span>
               <strong className={styles.summaryValue}>{totalFalha}</strong>
             </button>
           </div>
 
             {loadingHistorico ? (
-              <div className={styles.emptyState}>Loading history...</div>
+              <div className={styles.emptyState}>Carregando histórico...</div>
             ) : resultadoFiltrado.length === 0 ? (
               <div className={styles.emptyState}>
-                No discharges found for this filter.
+                Nenhum disparo encontrado para este filtro.
               </div>
             ) : (
               <div className={styles.resultsList}>
@@ -1444,7 +1457,7 @@ export default function DisparosWhatsAppPage() {
                   <div className={styles.resultCompactHeader}>
                     <div className={styles.resultCompactMain}>
                       <strong className={styles.resultCompactName}>
-                        {item.nome_contato || "Unnamed"} • {item.numero}
+                        {item.nome_contato || "Sem nome"} • {item.numero}
                       </strong>
 
                       <p className={styles.resultCompactMeta}>
@@ -1456,7 +1469,7 @@ export default function DisparosWhatsAppPage() {
                           <>
                             {" • "}
                             <span className={styles.badgeAgendado}>
-                              ⏰ Scheduled Discharge
+                              ⏰ Disparo agendado
                             </span>
                           </>
                         ) : null}
@@ -1464,7 +1477,7 @@ export default function DisparosWhatsAppPage() {
                     </div>
 
                     <span className={styles.resultStatus}>
-                      {item.status_label || (item.ok ? "Sent" : "Failed")}
+                      {item.status_label || (item.ok ? "Enviado" : "Falha")}
                     </span>
                   </div>
 
@@ -1491,7 +1504,7 @@ export default function DisparosWhatsAppPage() {
                               className={styles.expandMessageButton}
                               onClick={() => alternarMensagemExpandida(chaveMensagem)}
                             >
-                              {expandida ? "Hide" : "View message"}
+                              {expandida ? "Ocultar" : "Ver mensagem"}
                             </button>
                           </div>
                         );
@@ -1515,7 +1528,7 @@ export default function DisparosWhatsAppPage() {
 
                           {feedbackErro.detalhe ? (
                             <p className={styles.resultErrorDetail}>
-                              Technical detail: {feedbackErro.detalhe}
+                              Detalhe técnico: {feedbackErro.detalhe}
                             </p>
                           ) : null}
                         </div>
@@ -1527,8 +1540,8 @@ export default function DisparosWhatsAppPage() {
                 {resultadoFiltrado.length > ITENS_HISTORICO_POR_PAGINA ? (
                   <div className={styles.paginationBar}>
                     <span className={styles.paginationInfo}>
-                      Showing  {primeiroItemHistorico} a {ultimoItemHistorico} de{" "}
-                      {resultadoFiltrado.length} broadcasts
+                      Mostrando {primeiroItemHistorico} a {ultimoItemHistorico} de{" "}
+                      {resultadoFiltrado.length} disparos
                     </span>
 
                     <div className={styles.paginationActions}>
@@ -1538,11 +1551,11 @@ export default function DisparosWhatsAppPage() {
                         onClick={() => setPaginaHistorico((prev) => Math.max(1, prev - 1))}
                         disabled={paginaHistorico <= 1}
                       >
-                        Previous
+                        Anterior
                       </button>
 
                       <span className={styles.paginationCurrent}>
-                        Page {paginaHistorico} of {totalPaginasHistorico}
+                        Página {paginaHistorico} de {totalPaginasHistorico}
                       </span>
 
                       <button
@@ -1555,7 +1568,7 @@ export default function DisparosWhatsAppPage() {
                         }
                         disabled={paginaHistorico >= totalPaginasHistorico}
                       >
-                        Next
+                        Próxima
                       </button>
                     </div>
                   </div>
@@ -1573,10 +1586,10 @@ export default function DisparosWhatsAppPage() {
           >
             <div className={styles.modalHeader}>
               <div>
-                <p className={styles.modalEyebrow}>Charging Confirmation</p>
-                <h3 className={styles.modalTitle}>Confirm Message Discharge</h3>
+                <p className={styles.modalEyebrow}>Confirmação de cobrança</p>
+                <h3 className={styles.modalTitle}>Confirmar disparo de mensagens</h3>
                 <p className={styles.modalSubtitle}>
-                  Review the information below before continuing. This send may generate a charge.
+                  Revise as informações abaixo antes de continuar. Este envio pode gerar cobrança.
                 </p>
               </div>
 
@@ -1591,7 +1604,7 @@ export default function DisparosWhatsAppPage() {
 
             <div className={styles.modalBody}>
               <div className={styles.modalSection}>
-                <h4 className={styles.modalSectionTitle}>Broadcast Summary</h4>
+                <h4 className={styles.modalSectionTitle}>Resumo do disparo</h4>
 
                 <div className={styles.modalGridResumo}>
                   <div className={styles.modalInfoItem}>
@@ -1602,28 +1615,28 @@ export default function DisparosWhatsAppPage() {
                   </div>
 
                   <div className={styles.modalInfoItem}>
-                    <span className={styles.modalInfoLabel}>Category</span>
+                    <span className={styles.modalInfoLabel}>Categoria</span>
                     <strong className={styles.modalInfoValue}>
-                      {String(previewCusto?.categoria || templateSelecionado?.categoria || "-").toUpperCase()}
+                      {formatarCategoriaMeta(previewCusto?.categoria || templateSelecionado?.categoria)}
                     </strong>
                   </div>
 
                   <div className={styles.modalInfoItem}>
-                    <span className={styles.modalInfoLabel}>Selected</span>
+                    <span className={styles.modalInfoLabel}>Selecionados</span>
                     <strong className={styles.modalInfoValue}>
                       {previewCusto?.totalSelecionados ?? contatosSelecionados.length}
                     </strong>
                   </div>
 
                   <div className={styles.modalInfoItem}>
-                    <span className={styles.modalInfoLabel}>Exempt</span>
+                    <span className={styles.modalInfoLabel}>Isentos</span>
                     <strong className={styles.modalInfoValue}>
                       {previewCusto?.totalIsentos ?? 0}
                     </strong>
                   </div>
 
                   <div className={styles.modalInfoItem}>
-                    <span className={styles.modalInfoLabel}>Charged</span>
+                    <span className={styles.modalInfoLabel}>Cobrados</span>
                     <strong className={styles.modalInfoValue}>
                       {previewCusto?.totalCobrados ?? 0}
                     </strong>
@@ -1639,28 +1652,28 @@ export default function DisparosWhatsAppPage() {
               </div>
 
               <div className={styles.modalDestaqueFinanceiro}>
-                <span className={styles.modalFinanceiroLabel}>Estimated Total</span>
+                <span className={styles.modalFinanceiroLabel}>Total estimado</span>
                 <strong className={styles.modalFinanceiroValor}>
                   R$ {(previewCusto?.valorTotalBrlMin ?? 0).toFixed(2)} ~ R$ {(previewCusto?.valorTotalBrlMax ?? 0).toFixed(2)}
                 </strong>
                 <p className={styles.modalFinanceiroObs}>
-                  Reference value calculated from the total in USD and the current exchange rate.
+                  Valor de referência calculado a partir do total em USD e da cotação atual.
                 </p>
               </div>
 
               <div className={styles.modalAlert}>
-                <strong>Attention:</strong> the charge may be processed by Meta using the payment method linked to the commercial account. The final invoiced value may vary in relation to the estimate shown on this screen.
+                <strong>Atenção:</strong> a cobrança pode ser processada pela Meta usando o método de pagamento vinculado à conta comercial. O valor final faturado pode variar em relação à estimativa exibida nesta tela.
               </div>
 
               <div className={styles.modalSection}>
-                <h4 className={styles.modalSectionTitle}>Important Information</h4>
+                <h4 className={styles.modalSectionTitle}>Informações importantes</h4>
 
                 <ul className={styles.modalList}>
-                  <li>The value in Brazilian Real displayed here is an estimate and serves only as a reference.</li>
-                  <li>The final value may vary according to the USD exchange rate, IOF, taxes, banking fees and applicable billing rules.</li>
-                  <li>Exempt conversations do not enter the charged total.</li>
-                  <li>Marketing templates may generate charges even when there is an active conversation.</li>
-                  <li>After confirmation, the broadcast will be initiated immediately.</li>
+                  <li>O valor em real exibido aqui é uma estimativa e serve apenas como referência.</li>
+                  <li>O valor final pode variar conforme cotação do USD, IOF, impostos, tarifas bancárias e regras de cobrança aplicáveis.</li>
+                  <li>Conversas isentas não entram no total cobrado.</li>
+                  <li>Templates de marketing podem gerar cobrança mesmo quando existe uma conversa ativa.</li>
+                  <li>Após a confirmação, o disparo será iniciado imediatamente.</li>
                 </ul>
               </div>
 
@@ -1671,7 +1684,7 @@ export default function DisparosWhatsAppPage() {
                   onChange={(e) => setConfirmacaoCobranca(e.target.checked)}
                 />
                 <span>
-                  I have read the information above and I am aware that this broadcast may generate a charge.
+                  Li as informações acima e estou ciente de que este disparo pode gerar cobrança.
                 </span>
               </label>
             </div>
@@ -1682,7 +1695,7 @@ export default function DisparosWhatsAppPage() {
                 className={styles.secondaryButton}
                 onClick={() => setModalConfirmacaoAberto(false)}
               >
-                Cancel
+                Cancelar
               </button>
 
               <button
@@ -1691,7 +1704,7 @@ export default function DisparosWhatsAppPage() {
                 onClick={confirmarEDisparar}
                 disabled={!confirmacaoCobranca || disparando}
               >
-                Confirm and Send
+                Confirmar e enviar
               </button>
             </div>
           </div>

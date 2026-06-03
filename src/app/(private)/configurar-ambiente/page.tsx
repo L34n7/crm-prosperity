@@ -68,30 +68,30 @@ type Etapa = {
 const ETAPAS: Etapa[] = [
   {
     numero: 1,
-    titulo: "Connect Meta Account",
+    titulo: "Conectar conta Meta",
     descricao:
-      "Link your Meta Business account and capture the official WhatsApp Business data.",
+      "Vincule sua conta empresarial da Meta e capture os dados oficiais do WhatsApp Business.",
     chave: "meta_conectado",
   },
   {
     numero: 2,
-    titulo: "Activate WhatsApp Number",
+    titulo: "Ativar número do WhatsApp",
     descricao:
-      "Complete the technical registration of the phone number to send and receive messages.",
+      "Conclua o registro técnico do número para enviar e receber mensagens.",
     chave: "numero_registrado",
   },
   {
     numero: 3,
-    titulo: "Configure Webhook",
+    titulo: "Configurar Webhook",
     descricao:
-      "Allow the CRM to receive messages, statuses, and WhatsApp events in real time.",
+      "Permita que o CRM receba mensagens, status e eventos do WhatsApp em tempo real.",
     chave: "webhook_configurado" as any,
   },
   {
     numero: 4,
-    titulo: "Complete Setup",
+    titulo: "Concluir configuração",
     descricao:
-      "Review the final data and activate the WhatsApp integration in the CRM.",
+      "Revise os dados finais e ative a integração do WhatsApp no CRM.",
     chave: "concluido",
   },
 ];
@@ -120,18 +120,18 @@ function obterIndiceEtapaAtual(integracao: IntegracaoWhatsapp | null) {
 }
 
 function formatarStatus(valor?: string | null) {
-  if (!valor) return "Not provided";
+  if (!valor) return "Não informado";
 
   const mapa: Record<string, string> = {
-    pendente: "Pending",
-    ativa: "Active",
-    erro: "Error",
-    desconectada: "Disconnected",
-    inicio: "Start",
-    meta_conectado: "Meta Connected",
-    numero_registrado: "Phone Number Registered",
-    webhook_configurado: "Webhook Configured",
-    concluido: "Completed",
+    pendente: "Pendente",
+    ativa: "Ativa",
+    erro: "Erro",
+    desconectada: "Desconectada",
+    inicio: "Início",
+    meta_conectado: "Meta conectada",
+    numero_registrado: "Número registrado",
+    webhook_configurado: "Webhook configurado",
+    concluido: "Concluído",
   };
 
   return (
@@ -168,7 +168,7 @@ export default function ConfigurarAmbientePage() {
     const data = await response.json();
 
     if (!response.ok || !data.ok) {
-      throw new Error(data.error || "Error syncing Meta data.");
+      throw new Error(data.error || "Erro ao sincronizar dados da Meta.");
     }
 
     return data;
@@ -186,7 +186,7 @@ export default function ConfigurarAmbientePage() {
     const data = await response.json();
 
     if (!response.ok || !data.ok) {
-      throw new Error(data.error || "Error completing Embedded Signup data.");
+      throw new Error(data.error || "Erro ao concluir os dados do Embedded Signup.");
     }
 
     return data;
@@ -223,7 +223,7 @@ export default function ConfigurarAmbientePage() {
       script.async = true;
       script.defer = true;
       script.onerror = () =>
-        reject(new Error("Unable to load the Facebook SDK."));
+        reject(new Error("Não foi possível carregar o SDK do Facebook."));
 
       document.body.appendChild(script);
     });
@@ -247,7 +247,7 @@ export default function ConfigurarAmbientePage() {
       const data: ApiResponse = await response.json();
 
       if (!response.ok || !data.ok || !data.integracao) {
-        throw new Error(data.error || "Error loading integration.");
+        throw new Error(data.error || "Erro ao carregar integração.");
       }
 
       let integracaoAtualizada = data.integracao;
@@ -293,7 +293,7 @@ export default function ConfigurarAmbientePage() {
       setErro(
         error instanceof Error
           ? error.message
-          : "Unexpected error while loading the integration."
+          : "Erro inesperado ao carregar a integração."
       );
     } finally {
       setLoading(false);
@@ -303,7 +303,7 @@ export default function ConfigurarAmbientePage() {
   
 function montarUrlMeta() {
   if (!integracao?.id) {
-    throw new Error("Integration has not loaded yet.");
+    throw new Error("A integração ainda não foi carregada.");
   }
 
   const appId = process.env.NEXT_PUBLIC_META_APP_ID;
@@ -432,7 +432,7 @@ async function iniciarEmbeddedSignup() {
         if (!response?.authResponse?.code) {
           window.removeEventListener("message", onMessage);
           setConectandoMeta(false);
-          alert("Meta did not return the authorization code.");
+          alert("A Meta não retornou o código de autorização.");
           return;
         }
 
@@ -455,7 +455,7 @@ async function iniciarEmbeddedSignup() {
             alert(
               error instanceof Error
                 ? error.message
-                : "Error saving Embedded Signup data."
+                : "Erro ao salvar dados do Embedded Signup."
             );
           }
         }, 1500);
@@ -478,7 +478,7 @@ async function iniciarEmbeddedSignup() {
     alert(
       error instanceof Error
         ? error.message
-        : "Error opening Meta setup."
+        : "Erro ao abrir a configuração da Meta."
     );
   }
 }
@@ -517,19 +517,19 @@ async function handleRegistrarNumero(pinInformado?: string) {
         return;
       }
 
-      throw new Error(data.error || "Error registering phone number.");
+      throw new Error(data.error || "Erro ao registrar o número de telefone.");
     }
 
     setModalPinAberto(false);
     setPin("");
 
-    alert("Phone number activated successfully.");
+    alert("Número ativado com sucesso.");
     await carregarIntegracao(false);
   } catch (error) {
     alert(
       error instanceof Error
         ? error.message
-        : "Unexpected error while activating phone number."
+        : "Erro inesperado ao ativar o número."
     );
   } finally {
     setRegistrandoNumero(false);
@@ -544,7 +544,7 @@ async function handleConfirmarPin() {
 async function handleConfigurarWebhook() {
   try {
     if (!integracao?.id) {
-      setErroWebhook("Integration not loaded.");
+      setErroWebhook("Integração não carregada.");
       return;
     }
 
@@ -568,23 +568,23 @@ async function handleConfigurarWebhook() {
 
     if (!response.ok || !data.ok) {
       const mensagemOriginal =
-        data.error || "Error configuring webhook.";
+        data.error || "Erro ao configurar webhook.";
 
       setErroWebhook(
-        `Webhook subscription could not be completed because the app still requires Meta advanced permissions. Required permission: whatsapp_business_management. Original API response: ${mensagemOriginal}`
+        `Não foi possível concluir a assinatura do webhook porque o app ainda precisa de permissões avançadas da Meta. Permissão necessária: whatsapp_business_management. Resposta original da API: ${mensagemOriginal}`
       );
 
       return;
     }
 
     setErroWebhook(null);
-    alert("Webhook configured successfully.");
+    alert("Webhook configurado com sucesso.");
     await carregarIntegracao(false);
   } catch (error) {
     setErroWebhook(
       error instanceof Error
-        ? `Webhook subscription could not be completed. Required permission: whatsapp_business_management. Original error: ${error.message}`
-        : "Webhook subscription could not be completed. Required permission: whatsapp_business_management."
+        ? `Não foi possível concluir a assinatura do webhook. Permissão necessária: whatsapp_business_management. Erro original: ${error.message}`
+        : "Não foi possível concluir a assinatura do webhook. Permissão necessária: whatsapp_business_management."
     );
   } finally {
     setConfigurandoWebhook(false);
@@ -611,13 +611,13 @@ async function handleConfigurarWebhook() {
     <main className={styles.page}>
       <div className={styles.container}>
         <header className={styles.hero}>
-          <div className={styles.heroBadge}>Initial setup</div>
+          <div className={styles.heroBadge}>Configuração inicial</div>
 
-          <h1 className={styles.title}>Official WhatsApp Environment Setup</h1>
+          <h1 className={styles.title}>Configuração do ambiente oficial do WhatsApp</h1>
 
           <p className={styles.subtitle}>
-            Connect your CRM to Meta, register your official WhatsApp Business number,
-            and complete the activation process.
+            Conecte seu CRM à Meta, registre seu número oficial do WhatsApp Business
+            e conclua o processo de ativação.
           </p>
         </header>
 
@@ -625,15 +625,15 @@ async function handleConfigurarWebhook() {
           <section className={styles.loadingCard}>
             <div className={styles.spinner} />
             <div>
-              <h2 className={styles.loadingTitle}>Preparing your setup</h2>
+              <h2 className={styles.loadingTitle}>Preparando sua configuração</h2>
               <p className={styles.loadingText}>
-                We are checking whether your company already has an integration created.
+                Estamos verificando se sua empresa já possui uma integração criada.
               </p>
             </div>
           </section>
         ) : erro ? (
           <section className={styles.errorCard}>
-            <h2 className={styles.errorTitle}>Unable to load setup</h2>
+            <h2 className={styles.errorTitle}>Não foi possível carregar a configuração</h2>
             <p className={styles.errorText}>{erro}</p>
 
             <button
@@ -641,7 +641,7 @@ async function handleConfigurarWebhook() {
               className={styles.primaryButton}
               onClick={() => carregarIntegracao(true)}
             >
-              Try Again
+              Tentar novamente
             </button>
           </section>
         ) : (
@@ -649,8 +649,8 @@ async function handleConfigurarWebhook() {
             <section className={styles.mainCard}>
               <div className={styles.sectionHeader}>
                 <div>
-                  <span className={styles.sectionEyebrow}>Onboarding steps</span>
-                  <h2 className={styles.sectionTitle}>Setup Progress</h2>
+                  <span className={styles.sectionEyebrow}>Etapas de onboarding</span>
+                  <h2 className={styles.sectionTitle}>Progresso da configuração</h2>
                 </div>
 
                 <button
@@ -659,13 +659,13 @@ async function handleConfigurarWebhook() {
                   onClick={() => carregarIntegracao(false)}
                   disabled={recarregando}
                 >
-                  {recarregando ? "Refreshing..." : "Refresh Status"}
+                  {recarregando ? "Atualizando..." : "Atualizar status"}
                 </button>
               </div>
 
               <div className={styles.progressWrapper}>
                 <div className={styles.progressLabelRow}>
-                  <span>Current progress</span>
+                  <span>Progresso atual</span>
                   <span>{Math.round(progressoPercentual)}%</span>
                 </div>
 
@@ -698,10 +698,10 @@ async function handleConfigurarWebhook() {
                           <h3 className={styles.stepTitle}>{etapa.titulo}</h3>
                           <span className={styles.stepStatus}>
                             {concluida
-                              ? "Completed"
+                              ? "Concluído"
                               : atual
-                              ? "Current Step"
-                              : "Pending"}
+                              ? "Etapa atual"
+                              : "Pendente"}
                           </span>
                         </div>
 
@@ -715,7 +715,7 @@ async function handleConfigurarWebhook() {
                               onClick={iniciarEmbeddedSignup}
                               disabled={conectandoMeta}
                             >
-                              {conectandoMeta ? "Opening Meta..." : "Connect with Meta"}
+                              {conectandoMeta ? "Abrindo Meta..." : "Conectar com a Meta"}
                             </button>
                           </div>
                         )}
@@ -728,7 +728,7 @@ async function handleConfigurarWebhook() {
                               onClick={() => handleRegistrarNumero()}
                               disabled={indiceEtapaAtual < 1 || recarregando}
                             >
-                              {recarregando ? "Activating..." : "Activate Number"}
+                              {recarregando ? "Ativando..." : "Ativar número"}
                             </button>
                           </div>
                         )}
@@ -741,14 +741,14 @@ async function handleConfigurarWebhook() {
                               onClick={handleConfigurarWebhook}
                               disabled={indiceEtapaAtual < 2 || configurandoWebhook}
                             >
-                              {configurandoWebhook ? "Configuring..." : "Configure Webhook"}
+                              {configurandoWebhook ? "Configurando..." : "Configurar Webhook"}
                             </button>
                           </div>
                         )}
 
                         {etapa.numero === 3 && erroWebhook && (
                           <div className={styles.alertError}>
-                            <strong>Webhook permission required</strong>
+                            <strong>Permissão de webhook necessária</strong>
                             <p>{erroWebhook}</p>
                           </div>
                         )}
@@ -760,7 +760,7 @@ async function handleConfigurarWebhook() {
                               className={styles.disabledButton}
                               disabled
                             >
-                              Available after webhook setup
+                              Disponível após configurar o webhook
                             </button>
                           </div>
                         )}
@@ -774,31 +774,31 @@ async function handleConfigurarWebhook() {
             <aside className={styles.sideCard}>
               <div className={styles.sectionHeader}>
                 <div>
-                  <span className={styles.sectionEyebrow}>Technical summary</span>
-                  <h2 className={styles.sectionTitle}>Integration Data</h2>
+                  <span className={styles.sectionEyebrow}>Resumo técnico</span>
+                  <h2 className={styles.sectionTitle}>Dados da integração</h2>
                 </div>
               </div>
 
               <div className={styles.infoList}>
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Connection name</span>
+                  <span className={styles.infoLabel}>Nome da conexão</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.nome_conexao || "Not defined"}
+                    {integracao?.nome_conexao || "Não definido"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Integration status</span>
+                  <span className={styles.infoLabel}>Status da integração</span>
                   <strong className={styles.infoValue}>{statusConexao}</strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Onboarding status</span>
+                  <span className={styles.infoLabel}>Status do onboarding</span>
                   <strong className={styles.infoValue}>{statusGeral}</strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Current step</span>
+                  <span className={styles.infoLabel}>Etapa atual</span>
                   <strong className={styles.infoValue}>
                     {formatarStatus(integracao?.onboarding_etapa)}
                   </strong>
@@ -807,127 +807,127 @@ async function handleConfigurarWebhook() {
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>WABA ID</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.waba_id || "Not defined yet"}
+                    {integracao?.waba_id || "Ainda não definido"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Phone Number ID</span>
+                  <span className={styles.infoLabel}>ID do número</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.phone_number_id || "Not defined yet"}
+                    {integracao?.phone_number_id || "Ainda não definido"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Business Account ID</span>
+                  <span className={styles.infoLabel}>ID da conta empresarial</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.business_account_id || "Not defined yet"}
+                    {integracao?.business_account_id || "Ainda não definido"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Business Portfolio ID</span>
+                  <span className={styles.infoLabel}>ID do portfólio empresarial</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.business_portfolio_id || "Not defined yet"}
+                    {integracao?.business_portfolio_id || "Ainda não definido"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Verified Name</span>
+                  <span className={styles.infoLabel}>Nome verificado</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.verified_name || "Not defined yet"}
+                    {integracao?.verified_name || "Ainda não definido"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Phone Number Status</span>
+                  <span className={styles.infoLabel}>Status do número</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.phone_number_status || "Not defined yet"}
+                    {integracao?.phone_number_status || "Ainda não definido"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Quality Rating</span>
+                  <span className={styles.infoLabel}>Classificação de qualidade</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.quality_rating || "Not defined yet"}
+                    {integracao?.quality_rating || "Ainda não definido"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>App assigned to WABA</span>
+                  <span className={styles.infoLabel}>App vinculado à WABA</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.app_assigned ? "Yes" : "No"}
+                    {integracao?.app_assigned ? "Sim" : "Não"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Saved number</span>
+                  <span className={styles.infoLabel}>Número salvo</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.numero || "Not defined yet"}
+                    {integracao?.numero || "Ainda não definido"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Webhook verified</span>
+                  <span className={styles.infoLabel}>Webhook verificado</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.webhook_verificado ? "Yes" : "No"}
+                    {integracao?.webhook_verificado ? "Sim" : "Não"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Phone number registered</span>
+                  <span className={styles.infoLabel}>Número registrado</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.phone_registered ? "Yes" : "No"}
+                    {integracao?.phone_registered ? "Sim" : "Não"}
                   </strong>
                 </div>
 
                 <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Payment method added</span>
+                  <span className={styles.infoLabel}>Método de pagamento adicionado</span>
                   <strong className={styles.infoValue}>
-                    {integracao?.payment_method_added ? "Yes" : "No"}
+                    {integracao?.payment_method_added ? "Sim" : "Não"}
                   </strong>
                 </div>
               </div>
 
               <div className={styles.permissionsCard}>
-                <h3 className={styles.permissionsTitle}>Meta Permissions Status</h3>
+                <h3 className={styles.permissionsTitle}>Status das permissões da Meta</h3>
 
                 <div className={styles.permissionItem}>
                   <span>✅ whatsapp_business_messaging</span>
-                  <strong>Approved</strong>
+                  <strong>Aprovada</strong>
                 </div>
 
                 <div className={styles.permissionItem}>
                   <span>✅ public_profile</span>
-                  <strong>Approved</strong>
+                  <strong>Aprovada</strong>
                 </div>
 
                 <div className={styles.permissionItem}>
                   <span>⏳ whatsapp_business_management</span>
-                  <strong>Pending approval</strong>
+                  <strong>Pendente de aprovação</strong>
                 </div>
 
                 <div className={styles.permissionItem}>
                   <span>⏳ business_management</span>
-                  <strong>Pending approval</strong>
+                  <strong>Pendente de aprovação</strong>
                 </div>
 
                 <p className={styles.permissionNote}>
-                  The CRM requires whatsapp_business_management to complete WABA asset management,
-                  webhook subscription, and official WhatsApp Business onboarding.
+                  O CRM precisa da permissão whatsapp_business_management para concluir a gestão dos ativos WABA,
+                  a assinatura do webhook e o onboarding oficial do WhatsApp Business.
                 </p>
               </div>
 
               {integracao?.onboarding_erro ? (
                 <div className={styles.alertError}>
-                  <strong>Last error:</strong>
+                  <strong>Último erro:</strong>
                   <p>{integracao.onboarding_erro}</p>
                 </div>
               ) : (
                 <div className={styles.alertInfo}>
-                  <strong>Next step:</strong>
+                  <strong>Próxima etapa:</strong>
                   <p>
-                    Click <b>Connect with Meta</b> to start the official setup of your environment.
+                    Clique em <b>Conectar com a Meta</b> para iniciar a configuração oficial do seu ambiente.
                   </p>
                 </div>
               )}
@@ -939,11 +939,11 @@ async function handleConfigurarWebhook() {
       {modalPinAberto && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalCard}>
-            <h2 className={styles.modalTitle}>Two-step verification PIN</h2>
+            <h2 className={styles.modalTitle}>PIN de verificação em duas etapas</h2>
 
             <p className={styles.modalText}>
-              Meta reported that this phone number requires a 6-digit PIN to complete
-              the activation in the Cloud API.
+              A Meta informou que este número exige um PIN de 6 dígitos para concluir
+              a ativação na Cloud API.
             </p>
 
             <input
@@ -956,7 +956,7 @@ async function handleConfigurarWebhook() {
                 const somenteNumeros = e.target.value.replace(/\D/g, "");
                 setPin(somenteNumeros);
               }}
-              placeholder="Enter the 6-digit PIN"
+              placeholder="Digite o PIN de 6 dígitos"
             />
 
             <div className={styles.modalActions}>
@@ -969,7 +969,7 @@ async function handleConfigurarWebhook() {
                 }}
                 disabled={registrandoNumero}
               >
-                Cancel
+                Cancelar
               </button>
 
               <button
@@ -978,7 +978,7 @@ async function handleConfigurarWebhook() {
                 onClick={handleConfirmarPin}
                 disabled={registrandoNumero || pin.length !== 6}
               >
-                {registrandoNumero ? "Activating..." : "Confirm PIN"}
+                {registrandoNumero ? "Ativando..." : "Confirmar PIN"}
               </button>
             </div>
           </div>

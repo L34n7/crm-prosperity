@@ -58,7 +58,7 @@ export default function SobrePage() {
           </span>
           <span>
             <strong>CRM Prosperity</strong>
-            <small>Business platform</small>
+            <small>Plataforma empresarial</small>
           </span>
         </Link>
 

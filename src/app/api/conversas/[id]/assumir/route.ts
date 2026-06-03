@@ -7,6 +7,7 @@ import {
   podeAssumirConversas,
 } from "@/lib/auth/authorization";
 import { getPoliticaAtendimentoDoUsuario } from "@/lib/configuracoes/politicas-atendimento";
+import { verificarEEncerrarConversaSe24hExpirada } from "@/lib/whatsapp/verificar-expiracao-conversas";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -22,6 +23,7 @@ type ConversaRow = {
   status: string | null;
   closed_at?: string | null;
   bot_ativo?: boolean | null;
+  last_inbound_message_at?: string | null;
 };
 
 export async function POST(
@@ -72,7 +74,7 @@ export async function POST(
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
-      .select("id, empresa_id, setor_id, responsavel_id, status, closed_at, bot_ativo")
+      .select("id, empresa_id, setor_id, responsavel_id, status, closed_at, bot_ativo, last_inbound_message_at")
       .eq("id", id)
       .maybeSingle<ConversaRow>();
 
@@ -114,6 +116,25 @@ export async function POST(
         },
         { status: 400 }
       );
+    }
+
+    if (conversaEncerradaReabrivel) {
+      const expiracao = await verificarEEncerrarConversaSe24hExpirada({
+        empresaId: conversa.empresa_id,
+        conversaId: conversa.id,
+        lastInboundMessageAt: conversa.last_inbound_message_at ?? null,
+      });
+
+      if (expiracao.expirada) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Esta conversa ultrapassou a janela de 24 horas desde a ultima mensagem do contato. Ela foi encerrada automaticamente; para voltar a falar com o contato, envie um template aprovado.",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     if (!isAdministrador(usuario)) {

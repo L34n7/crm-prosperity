@@ -62,6 +62,7 @@
 
 .refreshButton,
 .primaryButton,
+.secondaryButton,
 .urlRow button {
   display: inline-flex;
   align-items: center;
@@ -281,6 +282,30 @@
   cursor: wait;
 }
 
+.secondaryButton {
+  min-height: 41px;
+  padding: 0 15px;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  background: #ffffff;
+}
+
+.secondaryButton:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .list,
 .eventList {
   display: flex;
@@ -401,9 +426,13 @@
 
 .eventItem {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 11px;
   padding: 12px;
+}
+
+.eventContent {
+  min-width: 0;
 }
 
 .eventIcon {
@@ -429,9 +458,111 @@
   font-size: 11px;
 }
 
+.eventActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.eventActionButton,
+.eventActionDangerButton {
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  transition: 0.2s ease;
+}
+
+.eventActionButton {
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  background: #ffffff;
+}
+
+.eventActionButton:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.eventActionDangerButton {
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  background: #fff7f7;
+}
+
+.eventActionDangerButton:hover {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
 .eventMeta b {
   color: #047857;
   font-size: 12px;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.modalCard {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 20px;
+}
+
+.modalHeader p:not(.eyebrow) {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.modalCloseButton {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.modalCloseButton:hover {
+  color: #0f172a;
+}
+
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
 }
 
 @media (max-width: 1050px) {

@@ -98,7 +98,7 @@ const getGrupoFromCodigo = (codigo: string) => {
 
   switch (prefixo) {
     case "dashboard":
-      return "Dashboard";
+      return "Painel";
     case "conversas":
       return "Conversas";
     case "mensagens":

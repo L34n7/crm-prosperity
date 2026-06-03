@@ -44,41 +44,41 @@ type WhatsappSidebarPerfil = {
 };
 
 const menuItems: MenuItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Conversations", href: "/conversas", icon: MessageSquare },
-  { label: "Broadcasts", href: "/disparos-whatsapp", icon: Send },
-  { label: "Scheduled Broadcasts", href: "/disparos-agendados", icon: CalendarClock },
+  { label: "Painel", href: "/", icon: LayoutDashboard },
+  { label: "Conversas", href: "/conversas", icon: MessageSquare },
+  { label: "Disparos", href: "/disparos-whatsapp", icon: Send },
+  { label: "Disparos agendados", href: "/disparos-agendados", icon: CalendarClock },
   { label: "Agendas", href: "/agendas", icon: CalendarCheck },
   { label: "Templates", href: "/configuracoes/templates-whatsapp", icon: FileText },
-  { label: "Flows", href: "/fluxos", icon: GitBranch },
-  { label: "Contacts", href: "/contatos", icon: Contact },
+  { label: "Fluxos", href: "/fluxos", icon: GitBranch },
+  { label: "Contatos", href: "/contatos", icon: Contact },
   {
-    label: "Lead Tracking",
+    label: "Rastreamento de leads",
     href: "/rastreamento",
     icon: MousePointerClick,
     permissao: "rastreamento.visualizar",
   },
-  { label: "Users", href: "/usuarios", icon: Users },
+  { label: "Usuários", href: "/usuarios", icon: Users },
   {
-    label: "Companies",
+    label: "Empresas",
     href: "/empresas",
     icon: Building2,
     permissao: "empresas.visualizar",
   },
   {
-    label: "Departments Settings",
+    label: "Configuração de setores",
     href: "/configuracoes/setores",
     icon: Layers3,
     permissao: "setores.visualizar",
   },
   {
-    label: "Profile Settings",
+    label: "Configuração de perfis",
     href: "/configuracoes/perfis",
     icon: IdCard,
     permissao: "perfis.visualizar",
   },
   {
-    label: "Permission Settings",
+    label: "Configuração de permissões",
     href: "/configuracoes/permissoes",
     icon: ShieldCheck,
   },
@@ -89,7 +89,7 @@ const menuItems: MenuItem[] = [
     permissao: "auditoria.visualizar",
   },
   {
-    label: "Environment Setup",
+    label: "Configurar ambiente",
     href: "/configurar-ambiente",
     icon: PlugZap,
   },
@@ -194,7 +194,7 @@ export default function Sidebar({
 
             {!collapsed && (
               <div className={styles.brandText}>
-                <p className={styles.brandLabel}>Platform</p>
+                <p className={styles.brandLabel}>Plataforma</p>
                 <h1 className={styles.brandTitle}>CRM Prosperity</h1>
               </div>
             )}
@@ -209,7 +209,7 @@ export default function Sidebar({
               collapsed ? styles.sectionTitleCollapsed : ""
             }`}
           >
-            Main Navigation
+            Navegação principal
           </p>
 
           <nav className={styles.nav}>
@@ -292,8 +292,8 @@ export default function Sidebar({
           type="button"
           onClick={toggleSidebar}
           className={styles.menuButton}
-          aria-label="Toggle sidebar menu"
-          title={collapsed ? "Expand menu" : "Collapse menu"}
+          aria-label="Alternar menu lateral"
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
         >
           <span className={styles.menuIcon}>
             <span></span>

@@ -99,7 +99,7 @@ export default async function HomePage() {
   return (
     <>
       <Header
-        title="Dashboard"
+        title="Painel"
         subtitle="Visão inicial do sistema com acesso rápido aos principais módulos."
       />
         <div className={styles.pageContent}>

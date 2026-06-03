@@ -62,25 +62,38 @@ function formatarData(data: string | null | undefined) {
 }
 
 function getStatusLabel(status: string | null | undefined) {
-  if (!status) return "No status";
+  if (!status) return "Sem status";
 
   switch (status.toUpperCase()) {
     case "PENDING":
-      return "Under review";
+      return "Em análise";
     case "APPROVED":
-      return "Approved";
+      return "Aprovado";
     case "REJECTED":
-      return "Rejected";
+      return "Rejeitado";
     case "PAUSED":
-      return "Paused";
+      return "Pausado";
     case "DISABLED":
-      return "Disabled";
+      return "Desativado";
     case "ARCHIVED":
-      return "Archived";
+      return "Arquivado";
     case "ERRO_ENVIO":
-      return "Delivery error";
+      return "Erro no envio";
     default:
       return status;
+  }
+}
+
+function formatarCategoriaMeta(categoria: string | null | undefined) {
+  switch (String(categoria || "").toUpperCase()) {
+    case "UTILITY":
+      return "Utilidade";
+    case "MARKETING":
+      return "Marketing";
+    case "AUTHENTICATION":
+      return "Autenticação";
+    default:
+      return categoria || "-";
   }
 }
 
@@ -155,15 +168,15 @@ function contarVariaveisTexto(texto: string) {
 }
 
 function formatarStatusIntegracao(status?: string | null) {
-  if (!status) return "No status";
+  if (!status) return "Sem status";
 
   switch ((status || "").toLowerCase()) {
     case "ativo":
-      return "Active";
+      return "Ativa";
     case "conectado":
-      return "Connected";
+      return "Conectada";
     case "inativo":
-      return "Inactive";
+      return "Inativa";
     default:
       return status;
   }
@@ -482,18 +495,18 @@ export default function TemplatesWhatsAppPage() {
   return (
     <>
       <Header
-        title="WhatsApp Templates"
-        subtitle="Create, preview, and track templates submitted for Meta approval."
+        title="Templates WhatsApp"
+        subtitle="Crie, visualize e acompanhe templates enviados para aprovação da Meta."
       />
 
       <div className={styles.pageContent}>
         <div className={styles.layout}>
           <div className={styles.formCard}>
             <div className={styles.cardHeader}>
-              <p className={styles.eyebrow}>Template Creation</p>
-              <h2 className={styles.cardTitle}>New Template</h2>
+              <p className={styles.eyebrow}>Criação de template</p>
+              <h2 className={styles.cardTitle}>Novo template</h2>
               <p className={styles.cardSubtitle}>
-                Build the template, review the preview, and submit for Meta validation.
+                Monte o template, revise a prévia e envie para validação da Meta.
               </p>
             </div>
 
@@ -502,7 +515,7 @@ export default function TemplatesWhatsAppPage() {
                   <div className={styles.formFields}>
                       <div className={styles.topGrid}>
                         <div className={styles.field}>
-                          <label className={styles.label}>WhatsApp Integration</label>
+                          <label className={styles.label}>Integração WhatsApp</label>
                           <select
                             value={integracaoId}
                             onChange={(e) => setIntegracaoId(e.target.value)}
@@ -510,7 +523,7 @@ export default function TemplatesWhatsAppPage() {
                             required
                           >
                             <option value="">
-                              {loadingIntegracoes ? "Loading..." : "Select an integration"}
+                              {loadingIntegracoes ? "Carregando..." : "Selecione uma integração"}
                             </option>
 
                             {integracoes.map((item) => (
@@ -523,7 +536,7 @@ export default function TemplatesWhatsAppPage() {
                         </div>
 
                         <div className={styles.field}>
-                          <label className={styles.label}>Language</label>
+                          <label className={styles.label}>Idioma</label>
                           <select
                             value={language}
                             onChange={(e) => setLanguage(e.target.value)}
@@ -536,37 +549,37 @@ export default function TemplatesWhatsAppPage() {
 
                       <div className={styles.topGrid}>
                         <div className={styles.field}>
-                          <label className={styles.label}>Template Name</label>
+                          <label className={styles.label}>Nome do template</label>
                           <input
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             className={styles.input}
-                            placeholder="e.g., notification_of_initiated_service"
+                            placeholder="Ex.: notificacao_atendimento_iniciado"
                             required
                           />
                           <p className={styles.help}>
-                            Use a simple name, without spaces. The backend will normalize it automatically.
+                            Use um nome simples, sem espaços. O backend normaliza automaticamente.
                           </p>
                         </div>
                         
                         <div className={styles.field}>
-                          <label className={styles.label}>Category</label>
+                          <label className={styles.label}>Categoria</label>
                           <select
                             value={category}
                             onChange={(e) => setCategory(e.target.value as "UTILITY" | "MARKETING")}
                             className={styles.input}
                           >
-                            <option value="UTILITY">UTILITY</option>
+                            <option value="UTILITY">UTILIDADE</option>
                             <option value="MARKETING">MARKETING</option>
                           </select>
                           <p className={styles.help}>
-                            UTILITY for operational communication. MARKETING for campaigns and promotion.
+                            UTILIDADE para comunicações operacionais. MARKETING para campanhas e promoções.
                           </p>
                         </div>
                       </div>
                       
                       <div className={styles.field}>
-                        <label className={styles.label}>Header</label>
+                        <label className={styles.label}>Cabeçalho</label>
                         <input
                           value={headerText}
                           onChange={(e) => setHeaderText(e.target.value)}
@@ -576,33 +589,33 @@ export default function TemplatesWhatsAppPage() {
                       </div>
 
                       <div className={styles.field}>
-                        <label className={styles.label}>Body</label>
+                        <label className={styles.label}>Corpo</label>
                         <textarea
                           value={bodyText}
                           onChange={(e) => setBodyText(e.target.value)}
                           rows={7}
                           className={styles.textarea}
-                          placeholder="Enter the main content of the template"
+                          placeholder="Digite o conteúdo principal do template"
                           required
                         />
                         <p className={styles.help}>
-                          Use variables like {"{{1}}"} and {"{{2}}"}. Avoid leaving variables at the beginning or end of the sentence.
+                          Use variáveis como {"{{1}}"} e {"{{2}}"}. Evite deixar variáveis no início ou no fim da frase.
                         </p>
                       </div>
 
                       <div className={styles.topGrid}>
                         <div className={styles.field}>
-                          <label className={styles.label}>Example Variable 1</label>
+                          <label className={styles.label}>Exemplo da variável 1</label>
                           <input
                             value={bodyExample1}
                             onChange={(e) => setBodyExample1(e.target.value)}
                             className={styles.input}
-                            placeholder="e.g., John"
+                            placeholder="Ex.: João"
                           />
                         </div>
 
                         <div className={styles.field}>
-                          <label className={styles.label}>Example Variable 2</label>
+                          <label className={styles.label}>Exemplo da variável 2</label>
                           <input
                             value={bodyExample2}
                             onChange={(e) => setBodyExample2(e.target.value)}
@@ -613,7 +626,7 @@ export default function TemplatesWhatsAppPage() {
                       </div>
 
                       <div className={styles.field}>
-                        <label className={styles.label}>Footer</label>
+                        <label className={styles.label}>Rodapé</label>
                         <input
                           value={footerText}
                           onChange={(e) => setFooterText(e.target.value)}
@@ -623,21 +636,21 @@ export default function TemplatesWhatsAppPage() {
                       </div>
 
                       <div className={styles.field}>
-                        <label className={styles.label}>Quick replies</label>
+                        <label className={styles.label}>Respostas rápidas</label>
 
                         <div className={styles.topGrid}>
                           <input
                             value={quickReply1}
                             onChange={(e) => setQuickReply1(e.target.value)}
                             className={styles.input}
-                            placeholder="Quick reply 1"
+                            placeholder="Resposta rápida 1"
                           />
 
                           <input
                             value={quickReply2}
                             onChange={(e) => setQuickReply2(e.target.value)}
                             className={styles.input}
-                            placeholder="Quick reply 2"
+                            placeholder="Resposta rápida 2"
                           />
                         </div>
 
@@ -645,11 +658,11 @@ export default function TemplatesWhatsAppPage() {
                           value={quickReply3}
                           onChange={(e) => setQuickReply3(e.target.value)}
                           className={styles.input}
-                          placeholder="Quick reply 3"
+                          placeholder="Resposta rápida 3"
                         />
 
                         <p className={styles.help}>
-                            Optional. You can add up to 3 quick replies.
+                            Opcional. Você pode adicionar até 3 respostas rápidas.
                         </p>
                       </div>
                     </div>
@@ -657,7 +670,7 @@ export default function TemplatesWhatsAppPage() {
                     <aside className={styles.previewSidebar}>
                       <div className={styles.whatsappPreviewCard}>
                         <div className={styles.previewTopLine}>
-                          <strong>WhatsApp Preview</strong>
+                          <strong>Prévia WhatsApp</strong>
                         </div>
 
                         <div className={styles.whatsappPreviewArea}>
@@ -669,7 +682,7 @@ export default function TemplatesWhatsAppPage() {
                             ) : null}
 
                             <p className={styles.whatsappPreviewText}>
-                              {bodyText.trim() || "Enter the template body to preview the WhatsApp message."}
+                              {bodyText.trim() || "Digite o corpo do template para visualizar a mensagem do WhatsApp."}
                             </p>
 
                             <div className={styles.whatsappPreviewMeta}>
@@ -697,34 +710,34 @@ export default function TemplatesWhatsAppPage() {
                       <div className={styles.previewCard}>
                         <div className={styles.previewHeader}>
                           <div>
-                            <h3 className={styles.previewTitle}>Template Structure</h3>
+                            <h3 className={styles.previewTitle}>Estrutura do template</h3>
                             <p className={styles.previewSubtitle}>
-                              Review the content before submitting for approval.
+                              Revise o conteúdo antes de enviar para aprovação.
                             </p>
                           </div>
                           <span className={`${styles.badge} ${styles.badgeBlue}`}>
-                            Variables detected: {totalVariaveisBody}
+                            Variáveis detectadas: {totalVariaveisBody}
                           </span>
                         </div>
 
                         <div className={styles.previewGrid}>
                           <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Header</span>
+                            <span className={styles.previewLabel}>Cabeçalho</span>
                             <p className={styles.previewText}>{headerText.trim() || "Não informado"}</p>
                           </div>
 
                           <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Body</span>
+                            <span className={styles.previewLabel}>Corpo</span>
                             <p className={styles.previewText}>{bodyText.trim() || "Não informado"}</p>
                           </div>
 
                           <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Footer</span>
+                            <span className={styles.previewLabel}>Rodapé</span>
                             <p className={styles.previewText}>{footerText.trim() || "Não informado"}</p>
                           </div>
 
                           <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Quick replies</span>
+                            <span className={styles.previewLabel}>Respostas rápidas</span>
 
                             {quickRepliesPreview.length > 0 ? (
                               <div className={styles.quickRepliesList}>
@@ -738,7 +751,7 @@ export default function TemplatesWhatsAppPage() {
                                 ))}
                               </div>
                             ) : (
-                              <p className={styles.previewText}>No quick replies added.</p>
+                              <p className={styles.previewText}>Nenhuma resposta rápida adicionada.</p>
                             )}
                           </div>
                         </div>
@@ -749,14 +762,14 @@ export default function TemplatesWhatsAppPage() {
                 <div className={styles.submitBar}>
                   <div className={styles.submitInfo}>
                     <span>
-                      <strong>Integration:</strong>{" "}
-                      {integracaoSelecionada?.nome_conexao || "Not selected"}
+                      <strong>Integração:</strong>{" "}
+                      {integracaoSelecionada?.nome_conexao || "Não selecionada"}
                     </span>
                     <span>
-                      <strong>Category:</strong> {category}
+                      <strong>Categoria:</strong> {formatarCategoriaMeta(category)}
                     </span>
                     <span>
-                      <strong>Language:</strong> {language}
+                      <strong>Idioma:</strong> {language}
                     </span>
                   </div>
 
@@ -774,7 +787,7 @@ export default function TemplatesWhatsAppPage() {
                     
                   <div className={styles.actions}>
                     <button type="submit" disabled={submitting} className={styles.primaryButton}>
-                      {submitting ? "Sending..." : "Create template"}
+                      {submitting ? "Enviando..." : "Criar template"}
                     </button>
                   </div>
                 </div>
@@ -783,10 +796,10 @@ export default function TemplatesWhatsAppPage() {
 
           <div className={styles.resultsCard}>
               <div className={styles.cardHeader}>
-                <p className={styles.eyebrow}>Registered templates</p>
-                <h2 className={styles.cardTitle}>Template list</h2>
+                <p className={styles.eyebrow}>Templates cadastrados</p>
+                <h2 className={styles.cardTitle}>Lista de templates</h2>
                 <p className={styles.cardSubtitle}>
-                  Track status, content, and sync the connection with Meta.
+                  Acompanhe status, conteúdo e sincronize a conexão com a Meta.
                 </p>
               </div>
 
@@ -809,7 +822,7 @@ export default function TemplatesWhatsAppPage() {
                   }`}
                   onClick={() => setFiltroStatus("approved")}
                 >
-                  <span className={styles.summaryLabel}>Approved</span>
+                  <span className={styles.summaryLabel}>Aprovados</span>
                   <span className={styles.summaryValue}>{resumoTemplates.aprovados}</span>
                 </button>
 
@@ -820,7 +833,7 @@ export default function TemplatesWhatsAppPage() {
                   }`}
                   onClick={() => setFiltroStatus("pending")}
                 >
-                  <span className={styles.summaryLabel}>Pending</span>
+                  <span className={styles.summaryLabel}>Pendentes</span>
                   <span className={styles.summaryValue}>{resumoTemplates.pendentes}</span>
                 </button>
 
@@ -831,7 +844,7 @@ export default function TemplatesWhatsAppPage() {
                   }`}
                   onClick={() => setFiltroStatus("rejected")}
                 >
-                  <span className={styles.summaryLabel}>Rejected</span>
+                  <span className={styles.summaryLabel}>Rejeitados</span>
                   <span className={styles.summaryValue}>{resumoTemplates.rejeitados}</span>
                 </button>
               </div>
@@ -839,7 +852,7 @@ export default function TemplatesWhatsAppPage() {
               <div className={styles.inlineBlock}>
                 <div className={styles.searchRow}>
                   <div className={styles.field}>
-                    <label className={styles.label}>Filter by integration</label>
+                    <label className={styles.label}>Filtrar por integração</label>
                     <select
                       value={filtroIntegracao}
                       onChange={(e) => {
@@ -848,7 +861,7 @@ export default function TemplatesWhatsAppPage() {
                       }}
                       className={styles.input}
                     >
-                      <option value="">All integrations</option>
+                      <option value="">Todas as integrações</option>
                       {integracoes.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.nome_conexao}
@@ -864,7 +877,7 @@ export default function TemplatesWhatsAppPage() {
                       onClick={() => carregarTemplates(filtroIntegracao)}
                       className={styles.secondaryButton}
                     >
-                      Update list
+                      Atualizar lista
                     </button>
 
                     <button
@@ -873,16 +886,16 @@ export default function TemplatesWhatsAppPage() {
                       className={styles.primaryButton}
                       disabled={sincronizando}
                     >
-                      {sincronizando ? "Synchronizing..." : "Synchronize with Meta"}
+                      {sincronizando ? "Sincronizando..." : "Sincronizar com a Meta"}
                     </button>
                   </div>
                 </div>
               </div>
 
                 {loadingTemplates ? (
-                  <div className={styles.emptyState}>Loading templates...</div>
+                  <div className={styles.emptyState}>Carregando templates...</div>
                 ) : templatesFiltradosPorStatus.length === 0 ? (
-                  <div className={styles.emptyState}>No templates found.</div>
+                  <div className={styles.emptyState}>Nenhum template encontrado.</div>
                 ) : (
                   <div className={styles.resultsList}>
                     {templatesPaginados.map((template) => {
@@ -903,8 +916,8 @@ export default function TemplatesWhatsAppPage() {
                               </div>
 
                               <p className={styles.compactTemplateMeta}>
-                                Category: {template.categoria} • Language: {template.idioma} • Meta ID:{" "}
-                                {template.meta_template_id || "-"} • Created on:{" "}
+                                Categoria: {formatarCategoriaMeta(template.categoria)} • Idioma: {template.idioma} • ID Meta:{" "}
+                                {template.meta_template_id || "-"} • Criado em:{" "}
                                 {formatarData(template.created_at)}
                               </p>
                             </div>
@@ -912,28 +925,28 @@ export default function TemplatesWhatsAppPage() {
 
                           {header ? (
                             <div className={styles.compactBlock}>
-                              <span className={styles.compactLabel}>Header</span>
+                              <span className={styles.compactLabel}>Cabeçalho</span>
                               <p className={styles.compactText}>{header}</p>
                             </div>
                           ) : null}
 
                           <div className={styles.compactBlock}>
-                            <span className={styles.compactLabel}>Body</span>
-                            <p className={styles.compactText}>{body || "Not provided"}</p>
+                            <span className={styles.compactLabel}>Corpo</span>
+                            <p className={styles.compactText}>{body || "Não informado"}</p>
                           </div>
 
                           {(footer || quickReplies.length > 0) && (
                             <div className={styles.compactFooterRow}>
                               {footer ? (
                                 <div className={styles.compactMiniBlock}>
-                                  <span className={styles.compactLabel}>Footer</span>
+                                  <span className={styles.compactLabel}>Rodapé</span>
                                   <p className={styles.compactText}>{footer}</p>
                                 </div>
                               ) : null}
 
                               {quickReplies.length > 0 ? (
                                 <div className={styles.compactMiniBlock}>
-                                  <span className={styles.compactLabel}>Quick replies</span>
+                                  <span className={styles.compactLabel}>Respostas rápidas</span>
                                   <div className={styles.quickRepliesList}>
                                     {quickReplies.map((item, index) => (
                                       <span
@@ -951,13 +964,13 @@ export default function TemplatesWhatsAppPage() {
 
                           {template.quality_rating ? (
                             <p className={styles.resultText}>
-                              <strong>Quality:</strong> {template.quality_rating}
+                              <strong>Qualidade:</strong> {template.quality_rating}
                             </p>
                           ) : null}
 
                           {template.rejeicao_motivo ? (
                             <p className={styles.resultCompactError}>
-                              <strong>Reason for rejection:</strong> {template.rejeicao_motivo}
+                              <strong>Motivo da rejeição:</strong> {template.rejeicao_motivo}
                             </p>
                           ) : null}
                         </div>
@@ -974,11 +987,11 @@ export default function TemplatesWhatsAppPage() {
                   disabled={paginaAtual === 1}
                   onClick={() => setPaginaAtual((prev) => Math.max(prev - 1, 1))}
                 >
-                  Previous
+                  Anterior
                 </button>
 
                 <span className={styles.paginationInfo}>
-                  Page {paginaAtual} of {totalPaginasTemplates}
+                  Página {paginaAtual} de {totalPaginasTemplates}
                 </span>
 
                 <button
@@ -989,7 +1002,7 @@ export default function TemplatesWhatsAppPage() {
                     setPaginaAtual((prev) => Math.min(prev + 1, totalPaginasTemplates))
                   }
                 >
-                  Next
+                  Próxima
                 </button>
               </div>
             )}

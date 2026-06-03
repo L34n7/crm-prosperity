@@ -30,7 +30,7 @@ export const pt = {
   },
 
   sidebar: {
-    dashboard: "Dashboard",
+    dashboard: "Painel",
     conversations: "Conversas",
     contacts: "Contatos",
     automations: "Automações",

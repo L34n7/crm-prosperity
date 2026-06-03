@@ -87,7 +87,29 @@ const EVENTOS_LABEL: Record<string, string> = {
   agendamento_confirmado: "Agendamento confirmado",
   venda_realizada: "Venda realizada",
   venda_perdida: "Venda perdida",
+  fluxo_iniciado: "Fluxo iniciado",
+  fluxo_finalizado: "Fluxo finalizado",
+  fluxo_transferido_atendimento: "Transferido para atendimento",
+  fluxo_incompleto_timeout: "Fluxo incompleto por timeout",
 };
+
+const EVENTOS_MANUAIS = [
+  { value: "venda_realizada", label: "Venda realizada", exigeValor: true },
+  { value: "venda_perdida", label: "Venda perdida" },
+  { value: "lead_qualificado", label: "Lead qualificado" },
+  { value: "agendamento_criado", label: "Agendamento criado" },
+  { value: "agendamento_confirmado", label: "Agendamento confirmado" },
+];
+
+function eventoManualValido(tipo: string) {
+  return EVENTOS_MANUAIS.some((evento) => evento.value === tipo);
+}
+
+function eventoExigeValor(tipo: string) {
+  return EVENTOS_MANUAIS.some(
+    (evento) => evento.value === tipo && evento.exigeValor
+  );
+}
 
 async function lerResposta(response: Response) {
   const json = await response.json();
@@ -175,6 +197,11 @@ export default function RastreamentoPage() {
   const [eventoTipo, setEventoTipo] = useState("venda_realizada");
   const [eventoContatoId, setEventoContatoId] = useState("");
   const [eventoValor, setEventoValor] = useState("");
+  const [eventoEditandoId, setEventoEditandoId] = useState<string | null>(null);
+  const [modalEditarEventoAberto, setModalEditarEventoAberto] = useState(false);
+  const [eventoEdicaoTipo, setEventoEdicaoTipo] = useState("venda_realizada");
+  const [eventoEdicaoContatoId, setEventoEdicaoContatoId] = useState("");
+  const [eventoEdicaoValor, setEventoEdicaoValor] = useState("");
 
   const carregarDados = useCallback(async () => {
     setLoading(true);
@@ -321,7 +348,38 @@ export default function RastreamentoPage() {
     }
   }
 
-  async function criarEvento(event: FormEvent) {
+  function limparFormularioEvento() {
+    setEventoTipo("venda_realizada");
+    setEventoContatoId("");
+    setEventoValor("");
+  }
+
+  function fecharModalEditarEvento() {
+    setModalEditarEventoAberto(false);
+    setEventoEditandoId(null);
+    setEventoEdicaoTipo("venda_realizada");
+    setEventoEdicaoContatoId("");
+    setEventoEdicaoValor("");
+  }
+
+  function editarEvento(evento: Evento) {
+    if (evento.origem_registro !== "manual") {
+      setErro("Eventos automaticos nao podem ser editados.");
+      return;
+    }
+
+    setEventoEditandoId(evento.id);
+    setEventoEdicaoTipo(eventoManualValido(evento.tipo) ? evento.tipo : "venda_realizada");
+    setEventoEdicaoContatoId(evento.contatos?.id || "");
+    setEventoEdicaoValor(
+      evento.valor === null || evento.valor === undefined ? "" : String(evento.valor)
+    );
+    setModalEditarEventoAberto(true);
+    setMensagem("");
+    setErro("");
+  }
+
+  async function salvarEvento(event: FormEvent) {
     event.preventDefault();
     limparFeedback();
     setSalvando(true);
@@ -333,18 +391,76 @@ export default function RastreamentoPage() {
         body: JSON.stringify({
           tipo: eventoTipo,
           contato_id: eventoContatoId,
-          valor: eventoValor,
+          valor: eventoExigeValor(eventoTipo) ? eventoValor : null,
         }),
       }).then(lerResposta);
 
-      setEventoContatoId("");
-      setEventoValor("");
+      limparFormularioEvento();
       setMensagem("Evento comercial registrado.");
       await carregarDados();
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro ao registrar evento.");
+      setErro(error instanceof Error ? error.message : "Erro ao salvar evento.");
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function salvarEventoEditado(event: FormEvent) {
+    event.preventDefault();
+
+    if (!eventoEditandoId) return;
+
+    limparFeedback();
+    setSalvando(true);
+
+    try {
+      await fetch(`/api/rastreamento/eventos/${eventoEditandoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: eventoEdicaoTipo,
+          contato_id: eventoEdicaoContatoId,
+          valor: eventoExigeValor(eventoEdicaoTipo) ? eventoEdicaoValor : null,
+        }),
+      }).then(lerResposta);
+
+      fecharModalEditarEvento();
+      setMensagem("Evento comercial atualizado.");
+      await carregarDados();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao editar evento.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function apagarEvento(evento: Evento) {
+    if (evento.origem_registro !== "manual") {
+      setErro("Eventos automaticos nao podem ser apagados.");
+      return;
+    }
+
+    const confirmou = window.confirm(
+      "Apagar este evento comercial? Esta acao nao pode ser desfeita."
+    );
+
+    if (!confirmou) return;
+
+    limparFeedback();
+
+    try {
+      await fetch(`/api/rastreamento/eventos/${evento.id}`, {
+        method: "DELETE",
+      }).then(lerResposta);
+
+      if (eventoEditandoId === evento.id) {
+        fecharModalEditarEvento();
+      }
+
+      setMensagem("Evento comercial apagado.");
+      await carregarDados();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao apagar evento.");
     }
   }
 
@@ -684,19 +800,32 @@ export default function RastreamentoPage() {
 
             {aba === "eventos" && (
               <section className={styles.eventsLayout}>
-                <form className={styles.card} onSubmit={criarEvento}>
+                <form className={styles.card} onSubmit={salvarEvento}>
                   <div className={styles.sectionHeader}>
                     <div>
                       <p className={styles.eyebrow}>Registro comercial</p>
-                      <h2>Adicionar venda</h2>
+                      <h2>Adicionar evento</h2>
                     </div>
                     <Plus size={20} />
                   </div>
                   <label className={styles.field}>
                     <span>Evento</span>
-                    <select value={eventoTipo} onChange={(event) => setEventoTipo(event.target.value)}>
-                      <option value="venda_realizada">Venda realizada</option>
-                      <option value="venda_perdida">Venda perdida</option>
+                    <select
+                      value={eventoTipo}
+                      onChange={(event) => {
+                        const novoTipo = event.target.value;
+                        setEventoTipo(novoTipo);
+
+                        if (!eventoExigeValor(novoTipo)) {
+                          setEventoValor("");
+                        }
+                      }}
+                    >
+                      {EVENTOS_MANUAIS.map((eventoManual) => (
+                        <option key={eventoManual.value} value={eventoManual.value}>
+                          {eventoManual.label}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className={styles.field}>
@@ -710,13 +839,24 @@ export default function RastreamentoPage() {
                       ))}
                     </select>
                   </label>
-                  <label className={styles.field}>
-                    <span>Valor em reais</span>
-                    <input type="number" min="0" step="0.01" value={eventoValor} onChange={(event) => setEventoValor(event.target.value)} placeholder="497,00" />
-                  </label>
-                  <button className={styles.primaryButton} disabled={salvando}>
-                    Registrar evento
-                  </button>
+                  {eventoExigeValor(eventoTipo) && (
+                    <label className={styles.field}>
+                      <span>Valor em reais</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={eventoValor}
+                        onChange={(event) => setEventoValor(event.target.value)}
+                        placeholder="497,00"
+                      />
+                    </label>
+                  )}
+                  <div className={styles.formActions}>
+                    <button className={styles.primaryButton} disabled={salvando}>
+                      Registrar evento
+                    </button>
+                  </div>
                 </form>
 
                 <section className={styles.card}>
@@ -731,16 +871,35 @@ export default function RastreamentoPage() {
                     {eventos.map((evento) => (
                       <article className={styles.eventItem} key={evento.id}>
                         <div className={styles.eventIcon}><Activity size={15} /></div>
-                        <div>
+                        <div className={styles.eventContent}>
                           <strong>{EVENTOS_LABEL[evento.tipo] || evento.tipo}</strong>
                           <p>
                             {evento.contatos?.nome || evento.contatos?.telefone || "Visitante ainda nao identificado"}
                             {evento.rastreamento_campanhas?.nome ? ` | ${evento.rastreamento_campanhas.nome}` : ""}
+                            {evento.origem_registro === "manual" ? " | Manual" : ""}
                           </p>
                         </div>
                         <div className={styles.eventMeta}>
                           {formatarValor(evento.valor) && <b>{formatarValor(evento.valor)}</b>}
                           <span>{formatarData(evento.ocorrido_em)}</span>
+                          {evento.origem_registro === "manual" && (
+                            <div className={styles.eventActions}>
+                              <button
+                                type="button"
+                                className={styles.eventActionButton}
+                                onClick={() => editarEvento(evento)}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.eventActionDangerButton}
+                                onClick={() => apagarEvento(evento)}
+                              >
+                                Apagar
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </article>
                     ))}
@@ -751,6 +910,99 @@ export default function RastreamentoPage() {
           </>
         )}
       </main>
+
+      {modalEditarEventoAberto && (
+        <div className={styles.modalOverlay} onClick={fecharModalEditarEvento}>
+          <form
+            className={styles.modalCard}
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={salvarEventoEditado}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.eyebrow}>Registro comercial</p>
+                <h3>Editar evento</h3>
+                <p>Corrija o resultado manual registrado pelo atendente.</p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.modalCloseButton}
+                onClick={fecharModalEditarEvento}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <label className={styles.field}>
+                <span>Evento</span>
+                <select
+                  value={eventoEdicaoTipo}
+                  onChange={(event) => {
+                    const novoTipo = event.target.value;
+                    setEventoEdicaoTipo(novoTipo);
+
+                    if (!eventoExigeValor(novoTipo)) {
+                      setEventoEdicaoValor("");
+                    }
+                  }}
+                >
+                  {EVENTOS_MANUAIS.map((eventoManual) => (
+                    <option key={eventoManual.value} value={eventoManual.value}>
+                      {eventoManual.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className={styles.field}>
+                <span>Contato</span>
+                <select
+                  value={eventoEdicaoContatoId}
+                  onChange={(event) => setEventoEdicaoContatoId(event.target.value)}
+                >
+                  <option value="">Selecione</option>
+                  {contatos.map((contato) => (
+                    <option key={contato.id} value={contato.id}>
+                      {contato.nome || "Sem nome"} - {contato.telefone}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {eventoExigeValor(eventoEdicaoTipo) && (
+                <label className={styles.field}>
+                  <span>Valor em reais</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={eventoEdicaoValor}
+                    onChange={(event) => setEventoEdicaoValor(event.target.value)}
+                    placeholder="497,00"
+                  />
+                </label>
+              )}
+
+              <div className={styles.formActions}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={fecharModalEditarEvento}
+                  disabled={salvando}
+                >
+                  Cancelar
+                </button>
+
+                <button className={styles.primaryButton} disabled={salvando}>
+                  {salvando ? "Salvando..." : "Salvar alterações"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
     </>
   );
 }

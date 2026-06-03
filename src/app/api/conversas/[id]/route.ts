@@ -12,6 +12,7 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import { verificarEEncerrarConversaSe24hExpirada } from "@/lib/whatsapp/verificar-expiracao-conversas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -30,6 +31,7 @@ type ConversaAtual = {
   started_at?: string | null;
   created_at?: string | null;
   closed_at?: string | null;
+  last_inbound_message_at?: string | null;
 };
 
 function isStatusValido(status: string | null) {
@@ -358,6 +360,36 @@ export async function PUT(
 
   const estaReabrindo =
     !novoStatusEhEncerrado && conversaAtualEstaEncerrada;
+
+  if (estaReabrindo) {
+    if (conversaAtual.status === "encerrado_24h") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Esta conversa foi encerrada por 24h. Para voltar a falar com o contato, envie um template aprovado.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const expiracao = await verificarEEncerrarConversaSe24hExpirada({
+      empresaId: conversaAtual.empresa_id,
+      conversaId: conversaAtual.id,
+      lastInboundMessageAt: conversaAtual.last_inbound_message_at ?? null,
+    });
+
+    if (expiracao.expirada) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Esta conversa ultrapassou a janela de 24 horas desde a ultima mensagem do contato. Ela foi encerrada automaticamente; para voltar a falar com o contato, envie um template aprovado.",
+        },
+        { status: 400 }
+      );
+    }
+  }
 
   if (mudouSetor && !(await usuarioPodeTransferir(usuario, conversaAtual))) {
     return NextResponse.json(

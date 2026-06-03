@@ -5,6 +5,7 @@ import {
   registrarTentativaBloco,
   executarAcaoExcessoTentativas,
   enviarMensagemAutomacao,
+  registrarEventoRastreamentoFluxo,
 } from "@/lib/automacoes/process-automation-engine";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -159,6 +160,20 @@ export async function GET(request: Request) {
             .eq("id", payload.conversa_id)
             .eq("empresa_id", agendamento.empresa_id)
             .eq("status", "bot");
+
+          await registrarEventoRastreamentoFluxo({
+            empresaId: agendamento.empresa_id,
+            conversaId: payload.conversa_id,
+            execucaoId: agendamento.execucao_id,
+            fluxoId: agendamento.fluxo_id,
+            noId: agendamento.no_id,
+            tipo: "fluxo_incompleto_timeout",
+            metadata: {
+              tipo_encerramento: "inatividade_fluxo",
+              origem_timeout: "encerramento_inatividade_fluxo",
+              mensagem_enviada: !!mensagem,
+            },
+          });
 
           await supabaseAdmin
             .from("automacao_agendamentos")

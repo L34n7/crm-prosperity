@@ -79,7 +79,13 @@
   border: 1px solid #d9e0e7;
   background: #ffffff;
   color: #111827;
-  padding: 10px 14px;
+  padding: 10px 11px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .iconButton:hover {
@@ -171,6 +177,16 @@
   cursor: not-allowed;
 }
 
+.spinningIcon {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .searchInput,
 .filterSelect,
 .actionSelect,
@@ -182,7 +198,7 @@
   color: #111827;
   border-radius: 12px;
   padding: 12px 14px;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -215,6 +231,7 @@
   background: #ffffff;
   color: #475569;
   padding: 8px 12px;
+  font-size: 12px;
 }
 
 .quickChip:hover {
@@ -1277,6 +1294,83 @@
   font-size: 14px;
   line-height: 1.5;
   color: #111827;
+}
+
+.trackingResultCard {
+  border: 1px solid #edf2f7;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.trackingResultHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.trackingResultHeader .secondaryButton {
+  padding: 8px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.trackingResultTitle {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  color: #111827;
+}
+
+.trackingEventList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trackingEventItem {
+  border: 1px solid #f1f5f9;
+  border-radius: 14px;
+  background: #fafbfc;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trackingEventInfo strong {
+  display: block;
+  font-size: 14px;
+  color: #111827;
+}
+
+.trackingEventInfo span,
+.trackingEventInfo p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.trackingEventActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trackingEventActions b {
+  font-size: 13px;
+  color: #047857;
+}
+
+.trackingEventActions .listaIconButton {
+  width: auto;
+  min-width: 38px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .botCardHeader {

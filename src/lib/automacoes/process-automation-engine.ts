@@ -36,6 +36,180 @@ function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
 }
 
+type TipoEventoFluxoRastreamento =
+  | "fluxo_iniciado"
+  | "fluxo_finalizado"
+  | "fluxo_transferido_atendimento"
+  | "fluxo_incompleto_timeout";
+
+type ResultadoFluxoRastreamento = "positivo" | "negativo" | "neutro";
+
+function normalizarResultadoFluxoRastreamento(
+  valor: unknown
+): ResultadoFluxoRastreamento {
+  const resultado = String(valor || "neutro").trim().toLowerCase();
+
+  if (
+    resultado === "positivo" ||
+    resultado === "negativo" ||
+    resultado === "neutro"
+  ) {
+    return resultado;
+  }
+
+  return "neutro";
+}
+
+function normalizarValorMonetarioRastreamento(valor: unknown) {
+  if (valor === null || valor === undefined) return null;
+
+  if (typeof valor === "number") {
+    return Number.isFinite(valor) && valor >= 0 ? Number(valor.toFixed(2)) : null;
+  }
+
+  const texto = String(valor).trim();
+  if (!texto) return null;
+
+  const normalizado = texto
+    .replace(/[R$\s]/g, "")
+    .replace(/\.(?=\d{3}(\D|$))/g, "")
+    .replace(",", ".");
+
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) && numero >= 0 ? Number(numero.toFixed(2)) : null;
+}
+
+function normalizarNomeVariavelFluxo(valor: unknown) {
+  return String(valor || "")
+    .trim()
+    .replace(/^\{\{\s*/, "")
+    .replace(/\s*\}\}$/, "")
+    .replace(/^variaveis\./, "")
+    .trim();
+}
+
+function lerVariavelExecucao(metadata: any, nome: string) {
+  if (!nome) return null;
+
+  const variaveis = metadata?.variaveis || {};
+  return variaveis[nome] ?? metadata?.[nome] ?? null;
+}
+
+async function resolverValorConversaoEncerramento(params: {
+  empresaId: string;
+  execucaoId: string;
+  config: Record<string, any>;
+}) {
+  const { empresaId, execucaoId, config } = params;
+  const tipoValor = String(config.valor_conversao_tipo || "sem_valor").trim();
+
+  if (tipoValor === "valor_fixo") {
+    return normalizarValorMonetarioRastreamento(config.valor_conversao);
+  }
+
+  if (tipoValor !== "variavel") {
+    return null;
+  }
+
+  const nomeVariavel = normalizarNomeVariavelFluxo(
+    config.valor_conversao_variavel
+  );
+
+  if (!nomeVariavel) return null;
+
+  const { data: execucao } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("metadata_json")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  return normalizarValorMonetarioRastreamento(
+    lerVariavelExecucao(execucao?.metadata_json || {}, nomeVariavel)
+  );
+}
+
+export async function registrarEventoRastreamentoFluxo(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  noId?: string | null;
+  tipo: TipoEventoFluxoRastreamento;
+  resultado?: ResultadoFluxoRastreamento | null;
+  valor?: number | null;
+  metadata?: Record<string, any>;
+}) {
+  const {
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noId,
+    tipo,
+    resultado,
+    valor,
+    metadata,
+  } = params;
+
+  const [{ data: execucao }, { data: fluxo }, { data: no }] = await Promise.all([
+    supabaseAdmin
+      .from("automacao_execucoes")
+      .select("contato_id, conversa_protocolo_id, metadata_json")
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("automacao_fluxos")
+      .select("nome")
+      .eq("id", fluxoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle(),
+    noId
+      ? supabaseAdmin
+          .from("automacao_nos")
+          .select("titulo, tipo_no")
+          .eq("id", noId)
+          .eq("empresa_id", empresaId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const { error } = await supabaseAdmin.rpc("rastreamento_criar_evento", {
+    p_empresa_id: empresaId,
+    p_tipo: tipo,
+    p_contato_id: execucao?.contato_id || null,
+    p_conversa_id: conversaId,
+    p_valor: valor ?? null,
+    p_origem_registro: "automacao",
+    p_idempotency_key: `automacao:${execucaoId}:${tipo}`,
+    p_metadata_json: {
+      origem: "automacao_fluxo",
+      fluxo_id: fluxoId,
+      fluxo_nome: fluxo?.nome || null,
+      execucao_id: execucaoId,
+      conversa_protocolo_id: execucao?.conversa_protocolo_id || null,
+      no_id: noId || null,
+      no_titulo: no?.titulo || null,
+      no_tipo: no?.tipo_no || null,
+      resultado_fluxo: resultado || null,
+      ...(metadata || {}),
+    },
+  });
+
+  if (error) {
+    console.error("[AUTOMATION_ENGINE] Erro ao registrar evento de rastreamento:", {
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId,
+      tipo,
+      error,
+    });
+  }
+}
+
 function validarCpf(cpfEntrada: string) {
   const cpf = somenteDigitos(cpfEntrada);
 
@@ -1191,6 +1365,20 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     },
   });
 
+  await registrarEventoRastreamentoFluxo({
+    empresaId,
+    conversaId,
+    execucaoId: execucaoCriada.id,
+    fluxoId: fluxo.id,
+    noId: noInicial.id,
+    tipo: "fluxo_iniciado",
+    metadata: {
+      tipo_inicio: tipoInicioExecucao,
+      gatilho: gatilhoEncontrado || null,
+      mensagem_inicial: mensagemTexto,
+    },
+  });
+
   const runtimeCache = await carregarFluxoRuntimeCache({
     empresaId,
     fluxoId: fluxo.id,
@@ -2080,7 +2268,23 @@ export async function executarNo(params: {
   }
 
   if (no.tipo_no === "encerrar") {
-    const mensagem = String(no.configuracao_json?.mensagem || "").trim();
+    const config = no.configuracao_json || {};
+    const mensagem = String(config.mensagem || "").trim();
+    const resultadoFluxo = normalizarResultadoFluxoRastreamento(
+      config.resultado_fluxo
+    );
+    const tipoValorConversao =
+      resultadoFluxo === "positivo"
+        ? String(config.valor_conversao_tipo || "sem_valor").trim()
+        : "sem_valor";
+    const valorConversao =
+      resultadoFluxo === "positivo"
+        ? await resolverValorConversaoEncerramento({
+            empresaId,
+            execucaoId,
+            config,
+          })
+        : null;
 
     if (mensagem) {
       await enviarMensagemAutomacao({
@@ -2124,10 +2328,32 @@ export async function executarNo(params: {
       descricao: mensagem
         ? "Execução finalizada pelo nó encerrar com mensagem de encerramento."
         : "Execução finalizada pelo nó encerrar sem mensagem de encerramento.",
-      entrada: no.configuracao_json,
+      entrada: config,
       saida: {
         mensagem_enviada: !!mensagem,
         mensagem,
+        resultado_fluxo: resultadoFluxo,
+        valor_conversao_tipo: tipoValorConversao,
+        valor_conversao: valorConversao,
+      },
+    });
+
+    await registrarEventoRastreamentoFluxo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipo: "fluxo_finalizado",
+      resultado: resultadoFluxo,
+      valor: valorConversao,
+      metadata: {
+        tipo_encerramento: "bloco_encerrar",
+        valor_conversao_tipo: tipoValorConversao,
+        valor_conversao_variavel:
+          tipoValorConversao === "variavel"
+            ? normalizarNomeVariavelFluxo(config.valor_conversao_variavel)
+            : null,
       },
     });
 
@@ -2183,6 +2409,35 @@ export async function executarNo(params: {
       })
       .eq("id", conversaId)
       .eq("empresa_id", empresaId);
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "execucao_transferida_atendimento",
+      descricao: "ExecuÃ§Ã£o finalizada pelo nÃ³ transferir para atendimento.",
+      entrada: no.configuracao_json,
+      saida: {
+        mensagem,
+        setor_id: no.configuracao_json?.setor_id || null,
+        conversa_protocolo_id: protocoloAtivo.id,
+      },
+    });
+
+    await registrarEventoRastreamentoFluxo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipo: "fluxo_transferido_atendimento",
+      metadata: {
+        tipo_encerramento: "transferencia_atendimento",
+        setor_id: no.configuracao_json?.setor_id || null,
+        conversa_protocolo_id: protocoloAtivo.id,
+      },
+    });
 
     return;
   }
@@ -4681,6 +4936,26 @@ export async function executarAcaoExcessoTentativas(params: {
       .eq("id", conversaId)
       .eq("empresa_id", empresaId);
 
+    const tipoEventoRastreamento: TipoEventoFluxoRastreamento =
+      tipo === "sem_resposta"
+        ? "fluxo_incompleto_timeout"
+        : "fluxo_finalizado";
+
+    await registrarEventoRastreamentoFluxo({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipo: tipoEventoRastreamento,
+      resultado: tipo === "sem_resposta" ? null : "negativo",
+      metadata: {
+        tipo_encerramento: "excesso_tentativas",
+        tipo_tentativa: tipo,
+        acao_executada: acao,
+      },
+    });
+
     return;
   }
 
@@ -4720,6 +4995,21 @@ export async function executarAcaoExcessoTentativas(params: {
     })
     .eq("id", conversaId)
     .eq("empresa_id", empresaId);
+
+  await registrarEventoRastreamentoFluxo({
+    empresaId,
+    conversaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    noId: no.id,
+    tipo: "fluxo_transferido_atendimento",
+    metadata: {
+      tipo_encerramento: "excesso_tentativas_transferencia",
+      tipo_tentativa: tipo,
+      acao_executada: acao,
+      setor_id: setorExcessoTentativas,
+    },
+  });
 }
 
 export async function registrarTentativaBloco(params: {

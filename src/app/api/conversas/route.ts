@@ -92,6 +92,15 @@ type ConversaLeituraRow = {
   ultima_mensagem_lida_at: string | null;
 };
 
+type DisparoPendenteRow = {
+  id: string;
+  conversa_id: string | null;
+  executar_em: string;
+  payload_json?: {
+    template_nome?: string | null;
+  } | null;
+};
+
 function isStatusValido(status: string | null) {
   if (!status) return false;
 
@@ -178,113 +187,6 @@ function isUuid(valor: string) {
   );
 }
 
-const STATUS_ENCERRADOS_24H_CHECK = [
-  "encerrado_manual",
-  "encerrado_24h",
-  "encerrado_aut",
-];
-
-async function encerrarConversasExpiradas24h(params: {
-  empresaId: string;
-}) {
-  const { empresaId } = params;
-
-  const agora = new Date();
-  const agoraIso = agora.toISOString();
-
-  const limite24h = new Date(
-    agora.getTime() - 24 * 60 * 60 * 1000
-  ).toISOString();
-
-  const { data: conversasExpiradas, error: buscarError } = await supabaseAdmin
-    .from("conversas")
-    .select("id")
-    .eq("empresa_id", empresaId)
-    .not("last_inbound_message_at", "is", null)
-    .lt("last_inbound_message_at", limite24h)
-    .not("status", "in", `(${STATUS_ENCERRADOS_24H_CHECK.join(",")})`)
-    .limit(200);
-
-  if (buscarError) {
-    console.error("[CONVERSAS] Erro ao buscar conversas expiradas 24h:", buscarError);
-    return;
-  }
-
-  const conversaIds = (conversasExpiradas || []).map((item) => item.id);
-
-  if (conversaIds.length === 0) {
-    return;
-  }
-
-  const { error: atualizarError } = await supabaseAdmin
-    .from("conversas")
-    .update({
-      status: "encerrado_24h",
-      bot_ativo: false,
-      closed_at: agoraIso,
-      updated_at: agoraIso,
-    })
-    .eq("empresa_id", empresaId)
-    .in("id", conversaIds);
-
-  if (atualizarError) {
-    console.error("[CONVERSAS] Erro ao encerrar conversas expiradas 24h:", atualizarError);
-    return;
-  }
-
-  const { data: execucoesAtivas } = await supabaseAdmin
-    .from("automacao_execucoes")
-    .select("id")
-    .eq("empresa_id", empresaId)
-    .in("conversa_id", conversaIds)
-    .in("status", ["rodando", "aguardando"]);
-
-  const execucaoIds = (execucoesAtivas || []).map((item) => item.id);
-
-  if (execucaoIds.length > 0) {
-    await supabaseAdmin
-      .from("automacao_execucoes")
-      .update({
-        status: "cancelado",
-        finished_at: agoraIso,
-        updated_at: agoraIso,
-        metadata_json: {
-          motivo_cancelamento: "janela_24h_expirada",
-          cancelado_em: agoraIso,
-        },
-      })
-      .eq("empresa_id", empresaId)
-      .in("id", execucaoIds);
-
-    await supabaseAdmin
-      .from("automacao_agendamentos")
-      .update({
-        status: "cancelado",
-        updated_at: agoraIso,
-      })
-      .eq("empresa_id", empresaId)
-      .in("execucao_id", execucaoIds)
-      .eq("status", "pendente");
-  }
-
-  await supabaseAdmin
-    .from("conversa_protocolos")
-    .update({
-      ativo: false,
-      closed_at: agoraIso,
-      updated_at: agoraIso,
-    })
-    .eq("empresa_id", empresaId)
-    .in("conversa_id", conversaIds)
-    .eq("ativo", true);
-
-  console.log("[CONVERSAS] Conversas encerradas por 24h:", {
-    empresaId,
-    quantidade: conversaIds.length,
-  });
-}
-
-
 export async function GET(request: Request) {
   const resultado = await getUsuarioContexto();
 
@@ -327,9 +229,7 @@ export async function GET(request: Request) {
     );
   }
 
-  await encerrarConversasExpiradas24h({
-    empresaId: usuario.empresa_id,
-  });
+  await encerrarConversasExpiradas(usuario.empresa_id);
 
   let query = supabaseAdmin
     .from("conversas")
@@ -569,9 +469,9 @@ export async function GET(request: Request) {
 
   const conversaIds = conversas.map((conversa) => conversa.id);
 
-  let listasPorConversa = new Map<string, { id: string; nome: string }[]>();
-  let protocolosAtivosPorConversa = new Map<string, string>();
-  let disparosPendentesPorConversa = new Map<
+  const listasPorConversa = new Map<string, { id: string; nome: string }[]>();
+  const protocolosAtivosPorConversa = new Map<string, string>();
+  const disparosPendentesPorConversa = new Map<
     string,
     {
       id: string;
@@ -579,9 +479,9 @@ export async function GET(request: Request) {
       template_nome: string | null;
     }
   >();
-  let ultimaMensagemPorConversa = new Map<string, MensagemListaRow>();
-  let unreadCountPorConversa = new Map<string, number>();
-  let leituraPorConversa = new Map<string, string | null>();
+  const ultimaMensagemPorConversa = new Map<string, MensagemListaRow>();
+  const unreadCountPorConversa = new Map<string, number>();
+  const leituraPorConversa = new Map<string, string | null>();
 
   if (conversaIds.length > 0) {
     const { data: itensListas, error: itensListasError } = await supabaseAdmin
@@ -741,8 +641,8 @@ export async function GET(request: Request) {
       );
     }
 
-    for (const disparo of disparosPendentes || []) {
-      const conversaId = String((disparo as any).conversa_id || "");
+    for (const disparo of (disparosPendentes || []) as DisparoPendenteRow[]) {
+      const conversaId = String(disparo.conversa_id || "");
 
       if (!conversaId) continue;
 
@@ -750,8 +650,7 @@ export async function GET(request: Request) {
         disparosPendentesPorConversa.set(conversaId, {
           id: disparo.id,
           executar_em: disparo.executar_em,
-          template_nome:
-            (disparo.payload_json as any)?.template_nome || null,
+          template_nome: disparo.payload_json?.template_nome || null,
         });
       }
     }

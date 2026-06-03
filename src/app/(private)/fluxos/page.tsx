@@ -97,6 +97,21 @@ type AgendaOpcao = {
   status: string;
 };
 
+type ResultadoEncerramentoFluxo = "positivo" | "negativo" | "neutro";
+type TipoValorConversao = "sem_valor" | "valor_fixo" | "variavel";
+
+const RESULTADOS_ENCERRAMENTO: ResultadoEncerramentoFluxo[] = [
+  "positivo",
+  "negativo",
+  "neutro",
+];
+
+const TIPOS_VALOR_CONVERSAO: TipoValorConversao[] = [
+  "sem_valor",
+  "valor_fixo",
+  "variavel",
+];
+
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
@@ -245,6 +260,48 @@ function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {
   if (tipoNo === "capturar_resposta") return "sempre";
 
   return tipoNoEsperaResposta(tipoNo) ? "resposta_contem" : "sempre";
+}
+
+function resultadoEncerramentoValido(
+  valor: unknown
+): valor is ResultadoEncerramentoFluxo {
+  return RESULTADOS_ENCERRAMENTO.includes(
+    valor as ResultadoEncerramentoFluxo
+  );
+}
+
+function tipoValorConversaoValido(
+  valor: unknown
+): valor is TipoValorConversao {
+  return TIPOS_VALOR_CONVERSAO.includes(valor as TipoValorConversao);
+}
+
+function normalizarValorMonetario(valor: unknown) {
+  const texto = String(valor ?? "").replace(/[R$\s]/g, "").trim();
+
+  if (!texto) return null;
+
+  const normalizado = texto.includes(",")
+    ? texto.replace(/\./g, "").replace(",", ".")
+    : texto;
+
+  const numero = Number(normalizado);
+
+  if (!Number.isFinite(numero) || numero < 0) return null;
+
+  return Math.round(numero * 100) / 100;
+}
+
+function normalizarVariavelFluxo(valor: string) {
+  return String(valor || "")
+    .replace(/[{}]/g, "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
 }
 
 function rotuloPadraoPorTipoNo(tipoNo: string) {
@@ -507,6 +564,13 @@ export default function FluxosPage() {
     useState("agendado");
   const [agendaMotivoCancelamentoNode, setAgendaMotivoCancelamentoNode] =
     useState("Cancelado pelo cliente via automacao");
+  const [encerrarResultadoNode, setEncerrarResultadoNode] =
+    useState<ResultadoEncerramentoFluxo>("positivo");
+  const [encerrarValorTipoNode, setEncerrarValorTipoNode] =
+    useState<TipoValorConversao>("sem_valor");
+  const [encerrarValorFixoNode, setEncerrarValorFixoNode] = useState("");
+  const [encerrarValorVariavelNode, setEncerrarValorVariavelNode] =
+    useState("");
   const [previewCustoAgendarDisparo, setPreviewCustoAgendarDisparo] = useState<{
     categoria: string;
     totalSelecionados: number;
@@ -1207,6 +1271,12 @@ async function criarFluxoRapido() {
               mensagem:
                 "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar.",
             }
+          : tipoNo === "encerrar"
+          ? {
+              mensagem: "",
+              resultado_fluxo: "positivo",
+              valor_conversao_tipo: "sem_valor",
+            }
           : tipoNo === "interpretar_arquivo_ia"
           ? {
               mensagem: "Envie o arquivo para análise.",
@@ -1501,6 +1571,28 @@ function offsetLabelConexao(edgeId: string) {
       )
     );
 
+    setEncerrarResultadoNode(
+      resultadoEncerramentoValido(configuracaoJson?.resultado_fluxo)
+        ? configuracaoJson.resultado_fluxo
+        : "positivo"
+    );
+
+    setEncerrarValorTipoNode(
+      tipoValorConversaoValido(configuracaoJson?.valor_conversao_tipo)
+        ? configuracaoJson.valor_conversao_tipo
+        : "sem_valor"
+    );
+
+    setEncerrarValorFixoNode(
+      configuracaoJson?.valor_conversao != null
+        ? String(configuracaoJson.valor_conversao)
+        : ""
+    );
+
+    setEncerrarValorVariavelNode(
+      String(configuracaoJson?.valor_conversao_variavel || "")
+    );
+
     setArquivoInstrucaoIaNode(
       String(configuracaoJson?.instrucao_ia || "")
     );
@@ -1638,6 +1730,33 @@ function aplicarEdicaoNo() {
 function aplicarEdicaoNoInterno() {
   if (!editandoNodeId) return;
 
+  const valorFixoEncerramento = normalizarValorMonetario(encerrarValorFixoNode);
+  const variavelEncerramento = normalizarVariavelFluxo(
+    encerrarValorVariavelNode
+  );
+
+  if (
+    tipoNodeEdicao === "encerrar" &&
+    encerrarResultadoNode === "positivo" &&
+    encerrarValorTipoNode === "valor_fixo" &&
+    valorFixoEncerramento == null
+  ) {
+    setErro("Informe um valor fixo valido para a conversao.");
+    return;
+  }
+
+  if (
+    tipoNodeEdicao === "encerrar" &&
+    encerrarResultadoNode === "positivo" &&
+    encerrarValorTipoNode === "variavel" &&
+    !variavelEncerramento
+  ) {
+    setErro("Informe a variavel que contem o valor da conversao.");
+    return;
+  }
+
+  setErro("");
+
   setNodes((atuais) =>
     atuais.map((node) => {
       if (node.id !== editandoNodeId) return node;
@@ -1645,7 +1764,7 @@ function aplicarEdicaoNoInterno() {
       const tipoAtual = String(node.data?.tipo_no || "enviar_texto");
       const tipoFinal = tipoAtual === "inicio" ? "inicio" : tipoNodeEdicao;
 
-      let configuracao_json: Record<string, any> = {};
+      const configuracao_json: Record<string, any> = {};
 
       if (
         tipoFinal === "enviar_texto" ||
@@ -1666,6 +1785,28 @@ function aplicarEdicaoNoInterno() {
         tipoFinal === "interpretar_arquivo_ia"
       ) {
         configuracao_json.mensagem = mensagemNode;
+      }
+
+      if (tipoFinal === "encerrar") {
+        configuracao_json.resultado_fluxo = encerrarResultadoNode;
+        configuracao_json.valor_conversao_tipo =
+          encerrarResultadoNode === "positivo"
+            ? encerrarValorTipoNode
+            : "sem_valor";
+
+        if (
+          encerrarResultadoNode === "positivo" &&
+          encerrarValorTipoNode === "valor_fixo"
+        ) {
+          configuracao_json.valor_conversao = valorFixoEncerramento;
+        }
+
+        if (
+          encerrarResultadoNode === "positivo" &&
+          encerrarValorTipoNode === "variavel"
+        ) {
+          configuracao_json.valor_conversao_variavel = variavelEncerramento;
+        }
       }
 
       if (tipoFinal === "agendar_disparo") {
@@ -2630,6 +2771,35 @@ function validarFluxoAntesDeAtivar() {
       return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
     }
 
+    if (tipoNo === "encerrar") {
+      const resultadoFluxo = String(config.resultado_fluxo || "positivo");
+      const tipoValorConversao = String(config.valor_conversao_tipo || "sem_valor");
+
+      if (!resultadoEncerramentoValido(resultadoFluxo)) {
+        return `O bloco "${node.data?.titulo}" precisa ter um resultado valido.`;
+      }
+
+      if (resultadoFluxo === "positivo") {
+        if (!tipoValorConversaoValido(tipoValorConversao)) {
+          return `O bloco "${node.data?.titulo}" precisa ter um tipo de valor valido.`;
+        }
+
+        if (
+          tipoValorConversao === "valor_fixo" &&
+          normalizarValorMonetario(config.valor_conversao) == null
+        ) {
+          return `O bloco "${node.data?.titulo}" precisa ter um valor fixo valido.`;
+        }
+
+        if (
+          tipoValorConversao === "variavel" &&
+          !normalizarVariavelFluxo(String(config.valor_conversao_variavel || ""))
+        ) {
+          return `O bloco "${node.data?.titulo}" precisa informar a variavel do valor.`;
+        }
+      }
+    }
+
     if (tipoNo === "pergunta_opcoes") {
       if (!String(config.mensagem || "").trim()) {
         return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
@@ -3507,6 +3677,10 @@ useEffect(() => {
                             setMensagemNode("");
                             setSetorDestino("");
                             setOpcoesNode([]);
+                            setEncerrarResultadoNode("positivo");
+                            setEncerrarValorTipoNode("sem_valor");
+                            setEncerrarValorFixoNode("");
+                            setEncerrarValorVariavelNode("");
                           }
 
                           if (novoTipo === "transferir_setor") {
@@ -3709,6 +3883,112 @@ useEffect(() => {
                         placeholder="Digite o conteúdo"
                       />
                     </label>
+                  )}
+
+                  {tipoNodeEdicao === "encerrar" && (
+                    <div className={styles.optionsBox}>
+                      <label className={styles.field}>
+                        <span className={styles.label}>Resultado do fluxo</span>
+                        <select
+                          className={styles.input}
+                          value={encerrarResultadoNode}
+                          onChange={(e) => {
+                            const resultado = e.target.value;
+
+                            setEncerrarResultadoNode(
+                              resultadoEncerramentoValido(resultado)
+                                ? resultado
+                                : "positivo"
+                            );
+
+                            if (resultado !== "positivo") {
+                              setEncerrarValorTipoNode("sem_valor");
+                              setEncerrarValorFixoNode("");
+                              setEncerrarValorVariavelNode("");
+                            }
+                          }}
+                        >
+                          <option value="positivo">Positivo</option>
+                          <option value="negativo">Negativo</option>
+                          <option value="neutro">Neutro</option>
+                        </select>
+                        <span className={styles.help}>
+                          Esse resultado sera usado nos eventos e relatorios do
+                          rastreamento.
+                        </span>
+                      </label>
+
+                      {encerrarResultadoNode === "positivo" && (
+                        <>
+                          <label className={styles.field}>
+                            <span className={styles.label}>
+                              Valor da conversao
+                            </span>
+                            <select
+                              className={styles.input}
+                              value={encerrarValorTipoNode}
+                              onChange={(e) => {
+                                const tipoValor = e.target.value;
+
+                                setEncerrarValorTipoNode(
+                                  tipoValorConversaoValido(tipoValor)
+                                    ? tipoValor
+                                    : "sem_valor"
+                                );
+
+                                if (tipoValor !== "valor_fixo") {
+                                  setEncerrarValorFixoNode("");
+                                }
+
+                                if (tipoValor !== "variavel") {
+                                  setEncerrarValorVariavelNode("");
+                                }
+                              }}
+                            >
+                              <option value="sem_valor">Sem valor</option>
+                              <option value="valor_fixo">Valor fixo</option>
+                              <option value="variavel">Variavel do fluxo</option>
+                            </select>
+                          </label>
+
+                          {encerrarValorTipoNode === "valor_fixo" && (
+                            <label className={styles.field}>
+                              <span className={styles.label}>
+                                Valor fixo da conversao
+                              </span>
+                              <input
+                                className={styles.input}
+                                value={encerrarValorFixoNode}
+                                onChange={(e) =>
+                                  setEncerrarValorFixoNode(e.target.value)
+                                }
+                                placeholder="Ex: 497,00"
+                              />
+                            </label>
+                          )}
+
+                          {encerrarValorTipoNode === "variavel" && (
+                            <label className={styles.field}>
+                              <span className={styles.label}>
+                                Variavel com o valor
+                              </span>
+                              <input
+                                className={styles.input}
+                                value={encerrarValorVariavelNode}
+                                onChange={(e) =>
+                                  setEncerrarValorVariavelNode(e.target.value)
+                                }
+                                placeholder="Ex: valor_plano"
+                              />
+                              <span className={styles.help}>
+                                Informe o nome da variavel salva no fluxo, sem
+                                chaves. Exemplo: valor_plano.
+                              </span>
+                            </label>
+                          )}
+                        </>
+                      )}
+                    </div>
                   )}
 
                   {tipoNodeEdicao === "capturar_resposta" && (
