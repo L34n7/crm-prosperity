@@ -46,6 +46,42 @@ function obterReferenciasOferta(payload: any) {
     .filter(Boolean);
 }
 
+function obterPlanoSlug(payload: any, lead?: any) {
+  const slug = String(
+    lead?.plano_slug ||
+      payload.metadata_extra?.plano_slug ||
+      payload.metadata?.plano_slug ||
+      payload.tracking?.utm_term ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (slug === "basico" || slug === "essencial") {
+    return slug;
+  }
+
+  return "basico";
+}
+
+function obterTipoOferta(payload: any, lead?: any) {
+  const tipo = String(
+    lead?.tipo_oferta ||
+      payload.metadata_extra?.tipo_oferta ||
+      payload.metadata?.tipo_oferta ||
+      payload.tracking?.utm_content ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (tipo === "normal" || tipo === "vip" || tipo === "jv" || tipo === "free") {
+    return tipo;
+  }
+
+  return "normal";
+}
+
 /* =========================
    BUSCAR / CRIAR LEAD
 ========================= */
@@ -85,6 +121,9 @@ async function buscarLeadCadastro(params: {
 }
 
 async function criarLeadAutomatico(payload: any) {
+  const planoSlug = obterPlanoSlug(payload);
+  const tipoOferta = obterTipoOferta(payload);
+
   const { data, error } = await supabase
     .from("leads_cadastro")
     .insert({
@@ -96,6 +135,8 @@ async function criarLeadAutomatico(payload: any) {
       empresa: payload.offer?.title ?? "Cliente Átomo",
       status: "novo",
       pago: false,
+      plano_slug: planoSlug,
+      tipo_oferta: tipoOferta,
       metadata_json: payload,
       created_at: new Date().toISOString(),
     })
@@ -135,7 +176,8 @@ async function criarEmpresa(lead: any, payload: any) {
     if (data) return data;
   }
 
-  const planoId = await buscarPlanoIdPorSlug(lead?.plano_slug);
+  const planoSlug = obterPlanoSlug(payload, lead);
+  const planoId = await buscarPlanoIdPorSlug(planoSlug);
 
   const { data, error } = await supabase
     .from("empresas")
