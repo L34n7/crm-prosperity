@@ -231,12 +231,12 @@
 
 .dangerButton {
   border: none;
-  background: #b91c1c;
+  background: #da3a3a;
   color: #ffffff;
 }
 
 .dangerButton:hover {
-  background: #991b1b;
+  background: #c03333;
   transform: translateY(-1px);
 }
 
@@ -254,6 +254,16 @@
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+.spinningIcon {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .input,
@@ -442,8 +452,8 @@
 .dayMarker {
   margin-top: auto;
   max-width: 100%;
-  min-height: 22px;
-  padding: 0 8px;
+  min-height: 18px;
+  padding: 0px 8px;
   border-radius: 999px;
   background: #eff6ff;
   color: #1d4ed8;
@@ -458,10 +468,10 @@
 .dayMarkerGoogle {
   margin-top: 5px;
   max-width: 100%;
-  min-height: 22px;
+  min-height: 18px;
   padding: 0 8px;
   border-radius: 999px;
-  background: #fef3c7;
+  background: #fff7d7;
   color: #92400e;
   border: 1px solid #fde68a;
   display: inline-flex;

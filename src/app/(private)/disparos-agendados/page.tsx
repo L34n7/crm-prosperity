@@ -8,6 +8,8 @@ import styles from "./disparos-agendados.module.css";
 
 type StatusDisparo = "todos" | "pendente" | "executado" | "cancelado" | "erro";
 
+const ITENS_POR_PAGINA = 20;
+
 type DisparoAgendado = {
   id: string;
   execucao_id: string | null;
@@ -192,6 +194,7 @@ export default function DisparosAgendadosPage() {
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<StatusDisparo>("todos");
+  const [paginaAtual, setPaginaAtual] = useState(1);
 
   const [disparoSelecionado, setDisparoSelecionado] =
     useState<DisparoAgendado | null>(null);
@@ -252,10 +255,6 @@ export default function DisparosAgendadosPage() {
       setSucesso("");
 
       const params = new URLSearchParams();
-
-      if (filtroStatus !== "todos") {
-        params.set("status", filtroStatus);
-      }
 
       if (busca.trim()) {
         params.set("busca", busca.trim());
@@ -502,7 +501,7 @@ export default function DisparosAgendadosPage() {
 
   useEffect(() => {
     carregarDisparos();
-  }, [filtroStatus]);
+  }, []);
 
 
   useEffect(() => {
@@ -531,15 +530,46 @@ export default function DisparosAgendadosPage() {
     const total = disparos.length;
     const pendentes = disparos.filter((item) => item.status === "pendente").length;
     const executados = disparos.filter((item) => item.status === "executado").length;
+    const cancelados = disparos.filter((item) => item.status === "cancelado").length;
     const erros = disparos.filter((item) => item.status === "erro").length;
 
     return {
       total,
       pendentes,
       executados,
+      cancelados,
       erros,
     };
   }, [disparos]);
+
+  const disparosFiltrados = useMemo(() => {
+    if (filtroStatus === "todos") return disparos;
+
+    return disparos.filter((item) => item.status === filtroStatus);
+  }, [disparos, filtroStatus]);
+
+  const totalPaginas = useMemo(() => {
+    return Math.max(1, Math.ceil(disparosFiltrados.length / ITENS_POR_PAGINA));
+  }, [disparosFiltrados.length]);
+
+  const disparosPaginados = useMemo(() => {
+    const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+    const fim = inicio + ITENS_POR_PAGINA;
+
+    return disparosFiltrados.slice(inicio, fim);
+  }, [disparosFiltrados, paginaAtual]);
+
+  const primeiroItem =
+    disparosFiltrados.length === 0 ? 0 : (paginaAtual - 1) * ITENS_POR_PAGINA + 1;
+
+  const ultimoItem = Math.min(
+    paginaAtual * ITENS_POR_PAGINA,
+    disparosFiltrados.length
+  );
+
+  useEffect(() => {
+    setPaginaAtual(1);
+  }, [filtroStatus, disparos]);
 
   const contatosDisponiveis = useMemo(() => {
     const idsSelecionados = new Set(
@@ -708,61 +738,6 @@ export default function DisparosAgendadosPage() {
       />
 
       <main className={styles.pageContent}>
-        <aside className={styles.sidebar}>
-          <div className={styles.sidebarHeader}>
-            <p className={styles.eyebrow}>Automação</p>
-            <h1 className={styles.sidebarTitle}>Disparos</h1>
-            <p className={styles.sidebarSubtitle}>
-              Filtre os disparos agendados por status.
-            </p>
-          </div>
-
-          <div className={styles.sidebarFilters}>
-            <input
-              className={styles.input}
-              placeholder="Buscar template, telefone..."
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  carregarDisparos();
-                }
-              }}
-            />
-
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={carregarDisparos}
-            >
-              Buscar
-            </button>
-          </div>
-
-          <div className={styles.statusList}>
-            {[
-              { value: "todos", label: "Todos" },
-              { value: "pendente", label: "Pendentes" },
-              { value: "executado", label: "Executados" },
-              { value: "cancelado", label: "Cancelados" },
-              { value: "erro", label: "Erro" },
-            ].map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                className={
-                  filtroStatus === item.value
-                    ? styles.statusItemActive
-                    : styles.statusItem
-                }
-                onClick={() => setFiltroStatus(item.value as StatusDisparo)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </aside>
-
         <section className={styles.mainPanel}>
           <header className={styles.editorHeader}>
             <div>
@@ -809,38 +784,95 @@ export default function DisparosAgendadosPage() {
             onSuccessDismiss={() => setSucesso("")}
           />
 
+          <div className={styles.searchBar}>
+            <input
+              className={styles.input}
+              placeholder="Buscar template, telefone..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  carregarDisparos();
+                }
+              }}
+            />
+
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={carregarDisparos}
+            >
+              Buscar
+            </button>
+          </div>
+
           <div className={styles.metricsGrid}>
-            <div className={styles.metricCard}>
+            <button
+              type="button"
+              className={`${styles.metricCard} ${
+                filtroStatus === "todos" ? styles.metricCardActive : ""
+              }`}
+              onClick={() => setFiltroStatus("todos")}
+            >
               <span>Total</span>
               <strong>{metricas.total}</strong>
-            </div>
+            </button>
 
-            <div className={styles.metricCard}>
+            <button
+              type="button"
+              className={`${styles.metricCard} ${
+                filtroStatus === "pendente" ? styles.metricCardActive : ""
+              }`}
+              onClick={() => setFiltroStatus("pendente")}
+            >
               <span>Pendentes</span>
               <strong>{metricas.pendentes}</strong>
-            </div>
+            </button>
 
-            <div className={styles.metricCard}>
+            <button
+              type="button"
+              className={`${styles.metricCard} ${
+                filtroStatus === "executado" ? styles.metricCardActive : ""
+              }`}
+              onClick={() => setFiltroStatus("executado")}
+            >
               <span>Executados</span>
               <strong>{metricas.executados}</strong>
-            </div>
+            </button>
 
-            <div className={styles.metricCard}>
+            <button
+              type="button"
+              className={`${styles.metricCard} ${
+                filtroStatus === "cancelado" ? styles.metricCardActive : ""
+              }`}
+              onClick={() => setFiltroStatus("cancelado")}
+            >
+              <span>Cancelados</span>
+              <strong>{metricas.cancelados}</strong>
+            </button>
+
+            <button
+              type="button"
+              className={`${styles.metricCard} ${
+                filtroStatus === "erro" ? styles.metricCardActive : ""
+              }`}
+              onClick={() => setFiltroStatus("erro")}
+            >
               <span>Erros</span>
               <strong>{metricas.erros}</strong>
-            </div>
+            </button>
           </div>
 
           <div className={styles.listArea}>
             {carregando ? (
               <div className={styles.emptyState}>Carregando disparos...</div>
-            ) : disparos.length === 0 ? (
+            ) : disparosFiltrados.length === 0 ? (
               <div className={styles.emptyState}>
                 Nenhum disparo agendado encontrado.
               </div>
             ) : (
               <div className={styles.disparosList}>
-                {disparos.map((disparo) => {
+                {disparosPaginados.map((disparo) => {
                   const payload = disparo.payload_json || {};
                   const templateNome = payload.template_nome || "Template";
                   const numero = payload.numero_destino || "-";
@@ -927,6 +959,45 @@ export default function DisparosAgendadosPage() {
                     </article>
                   );
                 })}
+
+                {disparosFiltrados.length > ITENS_POR_PAGINA ? (
+                  <div className={styles.paginationBar}>
+                    <span className={styles.paginationInfo}>
+                      Exibindo {primeiroItem} a {ultimoItem} de{" "}
+                      {disparosFiltrados.length} disparos
+                    </span>
+
+                    <div className={styles.paginationActions}>
+                      <button
+                        type="button"
+                        className={styles.paginationButton}
+                        onClick={() =>
+                          setPaginaAtual((prev) => Math.max(1, prev - 1))
+                        }
+                        disabled={paginaAtual <= 1}
+                      >
+                        Anterior
+                      </button>
+
+                      <span className={styles.paginationCurrent}>
+                        Página {paginaAtual} de {totalPaginas}
+                      </span>
+
+                      <button
+                        type="button"
+                        className={styles.paginationButton}
+                        onClick={() =>
+                          setPaginaAtual((prev) =>
+                            Math.min(totalPaginas, prev + 1)
+                          )
+                        }
+                        disabled={paginaAtual >= totalPaginas}
+                      >
+                        Próxima
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>

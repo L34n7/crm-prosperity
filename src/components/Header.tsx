@@ -29,6 +29,8 @@ type SaldoTokensIa = {
   limite_mensal: number | null;
   tokens_usados: number;
   tokens_restantes: number | null;
+  saldo_mensal_restante: number | null;
+  saldo_avulso_restante: number;
   periodo_inicio?: string;
 };
 
@@ -119,13 +121,17 @@ export default function Header({
   function formatarTokens(valor: number | null) {
     if (valor === null) return "Ilimitado";
 
+    const formatarCompacto = (numero: number) =>
+      new Intl.NumberFormat("pt-BR", {
+        maximumFractionDigits: 1,
+      }).format(Math.floor(numero * 10) / 10);
+
     if (valor >= 1_000_000) {
-      const milhoes = valor / 1_000_000;
-      return `${Number.isInteger(milhoes) ? milhoes : milhoes.toFixed(1)} mi`;
+      return `${formatarCompacto(valor / 1_000_000)} mi`;
     }
 
     if (valor >= 1_000) {
-      return `${Math.round(valor / 1_000)} mil`;
+      return `${formatarCompacto(valor / 1_000)} mil`;
     }
 
     return String(valor);
@@ -341,11 +347,6 @@ export default function Header({
             >
               <span className={styles.tokensLabel}>IA</span>
               <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>
-              {saldoTokensIa.limite_mensal !== null && (
-                <span className={styles.tokensLimit}>
-                  / {formatarTokens(saldoTokensIa.limite_mensal)}
-                </span>
-              )}
             </Link>
           ) : (
             <span
@@ -354,11 +355,6 @@ export default function Header({
             >
               <span className={styles.tokensLabel}>IA</span>
               <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>
-              {saldoTokensIa.limite_mensal !== null && (
-                <span className={styles.tokensLimit}>
-                  / {formatarTokens(saldoTokensIa.limite_mensal)}
-                </span>
-              )}
             </span>
           ))}
 
@@ -598,7 +594,7 @@ export default function Header({
 
               <p>
                 Restam <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>{" "}
-                de <strong>{formatarTokens(saldoTokensIa.limite_mensal)}</strong>.
+                tokens disponíveis, incluindo pacotes avulsos.
                 Sem tokens, automacoes podem deixar de interpretar respostas,
                 analisar arquivos e transcrever audios.
               </p>

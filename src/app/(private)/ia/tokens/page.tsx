@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 import Header from "@/components/Header";
 import styles from "./tokens.module.css";
 
@@ -9,6 +10,9 @@ type SaldoTokensIa = {
   limite_mensal: number | null;
   tokens_usados: number;
   tokens_restantes: number | null;
+  saldo_mensal_restante: number | null;
+  saldo_avulso_restante: number;
+  tokens_mensais_usados: number;
   periodo_inicio: string;
   periodo_fim: string;
 };
@@ -20,7 +24,7 @@ type UsoTokensIa = {
   tokens_input: number | null;
   tokens_output: number | null;
   tokens_total: number;
-  metadata_json: Record<string, any>;
+  metadata_json: Record<string, unknown>;
   created_at: string;
 };
 
@@ -28,6 +32,16 @@ type TotaisTokens = {
   tokens_input: number;
   tokens_output: number;
   tokens_total: number;
+};
+
+type MovimentacaoTokens = {
+  id: string;
+  tipo: "renovacao" | "recarga" | "ajuste";
+  referencia: string;
+  quantidade_tokens: number;
+  saldo_mensal_apos: number | null;
+  saldo_avulso_apos: number;
+  created_at: string;
 };
 
 function hojeIso() {
@@ -39,6 +53,16 @@ function primeiroDiaMesIso() {
   return new Date(Date.UTC(agora.getFullYear(), agora.getMonth(), 1))
     .toISOString()
     .slice(0, 10);
+}
+
+function dataIso(data: Date) {
+  return data.toISOString().slice(0, 10);
+}
+
+function diasAtrasIso(dias: number) {
+  const data = new Date();
+  data.setDate(data.getDate() - (dias - 1));
+  return dataIso(data);
 }
 
 function formatarData(valor?: string | null) {
@@ -88,6 +112,7 @@ function origemClass(origem: string) {
 export default function ExtratoTokensIaPage() {
   const [saldo, setSaldo] = useState<SaldoTokensIa | null>(null);
   const [usos, setUsos] = useState<UsoTokensIa[]>([]);
+  const [movimentacoes, setMovimentacoes] = useState<MovimentacaoTokens[]>([]);
   const [totais, setTotais] = useState<TotaisTokens>({
     tokens_input: 0,
     tokens_output: 0,
@@ -97,10 +122,14 @@ export default function ExtratoTokensIaPage() {
   const [dataFim, setDataFim] = useState(hojeIso());
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const [renovacoesOpen, setRenovacoesOpen] = useState(false);
 
   const percentualUsado = useMemo(() => {
     if (!saldo?.limite_mensal) return 0;
-    return Math.min(100, Math.round((saldo.tokens_usados / saldo.limite_mensal) * 100));
+    return Math.min(
+      100,
+      Math.round((saldo.tokens_mensais_usados / saldo.limite_mensal) * 100)
+    );
   }, [saldo]);
 
   async function carregarSaldo() {
@@ -140,14 +169,40 @@ export default function ExtratoTokensIaPage() {
     );
   }
 
+  async function carregarMovimentacoes() {
+    const params = new URLSearchParams();
+
+    if (dataInicio) params.set("data_inicio", dataInicio);
+    if (dataFim) params.set("data_fim", dataFim);
+
+    const res = await fetch(`/api/ia/tokens/movimentacoes?${params.toString()}`, {
+      cache: "no-store",
+    });
+    const json = await res.json();
+
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || "Erro ao carregar movimentacoes.");
+    }
+
+    setMovimentacoes(json.movimentacoes || []);
+  }
+
   async function carregarDados() {
     setCarregando(true);
     setErro("");
 
     try {
-      await Promise.all([carregarSaldo(), carregarUsos()]);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar extrato de tokens.");
+      await Promise.all([
+        carregarSaldo(),
+        carregarUsos(),
+        carregarMovimentacoes(),
+      ]);
+    } catch (error: unknown) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao carregar extrato de tokens."
+      );
     } finally {
       setCarregando(false);
     }
@@ -158,10 +213,44 @@ export default function ExtratoTokensIaPage() {
     setDataFim(hojeIso());
   }
 
+  function aplicarAtalhoPeriodo(tipo: "7_dias" | "15_dias" | "mes_passado" | "3_meses" | "6_meses") {
+    const hoje = new Date();
+
+    if (tipo === "mes_passado") {
+      const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+      const fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+      setDataInicio(dataIso(inicio));
+      setDataFim(dataIso(fim));
+      return;
+    }
+
+    if (tipo === "7_dias") setDataInicio(diasAtrasIso(7));
+    if (tipo === "15_dias") setDataInicio(diasAtrasIso(15));
+
+    if (tipo === "3_meses" || tipo === "6_meses") {
+      const inicio = new Date(hoje);
+      inicio.setMonth(inicio.getMonth() - (tipo === "3_meses" ? 3 : 6));
+      setDataInicio(dataIso(inicio));
+    }
+
+    setDataFim(hojeIso());
+  }
+
   useEffect(() => {
     carregarDados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!renovacoesOpen) return;
+
+    function fecharComEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setRenovacoesOpen(false);
+    }
+
+    window.addEventListener("keydown", fecharComEscape);
+    return () => window.removeEventListener("keydown", fecharComEscape);
+  }, [renovacoesOpen]);
 
   return (
     <>
@@ -175,21 +264,23 @@ export default function ExtratoTokensIaPage() {
           <div className={styles.summaryCard}>
             <span>Saldo disponível</span>
             <strong>{formatarNumero(saldo?.tokens_restantes)}</strong>
-            <p>Tokens restantes no ciclo mensal atual.</p>
+            <p>Saldo mensal somado aos pacotes avulsos.</p>
           </div>
 
           <div className={styles.summaryCard}>
-            <span>Usado no mês</span>
-            <strong>{formatarNumero(saldo?.tokens_usados)}</strong>
-            <p>
-              {saldo?.limite_mensal
-                ? `${percentualUsado}% do limite mensal`
-                : "Plano sem limite mensal definido"}
-            </p>
+            <span>Saldo mensal</span>
+            <strong>{formatarNumero(saldo?.saldo_mensal_restante)}</strong>
+            <p>{percentualUsado}% consumido no ciclo atual.</p>
           </div>
 
           <div className={styles.summaryCard}>
-            <span>Limite mensal</span>
+            <span>Saldo avulso</span>
+            <strong>{formatarNumero(saldo?.saldo_avulso_restante)}</strong>
+            <p>Pacotes comprados sem expiração mensal.</p>
+          </div>
+
+          <div className={styles.summaryCard}>
+            <span>Mensalidade</span>
             <strong>{formatarNumero(saldo?.limite_mensal)}</strong>
             <p>
               Ciclo {formatarPeriodo(saldo?.periodo_inicio)} ate{" "}
@@ -261,7 +352,34 @@ export default function ExtratoTokensIaPage() {
               >
                 Mês atual
               </button>
+
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setRenovacoesOpen(true)}
+              >
+                Renovações
+              </button>
             </div>
+          </div>
+
+          <div className={styles.shortcutRow}>
+            <span>Atalhos</span>
+            <button type="button" onClick={() => aplicarAtalhoPeriodo("7_dias")}>
+              7 dias
+            </button>
+            <button type="button" onClick={() => aplicarAtalhoPeriodo("15_dias")}>
+              15 dias
+            </button>
+            <button type="button" onClick={() => aplicarAtalhoPeriodo("mes_passado")}>
+              Mês passado
+            </button>
+            <button type="button" onClick={() => aplicarAtalhoPeriodo("3_meses")}>
+              3 meses
+            </button>
+            <button type="button" onClick={() => aplicarAtalhoPeriodo("6_meses")}>
+              6 meses
+            </button>
           </div>
 
           {erro && <div className={styles.alertError}>{erro}</div>}
@@ -321,7 +439,84 @@ export default function ExtratoTokensIaPage() {
             </div>
           )}
         </section>
+
       </main>
+
+      {renovacoesOpen && (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="renovacoes-title"
+          onClick={() => setRenovacoesOpen(false)}
+        >
+          <section
+            className={styles.modalCard}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.eyebrow}>Créditos</p>
+                <h2 id="renovacoes-title" className={styles.cardTitle}>
+                  Renovações e recargas
+                </h2>
+                <p className={styles.cardDescription}>
+                  Movimentações encontradas no período selecionado.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setRenovacoesOpen(false)}
+                aria-label="Fechar renovações"
+                title="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {carregando ? (
+              <div className={styles.emptyState}>Carregando movimentações...</div>
+            ) : movimentacoes.length === 0 ? (
+              <div className={styles.emptyState}>
+                Nenhuma renovação ou recarga encontrada nesse período.
+              </div>
+            ) : (
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Tipo</th>
+                      <th>Referência</th>
+                      <th>Tokens</th>
+                      <th>Saldo mensal</th>
+                      <th>Saldo avulso</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movimentacoes.map((movimentacao) => (
+                      <tr key={movimentacao.id}>
+                        <td>{formatarData(movimentacao.created_at)}</td>
+                        <td>{movimentacao.tipo}</td>
+                        <td>{movimentacao.referencia}</td>
+                        <td>
+                          <strong>
+                            + {formatarNumero(movimentacao.quantidade_tokens)}
+                          </strong>
+                        </td>
+                        <td>{formatarNumero(movimentacao.saldo_mensal_apos)}</td>
+                        <td>{formatarNumero(movimentacao.saldo_avulso_apos)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </>
   );
 }

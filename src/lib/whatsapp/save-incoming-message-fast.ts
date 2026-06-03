@@ -7,6 +7,7 @@ import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-conta
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import { saveIncomingWhatsAppMessage } from "@/lib/whatsapp/save-incoming-message";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { atribuirCampanhaPorMensagemWhatsApp } from "@/lib/rastreamento/atribuir-campanha-whatsapp";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -89,6 +90,13 @@ export async function salvarMensagensRecebidasRapido(
         empresaId: integration.empresa_id,
         contatoId: contact.id,
         integracaoWhatsappId: integration.id,
+      });
+
+      await atribuirCampanhaPorMensagemWhatsApp({
+        empresaId: integration.empresa_id,
+        contatoId: contact.id,
+        conversaId: conversation.id,
+        conteudo: message.conteudo || message.text,
       });
 
       const { data: protocoloAtivo, error: protocoloAtivoError } =

@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { listarOcupacoesGoogleCalendar } from "@/lib/agendas/google-calendar";
+import {
+  listarOcupacoesGoogleCalendar,
+  reconciliarExclusoesGoogleCalendar,
+} from "@/lib/agendas/google-calendar";
 
 export type AgendaSlot = {
   indice: number;
@@ -602,6 +605,13 @@ export async function existeConflitoAgenda(params: {
   fimAt: string;
   ignorarAgendamentoId?: string | null;
 }) {
+  await reconciliarExclusoesGoogleCalendar({
+    empresaId: params.empresaId,
+    agendaId: params.agendaId,
+    inicioAt: params.inicioAt,
+    fimAt: params.fimAt,
+  });
+
   let query = params.supabase
     .from("agenda_agendamentos")
     .select("id")
@@ -715,6 +725,13 @@ export async function listarSlotsDisponiveis(params: {
     data: ymdKey(rangeFimLocal),
     minutosDoDia: 0,
     timezone,
+  });
+
+  await reconciliarExclusoesGoogleCalendar({
+    empresaId: params.empresaId,
+    agendaId: params.agendaId,
+    inicioAt: rangeInicio.toISOString(),
+    fimAt: rangeFim.toISOString(),
   });
 
   const { data: agendamentos, error: agendamentosError } = await params.supabase

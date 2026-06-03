@@ -36,6 +36,16 @@ function montarNomeEmpresa(lead: any, payload: any) {
   return "Empresa Cliente";
 }
 
+function obterReferenciasOferta(payload: any) {
+  return [
+    payload.offer?.id,
+    payload.offer?.hash,
+    payload.offer_hash,
+  ]
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+}
+
 /* =========================
    BUSCAR / CRIAR LEAD
 ========================= */
@@ -174,8 +184,17 @@ async function salvarPagamento(payload: any, leadId: string | null) {
         metodo: payload.method,
         valor: payload.transaction?.amount,
         valor_liquido: payload.transaction?.net_amount,
+        customer_id: payload.customer?.id,
         customer_email: normalizarEmail(payload.customer?.email),
         customer_nome: payload.customer?.name,
+        customer_telefone: limparTelefone(
+          payload.customer?.phone_number || payload.customer?.phone
+        ),
+        customer_documento: payload.customer?.document,
+        offer_hash: payload.offer?.hash ?? payload.offer_hash,
+        offer_titulo: payload.offer?.title,
+        offer_preco: payload.offer?.price,
+        paid_at: somenteDataValida(payload.paid_at),
         lead_id: leadId,
         payload,
         updated_at: new Date().toISOString(),
@@ -188,6 +207,45 @@ async function salvarPagamento(payload: any, leadId: string | null) {
   if (error) throw new Error(error.message);
 
   return data;
+}
+
+async function aplicarPagamentoTokensIa(params: {
+  empresaId: string;
+  payload: any;
+}) {
+  const { empresaId, payload } = params;
+  const referencia = String(payload.transaction?.id ?? "").trim();
+
+  if (!referencia) {
+    throw new Error("Pagamento aprovado sem transaction_id para aplicar tokens de IA.");
+  }
+
+  const pagoEm =
+    somenteDataValida(payload.paid_at) ?? new Date().toISOString();
+
+  const { data, error } = await supabase.rpc("aplicar_pagamento_tokens_ia", {
+    p_empresa_id: empresaId,
+    p_referencia: referencia,
+    p_oferta_referencias: obterReferenciasOferta(payload),
+    p_pago_em: pagoEm,
+    p_metadata_json: {
+      origem: "webhook_atomopay",
+      status: payload.status ?? payload.transaction?.status ?? null,
+      offer_id: payload.offer?.id ?? null,
+      offer_title: payload.offer?.title ?? null,
+    },
+  });
+
+  if (error) {
+    throw new Error(`Erro ao aplicar pagamento de tokens de IA: ${error.message}`);
+  }
+
+  if (!data?.aplicado && data?.motivo === "oferta_nao_configurada") {
+    console.warn(
+      "[WEBHOOK ATOMO] Oferta sem configuracao de tokens de IA.",
+      obterReferenciasOferta(payload)
+    );
+  }
 }
 
 /* =========================
@@ -249,6 +307,7 @@ async function enviarConviteAuth(params: {
 
 async function processarPagamentoAprovado(lead: any, payload: any) {
   const empresa = await criarEmpresa(lead, payload);
+  const primeiroPagamento = lead?.pago !== true;
 
   const email = normalizarEmail(lead.email || payload.customer?.email);
 
@@ -256,16 +315,28 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
     throw new Error("Pagamento sem email válido");
   }
 
-  await enviarConviteAuth({
-    email,
-    nome: lead.nome || payload.customer?.name,
+  await aplicarPagamentoTokensIa({
     empresaId: empresa.id,
-    telefone: limparTelefone(
-      lead.telefone ||
-        payload.customer?.phone_number ||
-        payload.customer?.phone
-    ),
+    payload,
   });
+
+  await supabase
+    .from("pagamentos")
+    .update({ empresa_id: empresa.id })
+    .eq("transaction_id", payload.transaction?.id);
+
+  if (primeiroPagamento) {
+    await enviarConviteAuth({
+      email,
+      nome: lead.nome || payload.customer?.name,
+      empresaId: empresa.id,
+      telefone: limparTelefone(
+        lead.telefone ||
+          payload.customer?.phone_number ||
+          payload.customer?.phone
+      ),
+    });
+  }
 
   await supabase
     .from("leads_cadastro")

@@ -13,6 +13,10 @@ export type SaldoTokensIa = {
   limite_mensal: number | null;
   tokens_usados: number;
   tokens_restantes: number | null;
+  saldo_mensal_restante: number | null;
+  saldo_avulso_restante: number;
+  tokens_mensais_usados: number;
+  tokens_avulsos_usados: number;
   periodo_inicio: string;
   periodo_fim: string;
   updated_at?: string;
@@ -20,7 +24,7 @@ export type SaldoTokensIa = {
 
 export class SaldoTokensIaEsgotadoError extends Error {
   constructor() {
-    super("Saldo mensal de tokens de IA esgotado.");
+    super("Saldo de tokens de IA esgotado.");
     this.name = "SaldoTokensIaEsgotadoError";
   }
 }

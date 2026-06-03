@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { excluirEventosVinculadosGoogleCalendar } from "@/lib/agendas/google-calendar";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const TIMEZONE_PADRAO = "America/Sao_Paulo";
@@ -216,19 +217,41 @@ export async function DELETE(
 
     const supabase = getSupabaseAdmin();
 
+    const { data: agenda, error: agendaError } = await supabase
+      .from("agenda_calendarios")
+      .select("id, status")
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("id", id)
+      .maybeSingle();
+
+    if (agendaError || !agenda) {
+      return NextResponse.json(
+        { ok: false, error: "Agenda nao encontrada." },
+        { status: 404 }
+      );
+    }
+
+    if (agenda.status !== "arquivado") {
+      return NextResponse.json(
+        { ok: false, error: "Arquive a agenda antes de exclui-la permanentemente." },
+        { status: 409 }
+      );
+    }
+
+    await excluirEventosVinculadosGoogleCalendar({
+      empresaId: usuario.empresa_id,
+      agendaId: id,
+    });
+
     const { error } = await supabase
       .from("agenda_calendarios")
-      .update({
-        status: "arquivado",
-        updated_at: new Date().toISOString(),
-        updated_by: usuario.id,
-      })
+      .delete()
       .eq("empresa_id", usuario.empresa_id)
       .eq("id", id);
 
     if (error) {
       return NextResponse.json(
-        { ok: false, error: `Erro ao arquivar agenda: ${error.message}` },
+        { ok: false, error: `Erro ao excluir agenda: ${error.message}` },
         { status: 500 }
       );
     }
@@ -236,7 +259,7 @@ export async function DELETE(
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno ao arquivar agenda." },
+      { ok: false, error: error?.message || "Erro interno ao excluir agenda." },
       { status: 500 }
     );
   }

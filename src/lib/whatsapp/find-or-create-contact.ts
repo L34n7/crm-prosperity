@@ -62,7 +62,7 @@ export async function findOrCreateWhatsAppContact({
       empresa_id: empresaId,
       nome: nome || telefone,
       telefone,
-      origem: "whatsapp",
+      origem: "Direto / Nao identificado",
       status_lead: "novo",
       observacoes: "Contato criado automaticamente via webhook do WhatsApp.",
     })

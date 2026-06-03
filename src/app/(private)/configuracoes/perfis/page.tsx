@@ -37,17 +37,6 @@ const formInicial: PerfilForm = {
   ativo: true,
 };
 
-type LogAuditoria = {
-  id: string;
-  entidade: string;
-  entidade_id: string;
-  acao: string;
-  usuario_id?: string | null;
-  usuario_nome?: string | null;
-  detalhes?: Record<string, unknown> | null;
-  created_at: string;
-};
-
 function formatarData(data?: string) {
   if (!data) return "Não informado";
 
@@ -60,72 +49,6 @@ function formatarData(data?: string) {
   });
 }
 
-function formatarMudancasLog(log: LogAuditoria) {
-  const detalhes = log.detalhes;
-
-  if (!detalhes || typeof detalhes !== "object") {
-    return [];
-  }
-
-  if (log.acao === "criado") {
-    const mudancas: string[] = [];
-
-    if ("nome" in detalhes && detalhes.nome) {
-      mudancas.push(`Nome definido como "${String(detalhes.nome)}"`);
-    }
-
-    if ("descricao" in detalhes && detalhes.descricao) {
-      mudancas.push("Descrição definida");
-    }
-
-    if ("ativo" in detalhes) {
-      mudancas.push(detalhes.ativo ? "Criado como ativo" : "Criado como inativo");
-    }
-
-    return mudancas;
-  }
-
-  if (log.acao === "atualizado") {
-    const antes =
-      "antes" in detalhes && detalhes.antes && typeof detalhes.antes === "object"
-        ? (detalhes.antes as Record<string, unknown>)
-        : {};
-
-    const depois =
-      "depois" in detalhes && detalhes.depois && typeof detalhes.depois === "object"
-        ? (detalhes.depois as Record<string, unknown>)
-        : {};
-
-    const mudancas: string[] = [];
-
-    if (antes.nome !== depois.nome) {
-      mudancas.push(
-        `Nome alterado de "${String(antes.nome ?? "")}" para "${String(
-          depois.nome ?? ""
-        )}"`
-      );
-    }
-
-    if (antes.descricao !== depois.descricao) {
-      if (!antes.descricao && depois.descricao) {
-        mudancas.push("Descrição adicionada");
-      } else if (antes.descricao && !depois.descricao) {
-        mudancas.push("Descrição removida");
-      } else {
-        mudancas.push("Descrição alterada");
-      }
-    }
-
-    if (antes.ativo !== depois.ativo) {
-      mudancas.push(depois.ativo ? "Perfil ativado" : "Perfil inativado");
-    }
-
-    return mudancas;
-  }
-
-  return [];
-}
-
 export default function PerfisPage() {
   const { permissoes } = useHeaderUser();
   const podeCriarPerfis = permissoes.includes("perfis.criar");
@@ -134,7 +57,6 @@ export default function PerfisPage() {
   const podeAlterarPermissoesPerfis = permissoes.includes(
     "perfis.alterar_permissoes"
   );
-  const podeVisualizarAuditoria = permissoes.includes("auditoria.visualizar");
   const [perfis, setPerfis] = useState<Perfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -145,11 +67,6 @@ export default function PerfisPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null);
   const [form, setForm] = useState<PerfilForm>(formInicial);
-
-  const [logsPorPerfil, setLogsPorPerfil] = useState<Record<string, LogAuditoria[]>>(
-    {}
-  );
-  const [loadingLogsId, setLoadingLogsId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
 
   async function carregarPerfis() {
@@ -179,31 +96,6 @@ export default function PerfisPage() {
   useEffect(() => {
     carregarPerfis();
   }, []);
-
-  async function carregarLogsDoPerfil(perfilId: string) {
-    try {
-      setLoadingLogsId(perfilId);
-
-      const res = await fetch(
-        `/api/auditoria?entidade=perfil&entidade_id=${perfilId}`,
-        { cache: "no-store" }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        return;
-      }
-
-      setLogsPorPerfil((atual) => ({
-        ...atual,
-        [perfilId]: data.logs || [],
-      }));
-    } catch {
-    } finally {
-      setLoadingLogsId(null);
-    }
-  }
 
   const perfisFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -299,20 +191,11 @@ export default function PerfisPage() {
     }
   }
 
-  async function toggleExpandir(perfilId: string) {
-    const novoId = expandidoId === perfilId ? null : perfilId;
-    setExpandidoId(novoId);
-
-    if (novoId && !logsPorPerfil[perfilId]) {
-      await carregarLogsDoPerfil(perfilId);
-    }
-  }
-
   return (
     <>
       <Header
         title="Configuração de perfis"
-        subtitle="Crie papéis de acesso, organize funções da equipe e acompanhe o histórico de alterações."
+        subtitle="Crie papéis de acesso e organize funções da equipe."
       />
 
       <div className={styles.pageContent}>
@@ -364,7 +247,6 @@ export default function PerfisPage() {
             <div className={styles.list}>
               {perfisFiltrados.map((perfil) => {
                 const expandido = expandidoId === perfil.id;
-                const logs = logsPorPerfil[perfil.id] || [];
 
                 return (
                   <article key={perfil.id} className={styles.itemCard}>
@@ -408,14 +290,16 @@ export default function PerfisPage() {
                       </div>
 
                       <div className={styles.itemRight}>
-                        {podeVisualizarAuditoria && (
-                          <button
-                            className={styles.secondaryButton}
-                            onClick={() => toggleExpandir(perfil.id)}
-                          >
-                            {expandido ? "Recolher" : "Expandir"}
-                          </button>
-                        )}
+                        <button
+                          className={styles.secondaryButton}
+                          onClick={() =>
+                            setExpandidoId((atual) =>
+                              atual === perfil.id ? null : perfil.id
+                            )
+                          }
+                        >
+                          {expandido ? "Recolher" : "Expandir"}
+                        </button>
 
                         {podeEditarPerfis && (
                           <button
@@ -457,68 +341,6 @@ export default function PerfisPage() {
                               {formatarData(perfil.updated_at)}
                             </span>
                           </div>
-                        </div>
-
-                        <div className={styles.timelineSection}>
-                          <div className={styles.timelineHeader}>
-                            <strong className={styles.timelineTitle}>Histórico</strong>
-                            <button
-                              className={styles.timelineButton}
-                              onClick={() => carregarLogsDoPerfil(perfil.id)}
-                              disabled={loadingLogsId === perfil.id}
-                            >
-                              {loadingLogsId === perfil.id
-                                ? "Carregando..."
-                                : "Atualizar histórico"}
-                            </button>
-                          </div>
-
-                          {loadingLogsId === perfil.id && logs.length === 0 ? (
-                            <div className={styles.timelineEmpty}>
-                              Carregando histórico...
-                            </div>
-                          ) : logs.length === 0 ? (
-                            <div className={styles.timelineEmpty}>
-                              Nenhum histórico encontrado para este perfil.
-                            </div>
-                          ) : (
-                            <div className={styles.timelineList}>
-                              {logs.map((log) => {
-                                const mudancas = formatarMudancasLog(log);
-
-                                return (
-                                  <div key={log.id} className={styles.timelineItem}>
-                                    <div className={styles.timelineDot} />
-                                    <div className={styles.timelineContent}>
-                                      <strong className={styles.timelineItemTitle}>
-                                        {log.acao === "criado"
-                                          ? "Perfil criado"
-                                          : "Perfil atualizado"}
-                                      </strong>
-
-                                      <span className={styles.timelineMeta}>
-                                        por {log.usuario_nome || "Não identificado"} em{" "}
-                                        {formatarData(log.created_at)}
-                                      </span>
-
-                                      {mudancas.length > 0 && (
-                                        <ul className={styles.timelineChanges}>
-                                          {mudancas.map((mudanca, index) => (
-                                            <li
-                                              key={index}
-                                              className={styles.timelineChangeItem}
-                                            >
-                                              {mudanca}
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
                         </div>
                       </div>
                     )}

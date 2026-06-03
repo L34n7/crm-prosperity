@@ -13,6 +13,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { baixarAudioWhatsApp } from "@/lib/whatsapp/baixar-audio-whatsapp";
 import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
+import { atribuirCampanhaPorMensagemWhatsApp } from "@/lib/rastreamento/atribuir-campanha-whatsapp";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -315,6 +316,13 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
       perf("PROCESS / buscar ou criar conversa", inicioConversa, {
         conversaId: conversation.id,
+      });
+
+      await atribuirCampanhaPorMensagemWhatsApp({
+        empresaId: integration.empresa_id,
+        contatoId: contact.id,
+        conversaId: conversation.id,
+        conteudo: message.conteudo || message.text,
       });
 
       await atualizarUltimaMensagemRecebidaConversa({

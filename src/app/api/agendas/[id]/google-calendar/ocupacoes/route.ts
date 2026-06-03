@@ -2,7 +2,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { listarEventosExternosGoogleCalendar } from "@/lib/agendas/google-calendar";
+import {
+  listarEventosExternosGoogleCalendar,
+  reconciliarExclusoesGoogleCalendar,
+} from "@/lib/agendas/google-calendar";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET(
@@ -58,14 +61,25 @@ export async function GET(
       );
     }
 
-    const eventos = await listarEventosExternosGoogleCalendar({
+    const parametros = {
       empresaId,
       agendaId: id,
       inicioAt: new Date(inicioAt).toISOString(),
       fimAt: new Date(fimAt).toISOString(),
+    };
+    const agendamentosCancelados = await reconciliarExclusoesGoogleCalendar({
+      empresaId,
+      agendaId: id,
+      inicioAt: parametros.inicioAt,
+      fimAt: parametros.fimAt,
     });
+    const eventos = await listarEventosExternosGoogleCalendar(parametros);
 
-    return NextResponse.json({ ok: true, eventos });
+    return NextResponse.json({
+      ok: true,
+      eventos,
+      agendamentos_cancelados: agendamentosCancelados,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || "Erro ao buscar eventos do Google." },

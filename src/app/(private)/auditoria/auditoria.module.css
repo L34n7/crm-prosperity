@@ -123,6 +123,7 @@
   background: #ffffff;
   color: #0f172a;
   outline: none;
+  font-size: 14px;
 }
 
 .field input:focus,
@@ -149,6 +150,7 @@
   border-radius: 12px;
   cursor: pointer;
   font-weight: 700;
+  font-size: 15px;
   transition: 0.2s ease;
 }
 

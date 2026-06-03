@@ -28,7 +28,7 @@ function configGoogle() {
   const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
 
   if (!clientId || !clientSecret) {
-    throw new Error("Integracao com Google Calendar ainda nao configurada no servidor.");
+    throw new Error("Integração com Google Calendar ainda não configurada no servidor.");
   }
 
   return { clientId, clientSecret };
@@ -52,7 +52,7 @@ function chaveCriptografia() {
     process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!segredo) {
-    throw new Error("Chave de criptografia do Google Calendar nao configurada.");
+    throw new Error("Chave de criptografia do Google Calendar não configurada.");
   }
 
   return crypto.createHash("sha256").update(segredo).digest();
@@ -184,7 +184,7 @@ export async function concluirOAuthGoogleCalendar(params: {
   usuarioId: string;
 }) {
   if (!params.code) {
-    throw new Error("Google nao retornou o codigo de autorizacao.");
+    throw new Error("Google nao retornou o código de autorização.");
   }
 
   const { clientId, clientSecret } = configGoogle();
@@ -215,7 +215,7 @@ export async function concluirOAuthGoogleCalendar(params: {
     .maybeSingle();
 
   if (!agenda) {
-    throw new Error("Agenda nao encontrada para concluir a integracao.");
+    throw new Error("Agenda não encontrada para concluir a integração.");
   }
 
   const { error } = await supabase.from("agenda_google_integracoes").upsert(
@@ -280,10 +280,173 @@ async function googleFetch(
 
   if (!response.ok) {
     const json = await response.json().catch(() => ({}));
-    throw new Error(json.error?.message || "Erro ao sincronizar com Google Calendar.");
+    throw new GoogleCalendarHttpError(
+      response.status,
+      json.error?.message || "Erro ao sincronizar com Google Calendar."
+    );
   }
 
   return response.status === 204 ? null : response.json();
+}
+
+class GoogleCalendarHttpError extends Error {
+  constructor(
+    public status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "GoogleCalendarHttpError";
+  }
+}
+
+export async function reconciliarExclusoesGoogleCalendar(params: {
+  empresaId: string;
+  agendaId: string;
+  inicioAt?: string;
+  fimAt?: string;
+}) {
+  const integracao = await obterIntegracao(params.empresaId, params.agendaId);
+
+  if (!integracao) return [];
+
+  const supabase = getSupabaseAdmin();
+  const { data: vinculos, error: vinculosError } = await supabase
+    .from("agenda_google_eventos")
+    .select("id, agendamento_id, google_event_id")
+    .eq("empresa_id", params.empresaId)
+    .eq("agenda_id", params.agendaId);
+
+  if (vinculosError) {
+    throw new Error(`Erro ao listar vinculos do Google: ${vinculosError.message}`);
+  }
+
+  if (!vinculos?.length) return [];
+
+  let agendamentosQuery = supabase
+    .from("agenda_agendamentos")
+    .select("id, status")
+    .eq("empresa_id", params.empresaId)
+    .eq("agenda_id", params.agendaId)
+    .in(
+      "id",
+      vinculos.map((vinculo) => vinculo.agendamento_id)
+    );
+
+  if (params.inicioAt && params.fimAt) {
+    agendamentosQuery = agendamentosQuery
+      .lt("inicio_at", params.fimAt)
+      .gt("fim_at", params.inicioAt);
+  }
+
+  const { data: agendamentos, error: agendamentosError } = await agendamentosQuery;
+
+  if (agendamentosError) {
+    throw new Error(`Erro ao listar agendamentos vinculados: ${agendamentosError.message}`);
+  }
+
+  const ativos = new Set(
+    (agendamentos || [])
+      .filter((agendamento) => ["agendado", "confirmado"].includes(agendamento.status))
+      .map((agendamento) => agendamento.id)
+  );
+  const calendarId = encodeURIComponent(integracao.google_calendar_id);
+  const cancelados: string[] = [];
+
+  for (const vinculo of vinculos) {
+    if (!ativos.has(vinculo.agendamento_id)) continue;
+
+    let excluidoNoGoogle = false;
+
+    try {
+      const evento = await googleFetch(
+        integracao,
+        `/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(vinculo.google_event_id)}`
+      );
+
+      excluidoNoGoogle = evento?.status === "cancelled";
+    } catch (error) {
+      if (
+        error instanceof GoogleCalendarHttpError &&
+        [404, 410].includes(error.status)
+      ) {
+        excluidoNoGoogle = true;
+      } else {
+        throw error;
+      }
+    }
+
+    if (!excluidoNoGoogle) continue;
+
+    const agora = new Date().toISOString();
+    const { error: updateError } = await supabase
+      .from("agenda_agendamentos")
+      .update({
+        status: "cancelado",
+        updated_at: agora,
+      })
+      .eq("empresa_id", params.empresaId)
+      .eq("agenda_id", params.agendaId)
+      .eq("id", vinculo.agendamento_id)
+      .in("status", ["agendado", "confirmado"]);
+
+    if (updateError) {
+      throw new Error(`Erro ao cancelar agendamento excluido no Google: ${updateError.message}`);
+    }
+
+    const { error: deleteError } = await supabase
+      .from("agenda_google_eventos")
+      .delete()
+      .eq("id", vinculo.id);
+
+    if (deleteError) {
+      throw new Error(`Erro ao remover vinculo excluido no Google: ${deleteError.message}`);
+    }
+
+    cancelados.push(vinculo.agendamento_id);
+  }
+
+  return cancelados;
+}
+
+export async function excluirEventosVinculadosGoogleCalendar(params: {
+  empresaId: string;
+  agendaId: string;
+}) {
+  const integracao = await obterIntegracao(params.empresaId, params.agendaId);
+
+  if (!integracao) return;
+
+  const supabase = getSupabaseAdmin();
+  const { data: vinculos, error } = await supabase
+    .from("agenda_google_eventos")
+    .select("google_event_id")
+    .eq("empresa_id", params.empresaId)
+    .eq("agenda_id", params.agendaId);
+
+  if (error) {
+    throw new Error(`Erro ao listar eventos vinculados ao Google: ${error.message}`);
+  }
+
+  const calendarId = encodeURIComponent(integracao.google_calendar_id);
+
+  for (const vinculo of vinculos || []) {
+    try {
+      await googleFetch(
+        integracao,
+        `/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(vinculo.google_event_id)}`,
+        { method: "DELETE" }
+      );
+    } catch (deleteError) {
+      if (
+        deleteError instanceof GoogleCalendarHttpError &&
+        [404, 410].includes(deleteError.status)
+      ) {
+        continue;
+      }
+
+      throw deleteError;
+    }
+  }
 }
 
 export async function listarOcupacoesGoogleCalendar(params: {
@@ -432,6 +595,9 @@ export async function sincronizarAgendaGoogleCalendar(params: {
   agendaId: string;
 }) {
   const supabase = getSupabaseAdmin();
+
+  await reconciliarExclusoesGoogleCalendar(params);
+
   const { data: agendamentos, error } = await supabase
     .from("agenda_agendamentos")
     .select("id")

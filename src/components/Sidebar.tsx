@@ -21,6 +21,7 @@ import {
   PlugZap,
   MessageCircle,
   ScrollText,
+  MousePointerClick,
 } from "lucide-react";
 import styles from "./Sidebar.module.css";
 
@@ -51,6 +52,12 @@ const menuItems: MenuItem[] = [
   { label: "Templates", href: "/configuracoes/templates-whatsapp", icon: FileText },
   { label: "Flows", href: "/fluxos", icon: GitBranch },
   { label: "Contacts", href: "/contatos", icon: Contact },
+  {
+    label: "Lead Tracking",
+    href: "/rastreamento",
+    icon: MousePointerClick,
+    permissao: "rastreamento.visualizar",
+  },
   { label: "Users", href: "/usuarios", icon: Users },
   {
     label: "Companies",

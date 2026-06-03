@@ -36,17 +36,6 @@ const formInicial: SetorForm = {
   ativo: true,
 };
 
-type LogAuditoria = {
-  id: string;
-  entidade: string;
-  entidade_id: string;
-  acao: string;
-  usuario_id?: string | null;
-  usuario_nome?: string | null;
-  detalhes?: Record<string, unknown> | null;
-  created_at: string;
-};
-
 function formatarData(data?: string) {
   if (!data) return "Não informado";
 
@@ -59,72 +48,6 @@ function formatarData(data?: string) {
   });
 }
 
-function formatarMudancasLog(log: LogAuditoria) {
-  const detalhes = log.detalhes;
-
-  if (!detalhes || typeof detalhes !== "object") {
-    return [];
-  }
-
-  if (log.acao === "criado") {
-    const mudancas: string[] = [];
-
-    if ("nome" in detalhes && detalhes.nome) {
-      mudancas.push(`Nome definido como "${String(detalhes.nome)}"`);
-    }
-
-    if ("descricao" in detalhes && detalhes.descricao) {
-      mudancas.push("Descrição definida");
-    }
-
-    if ("ativo" in detalhes) {
-      mudancas.push(detalhes.ativo ? "Criado como ativo" : "Criado como inativo");
-    }
-
-    return mudancas;
-  }
-
-  if (log.acao === "atualizado") {
-    const antes =
-      "antes" in detalhes && detalhes.antes && typeof detalhes.antes === "object"
-        ? (detalhes.antes as Record<string, unknown>)
-        : {};
-
-    const depois =
-      "depois" in detalhes && detalhes.depois && typeof detalhes.depois === "object"
-        ? (detalhes.depois as Record<string, unknown>)
-        : {};
-
-    const mudancas: string[] = [];
-
-    if (antes.nome !== depois.nome) {
-      mudancas.push(
-        `Nome alterado de "${String(antes.nome ?? "")}" para "${String(
-          depois.nome ?? ""
-        )}"`
-      );
-    }
-
-    if (antes.descricao !== depois.descricao) {
-      if (!antes.descricao && depois.descricao) {
-        mudancas.push("Descrição adicionada");
-      } else if (antes.descricao && !depois.descricao) {
-        mudancas.push("Descrição removida");
-      } else {
-        mudancas.push("Descrição alterada");
-      }
-    }
-
-    if (antes.ativo !== depois.ativo) {
-      mudancas.push(depois.ativo ? "Setor ativado" : "Setor inativado");
-    }
-
-    return mudancas;
-  }
-
-  return [];
-}
-
 export default function SetoresPage() {
   const { permissoes } = useHeaderUser();
   const podeCriarSetores = permissoes.includes("setores.criar");
@@ -132,7 +55,6 @@ export default function SetoresPage() {
   const podeAlterarStatusSetores = permissoes.includes(
     "setores.alterar_status"
   );
-  const podeVisualizarAuditoria = permissoes.includes("auditoria.visualizar");
   const [setores, setSetores] = useState<Setor[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -143,9 +65,6 @@ export default function SetoresPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [setorEditando, setSetorEditando] = useState<Setor | null>(null);
   const [form, setForm] = useState<SetorForm>(formInicial);
-
-  const [logsPorSetor, setLogsPorSetor] = useState<Record<string, LogAuditoria[]>>({});
-  const [loadingLogsId, setLoadingLogsId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
 
   async function carregarSetores() {
@@ -175,31 +94,6 @@ export default function SetoresPage() {
   useEffect(() => {
     carregarSetores();
   }, []);
-
-  async function carregarLogsDoSetor(setorId: string) {
-    try {
-      setLoadingLogsId(setorId);
-
-      const res = await fetch(
-        `/api/auditoria?entidade=setor&entidade_id=${setorId}`,
-        { cache: "no-store" }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        return;
-      }
-
-      setLogsPorSetor((atual) => ({
-        ...atual,
-        [setorId]: data.logs || [],
-      }));
-    } catch {
-    } finally {
-      setLoadingLogsId(null);
-    }
-  }
 
   const setoresFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -295,20 +189,11 @@ export default function SetoresPage() {
     }
   }
 
-  async function toggleExpandir(setorId: string) {
-    const novoId = expandidoId === setorId ? null : setorId;
-    setExpandidoId(novoId);
-
-    if (novoId && !logsPorSetor[setorId]) {
-      await carregarLogsDoSetor(setorId);
-    }
-  }
-
   return (
     <>
       <Header
         title="Configuração de setores"
-        subtitle="Organize áreas de atendimento, controle ativação e acompanhe o histórico de alterações."
+        subtitle="Organize áreas de atendimento e controle a ativação dos setores."
       />
 
       <div className={styles.pageContent}>
@@ -318,8 +203,7 @@ export default function SetoresPage() {
               <p className={styles.eyebrow}>Gestão</p>
               <h2 className={styles.cardTitle}>Setores da empresa</h2>
               <p className={styles.cardDescription}>
-                Crie, edite, ative ou inative setores e acompanhe a rastreabilidade
-                de mudanças.
+                Crie, edite, ative ou inative setores conforme a operação da empresa.
               </p>
             </div>
 
@@ -360,7 +244,6 @@ export default function SetoresPage() {
             <div className={styles.list}>
               {setoresFiltrados.map((setor) => {
                 const expandido = expandidoId === setor.id;
-                const logs = logsPorSetor[setor.id] || [];
 
                 return (
                   <article key={setor.id} className={styles.itemCard}>
@@ -404,14 +287,16 @@ export default function SetoresPage() {
                       </div>
 
                       <div className={styles.itemRight}>
-                        {podeVisualizarAuditoria && (
-                          <button
-                            className={styles.secondaryButton}
-                            onClick={() => toggleExpandir(setor.id)}
-                          >
-                            {expandido ? "Recolher" : "Expandir"}
-                          </button>
-                        )}
+                        <button
+                          className={styles.secondaryButton}
+                          onClick={() =>
+                            setExpandidoId((atual) =>
+                              atual === setor.id ? null : setor.id
+                            )
+                          }
+                        >
+                          {expandido ? "Recolher" : "Expandir"}
+                        </button>
 
                         {podeEditarSetores && (
                           <button
@@ -446,68 +331,6 @@ export default function SetoresPage() {
                               {formatarData(setor.updated_at)}
                             </span>
                           </div>
-                        </div>
-
-                        <div className={styles.timelineSection}>
-                          <div className={styles.timelineHeader}>
-                            <strong className={styles.timelineTitle}>Histórico</strong>
-                            <button
-                              className={styles.timelineButton}
-                              onClick={() => carregarLogsDoSetor(setor.id)}
-                              disabled={loadingLogsId === setor.id}
-                            >
-                              {loadingLogsId === setor.id
-                                ? "Carregando..."
-                                : "Atualizar histórico"}
-                            </button>
-                          </div>
-
-                          {loadingLogsId === setor.id && logs.length === 0 ? (
-                            <div className={styles.timelineEmpty}>
-                              Carregando histórico...
-                            </div>
-                          ) : logs.length === 0 ? (
-                            <div className={styles.timelineEmpty}>
-                              Nenhum histórico encontrado para este setor.
-                            </div>
-                          ) : (
-                            <div className={styles.timelineList}>
-                              {logs.map((log) => {
-                                const mudancas = formatarMudancasLog(log);
-
-                                return (
-                                  <div key={log.id} className={styles.timelineItem}>
-                                    <div className={styles.timelineDot} />
-                                    <div className={styles.timelineContent}>
-                                      <strong className={styles.timelineItemTitle}>
-                                        {log.acao === "criado"
-                                          ? "Setor criado"
-                                          : "Setor atualizado"}
-                                      </strong>
-
-                                      <span className={styles.timelineMeta}>
-                                        por {log.usuario_nome || "Não identificado"} em{" "}
-                                        {formatarData(log.created_at)}
-                                      </span>
-
-                                      {mudancas.length > 0 && (
-                                        <ul className={styles.timelineChanges}>
-                                          {mudancas.map((mudanca, index) => (
-                                            <li
-                                              key={index}
-                                              className={styles.timelineChangeItem}
-                                            >
-                                              {mudanca}
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
                         </div>
                       </div>
                     )}

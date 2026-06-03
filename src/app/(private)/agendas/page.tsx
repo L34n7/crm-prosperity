@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Archive,
+  ArchiveRestore,
   CalendarPlus,
   ChevronLeft,
   ChevronRight,
@@ -335,6 +337,7 @@ export default function AgendasPage() {
 
   const [carregando, setCarregando] = useState(true);
   const [carregandoDia, setCarregandoDia] = useState(false);
+  const [atualizandoAgenda, setAtualizandoAgenda] = useState(false);
   const [salvandoConfiguracoes, setSalvandoConfiguracoes] = useState(false);
   const [googleCalendar, setGoogleCalendar] =
     useState<GoogleCalendarIntegracao | null>(null);
@@ -348,6 +351,7 @@ export default function AgendasPage() {
 
   const [modalAgendamentoAberto, setModalAgendamentoAberto] = useState(false);
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
+  const [erroAgendamento, setErroAgendamento] = useState("");
   const [formAgendamento, setFormAgendamento] = useState<AgendamentoForm>(() =>
     agendamentoFormPadrao()
   );
@@ -421,26 +425,33 @@ export default function AgendasPage() {
     setAgendamentos(json.agendamentos || []);
   }, []);
 
-  const carregarEventosGoogle = useCallback(async (agendaId: string, mes: Date) => {
-    const inicio = new Date(mes.getFullYear(), mes.getMonth(), 1);
-    const fim = new Date(mes.getFullYear(), mes.getMonth() + 1, 1);
-    const params = new URLSearchParams({
-      inicio_at: inicio.toISOString(),
-      fim_at: fim.toISOString(),
-    });
-    const res = await fetch(
-      `/api/agendas/${agendaId}/google-calendar/ocupacoes?${params}`,
-      { cache: "no-store" }
-    );
-    const json = await res.json();
+  const carregarEventosGoogle = useCallback(
+    async (agendaId: string, mes: Date) => {
+      const inicio = new Date(mes.getFullYear(), mes.getMonth(), 1);
+      const fim = new Date(mes.getFullYear(), mes.getMonth() + 1, 1);
+      const params = new URLSearchParams({
+        inicio_at: inicio.toISOString(),
+        fim_at: fim.toISOString(),
+      });
+      const res = await fetch(
+        `/api/agendas/${agendaId}/google-calendar/ocupacoes?${params}`,
+        { cache: "no-store" }
+      );
+      const json = await res.json();
 
-    if (!res.ok || !json.ok) {
-      setEventosGoogle([]);
-      return;
-    }
+      if (!res.ok || !json.ok) {
+        setEventosGoogle([]);
+        return;
+      }
 
-    setEventosGoogle(json.eventos || []);
-  }, []);
+      setEventosGoogle(json.eventos || []);
+
+      if (json.agendamentos_cancelados?.length) {
+        await carregarAgendamentos(agendaId);
+      }
+    },
+    [carregarAgendamentos]
+  );
 
   const carregarSlotsDia = useCallback(
     async (agendaId: string, data: string) => {
@@ -625,6 +636,7 @@ export default function AgendasPage() {
     });
     setDisponibilidades(disponibilidadesPadrao());
     setErro("");
+    setErroAgendamento("");
     setSucesso("");
     setModalConfigAberto(true);
   }
@@ -727,6 +739,7 @@ export default function AgendasPage() {
 
       setSucesso("Agenda sincronizada com o Google Calendar.");
       await carregarGoogleCalendar(agendaSelecionadaId);
+      await carregarAgendamentos(agendaSelecionadaId);
       await carregarEventosGoogle(agendaSelecionadaId, mesAtual);
 
       if (diaSelecionado) {
@@ -736,6 +749,57 @@ export default function AgendasPage() {
       setErro(mensagemErro(error, "Erro ao sincronizar Google Calendar."));
     } finally {
       setCarregandoGoogleCalendar(false);
+    }
+  }
+
+  async function atualizarAgendaCompleta() {
+    if (!agendaSelecionadaId) return;
+
+    try {
+      setAtualizandoAgenda(true);
+      setErro("");
+      setSucesso("");
+
+      const statusRes = await fetch(
+        `/api/agendas/${agendaSelecionadaId}/google-calendar`,
+        { cache: "no-store" }
+      );
+      const statusJson = await statusRes.json();
+
+      if (!statusRes.ok || !statusJson.ok) {
+        throw new Error(statusJson.error || "Erro ao consultar Google Calendar.");
+      }
+
+      const conectado = Boolean(statusJson.integracao?.conectado);
+
+      if (conectado) {
+        const syncRes = await fetch(
+          `/api/agendas/${agendaSelecionadaId}/google-calendar`,
+          { method: "POST" }
+        );
+        const syncJson = await syncRes.json();
+
+        if (!syncRes.ok || !syncJson.ok) {
+          throw new Error(syncJson.error || "Erro ao sincronizar Google Calendar.");
+        }
+      }
+
+      await carregarDetalhesAgenda(agendaSelecionadaId);
+      await carregarEventosGoogle(agendaSelecionadaId, mesAtual);
+
+      if (diaSelecionado) {
+        await carregarSlotsDia(agendaSelecionadaId, diaSelecionado);
+      }
+
+      setSucesso(
+        conectado
+          ? "Agenda atualizada e sincronizada com o Google Calendar."
+          : "Agenda atualizada."
+      );
+    } catch (error: unknown) {
+      setErro(mensagemErro(error, "Erro ao atualizar agenda."));
+    } finally {
+      setAtualizandoAgenda(false);
     }
   }
 
@@ -802,7 +866,7 @@ export default function AgendasPage() {
 
     try {
       setSalvandoAgendamento(true);
-      setErro("");
+      setErroAgendamento("");
       setSucesso("");
 
       const payload = {
@@ -850,6 +914,7 @@ export default function AgendasPage() {
       }
 
       setModalAgendamentoAberto(false);
+      setErroAgendamento("");
       setSucesso("Agendamento criado.");
 
       const diaCriado = dateKeyFromIso(payload.inicio_at);
@@ -859,7 +924,7 @@ export default function AgendasPage() {
       await carregarAgendamentos(agendaSelecionadaId);
       await carregarSlotsDia(agendaSelecionadaId, diaCriado);
     } catch (error: unknown) {
-      setErro(mensagemErro(error, "Erro ao criar agendamento."));
+      setErroAgendamento(mensagemErro(error, "Erro ao criar agendamento."));
     } finally {
       setSalvandoAgendamento(false);
     }
@@ -1023,6 +1088,41 @@ export default function AgendasPage() {
       }
     } catch (error: unknown) {
       setErro(mensagemErro(error, "Erro ao atualizar status da agenda."));
+    } finally {
+      setSalvandoConfiguracoes(false);
+    }
+  }
+
+  async function excluirAgenda() {
+    if (!agendaSelecionadaId || agendaSelecionada?.status !== "arquivado") return;
+
+    const confirmou = window.confirm(
+      "Excluir esta agenda permanentemente? O historico de agendamentos e os eventos vinculados no Google Calendar tambem serao removidos. Esta acao nao pode ser desfeita."
+    );
+
+    if (!confirmou) return;
+
+    try {
+      setErro("");
+      setSucesso("");
+      setSalvandoConfiguracoes(true);
+
+      const res = await fetch(`/api/agendas/${agendaSelecionadaId}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao excluir agenda.");
+      }
+
+      setModalConfigAberto(false);
+      setAgendaSelecionadaId("");
+      setDiaSelecionado(null);
+      setSucesso("Agenda excluida permanentemente.");
+      await carregarAgendas();
+    } catch (error: unknown) {
+      setErro(mensagemErro(error, "Erro ao excluir agenda."));
     } finally {
       setSalvandoConfiguracoes(false);
     }
@@ -1209,12 +1309,14 @@ export default function AgendasPage() {
                   <button
                     type="button"
                     className={styles.secondaryButton}
-                    onClick={() =>
-                      agendaSelecionadaId && carregarDetalhesAgenda(agendaSelecionadaId)
-                    }
-                    disabled={!agendaSelecionadaId}
+                    onClick={atualizarAgendaCompleta}
+                    disabled={!agendaSelecionadaId || atualizandoAgenda}
                   >
-                    Atualizar
+                    <RefreshCw
+                      size={16}
+                      className={atualizandoAgenda ? styles.spinningIcon : ""}
+                    />
+                    {atualizandoAgenda ? "Atualizando..." : "Atualizar"}
                   </button>
                 </div>
 
@@ -1679,15 +1781,32 @@ export default function AgendasPage() {
 
             <div className={styles.modalFooter}>
               {modoModal === "editar" && (
-                <button
-                  type="button"
-                  className={classeBotaoStatusAgenda()}
-                  onClick={arquivarAgenda}
-                  disabled={salvandoConfiguracoes}
-                >
-                  <Trash2 size={16} />
-                  {textoBotaoStatusAgenda()}
-                </button>
+                <>
+                  {agendaSelecionada?.status === "arquivado" && (
+                    <button
+                      type="button"
+                      className={styles.dangerButton}
+                      onClick={excluirAgenda}
+                      disabled={salvandoConfiguracoes}
+                    >
+                      <Trash2 size={16} />
+                      Excluir permanentemente
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={classeBotaoStatusAgenda()}
+                    onClick={arquivarAgenda}
+                    disabled={salvandoConfiguracoes}
+                  >
+                    {agendaSelecionada?.status === "arquivado" ? (
+                      <ArchiveRestore size={16} />
+                    ) : (
+                      <Archive size={16} />
+                    )}
+                    {textoBotaoStatusAgenda()}
+                  </button>
+                </>
               )}
 
               <button
@@ -1723,7 +1842,10 @@ export default function AgendasPage() {
               <button
                 type="button"
                 className={styles.closeButton}
-                onClick={() => setModalAgendamentoAberto(false)}
+                onClick={() => {
+                  setModalAgendamentoAberto(false);
+                  setErroAgendamento("");
+                }}
                 aria-label="Fechar agendamento"
               >
                 <X size={18} />
@@ -1731,6 +1853,10 @@ export default function AgendasPage() {
             </div>
 
             <div className={styles.modalBody}>
+              {erroAgendamento && (
+                <div className={styles.errorAlert}>{erroAgendamento}</div>
+              )}
+
               <div className={styles.configGrid}>
                 <label className={styles.field}>
                   <span className={styles.label}>Título</span>
@@ -1848,7 +1974,10 @@ export default function AgendasPage() {
               <button
                 type="button"
                 className={styles.secondaryButton}
-                onClick={() => setModalAgendamentoAberto(false)}
+                onClick={() => {
+                  setModalAgendamentoAberto(false);
+                  setErroAgendamento("");
+                }}
               >
                 Cancelar
               </button>

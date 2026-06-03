@@ -85,9 +85,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const prioridadeStatus: Record<string, number> = {
+      ativo: 0,
+      inativo: 1,
+      arquivado: 2,
+    };
+    const agendasOrdenadas = [...(agendas || [])].sort((a: any, b: any) => {
+      const prioridade =
+        (prioridadeStatus[a.status] ?? 99) - (prioridadeStatus[b.status] ?? 99);
+
+      if (prioridade !== 0) return prioridade;
+
+      return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+    });
+
     return NextResponse.json({
       ok: true,
-      agendas: (agendas || []).map((agenda: any) => ({
+      agendas: agendasOrdenadas.map((agenda: any) => ({
         ...agenda,
         proximo_agendamento: proximosPorAgenda.get(agenda.id) || null,
       })),
