@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import styles from "./checkout-free.module.css";
 
@@ -33,7 +33,7 @@ function formatarTelefone(valor: string) {
 }
 
 
-export default function CheckoutFreePage() {
+function CheckoutFreeContent() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -278,6 +278,14 @@ export default function CheckoutFreePage() {
         CRM Prosperity está processando este pedido à serviço do acesso beta gratuito.
       </footer>
     </main>
+  );
+}
+
+export default function CheckoutFreePage() {
+  return (
+    <Suspense fallback={<p>Carregando checkout...</p>}>
+      <CheckoutFreeContent />
+    </Suspense>
   );
 }
 
