@@ -3,25 +3,27 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabase = getSupabaseAdmin();
 
-function obterCheckoutUrlPorOferta(tipoOferta: string | null) {
+function obterCheckoutUrl(tipoOferta: string | null, planoSlug: string | null) {
   const checkoutPadrao = process.env.ATOMOPAY_CHECKOUT_URL_PADRAO ?? "";
   const checkoutVip = process.env.ATOMOPAY_CHECKOUT_URL_VIP ?? "";
   const checkoutJv = process.env.ATOMOPAY_CHECKOUT_URL_JV ?? "";
   const checkoutFree = process.env.CRM_CHECKOUT_FREE_URL ?? "";
 
-  if (tipoOferta === "vip") {
-    return checkoutVip || checkoutPadrao;
-  }
-
-  if (tipoOferta === "jv") {
-    return checkoutJv || checkoutPadrao;
-  }
-
   if (tipoOferta === "free") {
     return checkoutFree;
   }
 
-  return checkoutPadrao;
+  const checkoutPlano = obterCheckoutUrlPorPlano(planoSlug);
+
+  if (planoSlug === "basico" && tipoOferta === "vip") {
+    return checkoutVip || checkoutPlano || checkoutPadrao;
+  }
+
+  if (planoSlug === "basico" && tipoOferta === "jv") {
+    return checkoutJv || checkoutPlano || checkoutPadrao;
+  }
+
+  return checkoutPlano || checkoutPadrao;
 }
 
 function obterCheckoutUrlPorPlano(planoSlug: string | null) {
@@ -82,9 +84,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const checkoutUrl =
-      obterCheckoutUrlPorPlano(planoSlug) ||
-      obterCheckoutUrlPorOferta(lead.tipo_oferta);
+    const checkoutUrl = obterCheckoutUrl(lead.tipo_oferta, planoSlug);
 
     if (!checkoutUrl) {
       throw new Error("Checkout não configurado.");

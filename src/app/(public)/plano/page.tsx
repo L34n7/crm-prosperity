@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./plano.module.css";
 
@@ -27,7 +27,19 @@ export default function PlanoPage() {
   const [planosExpandidos, setPlanosExpandidos] = useState<string[]>([]);
   const [loadingCheckout, setLoadingCheckout] = useState(false);
   const whatsappComercial =
-    process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975233266";
+    process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "55975117638";
+
+  useEffect(() => {
+    function resetarLoadingCheckout() {
+      setLoadingCheckout(false);
+    }
+
+    window.addEventListener("pageshow", resetarLoadingCheckout);
+
+    return () => {
+      window.removeEventListener("pageshow", resetarLoadingCheckout);
+    };
+  }, []);
 
   async function handleCheckout(planoSlug: "basico" | "essencial") {
     const leadId = localStorage.getItem("lead_id");
