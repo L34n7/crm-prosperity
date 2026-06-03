@@ -591,6 +591,42 @@ async function handleConfigurarWebhook() {
   }
 }
 
+
+async function handleConcluirConfiguracao() {
+  try {
+    if (!integracao?.id) {
+      alert("Integração ainda não carregada.");
+      return;
+    }
+
+    const response = await fetch("/api/integracoes-whatsapp/concluir", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        integracao_id: integracao.id,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erro ao concluir configuração.");
+    }
+
+    alert("Configuração concluída com sucesso.");
+    await carregarIntegracao(false);
+  } catch (error) {
+    alert(
+      error instanceof Error
+        ? error.message
+        : "Erro inesperado ao concluir configuração."
+    );
+  }
+}
+
+
   useEffect(() => {
     carregarIntegracao(true);
   }, []);
@@ -725,10 +761,10 @@ async function handleConfigurarWebhook() {
                             <button
                               type="button"
                               className={indiceEtapaAtual >= 1 ? styles.primaryButton : styles.disabledButton}
-                              onClick={() => handleRegistrarNumero()}
-                              disabled={indiceEtapaAtual < 1 || recarregando}
+                              onClick={() => setModalPinAberto(true)}
+                              disabled={indiceEtapaAtual < 1 || registrandoNumero}
                             >
-                              {recarregando ? "Ativando..." : "Ativar número"}
+                              {registrandoNumero ? "Ativando..." : "Ativar número"}
                             </button>
                           </div>
                         )}
@@ -757,10 +793,13 @@ async function handleConfigurarWebhook() {
                           <div className={styles.stepActions}>
                             <button
                               type="button"
-                              className={styles.disabledButton}
-                              disabled
+                              className={indiceEtapaAtual >= 3 ? styles.primaryButton : styles.disabledButton}
+                              onClick={handleConcluirConfiguracao}
+                              disabled={indiceEtapaAtual < 3}
                             >
-                              Disponível após configurar o webhook
+                              {indiceEtapaAtual >= 3
+                                ? "Concluir configuração"
+                                : "Disponível após configurar o webhook"}
                             </button>
                           </div>
                         )}

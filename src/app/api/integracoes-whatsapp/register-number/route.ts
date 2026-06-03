@@ -39,6 +39,16 @@ async function registerNumber(request: NextRequest) {
         ? body.pin.trim()
         : null;
 
+    if (!pin || !/^\d{6}$/.test(pin)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Informe o PIN de 6 dígitos para registrar o número na Meta.",
+          requires_pin: true,
+        },
+        { status: 400 }
+      );
+    }
 
     const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")
@@ -105,7 +115,7 @@ async function registerNumber(request: NextRequest) {
         },
       body: JSON.stringify({
         messaging_product: "whatsapp",
-        ...(pin ? { pin } : {}),
+        pin,
       }),
       }
     );
