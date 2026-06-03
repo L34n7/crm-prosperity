@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import styles from "./checkout-free.module.css";
 
 type MetodoPagamento = "pix";
@@ -41,8 +42,18 @@ export default function CheckoutFreePage() {
 
   const metodo: MetodoPagamento = "pix";
   const valorCentavos = 0;
-  const planoSlug = "basico";
+  const searchParams = useSearchParams();
+
+  const planoParam = searchParams.get("plano");
+  const planoSlug = planoParam === "essencial" ? "essencial" : "basico";
   const tipoOferta = "free";
+
+  const ofertaHash =
+    planoSlug === "essencial"
+      ? "offer_free_beta_essencial"
+      : "offer_free_beta_basico";
+
+  const planoNome = planoSlug === "essencial" ? "Essencial" : "Básico";
 
   const payload = useMemo(() => {
     const transactionId = gerarTransactionId();
@@ -74,15 +85,18 @@ export default function CheckoutFreePage() {
         },
       },
       offer: {
-        hash: "offer_free_beta",
-        title: "CRM Prosperity",
+        hash: ofertaHash,
+        title: `CRM Prosperity - Plano ${planoNome} Beta Gratuito`,
         price: valorCentavos,
       },
       items: [
         {
-          hash: "item_free_beta",
+          hash:
+            planoSlug === "essencial"
+              ? "item_free_beta_essencial"
+              : "item_free_beta_basico",
           product_hash: "crm_prosperity",
-          title: "CRM Prosperity",
+          title: `CRM Prosperity - Plano ${planoNome} Beta Gratuito`,
           price: valorCentavos,
           quantity: 1,
           cover: null,
@@ -105,7 +119,7 @@ export default function CheckoutFreePage() {
       fbp: null,
       fbc: null,
     };
-  }, [nome, email, telefone]);
+  }, [nome, email, telefone, planoSlug, tipoOferta, ofertaHash, planoNome]);
 
   async function ativarAcessoGratuito() {
     try {
