@@ -88,11 +88,6 @@ const menuItems: MenuItem[] = [
     icon: ScrollText,
     permissao: "auditoria.visualizar",
   },
-  {
-    label: "Configurar ambiente",
-    href: "/configurar-ambiente",
-    icon: PlugZap,
-  },
   { label: "Perfil WhatsApp", href: "/configuracoes/whatsapp/perfil", icon: Settings2 },
 ];
 

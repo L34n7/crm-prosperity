@@ -6,6 +6,63 @@ import { useRouter } from "next/navigation";
 import styles from "./login.module.css";
 import Link from "next/link";
 
+
+type IntegracaoWhatsappAmbiente = {
+  status?: string | null;
+  webhook_verificado?: boolean | null;
+  onboarding_etapa?: string | null;
+  onboarding_status?: string | null;
+  setup_completed_at?: string | null;
+  phone_registered?: boolean | null;
+  app_assigned?: boolean | null;
+  waba_id?: string | null;
+  phone_number_id?: string | null;
+};
+
+function isAmbienteConfigurado(
+  integracao: IntegracaoWhatsappAmbiente | null | undefined
+) {
+  if (!integracao) return false;
+
+  return (
+    integracao.status === "ativa" &&
+    integracao.webhook_verificado === true &&
+    integracao.onboarding_etapa === "concluido" &&
+    integracao.onboarding_status === "concluido" &&
+    integracao.phone_registered === true &&
+    integracao.app_assigned === true &&
+    !!integracao.waba_id &&
+    !!integracao.phone_number_id &&
+    !!integracao.setup_completed_at
+  );
+}
+
+async function obterRotaAposLogin() {
+  try {
+    const response = await fetch("/api/integracoes-whatsapp", {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      return "/";
+    }
+
+    const ambienteConfigurado = isAmbienteConfigurado(data.integracao);
+
+    if (!ambienteConfigurado) {
+      return "/configurar-ambiente";
+    }
+
+    return "/";
+  } catch (error) {
+    console.warn("[LOGIN] Erro ao verificar ambiente:", error);
+    return "/";
+  }
+}
+
 export default function LoginPage() {
   const [supabase] = useState(() => createClient());
   const router = useRouter();
@@ -22,7 +79,16 @@ export default function LoginPage() {
       } = await supabase.auth.getUser();
 
       if (user) {
-        router.push("/");
+        const rota = await obterRotaAposLogin();
+
+        if (rota === "/configurar-ambiente") {
+          window.sessionStorage.setItem(
+            "crm_ambiente_redirect_apos_login",
+            "true"
+          );
+        }
+
+        router.replace(rota);
         router.refresh();
       }
     }
@@ -55,9 +121,19 @@ export default function LoginPage() {
       return;
     }
 
+    window.sessionStorage.removeItem("crm_ambiente_redirect_apos_login");
+    window.sessionStorage.removeItem("crm_ambiente_redirect_inicial");
+
+    const rota = await obterRotaAposLogin();
+
+    if (rota === "/configurar-ambiente") {
+      window.sessionStorage.setItem("crm_ambiente_redirect_apos_login", "true");
+    }
+
     setMensagem("Login realizado com sucesso.");
     setLoading(false);
-    router.push("/");
+
+    router.replace(rota);
     router.refresh();
   }
 

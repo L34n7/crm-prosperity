@@ -5,6 +5,7 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import { normalizarConfiguracaoFluxo } from "@/lib/automacoes/normalizar-configuracao-fluxo";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -144,16 +145,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const configuracaoPadraoFluxo = {
-      encerramento_inatividade: {
-        ativo: true,
-        tempo_quantidade: 23,
-        tempo_unidade: "horas",
-        mensagem:
-          "Como não tivemos retorno, este atendimento será encerrado. Caso precise de ajuda, envie uma nova mensagem.",
-      },
-    };
-
     const { data, error } = await supabaseAdmin
       .from("automacao_fluxos")
       .insert({
@@ -165,13 +156,9 @@ export async function POST(req: NextRequest) {
         criado_por: usuario.id,
         atualizado_por: usuario.id,
         fluxo_padrao: fluxoPadrao,
-        configuracao_json:
-          body?.configuracao_json && typeof body.configuracao_json === "object"
-            ? {
-                ...configuracaoPadraoFluxo,
-                ...body.configuracao_json,
-              }
-            : configuracaoPadraoFluxo,
+        configuracao_json: normalizarConfiguracaoFluxo(
+          body?.configuracao_json
+        ),
       })
       .select("*")
       .single();
@@ -288,10 +275,9 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (body?.configuracao_json !== undefined) {
-      atualizacao.configuracao_json =
-        body.configuracao_json && typeof body.configuracao_json === "object"
-          ? body.configuracao_json
-          : {};
+      atualizacao.configuracao_json = normalizarConfiguracaoFluxo(
+        body.configuracao_json
+      );
     }
 
     if (Boolean(body?.fluxo_padrao)) {
@@ -585,7 +571,9 @@ export async function PUT(req: NextRequest) {
         criado_por: usuario.id,
         atualizado_por: usuario.id,
         fluxo_padrao: false,
-        configuracao_json: fluxoOriginal.configuracao_json || {},
+        configuracao_json: normalizarConfiguracaoFluxo(
+          fluxoOriginal.configuracao_json
+        ),
       })
       .select("*")
       .single();

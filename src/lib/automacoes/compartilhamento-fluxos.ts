@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizarConfiguracaoFluxo } from "@/lib/automacoes/normalizar-configuracao-fluxo";
 
 const ALFABETO_CODIGO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -51,6 +52,58 @@ export type SnapshotCompartilhamentoFluxo = {
 };
 
 type SupabaseLike = SupabaseClient;
+
+const CHAVES_MIDIA_RESTRITA = new Set([
+  "midia_url",
+  "midia_nome",
+  "midia_id",
+  "media_url",
+  "media_nome",
+  "media_id",
+  "mime_type",
+  "mimeType",
+  "arquivo_url",
+  "arquivo_nome",
+  "arquivo_id",
+  "storage_path",
+  "storagePath",
+]);
+
+function ehObjetoJson(valor: unknown): valor is JsonObject {
+  return Boolean(valor) && typeof valor === "object" && !Array.isArray(valor);
+}
+
+function removerReferenciasMidia(valor: unknown): unknown {
+  if (Array.isArray(valor)) {
+    return valor.map(removerReferenciasMidia);
+  }
+
+  if (!ehObjetoJson(valor)) {
+    return valor;
+  }
+
+  return Object.entries(valor).reduce<JsonObject>((config, [chave, item]) => {
+    if (CHAVES_MIDIA_RESTRITA.has(chave)) {
+      return config;
+    }
+
+    config[chave] = removerReferenciasMidia(item);
+    return config;
+  }, {});
+}
+
+function sanitizarConfiguracaoCompartilhada(configuracao: unknown): JsonObject {
+  const configuracaoLimpa = removerReferenciasMidia(configuracao);
+
+  return ehObjetoJson(configuracaoLimpa) ? configuracaoLimpa : {};
+}
+
+function sanitizarConfiguracaoFluxoCompartilhada(configuracao: unknown): JsonObject {
+  const configuracaoLimpa = sanitizarConfiguracaoCompartilhada(configuracao);
+  const configuracaoNormalizada = normalizarConfiguracaoFluxo(configuracaoLimpa);
+
+  return ehObjetoJson(configuracaoNormalizada) ? configuracaoNormalizada : {};
+}
 
 export function normalizarCodigoCompartilhamento(codigo: unknown) {
   return String(codigo || "")
@@ -154,10 +207,9 @@ export async function montarSnapshotCompartilhamentoFluxo(params: {
       nome: String(fluxo.nome || "Fluxo importado"),
       descricao: fluxo.descricao || null,
       canal: String(fluxo.canal || "whatsapp"),
-      configuracao_json:
-        fluxo.configuracao_json && typeof fluxo.configuracao_json === "object"
-          ? fluxo.configuracao_json
-          : {},
+      configuracao_json: sanitizarConfiguracaoFluxoCompartilhada(
+        fluxo.configuracao_json
+      ),
     },
     nos: (nos || []).map((no) => ({
       id: String(no.id),
@@ -167,9 +219,7 @@ export async function montarSnapshotCompartilhamentoFluxo(params: {
       posicao_x: Math.round(Number(no.posicao_x || 0)),
       posicao_y: Math.round(Number(no.posicao_y || 0)),
       configuracao_json:
-        no.configuracao_json && typeof no.configuracao_json === "object"
-          ? no.configuracao_json
-          : {},
+        sanitizarConfiguracaoCompartilhada(no.configuracao_json),
       delay_segundos:
         no.delay_segundos == null ? null : Math.max(0, Number(no.delay_segundos)),
     })),
@@ -233,7 +283,9 @@ export async function criarCopiaFluxoCompartilhado(params: {
       criado_por: usuarioId,
       atualizado_por: usuarioId,
       fluxo_padrao: false,
-      configuracao_json: snapshot.fluxo.configuracao_json || {},
+      configuracao_json: sanitizarConfiguracaoFluxoCompartilhada(
+        snapshot.fluxo.configuracao_json
+      ),
     })
     .select("*")
     .single();
@@ -257,7 +309,7 @@ export async function criarCopiaFluxoCompartilhado(params: {
       descricao: no.descricao,
       posicao_x: Math.round(Number(no.posicao_x || 0)),
       posicao_y: Math.round(Number(no.posicao_y || 0)),
-      configuracao_json: no.configuracao_json || {},
+      configuracao_json: sanitizarConfiguracaoCompartilhada(no.configuracao_json),
       delay_segundos:
         no.tipo_no === "inicio" || no.delay_segundos == null
           ? null

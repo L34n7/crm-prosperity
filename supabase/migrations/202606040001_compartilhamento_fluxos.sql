@@ -19,4 +19,8 @@ CREATE INDEX IF NOT EXISTS automacao_fluxo_compartilhamentos_empresa_idx
 CREATE INDEX IF NOT EXISTS automacao_fluxo_compartilhamentos_fluxo_idx
   ON public.automacao_fluxo_compartilhamentos (fluxo_origem_id, created_at DESC);
 
+CREATE UNIQUE INDEX IF NOT EXISTS automacao_fluxo_compartilhamentos_fluxo_ativo_uidx
+  ON public.automacao_fluxo_compartilhamentos (empresa_origem_id, fluxo_origem_id)
+  WHERE ativo;
+
 ALTER TABLE public.automacao_fluxo_compartilhamentos ENABLE ROW LEVEL SECURITY;

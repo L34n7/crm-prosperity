@@ -7,12 +7,14 @@ import type {
 } from "./types";
 import { gatilhoCombinaComMensagem } from "./match-trigger";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
+import { sendWhatsAppInteractiveCtaUrlMessage } from "@/lib/whatsapp/send-interactive-cta-url-message";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendAutomationNotificationEmail } from "@/lib/email/send-automation-notification-email";
 import { interpretarConexaoComIA } from "@/lib/ia/interpretar-conexao";
 import { interpretarArquivoComIA } from "@/lib/ia/interpretar-arquivo";
 import { baixarMidiaWhatsapp } from "@/lib/whatsapp/download-arquivo";
 import { salvarArquivoAnaliseStorage } from "@/lib/automacoes/salvar-arquivo-analise";
+import { obterConfiguracaoEncerramentoInatividade } from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import {
   existeConflitoAgenda,
   filtrarSlotsPorPreferencia,
@@ -513,38 +515,11 @@ async function buscarConfiguracaoEncerramentoInatividade(params: {
     return null;
   }
 
-  const config = fluxo?.configuracao_json || {};
-  const encerramento = config.encerramento_inatividade || {};
-
-  if (encerramento.ativo !== true) {
+  if (!fluxo) {
     return null;
   }
 
-  const quantidade = Math.max(1, Number(encerramento.tempo_quantidade || 1));
-  const unidade =
-    encerramento.tempo_unidade === "minutos" ? "minutos" : "horas";
-
-  const segundos =
-    unidade === "horas" ? quantidade * 60 * 60 : quantidade * 60;
-
-  if (!Number.isFinite(segundos)) {
-    return null;
-  }
-
-  if (segundos < 5 * 60) {
-    return null;
-  }
-
-  if (segundos > 23 * 60 * 60) {
-    return null;
-  }
-
-  return {
-    segundos,
-    quantidade,
-    unidade,
-    mensagem: String(encerramento.mensagem || "").trim(),
-  };
+  return obterConfiguracaoEncerramentoInatividade(fluxo.configuracao_json);
 }
 
 
@@ -2024,6 +1999,111 @@ export async function executarNo(params: {
       fluxoId,
       noId: no.id,
       numeroDestino,
+    });
+
+    return;
+  }
+
+  if (no.tipo_no === "botao_redirect") {
+    const mensagem = String(no.configuracao_json?.mensagem || "").trim();
+    const botaoTexto = String(
+      no.configuracao_json?.botao_texto || "Acessar"
+    ).trim();
+    const url = String(no.configuracao_json?.url || "").trim();
+
+    if (!mensagem || !botaoTexto || !url) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "erro_botao_redirect",
+        descricao:
+          "No Botao redirect sem mensagem, texto do botao ou URL configurados.",
+        entrada: no.configuracao_json,
+        saida: {},
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        numeroDestino,
+        runtimeCache,
+      });
+
+      return;
+    }
+
+    let envio;
+
+    try {
+      envio = await enviarBotaoRedirectAutomacao({
+        empresaId,
+        conversaId,
+        numeroDestino,
+        mensagem,
+        botaoTexto,
+        url,
+        execucaoId,
+        noId: no.id,
+      });
+    } catch (error) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "erro_envio_botao_redirect",
+        descricao: "Erro ao enviar mensagem CTA URL pela automacao.",
+        entrada: no.configuracao_json,
+        saida: {
+          erro: error instanceof Error ? error.message : String(error),
+        },
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        numeroDestino,
+        runtimeCache,
+      });
+
+      return;
+    }
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "botao_redirect_enviado",
+      descricao: "Mensagem CTA URL enviada pela automacao.",
+      entrada: no.configuracao_json,
+      saida: {
+        mensagem,
+        botao_texto: botaoTexto,
+        url,
+        ok: envio.ok,
+        status_envio: envio.status_envio,
+        mensagem_externa_id: envio.messageId,
+        erro: envio.erro,
+      },
+    });
+
+    await seguirParaProximoNo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noAtualId: no.id,
+      numeroDestino,
+      runtimeCache,
     });
 
     return;
@@ -6193,6 +6273,185 @@ async function enviarBotoesAutomacao({
   }
 
   return json;
+}
+
+async function enviarBotaoRedirectAutomacao({
+  empresaId,
+  conversaId,
+  numeroDestino,
+  mensagem,
+  botaoTexto,
+  url,
+  execucaoId,
+  noId,
+}: {
+  empresaId: string;
+  conversaId: string;
+  numeroDestino: string;
+  mensagem: string;
+  botaoTexto: string;
+  url: string;
+  execucaoId: string;
+  noId: string;
+}) {
+  const [mensagemComVariaveis, botaoTextoComVariaveis, urlComVariaveis] =
+    await Promise.all([
+      substituirVariaveisMensagem({
+        empresaId,
+        execucaoId,
+        texto: mensagem,
+      }),
+      substituirVariaveisMensagem({
+        empresaId,
+        execucaoId,
+        texto: botaoTexto,
+      }),
+      substituirVariaveisMensagem({
+        empresaId,
+        execucaoId,
+        texto: url,
+      }),
+    ]);
+
+  const { data: conversa, error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .select(
+      `
+      id,
+      empresa_id,
+      integracao_whatsapp_id,
+      integracoes_whatsapp (
+        id,
+        phone_number_id,
+        token_ref,
+        status
+      )
+    `
+    )
+    .eq("id", conversaId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (conversaError || !conversa) {
+    throw new Error(
+      "Conversa nao encontrada para envio do Botao redirect da automacao."
+    );
+  }
+
+  const integracao = Array.isArray(conversa.integracoes_whatsapp)
+    ? conversa.integracoes_whatsapp[0]
+    : conversa.integracoes_whatsapp;
+
+  const phoneNumberId =
+    integracao?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+
+  if (!phoneNumberId) {
+    throw new Error("WHATSAPP_PHONE_NUMBER_ID nao configurado.");
+  }
+
+  if (!accessToken) {
+    throw new Error("WHATSAPP_ACCESS_TOKEN nao configurado.");
+  }
+
+  const permissaoEnvio = await canSendFreeformWhatsAppMessage({
+    conversaId,
+  });
+
+  if (!permissaoEnvio.podeEnviarMensagemLivre) {
+    await supabaseAdmin.from("mensagens").insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      remetente_tipo: "sistema",
+      conteudo:
+        permissaoEnvio.motivoBloqueio ||
+        "Botao redirect automatico nao enviado: janela de 24 horas encerrada.",
+      tipo_mensagem: "texto",
+      origem: "automatica",
+      status_envio: "falha",
+      automacao_execucao_id: execucaoId,
+      automacao_no_id: noId,
+      metadata_json: {
+        motivo: "janela_24h_encerrada",
+        botao_texto: botaoTextoComVariaveis,
+        url: urlComVariaveis,
+      },
+    });
+
+    return {
+      ok: false,
+      status_envio: "falha",
+      messageId: null,
+      metaResponse: null,
+      erro:
+        permissaoEnvio.motivoBloqueio ||
+        "Janela de 24 horas encerrada para mensagem livre.",
+      mensagemId: null,
+    };
+  }
+
+  const envio = await sendWhatsAppInteractiveCtaUrlMessage({
+    phoneNumberId,
+    accessToken,
+    to: numeroDestino,
+    body: mensagemComVariaveis,
+    buttonText: botaoTextoComVariaveis,
+    url: urlComVariaveis,
+  });
+
+  const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+    empresaId,
+    conversaId,
+  });
+
+  const { data: mensagemSalva, error: mensagemError } = await supabaseAdmin
+    .from("mensagens")
+    .insert({
+      empresa_id: empresaId,
+      conversa_id: conversaId,
+      conversa_protocolo_id: protocoloAtivo.id,
+      remetente_tipo: "bot",
+      remetente_id: null,
+      conteudo: mensagemComVariaveis,
+      tipo_mensagem: "botao",
+      origem: "automatica",
+      status_envio: envio.ok ? "enviada" : "falha",
+      mensagem_externa_id: envio.messageId,
+      automacao_execucao_id: execucaoId,
+      automacao_no_id: noId,
+      metadata_json: {
+        botao_texto: botaoTextoComVariaveis,
+        url: urlComVariaveis,
+        botoes: [
+          {
+            id: "cta_url",
+            titulo: botaoTextoComVariaveis,
+            url: urlComVariaveis,
+            tipo: "cta_url",
+          },
+        ],
+        meta_response: envio.raw,
+        erro: envio.error,
+      },
+    })
+    .select("*")
+    .single();
+
+  if (mensagemError) {
+    throw new Error(
+      `Erro ao salvar Botao redirect da automacao: ${mensagemError.message}`
+    );
+  }
+
+  return {
+    ok: envio.ok,
+    status_envio: envio.ok ? "enviada" : "falha",
+    messageId: envio.messageId,
+    metaResponse: envio.raw,
+    erro: envio.error,
+    mensagemId: mensagemSalva?.id,
+  };
 }
 
 async function enviarMidiaAutomacao(params: {

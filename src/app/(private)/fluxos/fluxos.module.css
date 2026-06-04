@@ -211,7 +211,8 @@
 }
 
 .input,
-.textarea {
+.textarea,
+.textareadesc {
   width: 100%;
   border: 1px solid #cbd5e1;
   background: #ffffff;
@@ -223,7 +224,8 @@
 }
 
 .input:focus,
-.textarea:focus {
+.textarea:focus
+.textareadesc:focus {
   border-color: #0f172a;
   box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
 }
@@ -239,7 +241,20 @@
   line-height: 1.6;
 }
 
+.textareadesc {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.6;
+}
+
 .help {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.helpS {
   margin: 0;
   font-size: 12px;
   color: #64748b;
@@ -347,6 +362,7 @@
   width: fit-content;
   min-height: 28px;
   padding: 0 9px;
+  margin-right: 5px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 800;
@@ -394,6 +410,13 @@
 .nodeBox:hover {
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
   border-color: #0098bab6;
+}
+
+.nodeSelecionado {
+  border-color: rgba(0, 175, 214, 0.714) !important;
+  box-shadow:
+    0 0 15 4px rgba(0, 134, 164, 0.289),
+    0 18px 40px rgba(44, 216, 255, 0.271) !important;
 }
 
 .nodeHeader {
@@ -526,6 +549,15 @@
   background: #d3ffb3;
 }
 
+.nodeRedirect {
+  border-color: #9ad7ff;
+  background: linear-gradient(
+    135deg,
+    #e7f7ff 0%,
+    #b8f2e2 100%
+  );
+}
+
 .nodeAvaliacao {
   border-color: #d7afff;
   background: linear-gradient(
@@ -605,14 +637,6 @@
   background: #ffffff;
 }
 
-.nodeNovo {
-  border-color: #04f7ff !important;
-  box-shadow:
-    0 0 0 4px rgba(37, 235, 235, 0.137),
-    0 18px 45px rgba(37, 186, 235, 0.628) !important;
-  animation: nodeNovoPulse 1.2s ease-in-out infinite;
-}
-
 .sidebarFilters {
   padding: 14px 16px;
   display: grid;
@@ -664,20 +688,6 @@
   background: #f8fafc;
   border-color: #94a3b8;
   transform: translateY(-1px);
-}
-
-@keyframes nodeNovoPulse {
-  0%, 100% {
-    box-shadow:
-      0 0 0 4px rgba(37, 99, 235, 0.14),
-      0 18px 45px rgba(37, 99, 235, 0.18);
-  }
-
-  50% {
-    box-shadow:
-      0 0 0 7px rgba(37, 99, 235, 0.08),
-      0 22px 55px rgba(37, 99, 235, 0.26);
-  }
 }
 
 .optionsBox {
@@ -868,6 +878,7 @@
 
 .modalSectionTitle {
   margin: 0;
+  padding: 0px 0px 10px 0px;
   font-size: 15px;
   font-weight: 800;
   color: #0f172a;
@@ -1283,7 +1294,7 @@
 .headerSubmenuLeft {
   position: absolute;
   top: 0;
-  right: calc(100% + 8px);
+  right: calc(100% + 2px);
   min-width: 230px;
   padding: 8px;
   border: 1px solid #e2e8f0;
@@ -1517,7 +1528,7 @@
 }
 
 .delayInput {
-  width: 90px;
+  width: 75px;
   height: 38px;
   border: 1px solid #dbe4ef;
   border-radius: 10px;

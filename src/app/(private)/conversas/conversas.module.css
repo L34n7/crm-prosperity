@@ -4327,6 +4327,16 @@
   cursor: default;
 }
 
+a.buttonMessageOption {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+a.buttonMessageOption:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
 .scheduledDisparoMiniBadge {
   width: fit-content;
   display: inline-flex;

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { listarPermissoesDoUsuario } from "@/lib/permissoes/can";
 import CrmShell from "@/components/CrmShell";
+import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
 
 export default async function PrivateLayout({
   children,
@@ -36,7 +37,7 @@ export default async function PrivateLayout({
       permissoes = await listarPermissoesDoUsuario(usuarioSistema.id);
     }
   }
-
+ 
   return (
     <CrmShell
       initialCollapsed={initialCollapsed}
@@ -44,7 +45,8 @@ export default async function PrivateLayout({
       avatarUrl={avatarUrl}
       permissoes={permissoes}
     >
-      {children}
+        {children}
+      <AmbienteObrigatorioGuard/>
     </CrmShell>
   );
 }

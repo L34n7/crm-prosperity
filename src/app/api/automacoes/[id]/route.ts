@@ -275,25 +275,29 @@ export async function PUT(
       .eq("empresa_id", usuario.empresa_id);
 
     if (nos.length > 0) {
-      const nosParaSalvar = nos.map((no: any) => ({
-        id: no.id,
-        empresa_id: usuario.empresa_id,
-        fluxo_id: id,
-        tipo_no: no.tipo_no,
-        titulo: no.titulo || "Bloco",
-        descricao: no.descricao || null,
-        posicao_x: Math.round(Number(no.posicao_x || 0)),
-        posicao_y: Math.round(Number(no.posicao_y || 0)),
-        configuracao_json: no.configuracao_json || {},
-        delay_segundos:
-          no.tipo_no === "inicio"
-            ? null
-            : no.delay_segundos != null
-            ? Math.max(0, Number(no.delay_segundos))
-            : null,
-        ativo: true,
-        updated_at: agora,
-      }));
+      const nosParaSalvar = nos.map((no: any) => {
+        const tipoNo = String(no.tipo_no || "");
+
+        return {
+          id: no.id,
+          empresa_id: usuario.empresa_id,
+          fluxo_id: id,
+          tipo_no: tipoNo,
+          titulo: no.titulo || "Bloco",
+          descricao: no.descricao || null,
+          posicao_x: Math.round(Number(no.posicao_x || 0)),
+          posicao_y: Math.round(Number(no.posicao_y || 0)),
+          configuracao_json: no.configuracao_json || {},
+          delay_segundos:
+            tipoNo === "inicio"
+              ? null
+              : no.delay_segundos != null
+              ? Math.max(0, Number(no.delay_segundos))
+              : null,
+          ativo: true,
+          updated_at: agora,
+        };
+      });
 
       const { error: nosUpsertError } = await supabaseAdmin
         .from("automacao_nos")

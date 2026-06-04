@@ -10,6 +10,9 @@ export default function LogoutButton() {
   async function handleLogout() {
     const supabase = createClient();
 
+    window.sessionStorage.removeItem("crm_ambiente_redirect_apos_login");
+    window.sessionStorage.removeItem("crm_ambiente_redirect_inicial");
+
     await supabase.auth.signOut();
 
     router.push("/login");

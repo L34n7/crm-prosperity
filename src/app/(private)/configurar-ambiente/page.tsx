@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import styles from "./configurar-ambiente.module.css";
 import { t } from "@/i18n";
 
@@ -50,6 +51,11 @@ type ApiResponse = {
   created?: boolean;
   integracao?: IntegracaoWhatsapp;
   error?: string;
+};
+
+type PerfilOnboarding = {
+  nomeUsuario: string;
+  nomeEmpresa: string;
 };
 
 type Etapa = {
@@ -153,6 +159,16 @@ export default function ConfigurarAmbientePage() {
   const [registrandoNumero, setRegistrandoNumero] = useState(false);
   const [erroWebhook, setErroWebhook] = useState<string | null>(null);
   const [configurandoWebhook, setConfigurandoWebhook] = useState(false);
+  const router = useRouter();
+  const numeroValido =
+    !!integracao?.numero && !integracao.numero.startsWith("pendente_");
+    
+  const [etapaQuiz, setEtapaQuiz] = useState(0);
+  const [perfilOnboarding, setPerfilOnboarding] =
+    useState<PerfilOnboarding>({
+      nomeUsuario: "usuário",
+      nomeEmpresa: "sua empresa",
+    });
 
   async function sincronizarDadosMeta(integracaoId: string) {
     const response = await fetch("/api/integracoes-whatsapp/meta-dados", {
@@ -524,6 +540,16 @@ async function handleRegistrarNumero(pinInformado?: string) {
     setPin("");
 
     alert("Número ativado com sucesso.");
+
+    try {
+      await fetch("/api/integracoes-whatsapp/check-phone", {
+        method: "GET",
+        cache: "no-store",
+      });
+    } catch (syncError) {
+      console.warn("[CONFIGURAR AMBIENTE] Erro ao sincronizar número:", syncError);
+    }
+
     await carregarIntegracao(false);
   } catch (error) {
     alert(
@@ -626,8 +652,37 @@ async function handleConcluirConfiguracao() {
   }
 }
 
+async function carregarPerfilOnboarding() {
+  try {
+    const response = await fetch("/api/integracoes-whatsapp", {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      return;
+    }
+
+    setPerfilOnboarding({
+      nomeUsuario:
+        data.usuario?.nome ||
+        data.usuario?.email?.split("@")?.[0] ||
+        "usuário",
+      nomeEmpresa:
+        data.empresa?.nome ||
+        data.empresa?.nome_fantasia ||
+        data.empresa?.razao_social ||
+        "sua empresa",
+    });
+  } catch (error) {
+    console.warn("[CONFIGURAR AMBIENTE] Erro ao carregar perfil:", error);
+  }
+}
 
   useEffect(() => {
+    carregarPerfilOnboarding();
     carregarIntegracao(true);
   }, []);
 
@@ -642,20 +697,41 @@ async function handleConcluirConfiguracao() {
 
   const statusGeral = formatarStatus(integracao?.onboarding_status);
   const statusConexao = formatarStatus(integracao?.status);
+  const metaConectado = !!integracao?.waba_id && !!integracao?.phone_number_id;
+  const numeroRegistrado = !!integracao?.phone_registered;
+  const webhookConfigurado =
+    !!integracao?.webhook_verificado && !!integracao?.app_assigned;
+
+  const ambienteConcluido =
+    integracao?.status === "ativa" &&
+    integracao?.onboarding_etapa === "concluido" &&
+    integracao?.onboarding_status === "concluido" &&
+    numeroRegistrado &&
+    webhookConfigurado;
+
+  const progressoQuiz = Math.round((etapaQuiz / 3) * 100);
+
+  function avancarEtapaQuiz() {
+    setEtapaQuiz((etapaAtual) => Math.min(etapaAtual + 1, 3));
+  }
+
+  function voltarEtapaQuiz() {
+    setEtapaQuiz((etapaAtual) => Math.max(etapaAtual - 1, 0));
+  }
+  
+  const textoBotaoAtualizarStatus =
+  etapaQuiz === 1
+    ? "Verificar conexão"
+    : etapaQuiz === 2
+    ? "Verificar número"
+    : etapaQuiz === 3
+    ? "Verificar ambiente"
+    : "Atualizar status";
+
 
   return (
     <main className={styles.page}>
       <div className={styles.container}>
-        <header className={styles.hero}>
-          <div className={styles.heroBadge}>Configuração inicial</div>
-
-          <h1 className={styles.title}>Configuração do ambiente oficial do WhatsApp</h1>
-
-          <p className={styles.subtitle}>
-            Conecte seu CRM à Meta, registre seu número oficial do WhatsApp Business
-            e conclua o processo de ativação.
-          </p>
-        </header>
 
         {loading ? (
           <section className={styles.loadingCard}>
@@ -681,297 +757,464 @@ async function handleConcluirConfiguracao() {
             </button>
           </section>
         ) : (
-          <div className={styles.contentGrid}>
-            <section className={styles.mainCard}>
-              <div className={styles.sectionHeader}>
+          <section className={styles.quizShell}>
+            <div className={styles.quizCard}>
+              <div className={styles.quizTop}>
                 <div>
-                  <span className={styles.sectionEyebrow}>Etapas de onboarding</span>
-                  <h2 className={styles.sectionTitle}>Progresso da configuração</h2>
+                  <span className={styles.sectionEyebrow}>
+                    Configuração guiada
+                  </span>
+
+                  <h2 className={styles.quizTitle}>
+                    {etapaQuiz === 0 && "Configuração do ambiente oficial do WhatsApp"}
+                    {etapaQuiz === 1 && "Conectar conta Meta"}
+                    {etapaQuiz === 2 && "Ativar número do WhatsApp"}
+                    {etapaQuiz === 3 && "Finalizar ambiente oficial"}
+                  </h2>
                 </div>
 
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => carregarIntegracao(false)}
-                  disabled={recarregando}
-                >
-                  {recarregando ? "Atualizando..." : "Atualizar status"}
-                </button>
+                {etapaQuiz > 0 && (
+                  <button
+                    type="button"
+                    className={styles.refreshStatusButton}
+                    onClick={() => carregarIntegracao(false)}
+                    disabled={recarregando}
+                  >
+                    {recarregando ? "Verificando..." : textoBotaoAtualizarStatus}
+                  </button>
+                )}
               </div>
 
-              <div className={styles.progressWrapper}>
+              <div className={styles.quizProgress}>
                 <div className={styles.progressLabelRow}>
-                  <span>Progresso atual</span>
-                  <span>{Math.round(progressoPercentual)}%</span>
+                  <span>
+                    {etapaQuiz === 0
+                      ? "Introdução"
+                      : `Etapa ${etapaQuiz} de 3`}
+                  </span>
+                  <span>{progressoQuiz}%</span>
                 </div>
 
                 <div className={styles.progressBar}>
                   <div
                     className={styles.progressFill}
-                    style={{ width: `${progressoPercentual}%` }}
+                    style={{ width: `${progressoQuiz}%` }}
                   />
                 </div>
               </div>
 
-              <div className={styles.stepsList}>
-                {ETAPAS.map((etapa, index) => {
-                  const concluida = indiceEtapaAtual >= index + 1;
-                  const atual = indiceEtapaAtual === index;
+              {etapaQuiz === 0 && (
+                <div className={styles.quizContent}>
+                  <div className={styles.quizIcon}>👋</div>
 
-                  return (
-                    <article
-                      key={etapa.numero}
-                      className={`${styles.stepCard} ${
-                        concluida ? styles.stepCardDone : ""
-                      } ${atual ? styles.stepCardActive : ""}`}
-                    >
-                      <div className={styles.stepNumber}>
-                        {concluida ? "✓" : etapa.numero}
-                      </div>
+                  <h3 className={styles.quizHeadline}>
+                    {perfilOnboarding.nomeUsuario}, seja bem-vindo ao CRM Prosperity. Tudo bem?
+                  </h3>
 
-                      <div className={styles.stepBody}>
-                        <div className={styles.stepHeader}>
-                          <h3 className={styles.stepTitle}>{etapa.titulo}</h3>
-                          <span className={styles.stepStatus}>
-                            {concluida
-                              ? "Concluído"
-                              : atual
-                              ? "Etapa atual"
-                              : "Pendente"}
-                          </span>
-                        </div>
-
-                        <p className={styles.stepDescription}>{etapa.descricao}</p>
-
-                        {etapa.numero === 1 && (
-                          <div className={styles.stepActions}>
-                            <button
-                              type="button"
-                              className={styles.primaryButton}
-                              onClick={iniciarEmbeddedSignup}
-                              disabled={conectandoMeta}
-                            >
-                              {conectandoMeta ? "Abrindo Meta..." : "Conectar com a Meta"}
-                            </button>
-                          </div>
-                        )}
-
-                        {etapa.numero === 2 && !concluida && (
-                          <div className={styles.stepActions}>
-                            <button
-                              type="button"
-                              className={indiceEtapaAtual >= 1 ? styles.primaryButton : styles.disabledButton}
-                              onClick={() => setModalPinAberto(true)}
-                              disabled={indiceEtapaAtual < 1 || registrandoNumero}
-                            >
-                              {registrandoNumero ? "Ativando..." : "Ativar número"}
-                            </button>
-                          </div>
-                        )}
-
-                        {etapa.numero === 3 && !concluida && (
-                          <div className={styles.stepActions}>
-                            <button
-                              type="button"
-                              className={indiceEtapaAtual >= 2 ? styles.primaryButton : styles.disabledButton}
-                              onClick={handleConfigurarWebhook}
-                              disabled={indiceEtapaAtual < 2 || configurandoWebhook}
-                            >
-                              {configurandoWebhook ? "Configurando..." : "Configurar Webhook"}
-                            </button>
-                          </div>
-                        )}
-
-                        {etapa.numero === 3 && erroWebhook && (
-                          <div className={styles.alertError}>
-                            <strong>Permissão de webhook necessária</strong>
-                            <p>{erroWebhook}</p>
-                          </div>
-                        )}
-                        
-                        {etapa.numero === 4 && !concluida && (
-                          <div className={styles.stepActions}>
-                            <button
-                              type="button"
-                              className={indiceEtapaAtual >= 3 ? styles.primaryButton : styles.disabledButton}
-                              onClick={handleConcluirConfiguracao}
-                              disabled={indiceEtapaAtual < 3}
-                            >
-                              {indiceEtapaAtual >= 3
-                                ? "Concluir configuração"
-                                : "Disponível após configurar o webhook"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-
-            <aside className={styles.sideCard}>
-              <div className={styles.sectionHeader}>
-                <div>
-                  <span className={styles.sectionEyebrow}>Resumo técnico</span>
-                  <h2 className={styles.sectionTitle}>Dados da integração</h2>
-                </div>
-              </div>
-
-              <div className={styles.infoList}>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Nome da conexão</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.nome_conexao || "Não definido"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Status da integração</span>
-                  <strong className={styles.infoValue}>{statusConexao}</strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Status do onboarding</span>
-                  <strong className={styles.infoValue}>{statusGeral}</strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Etapa atual</span>
-                  <strong className={styles.infoValue}>
-                    {formatarStatus(integracao?.onboarding_etapa)}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>WABA ID</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.waba_id || "Ainda não definido"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>ID do número</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.phone_number_id || "Ainda não definido"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>ID da conta empresarial</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.business_account_id || "Ainda não definido"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>ID do portfólio empresarial</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.business_portfolio_id || "Ainda não definido"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Nome verificado</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.verified_name || "Ainda não definido"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Status do número</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.phone_number_status || "Ainda não definido"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Classificação de qualidade</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.quality_rating || "Ainda não definido"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>App vinculado à WABA</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.app_assigned ? "Sim" : "Não"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Número salvo</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.numero || "Ainda não definido"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Webhook verificado</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.webhook_verificado ? "Sim" : "Não"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Número registrado</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.phone_registered ? "Sim" : "Não"}
-                  </strong>
-                </div>
-
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Método de pagamento adicionado</span>
-                  <strong className={styles.infoValue}>
-                    {integracao?.payment_method_added ? "Sim" : "Não"}
-                  </strong>
-                </div>
-              </div>
-
-              <div className={styles.permissionsCard}>
-                <h3 className={styles.permissionsTitle}>Status das permissões da Meta</h3>
-
-                <div className={styles.permissionItem}>
-                  <span>✅ whatsapp_business_messaging</span>
-                  <strong>Aprovada</strong>
-                </div>
-
-                <div className={styles.permissionItem}>
-                  <span>✅ public_profile</span>
-                  <strong>Aprovada</strong>
-                </div>
-
-                <div className={styles.permissionItem}>
-                  <span>⏳ whatsapp_business_management</span>
-                  <strong>Pendente de aprovação</strong>
-                </div>
-
-                <div className={styles.permissionItem}>
-                  <span>⏳ business_management</span>
-                  <strong>Pendente de aprovação</strong>
-                </div>
-
-                <p className={styles.permissionNote}>
-                  O CRM precisa da permissão whatsapp_business_management para concluir a gestão dos ativos WABA,
-                  a assinatura do webhook e o onboarding oficial do WhatsApp Business.
-                </p>
-              </div>
-
-              {integracao?.onboarding_erro ? (
-                <div className={styles.alertError}>
-                  <strong>Último erro:</strong>
-                  <p>{integracao.onboarding_erro}</p>
-                </div>
-              ) : (
-                <div className={styles.alertInfo}>
-                  <strong>Próxima etapa:</strong>
-                  <p>
-                    Clique em <b>Conectar com a Meta</b> para iniciar a configuração oficial do seu ambiente.
+                  <p className={styles.quizText}>
+                    Vamos iniciar a configuração do ambiente oficial da{" "}
+                    <strong>{perfilOnboarding.nomeEmpresa}</strong>.
                   </p>
+
+                  <p className={styles.quizText}>
+                    Em poucos passos, você vai conectar a conta Meta, ativar o
+                    número oficial do WhatsApp, configurar o webhook e concluir
+                    a ativação do ambiente.
+                  </p>
+
+                  <div className={styles.quizActions}>
+                    <button
+                      type="button"
+                      className={styles.primaryButton}
+                      onClick={avancarEtapaQuiz}
+                    >
+                      Começar
+                    </button>
+                  </div>
                 </div>
               )}
-            </aside>
-          </div>
+
+              {etapaQuiz === 1 && (
+                <div className={styles.quizContent}>
+                  <div
+                    className={`${styles.quizStatusIcon} ${
+                      metaConectado ? styles.quizStatusDone : ""
+                    }`}
+                  >
+                    {metaConectado ? "✓" : "1"}
+                  </div>
+
+                  <h3 className={styles.quizHeadline}>
+                    Conecte sua conta empresarial da Meta
+                  </h3>
+
+                  <p className={styles.quizText}>
+                    Nesta etapa, o CRM será vinculado à Meta para capturar os
+                    dados oficiais do WhatsApp Business, como WABA ID e ID do
+                    número.
+                  </p>
+
+                  <div
+                    className={`${styles.quizInfoBox} ${
+                      metaConectado ? styles.quizInfoBoxDone : ""
+                    }`}
+                  >
+                    <div>
+                      <span>Status da etapa</span>
+                      <strong>
+                        {metaConectado ? "Conta Meta conectada" : "Aguardando conexão"}
+                      </strong>
+                    </div>
+
+                    {metaConectado && <div className={styles.quizCheckIcon}>✓</div>}
+                  </div>
+
+                  <div className={styles.quizActions}>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={voltarEtapaQuiz}
+                    >
+                      Voltar
+                    </button>
+
+                    <button
+                      type="button"
+                      className={styles.primaryButton}
+                      onClick={iniciarEmbeddedSignup}
+                      disabled={conectandoMeta}
+                    >
+                      {conectandoMeta
+                        ? "Abrindo Meta..."
+                        : metaConectado
+                        ? "Reconectar com a Meta"
+                        : "Conectar com a Meta"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        metaConectado
+                          ? styles.primaryButton
+                          : styles.disabledButton
+                      }
+                      onClick={avancarEtapaQuiz}
+                      disabled={!metaConectado}
+                    >
+                      Avançar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {etapaQuiz === 2 && (
+                <div className={styles.quizContent}>
+                  <div
+                    className={`${styles.quizStatusIcon} ${
+                      numeroRegistrado ? styles.quizStatusDone : ""
+                    }`}
+                  >
+                    {numeroRegistrado ? "✓" : "2"}
+                  </div>
+
+                  <h3 className={styles.quizHeadline}>
+                    Ative o número oficial do WhatsApp
+                  </h3>
+
+                  <p className={styles.quizText}>
+                    Agora vamos concluir o registro técnico do número para que ele possa enviar
+                    e receber mensagens pela Cloud API oficial.
+                  </p>
+
+                  <div className={styles.pinInfoBox}>
+                    <strong>Importante sobre o PIN do WhatsApp</strong>
+
+                    <p>
+                      Nesta etapa será cadastrado ou informado o <b>PIN de verificação em duas</b> etapas do número do WhatsApp Business.
+                    </p>
+
+                    <p>
+                      <b>Guarde esse PIN com segurança</b>. Ele pode ser necessário no futuro em 
+                      <b> validações</b>, <b>alterações</b> ou <b>migrações</b> do número na Meta.
+                    </p>
+                  </div>
+                  <div
+                    className={`${styles.quizInfoBox} ${
+                      numeroValido ? styles.quizInfoBoxDone : ""
+                    }`}
+                  >
+                    <div>
+                      <span>Número vinculado</span>
+                      <strong>{numeroValido ? integracao?.numero : "Ainda não definido"}</strong>
+                    </div>
+
+                    {numeroValido && <div className={styles.quizCheckIcon}>✓</div>}
+                  </div>
+
+                  <div
+                    className={`${styles.quizInfoBox} ${
+                      numeroRegistrado ? styles.quizInfoBoxDone : ""
+                    }`}
+                  >
+                    <div>
+                      <span>Status da etapa</span>
+                      <strong>
+                        {numeroRegistrado ? "Número ativado" : "Aguardando ativação"}
+                      </strong>
+                    </div>
+
+                    {numeroRegistrado && <div className={styles.quizCheckIcon}>✓</div>}
+                  </div>
+
+                  <div className={styles.quizActions}>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={voltarEtapaQuiz}
+                    >
+                      Voltar
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        metaConectado
+                          ? styles.primaryButton
+                          : styles.disabledButton
+                      }
+                      onClick={() => setModalPinAberto(true)}
+                      disabled={!metaConectado || registrandoNumero}
+                    >
+                      {registrandoNumero
+                        ? "Ativando..."
+                        : numeroRegistrado
+                        ? "Número já ativado"
+                        : "Ativar número"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        numeroRegistrado
+                          ? styles.primaryButton
+                          : styles.disabledButton
+                      }
+                      onClick={avancarEtapaQuiz}
+                      disabled={!numeroRegistrado}
+                    >
+                      Avançar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {etapaQuiz === 3 && (
+                <div className={styles.quizContent}>
+                  <div className={styles.quizStatusRow}>
+                    <div
+                      className={`${styles.quizStatusIcon} ${
+                        ambienteConcluido ? styles.quizStatusDone : ""
+                      }`}
+                    >
+                      {ambienteConcluido ? "✓" : "3"}
+                    </div>
+
+                    {ambienteConcluido && (
+                      <div className={styles.quizStatusTextDone}>
+                        Ambiente configurado
+                      </div>
+                    )}
+                  </div>
+
+                  {!ambienteConcluido ? (
+                    <>
+                      <h3 className={styles.quizHeadline}>
+                        Configure o webhook e conclua a ativação
+                      </h3>
+
+                      <p className={styles.quizText}>
+                        O webhook permite que o CRM receba mensagens, status e
+                        eventos do WhatsApp em tempo real. Depois disso, basta
+                        concluir a configuração do ambiente.
+                      </p>
+
+                      <div className={styles.quizInfoGrid}>
+                        <div
+                          className={`${styles.quizInfoBox} ${
+                            webhookConfigurado ? styles.quizInfoBoxDone : ""
+                          }`}
+                        >
+                          <div>
+                            <span>Webhook</span>
+                            <strong>{webhookConfigurado ? "Configurado" : "Pendente"}</strong>
+                          </div>
+
+                          {webhookConfigurado && <div className={styles.quizCheckIcon}>✓</div>}
+                        </div>
+
+                        <div
+                          className={`${styles.quizInfoBox} ${
+                            ambienteConcluido ? styles.quizInfoBoxDone : ""
+                          }`}
+                        >
+                          <div>
+                            <span>Ambiente</span>
+                            <strong>{ambienteConcluido ? "Concluído" : "Pendente"}</strong>
+                          </div>
+
+                          {ambienteConcluido && <div className={styles.quizCheckIcon}>✓</div>}
+                        </div>
+                      </div>
+
+                      {erroWebhook && (
+                        <div className={styles.alertError}>
+                          <strong>Permissão de webhook necessária</strong>
+                          <p>{erroWebhook}</p>
+                        </div>
+                      )}
+
+                      <div className={styles.quizActions}>
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          onClick={voltarEtapaQuiz}
+                        >
+                          Voltar
+                        </button>
+
+                        <button
+                          type="button"
+                          className={
+                            numeroRegistrado
+                              ? styles.primaryButton
+                              : styles.disabledButton
+                          }
+                          onClick={handleConfigurarWebhook}
+                          disabled={!numeroRegistrado || configurandoWebhook}
+                        >
+                          {configurandoWebhook
+                            ? "Configurando..."
+                            : webhookConfigurado
+                            ? "Webhook configurado"
+                            : "Configurar webhook"}
+                        </button>
+
+                        <button
+                          type="button"
+                          className={
+                            webhookConfigurado
+                              ? styles.primaryButton
+                              : styles.disabledButton
+                          }
+                          onClick={handleConcluirConfiguracao}
+                          disabled={!webhookConfigurado}
+                        >
+                          Concluir configuração
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className={styles.quizHeadline}>
+                        Tudo certo {perfilOnboarding.nomeUsuario}! O ambiente oficial do WhatsApp está ativo.
+                      </h3>
+
+                      <p className={styles.quizText}>
+                        A integração da{" "}
+                        <strong>{perfilOnboarding.nomeEmpresa}</strong> foi
+                        concluída com sucesso. Agora você pode personalizar as
+                        permissões, políticas e regras internas da empresa.
+                      </p>
+
+                      <div className={styles.quizInfoGrid}>
+                        <div
+                          className={`${styles.quizInfoBox} ${
+                            integracao?.status === "ativa" ? styles.quizInfoBoxDone : ""
+                          }`}
+                        >
+                          <div>
+                            <span>Status da integração</span>
+                            <strong>{statusConexao}</strong>
+                          </div>
+
+                          {integracao?.status === "ativa" && (
+                            <div className={styles.quizCheckIcon}>✓</div>
+                          )}
+                        </div>
+
+                        <div
+                          className={`${styles.quizInfoBox} ${
+                            integracao?.waba_id ? styles.quizInfoBoxDone : ""
+                          }`}
+                        >
+                          <div>
+                            <span>WABA ID</span>
+                            <strong>{integracao?.waba_id || "Ainda não definido"}</strong>
+                          </div>
+
+                          {integracao?.waba_id && <div className={styles.quizCheckIcon}>✓</div>}
+                        </div>
+
+                        <div
+                          className={`${styles.quizInfoBox} ${
+                            integracao?.phone_number_id ? styles.quizInfoBoxDone : ""
+                          }`}
+                        >
+                          <div>
+                            <span>ID do número</span>
+                            <strong>
+                              {integracao?.phone_number_id || "Ainda não definido"}
+                            </strong>
+                          </div>
+
+                          {integracao?.phone_number_id && (
+                            <div className={styles.quizCheckIcon}>✓</div>
+                          )}
+                        </div>
+
+                        <div
+                          className={`${styles.quizInfoBox} ${
+                            integracao?.webhook_verificado ? styles.quizInfoBoxDone : ""
+                          }`}
+                        >
+                          <div>
+                            <span>Webhook verificado</span>
+                            <strong>{integracao?.webhook_verificado ? "Sim" : "Não"}</strong>
+                          </div>
+
+                          {integracao?.webhook_verificado && (
+                            <div className={styles.quizCheckIcon}>✓</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <p className={styles.quizTextfim}>
+                        Deseja personalizar agora as políticas da empresa?
+                      </p>
+
+                      <div className={styles.quizActions}>
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          onClick={voltarEtapaQuiz}
+                        >
+                          Voltar
+                        </button>
+
+                        <button
+                          type="button"
+                          className={styles.primaryButton}
+                          onClick={() => router.push("/configuracoes/permissoes")}
+                        >
+                          Avançar
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
         )}
       </div>
 
@@ -981,9 +1224,18 @@ async function handleConcluirConfiguracao() {
             <h2 className={styles.modalTitle}>PIN de verificação em duas etapas</h2>
 
             <p className={styles.modalText}>
-              A Meta informou que este número exige um PIN de 6 dígitos para concluir
-              a ativação na Cloud API.
+              Informe o PIN de 6 dígitos configurado na verificação em duas etapas do
+              número do WhatsApp Business.
             </p>
+
+            <div className={styles.modalPinInfoBox}>
+            <strong>Guarde esse PIN com segurança!</strong>
+
+            <p>
+              Esse <b>PIN</b> pode ser <b>solicitado novamente</b> pela <b>Meta</b> em futuras validações,
+              alterações ou migrações do número.
+            </p>
+          </div>
 
             <input
               type="text"

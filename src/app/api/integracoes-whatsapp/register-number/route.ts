@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { encryptText } from "@/lib/security/crypto";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -158,13 +159,18 @@ async function registerNumber(request: NextRequest) {
       );
     }
 
+    const agora = new Date().toISOString();
+
     const updatePayload: Record<string, any> = {
       phone_registered: true,
       onboarding_status: "em_andamento",
       onboarding_etapa: "numero_registrado",
       onboarding_erro: null,
-      ultimo_sync_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+
+      pin_encrypted: encryptText(pin),
+
+      ultimo_sync_at: agora,
+      updated_at: agora,
     };
 
     await supabaseAdmin

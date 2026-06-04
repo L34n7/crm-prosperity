@@ -6,6 +6,8 @@ type UsuarioSistema = {
   id: string;
   empresa_id: string | null;
   status: "ativo" | "inativo" | "bloqueado";
+  nome: string | null;
+  email: string | null;
 };
 
 async function getUsuarioLogado() {
@@ -22,7 +24,7 @@ async function getUsuarioLogado() {
 
   const { data: usuario, error: usuarioError } = await supabase
     .from("usuarios")
-    .select("id, empresa_id, status")
+    .select("id, empresa_id, status, nome, email")
     .eq("auth_user_id", user.id)
     .single<UsuarioSistema>();
 
@@ -66,6 +68,19 @@ export async function GET() {
 
     const supabaseAdmin = getSupabaseAdmin();
 
+    const { data: empresa, error: empresaError } = await supabaseAdmin
+      .from("empresas")
+      .select("id, nome_fantasia, razao_social")
+      .eq("id", usuario.empresa_id)
+      .maybeSingle();
+
+    if (empresaError || !empresa) {
+      return NextResponse.json(
+        { ok: false, error: "Empresa não encontrada." },
+        { status: 404 }
+      );
+    }
+
     // 🔍 Busca integração existente
     const { data: integracaoExistente, error: integracaoError } =
       await supabaseAdmin
@@ -89,22 +104,17 @@ export async function GET() {
       return NextResponse.json({
         ok: true,
         created: false,
+        usuario: {
+          id: usuario.id,
+          nome: usuario.nome,
+          email: usuario.email,
+        },
+        empresa: {
+          id: empresa.id,
+          nome: empresa.nome_fantasia || empresa.razao_social || "sua empresa",
+        },
         integracao: integracaoExistente,
       });
-    }
-
-    // 🔍 Busca empresa
-    const { data: empresa, error: empresaError } = await supabaseAdmin
-      .from("empresas")
-      .select("id, nome_fantasia")
-      .eq("id", usuario.empresa_id)
-      .maybeSingle();
-
-    if (empresaError || !empresa) {
-      return NextResponse.json(
-        { ok: false, error: "Empresa não encontrada." },
-        { status: 404 }
-      );
     }
 
     const agora = new Date().toISOString();
@@ -143,11 +153,20 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      created: true,
-      integracao: novaIntegracao,
-    });
+  return NextResponse.json({
+    ok: true,
+    created: true,
+    usuario: {
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+    },
+    empresa: {
+      id: empresa.id,
+      nome: empresa.nome_fantasia || empresa.razao_social || "sua empresa",
+    },
+    integracao: novaIntegracao,
+  });
   } catch (error) {
     console.error("Erro ao iniciar integração WhatsApp:", error);
 

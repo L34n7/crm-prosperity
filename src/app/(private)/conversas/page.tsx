@@ -83,6 +83,8 @@ type Mensagem = {
     botoes?: Array<{
       id?: string | null;
       titulo?: string | null;
+      url?: string | null;
+      tipo?: string | null;
     }> | null;
     media_id?: string | null;
     mime_type?: string | null;
@@ -2139,14 +2141,29 @@ export default function ConversasPage() {
 
           {botoes.length > 0 && (
             <div className={styles.buttonMessageOptions}>
-              {botoes.map((botao, index) => (
-                <div
-                  key={`${botao.id || botao.titulo || "botao"}-${index}`}
-                  className={styles.buttonMessageOption}
-                >
-                  <TextoComEmoji texto={botao.titulo || botao.id || "Opção"} />
-                </div>
-              ))}
+              {botoes.map((botao, index) => {
+                const textoBotao = botao.titulo || botao.id || "Opção";
+                const urlBotao = String(botao.url || "").trim();
+
+                return urlBotao ? (
+                  <a
+                    key={`${botao.id || botao.titulo || "botao"}-${index}`}
+                    className={styles.buttonMessageOption}
+                    href={urlBotao}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <TextoComEmoji texto={textoBotao} />
+                  </a>
+                ) : (
+                  <div
+                    key={`${botao.id || botao.titulo || "botao"}-${index}`}
+                    className={styles.buttonMessageOption}
+                  >
+                    <TextoComEmoji texto={textoBotao} />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

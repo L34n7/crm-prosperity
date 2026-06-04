@@ -174,21 +174,23 @@ export async function GET() {
       }
     }
 
-    await supabaseAdmin
+    const { data: integracaoAtualizada, error: updateError } = await supabaseAdmin
       .from("integracoes_whatsapp")
       .update(payloadUpdate)
-      .eq("id", integracao.id);
+      .eq("id", integracao.id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      return NextResponse.json(
+        { ok: false, error: updateError.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      integracao: {
-        id: integracao.id,
-        empresa_id: integracao.empresa_id,
-        waba_id: integracao.waba_id,
-        phone_number_id: integracao.phone_number_id,
-        numero: integracao.numero,
-        status: integracao.status,
-      },
+      integracao: integracaoAtualizada,
       total_numeros: lista.length,
       numero_atual: numeroAtual ?? null,
       data,

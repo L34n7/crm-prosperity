@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addEdge,
   Background,
@@ -22,7 +22,7 @@ import styles from "./fluxos.module.css";
 import { Handle } from "@xyflow/react";
 import { gerarSugestaoDescricaoIA } from "@/lib/ia/sugestoes-descricao-ia";
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Copy, Download, Share2 } from "lucide-react";
+import { Copy, CopyPlus, Share2 } from "lucide-react";
 
 type Fluxo = {
   id: string;
@@ -173,6 +173,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "enviar_video") return "Vídeo";
   if (tipo === "enviar_audio") return "Áudio";
   if (tipo === "enviar_botoes") return "Botões";
+  if (tipo === "botao_redirect") return "Botao redirect";
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Captura";
   if (tipo === "agendar_disparo") return "Agendar disparo";
@@ -195,6 +196,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "enviar_video") return styles.nodeVideo;
   if (tipo === "enviar_audio") return styles.nodeAudio;
   if (tipo === "enviar_botoes") return styles.nodeBotoes;
+  if (tipo === "botao_redirect") return styles.nodeRedirect;
   if (tipo === "avaliacao") return styles.nodeAvaliacao;
   if (tipo === "capturar_resposta") return styles.nodeCaptura;
   if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
@@ -212,6 +214,7 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "enviar_texto") return "Nova mensagem";
   if (tipo === "pergunta_opcoes") return "Nova pergunta";
   if (tipo === "enviar_botoes") return "Pergunta botões";
+  if (tipo === "botao_redirect") return "Botao redirect";
   if (tipo === "transferir_setor") return "Transferir setor";
   if (tipo === "encerrar") return "Encerrar";
   if (tipo === "enviar_imagem") return "Nova imagem";
@@ -326,6 +329,19 @@ function normalizarValorMonetario(valor: unknown) {
   return Math.round(numero * 100) / 100;
 }
 
+function urlHttpValida(valor: unknown) {
+  const texto = String(valor || "").trim();
+
+  if (!texto) return false;
+
+  try {
+    const url = new URL(texto);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function normalizarVariavelFluxo(valor: string) {
   return String(valor || "")
     .replace(/[{}]/g, "")
@@ -342,7 +358,75 @@ function rotuloPadraoPorTipoNo(tipoNo: string) {
   return tipoNoEsperaResposta(tipoNo) ? "Nova condição" : "Sempre seguir";
 }
 
+const NODE_CARD_WIDTH = 160;
+const NODE_CARD_HEIGHT = 95;
+const NODE_GAP_X = 70;
+const NODE_GAP_Y = 40;
+
+function posicoesSobrepostas(
+  a: { x: number; y: number },
+  b: { x: number; y: number }
+) {
+  return (
+    Math.abs(a.x - b.x) < NODE_CARD_WIDTH + NODE_GAP_X &&
+    Math.abs(a.y - b.y) < NODE_CARD_HEIGHT + NODE_GAP_Y
+  );
+}
+
+function calcularPosicaoLivreNovoNo(nodesAtuais: Node[]) {
+  if (nodesAtuais.length === 0) {
+    return {
+      x: 180,
+      y: 220,
+    };
+  }
+
+  const nodeReferencia = nodesAtuais.reduce((maisADireita, nodeAtual) =>
+    nodeAtual.position.x > maisADireita.position.x ? nodeAtual : maisADireita
+  );
+
+  const passoX = NODE_CARD_WIDTH + NODE_GAP_X;
+  const passoY = NODE_CARD_HEIGHT + NODE_GAP_Y;
+  const posicaoBase = {
+    x: Math.round(nodeReferencia.position.x + passoX),
+    y: Math.round(nodeReferencia.position.y),
+  };
+
+  const deslocamentos = [
+    { x: 0, y: 0 },
+    { x: 0, y: passoY },
+    { x: 0, y: -passoY },
+    { x: passoX, y: 0 },
+    { x: passoX, y: passoY },
+    { x: passoX, y: -passoY },
+  ];
+
+  for (let coluna = 0; coluna < 8; coluna += 1) {
+    for (const deslocamento of deslocamentos) {
+      const candidato = {
+        x: posicaoBase.x + coluna * passoX + deslocamento.x,
+        y: posicaoBase.y + deslocamento.y,
+      };
+
+      const colide = nodesAtuais.some((node) =>
+        posicoesSobrepostas(candidato, node.position)
+      );
+
+      if (!colide) {
+        return candidato;
+      }
+    }
+  }
+
+  return {
+    x: posicaoBase.x + nodesAtuais.length * passoX,
+    y: posicaoBase.y,
+  };
+}
+
 function dbNoParaReactFlow(no: AutomacaoNo): Node {
+  const configuracaoJson = no.configuracao_json || {};
+
   return {
     id: no.id,
     position: {
@@ -357,18 +441,18 @@ function dbNoParaReactFlow(no: AutomacaoNo): Node {
       tipo_no: no.tipo_no,
       titulo: no.titulo,
       descricao: no.descricao,
-      configuracao_json: no.configuracao_json || {},
+      configuracao_json: configuracaoJson,
       delay_segundos: no.delay_segundos ?? null,
-      isNovo: false,
+      isSelecionado: false,
     },
   };
 }
 
-function NodeCustom({ data }: any) {
+function NodeCustom({ data, dragging }: any) {
   return (
     <div
         className={`${styles.nodeBox} ${corTipoNo(data.tipo_no)} ${
-          data.isNovo ? styles.nodeNovo : ""
+          !dragging && data.isSelecionado ? styles.nodeSelecionado : ""
         }`}
       >
       <Handle type="target" position={Position.Left} className={styles.nodeHandle} />
@@ -405,6 +489,7 @@ export default function FluxosPage() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const ignorarCliqueNodeAposArrasteRef = useRef(false);
 
   const [carregandoFluxos, setCarregandoFluxos] = useState(true);
   const [carregandoEstrutura, setCarregandoEstrutura] = useState(false);
@@ -452,10 +537,10 @@ export default function FluxosPage() {
     useState<"qualquer" | "entregue" | "lida">("qualquer");
 
   const [editandoFluxo, setEditandoFluxo] = useState(false);
+  const [fluxoEmEdicao, setFluxoEmEdicao] = useState<Fluxo | null>(null);
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
   const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
   const [erroEdicaoFluxo, setErroEdicaoFluxo] = useState("");
-  const [encerrarInatividadeAtivo, setEncerrarInatividadeAtivo] = useState(true);
   const [encerrarInatividadeQuantidade, setEncerrarInatividadeQuantidade] = useState("23");
   const [encerrarInatividadeUnidade, setEncerrarInatividadeUnidade] =
     useState<"minutos" | "horas">("horas");
@@ -464,7 +549,6 @@ export default function FluxosPage() {
   );
 
   function resetarEncerramentoInatividadePadrao() {
-    setEncerrarInatividadeAtivo(true);
     setEncerrarInatividadeQuantidade("23");
     setEncerrarInatividadeUnidade("horas");
     setEncerrarInatividadeMensagem(
@@ -473,7 +557,6 @@ export default function FluxosPage() {
   }
 
   const [setorDestino, setSetorDestino] = useState("");
-  const [nodeNovoId, setNodeNovoId] = useState<string | null>(null);
   const fluxo = fluxoSelecionado;
   const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);
   const [confirmandoExclusaoConexao, setConfirmandoExclusaoConexao] =
@@ -535,6 +618,9 @@ export default function FluxosPage() {
   const [botoesNode, setBotoesNode] = useState<
     { id: string; titulo: string }[]
   >([]);
+  const [redirectBotaoTextoNode, setRedirectBotaoTextoNode] =
+    useState("Acessar");
+  const [redirectUrlNode, setRedirectUrlNode] = useState("");
 
   const [editandoEdgeId, setEditandoEdgeId] = useState<string | null>(null);
   const [rotuloConexao, setRotuloConexao] = useState("");
@@ -952,6 +1038,26 @@ export default function FluxosPage() {
     }
   }
 
+  async function carregarEstruturaParaValidacao(fluxoId: string) {
+    const res = await fetch(`/api/automacoes/${fluxoId}`, {
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || "Erro ao carregar estrutura.");
+    }
+
+    const nosDb: AutomacaoNo[] = json.nos || [];
+    const conexoesDb: AutomacaoConexao[] = json.conexoes || [];
+
+    return {
+      nodesValidacao: nosDb.map(dbNoParaReactFlow),
+      edgesValidacao: conexoesDb.map(dbConexaoParaReactFlow),
+    };
+  }
+
   function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {
     const ehSempreSeguir = conexao.condicao_json?.tipo === "sempre";
     const offsetY = offsetLabelConexao(conexao.id);
@@ -1115,21 +1221,19 @@ async function criarFluxoRapido() {
         ? quantidadeInformada * 60 * 60
         : quantidadeInformada * 60;
 
-    if (encerrarInatividadeAtivo) {
-      if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
-        setErroCriacaoFluxo("Informe um tempo válido para o encerramento por inatividade.");
-        return;
-      }
+    if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
+      setErroCriacaoFluxo("Informe um tempo válido para o encerramento por inatividade.");
+      return;
+    }
 
-      if (segundosInatividade < 5 * 60) {
-        setErroCriacaoFluxo("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
-        return;
-      }
+    if (segundosInatividade < 5 * 60) {
+      setErroCriacaoFluxo("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
+      return;
+    }
 
-      if (segundosInatividade > 23 * 60 * 60) {
-        setErroCriacaoFluxo("O tempo máximo para encerramento por inatividade é de 23 horas.");
-        return;
-      }
+    if (segundosInatividade > 23 * 60 * 60) {
+      setErroCriacaoFluxo("O tempo máximo para encerramento por inatividade é de 23 horas.");
+      return;
     }
 
     const res = await fetch("/api/automacoes", {
@@ -1145,7 +1249,7 @@ async function criarFluxoRapido() {
         fluxo_padrao: fluxoPadraoFinal,
         configuracao_json: {
           encerramento_inatividade: {
-            ativo: encerrarInatividadeAtivo,
+            ativo: true,
             tempo_quantidade: quantidadeInformada,
             tempo_unidade: encerrarInatividadeUnidade,
             mensagem: encerrarInatividadeMensagem.trim(),
@@ -1226,21 +1330,15 @@ async function criarFluxoRapido() {
     const id = criarIdTemporario("node");
 
     const tituloPadrao = tituloPadraoTipoNo(tipoNo);
+    const posicaoNovoNo = calcularPosicaoLivreNovoNo(nodes);
 
     const novoNoDb: AutomacaoNo = {
       id,
       tipo_no: tipoNo,
       titulo: tituloPadrao,
       descricao: null,
-      posicao_x:
-        nodes.length > 0
-          ? nodes[nodes.length - 1].position.x + 230
-          : 180,
-
-      posicao_y:
-        nodes.length > 0
-          ? nodes[nodes.length - 1].position.y
-          : 220,
+      posicao_x: posicaoNovoNo.x,
+      posicao_y: posicaoNovoNo.y,
       configuracao_json:
       tipoNo === "enviar_texto"
         ? { mensagem: "Digite a mensagem aqui.", delay_segundos: 3 }
@@ -1275,6 +1373,13 @@ async function criarFluxoRapido() {
                 "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
               notificar_email_excesso_tentativas: true,
+            }
+          : tipoNo === "botao_redirect"
+          ? {
+              mensagem: "Clique no botão abaixo para acessar.",
+              botao_texto: "Acessar",
+              url: "https://",
+              delay_segundos: 3,
             }
           : tipoNo === "avaliacao"
           ? {
@@ -1394,17 +1499,11 @@ async function criarFluxoRapido() {
 
     const novoNodeBase = dbNoParaReactFlow(novoNoDb);
 
-    const novoNode = {
-      ...novoNodeBase,
-      data: {
-        ...novoNodeBase.data,
-        isNovo: true,
-      },
-    };
+    const novoNode = novoNodeBase;
 
     setNodes((atuais) => [...atuais, novoNode]);
 
-    setNodeNovoId(id);
+    abrirEdicaoNo(novoNode);
 
     if (tipoNo !== "inicio") {
     const inicio = nodes.find((n) => n.data?.tipo_no === "inicio");
@@ -1488,11 +1587,40 @@ function offsetLabelConexao(edgeId: string) {
     setBotoesNode((atuais) => atuais.filter((_, i) => i !== index));
   }
 
+  function marcarNodeSelecionado(nodeId: string | null) {
+    setNodes((atuais) =>
+      atuais.map((node) => ({
+        ...node,
+        selected: nodeId ? node.id === nodeId : false,
+        data: {
+          ...(node.data || {}),
+          isSelecionado: nodeId ? node.id === nodeId : false,
+        },
+      }))
+    );
+
+    if (nodeId) {
+      setEdges((atuais) =>
+        atuais.map((edge) => ({
+          ...edge,
+          selected: false,
+          style: {
+            ...(edge.style || {}),
+            stroke: "#cbd5e1",
+            strokeWidth: 2,
+            strokeDasharray: "6 6",
+          },
+        }))
+      );
+    }
+  }
+
   function abrirEdicaoNo(node: Node) {
     const configuracaoJson = node.data?.configuracao_json as
       | Record<string, any>
       | undefined;
 
+    marcarNodeSelecionado(node.id);
     setEditandoNodeId(node.id);
     setTipoNodeEdicao(String(node.data?.tipo_no || ""));
     setEditandoEdgeId(null);
@@ -1529,6 +1657,10 @@ function offsetLabelConexao(edgeId: string) {
 
     setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
     setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
+    setRedirectBotaoTextoNode(
+      String(configuracaoJson?.botao_texto || "Acessar")
+    );
+    setRedirectUrlNode(String(configuracaoJson?.url || ""));
     setSetorDestino(configuracaoJson?.setor_id || "");
     setConfirmandoExclusaoNo(false);
     
@@ -1741,6 +1873,7 @@ function abrirEdicaoConexao(edge: Edge) {
     condicao.status_envio || "qualquer"
   );
 
+  marcarNodeSelecionado(null);
   setEditandoEdgeId(edge.id);
   setEditandoNodeId(null);
 
@@ -1849,6 +1982,25 @@ function aplicarEdicaoNoInterno() {
     return;
   }
 
+  if (tipoNodeEdicao === "botao_redirect") {
+    if (!mensagemNode.trim()) {
+      setErro("Informe a mensagem do Botao redirect.");
+      return;
+    }
+
+    const textoBotaoRedirect = redirectBotaoTextoNode.trim();
+
+    if (!textoBotaoRedirect || textoBotaoRedirect.length > 20) {
+      setErro("Informe um texto de botao com ate 20 caracteres.");
+      return;
+    }
+
+    if (!urlHttpValida(redirectUrlNode)) {
+      setErro("Informe uma URL iniciando com http:// ou https://.");
+      return;
+    }
+  }
+
   setErro("");
 
   setNodes((atuais) =>
@@ -1864,6 +2016,7 @@ function aplicarEdicaoNoInterno() {
         tipoFinal === "enviar_texto" ||
         tipoFinal === "pergunta_opcoes" ||
         tipoFinal === "enviar_botoes" ||
+        tipoFinal === "botao_redirect" ||
         tipoFinal === "enviar_imagem" ||
         tipoFinal === "enviar_video" ||
         tipoFinal === "enviar_audio" ||
@@ -2007,6 +2160,12 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.botoes = botoesNode;
       }
 
+      if (tipoFinal === "botao_redirect") {
+        configuracao_json.botao_texto =
+          redirectBotaoTextoNode.trim() || "Acessar";
+        configuracao_json.url = redirectUrlNode.trim();
+      }
+
       if (
         tipoFinal === "pergunta_opcoes" ||
         tipoFinal === "enviar_botoes" ||
@@ -2116,7 +2275,7 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.notificacao_mensagem = notificacaoMensagemNode.trim();
         configuracao_json.notificar_email = notificarEmailNode;
 
-      return dbNoParaReactFlow({
+      const noAtualizado = dbNoParaReactFlow({
         id: node.id,
         tipo_no: tipoFinal,
         titulo: tituloNode.trim() || tituloPadraoTipoNo(tipoFinal),
@@ -2131,6 +2290,15 @@ function aplicarEdicaoNoInterno() {
             ? Math.max(0, Number(delayNode))
             : null,
       });
+
+      return {
+        ...noAtualizado,
+        selected: true,
+        data: {
+          ...noAtualizado.data,
+          isSelecionado: true,
+        },
+      };
     })
   );
 
@@ -2224,27 +2392,34 @@ function aplicarEdicaoConexao() {
   setSucesso("Conexão atualizada. Clique em Salvar fluxo para gravar no banco.");
 }
 
-function abrirEdicaoFluxo() {
-  if (!fluxoSelecionado) return;
+function obterFluxoAlvoEdicao() {
+  return fluxoEmEdicao || fluxoSelecionado;
+}
+
+function abrirEdicaoFluxo(fluxoAlvo?: Fluxo) {
+  const fluxoParaEditar = fluxoAlvo || fluxoSelecionado;
+
+  if (!fluxoParaEditar) return;
 
   setErro("");
   setErroEdicaoFluxo("");
+  setFluxoEmEdicao(fluxoParaEditar);
   setEditandoFluxo(true);
-  setNomeFluxoEdicao(fluxoSelecionado.nome || "");
-  setDescricaoFluxoEdicao(fluxoSelecionado.descricao || "");
+  setNomeFluxoEdicao(fluxoParaEditar.nome || "");
+  setDescricaoFluxoEdicao(fluxoParaEditar.descricao || "");
 
-  const config = fluxoSelecionado.configuracao_json || {};
+  const config = fluxoParaEditar.configuracao_json || {};
   const encerramento = config.encerramento_inatividade || {};
-
-  setEncerrarInatividadeAtivo(Boolean(encerramento.ativo));
+  const unidadeEncerramento =
+    encerramento.tempo_unidade === "minutos" ? "minutos" : "horas";
+  const quantidadePadraoEncerramento =
+    unidadeEncerramento === "minutos" ? 1380 : 23;
 
   setEncerrarInatividadeQuantidade(
-    String(encerramento.tempo_quantidade || 24)
+    String(encerramento.tempo_quantidade || quantidadePadraoEncerramento)
   );
 
-  setEncerrarInatividadeUnidade(
-    encerramento.tempo_unidade === "minutos" ? "minutos" : "horas"
-  );
+  setEncerrarInatividadeUnidade(unidadeEncerramento);
 
   setEncerrarInatividadeMensagem(
     String(
@@ -2256,15 +2431,17 @@ function abrirEdicaoFluxo() {
   setNovoGatilhoValor("");
   setNovoGatilhoCondicao("contem");
 
-  if (fluxoSelecionado.fluxo_padrao) {
+  if (fluxoParaEditar.fluxo_padrao) {
     setGatilhosFluxo([]);
   } else {
-    carregarGatilhosFluxo(fluxoSelecionado.id);
+    carregarGatilhosFluxo(fluxoParaEditar.id);
   }
 }
 
 async function salvarEdicaoFluxo() {
-  if (!fluxoSelecionado) return;
+  const fluxoParaEditar = obterFluxoAlvoEdicao();
+
+  if (!fluxoParaEditar) return;
 
   const quantidadeInformada = Number(encerrarInatividadeQuantidade || 0);
 
@@ -2273,21 +2450,19 @@ async function salvarEdicaoFluxo() {
       ? quantidadeInformada * 60 * 60
       : quantidadeInformada * 60;
 
-  if (encerrarInatividadeAtivo) {
-    if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
-      setErroEdicaoFluxo("Informe um tempo válido para o encerramento por inatividade.");
-      return;
-    }
+  if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
+    setErroEdicaoFluxo("Informe um tempo válido para o encerramento por inatividade.");
+    return;
+  }
 
-    if (segundosInatividade < 5 * 60) {
-      setErroEdicaoFluxo("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
-      return;
-    }
+  if (segundosInatividade < 5 * 60) {
+    setErroEdicaoFluxo("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
+    return;
+  }
 
-    if (segundosInatividade > 23 * 60 * 60) {
-      setErroEdicaoFluxo("O tempo máximo para encerramento por inatividade é de 23 horas.");
-      return;
-    }
+  if (segundosInatividade > 23 * 60 * 60) {
+    setErroEdicaoFluxo("O tempo máximo para encerramento por inatividade é de 23 horas.");
+    return;
   }
 
   try {
@@ -2300,13 +2475,13 @@ async function salvarEdicaoFluxo() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        id: fluxoSelecionado.id,
+        id: fluxoParaEditar.id,
         nome: nomeFluxoEdicao,
         descricao: descricaoFluxoEdicao,
         configuracao_json: {
-          ...(fluxoSelecionado.configuracao_json || {}),
+          ...(fluxoParaEditar.configuracao_json || {}),
           encerramento_inatividade: {
-            ativo: encerrarInatividadeAtivo,
+            ativo: true,
             tempo_quantidade: quantidadeInformada,
             tempo_unidade: encerrarInatividadeUnidade,
             mensagem: encerrarInatividadeMensagem.trim(),
@@ -2323,6 +2498,7 @@ async function salvarEdicaoFluxo() {
 
     setSucesso("Fluxo atualizado com sucesso.");
     setEditandoFluxo(false);
+    setFluxoEmEdicao(null);
     setFluxoSelecionado(json.fluxo);
     await carregarFluxos();
   } catch (error: any) {
@@ -2520,21 +2696,25 @@ async function importarFluxoCompartilhado() {
       setErro("");
       setSucesso("");
 
-      const nosParaSalvar = nodes.map((node) => ({
-        id: node.id,
-        tipo_no: node.data?.tipo_no,
-        titulo: node.data?.titulo,
-        descricao: node.data?.descricao || null,
-        posicao_x: node.position.x,
-        posicao_y: node.position.y,
-        configuracao_json: node.data?.configuracao_json || {},
-        delay_segundos:
-          node.data?.tipo_no === "inicio"
-            ? null
-            : node.data?.delay_segundos != null
-            ? Math.max(0, Number(node.data.delay_segundos))
-            : null,
-      }));
+      const nosParaSalvar = nodes.map((node) => {
+        const tipoNo = String(node.data?.tipo_no || "");
+
+        return {
+          id: node.id,
+          tipo_no: tipoNo,
+          titulo: node.data?.titulo,
+          descricao: node.data?.descricao || null,
+          posicao_x: node.position.x,
+          posicao_y: node.position.y,
+          configuracao_json: node.data?.configuracao_json || {},
+          delay_segundos:
+            node.data?.tipo_no === "inicio"
+              ? null
+              : node.data?.delay_segundos != null
+              ? Math.max(0, Number(node.data.delay_segundos))
+              : null,
+        };
+      });
 
     const conexoesParaSalvar = edges.map((edge, index) => {
     const data = edge.data as
@@ -2657,7 +2837,9 @@ async function carregarGatilhosFluxo(fluxoId: string) {
 }
 
 async function criarGatilhoFluxo() {
-  if (!fluxoSelecionado) return;
+  const fluxoParaEditar = obterFluxoAlvoEdicao();
+
+  if (!fluxoParaEditar) return;
 
   try {
     setErro("");
@@ -2671,7 +2853,7 @@ async function criarGatilhoFluxo() {
     }
 
     const res = await fetch(
-      `/api/automacoes/${fluxoSelecionado.id}/gatilhos`,
+      `/api/automacoes/${fluxoParaEditar.id}/gatilhos`,
       {
         method: "POST",
         headers: {
@@ -2694,21 +2876,23 @@ async function criarGatilhoFluxo() {
     setNovoGatilhoValor("");
     setNovoGatilhoCondicao("contem");
     setSucesso("Gatilho criado com sucesso.");
-    await carregarGatilhosFluxo(fluxoSelecionado.id);
+    await carregarGatilhosFluxo(fluxoParaEditar.id);
   } catch (error: any) {
     setErro(error?.message || "Erro ao criar gatilho.");
   }
 }
 
 async function removerGatilhoFluxo(gatilhoId: string) {
-  if (!fluxoSelecionado) return;
+  const fluxoParaEditar = obterFluxoAlvoEdicao();
+
+  if (!fluxoParaEditar) return;
 
   try {
     setErro("");
     setSucesso("");
 
     const res = await fetch(
-      `/api/automacoes/${fluxoSelecionado.id}/gatilhos`,
+      `/api/automacoes/${fluxoParaEditar.id}/gatilhos`,
       {
         method: "DELETE",
         headers: {
@@ -2727,21 +2911,23 @@ async function removerGatilhoFluxo(gatilhoId: string) {
     }
 
     setSucesso("Gatilho removido com sucesso.");
-    await carregarGatilhosFluxo(fluxoSelecionado.id);
+    await carregarGatilhosFluxo(fluxoParaEditar.id);
   } catch (error: any) {
     setErro(error?.message || "Erro ao remover gatilho.");
   }
 }
 
 async function alternarGatilhoFluxo(gatilho: GatilhoFluxo) {
-  if (!fluxoSelecionado) return;
+  const fluxoParaEditar = obterFluxoAlvoEdicao();
+
+  if (!fluxoParaEditar) return;
 
   try {
     setErro("");
     setSucesso("");
 
     const res = await fetch(
-      `/api/automacoes/${fluxoSelecionado.id}/gatilhos`,
+      `/api/automacoes/${fluxoParaEditar.id}/gatilhos`,
       {
         method: "PATCH",
         headers: {
@@ -2760,7 +2946,7 @@ async function alternarGatilhoFluxo(gatilho: GatilhoFluxo) {
       throw new Error(json.error || "Erro ao atualizar gatilho.");
     }
 
-    await carregarGatilhosFluxo(fluxoSelecionado.id);
+    await carregarGatilhosFluxo(fluxoParaEditar.id);
   } catch (error: any) {
     setErro(error?.message || "Erro ao atualizar gatilho.");
   }
@@ -2924,24 +3110,32 @@ async function confirmarApagarDefinitivo() {
   }
 }
 
-function validarFluxoAntesDeAtivar() {
-  if (!fluxoSelecionado) {
+function validarFluxoAntesDeAtivar(params?: {
+  fluxo?: Fluxo | null;
+  nodesValidacao?: Node[];
+  edgesValidacao?: Edge[];
+}) {
+  const fluxoValidacao = params?.fluxo ?? fluxoSelecionado;
+  const nodesValidacao = params?.nodesValidacao ?? nodes;
+  const edgesValidacao = params?.edgesValidacao ?? edges;
+
+  if (!fluxoValidacao) {
     return "Selecione um fluxo.";
   }
 
-  const inicio = nodes.find((node) => node.data?.tipo_no === "inicio");
+  const inicio = nodesValidacao.find((node) => node.data?.tipo_no === "inicio");
 
   if (!inicio) {
     return "Adicione um bloco de início antes de ativar o fluxo.";
   }
 
-  const conexaoSaindoDoInicio = edges.some((edge) => edge.source === inicio.id);
+  const conexaoSaindoDoInicio = edgesValidacao.some((edge) => edge.source === inicio.id);
 
   if (!conexaoSaindoDoInicio) {
     return "O bloco de início precisa estar conectado a outro bloco.";
   }
 
-  const temBlocoFinal = nodes.some(
+  const temBlocoFinal = nodesValidacao.some(
     (node) =>
       node.data?.tipo_no === "encerrar" ||
       node.data?.tipo_no === "transferir_setor"
@@ -2951,7 +3145,7 @@ function validarFluxoAntesDeAtivar() {
     return "Adicione pelo menos um bloco final: Encerrar ou Transferir.";
   }
 
-  for (const node of nodes) {
+  for (const node of nodesValidacao) {
     const tipoNo = String(node.data?.tipo_no || "");
     const config = (node.data?.configuracao_json || {}) as Record<string, any>;
 
@@ -3020,6 +3214,22 @@ function validarFluxoAntesDeAtivar() {
 
       if (botaoInvalido) {
         return `O bloco "${node.data?.titulo}" tem botão inválido. Verifique ID e título.`;
+      }
+    }
+
+    if (tipoNo === "botao_redirect") {
+      if (!String(config.mensagem || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
+      }
+
+      const textoBotao = String(config.botao_texto || "").trim();
+
+      if (!textoBotao || textoBotao.length > 20) {
+        return `O bloco "${node.data?.titulo}" precisa ter texto do botão com até 20 caracteres.`;
+      }
+
+      if (!urlHttpValida(config.url)) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma URL começando com http:// ou https://.`;
       }
     }
 
@@ -3309,7 +3519,7 @@ useEffect(() => {
                 setModalImportarAberto(true);
               }}
             >
-              <Download size={18} strokeWidth={2.4} />
+              <CopyPlus size={18} strokeWidth={2.4} />
             </button>
           </div>
         </div>
@@ -3463,7 +3673,7 @@ useEffect(() => {
                 <button
                   type="button"
                   className={styles.secondaryButton}
-                  onClick={abrirEdicaoFluxo}
+                  onClick={() => abrirEdicaoFluxo()}
                   disabled={!fluxoSelecionado}
                 >
                   Editar fluxo
@@ -3608,6 +3818,17 @@ useEffect(() => {
                         className={styles.headerDropdownItem}
                         onClick={() => {
                           setMenuHeaderAberto(false);
+                          adicionarNo("botao_redirect");
+                        }}
+                      >
+                        + Botão redirect
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
                           adicionarNo("agendar_disparo");
                         }}
                       >
@@ -3724,7 +3945,7 @@ useEffect(() => {
                           abrirCompartilhamentoFluxo(fluxoSelecionado);
                         }}
                       >
-                        Compartilhar codigo
+                        Compartilhar fluxo
                       </button>
 
                       <button
@@ -3795,12 +4016,20 @@ useEffect(() => {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
+                onNodeDragStart={() => {
+                  ignorarCliqueNodeAposArrasteRef.current = true;
+                }}
+                onNodeDragStop={() => {
+                  window.setTimeout(() => {
+                    ignorarCliqueNodeAposArrasteRef.current = false;
+                  }, 120);
+                }}
                 onNodeClick={(_, node) => {
-                  abrirEdicaoNo(node);
-
-                  if (node.id === nodeNovoId) {
-                    setNodeNovoId(null);
+                  if (ignorarCliqueNodeAposArrasteRef.current) {
+                    return;
                   }
+
+                  abrirEdicaoNo(node);
                 }}
                 onEdgeClick={(_, edge) => {
                   abrirEdicaoConexao(edge);
@@ -3844,6 +4073,7 @@ useEffect(() => {
                         setEditandoEdgeId(null);
                         setConfirmandoExclusaoNo(false);
                         setConfirmandoExclusaoConexao(false);
+                        marcarNodeSelecionado(null);
                         
                         setEdges((atuais) =>
                           atuais.map((edge) => ({
@@ -3921,6 +4151,21 @@ useEffect(() => {
                                 { id: "sim", titulo: "Sim" },
                                 { id: "nao", titulo: "Não" },
                               ]);
+                            }
+                          }
+
+                          if (novoTipo === "botao_redirect") {
+                            setSetorDestino("");
+                            setOpcoesNode([]);
+                            setBotoesNode([]);
+                            setMidiaUrlNode("");
+
+                            if (!redirectBotaoTextoNode.trim()) {
+                              setRedirectBotaoTextoNode("Acessar");
+                            }
+
+                            if (!redirectUrlNode.trim()) {
+                              setRedirectUrlNode("https://");
                             }
                           }
 
@@ -4010,6 +4255,7 @@ useEffect(() => {
                         <option value="enviar_video">Vídeo</option>
                         <option value="enviar_audio">Áudio</option>
                         <option value="enviar_botoes">Pergunta com Botões</option>
+                        <option value="botao_redirect">Botão redirect</option>
                         <option value="agendar_disparo">Agendar disparo</option>
                         <option value="agenda_buscar_agendamento">Agenda: Buscar agendamento</option>
                         <option value="agenda_escolher_horario">Agenda: Escolher horario</option>
@@ -4042,6 +4288,7 @@ useEffect(() => {
                     "enviar_texto",
                     "pergunta_opcoes",
                     "enviar_botoes",
+                    "botao_redirect",
                     "enviar_imagem",
                     "enviar_video",
                     "enviar_audio",
@@ -4062,6 +4309,8 @@ useEffect(() => {
                           ? "Pergunta"
                           : tipoNodeEdicao === "enviar_botoes"
                           ? "Pergunta dos botões"
+                          : tipoNodeEdicao === "botao_redirect"
+                          ? "Mensagem do botão"
                           : tipoNodeEdicao === "enviar_imagem"
                           ? "Legenda da imagem"
                           : tipoNodeEdicao === "enviar_video"
@@ -4587,6 +4836,40 @@ useEffect(() => {
                     </div>
                   )}
 
+                  {tipoNodeEdicao === "botao_redirect" && (
+                    <div className={styles.optionsBox}>
+                      <label className={styles.field}>
+                        <span className={styles.label}>Texto do botão</span>
+                        <input
+                          className={styles.input}
+                          value={redirectBotaoTextoNode}
+                          onChange={(e) =>
+                            setRedirectBotaoTextoNode(e.target.value)
+                          }
+                          placeholder="Acessar"
+                          maxLength={20}
+                        />
+                        <span className={styles.help}>
+                          O WhatsApp permite ate 20 caracteres no botão CTA.
+                        </span>
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>URL de destino</span>
+                        <input
+                          className={styles.input}
+                          value={redirectUrlNode}
+                          onChange={(e) => setRedirectUrlNode(e.target.value)}
+                          placeholder="https://chat.whatsapp.com/..."
+                        />
+                        <span className={styles.help}>
+                          Use um link https, incluindo convites de grupo do
+                          WhatsApp ou links externos.
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
                   {tipoNodeEdicao === "agendar_disparo" && (
                     <div className={styles.optionsBox}>
                       <div className={styles.agendarDisparoCostAlert}>
@@ -5098,6 +5381,7 @@ useEffect(() => {
                       <div className={styles.delayTopRow}>
                         <span className={styles.label}>Delay antes de enviar:</span>
 
+                        <span className={styles.helpS}>Segundos:</span>
                         <input
                           type="number"
                           min={0}
@@ -5123,6 +5407,7 @@ useEffect(() => {
                             setDelayNode(valor);
                           }}
                         />
+
                       </div>
 
                       <span className={styles.help}>
@@ -5617,6 +5902,7 @@ useEffect(() => {
                 onClick={() => {
                   setErroEdicaoFluxo("");
                   setEditandoFluxo(false);
+                  setFluxoEmEdicao(null);
                 }}
                 >
                 ×
@@ -5643,99 +5929,13 @@ useEffect(() => {
                 <label className={styles.field}>
                 <span className={styles.label}>Descrição</span>
                 <textarea
-                    className={styles.textarea}
+                    className={styles.textareadesc}
                     value={descricaoFluxoEdicao}
                     onChange={(e) => setDescricaoFluxoEdicao(e.target.value)}
                 />
                 </label>
-                <div className={styles.sectionBlock}>
-                  <label className={styles.checkboxRow}>
-                    <input
-                      type="checkbox"
-                      checked={encerrarInatividadeAtivo}
-                      onChange={(e) => setEncerrarInatividadeAtivo(e.target.checked)}
-                    />
 
-                    <span>Encerrar automaticamente por inatividade</span>
-                  </label>
-
-                  <p className={styles.helperText}>
-                    Se ativado, o fluxo será encerrado automaticamente quando o contato ficar sem responder pelo tempo definido.
-                    Essa regra tem prioridade sobre conexões “Sem resposta após tempo” maiores.
-                  </p>
-
-                  {encerrarInatividadeAtivo && (
-                    <>
-                      <div className={styles.inlineFields}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>Tempo sem resposta</span>
-
-                          <input
-                            className={styles.input}
-                            type="number"
-                            min={encerrarInatividadeUnidade === "minutos" ? 5 : 1}
-                            max={encerrarInatividadeUnidade === "minutos" ? 1380 : 23}
-                            value={encerrarInatividadeQuantidade}
-                            onChange={(e) =>
-                              setEncerrarInatividadeQuantidade(
-                                limitarQuantidadeInatividade(
-                                  e.target.value,
-                                  encerrarInatividadeUnidade
-                                )
-                              )
-                            }
-                            onBlur={() =>
-                              setEncerrarInatividadeQuantidade(
-                                corrigirQuantidadeMinimaInatividade(
-                                  encerrarInatividadeQuantidade,
-                                  encerrarInatividadeUnidade
-                                )
-                              )
-                            }
-                          />
-                        </label>
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>Unidade</span>
-
-                          <select
-                            className={styles.input}
-                            value={encerrarInatividadeUnidade}
-                            onChange={(e) => {
-                              const novaUnidade =
-                                e.target.value === "minutos" ? "minutos" : "horas";
-
-                              setEncerrarInatividadeUnidade(novaUnidade);
-
-                              setEncerrarInatividadeQuantidade((valorAtual) =>
-                                corrigirQuantidadeMinimaInatividade(valorAtual, novaUnidade)
-                              );
-                            }}
-                          >
-                            <option value="minutos">Minutos</option>
-                            <option value="horas">Horas</option>
-                          </select>
-                        </label>
-                      </div>
-
-                      <p className={styles.helperText}>
-                        O tempo mínimo é de 5 minutos e o máximo é de 23 horas.
-                      </p>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Mensagem antes de encerrar</span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={encerrarInatividadeMensagem}
-                          onChange={(e) => setEncerrarInatividadeMensagem(e.target.value)}
-                          placeholder="Mensagem enviada antes de encerrar o atendimento."
-                        />
-                      </label>
-                    </>
-                  )}
-                </div>
-                {fluxoSelecionado?.fluxo_padrao ? (
+                {obterFluxoAlvoEdicao()?.fluxo_padrao ? (
                   <div className={styles.defaultFlowNotice}>
                     <div className={styles.defaultFlowIcon}>↪</div>
 
@@ -5834,6 +6034,82 @@ useEffect(() => {
                         )}
                   </div>
                 )}
+                <div className={styles.sectionBlock}>
+                  <div>
+                    <p className={styles.modalSectionTitle}>Encerramento por inatividade</p>
+                    <p className={styles.helperText}>
+                      Todo fluxo será encerrado automaticamente quando o contato ficar sem responder pelo tempo definido.
+                      Essa regra tem prioridade sobre conexões "Sem resposta após tempo" maiores.
+                    </p>
+                  </div>
+
+                  <div className={styles.inlineFields}>
+                    <label className={styles.field}>
+                      <span className={styles.label}>Tempo sem resposta</span>
+
+                      <input
+                        className={styles.input}
+                        type="number"
+                        min={encerrarInatividadeUnidade === "minutos" ? 5 : 1}
+                        max={encerrarInatividadeUnidade === "minutos" ? 1380 : 23}
+                        value={encerrarInatividadeQuantidade}
+                        onChange={(e) =>
+                          setEncerrarInatividadeQuantidade(
+                            limitarQuantidadeInatividade(
+                              e.target.value,
+                              encerrarInatividadeUnidade
+                            )
+                          )
+                        }
+                        onBlur={() =>
+                          setEncerrarInatividadeQuantidade(
+                            corrigirQuantidadeMinimaInatividade(
+                              encerrarInatividadeQuantidade,
+                              encerrarInatividadeUnidade
+                            )
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className={styles.field}>
+                      <span className={styles.label}>Unidade</span>
+
+                      <select
+                        className={styles.input}
+                        value={encerrarInatividadeUnidade}
+                        onChange={(e) => {
+                          const novaUnidade =
+                            e.target.value === "minutos" ? "minutos" : "horas";
+
+                          setEncerrarInatividadeUnidade(novaUnidade);
+
+                          setEncerrarInatividadeQuantidade((valorAtual) =>
+                            corrigirQuantidadeMinimaInatividade(valorAtual, novaUnidade)
+                          );
+                        }}
+                      >
+                        <option value="minutos">Minutos</option>
+                        <option value="horas">Horas</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <p className={styles.helperText}>
+                    O tempo mínimo é de 5 minutos e o máximo é de 23 horas.
+                  </p>
+
+                  <label className={styles.field}>
+                    <span className={styles.label}>Mensagem antes de encerrar</span>
+
+                    <textarea
+                      className={styles.textarea}
+                      value={encerrarInatividadeMensagem}
+                      onChange={(e) => setEncerrarInatividadeMensagem(e.target.value)}
+                      placeholder="Mensagem enviada antes de encerrar o atendimento."
+                    />
+                  </label>
+                </div>
             </div>
 
             <div className={styles.modalFooter}>
@@ -5843,6 +6119,7 @@ useEffect(() => {
                 onClick={() => {
                   setErroEdicaoFluxo("");
                   setEditandoFluxo(false);
+                  setFluxoEmEdicao(null);
                 }}
                 >
                 Cancelar
@@ -5991,7 +6268,7 @@ useEffect(() => {
                     setErroCompartilhamento("");
                   }}
                 >
-                  Ã—
+                  x
                 </button>
               </div>
 
@@ -6001,7 +6278,8 @@ useEffect(() => {
                   <div>
                     <strong>{fluxoParaCompartilhar.nome}</strong>
                     <p>
-                      O codigo cria uma copia em rascunho na empresa que importar.
+                      O código fica salvo neste fluxo e cria uma copia em rascunho na empresa que importar.
+                      Mídias não são copiadas.
                     </p>
                   </div>
                 </div>
@@ -6014,7 +6292,7 @@ useEffect(() => {
                       className={styles.codeInput}
                       value={
                         carregandoCodigoCompartilhamento
-                          ? "Gerando codigo..."
+                          ? "Carregando codigo..."
                           : codigoCompartilhamento
                       }
                       readOnly
@@ -6057,7 +6335,9 @@ useEffect(() => {
                   onClick={() => gerarCodigoCompartilhamento(fluxoParaCompartilhar)}
                   disabled={carregandoCodigoCompartilhamento}
                 >
-                  {carregandoCodigoCompartilhamento ? "Gerando..." : "Gerar novo codigo"}
+                  {carregandoCodigoCompartilhamento
+                    ? "Atualizando..."
+                    : "Atualizar compartilhamento"}
                 </button>
               </div>
             </div>
@@ -6082,17 +6362,17 @@ useEffect(() => {
                     setErroImportacao("");
                   }}
                 >
-                  Ã—
+                  x
                 </button>
               </div>
 
               <div className={styles.modalBody}>
                 <div className={styles.shareInfoBox}>
-                  <Download size={18} />
+                  <CopyPlus size={18} />
                   <div>
                     <strong>Importar copia do fluxo</strong>
                     <p>
-                      A copia sera criada como rascunho nesta empresa.
+                      A copia sera criada como rascunho nesta empresa, sem arquivos de midia.
                     </p>
                   </div>
                 </div>
@@ -6182,91 +6462,80 @@ useEffect(() => {
                 </label>
 
                 <div className={styles.sectionBlock}>
-                  <label className={styles.checkboxRow}>
-                    <input
-                      type="checkbox"
-                      checked={encerrarInatividadeAtivo}
-                      onChange={(e) => setEncerrarInatividadeAtivo(e.target.checked)}
-                    />
+                  <div>
+                    <p className={styles.modalSectionTitle}>Encerramento por inatividade</p>
+                    <p className={styles.helperText}>
+                      Todo fluxo será encerrado automaticamente quando o contato ficar sem responder pelo tempo definido.
+                      Essa regra tem prioridade sobre conexões "Sem resposta após tempo" maiores.
+                    </p>
+                  </div>
 
-                    <span>Encerrar automaticamente por inatividade</span>
-                  </label>
+                  <div className={styles.inlineFields}>
+                    <label className={styles.field}>
+                      <span className={styles.label}>Tempo sem resposta</span>
+
+                      <input
+                        className={styles.input}
+                        type="number"
+                        min={encerrarInatividadeUnidade === "minutos" ? 5 : 1}
+                        max={encerrarInatividadeUnidade === "minutos" ? 1380 : 23}
+                        value={encerrarInatividadeQuantidade}
+                        onChange={(e) =>
+                          setEncerrarInatividadeQuantidade(
+                            limitarQuantidadeInatividade(
+                              e.target.value,
+                              encerrarInatividadeUnidade
+                            )
+                          )
+                        }
+                        onBlur={() =>
+                          setEncerrarInatividadeQuantidade(
+                            corrigirQuantidadeMinimaInatividade(
+                              encerrarInatividadeQuantidade,
+                              encerrarInatividadeUnidade
+                            )
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className={styles.field}>
+                      <span className={styles.label}>Unidade</span>
+
+                      <select
+                        className={styles.input}
+                        value={encerrarInatividadeUnidade}
+                        onChange={(e) => {
+                          const novaUnidade =
+                            e.target.value === "minutos" ? "minutos" : "horas";
+
+                          setEncerrarInatividadeUnidade(novaUnidade);
+
+                          setEncerrarInatividadeQuantidade((valorAtual) =>
+                            corrigirQuantidadeMinimaInatividade(valorAtual, novaUnidade)
+                          );
+                        }}
+                      >
+                        <option value="minutos">Minutos</option>
+                        <option value="horas">Horas</option>
+                      </select>
+                    </label>
+                  </div>
 
                   <p className={styles.helperText}>
-                    Se ativado, o fluxo será encerrado automaticamente quando o contato ficar sem responder pelo tempo definido.
-                    Essa regra tem prioridade sobre conexões “Sem resposta após tempo” maiores.
+                    O tempo mínimo é de 5 minutos e o máximo é de 23 horas.
                   </p>
 
-                  {encerrarInatividadeAtivo && (
-                    <>
-                      <div className={styles.inlineFields}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>Tempo sem resposta</span>
+                  <label className={styles.field}>
+                    <span className={styles.label}>Mensagem antes de encerrar</span>
 
-                          <input
-                            className={styles.input}
-                            type="number"
-                            min={encerrarInatividadeUnidade === "minutos" ? 5 : 1}
-                            max={encerrarInatividadeUnidade === "minutos" ? 1380 : 23}
-                            value={encerrarInatividadeQuantidade}
-                            onChange={(e) =>
-                              setEncerrarInatividadeQuantidade(
-                                limitarQuantidadeInatividade(
-                                  e.target.value,
-                                  encerrarInatividadeUnidade
-                                )
-                              )
-                            }
-                            onBlur={() =>
-                              setEncerrarInatividadeQuantidade(
-                                corrigirQuantidadeMinimaInatividade(
-                                  encerrarInatividadeQuantidade,
-                                  encerrarInatividadeUnidade
-                                )
-                              )
-                            }
-                          />
-                        </label>
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>Unidade</span>
-
-                          <select
-                            className={styles.input}
-                            value={encerrarInatividadeUnidade}
-                            onChange={(e) => {
-                              const novaUnidade =
-                                e.target.value === "minutos" ? "minutos" : "horas";
-
-                              setEncerrarInatividadeUnidade(novaUnidade);
-
-                              setEncerrarInatividadeQuantidade((valorAtual) =>
-                                corrigirQuantidadeMinimaInatividade(valorAtual, novaUnidade)
-                              );
-                            }}
-                          >
-                            <option value="minutos">Minutos</option>
-                            <option value="horas">Horas</option>
-                          </select>
-                        </label>
-                      </div>
-
-                      <p className={styles.helperText}>
-                        O tempo mínimo é de 5 minutos e o máximo é de 23 horas.
-                      </p>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Mensagem antes de encerrar</span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={encerrarInatividadeMensagem}
-                          onChange={(e) => setEncerrarInatividadeMensagem(e.target.value)}
-                          placeholder="Mensagem enviada antes de encerrar o atendimento."
-                        />
-                      </label>
-                    </>
-                  )}
+                    <textarea
+                      className={styles.textarea}
+                      value={encerrarInatividadeMensagem}
+                      onChange={(e) => setEncerrarInatividadeMensagem(e.target.value)}
+                      placeholder="Mensagem enviada antes de encerrar o atendimento."
+                    />
+                  </label>
                 </div>
 
                 {!jaExisteFluxoPadrao && (
@@ -6488,7 +6757,7 @@ useEffect(() => {
                   type="button"
                   className={styles.flowDropdownItem}
                   onClick={() => {
-                    abrirEdicaoFluxo();
+                    abrirEdicaoFluxo(menuFluxo.fluxo!);
                     setMenuFluxo(null);
                   }}
                 >

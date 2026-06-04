@@ -20,12 +20,53 @@ function obterMensagemErro(error: unknown, fallback = "Erro interno.") {
   return error instanceof Error ? error.message : fallback;
 }
 
-async function inserirCompartilhamentoComCodigo(params: {
+async function obterOuCriarCompartilhamentoComCodigo(params: {
   empresaId: string;
   fluxoId: string;
   usuarioId: string;
   snapshot: SnapshotCompartilhamentoFluxo;
 }) {
+  const { data: compartilhamentoExistente, error: compartilhamentoExistenteError } =
+    await supabaseAdmin
+      .from("automacao_fluxo_compartilhamentos")
+      .select("*")
+      .eq("empresa_origem_id", params.empresaId)
+      .eq("fluxo_origem_id", params.fluxoId)
+      .eq("ativo", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+  if (compartilhamentoExistenteError) {
+    throw new Error(
+      `Erro ao buscar codigo de compartilhamento: ${compartilhamentoExistenteError.message}`
+    );
+  }
+
+  if (compartilhamentoExistente) {
+    const { data, error } = await supabaseAdmin
+      .from("automacao_fluxo_compartilhamentos")
+      .update({
+        nome_fluxo: params.snapshot.fluxo.nome,
+        snapshot_json: params.snapshot,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", compartilhamentoExistente.id)
+      .select("*")
+      .single();
+
+    if (error || !data) {
+      throw new Error(
+        `Erro ao atualizar compartilhamento: ${error?.message}`
+      );
+    }
+
+    return {
+      compartilhamento: data,
+      criado: false,
+    };
+  }
+
   for (let tentativa = 0; tentativa < 5; tentativa += 1) {
     const codigo = gerarCodigoCompartilhamentoFluxo();
 
@@ -43,7 +84,10 @@ async function inserirCompartilhamentoComCodigo(params: {
       .single();
 
     if (!error && data) {
-      return data;
+      return {
+        compartilhamento: data,
+        criado: true,
+      };
     }
 
     if (!error?.message?.toLowerCase().includes("duplicate")) {
@@ -93,20 +137,25 @@ export async function POST(req: NextRequest) {
       fluxoId,
     });
 
-    const compartilhamento = await inserirCompartilhamentoComCodigo({
-      empresaId: usuario.empresa_id,
-      fluxoId,
-      usuarioId: usuario.id,
-      snapshot,
-    });
+    const { compartilhamento, criado } =
+      await obterOuCriarCompartilhamentoComCodigo({
+        empresaId: usuario.empresa_id,
+        fluxoId,
+        usuarioId: usuario.id,
+        snapshot,
+      });
 
     await registrarLogAuditoriaSeguro({
       empresa_id: usuario.empresa_id,
       categoria: "fluxos",
       entidade: "fluxo",
       entidade_id: fluxoId,
-      acao: "fluxo_codigo_compartilhamento_gerado",
-      descricao: `Codigo de compartilhamento gerado para ${snapshot.fluxo.nome}`,
+      acao: criado
+        ? "fluxo_codigo_compartilhamento_gerado"
+        : "fluxo_codigo_compartilhamento_atualizado",
+      descricao: criado
+        ? `Codigo de compartilhamento gerado para ${snapshot.fluxo.nome}`
+        : `Codigo de compartilhamento atualizado para ${snapshot.fluxo.nome}`,
       usuario_id: usuario.id,
       usuario_nome: usuario.nome,
       usuario_email: usuario.email,
@@ -115,6 +164,7 @@ export async function POST(req: NextRequest) {
         nos: snapshot.nos.length,
         conexoes: snapshot.conexoes.length,
         gatilhos: snapshot.gatilhos.length,
+        criado,
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
@@ -128,6 +178,8 @@ export async function POST(req: NextRequest) {
         codigo: formatarCodigoCompartilhamento(compartilhamento.codigo),
         nome_fluxo: compartilhamento.nome_fluxo,
         created_at: compartilhamento.created_at,
+        updated_at: compartilhamento.updated_at,
+        criado,
       },
     });
   } catch (error: unknown) {

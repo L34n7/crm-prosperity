@@ -950,12 +950,23 @@ export default function DisparosWhatsAppPage() {
         <div className={styles.layout}>
           <section className={styles.formCard}>
             <div className={styles.cardHeader}>
-              <div>
-                <p className={styles.eyebrow}>Operação</p>
-                <h2 className={styles.cardTitle}>Novo disparo</h2>
-                <p className={styles.cardSubtitle}>
-                  Escolha a conexão, selecione o template e defina os contatos.
-                </p>
+              <div className={styles.cardHeaderContent}>
+                <div>
+                  <p className={styles.eyebrow}>Operação</p>
+                  <h2 className={styles.cardTitle}>Novo disparo</h2>
+                  <p className={styles.cardSubtitle}>
+                    Escolha a conexão, selecione o template e defina os contatos.
+                  </p>
+                </div>
+
+                <a
+                  href="https://business.facebook.com/settings/payment-methods"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.metaPaymentButton}
+                >
+                  Configurar pagamento na Meta
+                </a>
               </div>
             </div>
 
