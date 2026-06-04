@@ -960,7 +960,7 @@ export default function DisparosWhatsAppPage() {
                 </div>
 
                 <a
-                  href="https://business.facebook.com/settings/payment-methods"
+                  href="https://business.facebook.com/latest/billing_hub/accounts/details"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={styles.metaPaymentButton}

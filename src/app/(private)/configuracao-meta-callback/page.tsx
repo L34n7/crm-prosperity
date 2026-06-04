@@ -16,13 +16,47 @@ function CallbackContent() {
   const [status, setStatus] = useState<Status>("carregando");
   const [mensagem, setMensagem] = useState("Processando retorno do Meta...");
 
+  function notificarPaginaPrincipal(payload: {
+    ok: boolean;
+    error?: string;
+    integracao?: unknown;
+  }) {
+    if (typeof window === "undefined") return;
+
+    window.opener?.postMessage(
+      {
+        source: "crm-prosperity-meta-callback",
+        ...payload,
+      },
+      window.location.origin
+    );
+  }
+
+  function fecharPopupSePossivel(delay = 800) {
+    if (typeof window === "undefined") return;
+
+    if (window.opener) {
+      window.setTimeout(() => {
+        window.close();
+      }, delay);
+    }
+  }
+
   useEffect(() => {
     async function processarCallback() {
       if (error) {
+        const mensagemErro =
+          errorDescription || "O Meta retornou um erro durante a conexão.";
+
         setStatus("erro");
-        setMensagem(
-          errorDescription || "O Meta retornou um erro durante a conexão."
-        );
+        setMensagem(mensagemErro);
+
+        notificarPaginaPrincipal({
+          ok: false,
+          error: mensagemErro,
+        });
+
+        fecharPopupSePossivel(1400);
         return;
       }
 
@@ -72,22 +106,41 @@ function CallbackContent() {
           );
         }
 
-        setStatus("sucesso");
-        if (state) {
-          localStorage.removeItem(`meta_embedded_signup_${state}`);
-        }
-        setMensagem(
-          "Meta conectado com sucesso. Você já pode voltar para a tela de configuração do ambiente."
-        );
+      setStatus("sucesso");
+
+      if (state) {
+        localStorage.removeItem(`meta_embedded_signup_${state}`);
+      }
+
+      setMensagem(
+        window.opener
+          ? "Meta conectado com sucesso. Atualizando a tela de configuração..."
+          : "Meta conectado com sucesso. Você já pode voltar para a tela de configuração do ambiente."
+      );
+
+      notificarPaginaPrincipal({
+        ok: true,
+        integracao: data.integracao,
+      });
+
+      fecharPopupSePossivel(800);
       } catch (err) {
         console.error("[META CALLBACK PAGE] Erro:", err);
 
-        setStatus("erro");
-        setMensagem(
-          err instanceof Error
-            ? err.message
-            : "Erro inesperado ao processar retorno do Meta."
-        );
+      const mensagemErro =
+        err instanceof Error
+          ? err.message
+          : "Erro inesperado ao processar retorno do Meta.";
+
+      setStatus("erro");
+      setMensagem(mensagemErro);
+
+      notificarPaginaPrincipal({
+        ok: false,
+        error: mensagemErro,
+      });
+
+      fecharPopupSePossivel(1600);
       }
     }
 
@@ -143,7 +196,7 @@ function CallbackContent() {
           </p>
         )}
 
-        {status === "sucesso" && (
+        {status === "sucesso" && typeof window !== "undefined" && !window.opener && (
           <button
             type="button"
             onClick={() => {
@@ -165,7 +218,7 @@ function CallbackContent() {
           </button>
         )}
 
-        {status === "erro" && (
+        {status === "erro" && typeof window !== "undefined" && !window.opener && (
           <button
             type="button"
             onClick={() => {

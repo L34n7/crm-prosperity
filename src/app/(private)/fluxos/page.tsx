@@ -173,7 +173,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "enviar_video") return "Vídeo";
   if (tipo === "enviar_audio") return "Áudio";
   if (tipo === "enviar_botoes") return "Botões";
-  if (tipo === "botao_redirect") return "Botao redirect";
+  if (tipo === "botao_redirect") return "Botão redirect";
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Captura";
   if (tipo === "agendar_disparo") return "Agendar disparo";
@@ -214,7 +214,7 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "enviar_texto") return "Nova mensagem";
   if (tipo === "pergunta_opcoes") return "Nova pergunta";
   if (tipo === "enviar_botoes") return "Pergunta botões";
-  if (tipo === "botao_redirect") return "Botao redirect";
+  if (tipo === "botao_redirect") return "Botão redirect";
   if (tipo === "transferir_setor") return "Transferir setor";
   if (tipo === "encerrar") return "Encerrar";
   if (tipo === "enviar_imagem") return "Nova imagem";
@@ -4344,7 +4344,11 @@ useEffect(() => {
                         onChange={(e) => setMensagemNode(e.target.value)}
                         placeholder="Digite o conteúdo"
                       />
+                      <p className={styles.help}>
+                        A váriavel deve ser usada com duas colecheias de cada lado da palavra, exemplo: {"{{variavel}}"},  {"{{teste}}"}.
+                      </p>
                     </label>
+
                   )}
 
                   {tipoNodeEdicao === "encerrar" && (
@@ -4504,6 +4508,9 @@ useEffect(() => {
                           onChange={(e) => setCapturaVariavelNode(e.target.value)}
                           placeholder="Ex: nome, cpf, email"
                         />
+                        <p className={styles.help}>
+                          A váriavel deve ser usada com duas colecheias de cada lado da palavra, exemplo: {"{{variavel}}"},  {"{{teste}}"}.
+                        </p>
                       </label>
                       
                       <label className={styles.field}>

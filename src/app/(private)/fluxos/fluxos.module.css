@@ -550,11 +550,11 @@
 }
 
 .nodeRedirect {
-  border-color: #9ad7ff;
+  border-color: #82ddc3;
   background: linear-gradient(
     135deg,
-    #e7f7ff 0%,
-    #b8f2e2 100%
+    #ffffff 20%,
+    #82ddc3 100%
   );
 }
 

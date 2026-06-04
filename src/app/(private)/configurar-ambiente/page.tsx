@@ -208,6 +208,50 @@ export default function ConfigurarAmbientePage() {
     return data;
   }
 
+  async function processarMetaCallbackNaPagina({
+    code,
+    state,
+    embeddedSignup,
+  }: {
+    code: string;
+    state: string;
+    embeddedSignup: {
+      waba_id: string | null;
+      phone_number_id: string | null;
+      business_portfolio_id: string | null;
+      event: string;
+      raw: unknown;
+    } | null;
+  }) {
+    const response = await fetch("/api/integracoes-whatsapp/meta-callback", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        code,
+        state,
+        waba_id: embeddedSignup?.waba_id || null,
+        phone_number_id: embeddedSignup?.phone_number_id || null,
+        business_portfolio_id: embeddedSignup?.business_portfolio_id || null,
+        embedded_signup: embeddedSignup,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(
+        data.error ||
+          data?.meta_response?.error?.message ||
+          "Erro ao finalizar conexão com Meta."
+      );
+    }
+
+    return data;
+  }
+
   function carregarFacebookSdk() {
     return new Promise<void>((resolve, reject) => {
       if (window.FB) {
@@ -457,21 +501,32 @@ async function iniciarEmbeddedSignup() {
         setTimeout(async () => {
           try {
             window.removeEventListener("message", onMessage);
-            setConectandoMeta(false);
 
             if (dadosEmbeddedSignup) {
               await finalizarEmbeddedSignup(dadosEmbeddedSignup);
             }
 
-            window.location.href = `/configuracao-meta-callback?code=${encodeURIComponent(
-              code
-            )}&state=${encodeURIComponent(integracao.id)}`;
+            await processarMetaCallbackNaPagina({
+              code,
+              state: integracao.id,
+              embeddedSignup: dadosEmbeddedSignup,
+            });
+
+            if (integracao.id) {
+              localStorage.removeItem(`meta_embedded_signup_${integracao.id}`);
+            }
+
+            await carregarIntegracao(false);
+            setEtapaQuiz(1);
           } catch (error) {
-            console.error("[EMBEDDED SIGNUP FINISH ERROR]", error);
+            console.error("[EMBEDDED SIGNUP CALLBACK ERROR]", error);
+
+            setConectandoMeta(false);
+
             alert(
               error instanceof Error
                 ? error.message
-                : "Erro ao salvar dados do Embedded Signup."
+                : "Erro ao finalizar conexão com a Meta."
             );
           }
         }, 1500);
@@ -685,6 +740,32 @@ async function carregarPerfilOnboarding() {
     carregarPerfilOnboarding();
     carregarIntegracao(true);
   }, []);
+
+  useEffect(() => {
+    function receberCallbackMeta(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+
+      if (event.data?.source !== "crm-prosperity-meta-callback") return;
+
+      if (event.data?.ok) {
+        carregarIntegracao(false);
+        setEtapaQuiz(1);
+        return;
+      }
+
+      if (event.data?.error) {
+        alert(event.data.error);
+      }
+    }
+
+    window.addEventListener("message", receberCallbackMeta);
+
+    return () => {
+      window.removeEventListener("message", receberCallbackMeta);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const indiceEtapaAtual = useMemo(
     () => obterIndiceEtapaAtual(integracao),
