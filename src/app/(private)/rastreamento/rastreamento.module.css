@@ -435,6 +435,52 @@
   min-width: 0;
 }
 
+.eventTitleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.eventFlowName {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.eventFlowName::before {
+  content: "• ";
+  color: #cbd5e1;
+}
+
+.eventResultBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.eventResultPositive {
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.eventResultNegative {
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.eventResultNeutral {
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  background: #f8fafc;
+}
+
 .eventIcon {
   width: 32px;
   height: 32px;
@@ -500,6 +546,66 @@
 .eventMeta b {
   color: #047857;
   font-size: 12px;
+}
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 86px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  color: #64748b;
+  background: #f8fafc;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.paginationRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.paginationActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.paginationActions strong {
+  color: #334155;
+  font-size: 12px;
+}
+
+.paginationActions button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  color: #334155;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  transition: 0.2s ease;
+}
+
+.paginationActions button:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.paginationActions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .modalOverlay {
@@ -608,5 +714,14 @@
     width: 100%;
     align-items: flex-start;
     margin-left: 43px;
+  }
+
+  .paginationRow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .paginationActions {
+    justify-content: flex-start;
   }
 }

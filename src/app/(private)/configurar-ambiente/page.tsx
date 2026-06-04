@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./configurar-ambiente.module.css";
 import { t } from "@/i18n";
+import FeedbackToast from "@/components/FeedbackToast";
 
 declare global {
   interface Window {
@@ -162,13 +163,26 @@ export default function ConfigurarAmbientePage() {
   const router = useRouter();
   const numeroValido =
     !!integracao?.numero && !integracao.numero.startsWith("pendente_");
-    
+  const [toastSucesso, setToastSucesso] = useState("");
+  const [toastErro, setToastErro] = useState("");
+
   const [etapaQuiz, setEtapaQuiz] = useState(0);
   const [perfilOnboarding, setPerfilOnboarding] =
     useState<PerfilOnboarding>({
       nomeUsuario: "usuário",
       nomeEmpresa: "sua empresa",
     });
+
+
+  function mostrarSucessoToast(mensagem: string) {
+    setToastErro("");
+    setToastSucesso(mensagem);
+  }
+
+  function mostrarErroToast(mensagem: string) {
+    setToastSucesso("");
+    setToastErro(mensagem);
+  }
 
   async function sincronizarDadosMeta(integracaoId: string) {
     const response = await fetch("/api/integracoes-whatsapp/meta-dados", {
@@ -492,7 +506,7 @@ async function iniciarEmbeddedSignup() {
         if (!response?.authResponse?.code) {
           window.removeEventListener("message", onMessage);
           setConectandoMeta(false);
-          alert("A Meta não retornou o código de autorização.");
+          mostrarErroToast("A Meta não retornou o código de autorização.");
           return;
         }
 
@@ -518,16 +532,17 @@ async function iniciarEmbeddedSignup() {
 
             await carregarIntegracao(false);
             setEtapaQuiz(1);
+            mostrarSucessoToast("Conta Meta conectada com sucesso.");
           } catch (error) {
             console.error("[EMBEDDED SIGNUP CALLBACK ERROR]", error);
 
-            setConectandoMeta(false);
-
-            alert(
+            mostrarErroToast(
               error instanceof Error
                 ? error.message
                 : "Erro ao finalizar conexão com a Meta."
             );
+          } finally {
+            setConectandoMeta(false);
           }
         }, 1500);
       },
@@ -546,7 +561,7 @@ async function iniciarEmbeddedSignup() {
   } catch (error) {
     setConectandoMeta(false);
 
-    alert(
+    mostrarErroToast(
       error instanceof Error
         ? error.message
         : "Erro ao abrir a configuração da Meta."
@@ -558,12 +573,12 @@ async function iniciarEmbeddedSignup() {
 async function handleRegistrarNumero(pinInformado?: string) {
   try {
     if (!integracao?.id) {
-      alert("Integração ainda não carregada.");
+      mostrarErroToast("Integração ainda não carregada.");
       return;
     }
 
     if (pinInformado && !/^\d{6}$/.test(pinInformado)) {
-      alert("The PIN must contain exactly 6 digits.");
+      mostrarErroToast("O PIN deve conter exatamente 6 dígitos.");
       return;
     }
 
@@ -594,7 +609,7 @@ async function handleRegistrarNumero(pinInformado?: string) {
     setModalPinAberto(false);
     setPin("");
 
-    alert("Número ativado com sucesso.");
+    mostrarSucessoToast("Número ativado com sucesso.");
 
     try {
       await fetch("/api/integracoes-whatsapp/check-phone", {
@@ -607,7 +622,7 @@ async function handleRegistrarNumero(pinInformado?: string) {
 
     await carregarIntegracao(false);
   } catch (error) {
-    alert(
+    mostrarErroToast(
       error instanceof Error
         ? error.message
         : "Erro inesperado ao ativar o número."
@@ -648,25 +663,27 @@ async function handleConfigurarWebhook() {
     const data = await response.json();
 
     if (!response.ok || !data.ok) {
-      const mensagemOriginal =
-        data.error || "Erro ao configurar webhook.";
+      const mensagemOriginal = data.error || "Erro ao configurar webhook.";
 
-      setErroWebhook(
-        `Não foi possível concluir a assinatura do webhook porque o app ainda precisa de permissões avançadas da Meta. Permissão necessária: whatsapp_business_management. Resposta original da API: ${mensagemOriginal}`
-      );
+      const mensagemErro = `Não foi possível concluir a assinatura do webhook porque o app ainda precisa de permissões avançadas da Meta. Permissão necessária: whatsapp_business_management. Resposta original da API: ${mensagemOriginal}`;
+
+      setErroWebhook(mensagemErro);
+      mostrarErroToast("Não foi possível configurar o webhook.");
 
       return;
     }
 
     setErroWebhook(null);
-    alert("Webhook configurado com sucesso.");
+    mostrarSucessoToast("Webhook configurado com sucesso.");
     await carregarIntegracao(false);
   } catch (error) {
-    setErroWebhook(
+    const mensagemErro =
       error instanceof Error
         ? `Não foi possível concluir a assinatura do webhook. Permissão necessária: whatsapp_business_management. Erro original: ${error.message}`
-        : "Não foi possível concluir a assinatura do webhook. Permissão necessária: whatsapp_business_management."
-    );
+        : "Não foi possível concluir a assinatura do webhook. Permissão necessária: whatsapp_business_management.";
+
+    setErroWebhook(mensagemErro);
+    mostrarErroToast("Não foi possível configurar o webhook.");
   } finally {
     setConfigurandoWebhook(false);
   }
@@ -676,7 +693,7 @@ async function handleConfigurarWebhook() {
 async function handleConcluirConfiguracao() {
   try {
     if (!integracao?.id) {
-      alert("Integração ainda não carregada.");
+      mostrarErroToast("Integração ainda não carregada.");
       return;
     }
 
@@ -696,10 +713,10 @@ async function handleConcluirConfiguracao() {
       throw new Error(data.error || "Erro ao concluir configuração.");
     }
 
-    alert("Configuração concluída com sucesso.");
+    mostrarSucessoToast("Configuração concluída com sucesso.");
     await carregarIntegracao(false);
   } catch (error) {
-    alert(
+    mostrarErroToast(
       error instanceof Error
         ? error.message
         : "Erro inesperado ao concluir configuração."
@@ -754,7 +771,7 @@ async function carregarPerfilOnboarding() {
       }
 
       if (event.data?.error) {
-        alert(event.data.error);
+        mostrarErroToast(event.data.error);
       }
     }
 
@@ -765,6 +782,19 @@ async function carregarPerfilOnboarding() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!toastSucesso && !toastErro) return;
+
+    const timeout = window.setTimeout(() => {
+      setToastSucesso("");
+      setToastErro("");
+    }, 8000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toastSucesso, toastErro]);
 
 
   const indiceEtapaAtual = useMemo(
@@ -812,6 +842,12 @@ async function carregarPerfilOnboarding() {
 
   return (
     <main className={styles.page}>
+      <FeedbackToast
+        success={toastSucesso}
+        error={toastErro}
+        onSuccessDismiss={() => setToastSucesso("")}
+        onErrorDismiss={() => setToastErro("")}
+      />
       <div className={styles.container}>
 
         {loading ? (

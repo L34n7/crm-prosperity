@@ -58,10 +58,16 @@ type Evento = {
   valor: number | null;
   origem_registro: string;
   ocorrido_em: string;
+  metadata_json?: EventoMetadata | string | null;
   contatos?: { id: string; nome: string | null; telefone: string } | null;
   rastreamento_origens?: { id: string; nome: string } | null;
   rastreamento_campanhas?: { id: string; nome: string } | null;
   rastreamento_links?: { id: string; nome: string; slug: string } | null;
+};
+
+type EventoMetadata = {
+  fluxo_nome?: string | null;
+  resultado_fluxo?: string | null;
 };
 
 type IntegracaoWhatsapp = {
@@ -101,6 +107,8 @@ const EVENTOS_MANUAIS = [
   { value: "agendamento_confirmado", label: "Agendamento confirmado" },
 ];
 
+const EVENTOS_POR_PAGINA = 10;
+
 function eventoManualValido(tipo: string) {
   return EVENTOS_MANUAIS.some((evento) => evento.value === tipo);
 }
@@ -135,6 +143,55 @@ function formatarValor(valor: number | null) {
     style: "currency",
     currency: "BRL",
   }).format(valor);
+}
+
+function obterMetadataEvento(evento: Evento): EventoMetadata {
+  if (!evento.metadata_json) return {};
+
+  if (typeof evento.metadata_json === "string") {
+    try {
+      return JSON.parse(evento.metadata_json) as EventoMetadata;
+    } catch {
+      return {};
+    }
+  }
+
+  return evento.metadata_json;
+}
+
+function obterResultadoFluxo(evento: Evento) {
+  const metadata = obterMetadataEvento(evento);
+  const resultado = String(metadata.resultado_fluxo || "").toLowerCase();
+
+  if (resultado === "positivo") {
+    return { label: "Positivo", className: styles.eventResultPositive };
+  }
+
+  if (resultado === "negativo") {
+    return { label: "Negativo", className: styles.eventResultNegative };
+  }
+
+  if (resultado === "neutro") {
+    return { label: "Neutro", className: styles.eventResultNeutral };
+  }
+
+  if (evento.tipo === "fluxo_incompleto_timeout") {
+    return { label: "Incompleto", className: styles.eventResultNeutral };
+  }
+
+  return null;
+}
+
+function eventoContaComoVenda(evento: Evento) {
+  if (evento.tipo === "venda_realizada") return true;
+
+  const metadata = obterMetadataEvento(evento);
+
+  return (
+    evento.tipo === "fluxo_finalizado" &&
+    String(metadata.resultado_fluxo || "").toLowerCase() === "positivo" &&
+    Number(evento.valor || 0) > 0
+  );
 }
 
 function StatusControl({
@@ -202,6 +259,7 @@ export default function RastreamentoPage() {
   const [eventoEdicaoTipo, setEventoEdicaoTipo] = useState("venda_realizada");
   const [eventoEdicaoContatoId, setEventoEdicaoContatoId] = useState("");
   const [eventoEdicaoValor, setEventoEdicaoValor] = useState("");
+  const [paginaEventos, setPaginaEventos] = useState(1);
 
   const carregarDados = useCallback(async () => {
     setLoading(true);
@@ -228,6 +286,7 @@ export default function RastreamentoPage() {
       setCampanhas(campanhasResponse.campanhas || []);
       setLinks(linksResponse.links || []);
       setEventos(eventosResponse.eventos || []);
+      setPaginaEventos(1);
       setIntegracoes(integracoesResponse.data || []);
       setContatos(contatosResponse.contatos || []);
     } catch (error) {
@@ -252,9 +311,31 @@ export default function RastreamentoPage() {
   );
 
   const totalVendas = useMemo(
-    () => eventos.filter((evento) => evento.tipo === "venda_realizada").length,
+    () => eventos.filter(eventoContaComoVenda).length,
     [eventos]
   );
+
+  const totalPaginasEventos = useMemo(
+    () => Math.max(1, Math.ceil(eventos.length / EVENTOS_POR_PAGINA)),
+    [eventos.length]
+  );
+
+  const paginaEventosAtual = Math.min(paginaEventos, totalPaginasEventos);
+  const primeiroEventoExibido =
+    eventos.length === 0 ? 0 : (paginaEventosAtual - 1) * EVENTOS_POR_PAGINA + 1;
+  const ultimoEventoExibido = Math.min(
+    paginaEventosAtual * EVENTOS_POR_PAGINA,
+    eventos.length
+  );
+  const eventosPaginados = useMemo(() => {
+    const inicio = (paginaEventosAtual - 1) * EVENTOS_POR_PAGINA;
+
+    return eventos.slice(inicio, inicio + EVENTOS_POR_PAGINA);
+  }, [eventos, paginaEventosAtual]);
+
+  useEffect(() => {
+    setPaginaEventos((paginaAtual) => Math.min(paginaAtual, totalPaginasEventos));
+  }, [totalPaginasEventos]);
 
   function limparFeedback() {
     setErro("");
@@ -868,42 +949,103 @@ export default function RastreamentoPage() {
                     <span className={styles.countBadge}>{eventos.length}</span>
                   </div>
                   <div className={styles.eventList}>
-                    {eventos.map((evento) => (
-                      <article className={styles.eventItem} key={evento.id}>
-                        <div className={styles.eventIcon}><Activity size={15} /></div>
-                        <div className={styles.eventContent}>
-                          <strong>{EVENTOS_LABEL[evento.tipo] || evento.tipo}</strong>
-                          <p>
-                            {evento.contatos?.nome || evento.contatos?.telefone || "Visitante ainda nao identificado"}
-                            {evento.rastreamento_campanhas?.nome ? ` | ${evento.rastreamento_campanhas.nome}` : ""}
-                            {evento.origem_registro === "manual" ? " | Manual" : ""}
-                          </p>
-                        </div>
-                        <div className={styles.eventMeta}>
-                          {formatarValor(evento.valor) && <b>{formatarValor(evento.valor)}</b>}
-                          <span>{formatarData(evento.ocorrido_em)}</span>
-                          {evento.origem_registro === "manual" && (
-                            <div className={styles.eventActions}>
-                              <button
-                                type="button"
-                                className={styles.eventActionButton}
-                                onClick={() => editarEvento(evento)}
-                              >
-                                Editar
-                              </button>
-                              <button
-                                type="button"
-                                className={styles.eventActionDangerButton}
-                                onClick={() => apagarEvento(evento)}
-                              >
-                                Apagar
-                              </button>
+                    {eventosPaginados.length === 0 && (
+                      <div className={styles.emptyState}>
+                        Nenhum evento registrado ainda.
+                      </div>
+                    )}
+
+                    {eventosPaginados.map((evento) => {
+                      const metadata = obterMetadataEvento(evento);
+                      const resultadoFluxo = obterResultadoFluxo(evento);
+
+                      return (
+                        <article className={styles.eventItem} key={evento.id}>
+                          <div className={styles.eventIcon}><Activity size={15} /></div>
+                          <div className={styles.eventContent}>
+                            <div className={styles.eventTitleRow}>
+                              <strong>{EVENTOS_LABEL[evento.tipo] || evento.tipo}</strong>
+                              {metadata.fluxo_nome && (
+                                <span className={styles.eventFlowName}>
+                                  {metadata.fluxo_nome}
+                                </span>
+                              )}
+                              {resultadoFluxo && (
+                                <span
+                                  className={`${styles.eventResultBadge} ${resultadoFluxo.className}`}
+                                >
+                                  {resultadoFluxo.label}
+                                </span>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </article>
-                    ))}
+                            <p>
+                              {evento.contatos?.nome || evento.contatos?.telefone || "Visitante ainda nao identificado"}
+                              {evento.rastreamento_campanhas?.nome ? ` | ${evento.rastreamento_campanhas.nome}` : ""}
+                              {evento.origem_registro === "manual" ? " | Manual" : ""}
+                            </p>
+                          </div>
+                          <div className={styles.eventMeta}>
+                            {formatarValor(evento.valor) && <b>{formatarValor(evento.valor)}</b>}
+                            <span>{formatarData(evento.ocorrido_em)}</span>
+                            {evento.origem_registro === "manual" && (
+                              <div className={styles.eventActions}>
+                                <button
+                                  type="button"
+                                  className={styles.eventActionButton}
+                                  onClick={() => editarEvento(evento)}
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.eventActionDangerButton}
+                                  onClick={() => apagarEvento(evento)}
+                                >
+                                  Apagar
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
+
+                  {eventos.length > EVENTOS_POR_PAGINA && (
+                    <div className={styles.paginationRow}>
+                      <span>
+                        Mostrando {primeiroEventoExibido}-{ultimoEventoExibido} de{" "}
+                        {eventos.length}
+                      </span>
+                      <div className={styles.paginationActions}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPaginaEventos((paginaAtual) =>
+                              Math.max(1, paginaAtual - 1)
+                            )
+                          }
+                          disabled={paginaEventosAtual === 1}
+                        >
+                          Anterior
+                        </button>
+                        <strong>
+                          Pagina {paginaEventosAtual} de {totalPaginasEventos}
+                        </strong>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPaginaEventos((paginaAtual) =>
+                              Math.min(totalPaginasEventos, paginaAtual + 1)
+                            )
+                          }
+                          disabled={paginaEventosAtual === totalPaginasEventos}
+                        >
+                          Proxima
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </section>
               </section>
             )}
