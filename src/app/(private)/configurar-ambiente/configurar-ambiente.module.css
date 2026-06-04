@@ -769,6 +769,18 @@
   margin-top: 7px;
 }
 
+.modalPinError {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 @media (max-width: 768px) {
   .quizCard {
     padding: 22px;

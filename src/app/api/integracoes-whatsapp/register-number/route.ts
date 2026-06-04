@@ -140,7 +140,7 @@ async function registerNumber(request: NextRequest) {
 
       const mensagemMeta = data?.error?.message || "";
       const detalhesMeta = data?.error?.error_data?.details || "";
-      const codigoMeta = data?.error?.code;
+      const codigoMeta = Number(data?.error?.code);
 
       const mensagemCompleta = `${mensagemMeta} ${detalhesMeta}`.toLowerCase();
 

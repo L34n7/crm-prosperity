@@ -572,6 +572,7 @@ async function iniciarEmbeddedSignup() {
 
 
 async function handleRegistrarNumero(pinInformado?: string) {
+  setErroPin("");
   try {
     if (!integracao?.id) {
       mostrarErroToast("Integração ainda não carregada.");
@@ -602,19 +603,27 @@ async function handleRegistrarNumero(pinInformado?: string) {
     const data = await response.json();
 
     if (!response.ok || !data.ok) {
-      const mensagemErro =
-        data?.pin_incorreto
-          ? "PIN incorreto. Verifique o PIN de verificação em duas etapas e tente novamente."
-          : data?.error || "Erro ao registrar o número de telefone.";
+      const mensagemMeta =
+        data?.meta_response?.error?.message ||
+        data?.meta_response?.error?.error_data?.details ||
+        "";
 
-      if (data?.requires_pin || data?.pin_incorreto) {
-        setErroPin(mensagemErro);
-        mostrarErroToast(mensagemErro);
-        setModalPinAberto(true);
-        return;
-      }
+      const erroParecePinIncorreto =
+        data?.pin_incorreto === true ||
+        String(data?.meta_response?.error?.code) === "133005" ||
+        mensagemMeta.toLowerCase().includes("pin mismatch") ||
+        mensagemMeta.toLowerCase().includes("pin incorreto") ||
+        mensagemMeta.toLowerCase().includes("incompatibilidade de pin");
 
-      throw new Error(mensagemErro);
+      const mensagemErro = erroParecePinIncorreto
+        ? "PIN incorreto. Verifique o PIN de verificação em duas etapas e tente novamente."
+        : data?.error || "Erro ao registrar o número de telefone.";
+
+      setErroPin(mensagemErro);
+      mostrarErroToast(mensagemErro);
+      setModalPinAberto(true);
+
+      return;
     }
 
     setModalPinAberto(false);
@@ -634,11 +643,17 @@ async function handleRegistrarNumero(pinInformado?: string) {
 
     await carregarIntegracao(false);
   } catch (error) {
-    mostrarErroToast(
+    const mensagemErro =
       error instanceof Error
         ? error.message
-        : "Erro inesperado ao ativar o número."
-    );
+        : "Erro inesperado ao ativar o número.";
+
+    setErroPin(mensagemErro);
+    mostrarErroToast(mensagemErro);
+
+    if (pinInformado) {
+      setModalPinAberto(true);
+    }
   } finally {
     setRegistrandoNumero(false);
   }
