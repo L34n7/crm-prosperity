@@ -123,7 +123,8 @@ export default function LoginPage() {
 
     window.sessionStorage.removeItem("crm_ambiente_redirect_apos_login");
     window.sessionStorage.removeItem("crm_ambiente_redirect_inicial");
-
+    window.sessionStorage.removeItem("crm_ambiente_configurado");
+    
     const rota = await obterRotaAposLogin();
 
     if (rota === "/configurar-ambiente") {

@@ -12,7 +12,8 @@ export default function LogoutButton() {
 
     window.sessionStorage.removeItem("crm_ambiente_redirect_apos_login");
     window.sessionStorage.removeItem("crm_ambiente_redirect_inicial");
-
+    window.sessionStorage.removeItem("crm_ambiente_configurado");
+    
     await supabase.auth.signOut();
 
     router.push("/login");

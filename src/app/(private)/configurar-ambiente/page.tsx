@@ -713,6 +713,13 @@ async function handleConcluirConfiguracao() {
       throw new Error(data.error || "Erro ao concluir configuração.");
     }
 
+    if (data.integracao) {
+      setIntegracao(data.integracao);
+    }
+
+    window.sessionStorage.setItem("crm_ambiente_configurado", "true");
+    window.dispatchEvent(new Event("crm_ambiente_configurado"));
+
     mostrarSucessoToast("Configuração concluída com sucesso.");
     await carregarIntegracao(false);
   } catch (error) {

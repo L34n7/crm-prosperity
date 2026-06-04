@@ -24,10 +24,11 @@ export default function AmbienteObrigatorioGuard() {
     useState<IntegracaoWhatsappAmbiente | null>(null);
 
   const estaNaPaginaConfiguracao = pathname === "/configurar-ambiente";
+  const [ambienteConfiguradoLocal, setAmbienteConfiguradoLocal] = useState(false);
 
   const ambienteConfigurado = useMemo(() => {
-    return isAmbienteConfigurado(integracao);
-  }, [integracao]);
+    return ambienteConfiguradoLocal || isAmbienteConfigurado(integracao);
+  }, [ambienteConfiguradoLocal, integracao]);
 
   const verificarAmbiente = useCallback(
     async (modoManual = false) => {
@@ -60,6 +61,24 @@ export default function AmbienteObrigatorioGuard() {
     },
     []
   );
+
+  useEffect(() => {
+    const valorSalvo = window.sessionStorage.getItem("crm_ambiente_configurado");
+
+    if (valorSalvo === "true") {
+      setAmbienteConfiguradoLocal(true);
+    }
+
+    function marcarComoConfigurado() {
+      setAmbienteConfiguradoLocal(true);
+    }
+
+    window.addEventListener("crm_ambiente_configurado", marcarComoConfigurado);
+
+    return () => {
+      window.removeEventListener("crm_ambiente_configurado", marcarComoConfigurado);
+    };
+  }, []);
 
   useEffect(() => {
     verificarAmbiente(false);
