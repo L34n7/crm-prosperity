@@ -615,8 +615,17 @@ async function handleRegistrarNumero(pinInformado?: string) {
         mensagemMeta.toLowerCase().includes("pin incorreto") ||
         mensagemMeta.toLowerCase().includes("incompatibilidade de pin");
 
+      const erroMuitasTentativas =
+        data?.muitas_tentativas === true ||
+        String(data?.meta_response?.error?.code) === "133016" ||
+        mensagemMeta.toLowerCase().includes("too many attempts") ||
+        mensagemMeta.toLowerCase().includes("muitas tentativas") ||
+        mensagemMeta.toLowerCase().includes("limite de volume");
+
       const mensagemErro = erroParecePinIncorreto
         ? "PIN incorreto. Verifique o PIN de verificação em duas etapas e tente novamente."
+        : erroMuitasTentativas
+        ? "Muitas tentativas em pouco tempo. Aguarde alguns minutos antes de tentar novamente com este número."
         : data?.error || "Erro ao registrar o número de telefone.";
 
       setErroPin(mensagemErro);

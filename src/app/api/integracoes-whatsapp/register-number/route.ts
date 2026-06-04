@@ -150,6 +150,12 @@ async function registerNumber(request: NextRequest) {
         mensagemCompleta.includes("pin incorreto") ||
         mensagemCompleta.includes("incompatibilidade de pin");
 
+      const muitasTentativas =
+        codigoMeta === 133016 ||
+        mensagemCompleta.includes("too many attempts") ||
+        mensagemCompleta.includes("muitas tentativas") ||
+        mensagemCompleta.includes("limite de volume");
+
       const precisaPin =
         mensagemCompleta.includes("pin") ||
         mensagemCompleta.includes("two-step") ||
@@ -162,11 +168,14 @@ async function registerNumber(request: NextRequest) {
           ok: false,
           error: pinIncorreto
             ? "PIN incorreto. Verifique o PIN de verificação em duas etapas do número e tente novamente."
+            : muitasTentativas
+            ? "Muitas tentativas em pouco tempo. Aguarde alguns minutos antes de tentar novamente com este número."
             : precisaPin
             ? "Este número exige um PIN de verificação em duas etapas."
             : "Erro ao registrar número na Meta.",
-          requires_pin: precisaPin,
+          requires_pin: precisaPin || pinIncorreto || muitasTentativas,
           pin_incorreto: pinIncorreto,
+          muitas_tentativas: muitasTentativas,
           meta_response: data,
         },
         { status: response.status }
