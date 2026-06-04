@@ -139,20 +139,34 @@ async function registerNumber(request: NextRequest) {
         .eq("id", integracao.id);
 
       const mensagemMeta = data?.error?.message || "";
+      const detalhesMeta = data?.error?.error_data?.details || "";
+      const codigoMeta = data?.error?.code;
+
+      const mensagemCompleta = `${mensagemMeta} ${detalhesMeta}`.toLowerCase();
+
+      const pinIncorreto =
+        codigoMeta === 133005 ||
+        mensagemCompleta.includes("pin mismatch") ||
+        mensagemCompleta.includes("pin incorreto") ||
+        mensagemCompleta.includes("incompatibilidade de pin");
 
       const precisaPin =
-        mensagemMeta.toLowerCase().includes("pin") ||
-        mensagemMeta.toLowerCase().includes("two-step") ||
-        mensagemMeta.toLowerCase().includes("two factor") ||
-        mensagemMeta.toLowerCase().includes("two-factor");
+        mensagemCompleta.includes("pin") ||
+        mensagemCompleta.includes("two-step") ||
+        mensagemCompleta.includes("two step") ||
+        mensagemCompleta.includes("two factor") ||
+        mensagemCompleta.includes("two-factor");
 
       return NextResponse.json(
         {
           ok: false,
-          error: precisaPin
+          error: pinIncorreto
+            ? "PIN incorreto. Verifique o PIN de verificação em duas etapas do número e tente novamente."
+            : precisaPin
             ? "Este número exige um PIN de verificação em duas etapas."
             : "Erro ao registrar número na Meta.",
           requires_pin: precisaPin,
+          pin_incorreto: pinIncorreto,
           meta_response: data,
         },
         { status: response.status }

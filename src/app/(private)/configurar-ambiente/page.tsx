@@ -165,6 +165,7 @@ export default function ConfigurarAmbientePage() {
     !!integracao?.numero && !integracao.numero.startsWith("pendente_");
   const [toastSucesso, setToastSucesso] = useState("");
   const [toastErro, setToastErro] = useState("");
+  const [erroPin, setErroPin] = useState("");
 
   const [etapaQuiz, setEtapaQuiz] = useState(0);
   const [perfilOnboarding, setPerfilOnboarding] =
@@ -578,7 +579,10 @@ async function handleRegistrarNumero(pinInformado?: string) {
     }
 
     if (pinInformado && !/^\d{6}$/.test(pinInformado)) {
-      mostrarErroToast("O PIN deve conter exatamente 6 dígitos.");
+      const mensagem = "O PIN deve conter exatamente 6 dígitos.";
+
+      setErroPin(mensagem);
+      mostrarErroToast(mensagem);
       return;
     }
 
@@ -598,16 +602,24 @@ async function handleRegistrarNumero(pinInformado?: string) {
     const data = await response.json();
 
     if (!response.ok || !data.ok) {
-      if (data?.requires_pin) {
+      const mensagemErro =
+        data?.pin_incorreto
+          ? "PIN incorreto. Verifique o PIN de verificação em duas etapas e tente novamente."
+          : data?.error || "Erro ao registrar o número de telefone.";
+
+      if (data?.requires_pin || data?.pin_incorreto) {
+        setErroPin(mensagemErro);
+        mostrarErroToast(mensagemErro);
         setModalPinAberto(true);
         return;
       }
 
-      throw new Error(data.error || "Erro ao registrar o número de telefone.");
+      throw new Error(mensagemErro);
     }
 
     setModalPinAberto(false);
     setPin("");
+    setErroPin("");
 
     mostrarSucessoToast("Número ativado com sucesso.");
 
@@ -1106,7 +1118,10 @@ async function carregarPerfilOnboarding() {
                           ? styles.primaryButton
                           : styles.disabledButton
                       }
-                      onClick={() => setModalPinAberto(true)}
+                      onClick={() => {
+                        setErroPin("");
+                        setModalPinAberto(true);
+                      }}
                       disabled={!metaConectado || registrandoNumero}
                     >
                       {registrandoNumero
@@ -1368,11 +1383,19 @@ async function carregarPerfilOnboarding() {
               className={styles.modalInput}
               value={pin}
               onChange={(e) => {
-                const somenteNumeros = e.target.value.replace(/\D/g, "");
+                setErroPin("");
+
+                const somenteNumeros = e.target.value.replace(/\D/g, "").slice(0, 6);
                 setPin(somenteNumeros);
               }}
               placeholder="Digite o PIN de 6 dígitos"
             />
+
+            {erroPin && (
+              <div className={styles.modalPinError}>
+                {erroPin}
+              </div>
+            )}
 
             <div className={styles.modalActions}>
               <button
@@ -1381,6 +1404,7 @@ async function carregarPerfilOnboarding() {
                 onClick={() => {
                   setModalPinAberto(false);
                   setPin("");
+                  setErroPin("");
                 }}
                 disabled={registrandoNumero}
               >
