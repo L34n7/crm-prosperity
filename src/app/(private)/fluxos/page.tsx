@@ -21,6 +21,8 @@ import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
 import { Handle } from "@xyflow/react";
 import { gerarSugestaoDescricaoIA } from "@/lib/ia/sugestoes-descricao-ia";
+import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { Copy, Download, Share2 } from "lucide-react";
 
 type Fluxo = {
   id: string;
@@ -115,6 +117,38 @@ const TIPOS_VALOR_CONVERSAO: TipoValorConversao[] = [
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
+
+async function lerRespostaApi(res: Response, mensagemPadrao: string) {
+  const contentType = res.headers.get("content-type") || "";
+  const text = await res.text();
+
+  if (contentType.includes("application/json")) {
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(mensagemPadrao);
+    }
+  }
+
+  if (!res.ok) {
+    if (
+      res.status === 413 ||
+      /request entity too large|payload too large|function_payload_too_large/i.test(text)
+    ) {
+      throw new Error(
+        "O arquivo excede o limite de upload aceito pelo servidor. Tente reduzir o tamanho e envie novamente."
+      );
+    }
+
+    throw new Error(text || mensagemPadrao);
+  }
+
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return {};
+  }
+}
 
 const nodeTypes = {
   custom: NodeCustom,
@@ -482,6 +516,17 @@ export default function FluxosPage() {
     useState(false);
   const [fluxoParaApagarDefinitivo, setFluxoParaApagarDefinitivo] =
     useState<Fluxo | null>(null);
+  const [modalCompartilharAberto, setModalCompartilharAberto] = useState(false);
+  const [fluxoParaCompartilhar, setFluxoParaCompartilhar] =
+    useState<Fluxo | null>(null);
+  const [codigoCompartilhamento, setCodigoCompartilhamento] = useState("");
+  const [carregandoCodigoCompartilhamento, setCarregandoCodigoCompartilhamento] =
+    useState(false);
+  const [erroCompartilhamento, setErroCompartilhamento] = useState("");
+  const [modalImportarAberto, setModalImportarAberto] = useState(false);
+  const [codigoImportacao, setCodigoImportacao] = useState("");
+  const [importandoFluxo, setImportandoFluxo] = useState(false);
+  const [erroImportacao, setErroImportacao] = useState("");
 
   const [opcoesNode, setOpcoesNode] = useState<
     { valor: string; titulo: string }[]
@@ -739,39 +784,88 @@ export default function FluxosPage() {
       setErro("");
       setSucesso("");
 
-      const formData = new FormData();
-      formData.append("arquivo", arquivo);
-
-      const res = await fetch("/api/automacoes/midias/upload", {
+      const preparacaoRes = await fetch("/api/automacoes/midias/upload", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          acao: "preparar_upload",
+          nome: arquivo.name,
+          mimeType: arquivo.type,
+          tamanhoBytes: arquivo.size,
+        }),
       });
 
-      const json = await res.json();
+      const preparacaoJson = await lerRespostaApi(
+        preparacaoRes,
+        "Erro ao preparar envio da mídia."
+      );
 
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao enviar mídia.");
+      if (!preparacaoRes.ok || !preparacaoJson.ok) {
+        throw new Error(preparacaoJson.error || "Erro ao preparar envio da mídia.");
       }
 
-      setMidiaUrlNode(json.midia.url);
-      setMidiaNomeNode(json.midia.nome);
+      const upload = preparacaoJson.upload;
+
+      if (!upload?.bucket || !upload?.path || !upload?.token) {
+        throw new Error("Dados de upload inválidos.");
+      }
+
+      const supabase = createSupabaseBrowserClient();
+      const { error: uploadError } = await supabase.storage
+        .from(upload.bucket)
+        .uploadToSignedUrl(upload.path, upload.token, arquivo, {
+          contentType: arquivo.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(uploadError.message || "Erro ao enviar mídia para o Storage.");
+      }
+
+      const conclusaoRes = await fetch("/api/automacoes/midias/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          acao: "concluir_upload",
+          nome: arquivo.name,
+          mimeType: arquivo.type,
+          tamanhoBytes: arquivo.size,
+          storagePath: upload.path,
+        }),
+      });
+
+      const conclusaoJson = await lerRespostaApi(
+        conclusaoRes,
+        "Erro ao concluir envio da mídia."
+      );
+
+      if (!conclusaoRes.ok || !conclusaoJson.ok) {
+        throw new Error(conclusaoJson.error || "Erro ao concluir envio da mídia.");
+      }
+
+      setMidiaUrlNode(conclusaoJson.midia.url);
+      setMidiaNomeNode(conclusaoJson.midia.nome);
 
       setMidias((atuais) => {
-        const jaExiste = atuais.some((m) => m.id === json.midia.id);
+        const jaExiste = atuais.some((m) => m.id === conclusaoJson.midia.id);
 
         if (jaExiste) {
           return atuais;
         }
 
-        return [json.midia, ...atuais];
+        return [conclusaoJson.midia, ...atuais];
       });
 
       setSucesso("Mídia enviada com sucesso.");
 
       await carregarMidias();
 
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao enviar mídia.");
+    } catch (error: unknown) {
+      setErro(error instanceof Error ? error.message : "Erro ao enviar mídia.");
     } finally {
       setEnviandoMidia(false);
     }
@@ -2292,6 +2386,10 @@ function corrigirQuantidadeMinimaInatividade(
   return String(numero);
 }
 
+function mensagemErroFluxo(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 async function duplicarFluxo(fluxo: Fluxo) {
   try {
     setErro("");
@@ -2318,6 +2416,96 @@ async function duplicarFluxo(fluxo: Fluxo) {
     setFluxoSelecionado(json.fluxo);
   } catch (error: any) {
     setErro(error?.message || "Erro ao duplicar fluxo.");
+  }
+}
+
+async function gerarCodigoCompartilhamento(fluxo: Fluxo) {
+  try {
+    setCarregandoCodigoCompartilhamento(true);
+    setErroCompartilhamento("");
+    setCodigoCompartilhamento("");
+
+    const res = await fetch("/api/automacoes/compartilhamentos", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fluxo_id: fluxo.id,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || "Erro ao gerar codigo.");
+    }
+
+    setCodigoCompartilhamento(json.codigo || "");
+  } catch (error: unknown) {
+    setErroCompartilhamento(mensagemErroFluxo(error, "Erro ao gerar codigo."));
+  } finally {
+    setCarregandoCodigoCompartilhamento(false);
+  }
+}
+
+function abrirCompartilhamentoFluxo(fluxo: Fluxo) {
+  setFluxoParaCompartilhar(fluxo);
+  setModalCompartilharAberto(true);
+  gerarCodigoCompartilhamento(fluxo);
+}
+
+async function copiarCodigoCompartilhamento() {
+  try {
+    if (!codigoCompartilhamento) return;
+
+    await navigator.clipboard.writeText(codigoCompartilhamento);
+    setSucesso("Codigo copiado com sucesso.");
+  } catch {
+    setErroCompartilhamento(
+      "Nao foi possivel copiar automaticamente. Selecione e copie o codigo."
+    );
+  }
+}
+
+async function importarFluxoCompartilhado() {
+  try {
+    setErroImportacao("");
+    setErro("");
+    setSucesso("");
+
+    const codigo = codigoImportacao.trim();
+
+    if (!codigo) {
+      setErroImportacao("Cole o codigo do fluxo.");
+      return;
+    }
+
+    setImportandoFluxo(true);
+
+    const res = await fetch("/api/automacoes/compartilhamentos", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ codigo }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || "Erro ao importar fluxo.");
+    }
+
+    setCodigoImportacao("");
+    setModalImportarAberto(false);
+    setSucesso("Fluxo importado como rascunho.");
+    await carregarFluxos();
+    setFluxoSelecionado(json.fluxo);
+  } catch (error: unknown) {
+    setErroImportacao(mensagemErroFluxo(error, "Erro ao importar fluxo."));
+  } finally {
+    setImportandoFluxo(false);
   }
 }
 
@@ -3095,6 +3283,7 @@ useEffect(() => {
             <button
               type="button"
               className={styles.newFlowButton}
+              title="Criar fluxo"
               onClick={() => {
                 setErroCriacaoFluxo("");
                 setNovoFluxoNome("");
@@ -3108,6 +3297,19 @@ useEffect(() => {
               }}
             >
               +
+            </button>
+
+            <button
+              type="button"
+              className={styles.importFlowButton}
+              title="Importar por codigo"
+              onClick={() => {
+                setErroImportacao("");
+                setCodigoImportacao("");
+                setModalImportarAberto(true);
+              }}
+            >
+              <Download size={18} strokeWidth={2.4} />
             </button>
           </div>
         </div>
@@ -3512,6 +3714,17 @@ useEffect(() => {
                         }}
                       >
                         Clonar fluxo
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          abrirCompartilhamentoFluxo(fluxoSelecionado);
+                        }}
+                      >
+                        Compartilhar codigo
                       </button>
 
                       <button
@@ -4222,14 +4435,14 @@ useEffect(() => {
                                 setSucesso("");
 
                                 if (arquivo.type.startsWith("image/")) {
-                                  if (arquivo.size > 5 * 1024 * 1024) {
+                                  if (arquivo.size > LIMITE_IMAGEM_BYTES) {
                                     setErro("A imagem deve ter no máximo 5MB.");
                                     return;
                                   }
                                 }
 
                                 if (arquivo.type.startsWith("video/")) {
-                                  if (arquivo.size > 16 * 1024 * 1024) {
+                                  if (arquivo.size > LIMITE_VIDEO_BYTES) {
                                     setErro(
                                       "O vídeo deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
                                     );
@@ -5759,6 +5972,173 @@ useEffect(() => {
         </div>
         )}
 
+        {modalCompartilharAberto && fluxoParaCompartilhar && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalCard}>
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Compartilhar fluxo</p>
+                  <h3 className={styles.modalTitle}>Codigo do fluxo</h3>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.closePanelButton}
+                  onClick={() => {
+                    setModalCompartilharAberto(false);
+                    setFluxoParaCompartilhar(null);
+                    setCodigoCompartilhamento("");
+                    setErroCompartilhamento("");
+                  }}
+                >
+                  Ã—
+                </button>
+              </div>
+
+              <div className={styles.modalBody}>
+                <div className={styles.shareInfoBox}>
+                  <Share2 size={18} />
+                  <div>
+                    <strong>{fluxoParaCompartilhar.nome}</strong>
+                    <p>
+                      O codigo cria uma copia em rascunho na empresa que importar.
+                    </p>
+                  </div>
+                </div>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Codigo para compartilhar</span>
+
+                  <div className={styles.codeCopyRow}>
+                    <input
+                      className={styles.codeInput}
+                      value={
+                        carregandoCodigoCompartilhamento
+                          ? "Gerando codigo..."
+                          : codigoCompartilhamento
+                      }
+                      readOnly
+                    />
+
+                    <button
+                      type="button"
+                      className={styles.iconActionButton}
+                      title="Copiar codigo"
+                      onClick={copiarCodigoCompartilhamento}
+                      disabled={!codigoCompartilhamento}
+                    >
+                      <Copy size={18} strokeWidth={2.4} />
+                    </button>
+                  </div>
+                </label>
+
+                {erroCompartilhamento && (
+                  <div className={styles.errorAlert}>{erroCompartilhamento}</div>
+                )}
+              </div>
+
+              <div className={styles.modalFooter}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => {
+                    setModalCompartilharAberto(false);
+                    setFluxoParaCompartilhar(null);
+                    setCodigoCompartilhamento("");
+                    setErroCompartilhamento("");
+                  }}
+                >
+                  Fechar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={() => gerarCodigoCompartilhamento(fluxoParaCompartilhar)}
+                  disabled={carregandoCodigoCompartilhamento}
+                >
+                  {carregandoCodigoCompartilhamento ? "Gerando..." : "Gerar novo codigo"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {modalImportarAberto && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalCard}>
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Importar fluxo</p>
+                  <h3 className={styles.modalTitle}>Colar codigo</h3>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.closePanelButton}
+                  onClick={() => {
+                    setModalImportarAberto(false);
+                    setCodigoImportacao("");
+                    setErroImportacao("");
+                  }}
+                >
+                  Ã—
+                </button>
+              </div>
+
+              <div className={styles.modalBody}>
+                <div className={styles.shareInfoBox}>
+                  <Download size={18} />
+                  <div>
+                    <strong>Importar copia do fluxo</strong>
+                    <p>
+                      A copia sera criada como rascunho nesta empresa.
+                    </p>
+                  </div>
+                </div>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Codigo recebido</span>
+                  <input
+                    className={styles.input}
+                    value={codigoImportacao}
+                    onChange={(e) => setCodigoImportacao(e.target.value)}
+                    placeholder="FLX-XXXX-XXXX-XXXX"
+                  />
+                </label>
+
+                {erroImportacao && (
+                  <div className={styles.errorAlert}>{erroImportacao}</div>
+                )}
+              </div>
+
+              <div className={styles.modalFooter}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => {
+                    setModalImportarAberto(false);
+                    setCodigoImportacao("");
+                    setErroImportacao("");
+                  }}
+                  disabled={importandoFluxo}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={importarFluxoCompartilhado}
+                  disabled={importandoFluxo}
+                >
+                  {importandoFluxo ? "Importando..." : "Importar fluxo"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {abrirCriacao && (
           <div className={styles.modalOverlay}>
             <div className={styles.modalCard}>
@@ -6123,6 +6503,16 @@ useEffect(() => {
                   }}
                 >
                   Clonar
+                </button>
+
+                <button
+                  className={styles.flowDropdownItem}
+                  onClick={() => {
+                    abrirCompartilhamentoFluxo(menuFluxo.fluxo!);
+                    setMenuFluxo(null);
+                  }}
+                >
+                  Compartilhar
                 </button>
 
                 <button
