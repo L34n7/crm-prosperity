@@ -13,6 +13,40 @@ function obterMensagemErro(error: unknown, fallback = "Erro interno.") {
   return error instanceof Error ? error.message : fallback;
 }
 
+function textoNormalizado(valor: unknown) {
+  return String(valor || "").trim().toLowerCase();
+}
+
+function conexaoCombinaComErro(condicao: Record<string, any> | null | undefined) {
+  if (!condicao?.tipo) return false;
+
+  const valor = textoNormalizado(condicao.valor);
+
+  if (!valor) return false;
+
+  if (condicao.tipo === "resposta_igual") {
+    return valor === "erro";
+  }
+
+  if (condicao.tipo === "resposta_contem") {
+    return "erro".includes(valor);
+  }
+
+  if (condicao.tipo === "resposta_inicia_com") {
+    return "erro".startsWith(valor);
+  }
+
+  if (condicao.tipo === "resposta_regex") {
+    try {
+      return new RegExp(String(condicao.valor), "i").test("erro");
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 async function desvincularAgendamentosDoFluxo(params: {
   fluxoId: string;
   empresaId: string;
@@ -78,9 +112,79 @@ export async function GET() {
       );
     }
 
+    const fluxos = data || [];
+    const fluxoIds = fluxos.map((fluxo) => fluxo.id);
+    const alertasArquivoIaPorFluxo = new Map<string, number>();
+
+    if (fluxoIds.length > 0) {
+      const { data: nosArquivoIa, error: nosArquivoIaError } =
+        await supabaseAdmin
+          .from("automacao_nos")
+          .select("id, fluxo_id")
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("ativo", true)
+          .eq("tipo_no", "interpretar_arquivo_ia")
+          .in("fluxo_id", fluxoIds);
+
+      if (nosArquivoIaError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Erro ao buscar alertas dos fluxos: ${nosArquivoIaError.message}`,
+          },
+          { status: 500 }
+        );
+      }
+
+      const nosArquivoIaIds = (nosArquivoIa || []).map((no) => no.id);
+
+      const { data: conexoesArquivoIa, error: conexoesArquivoIaError } =
+        nosArquivoIaIds.length > 0
+          ? await supabaseAdmin
+              .from("automacao_conexoes")
+              .select("no_origem_id, condicao_json")
+              .eq("empresa_id", usuario.empresa_id)
+              .eq("ativo", true)
+              .in("no_origem_id", nosArquivoIaIds)
+          : { data: [], error: null };
+
+      if (conexoesArquivoIaError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Erro ao buscar conexoes dos alertas: ${conexoesArquivoIaError.message}`,
+          },
+          { status: 500 }
+        );
+      }
+
+      for (const no of nosArquivoIa || []) {
+        const temConexaoErro = (conexoesArquivoIa || []).some(
+          (conexao) =>
+            conexao.no_origem_id === no.id &&
+            conexaoCombinaComErro(conexao.condicao_json)
+        );
+
+        if (!temConexaoErro) {
+          alertasArquivoIaPorFluxo.set(
+            no.fluxo_id,
+            (alertasArquivoIaPorFluxo.get(no.fluxo_id) || 0) + 1
+          );
+        }
+      }
+    }
+
+    const fluxosComAlertas = fluxos.map((fluxo) => ({
+      ...fluxo,
+      alertas_configuracao: {
+        interpretar_arquivo_ia_sem_conexao_erro:
+          alertasArquivoIaPorFluxo.get(fluxo.id) || 0,
+      },
+    }));
+
     return NextResponse.json({
       ok: true,
-      fluxos: data || [],
+      fluxos: fluxosComAlertas,
     });
   } catch (error: unknown) {
     return NextResponse.json(

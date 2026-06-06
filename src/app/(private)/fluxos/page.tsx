@@ -33,6 +33,9 @@ type Fluxo = {
   fluxo_padrao?: boolean;
   created_at?: string;
   configuracao_json?: Record<string, any>;
+  alertas_configuracao?: {
+    interpretar_arquivo_ia_sem_conexao_erro?: number;
+  };
 };
 
 type AutomacaoNo = {
@@ -182,7 +185,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
   if (tipo === "agenda_remarcar_agendamento") return "Remarcar";
   if (tipo === "agenda_cancelar_agendamento") return "Cancelar agenda";
-  if (tipo === "interpretar_arquivo_ia") return "Inter. arquivo IA";
+  if (tipo === "interpretar_arquivo_ia") return "Interp. arquivo IA";
   return tipo;
 }
 
@@ -358,6 +361,54 @@ function rotuloPadraoPorTipoNo(tipoNo: string) {
   return tipoNoEsperaResposta(tipoNo) ? "Nova condição" : "Sempre seguir";
 }
 
+const AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA =
+  "Este fluxo possui um ou mais blocos Interp. arquivo IA sem a saída erro. Revise os blocos sinalizados no canvas.";
+
+const AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA =
+  "Este bloco precisa de uma CONEXÃO com palavra 'ERRO' em RESPOSTA ESPERADA para tratar falhas de IA e tokens esgotados.";
+
+function normalizarTextoComparacao(valor: unknown) {
+  return String(valor || "").trim().toLowerCase();
+}
+
+function condicaoCombinaComErroArquivoIa(
+  condicao: Record<string, any> | null | undefined
+) {
+  if (!condicao?.tipo) return false;
+
+  const valor = normalizarTextoComparacao(condicao.valor);
+
+  if (!valor) return false;
+
+  if (condicao.tipo === "resposta_igual") return valor === "erro";
+  if (condicao.tipo === "resposta_contem") return "erro".includes(valor);
+  if (condicao.tipo === "resposta_inicia_com") return "erro".startsWith(valor);
+
+  if (condicao.tipo === "resposta_regex") {
+    try {
+      return new RegExp(String(condicao.valor), "i").test("erro");
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+function nodeArquivoIaSemConexaoErro(node: Node, edgesAtuais: Edge[]) {
+  if (String(node.data?.tipo_no || "") !== "interpretar_arquivo_ia") {
+    return false;
+  }
+
+  return !edgesAtuais.some((edge) => {
+    const data = edge.data as { condicao_json?: Record<string, any> } | undefined;
+    return (
+      edge.source === node.id &&
+      condicaoCombinaComErroArquivoIa(data?.condicao_json)
+    );
+  });
+}
+
 const NODE_CARD_WIDTH = 160;
 const NODE_CARD_HEIGHT = 95;
 const NODE_GAP_X = 70;
@@ -449,6 +500,8 @@ function dbNoParaReactFlow(no: AutomacaoNo): Node {
 }
 
 function NodeCustom({ data, dragging }: any) {
+  const temAlertaConexaoErro = data?.arquivo_ia_sem_conexao_erro === true;
+
   return (
     <div
         className={`${styles.nodeBox} ${corTipoNo(data.tipo_no)} ${
@@ -473,7 +526,21 @@ function NodeCustom({ data, dragging }: any) {
       </div>
 
       <div className={styles.nodeContent}>
-        <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>
+        <div className={styles.nodeTitleRow}>
+          <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>
+
+          {temAlertaConexaoErro && (
+            <span
+              className={`${styles.infoAlertIcon} ${styles.infoAlertIconNode}`}
+              data-tooltip={AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA}
+              title={AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA}
+              aria-label={AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA}
+              role="img"
+            >
+              i
+            </span>
+          )}
+        </div>
       </div>
 
       <Handle type="source" position={Position.Right} className={styles.nodeHandle} />
@@ -506,6 +573,11 @@ export default function FluxosPage() {
   const [erro, setErro] = useState("");
   const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
   const [sucesso, setSucesso] = useState("");
+  const [tooltipAlertaFluxo, setTooltipAlertaFluxo] = useState<{
+    texto: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const [novoFluxoNome, setNovoFluxoNome] = useState("");
   const [novoFluxoPadrao, setNovoFluxoPadrao] = useState(false);
@@ -3444,11 +3516,43 @@ useEffect(() => {
   templateAgendarDisparoSelecionado?.categoria,
 ]);
 
+const nodesRenderizados = useMemo(
+  () =>
+    nodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        arquivo_ia_sem_conexao_erro: nodeArquivoIaSemConexaoErro(node, edges),
+      },
+    })),
+  [nodes, edges]
+);
+
+function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
+  const rect = elemento.getBoundingClientRect();
+  const larguraTooltip = 280;
+  const margem = 12;
+  const x = Math.min(
+    rect.right + 12,
+    window.innerWidth - larguraTooltip - margem
+  );
+  const y = Math.min(
+    Math.max(margem, rect.top - 8),
+    window.innerHeight - 140
+  );
+
+  setTooltipAlertaFluxo({
+    texto: AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA,
+    x,
+    y,
+  });
+}
+
   return (
     <>
       <Header
         title="Fluxos de automação"
-        subtitle="Monte fluxos visuais para automatizar atendimentos, direcionar clientes e escalar suas conversas no WhatsApp."
+        subtitle="Monte fluxos para automatizar atendimentos, direcionar clientes e escalar suas conversas no WhatsApp."
       />
     <main className={styles.pageContent}>
       <aside className={styles.sidebarFluxos}>
@@ -3591,6 +3695,28 @@ useEffect(() => {
                       <span className={badgeClass(fluxo.status)}>
                         {fluxo.status}
                       </span>
+
+                      {Number(
+                        fluxo.alertas_configuracao
+                          ?.interpretar_arquivo_ia_sem_conexao_erro || 0
+                      ) > 0 && (
+                        <span
+                          className={`${styles.infoAlertIcon} ${styles.infoAlertIconFlow}`}
+                          aria-label={AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA}
+                          role="img"
+                          tabIndex={0}
+                          onMouseEnter={(event) =>
+                            abrirTooltipAlertaFluxo(event.currentTarget)
+                          }
+                          onMouseLeave={() => setTooltipAlertaFluxo(null)}
+                          onFocus={(event) =>
+                            abrirTooltipAlertaFluxo(event.currentTarget)
+                          }
+                          onBlur={() => setTooltipAlertaFluxo(null)}
+                        >
+                          i
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -3622,6 +3748,7 @@ useEffect(() => {
                     </button>
                   </div>
                 </div>
+
               </div>
             ))
           )}
@@ -4007,7 +4134,7 @@ useEffect(() => {
               <div className={styles.emptyState}>Carregando estrutura...</div>
             ) : (
               <ReactFlow
-                nodes={nodes}
+                nodes={nodesRenderizados}
                 edges={edges}
                 fitView
                 fitViewOptions={{
@@ -4749,23 +4876,28 @@ useEffect(() => {
                       ) : (
                         opcoesNode.map((opcao, index) => (
                           <div key={index} className={styles.optionRow}>
-                            <input
-                              className={styles.optionValueInput}
-                              value={opcao.valor}
-                              onChange={(e) =>
-                                atualizarOpcaoPergunta(index, "valor", e.target.value)
-                              }
-                              placeholder="1"
-                            />
-
-                            <input
-                              className={styles.input}
-                              value={opcao.titulo}
-                              onChange={(e) =>
-                                atualizarOpcaoPergunta(index, "titulo", e.target.value)
-                              }
-                              placeholder="Comercial"
-                            />
+                            <label className={styles.botaoRespostaCampo}>
+                              <span className={styles.botaoRespostaLabel}>ID da resposta</span>
+                              <input
+                                className={styles.optionValueInput}
+                                value={opcao.valor}
+                                onChange={(e) =>
+                                  atualizarOpcaoPergunta(index, "valor", e.target.value)
+                                }
+                                placeholder="1"
+                              />
+                            </label>
+                            <label className={styles.botaoRespostaCampo}>
+                              <span className={styles.botaoRespostaLabel}>Texto do botão</span>
+                              <input
+                                className={styles.input}
+                                value={opcao.titulo}
+                                onChange={(e) =>
+                                  atualizarOpcaoPergunta(index, "titulo", e.target.value)
+                                }
+                                placeholder="Comercial"
+                              />
+                            </label>
 
                             <button
                               type="button"
@@ -4840,6 +4972,7 @@ useEffect(() => {
                         O cliente vê o texto do botão. A conexão do fluxo deve usar o ID da resposta.
                         Exemplo: ID “não” conecta com resposta esperada “não”.
                       </p>
+                        <p className={styles.help}> O WhatsApp permite até 20 caracteres no botão.</p>
                     </div>
                   )}
 
@@ -5338,6 +5471,16 @@ useEffect(() => {
                         />
                       </label>
                       <div className={styles.warningBox}>
+                        <div className={styles.errorConnectionNotice}>
+                          <strong>Crie uma conexão de Erro para este bloco</strong>
+                          <p>
+                            Se os tokens de IA acabarem, o fluxo vai seguir pela
+                            conexão com resposta esperada <strong>erro</strong>.
+                            Configure essa rota para enviar uma mensagem, transferir
+                            o atendimento ou executar a tratativa que desejar.
+                          </p>
+                        </div>
+
                         <strong>Como usar as conexões deste bloco</strong>
 
                         <p>
@@ -5353,7 +5496,8 @@ useEffect(() => {
                             <strong>reprovado</strong> — quando o arquivo não atende à instrução.
                           </li>
                           <li>
-                            <strong>erro</strong> — quando o arquivo está ilegível ou não pôde ser analisado.
+                            <strong>erro</strong> — quando o arquivo está ilegível,
+                            não pôde ser analisado ou os tokens de IA acabaram.
                           </li>
                         </ul>
                       </div>
@@ -5893,6 +6037,18 @@ useEffect(() => {
             )}
         </div>
       </section>
+
+      {tooltipAlertaFluxo && (
+        <div
+          className={styles.flowAlertTooltipPortal}
+          style={{
+            left: tooltipAlertaFluxo.x,
+            top: tooltipAlertaFluxo.y,
+          }}
+        >
+          {tooltipAlertaFluxo.texto}
+        </div>
+      )}
 
         {editandoFluxo && (
         <div className={styles.modalOverlay}>

@@ -394,6 +394,83 @@
   border-color: #e2e8f0;
 }
 
+.flowBadges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.infoAlertIcon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 950;
+  font-style: normal;
+  line-height: 1;
+  cursor: help;
+  z-index: 20;
+}
+
+.infoAlertIcon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: -90;
+  bottom: calc(100% + 8px);
+  width: 260px;
+  max-width: min(260px, calc(100vw - 32px));
+  border: 1px solid #ba0404;
+  border-radius: 12px;
+  background: #7f1d1ded;
+  color: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-transform: none;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.infoAlertIcon:hover::after,
+.infoAlertIcon:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.infoAlertIconFlow::after {
+  display: none;
+}
+
+.flowAlertTooltipPortal {
+  position: fixed;
+  z-index: 1000;
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  border: 1px solid #ba0404;
+  border-radius: 12px;
+  background: #7f1d1ded;
+  color: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
 .nodeBox {
   width: 160px;
   height: 95px;
@@ -404,7 +481,7 @@
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
   cursor: pointer;
   transition: all 0.2s ease;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .nodeBox:hover {
@@ -422,6 +499,7 @@
 .nodeHeader {
   padding: 8px 20px;
   border-bottom: 1px solid #e5ebe6;
+  border-radius: 20px 20px 0 0;
   background: rgba(248, 250, 252, 0.768);
   min-height: 30px;
   max-height: 30px;
@@ -486,6 +564,32 @@
 
   width: 100%;
   display: block;
+}
+
+.nodeTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.infoAlertIconNode {
+  width: 20px;
+  height: 20px;
+  flex-basis: 20px;
+  font-size: 13px;
+}
+
+.infoAlertIconNode::after {
+  right: auto;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translate(-50%, 4px);
+}
+
+.infoAlertIconNode:hover::after,
+.infoAlertIconNode:focus-visible::after {
+  transform: translate(-50%, 0);
 }
 
 .nodeHandle {
@@ -947,6 +1051,27 @@
 
 .warningBox p {
   margin: 8px 0 0;
+}
+
+.errorConnectionNotice {
+  margin: 0 0 14px;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 14px;
+  background: #fff7f7;
+  color: #7f1d1d;
+  padding: 12px 14px;
+}
+
+.errorConnectionNotice strong {
+  color: #991b1b;
+}
+
+.errorConnectionNotice p {
+  margin: 6px 0 0;
+  color: #7f1d1d;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .shareInfoBox {

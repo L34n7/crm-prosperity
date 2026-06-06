@@ -43,7 +43,7 @@
 .tokensBadge {
   height: 34px;
   padding: 0 10px;
-  margin-right: 10px;
+  margin-right: 0;
   border: 1px solid #dbeafe;
   border-radius: 10px;
   background: #eff6ff;
@@ -76,6 +76,117 @@
 .tokensBadge strong {
   font-size: 12px;
   color: #0f172a;
+}
+
+.tokensBadgeWarning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.tokensBadgeWarning:hover {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.tokensBadgeWarning.tokensBadgeStatic:hover {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.tokensBadgeWarning .tokensLabel {
+  color: #d97706;
+}
+
+.tokensBadgeWarning strong {
+  color: #78350f;
+}
+
+.tokensBadgeDanger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.tokensBadgeDanger:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.tokensBadgeDanger.tokensBadgeStatic:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.tokensBadgeDanger .tokensLabel {
+  color: #dc2626;
+}
+
+.tokensBadgeDanger strong {
+  color: #7f1d1d;
+}
+
+.tokensWarningInline {
+  height: 54px;
+  max-width: 240px;
+  margin-right: 4px;
+  margin-bottom: -10;
+  padding: 5px 10px 5px 12px;
+  border: 1px solid #fecaca;
+  border-left: 3px solid #dc2626;
+  border-radius: 10px;
+  background: #fff7f7;
+  color: #7f1d1d;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  text-decoration: none;
+  line-height: 1.15;
+}
+
+.tokensWarningInline span {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tokensWarningInline strong {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tokensWarningInlineWarning {
+  border-color: #fde68a;
+  border-left-color: #d97706;
+  background: #fffbeb;
+  color: #78350f;
+}
+
+.tokensWarningInlineWarning:hover {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.tokensWarningInlineWarning strong {
+  color: #92400e;
+}
+
+.tokensWarningInlineDanger {
+  border-color: #fecaca;
+  border-left-color: #dc2626;
+  background: #fff7f7;
+  color: #7f1d1d;
+}
+
+.tokensWarningInlineDanger:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.tokensWarningInlineDanger strong {
+  color: #991b1b;
 }
 
 .tokensLimit {
@@ -576,6 +687,14 @@
     linear-gradient(135deg, rgba(7, 17, 31, 0.98) 0%, rgba(11, 21, 38, 0.98) 45%, rgba(15, 23, 42, 0.98) 100%);
 }
 
+.tokenAlertCardWarning .tokenAlertHero {
+  background: linear-gradient(135deg, #78350f 0%, #b45309 100%);
+}
+
+.tokenAlertCardDanger .tokenAlertHero {
+  background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%);
+}
+
 .tokenAlertEyebrow {
   width: fit-content;
   margin: 0 0 12px;
@@ -715,6 +834,12 @@
   .right {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .tokensWarningInline {
+    width: 100%;
+    max-width: none;
+    margin-right: 0;
   }
 
   .subtitle {

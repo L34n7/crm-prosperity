@@ -442,6 +442,9 @@ type FluxoRuntimeCache = {
   conexoesPorOrigem: Map<string, any[]>;
 };
 
+const MENSAGEM_PADRAO_FALHA_ARQUIVO_IA =
+  "Tive uma falha ao analisar o arquivo agora. Vou te transferir para um atendente para continuar o atendimento.";
+
 async function carregarFluxoRuntimeCache(params: {
   empresaId: string;
   fluxoId: string;
@@ -4875,6 +4878,123 @@ async function registrarInterpretacaoArquivoAutomacao(params: {
   }
 }
 
+async function transferirArquivoIaSemConexaoErro(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  noAtualId: string;
+  mensagemTexto?: string;
+  numeroDestino: string;
+  runtimeCache?: FluxoRuntimeCache;
+  noAtual?: AutomacaoNo | null;
+}) {
+  const {
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noAtualId,
+    mensagemTexto,
+    numeroDestino,
+    runtimeCache,
+  } = params;
+
+  if (normalizarTexto(String(mensagemTexto || "")) !== "erro") {
+    return false;
+  }
+
+  let noAtual = params.noAtual || null;
+
+  if (!noAtual && runtimeCache) {
+    noAtual = runtimeCache.nosPorId.get(noAtualId) || null;
+  }
+
+  if (!noAtual) {
+    const { data } = await supabaseAdmin
+      .from("automacao_nos")
+      .select("*")
+      .eq("id", noAtualId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    noAtual = data || null;
+  }
+
+  if (noAtual?.tipo_no !== "interpretar_arquivo_ia") {
+    return false;
+  }
+
+  const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+    empresaId,
+    conversaId,
+  });
+
+  await enviarMensagemAutomacao({
+    empresaId,
+    conversaId,
+    numeroDestino,
+    conteudo: MENSAGEM_PADRAO_FALHA_ARQUIVO_IA,
+    execucaoId,
+    noId: noAtualId,
+  });
+
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      status: "finalizado",
+      finished_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId);
+
+  await supabaseAdmin
+    .from("conversas")
+    .update({
+      status: "fila",
+      setor_id: null,
+      responsavel_id: null,
+      bot_ativo: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", conversaId)
+    .eq("empresa_id", empresaId);
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId: noAtualId,
+    tipoEvento: "arquivo_ia_erro_sem_conexao_transferido",
+    descricao:
+      "Bloco Interpretar arquivo IA retornou erro sem conexao configurada; conversa transferida para atendimento humano.",
+    entrada: {
+      mensagemTexto,
+      bloco_tipo: noAtual.tipo_no,
+    },
+    saida: {
+      mensagem: MENSAGEM_PADRAO_FALHA_ARQUIVO_IA,
+      conversa_protocolo_id: protocoloAtivo.id,
+    },
+  });
+
+  await registrarEventoRastreamentoFluxo({
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noId: noAtualId,
+    tipo: "fluxo_transferido_atendimento",
+    metadata: {
+      tipo_encerramento: "arquivo_ia_erro_sem_conexao",
+      conversa_protocolo_id: protocoloAtivo.id,
+    },
+  });
+
+  return true;
+}
+
 export async function executarAcaoExcessoTentativas(params: {
   empresaId: string;
   conversaId: string;
@@ -5184,6 +5304,19 @@ async function seguirParaProximoNo(params: {
   }
 
   if (!conexoes || conexoes.length === 0) {
+    const transferiuArquivoIa = await transferirArquivoIaSemConexaoErro({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noAtualId,
+      mensagemTexto,
+      numeroDestino,
+      runtimeCache,
+    });
+
+    if (transferiuArquivoIa) return;
+
     await finalizarExecucao(execucaoId, empresaId);
     return;
   }
@@ -5314,6 +5447,20 @@ async function seguirParaProximoNo(params: {
         .maybeSingle();
 
       if (execucaoAtual && noAtual) {
+        const transferiuArquivoIa = await transferirArquivoIaSemConexaoErro({
+          empresaId,
+          conversaId,
+          execucaoId,
+          fluxoId,
+          noAtualId,
+          mensagemTexto,
+          numeroDestino,
+          runtimeCache,
+          noAtual,
+        });
+
+        if (transferiuArquivoIa) return;
+
         const tentativa = await registrarTentativaBloco({
           empresaId,
           execucao: execucaoAtual,
@@ -5375,6 +5522,32 @@ async function seguirParaProximoNo(params: {
       });
 
       return;
+    }
+  }
+
+  if (
+    !conexaoEscolhida &&
+    normalizarTexto(String(mensagemTexto || "")) === "erro"
+  ) {
+    const temConexaoErro = conexoes.some(
+      (conexao) =>
+        condicaoPrecisaDeResposta(conexao.condicao_json) &&
+        condicaoCombinaComMensagem(conexao.condicao_json, "erro")
+    );
+
+    if (!temConexaoErro) {
+      const transferiuArquivoIa = await transferirArquivoIaSemConexaoErro({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId,
+        mensagemTexto,
+        numeroDestino,
+        runtimeCache,
+      });
+
+      if (transferiuArquivoIa) return;
     }
   }
 

@@ -70,6 +70,8 @@ export default function Header({
 
   const LIMITE_NOTIFICACOES_POR_PAGINA = 60;
   const INTERVALO_LEMBRETE_TOKENS_MS = 30 * 60 * 1000;
+  const LIMITE_ALERTA_TOKENS_AMARELO = 0.2;
+  const LIMITE_ALERTA_TOKENS_VERMELHO = 0.1;
 
   const notificacoesMenu = notificacoes.slice(0, LIMITE_NOTIFICACOES_POR_PAGINA);
 
@@ -137,13 +139,28 @@ export default function Header({
     return String(valor);
   }
 
-  function saldoTokensEstaBaixo(saldo: SaldoTokensIa | null) {
+  function saldoTokensEmAlerta(saldo: SaldoTokensIa | null) {
     if (!saldo?.limite_mensal || saldo.tokens_restantes === null) return false;
-    return saldo.tokens_restantes <= saldo.limite_mensal * 0.15;
+    return (
+      saldo.tokens_restantes <
+      saldo.limite_mensal * LIMITE_ALERTA_TOKENS_AMARELO
+    );
+  }
+
+  function saldoTokensCritico(saldo: SaldoTokensIa | null) {
+    if (!saldo?.limite_mensal || saldo.tokens_restantes === null) return false;
+    return (
+      saldo.tokens_restantes <
+      saldo.limite_mensal * LIMITE_ALERTA_TOKENS_VERMELHO
+    );
   }
 
   function saldoTokensZerado(saldo: SaldoTokensIa | null) {
-    return saldo?.limite_mensal !== null && Number(saldo?.tokens_restantes ?? 0) <= 0;
+    return (
+      !!saldo &&
+      saldo.limite_mensal !== null &&
+      Number(saldo.tokens_restantes ?? 0) <= 0
+    );
   }
 
   function fecharAlertaTokens() {
@@ -260,7 +277,7 @@ export default function Header({
   }, []);
 
   useEffect(() => {
-    if (!saldoTokensEstaBaixo(saldoTokensIa)) {
+    if (!saldoTokensEmAlerta(saldoTokensIa)) {
       setAlertaTokensOpen(false);
       return;
     }
@@ -329,6 +346,32 @@ export default function Header({
     setMenuOpen(false);
   }
 
+  const tokensEmAlerta = saldoTokensEmAlerta(saldoTokensIa);
+  const tokensCriticos = saldoTokensCritico(saldoTokensIa);
+  const tokensZerados = saldoTokensZerado(saldoTokensIa);
+  const tokensBadgeClassName = `${styles.tokensBadge}${
+    tokensCriticos
+      ? ` ${styles.tokensBadgeDanger}`
+      : tokensEmAlerta
+        ? ` ${styles.tokensBadgeWarning}`
+        : ""
+  }`;
+  const tokensWarningClassName = `${styles.tokensWarningInline} ${
+    tokensCriticos
+      ? styles.tokensWarningInlineDanger
+      : styles.tokensWarningInlineWarning
+  }`;
+  const avisoTokensTitulo = tokensZerados
+    ? "Tokens esgotados"
+    : tokensCriticos
+      ? "Tokens estão acabando"
+      : "Atenção aos tokens";
+  const avisoTokensMensagem = tokensZerados
+    ? "Recarregue para reativar a IA."
+    : tokensCriticos
+      ? "Saldo abaixo de 10%. Recarregue para evitar pausas na IA."
+      : "Saldo abaixo de 20%. Planeje uma recarga para não interromper a IA.";
+
   return (
     <header className={styles.header}>
       <div className={styles.left}>
@@ -339,10 +382,29 @@ export default function Header({
       <div className={styles.right}>
         {podeExibirSaldoTokensIa &&
           saldoTokensIa &&
+          tokensEmAlerta &&
+          (podeAcessarExtratoTokensIa ? (
+            <Link
+              href="/ia/tokens/pacotes"
+              className={tokensWarningClassName}
+              title="Comprar tokens de IA"
+            >
+              <span>{avisoTokensTitulo}</span>
+              <strong>{avisoTokensMensagem}</strong>
+            </Link>
+          ) : (
+            <span className={tokensWarningClassName}>
+              <span>{avisoTokensTitulo}</span>
+              <strong>{avisoTokensMensagem}</strong>
+            </span>
+          ))}
+
+        {podeExibirSaldoTokensIa &&
+          saldoTokensIa &&
           (podeAcessarExtratoTokensIa ? (
             <Link
               href="/ia/tokens"
-              className={styles.tokensBadge}
+              className={tokensBadgeClassName}
               title="Abrir extrato de tokens de IA"
             >
               <span className={styles.tokensLabel}>IA</span>
@@ -350,7 +412,7 @@ export default function Header({
             </Link>
           ) : (
             <span
-              className={`${styles.tokensBadge} ${styles.tokensBadgeStatic}`}
+              className={`${tokensBadgeClassName} ${styles.tokensBadgeStatic}`}
               title="Tokens de IA restantes no ciclo mensal"
             >
               <span className={styles.tokensLabel}>IA</span>
@@ -569,7 +631,13 @@ export default function Header({
 
       {alertaTokensOpen && saldoTokensIa && (
         <div className={styles.tokenAlertOverlay} role="dialog" aria-modal="true">
-          <div className={styles.tokenAlertCard}>
+          <div
+            className={`${styles.tokenAlertCard} ${
+              tokensCriticos
+                ? styles.tokenAlertCardDanger
+                : styles.tokenAlertCardWarning
+            }`}
+          >
             <button
               type="button"
               className={styles.tokenAlertClose}
@@ -583,13 +651,17 @@ export default function Header({
               <span className={styles.tokenAlertEyebrow}>
                 {saldoTokensZerado(saldoTokensIa)
                   ? "Tokens esgotados"
-                  : "Tokens quase acabando"}
+                  : tokensCriticos
+                    ? "Tokens quase acabando"
+                    : "Atencao aos tokens"}
               </span>
 
               <h2>
                 {saldoTokensZerado(saldoTokensIa)
                   ? "Sua IA pode parar no atendimento"
-                  : "Seu saldo de IA esta baixo"}
+                  : tokensCriticos
+                    ? "Seu saldo de IA esta critico"
+                    : "Seu saldo de IA esta ficando baixo"}
               </h2>
 
               <p>
