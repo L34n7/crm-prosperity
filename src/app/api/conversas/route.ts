@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import {
+  getUsuarioContexto,
+  type UsuarioContexto,
+} from "@/lib/auth/get-usuario-contexto";
 import {
   isAdministrador,
   podeAtribuirConversas,
@@ -90,6 +93,28 @@ type MensagemListaRow = {
 type ConversaLeituraRow = {
   conversa_id: string;
   ultima_mensagem_lida_at: string | null;
+};
+
+type MensagemNaoLidaRow = {
+  conversa_id: string;
+  created_at: string;
+};
+
+type ConversaContagemRow = {
+  id: string;
+  setor_id: string | null;
+  responsavel_id: string | null;
+  status: string | null;
+  bot_ativo?: boolean | null;
+};
+
+type TotaisChipsRapidos = {
+  Todas: number;
+  minhas: number;
+  favoritos: number;
+  sem_responsavel: number;
+  nao_lidas: number;
+  robo: number;
 };
 
 type DisparoPendenteRow = {
@@ -187,6 +212,282 @@ function isUuid(valor: string) {
   );
 }
 
+async function buscarConversaIdsNaoLidas({
+  empresaId,
+  usuarioId,
+}: {
+  empresaId: string;
+  usuarioId: string;
+}) {
+  const { data: leituras, error: leiturasError } = await supabaseAdmin
+    .from("conversa_leituras")
+    .select("conversa_id, ultima_mensagem_lida_at")
+    .eq("empresa_id", empresaId)
+    .eq("usuario_id", usuarioId);
+
+  if (leiturasError) {
+    throw new Error(leiturasError.message);
+  }
+
+  const leituraPorConversa = new Map<string, string | null>();
+
+  for (const leitura of (leituras ?? []) as ConversaLeituraRow[]) {
+    leituraPorConversa.set(
+      leitura.conversa_id,
+      leitura.ultima_mensagem_lida_at ?? null
+    );
+  }
+
+  const { data: mensagens, error: mensagensError } = await supabaseAdmin
+    .from("mensagens")
+    .select("conversa_id, created_at")
+    .eq("empresa_id", empresaId)
+    .or("origem.eq.recebida,remetente_tipo.eq.contato")
+    .order("created_at", { ascending: false })
+    .limit(10000);
+
+  if (mensagensError) {
+    throw new Error(mensagensError.message);
+  }
+
+  const conversaIdsNaoLidas = new Set<string>();
+
+  for (const mensagem of (mensagens ?? []) as MensagemNaoLidaRow[]) {
+    if (!mensagem.conversa_id || conversaIdsNaoLidas.has(mensagem.conversa_id)) {
+      continue;
+    }
+
+    const ultimaLeitura = leituraPorConversa.get(mensagem.conversa_id) ?? null;
+
+    if (!ultimaLeitura) {
+      conversaIdsNaoLidas.add(mensagem.conversa_id);
+      continue;
+    }
+
+    const mensagemTime = new Date(mensagem.created_at).getTime();
+    const leituraTime = new Date(ultimaLeitura).getTime();
+
+    if (Number.isNaN(mensagemTime) || Number.isNaN(leituraTime)) {
+      continue;
+    }
+
+    if (mensagemTime >= leituraTime + 1) {
+      conversaIdsNaoLidas.add(mensagem.conversa_id);
+    }
+  }
+
+  return Array.from(conversaIdsNaoLidas);
+}
+
+function filtrarConversasPorPermissao<T extends ConversaContagemRow>({
+  conversas,
+  usuario,
+  usuarioPodeAtribuir,
+}: {
+  conversas: T[];
+  usuario: UsuarioContexto;
+  usuarioPodeAtribuir: boolean;
+}) {
+  if (isAdministrador(usuario)) {
+    return conversas;
+  }
+
+  const setoresDoUsuario = usuario.setores_ids ?? [];
+
+  if (usuarioPodeAtribuir) {
+    if (setoresDoUsuario.length === 0) return [];
+
+    return conversas.filter((conversa) => {
+      if (!conversa.setor_id) return false;
+      return setoresDoUsuario.includes(conversa.setor_id);
+    });
+  }
+
+  return conversas.filter((conversa) => {
+    const conversaEhMinha = conversa.responsavel_id === usuario.id;
+
+    const conversaEstaNaFilaDoMeuSetor =
+      !!conversa.setor_id &&
+      setoresDoUsuario.includes(conversa.setor_id) &&
+      conversa.responsavel_id === null &&
+      conversa.status === "fila";
+
+    return conversaEhMinha || conversaEstaNaFilaDoMeuSetor;
+  });
+}
+
+async function buscarTotaisChipsRapidos({
+  usuario,
+  usuarioPodeAtribuir,
+  status,
+  prioridade,
+  contatoId,
+  setorId,
+  responsavelId,
+  busca,
+  canal,
+}: {
+  usuario: UsuarioContexto;
+  usuarioPodeAtribuir: boolean;
+  status: string | null;
+  prioridade: string | null;
+  contatoId: string | null;
+  setorId: string | null;
+  responsavelId: string | null;
+  busca: string;
+  canal: string;
+}): Promise<TotaisChipsRapidos> {
+  if (!usuario.empresa_id) {
+    return {
+      Todas: 0,
+      minhas: 0,
+      favoritos: 0,
+      sem_responsavel: 0,
+      nao_lidas: 0,
+      robo: 0,
+    };
+  }
+
+  let query = supabaseAdmin
+    .from("conversas")
+    .select("id, setor_id, responsavel_id, status, bot_ativo")
+    .eq("empresa_id", usuario.empresa_id)
+    .limit(10000);
+
+  if (status) {
+    query = query.eq("status", status);
+  }
+
+  if (prioridade) {
+    query = query.eq("prioridade", prioridade);
+  }
+
+  if (canal && canal !== "todos") {
+    query = query.eq("canal", canal);
+  }
+
+  if (contatoId) {
+    query = query.eq("contato_id", contatoId);
+  }
+
+  if (setorId && setorId !== "todos") {
+    query = query.eq("setor_id", setorId);
+  }
+
+  if (responsavelId && responsavelId !== "todos") {
+    query = query.eq("responsavel_id", responsavelId);
+  }
+
+  if (busca) {
+    const termo = limparTermoBusca(busca);
+
+    if (termo) {
+      const { data: contatosEncontrados, error: contatosBuscaError } =
+        await supabaseAdmin
+          .from("contatos")
+          .select("id")
+          .eq("empresa_id", usuario.empresa_id)
+          .or(
+            [
+              `nome.ilike.%${termo}%`,
+              `telefone.ilike.%${termo}%`,
+              `email.ilike.%${termo}%`,
+              `empresa.ilike.%${termo}%`,
+            ].join(",")
+          )
+          .limit(500);
+
+      if (contatosBuscaError) {
+        throw new Error(contatosBuscaError.message);
+      }
+
+      const contatoIdsBusca = (contatosEncontrados ?? [])
+        .map((item) => item.id)
+        .filter(Boolean);
+
+      const filtrosOr: string[] = [`assunto.ilike.%${termo}%`];
+
+      if (isUuid(termo)) {
+        filtrosOr.push(`id.eq.${termo}`);
+      }
+
+      if (contatoIdsBusca.length > 0) {
+        filtrosOr.push(`contato_id.in.(${contatoIdsBusca.join(",")})`);
+      }
+
+      query = query.or(filtrosOr.join(","));
+    }
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const conversasPermitidas = filtrarConversasPorPermissao({
+    conversas: (data ?? []) as ConversaContagemRow[],
+    usuario,
+    usuarioPodeAtribuir,
+  });
+
+  if (conversasPermitidas.length === 0) {
+    return {
+      Todas: 0,
+      minhas: 0,
+      favoritos: 0,
+      sem_responsavel: 0,
+      nao_lidas: 0,
+      robo: 0,
+    };
+  }
+
+  const conversaIdsPermitidas = new Set(
+    conversasPermitidas.map((conversa) => conversa.id)
+  );
+
+  const [{ data: favoritos, error: favoritosError }, idsNaoLidas] =
+    await Promise.all([
+      supabaseAdmin
+        .from("conversas_favoritas")
+        .select("conversa_id")
+        .eq("usuario_id", usuario.id)
+        .eq("empresa_id", usuario.empresa_id),
+      buscarConversaIdsNaoLidas({
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+      }),
+    ]);
+
+  if (favoritosError) {
+    throw new Error(favoritosError.message);
+  }
+
+  const favoritosSet = new Set(
+    ((favoritos ?? []) as ConversaFavoritaRow[]).map((item) => item.conversa_id)
+  );
+  const naoLidasSet = new Set(idsNaoLidas);
+
+  return {
+    Todas: conversasPermitidas.length,
+    minhas: conversasPermitidas.filter(
+      (conversa) => conversa.responsavel_id === usuario.id
+    ).length,
+    favoritos: conversasPermitidas.filter((conversa) =>
+      favoritosSet.has(conversa.id)
+    ).length,
+    sem_responsavel: conversasPermitidas.filter(
+      (conversa) => !conversa.responsavel_id && conversa.bot_ativo === false
+    ).length,
+    nao_lidas: conversasPermitidas.filter(
+      (conversa) =>
+        conversaIdsPermitidas.has(conversa.id) && naoLidasSet.has(conversa.id)
+    ).length,
+    robo: conversasPermitidas.filter((conversa) => conversa.bot_ativo === true)
+      .length,
+  };
+}
+
 export async function GET(request: Request) {
   const resultado = await getUsuarioContexto();
 
@@ -230,6 +531,49 @@ export async function GET(request: Request) {
   }
 
   await encerrarConversasExpiradas(usuario.empresa_id);
+
+  if (status && !isStatusValido(status)) {
+    return NextResponse.json(
+      { ok: false, error: "Status invÃ¡lido" },
+      { status: 400 }
+    );
+  }
+
+  if (prioridade && !isPrioridadeValida(prioridade)) {
+    return NextResponse.json(
+      { ok: false, error: "Prioridade invÃ¡lida" },
+      { status: 400 }
+    );
+  }
+
+  const usuarioPodeAtribuir = await podeAtribuirConversas(usuario);
+
+  let totaisChipsRapidos: TotaisChipsRapidos;
+
+  try {
+    totaisChipsRapidos = await buscarTotaisChipsRapidos({
+      usuario,
+      usuarioPodeAtribuir,
+      status,
+      prioridade,
+      contatoId,
+      setorId,
+      responsavelId,
+      busca,
+      canal,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao buscar totais dos filtros",
+      },
+      { status: 500 }
+    );
+  }
 
   let query = supabaseAdmin
     .from("conversas")
@@ -308,7 +652,7 @@ export async function GET(request: Request) {
   }
 
   if (chip === "fila") {
-    query = query.eq("status", "fila");
+    query = query.is("responsavel_id", null);
   }
 
   if (chip === "robo") {
@@ -316,7 +660,7 @@ export async function GET(request: Request) {
   }
 
   if (chip === "sem_responsavel") {
-    query = query.is("responsavel_id", null);
+    query = query.is("responsavel_id", null).eq("bot_ativo", false);
   }
 
   if (chip === "urgentes") {
@@ -325,6 +669,44 @@ export async function GET(request: Request) {
 
   if (chip === "minhas") {
     query = query.eq("responsavel_id", usuario.id);
+  }
+
+  if (chip === "nao_lidas") {
+    let idsNaoLidas: string[] = [];
+
+    try {
+      idsNaoLidas = await buscarConversaIdsNaoLidas({
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Erro ao buscar conversas nao lidas",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (idsNaoLidas.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        conversas: [],
+        totais_chips: totaisChipsRapidos,
+        pagination: {
+          limit,
+          offset,
+          returned: 0,
+          hasMore: false,
+        },
+      });
+    }
+
+    query = query.in("id", idsNaoLidas);
   }
 
   if (busca) {
@@ -394,6 +776,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         ok: true,
         conversas: [],
+        totais_chips: totaisChipsRapidos,
         pagination: {
           limit,
           offset,
@@ -427,6 +810,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         ok: true,
         conversas: [],
+        totais_chips: totaisChipsRapidos,
         pagination: {
           limit,
           offset,
@@ -677,6 +1061,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       conversas,
+      totais_chips: totaisChipsRapidos,
       pagination: {
         limit,
         offset,
@@ -687,13 +1072,13 @@ export async function GET(request: Request) {
   }
 
   const setoresDoUsuario = usuario.setores_ids ?? [];
-  const usuarioPodeAtribuir = await podeAtribuirConversas(usuario);
 
   if (usuarioPodeAtribuir) {
     if (setoresDoUsuario.length === 0) {
       return NextResponse.json({
         ok: true,
         conversas: [],
+        totais_chips: totaisChipsRapidos,
         pagination: {
           limit,
           offset,
@@ -711,6 +1096,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       conversas,
+      totais_chips: totaisChipsRapidos,
       pagination: {
         limit,
         offset,
@@ -735,6 +1121,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     conversas,
+    totais_chips: totaisChipsRapidos,
     pagination: {
       limit,
       offset,

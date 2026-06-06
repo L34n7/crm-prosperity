@@ -24,6 +24,7 @@ import {
   type PreferenciaHorarioAgenda,
 } from "@/lib/agendas/agenda-service";
 import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
+import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -634,6 +635,21 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     contatoId,
     mensagemTexto,
   });
+
+  const assinatura = await buscarAssinaturaEmpresa(empresaId);
+
+  if (assinatura?.status === "bloqueada") {
+    console.log("[AUTOMATION_ENGINE] Automacao ignorada: assinatura bloqueada.", {
+      empresaId,
+      conversaId,
+      status: assinatura.status,
+    });
+
+    return {
+      ok: true,
+      status: "assinatura_bloqueada",
+    };
+  }
 
   const { data: conversaAtual, error: conversaAtualError } = await supabaseAdmin
     .from("conversas")

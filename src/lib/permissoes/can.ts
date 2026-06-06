@@ -1,4 +1,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  buscarAssinaturaEmpresa,
+  filtrarPermissoesPorAssinatura,
+} from "@/lib/assinaturas/status";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -71,6 +75,13 @@ export async function listarPermissoesDoUsuario(usuarioId: string) {
         .filter(Boolean)
     ),
   ];
+  const isAdmin = (vinculos ?? []).some((item) => {
+    const perfil = Array.isArray(item.perfis_empresa)
+      ? item.perfis_empresa[0]
+      : item.perfis_empresa;
+
+    return perfil?.nome === "Administrador";
+  });
 
   const permissoes = new Set<string>();
 
@@ -124,7 +135,19 @@ export async function listarPermissoesDoUsuario(usuarioId: string) {
     }
   }
 
-  return Array.from(permissoes);
+  const permissoesFinais = Array.from(permissoes);
+
+  if (!usuarioBase?.empresa_id) {
+    return permissoesFinais;
+  }
+
+  const assinatura = await buscarAssinaturaEmpresa(usuarioBase.empresa_id);
+
+  return filtrarPermissoesPorAssinatura({
+    permissoes: permissoesFinais,
+    isAdmin,
+    assinatura,
+  });
 }
 
 /**

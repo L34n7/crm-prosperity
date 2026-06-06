@@ -13,6 +13,18 @@ function obterMensagemErro(error: unknown, fallback = "Erro interno.") {
   return error instanceof Error ? error.message : fallback;
 }
 
+function respostaAssinaturaBloqueada() {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "ASSINATURA_BLOQUEADA",
+      error:
+        "Plano bloqueado. Renove a assinatura para ativar fluxos novamente.",
+    },
+    { status: 403 }
+  );
+}
+
 function textoNormalizado(valor: unknown) {
   return String(valor || "").trim().toLowerCase();
 }
@@ -222,6 +234,10 @@ export async function POST(req: NextRequest) {
     const status = String(body?.status || "rascunho").trim();
     const fluxoPadrao = Boolean(body?.fluxo_padrao);
 
+    if (status === "ativo" && usuario.assinatura?.status === "bloqueada") {
+      return respostaAssinaturaBloqueada();
+    }
+
     if (fluxoPadrao) {
       const { data: fluxoPadraoExistente } = await supabaseAdmin
         .from("automacao_fluxos")
@@ -376,6 +392,13 @@ export async function PATCH(req: NextRequest) {
 
     if (body?.status !== undefined) {
       atualizacao.status = String(body.status || "rascunho").trim();
+    }
+
+    if (
+      atualizacao.status === "ativo" &&
+      usuario.assinatura?.status === "bloqueada"
+    ) {
+      return respostaAssinaturaBloqueada();
     }
 
     if (body?.configuracao_json !== undefined) {

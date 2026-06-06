@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
-import { listarPermissoesDoUsuario } from "@/lib/permissoes/can";
 import CrmShell from "@/components/CrmShell";
 import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 
 export default async function PrivateLayout({
   children,
@@ -13,40 +13,33 @@ export default async function PrivateLayout({
   const sidebarCookie = cookieStore.get("crm-sidebar-collapsed")?.value;
   const initialCollapsed = sidebarCookie === "true";
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  let profileName = "Usuário";
+  let profileName = "Usuario";
   let avatarUrl = "";
   let permissoes: string[] = [];
+  let assinatura: AssinaturaEmpresa | null = null;
+  let isAdmin = false;
 
-  if (user) {
-    const { data: usuarioSistema } = await supabase
-      .from("usuarios")
-      .select("id, nome, avatar_url")
-      .eq("auth_user_id", user.id)
-      .maybeSingle();
+  const resultado = await getUsuarioContexto();
 
-    profileName = usuarioSistema?.nome || "Usuário";
-    avatarUrl = usuarioSistema?.avatar_url || "";
-
-    if (usuarioSistema?.id) {
-      permissoes = await listarPermissoesDoUsuario(usuarioSistema.id);
-    }
+  if (resultado.ok) {
+    profileName = resultado.usuario.nome || "Usuario";
+    avatarUrl = resultado.usuario.avatar_url || "";
+    permissoes = resultado.usuario.permissoes;
+    assinatura = resultado.usuario.assinatura;
+    isAdmin = resultado.usuario.is_admin;
   }
- 
+
   return (
     <CrmShell
       initialCollapsed={initialCollapsed}
       profileName={profileName}
       avatarUrl={avatarUrl}
       permissoes={permissoes}
+      assinatura={assinatura}
+      isAdmin={isAdmin}
     >
-        {children}
-      <AmbienteObrigatorioGuard/>
+      {children}
+      <AmbienteObrigatorioGuard />
     </CrmShell>
   );
 }

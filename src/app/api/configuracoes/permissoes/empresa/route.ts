@@ -27,6 +27,17 @@ export async function PUT(request: Request) {
       );
     }
 
+    if (usuario.assinatura?.status === "bloqueada") {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "ASSINATURA_BLOQUEADA",
+          error: "Plano bloqueado. Renove a assinatura para alterar permissoes.",
+        },
+        { status: 403 }
+      );
+    }
+
     if (!usuario.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada" },

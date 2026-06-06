@@ -209,6 +209,51 @@ type ListaEmpresa = {
   nome: string;
 };
 
+type ChipRapido =
+  | "Todas"
+  | "minhas"
+  | "favoritos"
+  | "fila"
+  | "nao_lidas"
+  | "sem_responsavel"
+  | "urgentes"
+  | "robo";
+
+type TotaisChipsRapidos = {
+  Todas: number;
+  minhas: number;
+  favoritos: number;
+  sem_responsavel: number;
+  nao_lidas: number;
+  robo: number;
+};
+
+const TOTAIS_CHIPS_RAPIDOS_INICIAIS: TotaisChipsRapidos = {
+  Todas: 0,
+  minhas: 0,
+  favoritos: 0,
+  sem_responsavel: 0,
+  nao_lidas: 0,
+  robo: 0,
+};
+
+function normalizarTotalChip(valor: unknown) {
+  return typeof valor === "number" && Number.isFinite(valor) ? valor : 0;
+}
+
+function normalizarTotaisChipsRapidos(
+  totais?: Partial<TotaisChipsRapidos> | null
+): TotaisChipsRapidos {
+  return {
+    Todas: normalizarTotalChip(totais?.Todas),
+    minhas: normalizarTotalChip(totais?.minhas),
+    favoritos: normalizarTotalChip(totais?.favoritos),
+    sem_responsavel: normalizarTotalChip(totais?.sem_responsavel),
+    nao_lidas: normalizarTotalChip(totais?.nao_lidas),
+    robo: normalizarTotalChip(totais?.robo),
+  };
+}
+
 type EtiquetaEmpresa = {
   id: string;
   nome: string;
@@ -1322,6 +1367,7 @@ export default function ConversasPage() {
 
   const carregandoMaisConversasRef = useRef(false);
   const conversasRef = useRef<Conversa[]>([]);
+  const atualizandoConversasAutomaticamenteRef = useRef(false);
   const [conversaSelecionada, setConversaSelecionada] =
     useState<Conversa | null>(null);
 
@@ -1338,9 +1384,9 @@ export default function ConversasPage() {
   const [canalFiltro, setCanalFiltro] = useState("todos");
   const [setorFiltro, setSetorFiltro] = useState("todos");
   const [responsavelFiltro, setResponsavelFiltro] = useState("todos");
-  const [chipRapido, setChipRapido] = useState<
-    "Todas" | "minhas" | "favoritos" | "fila" | "nao_lidas" | "sem_responsavel" | "urgentes" | "robo"
-  >("Todas");
+  const [chipRapido, setChipRapido] = useState<ChipRapido>("Todas");
+  const [totaisChipsRapidos, setTotaisChipsRapidos] =
+    useState<TotaisChipsRapidos>(TOTAIS_CHIPS_RAPIDOS_INICIAIS);
 
   const [conteudo, setConteudo] = useState("");
   const [loadingConversas, setLoadingConversas] = useState(false);
@@ -2545,38 +2591,39 @@ export default function ConversasPage() {
         }
 
         const listaNova: Conversa[] = data.conversas || [];
+        if (data.totais_chips) {
+          setTotaisChipsRapidos(
+            normalizarTotaisChipsRapidos(
+              data.totais_chips as Partial<TotaisChipsRapidos>
+            )
+          );
+        }
+
         setTemMaisConversas(Boolean(data.pagination?.hasMore));
 
-        let listaFinal: Conversa[] = [];
+        const mapa = new Map<string, Conversa>();
 
-        setConversas((atuais) => {
-          const mapa = new Map<string, Conversa>();
+        if (append) {
+          conversasAtuais.forEach((item) => mapa.set(item.id, item));
+          listaNova.forEach((item) => mapa.set(item.id, item));
+        } else {
+          listaNova.forEach((item) => mapa.set(item.id, item));
+        }
 
-          if (append) {
-            atuais.forEach((item) => mapa.set(item.id, item));
-            listaNova.forEach((item) => mapa.set(item.id, item));
-          } else if (silencioso) {
-            atuais.forEach((item) => mapa.set(item.id, item));
-            listaNova.forEach((item) => mapa.set(item.id, item));
-          } else {
-            listaNova.forEach((item) => mapa.set(item.id, item));
-          }
+        const listaFinal = Array.from(mapa.values()).sort((a, b) => {
+          const aTime = a.last_message_at
+            ? new Date(a.last_message_at).getTime()
+            : 0;
 
-          listaFinal = Array.from(mapa.values()).sort((a, b) => {
-            const aTime = a.last_message_at
-              ? new Date(a.last_message_at).getTime()
-              : 0;
+          const bTime = b.last_message_at
+            ? new Date(b.last_message_at).getTime()
+            : 0;
 
-            const bTime = b.last_message_at
-              ? new Date(b.last_message_at).getTime()
-              : 0;
-
-            return bTime - aTime;
-          });
-
-          conversasRef.current = listaFinal;
-          return listaFinal;
+          return bTime - aTime;
         });
+
+        conversasRef.current = listaFinal;
+        setConversas(listaFinal);
 
         setConversaSelecionada((atual) => {
           if (!atual) return atual;
@@ -4616,9 +4663,24 @@ async function baixarConversaPDF() {
     );
   }, [conversas]);
 
-  const totalConversasRobo = useMemo(() => {
-    return conversas.filter((c) => c.bot_ativo === true).length;
-  }, [conversas]);
+  const totalConversasRobo = totaisChipsRapidos.robo;
+
+  function renderQuickChipCount(
+    total: number,
+    variant: "alert" | "subtle" = "alert"
+  ) {
+    if (total <= 0) return null;
+
+    return (
+      <span
+        className={`${styles.quickChipCountBadge} ${
+          variant === "subtle" ? styles.quickChipCountBadgeSubtle : ""
+        }`}
+      >
+        {total}
+      </span>
+    );
+  }
 
   const conversasFiltradas = useMemo(() => {
     const lista = [...conversas];
@@ -4816,6 +4878,35 @@ const templateFooterTexto = useMemo(() => {
   ]);
 
   useEffect(() => {
+    if (!abaVisivel) return;
+
+    const interval = window.setInterval(async () => {
+      if (carregandoMaisConversasRef.current) return;
+      if (atualizandoConversasAutomaticamenteRef.current) return;
+
+      try {
+        atualizandoConversasAutomaticamenteRef.current = true;
+        await atualizarConversasCarregadas();
+      } finally {
+        atualizandoConversasAutomaticamenteRef.current = false;
+      }
+    }, 15000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    abaVisivel,
+    buscaDebounced,
+    statusFiltro,
+    canalFiltro,
+    setorFiltro,
+    responsavelFiltro,
+    chipRapido,
+    listaFiltroId,
+  ]);
+
+  useEffect(() => {
     const timeout = window.setTimeout(() => {
       setBuscaDebounced(busca.trim());
     }, 500);
@@ -4913,10 +5004,6 @@ const templateFooterTexto = useMemo(() => {
       acompanharCrescimentoChatRef.current = false;
       impedirAutoScrollRef.current = true;
       forcarScrollParaFinalRef.current = false;
-    }
-
-    if (!carregandoMaisConversasRef.current) {
-      await atualizarConversasCarregadas();
     }
 
       const inicioHistoricoAtual =
@@ -5290,6 +5377,7 @@ const templateFooterTexto = useMemo(() => {
                       }`}
                       onClick={() => setChipRapido("nao_lidas")}
                     >
+                      {renderQuickChipCount(totaisChipsRapidos.nao_lidas)}
                       Não lidas
                     </button>    
                     
@@ -5308,6 +5396,7 @@ const templateFooterTexto = useMemo(() => {
                       }`}
                       onClick={() => setChipRapido("favoritos")}
                     >
+                      {renderQuickChipCount(totaisChipsRapidos.favoritos, "subtle")}
                       Favoritas
                     </button>
                   </div>
@@ -5352,6 +5441,7 @@ const templateFooterTexto = useMemo(() => {
                     setListaFiltroId(null);
                   }}
                 >
+                  {renderQuickChipCount(totaisChipsRapidos.Todas, "subtle")}
                   Todas
                 </button>
 
@@ -5361,6 +5451,7 @@ const templateFooterTexto = useMemo(() => {
                   }`}
                   onClick={() => setChipRapido("minhas")}
                 >
+                  {renderQuickChipCount(totaisChipsRapidos.minhas, "subtle")}
                   Minhas
                 </button>
 
@@ -5370,6 +5461,7 @@ const templateFooterTexto = useMemo(() => {
                   }`}
                   onClick={() => setChipRapido("sem_responsavel")}
                 >
+                  {renderQuickChipCount(totaisChipsRapidos.sem_responsavel)}
                   Sem responsável
                 </button>
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { Resend } from "resend";
+import { calcularJanelaAssinatura } from "@/lib/assinaturas/status";
 
 const supabase = getSupabaseAdmin();
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -212,6 +213,52 @@ async function criarEmpresa(lead: any, payload: any) {
   return data;
 }
 
+async function aplicarAssinaturaPlano(params: {
+  empresaId: string;
+  planoId: string | null;
+  planoSlug: string;
+  payload: any;
+}) {
+  const referencia = String(params.payload.transaction?.id ?? "").trim() || null;
+  const pagoEm =
+    somenteDataValida(params.payload.paid_at) ?? new Date().toISOString();
+  const janela = calcularJanelaAssinatura(pagoEm);
+
+  const atualizacao: Record<string, any> = {
+    assinatura_status: "ativa",
+    assinatura_inicio_em: janela.inicioEm,
+    assinatura_vencimento_em: janela.vencimentoEm,
+    assinatura_bloqueio_em: janela.bloqueioEm,
+    assinatura_renovada_em: janela.inicioEm,
+    assinatura_gateway: "atomopay",
+    assinatura_referencia: referencia,
+    assinatura_metadata_json: {
+      origem: "webhook_atomopay",
+      plano_slug: params.planoSlug,
+      status: params.payload.status ?? params.payload.transaction?.status ?? null,
+      offer_id: params.payload.offer?.id ?? null,
+      offer_hash:
+        params.payload.offer?.hash ?? params.payload.offer_hash ?? null,
+      transaction_id: referencia,
+    },
+    assinatura_fluxos_pausados_em: null,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (params.planoId) {
+    atualizacao.plano_id = params.planoId;
+  }
+
+  const { error } = await supabase
+    .from("empresas")
+    .update(atualizacao)
+    .eq("id", params.empresaId);
+
+  if (error) {
+    throw new Error(`Erro ao atualizar assinatura da empresa: ${error.message}`);
+  }
+}
+
 /* =========================
    PAGAMENTO
 ========================= */
@@ -288,6 +335,60 @@ async function aplicarPagamentoTokensIa(params: {
       obterReferenciasOferta(payload)
     );
   }
+
+  return data;
+}
+
+async function pagamentoEhRecargaTokens(params: {
+  empresaId: string;
+  payload: any;
+}) {
+  const referencias = obterReferenciasOferta(params.payload);
+
+  if (referencias.length === 0) return false;
+
+  const { data } = await supabase
+    .from("ia_token_ofertas")
+    .select("tipo")
+    .eq("gateway", "atomo")
+    .eq("ativa", true)
+    .in("referencia", referencias)
+    .or(`empresa_id.is.null,empresa_id.eq.${params.empresaId}`)
+    .order("empresa_id", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data?.tipo === "recarga";
+}
+
+async function renovarTokensPlanoSemOfertaConfigurada(params: {
+  empresaId: string;
+  payload: any;
+}) {
+  const referencia = String(params.payload.transaction?.id ?? "").trim();
+
+  if (!referencia) return;
+
+  const pagoEm =
+    somenteDataValida(params.payload.paid_at) ?? new Date().toISOString();
+
+  const { error } = await supabase.rpc("renovar_tokens_assinatura_plano", {
+    p_empresa_id: params.empresaId,
+    p_referencia: referencia,
+    p_pago_em: pagoEm,
+    p_metadata_json: {
+      origem: "webhook_atomopay_fallback",
+      status: params.payload.status ?? params.payload.transaction?.status ?? null,
+      offer_id: params.payload.offer?.id ?? null,
+      offer_title: params.payload.offer?.title ?? null,
+    },
+  });
+
+  if (error) {
+    throw new Error(
+      `Erro ao renovar tokens do plano sem oferta configurada: ${error.message}`
+    );
+  }
 }
 
 /* =========================
@@ -350,6 +451,8 @@ async function enviarConviteAuth(params: {
 async function processarPagamentoAprovado(lead: any, payload: any) {
   const empresa = await criarEmpresa(lead, payload);
   const primeiroPagamento = lead?.pago !== true;
+  const planoSlug = obterPlanoSlug(payload, lead);
+  const planoId = await buscarPlanoIdPorSlug(planoSlug);
 
   const email = normalizarEmail(lead.email || payload.customer?.email);
 
@@ -357,10 +460,35 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
     throw new Error("Pagamento sem email válido");
   }
 
-  await aplicarPagamentoTokensIa({
+  const ehRecargaTokens = await pagamentoEhRecargaTokens({
     empresaId: empresa.id,
     payload,
   });
+
+  if (!ehRecargaTokens) {
+    await aplicarAssinaturaPlano({
+      empresaId: empresa.id,
+      planoId,
+      planoSlug,
+      payload,
+    });
+  }
+
+  const resultadoTokens = await aplicarPagamentoTokensIa({
+    empresaId: empresa.id,
+    payload,
+  });
+
+  if (
+    !ehRecargaTokens &&
+    !resultadoTokens?.aplicado &&
+    resultadoTokens?.motivo === "oferta_nao_configurada"
+  ) {
+    await renovarTokensPlanoSemOfertaConfigurada({
+      empresaId: empresa.id,
+      payload,
+    });
+  }
 
   await supabase
     .from("pagamentos")
@@ -387,6 +515,7 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
       pago: true,
       pago_em: somenteDataValida(payload.paid_at) ?? new Date().toISOString(),
       empresa_id: empresa.id,
+      plano_slug: planoSlug,
       atomopay_checkout_id: payload.transaction?.id,
       atomopay_customer_id: payload.customer?.id,
       metadata_json: payload,

@@ -34,6 +34,94 @@ type SaldoTokensIa = {
   periodo_inicio?: string;
 };
 
+type PlanoRenovacaoSlug = "basico" | "essencial";
+
+type PlanoRenovacao =
+  | {
+      tipo: "checkout";
+      slug: PlanoRenovacaoSlug;
+      nome: string;
+      badge: string;
+      descricao: string;
+      precoOriginal?: string;
+      preco: string;
+      observacao: string;
+      recursos: string[];
+    }
+  | {
+      tipo: "cotacao";
+      nome: string;
+      badge: string;
+      descricao: string;
+      preco: string;
+      observacao: string;
+      recursos: string[];
+    };
+
+type CheckoutPlanoResponse = {
+  ok: boolean;
+  checkout_url?: string;
+  error?: string;
+};
+
+const PLANOS_RENOVACAO: PlanoRenovacao[] = [
+  {
+    tipo: "checkout",
+    slug: "basico",
+    nome: "Básico",
+    badge: "Entrada inteligente",
+    descricao:
+      "Para começar com atendimento automatizado, organização profissional e IA integrada.",
+    precoOriginal: "R$ 197/mês",
+    preco: "R$ 137/mês",
+    observacao: "2 usuários e 1 milhão de tokens de IA.",
+    recursos: [
+      "API Oficial do WhatsApp inclusa",
+      "Atendimento automatizado com IA",
+      "Respostas inteligentes em tempo real",
+      "Disparo de mensagens em massa",
+      "Fila de atendimento dinâmica",
+      "Relatórios operacionais",
+    ],
+  },
+  {
+    tipo: "checkout",
+    slug: "essencial",
+    nome: "Essencial IA PRO",
+    badge: "Mais indicado",
+    descricao:
+      "Para equipes que precisam de mais automação, IA e volume para escalar vendas e atendimento.",
+    precoOriginal: "R$ 367/mês",
+    preco: "R$ 267/mês",
+    observacao: "6 usuários e 5 milhões de tokens de IA.",
+    recursos: [
+      "Atendimento automatizado avançado",
+      "IA treinável para responder clientes",
+      "Disparo inteligente de mensagens",
+      "Segmentação avançada de contatos",
+      "Distribuição automática na fila",
+      "Relatórios completos de performance",
+    ],
+  },
+  {
+    tipo: "cotacao",
+    nome: "Profissional Enterprise",
+    badge: "Cotação",
+    descricao:
+      "Estrutura para operações maiores que precisam de performance, escala e automações sob medida.",
+    preco: "Sob cotação",
+    observacao: "Usuários, tokens e números ajustados ao seu volume.",
+    recursos: [
+      "Usuários sob medida",
+      "Tokens de IA sob medida",
+      "Múltiplos números oficiais",
+      "IA personalizada para sua empresa",
+      "Automações avançadas",
+      "Suporte estratégico prioritário",
+    ],
+  },
+];
+
 export default function Header({
   title,
   subtitle,
@@ -52,6 +140,9 @@ export default function Header({
     null
   );
   const [alertaTokensOpen, setAlertaTokensOpen] = useState(false);
+  const [modalPlanosOpen, setModalPlanosOpen] = useState(false);
+  const [planoCheckoutLoading, setPlanoCheckoutLoading] =
+    useState<PlanoRenovacaoSlug | null>(null);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notificacoesRef = useRef<HTMLDivElement | null>(null);
@@ -63,6 +154,8 @@ export default function Header({
   const podeAcessarExtratoTokensIa = headerUser.permissoes.includes(
     "ia.tokens.visualizar_extrato"
   );
+  const assinaturaEmAberto =
+    headerUser.assinatura !== null && headerUser.assinatura.status !== "ativa";
 
   const nomeFinal = profileName || headerUser.profileName || "Usuário";
   const avatarFinal = avatarUrl || headerUser.avatarUrl || "";
@@ -106,7 +199,7 @@ export default function Header({
   }
 
   async function carregarSaldoTokensIa() {
-    if (!podeExibirSaldoTokensIa) return;
+    if (!podeExibirSaldoTokensIa || assinaturaEmAberto) return;
 
     try {
       const res = await fetch("/api/ia/tokens", { cache: "no-store" });
@@ -277,7 +370,7 @@ export default function Header({
   }, []);
 
   useEffect(() => {
-    if (!saldoTokensEmAlerta(saldoTokensIa)) {
+    if (assinaturaEmAberto || !saldoTokensEmAlerta(saldoTokensIa)) {
       setAlertaTokensOpen(false);
       return;
     }
@@ -310,7 +403,7 @@ export default function Header({
       );
       setAlertaTokensOpen(true);
     }
-  }, [saldoTokensIa]);
+  }, [assinaturaEmAberto, saldoTokensIa]);
 
   function toggleMenu() {
     setMenuOpen((prev) => !prev);
@@ -346,6 +439,56 @@ export default function Header({
     setMenuOpen(false);
   }
 
+  function abrirModalPlanosAssinatura() {
+    setMenuOpen(false);
+    setNotificacoesOpen(false);
+    setModalPlanosOpen(true);
+  }
+
+  function fecharModalPlanosAssinatura() {
+    setModalPlanosOpen(false);
+  }
+
+  function abrirCotacaoPlano() {
+    const whatsappComercial =
+      process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "55975117638";
+    const mensagem = encodeURIComponent(
+      "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity."
+    );
+
+    setModalPlanosOpen(false);
+    window.location.assign(`https://wa.me/${whatsappComercial}?text=${mensagem}`);
+  }
+
+  async function contratarPlanoAssinatura(plano: PlanoRenovacao) {
+    if (plano.tipo === "cotacao") {
+      abrirCotacaoPlano();
+      return;
+    }
+
+    setPlanoCheckoutLoading(plano.slug);
+
+    try {
+      const res = await fetch("/api/assinaturas/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plano_slug: plano.slug }),
+      });
+      const data = (await res.json()) as CheckoutPlanoResponse;
+
+      if (!res.ok || !data.checkout_url) {
+        alert(data.error || "Não foi possível iniciar o checkout.");
+        return;
+      }
+
+      window.location.assign(data.checkout_url);
+    } catch {
+      alert("Erro inesperado ao iniciar o checkout.");
+    } finally {
+      setPlanoCheckoutLoading(null);
+    }
+  }
+
   const tokensEmAlerta = saldoTokensEmAlerta(saldoTokensIa);
   const tokensCriticos = saldoTokensCritico(saldoTokensIa);
   const tokensZerados = saldoTokensZerado(saldoTokensIa);
@@ -372,6 +515,20 @@ export default function Header({
       ? "Saldo abaixo de 10%. Recarregue para evitar pausas na IA."
       : "Saldo abaixo de 20%. Planeje uma recarga para não interromper a IA.";
 
+  const assinaturaStatus = headerUser.assinatura?.status ?? "ativa";
+  const assinaturaBloqueada = assinaturaStatus === "bloqueada";
+  const assinaturaWarningClassName = `${styles.assinaturaWarningInline} ${
+    assinaturaBloqueada
+      ? styles.assinaturaWarningInlineDanger
+      : styles.assinaturaWarningInlineWarning
+  }`;
+  const avisoAssinaturaTitulo = assinaturaBloqueada
+    ? "Plano bloqueado"
+    : "Plano vencido";
+  const avisoAssinaturaMensagem = assinaturaBloqueada
+    ? "Renove para liberar o sistema"
+    : "Renove em ate 7 dias";
+
   return (
     <header className={styles.header}>
       <div className={styles.left}>
@@ -380,7 +537,20 @@ export default function Header({
       </div>
 
       <div className={styles.right}>
-        {podeExibirSaldoTokensIa &&
+        {assinaturaEmAberto && (
+          <button
+            type="button"
+            className={assinaturaWarningClassName}
+            title="Renovar plano"
+            onClick={abrirModalPlanosAssinatura}
+          >
+            <span>{avisoAssinaturaTitulo}</span>
+            <strong>{avisoAssinaturaMensagem}</strong>
+          </button>
+        )}
+
+        {!assinaturaEmAberto &&
+          podeExibirSaldoTokensIa &&
           saldoTokensIa &&
           tokensEmAlerta &&
           (podeAcessarExtratoTokensIa ? (
@@ -399,7 +569,8 @@ export default function Header({
             </span>
           ))}
 
-        {podeExibirSaldoTokensIa &&
+        {!assinaturaEmAberto &&
+          podeExibirSaldoTokensIa &&
           saldoTokensIa &&
           (podeAcessarExtratoTokensIa ? (
             <Link
@@ -580,6 +751,103 @@ export default function Header({
                 >
                   Próxima
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {modalPlanosOpen && (
+          <div
+            className={styles.planRenewalOverlay}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="plan-renewal-title"
+            onClick={fecharModalPlanosAssinatura}
+          >
+            <div
+              className={styles.planRenewalModal}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className={styles.planRenewalHeader}>
+                <div>
+                  <span className={styles.planRenewalEyebrow}>
+                    Renovação de plano
+                  </span>
+                  <h2 id="plan-renewal-title">Escolha seu plano</h2>
+                  <p>
+                    Renove o plano atual ou escolha outro. A liberação acontece
+                    automaticamente após a confirmação da Átomo.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.planRenewalClose}
+                  onClick={fecharModalPlanosAssinatura}
+                  aria-label="Fechar planos"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className={styles.planRenewalGrid}>
+                {PLANOS_RENOVACAO.map((plano) => {
+                  const carregando =
+                    plano.tipo === "checkout" &&
+                    planoCheckoutLoading === plano.slug;
+
+                  return (
+                    <article
+                      key={plano.nome}
+                      className={`${styles.planRenewalCard} ${
+                        plano.nome === "Essencial IA PRO"
+                          ? styles.planRenewalCardFeatured
+                          : ""
+                      }`}
+                    >
+                      <div className={styles.planRenewalCardTop}>
+                        <span className={styles.planRenewalBadge}>
+                          {plano.badge}
+                        </span>
+                        <h3>{plano.nome}</h3>
+                        <p>{plano.descricao}</p>
+                      </div>
+
+                      <div className={styles.planRenewalPriceBlock}>
+                        {"precoOriginal" in plano && plano.precoOriginal && (
+                          <span className={styles.planRenewalOldPrice}>
+                            {plano.precoOriginal}
+                          </span>
+                        )}
+                        <strong>{plano.preco}</strong>
+                        <small>{plano.observacao}</small>
+                      </div>
+
+                      <ul className={styles.planRenewalFeatures}>
+                        {plano.recursos.map((recurso) => (
+                          <li key={recurso}>{recurso}</li>
+                        ))}
+                      </ul>
+
+                      <button
+                        type="button"
+                        className={
+                          plano.tipo === "cotacao"
+                            ? styles.planRenewalSecondary
+                            : styles.planRenewalPrimary
+                        }
+                        onClick={() => contratarPlanoAssinatura(plano)}
+                        disabled={carregando}
+                      >
+                        {plano.tipo === "cotacao"
+                          ? "Solicitar cotação"
+                          : carregando
+                            ? "Preparando..."
+                            : "Contratar plano"}
+                      </button>
+                    </article>
+                  );
+                })}
               </div>
             </div>
           </div>

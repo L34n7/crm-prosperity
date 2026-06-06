@@ -17,6 +17,7 @@ import {
 } from "@xyflow/react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
 import { Handle } from "@xyflow/react";
@@ -549,6 +550,7 @@ function NodeCustom({ data, dragging }: any) {
 }
 
 export default function FluxosPage() {
+  const headerUser = useHeaderUser();
   const [fluxos, setFluxos] = useState<Fluxo[]>([]);
   const [fluxoSelecionado, setFluxoSelecionado] = useState<Fluxo | null>(null);
   const [abrirCriacao, setAbrirCriacao] = useState(false);
@@ -3408,6 +3410,12 @@ async function alterarStatusFluxo(
     setSucesso("");
 
     if (novoStatus === "ativo") {
+      if (headerUser.assinatura?.status === "bloqueada") {
+        window.dispatchEvent(new Event("assinatura:abrir-renovacao"));
+        setErro("Plano bloqueado. Renove a assinatura para ativar fluxos.");
+        return;
+      }
+
       const erroValidacao = validarFluxoAntesDeAtivar();
 
       if (erroValidacao) {
@@ -3433,6 +3441,10 @@ async function alterarStatusFluxo(
     const json = text ? JSON.parse(text) : {};
 
     if (!res.ok || !json.ok) {
+      if (json.code === "ASSINATURA_BLOQUEADA") {
+        window.dispatchEvent(new Event("assinatura:abrir-renovacao"));
+      }
+
       throw new Error(json.error || "Erro ao alterar status do fluxo.");
     }
 
@@ -6525,7 +6537,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     setErroImportacao("");
                   }}
                 >
-                  x
+                  ×
                 </button>
               </div>
 

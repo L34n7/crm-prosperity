@@ -7,12 +7,15 @@ import {
   listarPermissoesDoUsuario,
   listarPerfisDoUsuario,
 } from "@/lib/permissoes/can";
+import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
+import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
 
 export type UsuarioBase = {
   id: string;
   auth_user_id: string;
   nome: string | null;
   email: string | null;
+  avatar_url?: string | null;
   empresa_id: string | null;
   status: "ativo" | "inativo" | "bloqueado";
 };
@@ -32,8 +35,11 @@ export type UsuarioContexto = {
   auth_user_id: string;
   nome: string | null;
   email: string | null;
+  avatar_url?: string | null;
   empresa_id: string | null;
   status: "ativo" | "inativo" | "bloqueado";
+  is_admin: boolean;
+  assinatura: AssinaturaEmpresa | null;
 
   permissoes: string[];
   perfis_dinamicos: PerfilDinamicoContexto[];
@@ -79,7 +85,7 @@ export async function getUsuarioContexto(): Promise<ResultadoUsuarioContexto> {
 
     const { data: usuarioBase, error: usuarioError } = await supabase
       .from("usuarios")
-      .select("id, auth_user_id, nome, email, empresa_id, status")
+      .select("id, auth_user_id, nome, email, avatar_url, empresa_id, status")
       .eq("auth_user_id", user.id)
       .maybeSingle<UsuarioBase>();
 
@@ -134,6 +140,12 @@ export async function getUsuarioContexto(): Promise<ResultadoUsuarioContexto> {
       .filter(Boolean) as PerfilDinamicoContexto[];
 
     const perfil_dinamico_principal = perfis_dinamicos[0] ?? null;
+    const isAdmin = perfis_dinamicos.some(
+      (perfil) => perfil.nome === "Administrador"
+    );
+    const assinatura = usuarioBase.empresa_id
+      ? await buscarAssinaturaEmpresa(usuarioBase.empresa_id)
+      : null;
 
     const setorPrincipal =
       vinculosSetores.find((item) => item.is_principal)?.setor_id ?? null;
@@ -145,8 +157,11 @@ export async function getUsuarioContexto(): Promise<ResultadoUsuarioContexto> {
         auth_user_id: usuarioBase.auth_user_id,
         nome: usuarioBase.nome,
         email: usuarioBase.email,
+        avatar_url: usuarioBase.avatar_url,
         empresa_id: usuarioBase.empresa_id,
         status: usuarioBase.status,
+        is_admin: isAdmin,
+        assinatura,
         permissoes,
         perfis_dinamicos,
         perfil_dinamico_principal,

@@ -285,6 +285,13 @@
   box-shadow: 0 4px 10px rgba(239, 68, 68, 0.35);
 }
 
+.conversationsNotificationDot {
+  border: 1px solid #012d0ec4;
+  background: #0aff91c6;
+  color: #000000;
+  box-shadow: 0 4px 10px rgba(34, 197, 94, 0.28);
+}
+
 .whatsappSidebarAvatar {
   width: 40px;
   height: 40px;

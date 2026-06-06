@@ -31,6 +31,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (usuario.assinatura?.status === "bloqueada") {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "ASSINATURA_BLOQUEADA",
+          error: "Plano bloqueado. Renove a assinatura para criar disparos.",
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
 
     const integracaoWhatsappId = String(body.integracao_whatsapp_id || "").trim();

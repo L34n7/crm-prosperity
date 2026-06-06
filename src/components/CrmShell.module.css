@@ -11,6 +11,138 @@
   flex-direction: column;
 }
 
+.assinaturaPopupOverlay,
+.assinaturaBlockOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(8px);
+}
+
+.assinaturaBlockOverlay {
+  z-index: 1190;
+  top: 54px;
+}
+
+.assinaturaModal {
+  width: min(100%, 520px);
+  position: relative;
+  border-radius: 8px;
+  border: 1px solid #fee2e2;
+  background: #ffffff;
+  padding: 28px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+}
+
+.assinaturaEyebrow {
+  display: inline-flex;
+  margin-bottom: 10px;
+  color: #b91c1c;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.assinaturaModal h2 {
+  margin: 0 0 10px;
+  color: #111827;
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.assinaturaModal p {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.assinaturaClose {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #374151;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.assinaturaDates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0;
+}
+
+.assinaturaDates div {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f9fafb;
+}
+
+.assinaturaDates span {
+  display: block;
+  margin-bottom: 4px;
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.assinaturaDates strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+.assinaturaActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.assinaturaPrimary,
+.assinaturaSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border-radius: 8px;
+  padding: 0 18px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.assinaturaPrimary {
+  border: 1px solid #b91c1c;
+  background: #b91c1c;
+  color: #ffffff;
+}
+
+.assinaturaSecondary {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+}
+
+.assinaturaHint {
+  margin-top: 18px !important;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 14px;
+  font-size: 0.85rem !important;
+}
+
 .main {
   flex: 1;
   min-width: 0;
@@ -20,5 +152,17 @@
 @media (max-width: 768px) {
   .main {
     padding: 88px 16px 16px;
+  }
+
+  .assinaturaModal {
+    padding: 24px;
+  }
+
+  .assinaturaDates {
+    grid-template-columns: 1fr;
+  }
+
+  .assinaturaActions {
+    flex-direction: column;
   }
 }

@@ -127,11 +127,11 @@
 }
 
 .tokensWarningInline {
-  height: 54px;
+  min-height: 44px;
   max-width: 240px;
   margin-right: 4px;
-  margin-bottom: -10;
-  padding: 5px 10px 5px 12px;
+  margin-bottom: -5px;
+  padding: 5px 10px 5px 10px;
   border: 1px solid #fecaca;
   border-left: 3px solid #dc2626;
   border-radius: 10px;
@@ -154,7 +154,7 @@
 
 .tokensWarningInline strong {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .tokensWarningInlineWarning {
@@ -187,6 +187,304 @@
 
 .tokensWarningInlineDanger strong {
   color: #991b1b;
+}
+
+.assinaturaWarningInline {
+  min-height: 44px;
+  max-width: 250px;
+  margin-right: 4px;
+  margin-bottom: -5px;
+  padding: 5px 10px;
+  border: 1px solid #fde68a;
+  border-left: 3px solid #d97706;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #78350f;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  font-family: inherit;
+  text-decoration: none;
+  text-align: left;
+  line-height: 1.15;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.assinaturaWarningInline:hover {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.assinaturaWarningInline span {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.assinaturaWarningInline strong {
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.assinaturaWarningInlineWarning {
+  border-color: #fde68a;
+  border-left-color: #d97706;
+  background: #fffbeb;
+  color: #78350f;
+}
+
+.assinaturaWarningInlineDanger {
+  border-color: #fecaca;
+  border-left-color: #dc2626;
+  background: #fff7f7;
+  color: #7f1d1d;
+}
+
+.assinaturaWarningInlineDanger:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.assinaturaWarningInlineDanger strong {
+  color: #991b1b;
+}
+
+.planRenewalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.54);
+}
+
+.planRenewalModal {
+  width: min(1040px, 100%);
+  max-height: min(820px, 92vh);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+}
+
+.planRenewalHeader {
+  padding: 18px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.planRenewalHeader h2 {
+  margin: 4px 0 6px;
+  color: #0f172a;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.planRenewalHeader p {
+  max-width: 680px;
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.planRenewalEyebrow {
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.planRenewalClose {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.planRenewalClose:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.planRenewalGrid {
+  padding: 18px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  background: #f8fafc;
+}
+
+.planRenewalCard {
+  min-height: 100%;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.planRenewalCardFeatured {
+  border-color: #93c5fd;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.2);
+}
+
+.planRenewalCardTop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.planRenewalBadge {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.planRenewalCard h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.planRenewalCard p {
+  min-height: 58px;
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.planRenewalPriceBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.planRenewalOldPrice {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: line-through;
+}
+
+.planRenewalPriceBlock strong {
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.planRenewalPriceBlock small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.planRenewalFeatures {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.planRenewalFeatures li {
+  position: relative;
+  padding-left: 18px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.planRenewalFeatures li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+
+.planRenewalPrimary,
+.planRenewalSecondary {
+  width: 100%;
+  min-height: 42px;
+  margin-top: auto;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.planRenewalPrimary {
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.planRenewalPrimary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.planRenewalSecondary {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.planRenewalSecondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.planRenewalPrimary:disabled,
+.planRenewalSecondary:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
 }
 
 .tokensLimit {
@@ -842,6 +1140,12 @@
     margin-right: 0;
   }
 
+  .assinaturaWarningInline {
+    width: 100%;
+    max-width: none;
+    margin-right: 0;
+  }
+
   .subtitle {
     white-space: normal;
   }
@@ -866,6 +1170,32 @@
 
   .notificationPageButton {
     width: 100%;
+  }
+
+  .planRenewalOverlay {
+    padding: 10px;
+    align-items: flex-start;
+  }
+
+  .planRenewalModal {
+    max-height: calc(100vh - 20px);
+  }
+
+  .planRenewalHeader {
+    padding: 16px;
+  }
+
+  .planRenewalHeader h2 {
+    font-size: 21px;
+  }
+
+  .planRenewalGrid {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .planRenewalCard p {
+    min-height: auto;
   }
 
   .tokenAlertCard {

@@ -46,6 +46,10 @@ function usuarioTemPermissao(usuario: any, permissao: string) {
 }
 
 function podeRealizarDisparos(usuario: any) {
+  if (usuario?.assinatura?.status === "bloqueada") {
+    return false;
+  }
+
   return (
     isAdministrador(usuario) ||
     usuarioTemPermissao(usuario, "whatsapp.disparos.enviar") ||

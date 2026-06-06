@@ -23,6 +23,7 @@ import {
   ScrollText,
   MousePointerClick,
 } from "lucide-react";
+import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import styles from "./Sidebar.module.css";
 
 type MenuItem = {
@@ -35,6 +36,8 @@ type MenuItem = {
 type SidebarProps = {
   initialCollapsed?: boolean;
   permissoes?: string[];
+  assinatura?: AssinaturaEmpresa | null;
+  isAdmin?: boolean;
 };
 
 type WhatsappSidebarPerfil = {
@@ -99,14 +102,24 @@ function isActivePath(pathname: string, href: string) {
 export default function Sidebar({
   initialCollapsed = false,
   permissoes = [],
+  assinatura = null,
+  isAdmin = false,
 }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [disparosPendentes, setDisparosPendentes] = useState(0);
+  const [conversasNaoLidas, setConversasNaoLidas] = useState(0);
   const [whatsappPerfil, setWhatsappPerfil] =
     useState<WhatsappSidebarPerfil | null>(null);
     
+  const assinaturaBloqueada = assinatura?.status === "bloqueada";
+  const disparosPendentesVisiveis = assinaturaBloqueada ? 0 : disparosPendentes;
+
   useEffect(() => {
+    if (assinaturaBloqueada) {
+      return;
+    }
+
     async function carregarDisparosPendentes() {
       try {
         const res = await fetch("/api/disparos-agendados/pendentes", {
@@ -126,6 +139,33 @@ export default function Sidebar({
     carregarDisparosPendentes();
 
     const intervalo = window.setInterval(carregarDisparosPendentes, 60_000);
+
+    return () => window.clearInterval(intervalo);
+  }, [assinaturaBloqueada]);
+
+  useEffect(() => {
+    async function carregarConversasNaoLidas() {
+      try {
+        const res = await fetch("/api/conversas/nao-lidas", {
+          cache: "no-store",
+        });
+
+        const json = await res.json();
+
+        if (res.ok && json.ok) {
+          setConversasNaoLidas(Number(json.quantidade || 0));
+          return;
+        }
+
+        setConversasNaoLidas(0);
+      } catch {
+        setConversasNaoLidas(0);
+      }
+    }
+
+    carregarConversasNaoLidas();
+
+    const intervalo = window.setInterval(carregarConversasNaoLidas, 30_000);
 
     return () => window.clearInterval(intervalo);
   }, []);
@@ -209,6 +249,12 @@ export default function Sidebar({
 
           <nav className={styles.nav}>
             {menuItems.map((item) => {
+              if (assinaturaBloqueada) {
+                if (!isAdmin || item.href !== "/conversas") {
+                  return null;
+                }
+              }
+
               if (item.href === "/configuracoes/whatsapp/perfil") {
                 return null;
               }
@@ -239,11 +285,19 @@ export default function Sidebar({
                     <Icon size={18} strokeWidth={2} />
                   )}
 
-                  {item.href === "/disparos-agendados" && disparosPendentes > 0 && (
+                  {item.href === "/disparos-agendados" && disparosPendentesVisiveis > 0 && (
                       <span className={styles.notificationDot}>
-                        {disparosPendentes > 9 ? "9+" : disparosPendentes}
+                        {disparosPendentesVisiveis > 9 ? "9+" : disparosPendentesVisiveis}
                       </span>
-                    )}
+                  )}
+
+                  {item.href === "/conversas" && conversasNaoLidas > 0 && (
+                    <span
+                      className={`${styles.notificationDot} ${styles.conversationsNotificationDot}`}
+                    >
+                      {conversasNaoLidas > 9 ? "9+" : conversasNaoLidas}
+                    </span>
+                  )}
                   </span>
 
                   {!collapsed && (
@@ -257,32 +311,34 @@ export default function Sidebar({
       </div>
 
       <div className={styles.sidebarBottom}>
-      <Link
-        href="/configuracoes/whatsapp/perfil"
-        className={`${styles.link} ${styles.linkWhatsappPerfil} ${
-          pathname === "/configuracoes/whatsapp/perfil"
-            ? styles.linkWhatsappActive
-            : ""
-        }`}
-      >
-        <span className={styles.linkIcon}>
-          {whatsappPerfil?.foto ? (
-            <img
-              src={whatsappPerfil.foto}
-              alt={whatsappPerfil.nome}
-              className={styles.whatsappSidebarAvatar}
-            />
-          ) : (
-            <MessageCircle size={18} strokeWidth={2} />
-          )}
-        </span>
-
-        {!collapsed && (
-          <span className={styles.linkText}>
-            Perfil WhatsApp
+      {!assinaturaBloqueada && (
+        <Link
+          href="/configuracoes/whatsapp/perfil"
+          className={`${styles.link} ${styles.linkWhatsappPerfil} ${
+            pathname === "/configuracoes/whatsapp/perfil"
+              ? styles.linkWhatsappActive
+              : ""
+          }`}
+        >
+          <span className={styles.linkIcon}>
+            {whatsappPerfil?.foto ? (
+              <img
+                src={whatsappPerfil.foto}
+                alt={whatsappPerfil.nome}
+                className={styles.whatsappSidebarAvatar}
+              />
+            ) : (
+              <MessageCircle size={18} strokeWidth={2} />
+            )}
           </span>
-        )}
-      </Link>
+
+          {!collapsed && (
+            <span className={styles.linkText}>
+              Perfil WhatsApp
+            </span>
+          )}
+        </Link>
+      )}
         <button
           type="button"
           onClick={toggleSidebar}
