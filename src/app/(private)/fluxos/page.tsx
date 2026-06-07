@@ -280,7 +280,7 @@ const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
 const VARIAVEIS_FIXAS_CONTATO_HELP =
-  "Variaveis fixas do contato: nome_contato, email_contato e numero_contato.";
+  "Variaveis fixas do contato: {{nome_contato}}, {{email_contato}} e {{numero_contato}}.";
 const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
   "nome_contato",
   "contato_nome",
@@ -352,7 +352,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "capturar_resposta") return "Captura";
   if (tipo === "agendar_disparo") return "Agendar disparo";
   if (tipo === "agenda_buscar_agendamento") return "Buscar agenda";
-  if (tipo === "agenda_escolher_horario") return "Escolher horario";
+  if (tipo === "agenda_escolher_horario") return "Escolher horário";
   if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
   if (tipo === "agenda_remarcar_agendamento") return "Remarcar";
   if (tipo === "agenda_cancelar_agendamento") return "Cancelar agenda";
@@ -398,7 +398,7 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "capturar_resposta") return "Capturar resposta";
   if (tipo === "agendar_disparo") return "Agendar disparo";
   if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";
-  if (tipo === "agenda_escolher_horario") return "Escolher horario";
+  if (tipo === "agenda_escolher_horario") return "Escolher horário";
   if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
   if (tipo === "agenda_remarcar_agendamento") return "Remarcar agendamento";
   if (tipo === "agenda_cancelar_agendamento") return "Cancelar agendamento";
@@ -4949,7 +4949,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         <option value="botao_redirect">Botão redirect</option>
                         <option value="agendar_disparo">Agendar disparo</option>
                         <option value="agenda_buscar_agendamento">Agenda: Buscar agendamento</option>
-                        <option value="agenda_escolher_horario">Agenda: Escolher horario</option>
+                        <option value="agenda_escolher_horario">Agenda: Escolher horário</option>
                         <option value="agenda_criar_agendamento">Agenda: Criar agendamento</option>
                         <option value="agenda_remarcar_agendamento">Agenda: Remarcar agendamento</option>
                         <option value="agenda_cancelar_agendamento">Agenda: Cancelar agendamento</option>

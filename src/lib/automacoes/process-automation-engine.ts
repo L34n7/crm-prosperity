@@ -4330,7 +4330,7 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
       fluxoId: execucao.fluxo_id,
       noId: no.id,
       tipoEvento: "agenda_tentativas_excedidas",
-      descricao: "Cliente excedeu tentativas ao escolher horario da agenda.",
+      descricao: "Cliente excedeu tentativas ao escolher horário da agenda.",
       entrada: {
         mensagemTexto,
       },
@@ -4345,13 +4345,21 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
     };
   }
 
+  const etapaAgendaAtual = String(
+    metadataAtual.agenda_estado?.[no.id]?.etapa || ""
+  );
+  const mensagemOpcaoInvalida =
+    etapaAgendaAtual === "aguardando_data"
+      ? String(config.mensagem_data_nao_identificada || "").trim() ||
+        "Não consegui identificar o dia. Responda com uma data, como hoje, amanhã, dia 22, 22/05 ou sexta-feira."
+      : String(config.mensagem_opcao_invalida || "").trim() ||
+        "Não encontrei essa opção. Responda com o número do horário ou me diga outro dia.";
+
   await enviarMensagemAutomacao({
     empresaId,
     conversaId,
     numeroDestino,
-    conteudo:
-      String(config.mensagem_opcao_invalida || "").trim() ||
-      "Nao encontrei essa opcao. Responda com o numero do horario ou me diga outro dia.",
+    conteudo: mensagemOpcaoInvalida,
     execucaoId: execucao.id,
     noId: no.id,
   });
@@ -4492,7 +4500,7 @@ async function registrarEscolhaAgendamentoAgendaAutomacao(params: {
     numeroDestino,
     conteudo:
       String(config.mensagem_opcao_invalida || "").trim() ||
-      "Nao encontrei essa opcao. Responda com o numero do agendamento.",
+      "Não encontrei essa opção. Responda com o número do agendamento.",
     execucaoId: execucao.id,
     noId: no.id,
   });
