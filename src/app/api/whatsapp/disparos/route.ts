@@ -69,20 +69,6 @@ function contarVariaveisNoTexto(texto?: string | null) {
   return Math.max(...numeros);
 }
 
-function contarVariaveisTemplate(payload: TemplatePayload | null) {
-  if (!payload?.components?.length) return 0;
-
-  const textos = payload.components.map((item) => item.text || "").join(" ");
-  const matches = textos.match(/\{\{\d+\}\}/g) || [];
-
-  const numeros = matches
-    .map((item) => Number(item.replace(/[{}]/g, "")))
-    .filter((n) => !Number.isNaN(n));
-
-  if (numeros.length === 0) return 0;
-  return Math.max(...numeros);
-}
-
 function substituirVariaveisTexto(texto: string, variaveis: string[]) {
   if (!texto) return "";
 
@@ -101,7 +87,7 @@ function montarParametrosParaTexto(texto: string | undefined, variaveis: string[
 
   return Array.from({ length: totalVariaveis }).map((_, index) => ({
     type: "text",
-    text: variaveis[index] || "",
+    text: String(variaveis[index] || "").trim(),
   }));
 }
 
@@ -112,11 +98,24 @@ function montarComponentesTemplate(
   const componentesOriginais = payload?.components || [];
   const componentesMontados: Array<Record<string, any>> = [];
 
-  const header = componentesOriginais.find((item) => item.type === "HEADER");
-  const body = componentesOriginais.find((item) => item.type === "BODY");
+  const header = componentesOriginais.find(
+    (item) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+  const body = componentesOriginais.find(
+    (item) => String(item.type || "").toUpperCase() === "BODY"
+  );
+  const buttons = componentesOriginais.find(
+    (item) => String(item.type || "").toUpperCase() === "BUTTONS"
+  );
 
-  const headerParams = montarParametrosParaTexto(header?.text, variaveis);
-  const bodyParams = montarParametrosParaTexto(body?.text, variaveis);
+  let variavelOffset = 0;
+
+  const headerTotalVariaveis = contarVariaveisNoTexto(header?.text);
+  const headerParams = montarParametrosParaTexto(
+    header?.text,
+    variaveis.slice(variavelOffset)
+  );
+  variavelOffset += headerTotalVariaveis;
 
   if (headerParams.length > 0) {
     componentesMontados.push({
@@ -125,6 +124,13 @@ function montarComponentesTemplate(
     });
   }
 
+  const bodyTotalVariaveis = contarVariaveisNoTexto(body?.text);
+  const bodyParams = montarParametrosParaTexto(
+    body?.text,
+    variaveis.slice(variavelOffset)
+  );
+  variavelOffset += bodyTotalVariaveis;
+
   if (bodyParams.length > 0) {
     componentesMontados.push({
       type: "body",
@@ -132,13 +138,28 @@ function montarComponentesTemplate(
     });
   }
 
-  if (componentesMontados.length === 0 && contarVariaveisTemplate(payload) > 0) {
-    componentesMontados.push({
-      type: "body",
-      parameters: variaveis.map((valor) => ({
+  for (const [index, button] of (buttons?.buttons || []).entries()) {
+    const tipoBotao = String(button?.type || "").toUpperCase();
+    const totalVariaveisBotao = contarVariaveisNoTexto(button?.url);
+
+    if (tipoBotao !== "URL" || totalVariaveisBotao === 0) {
+      continue;
+    }
+
+    const parametrosBotao = variaveis
+      .slice(variavelOffset, variavelOffset + totalVariaveisBotao)
+      .map((valor) => ({
         type: "text",
-        text: valor || "",
-      })),
+        text: String(valor || "").trim(),
+      }));
+
+    variavelOffset += totalVariaveisBotao;
+
+    componentesMontados.push({
+      type: "button",
+      sub_type: "url",
+      index: String(index),
+      parameters: parametrosBotao,
     });
   }
 
@@ -161,9 +182,21 @@ function montarConteudoTextoTemplate(
   const buttons = componentes.find((item) => item.type === "BUTTONS");
 
   const partes: string[] = [];
+  let variavelOffset = 0;
 
-  const headerTexto = substituirVariaveisTexto(header?.text || "", variaveis).trim();
-  const bodyTexto = substituirVariaveisTexto(body?.text || "", variaveis).trim();
+  function substituirComOffset(texto: string) {
+    const offsetAtual = variavelOffset;
+    const total = contarVariaveisNoTexto(texto);
+    variavelOffset += total;
+
+    return String(texto || "").replace(/\{\{(\d+)\}\}/g, (_, numero) => {
+      const index = offsetAtual + Number(numero) - 1;
+      return variaveis[index] ?? `{{${numero}}}`;
+    });
+  }
+
+  const headerTexto = substituirComOffset(header?.text || "").trim();
+  const bodyTexto = substituirComOffset(body?.text || "").trim();
   const footerTexto = substituirVariaveisTexto(footer?.text || "", variaveis).trim();
 
   if (headerTexto) {

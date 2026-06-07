@@ -1144,6 +1144,13 @@
   background: #cbd5e1;
 }
 
+.templateVariablesGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
 .previewSideCard {
   border: 1px solid #dbe3f0;
   background: #f8fafc;
@@ -1297,6 +1304,10 @@
 
   .templateInfoDivider {
     display: none;
+  }
+
+  .templateVariablesGrid {
+    grid-template-columns: 1fr;
   }
 }
 

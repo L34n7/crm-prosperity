@@ -47,21 +47,6 @@ function contarVariaveisNoTexto(texto?: string | null) {
   return Math.max(...numeros);
 }
 
-function contarVariaveisTemplate(payload: TemplatePayload | null) {
-  if (!payload?.components?.length) return 0;
-
-  const textos = payload.components.map((item) => item.text || "").join(" ");
-  const matches = textos.match(/\{\{\d+\}\}/g) || [];
-
-  const numeros = matches
-    .map((item) => Number(item.replace(/[{}]/g, "")))
-    .filter((n) => !Number.isNaN(n));
-
-  if (numeros.length === 0) return 0;
-
-  return Math.max(...numeros);
-}
-
 function substituirVariaveisTexto(texto: string, variaveis: string[]) {
   if (!texto) return "";
 
@@ -80,7 +65,7 @@ function montarParametrosParaTexto(texto: string | undefined, variaveis: string[
 
   return Array.from({ length: totalVariaveis }).map((_, index) => ({
     type: "text",
-    text: variaveis[index] || "",
+    text: String(variaveis[index] || "").trim(),
   }));
 }
 
@@ -91,11 +76,24 @@ function montarComponentesTemplate(
   const componentesOriginais = payload?.components || [];
   const componentesMontados: Array<Record<string, any>> = [];
 
-  const header = componentesOriginais.find((item) => item.type === "HEADER");
-  const body = componentesOriginais.find((item) => item.type === "BODY");
+  const header = componentesOriginais.find(
+    (item) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+  const body = componentesOriginais.find(
+    (item) => String(item.type || "").toUpperCase() === "BODY"
+  );
+  const buttons = componentesOriginais.find(
+    (item) => String(item.type || "").toUpperCase() === "BUTTONS"
+  );
 
-  const headerParams = montarParametrosParaTexto(header?.text, variaveis);
-  const bodyParams = montarParametrosParaTexto(body?.text, variaveis);
+  let variavelOffset = 0;
+
+  const headerTotalVariaveis = contarVariaveisNoTexto(header?.text);
+  const headerParams = montarParametrosParaTexto(
+    header?.text,
+    variaveis.slice(variavelOffset)
+  );
+  variavelOffset += headerTotalVariaveis;
 
   if (headerParams.length > 0) {
     componentesMontados.push({
@@ -104,6 +102,13 @@ function montarComponentesTemplate(
     });
   }
 
+  const bodyTotalVariaveis = contarVariaveisNoTexto(body?.text);
+  const bodyParams = montarParametrosParaTexto(
+    body?.text,
+    variaveis.slice(variavelOffset)
+  );
+  variavelOffset += bodyTotalVariaveis;
+
   if (bodyParams.length > 0) {
     componentesMontados.push({
       type: "body",
@@ -111,17 +116,118 @@ function montarComponentesTemplate(
     });
   }
 
-  if (componentesMontados.length === 0 && contarVariaveisTemplate(payload) > 0) {
-    componentesMontados.push({
-      type: "body",
-      parameters: variaveis.map((valor) => ({
+  for (const [index, button] of (buttons?.buttons || []).entries()) {
+    const tipoBotao = String(button?.type || "").toUpperCase();
+    const totalVariaveisBotao = contarVariaveisNoTexto(button?.url);
+
+    if (tipoBotao !== "URL" || totalVariaveisBotao === 0) {
+      continue;
+    }
+
+    const parametrosBotao = variaveis
+      .slice(variavelOffset, variavelOffset + totalVariaveisBotao)
+      .map((valor) => ({
         type: "text",
-        text: valor || "",
-      })),
+        text: String(valor || "").trim(),
+      }));
+
+    variavelOffset += totalVariaveisBotao;
+
+    componentesMontados.push({
+      type: "button",
+      sub_type: "url",
+      index: String(index),
+      parameters: parametrosBotao,
     });
   }
 
   return componentesMontados.length > 0 ? componentesMontados : undefined;
+}
+
+function coletarRequisitosVariaveisTemplate(payload: TemplatePayload | null) {
+  const componentes = payload?.components || [];
+  const requisitos: Array<{
+    componente: string;
+    posicaoGlobal: number;
+    marcador: string;
+  }> = [];
+
+  let posicaoGlobal = 0;
+
+  function adicionarRequisitos(componente: string, texto?: string | null) {
+    const total = contarVariaveisNoTexto(texto);
+
+    for (let index = 0; index < total; index += 1) {
+      requisitos.push({
+        componente,
+        posicaoGlobal,
+        marcador: `{{${index + 1}}}`,
+      });
+      posicaoGlobal += 1;
+    }
+  }
+
+  const header = componentes.find(
+    (item) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+  const body = componentes.find(
+    (item) => String(item.type || "").toUpperCase() === "BODY"
+  );
+  const buttons = componentes.find(
+    (item) => String(item.type || "").toUpperCase() === "BUTTONS"
+  );
+
+  adicionarRequisitos("cabecalho", header?.text);
+  adicionarRequisitos("corpo", body?.text);
+
+  for (const [index, button] of (buttons?.buttons || []).entries()) {
+    if (String(button?.type || "").toUpperCase() === "URL") {
+      adicionarRequisitos(`botao_url_${index + 1}`, button?.url);
+    }
+  }
+
+  return requisitos;
+}
+
+function validarTemplateAntesDoEnvio(params: {
+  payload: TemplatePayload | null;
+  variaveis: string[];
+  variaveisConfig: string[];
+}) {
+  const { payload, variaveis, variaveisConfig } = params;
+  const header = payload?.components?.find(
+    (item) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+  const formatoHeader = String(header?.format || "").toUpperCase();
+
+  if (["IMAGE", "VIDEO", "DOCUMENT"].includes(formatoHeader)) {
+    throw new Error(
+      "O template WhatsApp selecionado possui cabecalho de midia. Use um template sem cabecalho de midia para disparos/lembretes agendados, ou configure um template apenas com texto."
+    );
+  }
+
+  const requisitos = coletarRequisitosVariaveisTemplate(payload);
+  const faltantes = requisitos.filter((requisito) => {
+    return !String(variaveis[requisito.posicaoGlobal] || "").trim();
+  });
+
+  if (faltantes.length === 0) return;
+
+  const detalhes = faltantes
+    .map((requisito) => {
+      const variavelConfigurada = variaveisConfig[requisito.posicaoGlobal];
+
+      if (variavelConfigurada) {
+        return `${requisito.componente} ${requisito.marcador} (${variavelConfigurada})`;
+      }
+
+      return `${requisito.componente} ${requisito.marcador}`;
+    })
+    .join(", ");
+
+  throw new Error(
+    `Template WhatsApp com variaveis obrigatorias sem valor: ${detalhes}. Configure as variaveis do template no bloco antes de agendar o disparo.`
+  );
 }
 
 function montarConteudoTextoTemplate(
@@ -140,9 +246,21 @@ function montarConteudoTextoTemplate(
   const buttons = componentes.find((item) => item.type === "BUTTONS");
 
   const partes: string[] = [];
+  let variavelOffset = 0;
 
-  const headerTexto = substituirVariaveisTexto(header?.text || "", variaveis).trim();
-  const bodyTexto = substituirVariaveisTexto(body?.text || "", variaveis).trim();
+  function substituirComOffset(texto: string) {
+    const offsetAtual = variavelOffset;
+    const total = contarVariaveisNoTexto(texto);
+    variavelOffset += total;
+
+    return String(texto || "").replace(/\{\{(\d+)\}\}/g, (_, numero) => {
+      const index = offsetAtual + Number(numero) - 1;
+      return variaveis[index] ?? `{{${numero}}}`;
+    });
+  }
+
+  const headerTexto = substituirComOffset(header?.text || "").trim();
+  const bodyTexto = substituirComOffset(body?.text || "").trim();
   const footerTexto = substituirVariaveisTexto(footer?.text || "", variaveis).trim();
 
   if (headerTexto) {
@@ -236,8 +354,9 @@ async function resolverVariaveisAgendamento(params: {
   execucaoId: string | null;
   contato: any;
   variaveisConfig: string[];
+  payload?: Record<string, any>;
 }) {
-  const { empresaId, execucaoId, contato, variaveisConfig } = params;
+  const { empresaId, execucaoId, contato, variaveisConfig, payload = {} } = params;
 
   if (!variaveisConfig.length) {
     return [];
@@ -266,14 +385,44 @@ async function resolverVariaveisAgendamento(params: {
   }
 
   const variaveisFixasContato = montarMapaVariaveisFixasContato(contato);
+  const mapaPayload = new Map<string, string>();
+
+  function adicionarPayload(chave: string, valor: unknown) {
+    const chaveNormalizada = normalizarChaveVariavelFluxo(chave);
+    const texto = String(valor || "").trim();
+
+    if (chaveNormalizada && texto) {
+      mapaPayload.set(chaveNormalizada, texto);
+    }
+  }
+
+  adicionarPayload("agenda_data", payload.agenda_data);
+  adicionarPayload("agenda_hora", payload.agenda_hora);
+  adicionarPayload("agenda_inicio_at", payload.agenda_inicio_at);
+  adicionarPayload("agenda_fim_at", payload.agenda_fim_at);
+  adicionarPayload("agenda_agendamento_id", payload.agenda_agendamento_id);
+  adicionarPayload("agenda_id", payload.agenda_id);
+  adicionarPayload("agenda_nome", payload.agenda_nome);
+  adicionarPayload("nome_contato", payload.contato_nome);
+  adicionarPayload("contato_nome", payload.contato_nome);
+  adicionarPayload("nome", payload.contato_nome);
+  adicionarPayload("numero_contato", payload.numero_destino);
+  adicionarPayload("contato_numero", payload.numero_destino);
+  adicionarPayload("telefone", payload.numero_destino);
+  adicionarPayload("telefone_contato", payload.numero_destino);
+  adicionarPayload("contato_telefone", payload.numero_destino);
 
   return chaves.map((chave) => {
     if (chaveEhVariavelFixaContato(chave)) {
-      return variaveisFixasContato.get(chave) || "";
+      return variaveisFixasContato.get(chave) || mapaPayload.get(chave) || "";
     }
 
     if (mapa.has(chave)) {
       return mapa.get(chave) || "";
+    }
+
+    if (mapaPayload.has(chave)) {
+      return mapaPayload.get(chave) || "";
     }
 
     if (chave === "nome") {
@@ -449,9 +598,16 @@ async function executarDisparoAgendado(agendamento: any) {
     execucaoId,
     contato,
     variaveisConfig,
+    payload,
   });
 
   const payloadTemplate = (template.payload || null) as TemplatePayload | null;
+  validarTemplateAntesDoEnvio({
+    payload: payloadTemplate,
+    variaveis,
+    variaveisConfig,
+  });
+
   const components = montarComponentesTemplate(payloadTemplate, variaveis);
 
   const bodyMeta: Record<string, any> = {

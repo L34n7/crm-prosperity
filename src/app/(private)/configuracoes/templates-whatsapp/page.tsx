@@ -167,6 +167,13 @@ function contarVariaveisTexto(texto: string) {
   return Math.max(...numeros);
 }
 
+function substituirVariaveisTexto(texto: string, exemplos: string[]) {
+  return texto.replace(/\{\{(\d+)\}\}/g, (match: string, numero: string) => {
+    const valor = exemplos[Number(numero) - 1]?.trim();
+    return valor || match;
+  });
+}
+
 function formatarStatusIntegracao(status?: string | null) {
   if (!status) return "Sem status";
 
@@ -206,6 +213,7 @@ export default function TemplatesWhatsAppPage() {
   );
   const [bodyExample1, setBodyExample1] = useState("João");
   const [bodyExample2, setBodyExample2] = useState("ABC-123456");
+  const [bodyExample3, setBodyExample3] = useState("10:00");
   const [footerText, setFooterText] = useState("Equipe de atendimento");
   const [quickReply1, setQuickReply1] = useState("");
   const [quickReply2, setQuickReply2] = useState("");
@@ -286,6 +294,8 @@ export default function TemplatesWhatsAppPage() {
     .filter(Boolean);
 
   const totalVariaveisBody = useMemo(() => contarVariaveisTexto(bodyText), [bodyText]);
+  const exemplosBodyPreview = [bodyExample1, bodyExample2, bodyExample3];
+  const bodyTextPreview = substituirVariaveisTexto(bodyText.trim(), exemplosBodyPreview);
 
   const resumoTemplates = useMemo(() => {
     const total = templates.length;
@@ -358,6 +368,22 @@ export default function TemplatesWhatsAppPage() {
       return;
     }
 
+    if (totalVariaveisBody > 3) {
+      setErro("Use no máximo 3 variáveis no corpo do template.");
+      return;
+    }
+
+    const exemplosBody = [bodyExample1.trim(), bodyExample2.trim(), bodyExample3.trim()];
+    const exemplosObrigatorios = exemplosBody.slice(0, totalVariaveisBody);
+
+    if (
+      totalVariaveisBody > 0 &&
+      exemplosObrigatorios.some((exemplo) => !exemplo.trim())
+    ) {
+      setErro("Informe os exemplos das variáveis usadas no corpo do template.");
+      return;
+    }
+
     try {
       setSubmitting(true);
 
@@ -376,7 +402,7 @@ export default function TemplatesWhatsAppPage() {
         text: bodyText.trim(),
       };
 
-      const exemplos = [bodyExample1.trim(), bodyExample2.trim()].filter(Boolean);
+      const exemplos = exemplosBody.slice(0, totalVariaveisBody).filter(Boolean);
 
       if (exemplos.length > 0) {
         bodyComponent.example = {
@@ -437,6 +463,7 @@ export default function TemplatesWhatsAppPage() {
       );
       setBodyExample1("João");
       setBodyExample2("ABC-123456");
+      setBodyExample3("10:00");
       setFooterText("Equipe de atendimento");
       setQuickReply1("");
       setQuickReply2("");
@@ -599,31 +626,47 @@ export default function TemplatesWhatsAppPage() {
                           required
                         />
                         <p className={styles.help}>
-                          Use variáveis como {"{{1}}"} e {"{{2}}"}. Evite deixar variáveis no início ou no fim da frase.
+                          Use variáveis como {"{{1}}"}, {"{{2}}"} e {"{{3}}"}. Evite deixar variáveis no início ou no fim da frase.
                         </p>
                       </div>
 
-                      <div className={styles.topGrid}>
-                        <div className={styles.field}>
-                          <label className={styles.label}>Exemplo da variável 1</label>
-                          <input
-                            value={bodyExample1}
-                            onChange={(e) => setBodyExample1(e.target.value)}
-                            className={styles.input}
-                            placeholder="Ex.: João"
-                          />
-                        </div>
+                      {totalVariaveisBody > 0 ? (
+                        <div className={styles.topGrid}>
+                          <div className={styles.field}>
+                            <label className={styles.label}>Exemplo da variável 1</label>
+                            <input
+                              value={bodyExample1}
+                              onChange={(e) => setBodyExample1(e.target.value)}
+                              className={styles.input}
+                              placeholder="Ex.: João"
+                            />
+                          </div>
 
-                        <div className={styles.field}>
-                          <label className={styles.label}>Exemplo da variável 2</label>
-                          <input
-                            value={bodyExample2}
-                            onChange={(e) => setBodyExample2(e.target.value)}
-                            className={styles.input}
-                            placeholder="Ex: ABC-123456"
-                          />
+                          {totalVariaveisBody >= 2 ? (
+                            <div className={styles.field}>
+                              <label className={styles.label}>Exemplo da variável 2</label>
+                              <input
+                                value={bodyExample2}
+                                onChange={(e) => setBodyExample2(e.target.value)}
+                                className={styles.input}
+                                placeholder="Ex: ABC-123456"
+                              />
+                            </div>
+                          ) : null}
+
+                          {totalVariaveisBody >= 3 ? (
+                            <div className={styles.field}>
+                              <label className={styles.label}>Exemplo da variável 3</label>
+                              <input
+                                value={bodyExample3}
+                                onChange={(e) => setBodyExample3(e.target.value)}
+                                className={styles.input}
+                                placeholder="Ex.: 10:00"
+                              />
+                            </div>
+                          ) : null}
                         </div>
-                      </div>
+                      ) : null}
 
                       <div className={styles.field}>
                         <label className={styles.label}>Rodapé</label>
@@ -682,7 +725,7 @@ export default function TemplatesWhatsAppPage() {
                             ) : null}
 
                             <p className={styles.whatsappPreviewText}>
-                              {bodyText.trim() || "Digite o corpo do template para visualizar a mensagem do WhatsApp."}
+                              {bodyTextPreview || "Digite o corpo do template para visualizar a mensagem do WhatsApp."}
                             </p>
 
                             <div className={styles.whatsappPreviewMeta}>

@@ -138,17 +138,145 @@ function extrairQuickReplies(payload: WhatsAppTemplate["payload"]) {
 function contarVariaveisTemplate(template: WhatsAppTemplate | null) {
   if (!template?.payload?.components?.length) return 0;
 
-  const textos = template.payload.components
-    .map((item) => item.text || "")
-    .join(" ");
+  const components = template.payload.components;
+  const header = components.find(
+    (item) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+  const body = components.find(
+    (item) => String(item.type || "").toUpperCase() === "BODY"
+  );
+  const buttons = components.find(
+    (item) => String(item.type || "").toUpperCase() === "BUTTONS"
+  );
 
-  const matches = textos.match(/\{\{\d+\}\}/g) || [];
-  const numeros = matches
-    .map((item) => Number(item.replace(/[{}]/g, "")))
-    .filter((n) => !Number.isNaN(n));
+  function contarTexto(texto?: string | null) {
+    const matches = String(texto || "").match(/\{\{\d+\}\}/g) || [];
+    const numeros = matches
+      .map((item) => Number(item.replace(/[{}]/g, "")))
+      .filter((n) => !Number.isNaN(n));
 
-  if (numeros.length === 0) return 0;
-  return Math.max(...numeros);
+    if (numeros.length === 0) return 0;
+    return Math.max(...numeros);
+  }
+
+  const totalButtons = (buttons?.buttons || []).reduce(
+    (total, button) =>
+      String(button?.type || "").toUpperCase() === "URL"
+        ? total + contarTexto(button?.url)
+        : total,
+    0
+  );
+
+  return contarTexto(header?.text) + contarTexto(body?.text) + totalButtons;
+}
+
+function substituirPreviewSequencial(
+  texto: string,
+  variaveis: string[],
+  offset: number
+) {
+  return String(texto || "").replace(/\{\{(\d+)\}\}/g, (_, numero) => {
+    const index = offset + Number(numero) - 1;
+    return variaveis[index]?.trim() || `{{${numero}}}`;
+  });
+}
+
+function montarPreviewTemplateDisparo(
+  template: WhatsAppTemplate | null,
+  variaveis: string[]
+) {
+  if (!template) return null;
+
+  const components = template.payload?.components || [];
+  const header = components.find(
+    (item) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+  const body = components.find(
+    (item) => String(item.type || "").toUpperCase() === "BODY"
+  );
+  const footer = components.find(
+    (item) => String(item.type || "").toUpperCase() === "FOOTER"
+  );
+
+  let offset = 0;
+  const headerTexto = substituirPreviewSequencial(
+    header?.text || "",
+    variaveis,
+    offset
+  ).trim();
+  offset += contarVariaveisTemplate({
+    ...template,
+    payload: {
+      ...template.payload,
+      components: header ? [header] : [],
+    },
+  });
+
+  const bodyTexto = substituirPreviewSequencial(
+    body?.text || "",
+    variaveis,
+    offset
+  ).trim();
+
+  return {
+    titulo: headerTexto || template.nome || "Template WhatsApp",
+    corpo: bodyTexto || "Template sem conteúdo para prévia.",
+    rodape: String(footer?.text || "").trim() || "Equipe de atendimento",
+  };
+}
+
+function normalizarVariavelTemplate(valor: string) {
+  return String(valor || "")
+    .replace(/[{}]/g, "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+function resolverVariavelContato(valor: string, contato: ContatoOpcao) {
+  const texto = String(valor || "").trim();
+  const chave = texto
+    .replace(/^\{\{\s*/, "")
+    .replace(/\s*\}\}$/, "")
+    .trim()
+    .toLowerCase();
+
+  if (!texto) return "";
+
+  if (chave === "nome" || chave === "nome_contato" || chave === "contato_nome") {
+    return contato.nome || "Cliente";
+  }
+
+  if (
+    chave === "telefone" ||
+    chave === "numero" ||
+    chave === "numero_contato" ||
+    chave === "contato_numero"
+  ) {
+    return contato.telefone || "";
+  }
+
+  if (chave === "email" || chave === "email_contato" || chave === "contato_email") {
+    return contato.email || "";
+  }
+
+  if (chave === "campanha") {
+    return contato.campanha || contato.status_lead || contato.telefone || "";
+  }
+
+  if (chave === "status_lead" || chave === "status") {
+    return contato.status_lead || contato.campanha || contato.telefone || "";
+  }
+
+  if (chave === "origem") {
+    return contato.origem || "";
+  }
+
+  return texto;
 }
 
 function formatarStatusIntegracao(status?: string | null) {
@@ -351,6 +479,9 @@ export default function DisparosWhatsAppPage() {
 
   const [integracaoId, setIntegracaoId] = useState("");
   const [templateId, setTemplateId] = useState("");
+  const [templateVariavel1, setTemplateVariavel1] = useState("nome_contato");
+  const [templateVariavel2, setTemplateVariavel2] = useState("campanha");
+  const [templateVariavel3, setTemplateVariavel3] = useState("telefone");
   const [buscaContato, setBuscaContato] = useState("");
   const [origemFiltro, setOrigemFiltro] = useState("");
   const [origensDisponiveis, setOrigensDisponiveis] = useState<string[]>([]);
@@ -590,6 +721,15 @@ export default function DisparosWhatsAppPage() {
     return contarVariaveisTemplate(templateSelecionado);
   }, [templateSelecionado]);
 
+  const variaveisTemplate = useMemo(
+    () => [templateVariavel1, templateVariavel2, templateVariavel3],
+    [templateVariavel1, templateVariavel2, templateVariavel3]
+  );
+
+  const previewTemplateSelecionado = useMemo(() => {
+    return montarPreviewTemplateDisparo(templateSelecionado, variaveisTemplate);
+  }, [templateSelecionado, variaveisTemplate]);
+
   const contatosDisponiveis = useMemo(() => {
     const idsSelecionados = new Set(contatosSelecionados.map((item) => item.id));
     return contatos.filter((item) => !idsSelecionados.has(item.id));
@@ -740,6 +880,20 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
+    if (totalVariaveis > 3) {
+      setErro("Este template usa mais de 3 variáveis. Use um template com até 3 variáveis para esta tela.");
+      return;
+    }
+
+    const variaveisObrigatorias = variaveisTemplate
+      .slice(0, totalVariaveis)
+      .map((item) => normalizarVariavelTemplate(item));
+
+    if (variaveisObrigatorias.some((item) => !item)) {
+      setErro("Preencha os campos Variável 1, 2 e 3 exigidos pelo template.");
+      return;
+    }
+
     try {
       setDisparando(true);
 
@@ -747,10 +901,9 @@ export default function DisparosWhatsAppPage() {
         numero: limparNumero(contato.telefone),
         variaveis:
           totalVariaveis > 0
-            ? [
-                contato.nome || "Cliente",
-                contato.campanha || contato.status_lead || contato.telefone || "",
-              ].slice(0, totalVariaveis)
+            ? variaveisObrigatorias.map((variavel) =>
+                resolverVariavelContato(variavel, contato)
+              )
             : [],
       }));
 
@@ -1038,12 +1191,63 @@ export default function DisparosWhatsAppPage() {
                       </div>
                     ) : null}
                     
-                      <div className={styles.templateHint}>
-                        Este template usa <strong>{totalVariaveis}</strong> variável(is).
-                        Neste envio, quando existirem variáveis, o sistema preenche:
-                        <strong> {" {{1}}"}</strong> com o nome do contato e
-                        <strong> {" {{2}}"}</strong> com campanha, status do lead ou telefone.
-                      </div>
+                      {totalVariaveis > 0 ? (
+                        <>
+                          <div className={styles.templateHint}>
+                            Este template usa <strong>{totalVariaveis}</strong> variável(is).
+                            Variável 1 substitui <strong>{" {{1}}"}</strong>, Variável 2 substitui
+                            <strong>{" {{2}}"}</strong> e Variável 3 substitui <strong>{" {{3}}"}</strong>.
+                          </div>
+
+                          <div className={styles.templateVariablesGrid}>
+                            <div className={styles.field}>
+                              <label className={styles.label}>Variável 1</label>
+                              <input
+                                value={templateVariavel1}
+                                onChange={(e) =>
+                                  setTemplateVariavel1(
+                                    normalizarVariavelTemplate(e.target.value)
+                                  )
+                                }
+                                className={styles.input}
+                                placeholder="nome_contato"
+                              />
+                            </div>
+
+                            {totalVariaveis >= 2 ? (
+                              <div className={styles.field}>
+                                <label className={styles.label}>Variável 2</label>
+                                <input
+                                  value={templateVariavel2}
+                                  onChange={(e) =>
+                                    setTemplateVariavel2(
+                                      normalizarVariavelTemplate(e.target.value)
+                                    )
+                                  }
+                                  className={styles.input}
+                                  placeholder="campanha"
+                                />
+                              </div>
+                            ) : null}
+
+                            {totalVariaveis >= 3 ? (
+                              <div className={styles.field}>
+                                <label className={styles.label}>Variável 3</label>
+                                <input
+                                  value={templateVariavel3}
+                                  onChange={(e) =>
+                                    setTemplateVariavel3(
+                                      normalizarVariavelTemplate(e.target.value)
+                                    )
+                                  }
+                                  className={styles.input}
+                                  placeholder="telefone"
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                        </>
+                      ) : null}
                   </div>
 
                   <aside className={styles.previewSideCard}>
@@ -1056,16 +1260,16 @@ export default function DisparosWhatsAppPage() {
                         <div className={styles.whatsappPreviewArea}>
                           <div className={styles.whatsappBubble}>
                             <strong className={styles.whatsappPreviewTitle}>
-                              {extrairHeader(templateSelecionado.payload) || templateSelecionado.nome}
+                              {previewTemplateSelecionado?.titulo || templateSelecionado.nome}
                             </strong>
 
                             <p className={styles.whatsappPreviewText}>
-                              {extrairBody(templateSelecionado.payload)}
+                              {previewTemplateSelecionado?.corpo || extrairBody(templateSelecionado.payload)}
                             </p>
 
                             <div className={styles.whatsappPreviewMeta}>
                               <span className={styles.whatsappPreviewFooter}>
-                                {extrairFooter(templateSelecionado.payload) || "Equipe de atendimento"}
+                                {previewTemplateSelecionado?.rodape || "Equipe de atendimento"}
                               </span>
 
                               <span className={styles.whatsappPreviewTime}>

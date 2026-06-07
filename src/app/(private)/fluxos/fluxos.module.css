@@ -816,6 +816,138 @@
   align-items: flex-end;
 }
 
+.templateVariableGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.templateVariableStack {
+  grid-template-columns: 1fr;
+}
+
+.templatePreviewCard {
+  border: 1px solid #dbe3f0;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.templatePreviewTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.templatePreviewTop span {
+  color: #64748b;
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whatsappPreviewArea {
+  border-radius: 16px;
+  padding: 18px 18px 14px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(15, 23, 42, 0.04) 0 2px, transparent 2px),
+    #efe7dd;
+  background-size: 18px 18px;
+}
+
+.whatsappBubble {
+  width: min(100%, 360px);
+  background: #ffffff;
+  border-radius: 0 14px 14px 14px;
+  padding: 12px 12px 8px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  position: relative;
+}
+
+.whatsappBubble::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -9px;
+  border-top: 9px solid #ffffff;
+  border-left: 9px solid transparent;
+}
+
+.whatsappPreviewTitle {
+  display: block;
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.whatsappPreviewText {
+  margin: 0;
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.whatsappPreviewMeta {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.whatsappPreviewFooter {
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.whatsappPreviewTime {
+  flex-shrink: 0;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.whatsappPreviewButton {
+  margin-top: 8px;
+  padding: 9px 10px;
+  border-top: 1px solid #e5e7eb;
+  color: #0284c7;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.previewEmptyState {
+  min-height: 130px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #64748b;
+  padding: 16px;
+  font-size: 13px;
+}
+
 .optionValueInput {
   width: 100%;
   border: 1px solid #cbd5e1;
@@ -1987,6 +2119,10 @@
   .headerActions {
     width: 100%;
     justify-content: stretch;
+  }
+
+  .templateVariableGrid {
+    grid-template-columns: 1fr;
   }
 
   .primaryButton,

@@ -93,6 +93,153 @@ type TemplateWhatsappOpcao = {
   payload?: any;
 };
 
+type PreviewTemplateWhatsapp = {
+  titulo: string;
+  corpo: string;
+  rodape: string;
+  botoes: string[];
+};
+
+function contarVariaveisTextoTemplate(texto?: string | null) {
+  const matches = String(texto || "").match(/\{\{\d+\}\}/g) || [];
+  const numeros = matches
+    .map((item) => Number(item.replace(/[{}]/g, "")))
+    .filter((numero) => Number.isFinite(numero));
+
+  return numeros.length > 0 ? Math.max(...numeros) : 0;
+}
+
+function contarVariaveisTemplateWhatsapp(template?: TemplateWhatsappOpcao | null) {
+  const components = Array.isArray(template?.payload?.components)
+    ? template?.payload?.components
+    : [];
+
+  const header = components.find(
+    (item: any) => String(item?.type || "").toUpperCase() === "HEADER"
+  );
+  const body = components.find(
+    (item: any) => String(item?.type || "").toUpperCase() === "BODY"
+  );
+  const buttons = components.find(
+    (item: any) => String(item?.type || "").toUpperCase() === "BUTTONS"
+  );
+
+  const totalHeader = contarVariaveisTextoTemplate(header?.text);
+  const totalBody = contarVariaveisTextoTemplate(body?.text);
+  const totalButtons = (buttons?.buttons || []).reduce(
+    (total: number, button: any) => {
+      if (String(button?.type || "").toUpperCase() !== "URL") return total;
+      return total + contarVariaveisTextoTemplate(button?.url);
+    },
+    0
+  );
+
+  return totalHeader + totalBody + totalButtons;
+}
+
+function templateWhatsappTemCabecalhoMidia(template?: TemplateWhatsappOpcao | null) {
+  const components = Array.isArray(template?.payload?.components)
+    ? template?.payload?.components
+    : [];
+  const header = components.find(
+    (item: any) => String(item?.type || "").toUpperCase() === "HEADER"
+  );
+  const formatoHeader = String(header?.format || "").toUpperCase();
+
+  return ["IMAGE", "VIDEO", "DOCUMENT"].includes(formatoHeader);
+}
+
+function contarVariaveisObrigatoriasPreenchidas(
+  variaveis: string[] | string,
+  totalObrigatorio: number
+) {
+  const linhas = Array.isArray(variaveis)
+    ? variaveis
+    : obterLinhasVariaveisTemplate(variaveis);
+
+  return linhas
+    .slice(0, totalObrigatorio)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean).length;
+}
+
+function obterLinhasVariaveisTemplate(valor: string) {
+  const linhas = String(valor || "").split("\n");
+  return [linhas[0] || "", linhas[1] || "", linhas[2] || ""];
+}
+
+function atualizarLinhaVariavelTemplate(
+  valorAtual: string,
+  index: number,
+  novoValor: string
+) {
+  const linhas = obterLinhasVariaveisTemplate(valorAtual);
+  linhas[index] = normalizarVariavelFluxo(novoValor);
+  return linhas.join("\n");
+}
+
+function substituirVariaveisPreviewTemplate(
+  texto: string,
+  variaveis: string[],
+  offset: number
+) {
+  return String(texto || "").replace(/\{\{(\d+)\}\}/g, (_, numero) => {
+    const index = offset + Number(numero) - 1;
+    return variaveis[index]?.trim() || `{{${numero}}}`;
+  });
+}
+
+function montarPreviewTemplateWhatsapp(
+  template: TemplateWhatsappOpcao | null,
+  variaveisRaw: string
+): PreviewTemplateWhatsapp | null {
+  if (!template) return null;
+
+  const variaveis = obterLinhasVariaveisTemplate(variaveisRaw);
+  const components = Array.isArray(template.payload?.components)
+    ? template.payload.components
+    : [];
+  const header = components.find(
+    (item: any) => String(item?.type || "").toUpperCase() === "HEADER"
+  );
+  const body = components.find(
+    (item: any) => String(item?.type || "").toUpperCase() === "BODY"
+  );
+  const footer = components.find(
+    (item: any) => String(item?.type || "").toUpperCase() === "FOOTER"
+  );
+  const buttons = components.find(
+    (item: any) => String(item?.type || "").toUpperCase() === "BUTTONS"
+  );
+
+  let offset = 0;
+  const headerText = substituirVariaveisPreviewTemplate(
+    header?.text || "",
+    variaveis,
+    offset
+  ).trim();
+  offset += contarVariaveisTextoTemplate(header?.text);
+
+  const bodyText = substituirVariaveisPreviewTemplate(
+    body?.text || "",
+    variaveis,
+    offset
+  ).trim();
+
+  const quickReplies =
+    buttons?.buttons
+      ?.filter((button: any) => button?.type === "QUICK_REPLY" && button?.text)
+      .map((button: any) => String(button.text || "").trim())
+      .filter(Boolean) || [];
+
+  return {
+    titulo: headerText || template.nome || "Template WhatsApp",
+    corpo: bodyText || "Template sem texto para previsualizacao.",
+    rodape: String(footer?.text || "").trim() || "Equipe de atendimento",
+    botoes: quickReplies,
+  };
+}
+
 type AgendaOpcao = {
   id: string;
   nome: string;
@@ -122,7 +269,7 @@ const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
 const VARIAVEIS_FIXAS_CONTATO_HELP =
-  "Variaveis fixas do contato: {{nome_contato}}, {{email_contato}} e {{numero_contato}}.";
+  "Variaveis fixas do contato: nome_contato, email_contato e numero_contato.";
 const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
   "nome_contato",
   "contato_nome",
@@ -851,6 +998,42 @@ export default function FluxosPage() {
       ) || null
     );
   }, [templatesWhatsapp, agendaLembreteTemplateIdNode]);
+
+  const previewTemplateAgendarDisparo = useMemo(() => {
+    return montarPreviewTemplateWhatsapp(
+      templateAgendarDisparoSelecionado,
+      agendarDisparoVariaveisNode
+    );
+  }, [templateAgendarDisparoSelecionado, agendarDisparoVariaveisNode]);
+
+  const previewTemplateAgendaLembrete = useMemo(() => {
+    return montarPreviewTemplateWhatsapp(
+      templateAgendaLembreteSelecionado,
+      agendaLembreteVariaveisNode
+    );
+  }, [templateAgendaLembreteSelecionado, agendaLembreteVariaveisNode]);
+
+  const totalVariaveisTemplateAgendarDisparo = useMemo(() => {
+    return contarVariaveisTemplateWhatsapp(templateAgendarDisparoSelecionado);
+  }, [templateAgendarDisparoSelecionado]);
+
+  const totalVariaveisTemplateAgendaLembrete = useMemo(() => {
+    return contarVariaveisTemplateWhatsapp(templateAgendaLembreteSelecionado);
+  }, [templateAgendaLembreteSelecionado]);
+
+  const indicesVariaveisTemplateAgendarDisparo = useMemo(() => {
+    return Array.from(
+      { length: Math.min(totalVariaveisTemplateAgendarDisparo, 3) },
+      (_, index) => index
+    );
+  }, [totalVariaveisTemplateAgendarDisparo]);
+
+  const indicesVariaveisTemplateAgendaLembrete = useMemo(() => {
+    return Array.from(
+      { length: Math.min(totalVariaveisTemplateAgendaLembrete, 3) },
+      (_, index) => index
+    );
+  }, [totalVariaveisTemplateAgendaLembrete]);
 
   async function carregarTemplatesWhatsapp() {
     try {
@@ -1858,7 +2041,10 @@ function offsetLabelConexao(edgeId: string) {
 
     setAgendarDisparoVariaveisNode(
       Array.isArray(configuracaoJson?.variaveis)
-        ? configuracaoJson.variaveis.join("\n")
+        ? configuracaoJson.variaveis
+            .map((item: any) => normalizarVariavelFluxo(String(item || "")))
+            .filter(Boolean)
+            .join("\n")
         : ""
     );
 
@@ -1952,7 +2138,10 @@ function offsetLabelConexao(edgeId: string) {
     );
     setAgendaLembreteVariaveisNode(
       Array.isArray(configuracaoJson?.lembrete_agendamento_variaveis)
-        ? configuracaoJson.lembrete_agendamento_variaveis.join("\n")
+        ? configuracaoJson.lembrete_agendamento_variaveis
+            .map((item: any) => normalizarVariavelFluxo(String(item || "")))
+            .filter(Boolean)
+            .join("\n")
         : ""
     );
     setAgendaMotivoCancelamentoNode(
@@ -2172,6 +2361,37 @@ function aplicarEdicaoNoInterno() {
     }
   }
 
+  if (tipoNodeEdicao === "agendar_disparo" && templateAgendarDisparoSelecionado) {
+    if (templateWhatsappTemCabecalhoMidia(templateAgendarDisparoSelecionado)) {
+      setErro(
+        "O template selecionado possui cabecalho de midia. Use um template aprovado apenas com texto para agendar disparos."
+      );
+      return;
+    }
+
+    const totalVariaveisTemplate = contarVariaveisTemplateWhatsapp(
+      templateAgendarDisparoSelecionado
+    );
+    const totalVariaveisConfiguradas = contarVariaveisObrigatoriasPreenchidas(
+      agendarDisparoVariaveisNode,
+      totalVariaveisTemplate
+    );
+
+    if (totalVariaveisTemplate > 3) {
+      setErro(
+        "O template selecionado exige mais de 3 variaveis. Use um template com ate 3 variaveis para este bloco."
+      );
+      return;
+    }
+
+    if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
+      setErro(
+        `O template selecionado exige ${totalVariaveisTemplate} variavel(is). Preencha os campos Variavel 1, 2 e 3 antes de salvar o bloco.`
+      );
+      return;
+    }
+  }
+
   if (
     (([
       "agenda_criar_agendamento",
@@ -2205,6 +2425,37 @@ function aplicarEdicaoNoInterno() {
     if (agendaLembreteWhatsappNode && !agendaLembreteTemplateIdNode.trim()) {
       setErro("Selecione um template WhatsApp para o lembrete.");
       return;
+    }
+
+    if (agendaLembreteWhatsappNode && templateAgendaLembreteSelecionado) {
+      if (templateWhatsappTemCabecalhoMidia(templateAgendaLembreteSelecionado)) {
+        setErro(
+          "O template do lembrete possui cabecalho de midia. Use um template aprovado apenas com texto para lembretes agendados."
+        );
+        return;
+      }
+
+      const totalVariaveisTemplate = contarVariaveisTemplateWhatsapp(
+        templateAgendaLembreteSelecionado
+      );
+      const totalVariaveisConfiguradas = contarVariaveisObrigatoriasPreenchidas(
+        agendaLembreteVariaveisNode,
+        totalVariaveisTemplate
+      );
+
+      if (totalVariaveisTemplate > 3) {
+        setErro(
+          "O template do lembrete exige mais de 3 variaveis. Use um template com ate 3 variaveis para este bloco."
+        );
+        return;
+      }
+
+      if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
+        setErro(
+          `O template do lembrete exige ${totalVariaveisTemplate} variavel(is). Preencha os campos Variavel 1, 2 e 3 antes de salvar o bloco.`
+        );
+        return;
+      }
     }
   }
 
@@ -2284,7 +2535,7 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.tempo_unidade = agendarDisparoUnidadeNode;
         configuracao_json.variaveis = agendarDisparoVariaveisNode
           .split("\n")
-          .map((item) => item.trim())
+          .map((item) => normalizarVariavelFluxo(item))
           .filter(Boolean);
       }
 
@@ -2369,7 +2620,7 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.lembrete_agendamento_variaveis =
           agendaLembreteVariaveisNode
             .split("\n")
-            .map((item) => item.trim())
+            .map((item) => normalizarVariavelFluxo(item))
             .filter(Boolean);
       }
 
@@ -3522,6 +3773,32 @@ function validarFluxoAntesDeAtivar(params?: {
         return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp.`;
       }
 
+      const templateSelecionado = templatesWhatsapp.find(
+        (template) => template.id === String(config.template_id || "").trim()
+      );
+
+      if (templateWhatsappTemCabecalhoMidia(templateSelecionado)) {
+        return `O bloco "${node.data?.titulo}" usa um template com cabecalho de midia. Use um template apenas com texto para disparos agendados.`;
+      }
+
+      if (templateSelecionado) {
+        const totalVariaveisTemplate =
+          contarVariaveisTemplateWhatsapp(templateSelecionado);
+        const totalVariaveisConfiguradas =
+          contarVariaveisObrigatoriasPreenchidas(
+            Array.isArray(config.variaveis) ? config.variaveis : [],
+            totalVariaveisTemplate
+          );
+
+        if (totalVariaveisTemplate > 3) {
+          return `O bloco "${node.data?.titulo}" usa um template com mais de 3 variaveis.`;
+        }
+
+        if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
+          return `O bloco "${node.data?.titulo}" precisa informar ${totalVariaveisTemplate} variavel(is) do template WhatsApp.`;
+        }
+      }
+
       const quantidade = Number(config.tempo_quantidade || 0);
 
       if (!Number.isFinite(quantidade) || quantidade <= 0) {
@@ -3575,6 +3852,38 @@ function validarFluxoAntesDeAtivar(params?: {
           !String(config.lembrete_agendamento_template_id || "").trim()
         ) {
           return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp para o lembrete.`;
+        }
+
+        if (config.lembrete_agendamento_whatsapp === true) {
+          const templateSelecionado = templatesWhatsapp.find(
+            (template) =>
+              template.id ===
+              String(config.lembrete_agendamento_template_id || "").trim()
+          );
+
+          if (templateWhatsappTemCabecalhoMidia(templateSelecionado)) {
+            return `O bloco "${node.data?.titulo}" usa um template de lembrete com cabecalho de midia. Use um template apenas com texto.`;
+          }
+
+          if (templateSelecionado) {
+            const totalVariaveisTemplate =
+              contarVariaveisTemplateWhatsapp(templateSelecionado);
+            const totalVariaveisConfiguradas =
+              contarVariaveisObrigatoriasPreenchidas(
+                Array.isArray(config.lembrete_agendamento_variaveis)
+                  ? config.lembrete_agendamento_variaveis
+                  : [],
+                totalVariaveisTemplate
+              );
+
+            if (totalVariaveisTemplate > 3) {
+              return `O bloco "${node.data?.titulo}" usa um template de lembrete com mais de 3 variaveis.`;
+            }
+
+            if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
+              return `O bloco "${node.data?.titulo}" precisa informar ${totalVariaveisTemplate} variavel(is) do template de lembrete.`;
+            }
+          }
         }
       }
     }
@@ -5338,22 +5647,86 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         </label>
                       </div>
 
-                      <label className={styles.field}>
-                        <span className={styles.label}>Variáveis do template</span>
+                      <div className={styles.field}>
+                        {indicesVariaveisTemplateAgendarDisparo.length > 0 ? (
+                          <>
+                            <span className={styles.label}>Variáveis do template</span>
 
-                        <textarea
-                          className={styles.textarea}
-                          value={agendarDisparoVariaveisNode}
-                          onChange={(e) => setAgendarDisparoVariaveisNode(e.target.value)}
-                          placeholder={"Uma variavel por linha.\nEx:\n{{nome_contato}}\n{{numero_contato}}"}
-                        />
+                            <div className={styles.templateVariableGrid}>
+                              {indicesVariaveisTemplateAgendarDisparo.map((index) => (
+                                <label key={index} className={styles.field}>
+                                  <span className={styles.label}>Variável {index + 1}</span>
+                                  <input
+                                    className={styles.input}
+                                    value={obterLinhasVariaveisTemplate(agendarDisparoVariaveisNode)[index]}
+                                    onChange={(e) =>
+                                      setAgendarDisparoVariaveisNode((atual) =>
+                                        atualizarLinhaVariavelTemplate(atual, index, e.target.value)
+                                      )
+                                    }
+                                    placeholder={
+                                      index === 0
+                                        ? "nome_contato"
+                                        : index === 1
+                                        ? "numero_contato"
+                                        : "email_contato"
+                                    }
+                                  />
+                                </label>
+                              ))}
+                            </div>
 
-                        <span className={styles.help}>
-                          Use uma variável por linha. Na próxima etapa, o motor vai substituir esses valores antes de enviar.
-                        </span>
-                        <span className={styles.help}>
-                          {VARIAVEIS_FIXAS_CONTATO_HELP}
-                        </span>
+                            <span className={styles.help}>
+                              Variável 1 substitui {"{{1}}"}, Variável 2 substitui {"{{2}}"} e Variável 3 substitui {"{{3}}"}.
+                            </span>
+                            <span className={styles.help}>
+                              {VARIAVEIS_FIXAS_CONTATO_HELP}
+                            </span>
+                          </>
+                        ) : null}
+
+                        <div className={styles.templatePreviewCard}>
+                          <div className={styles.templatePreviewTop}>
+                            <strong>Prévia WhatsApp</strong>
+                            <span>{templateAgendarDisparoSelecionado?.nome || "Template"}</span>
+                          </div>
+
+                          {previewTemplateAgendarDisparo ? (
+                            <div className={styles.whatsappPreviewArea}>
+                              <div className={styles.whatsappBubble}>
+                                <strong className={styles.whatsappPreviewTitle}>
+                                  {previewTemplateAgendarDisparo.titulo}
+                                </strong>
+
+                                <p className={styles.whatsappPreviewText}>
+                                  {previewTemplateAgendarDisparo.corpo}
+                                </p>
+
+                                <div className={styles.whatsappPreviewMeta}>
+                                  <span className={styles.whatsappPreviewFooter}>
+                                    {previewTemplateAgendarDisparo.rodape}
+                                  </span>
+                                  <span className={styles.whatsappPreviewTime}>
+                                    {new Date().toLocaleTimeString("pt-BR", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                </div>
+
+                                {previewTemplateAgendarDisparo.botoes.map((texto, index) => (
+                                  <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
+                                    ↩ {texto}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className={styles.previewEmptyState}>
+                              Selecione um template aprovado para visualizar a mensagem.
+                            </div>
+                          )}
+                        </div>
 
                         <div className={styles.agendarDisparoCostPreviewCard}>
                           <div className={styles.costPreviewTop}>
@@ -5390,7 +5763,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             </p>
                           )}
                         </div>
-                      </label>
+                      </div>
                     </div>
                   )}
 
@@ -5883,21 +6256,90 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                     </select>
                                   </label>
 
-                                  <label className={styles.field}>
-                                    <span className={styles.label}>Variaveis do template</span>
-                                    <textarea
-                                      className={styles.textarea}
-                                      value={agendaLembreteVariaveisNode}
-                                      onChange={(e) =>
-                                        setAgendaLembreteVariaveisNode(e.target.value)
-                                      }
-                                      placeholder={
-                                        "Uma variavel por linha.\nEx:\n{{nome_contato}}\n{{agenda_data}}\n{{agenda_hora}}"
-                                      }
-                                    />
-                                    <span className={styles.help}>
-                                      Variaveis do agendamento como {"{{agenda_data}}"} e {"{{agenda_hora}}"} ficam disponiveis para o template.
-                                    </span>
+                                  <div className={styles.field}>
+                                    {indicesVariaveisTemplateAgendaLembrete.length > 0 ? (
+                                      <>
+                                        <span className={styles.label}>Variaveis do template</span>
+
+                                        <div className={`${styles.templateVariableGrid} ${styles.templateVariableStack}`}>
+                                          {indicesVariaveisTemplateAgendaLembrete.map((index) => (
+                                            <label key={index} className={styles.field}>
+                                              <span className={styles.label}>Variavel {index + 1}</span>
+                                              <input
+                                                className={styles.input}
+                                                value={obterLinhasVariaveisTemplate(agendaLembreteVariaveisNode)[index]}
+                                                onChange={(e) =>
+                                                  setAgendaLembreteVariaveisNode((atual) =>
+                                                    atualizarLinhaVariavelTemplate(
+                                                      atual,
+                                                      index,
+                                                      e.target.value
+                                                    )
+                                                  )
+                                                }
+                                                placeholder={
+                                                  index === 0
+                                                    ? "nome_contato"
+                                                    : index === 1
+                                                    ? "agenda_data"
+                                                    : "agenda_hora"
+                                                }
+                                              />
+                                            </label>
+                                          ))}
+                                        </div>
+
+                                        <span className={styles.help}>
+                                          Variavel 1 substitui {"{{1}}"}, Variavel 2 substitui {"{{2}}"} e Variavel 3 substitui {"{{3}}"}.
+                                        </span>
+                                        <span className={styles.help}>
+                                          Variaveis do agendamento como agenda_data e agenda_hora ficam disponiveis para o template.
+                                        </span>
+                                      </>
+                                    ) : null}
+
+                                    <div className={styles.templatePreviewCard}>
+                                      <div className={styles.templatePreviewTop}>
+                                        <strong>Previa WhatsApp</strong>
+                                        <span>{templateAgendaLembreteSelecionado?.nome || "Template"}</span>
+                                      </div>
+
+                                      {previewTemplateAgendaLembrete ? (
+                                        <div className={styles.whatsappPreviewArea}>
+                                          <div className={styles.whatsappBubble}>
+                                            <strong className={styles.whatsappPreviewTitle}>
+                                              {previewTemplateAgendaLembrete.titulo}
+                                            </strong>
+
+                                            <p className={styles.whatsappPreviewText}>
+                                              {previewTemplateAgendaLembrete.corpo}
+                                            </p>
+
+                                            <div className={styles.whatsappPreviewMeta}>
+                                              <span className={styles.whatsappPreviewFooter}>
+                                                {previewTemplateAgendaLembrete.rodape}
+                                              </span>
+                                              <span className={styles.whatsappPreviewTime}>
+                                                {new Date().toLocaleTimeString("pt-BR", {
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                                })}
+                                              </span>
+                                            </div>
+
+                                            {previewTemplateAgendaLembrete.botoes.map((texto, index) => (
+                                              <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
+                                                ↩ {texto}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className={styles.previewEmptyState}>
+                                          Selecione um template aprovado para visualizar a mensagem.
+                                        </div>
+                                      )}
+                                    </div>
 
                                     <div className={styles.agendarDisparoCostPreviewCard}>
                                       <div className={styles.costPreviewTop}>
@@ -5934,7 +6376,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                         </p>
                                       )}
                                     </div>
-                                  </label>
+                                  </div>
                                 </>
                               )}
 
