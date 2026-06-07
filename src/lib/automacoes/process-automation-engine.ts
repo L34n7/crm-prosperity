@@ -3370,7 +3370,8 @@ async function agendarLembretesAgendamento(params: {
   const emailDestino = String(emailCliente || agendamento.email_cliente || "")
     .trim()
     .toLowerCase();
-  const registros: any[] = [];
+  const registrosWhatsapp: any[] = [];
+  const registrosEmail: any[] = [];
 
   const payloadBase = {
     conversa_id: conversaId,
@@ -3453,7 +3454,7 @@ async function agendarLembretesAgendamento(params: {
           },
         });
       } else {
-        registros.push({
+        registrosWhatsapp.push({
           empresa_id: empresaId,
           execucao_id: execucaoId,
           fluxo_id: fluxoId,
@@ -3482,7 +3483,7 @@ async function agendarLembretesAgendamento(params: {
   }
 
   if (configLembrete.enviar_email && emailLembreteValido(emailDestino)) {
-    registros.push({
+    registrosEmail.push({
       empresa_id: empresaId,
       execucao_id: execucaoId,
       fluxo_id: fluxoId,
@@ -3512,28 +3513,58 @@ async function agendarLembretesAgendamento(params: {
     });
   }
 
-  if (registros.length === 0) return;
+  const registrosCriados: any[] = [];
 
-  const { error } = await supabaseAdmin
-    .from("automacao_agendamentos")
-    .insert(registros);
+  async function inserirRegistrosLembrete(params: {
+    registros: any[];
+    tipoEventoErro: string;
+    descricaoErro: string;
+  }) {
+    const { registros, tipoEventoErro, descricaoErro } = params;
 
-  if (error) {
-    await registrarLog({
-      empresaId,
-      execucaoId,
-      fluxoId,
-      noId,
-      tipoEvento: "agenda_lembrete_erro_insert",
-      descricao: "Erro ao criar lembrete de agendamento.",
-      entrada: configLembrete,
-      saida: {
-        erro: error.message,
-      },
-    });
+    if (registros.length === 0) return;
 
-    return;
+    const { error } = await supabaseAdmin
+      .from("automacao_agendamentos")
+      .insert(registros);
+
+    if (error) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId,
+        tipoEvento: tipoEventoErro,
+        descricao: descricaoErro,
+        entrada: configLembrete,
+        saida: {
+          erro: error.message,
+          tipos_agendamento: registros.map(
+            (registro) => registro.tipo_agendamento
+          ),
+          agendamento_id: agendamento.id,
+        },
+      });
+
+      return;
+    }
+
+    registrosCriados.push(...registros);
   }
+
+  await inserirRegistrosLembrete({
+    registros: registrosWhatsapp,
+    tipoEventoErro: "agenda_lembrete_whatsapp_erro_insert",
+    descricaoErro: "Erro ao criar lembrete WhatsApp de agendamento.",
+  });
+
+  await inserirRegistrosLembrete({
+    registros: registrosEmail,
+    tipoEventoErro: "agenda_lembrete_email_erro_insert",
+    descricaoErro: "Erro ao criar lembrete por email de agendamento.",
+  });
+
+  if (registrosCriados.length === 0) return;
 
   await registrarLog({
     empresaId,
@@ -3545,7 +3576,7 @@ async function agendarLembretesAgendamento(params: {
     entrada: configLembrete,
     saida: {
       executar_em: executarEm,
-      canais: registros.map((registro) => registro.tipo_agendamento),
+      canais: registrosCriados.map((registro) => registro.tipo_agendamento),
       agendamento_id: agendamento.id,
     },
   });
