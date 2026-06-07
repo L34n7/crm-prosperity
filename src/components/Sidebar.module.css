@@ -34,7 +34,7 @@
 
 .sidebarBottom {
   flex-shrink: 0;
-  padding-top: 12px;
+  padding-top: 8px;
   margin-top: auto;
   position: relative;
   z-index: 2;
@@ -247,6 +247,7 @@
   font-weight: 600;
   color: #0f172a;
   white-space: nowrap;
+  margin-left: 10px;
 }
 
 .sidebarCollapsed .menuText {
@@ -303,8 +304,83 @@
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
+.planButton {
+  width: 100%;
+  min-height: 38px;
+  margin: 0 0 8px;
+  padding: 0px 15px;
+  border: 1px transparent;
+  border-radius: 22px;
+  background: #ffffff;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.planButton:hover {
+  background: #f8fafc;
+  border-color: #dbe4ee;
+  box-shadow: none;
+}
+
+.planIcon {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.planText {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 20px;
+}
+
+.planLabel {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.planText strong {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebarCollapsed .planButton {
+  min-height: 0px;
+  justify-content: center;
+  padding: 7px;
+}
+
+.sidebarCollapsed .planText {
+  display: none;
+}
+
 .linkWhatsappPerfil {
-  margin-bottom: 15px;
+  margin-bottom: 0px;
   padding: 12px 3px;
   border-radius: 22px;
   min-height: 30px;
@@ -328,9 +404,7 @@
   border-radius: 999px;
   object-fit: cover;
   border:2px solid #ffffff;
-  box-shadow:
-    0 8px 24px rgba(15, 23, 42, 0.16),
-    0 0 0 1px #e2e8f0;
+
   transition: transform 0.2s ease;
 }
 
@@ -355,8 +429,15 @@
   .sectionTitle,
   .linkText,
   .footerBox,
-  .menuText {
+  .menuText,
+  .planText {
     display: none;
+  }
+
+  .planButton {
+    min-height: 40px;
+    justify-content: center;
+    padding: 7px;
   }
 
   .menuButton {

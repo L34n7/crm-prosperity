@@ -121,6 +121,18 @@ const TIPOS_VALOR_CONVERSAO: TipoValorConversao[] = [
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
+const VARIAVEIS_FIXAS_CONTATO_HELP =
+  "Variaveis fixas do contato: {{nome_contato}}, {{email_contato}} e {{numero_contato}}.";
+const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
+  "nome_contato",
+  "contato_nome",
+  "email_contato",
+  "contato_email",
+  "numero_contato",
+  "contato_numero",
+  "telefone_contato",
+  "contato_telefone",
+];
 
 async function lerRespostaApi(res: Response, mensagemPadrao: string) {
   const contentType = res.headers.get("content-type") || "";
@@ -767,6 +779,11 @@ export default function FluxosPage() {
     useState("Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.");
   const [agendaStatusAgendamentoNode, setAgendaStatusAgendamentoNode] =
     useState("agendado");
+  const [agendaEnviarEmailNode, setAgendaEnviarEmailNode] = useState(true);
+  const [agendaEmailOrigemNode, setAgendaEmailOrigemNode] =
+    useState<"contato" | "variavel">("contato");
+  const [agendaEmailVariavelNode, setAgendaEmailVariavelNode] =
+    useState("email");
   const [agendaMotivoCancelamentoNode, setAgendaMotivoCancelamentoNode] =
     useState("Cancelado pelo cliente via automacao");
   const [encerrarResultadoNode, setEncerrarResultadoNode] =
@@ -1528,6 +1545,9 @@ async function criarFluxoRapido() {
                 "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato.",
               mensagem_conflito:
                 "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.",
+              enviar_email_agendamento: true,
+              email_agendamento_origem: "contato",
+              email_agendamento_variavel: "email",
             }
           : tipoNo === "agenda_remarcar_agendamento"
           ? {
@@ -1864,6 +1884,15 @@ function offsetLabelConexao(edgeId: string) {
           "agendado"
       )
     );
+    setAgendaEnviarEmailNode(configuracaoJson?.enviar_email_agendamento !== false);
+    setAgendaEmailOrigemNode(
+      configuracaoJson?.email_agendamento_origem === "variavel"
+        ? "variavel"
+        : "contato"
+    );
+    setAgendaEmailVariavelNode(
+      String(configuracaoJson?.email_agendamento_variavel || "email")
+    );
     setAgendaMotivoCancelamentoNode(
       String(
         configuracaoJson?.motivo ||
@@ -2075,6 +2104,28 @@ function aplicarEdicaoNoInterno() {
     }
   }
 
+  if (
+    tipoNodeEdicao === "agenda_criar_agendamento" &&
+    agendaEnviarEmailNode &&
+    agendaEmailOrigemNode === "variavel" &&
+    !agendaEmailVariavelNode.trim()
+  ) {
+    setErro("Informe a variavel que contem o email do contato.");
+    return;
+  }
+
+  if (
+    tipoNodeEdicao === "capturar_resposta" &&
+    VARIAVEIS_FIXAS_CONTATO_RESERVADAS.includes(
+      capturaVariavelNode.trim().toLowerCase()
+    )
+  ) {
+    setErro(
+      "Esse nome de variavel e reservado para os dados fixos do contato."
+    );
+    return;
+  }
+
   setErro("");
 
   setNodes((atuais) =>
@@ -2202,6 +2253,11 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.mensagem_conflito =
           agendaMensagemConflitoNode.trim() ||
           "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.";
+        configuracao_json.enviar_email_agendamento = agendaEnviarEmailNode;
+        configuracao_json.email_agendamento_origem =
+          agendaEmailOrigemNode === "variavel" ? "variavel" : "contato";
+        configuracao_json.email_agendamento_variavel =
+          agendaEmailVariavelNode.trim() || "email";
       }
 
       if (tipoFinal === "agenda_remarcar_agendamento") {
@@ -4368,6 +4424,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               setMensagemNode(
                                 "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato."
                               );
+                              setAgendaEnviarEmailNode(true);
+                              setAgendaEmailOrigemNode("contato");
+                              setAgendaEmailVariavelNode("email");
                             }
 
                             if (novoTipo === "agenda_remarcar_agendamento") {
@@ -4484,7 +4543,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         placeholder="Digite o conteúdo"
                       />
                       <p className={styles.help}>
-                        A váriavel deve ser usada com duas colecheias de cada lado da palavra, exemplo: {"{{variavel}}"},  {"{{teste}}"}.
+                        Use variaveis com duas chaves de cada lado. Exemplo: {"{{variavel}}"} ou {"{{teste}}"}.
+                      </p>
+                      <p className={styles.help}>
+                        {VARIAVEIS_FIXAS_CONTATO_HELP}
                       </p>
                     </label>
 
@@ -4648,7 +4710,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           placeholder="Ex: nome, cpf, email"
                         />
                         <p className={styles.help}>
-                          A váriavel deve ser usada com duas colecheias de cada lado da palavra, exemplo: {"{{variavel}}"},  {"{{teste}}"}.
+                          Use variaveis com duas chaves de cada lado. Exemplo: {"{{variavel}}"} ou {"{{teste}}"}.
+                        </p>
+                        <p className={styles.help}>
+                          Nao use os nomes fixos do contato para salvar respostas.
                         </p>
                       </label>
                       
@@ -5107,11 +5172,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           className={styles.textarea}
                           value={agendarDisparoVariaveisNode}
                           onChange={(e) => setAgendarDisparoVariaveisNode(e.target.value)}
-                          placeholder={"Uma variável por linha.\nEx:\n{{nome}}\n{{telefone}}"}
+                          placeholder={"Uma variavel por linha.\nEx:\n{{nome_contato}}\n{{numero_contato}}"}
                         />
 
                         <span className={styles.help}>
                           Use uma variável por linha. Na próxima etapa, o motor vai substituir esses valores antes de enviar.
+                        </span>
+                        <span className={styles.help}>
+                          {VARIAVEIS_FIXAS_CONTATO_HELP}
                         </span>
 
                         <div className={styles.agendarDisparoCostPreviewCard}>
@@ -5158,7 +5226,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       <div>
                         <span className={styles.label}>Bloco de agenda</span>
                         <p className={styles.help}>
-                          Use junto com Pergunta, Condicoes e Mensagens para montar agendamento, remarcacao ou cancelamento.
+                          Use junto com Pergunta, Condições e Mensagens para montar agendamento, remarcacao ou cancelamento.
                         </p>
                       </div>
 
@@ -5170,7 +5238,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         <label className={styles.field}>
                           <span className={styles.label}>
                             {tipoNodeEdicao === "agenda_criar_agendamento"
-                              ? "Agenda alternativa"
+                              ? "Selecione a agenda"
                               : "Agenda"}
                           </span>
 
@@ -5387,7 +5455,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           </label>
 
                           <label className={styles.field}>
-                            <span className={styles.label}>Mensagem sem horário indisponivel</span>
+                            <span className={styles.label}>Mensagem sem horário / indisponivel</span>
                             <textarea
                               className={styles.textarea}
                               value={agendaMensagemConflitoNode}
@@ -5396,6 +5464,76 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               }
                             />
                           </label>
+                        </>
+                      )}
+                      <span className={styles.help}>
+                        Variaveis principais: {"{{agenda_data}}"}, {"{{agenda_hora}}"},{" "}
+                        {"{{agenda_data_nova}}"}, {"{{agenda_hora_nova}}"} e{" "}
+                        {"{{agenda_agendamento_id}}"}.
+                      </span>
+
+                      {tipoNodeEdicao === "agenda_criar_agendamento" && (
+                        <>
+                          <label className={styles.switchField}>
+                            <input
+                              type="checkbox"
+                              checked={agendaEnviarEmailNode}
+                              onChange={(e) =>
+                                setAgendaEnviarEmailNode(e.target.checked)
+                              }
+                            />
+
+                            <div>
+                              <strong>Enviar email de confirmacao</strong>
+                              <p>
+                                O email será enviado para o contato que está agendando. Selecione a origem do email abaixo.
+                              </p>
+                            </div>
+                          </label>
+
+                          {agendaEnviarEmailNode && (
+                            <>
+                              <label className={styles.field}>
+                                <span className={styles.label}>Origem do email</span>
+                                <select
+                                  className={styles.input}
+                                  value={agendaEmailOrigemNode}
+                                  onChange={(e) =>
+                                    setAgendaEmailOrigemNode(
+                                      e.target.value === "variavel"
+                                        ? "variavel"
+                                        : "contato"
+                                    )
+                                  }
+                                >
+                                  <option value="contato">Email cadastrado no contato</option>
+                                  <option value="variavel">Email salvo em uma variavel</option>
+                                </select>
+                                <span className={styles.help}>
+                                  Informe qual email o sistema vai usar, email do Contato ou uma variável do bloco Capturar resposta.
+                                </span>
+
+                              </label>
+
+                              {agendaEmailOrigemNode === "variavel" && (
+                                <label className={styles.field}>
+                                  <span className={styles.label}>Variavel do email</span>
+                                  <input
+                                    className={styles.input}
+                                    value={agendaEmailVariavelNode}
+                                    onChange={(e) =>
+                                      setAgendaEmailVariavelNode(e.target.value)
+                                    }
+                                    placeholder="email"
+                                  />
+                                  <span className={styles.help}>
+                                    Use o nome da variavel criada em Capturar resposta.
+                                    Exemplo: {"{{email}}"}.
+                                  </span>
+                                </label>
+                              )}
+                            </>
+                          )}
                         </>
                       )}
 
@@ -5428,11 +5566,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         </>
                       )}
 
-                      <span className={styles.help}>
-                        Variaveis principais: {"{{agenda_data}}"}, {"{{agenda_hora}}"},{" "}
-                        {"{{agenda_data_nova}}"}, {"{{agenda_hora_nova}}"} e{" "}
-                        {"{{agenda_agendamento_id}}"}.
-                      </span>
+
                     </div>
                   )}
 

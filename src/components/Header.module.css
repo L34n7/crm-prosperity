@@ -329,6 +329,88 @@
   border-color: #cbd5e1;
 }
 
+.planCurrentSummary {
+  padding: 14px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.planCurrentMain {
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.planCurrentMain span,
+.planCurrentMeta span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.planCurrentMain strong {
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.planCurrentMeta {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.planCurrentMeta div {
+  min-width: 118px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.planCurrentMeta strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.planCurrentStatus {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px !important;
+  line-height: 1 !important;
+}
+
+.planCurrentStatusActive {
+  background: #dcfce7;
+  color: #166534 !important;
+}
+
+.planCurrentStatusWarning {
+  background: #fef3c7;
+  color: #92400e !important;
+}
+
+.planCurrentStatusDanger {
+  background: #fee2e2;
+  color: #991b1b !important;
+}
+
 .planRenewalGrid {
   padding: 18px;
   overflow-y: auto;
@@ -443,7 +525,8 @@
 }
 
 .planRenewalPrimary,
-.planRenewalSecondary {
+.planRenewalSecondary,
+.planRenewalCurrent {
   width: 100%;
   min-height: 42px;
   margin-top: auto;
@@ -481,10 +564,22 @@
   border-color: #94a3b8;
 }
 
+.planRenewalCurrent {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+  cursor: default;
+}
+
 .planRenewalPrimary:disabled,
 .planRenewalSecondary:disabled {
   opacity: 0.62;
   cursor: not-allowed;
+}
+
+.planRenewalCurrent:disabled {
+  opacity: 1;
+  cursor: default;
 }
 
 .tokensLimit {
@@ -1187,6 +1282,21 @@
 
   .planRenewalHeader h2 {
     font-size: 21px;
+  }
+
+  .planCurrentSummary {
+    padding: 14px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .planCurrentMeta {
+    justify-content: stretch;
+  }
+
+  .planCurrentMeta div {
+    flex: 1;
+    min-width: 140px;
   }
 
   .planRenewalGrid {

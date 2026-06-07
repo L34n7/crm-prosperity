@@ -22,7 +22,7 @@ type Notificacao = {
   lida: boolean;
   conversa_id: string | null;
   created_at: string;
-  metadata_json?: Record<string, any>;
+  metadata_json?: Record<string, unknown>;
 };
 
 type SaldoTokensIa = {
@@ -63,6 +63,8 @@ type CheckoutPlanoResponse = {
   checkout_url?: string;
   error?: string;
 };
+
+const AJUDA_WHATSAPP_URL = "https://wa.me/5531975117638";
 
 const PLANOS_RENOVACAO: PlanoRenovacao[] = [
   {
@@ -232,6 +234,68 @@ export default function Header({
     return String(valor);
   }
 
+  function formatarDataAssinatura(valor: string | null | undefined) {
+    if (!valor) return "-";
+
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return "-";
+
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(data);
+  }
+
+  function formatarStatusAssinatura(status: string) {
+    if (status === "bloqueada") return "Bloqueado";
+    if (status === "vencida") return "Vencido";
+    return "Ativo";
+  }
+
+  function normalizarIdentificadorPlano(valor: string | null | undefined) {
+    const texto = (valor || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+
+    if (!texto) return "";
+    if (texto.includes("basic") || texto.includes("basico")) return "basico";
+    if (texto.includes("essencial")) return "essencial";
+    if (texto.includes("enterprise") || texto.includes("profissional")) {
+      return "enterprise";
+    }
+
+    return texto;
+  }
+
+  function planoEhAtual(plano: PlanoRenovacao) {
+    const planoAtual =
+      normalizarIdentificadorPlano(headerUser.assinatura?.plano_slug) ||
+      normalizarIdentificadorPlano(headerUser.assinatura?.plano_nome);
+
+    if (!planoAtual) return false;
+
+    const planoOpcao =
+      plano.tipo === "checkout"
+        ? normalizarIdentificadorPlano(plano.slug)
+        : normalizarIdentificadorPlano(plano.nome);
+
+    return planoAtual === planoOpcao;
+  }
+
+  function getPlanoActionLabel(
+    plano: PlanoRenovacao,
+    planoAtual: boolean,
+    carregando: boolean
+  ) {
+    if (planoAtual) return "Plano atual";
+    if (plano.tipo === "cotacao") return "Solicitar cotação";
+    if (carregando) return "Preparando...";
+    return "Contratar plano";
+  }
+
   function saldoTokensEmAlerta(saldo: SaldoTokensIa | null) {
     if (!saldo?.limite_mensal || saldo.tokens_restantes === null) return false;
     return (
@@ -366,6 +430,32 @@ export default function Header({
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    function abrirModalPlanosPorEvento(event: Event) {
+      const customEvent = event as CustomEvent<{ handled?: boolean }>;
+
+      if (customEvent.detail) {
+        customEvent.detail.handled = true;
+      }
+
+      setMenuOpen(false);
+      setNotificacoesOpen(false);
+      setModalPlanosOpen(true);
+    }
+
+    window.addEventListener(
+      "assinatura:abrir-modal-planos",
+      abrirModalPlanosPorEvento
+    );
+
+    return () => {
+      window.removeEventListener(
+        "assinatura:abrir-modal-planos",
+        abrirModalPlanosPorEvento
+      );
     };
   }, []);
 
@@ -517,6 +607,15 @@ export default function Header({
 
   const assinaturaStatus = headerUser.assinatura?.status ?? "ativa";
   const assinaturaBloqueada = assinaturaStatus === "bloqueada";
+  const assinaturaPlanoNome = headerUser.assinatura?.plano_nome || "Plano atual";
+  const assinaturaStatusLabel = formatarStatusAssinatura(assinaturaStatus);
+  const assinaturaStatusBadgeClassName = `${styles.planCurrentStatus} ${
+    assinaturaBloqueada
+      ? styles.planCurrentStatusDanger
+      : assinaturaStatus === "vencida"
+        ? styles.planCurrentStatusWarning
+        : styles.planCurrentStatusActive
+  }`;
   const assinaturaWarningClassName = `${styles.assinaturaWarningInline} ${
     assinaturaBloqueada
       ? styles.assinaturaWarningInlineDanger
@@ -771,12 +870,12 @@ export default function Header({
               <div className={styles.planRenewalHeader}>
                 <div>
                   <span className={styles.planRenewalEyebrow}>
-                    Renovação de plano
+                    Plano e assinatura
                   </span>
-                  <h2 id="plan-renewal-title">Escolha seu plano</h2>
+                  <h2 id="plan-renewal-title">Gerenciar plano</h2>
                   <p>
-                    Renove o plano atual ou escolha outro. A liberação acontece
-                    automaticamente após a confirmação da Átomo.
+                    Veja o plano atual da empresa, renove ou escolha outro.
+                    A liberacao acontece automaticamente apos a confirmacao.
                   </p>
                 </div>
 
@@ -790,11 +889,46 @@ export default function Header({
                 </button>
               </div>
 
+              <div className={styles.planCurrentSummary}>
+                <div className={styles.planCurrentMain}>
+                  <span>Plano atual</span>
+                  <strong>{assinaturaPlanoNome}</strong>
+                </div>
+
+                <div className={styles.planCurrentMeta}>
+                  <div>
+                    <span>Status</span>
+                    <strong className={assinaturaStatusBadgeClassName}>
+                      {assinaturaStatusLabel}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Vencimento</span>
+                    <strong>
+                      {formatarDataAssinatura(
+                        headerUser.assinatura?.vencimento_em
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Bloqueio</span>
+                    <strong>
+                      {formatarDataAssinatura(
+                        headerUser.assinatura?.bloqueio_em
+                      )}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
               <div className={styles.planRenewalGrid}>
                 {PLANOS_RENOVACAO.map((plano) => {
                   const carregando =
                     plano.tipo === "checkout" &&
                     planoCheckoutLoading === plano.slug;
+                  const planoAtual = planoEhAtual(plano);
 
                   return (
                     <article
@@ -832,18 +966,25 @@ export default function Header({
                       <button
                         type="button"
                         className={
-                          plano.tipo === "cotacao"
-                            ? styles.planRenewalSecondary
-                            : styles.planRenewalPrimary
+                          planoAtual
+                            ? styles.planRenewalCurrent
+                            : plano.tipo === "cotacao"
+                              ? styles.planRenewalSecondary
+                              : styles.planRenewalPrimary
                         }
-                        onClick={() => contratarPlanoAssinatura(plano)}
-                        disabled={carregando}
+                        onClick={
+                          planoAtual
+                            ? undefined
+                            : () => contratarPlanoAssinatura(plano)
+                        }
+                        title={getPlanoActionLabel(
+                          plano,
+                          planoAtual,
+                          carregando
+                        )}
+                        disabled={planoAtual || carregando}
                       >
-                        {plano.tipo === "cotacao"
-                          ? "Solicitar cotação"
-                          : carregando
-                            ? "Preparando..."
-                            : "Contratar plano"}
+                        {getPlanoActionLabel(plano, planoAtual, carregando)}
                       </button>
                     </article>
                   );
@@ -886,6 +1027,16 @@ export default function Header({
               >
                 Meu perfil
               </Link>
+
+              <a
+                href={AJUDA_WHATSAPP_URL}
+                className={styles.dropdownItem}
+                onClick={closeMenu}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Ajuda
+              </a>
 
               <div className={styles.dropdownDivider} />
 

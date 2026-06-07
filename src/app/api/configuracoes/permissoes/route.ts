@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { isAdministrador } from "@/lib/auth/authorization";
 import { upsertConfiguracaoEmpresa } from "@/lib/configuracoes/configuracoes-empresa";
+import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -240,6 +241,9 @@ export async function GET() {
     const mapConfigUsuario = new Map(
       (configuracoesUsuario || []).map((item) => [item.usuario_id, item])
     );
+    const catalogoPermissoesVisiveis = (catalogoPermissoes || []).filter(
+      (permissao) => !isPermissaoInternaOculta(permissao.codigo)
+    );
 
     const usuariosFormatados = usuariosRows.map((item) => ({
       id: item.id,
@@ -279,16 +283,20 @@ export async function GET() {
         new Set(
           (item.usuarios_perfis || [])
             .flatMap((p) => permissoesPorPerfil.get(p.perfil_empresa_id) || [])
+            .filter((codigo) => !isPermissaoInternaOculta(codigo))
             .filter(Boolean)
         )
       ),
-      permissoes_usuario: overridesPorUsuario.get(item.id) || [],
+      permissoes_usuario: (overridesPorUsuario.get(item.id) || []).filter(
+        (permissao) =>
+          !isPermissaoInternaOculta(permissao.permissao_codigo)
+      ),
     }));
 
     return NextResponse.json({
       ok: true,
       empresa,
-      permissoes_catalogo: catalogoPermissoes || [],
+      permissoes_catalogo: catalogoPermissoesVisiveis,
       usuarios: usuariosFormatados,
     });
   } catch (error) {

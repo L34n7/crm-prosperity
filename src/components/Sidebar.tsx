@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
@@ -18,12 +18,13 @@ import {
   Settings2,
   FileText,
   GitBranch,
-  PlugZap,
   MessageCircle,
   ScrollText,
   MousePointerClick,
+  CreditCard,
 } from "lucide-react";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
+import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 import styles from "./Sidebar.module.css";
 
 type MenuItem = {
@@ -46,6 +47,8 @@ type WhatsappSidebarPerfil = {
   numero: string;
 };
 
+const PERMISSAO_VISUALIZAR_PLANO_SIDEBAR = "assinaturas.plano.visualizar";
+
 const menuItems: MenuItem[] = [
   { label: "Painel", href: "/", icon: LayoutDashboard },
   { label: "Conversas", href: "/conversas", icon: MessageSquare },
@@ -66,7 +69,7 @@ const menuItems: MenuItem[] = [
     label: "Empresas",
     href: "/empresas",
     icon: Building2,
-    permissao: "empresas.visualizar",
+    permissao: PERMISSAO_INTERNA_EMPRESAS,
   },
   {
     label: "Configuração de setores",
@@ -99,6 +102,12 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function getAssinaturaStatusLabel(status: AssinaturaEmpresa["status"]) {
+  if (status === "bloqueada") return "Bloqueado";
+  if (status === "vencida") return "Vencido";
+  return "Ativo";
+}
+
 export default function Sidebar({
   initialCollapsed = false,
   permissoes = [],
@@ -106,6 +115,7 @@ export default function Sidebar({
   isAdmin = false,
 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [disparosPendentes, setDisparosPendentes] = useState(0);
   const [conversasNaoLidas, setConversasNaoLidas] = useState(0);
@@ -114,6 +124,13 @@ export default function Sidebar({
     
   const assinaturaBloqueada = assinatura?.status === "bloqueada";
   const disparosPendentesVisiveis = assinaturaBloqueada ? 0 : disparosPendentes;
+  const planoNome = assinatura?.plano_nome || "Plano atual";
+  const assinaturaStatus = assinatura?.status ?? "ativa";
+  const assinaturaStatusLabel = getAssinaturaStatusLabel(assinaturaStatus);
+  const planoTitle = `Plano atual: ${planoNome} (${assinaturaStatusLabel})`;
+  const podeVisualizarPlanoSidebar = permissoes.includes(
+    PERMISSAO_VISUALIZAR_PLANO_SIDEBAR
+  );
 
   useEffect(() => {
     if (assinaturaBloqueada) {
@@ -216,6 +233,18 @@ export default function Sidebar({
     });
   }
 
+  function abrirModalPlanosAssinatura() {
+    const detail = { handled: false };
+
+    window.dispatchEvent(
+      new CustomEvent("assinatura:abrir-modal-planos", { detail })
+    );
+
+    if (!detail.handled) {
+      router.push("/plano");
+    }
+  }
+
   return (
     <aside
       className={`${styles.sidebar} ${
@@ -310,7 +339,6 @@ export default function Sidebar({
         </div>
       </div>
 
-      <div className={styles.sidebarBottom}>
       {!assinaturaBloqueada && (
         <Link
           href="/configuracoes/whatsapp/perfil"
@@ -339,6 +367,29 @@ export default function Sidebar({
           )}
         </Link>
       )}
+
+      <div className={styles.sidebarBottom}>
+        {podeVisualizarPlanoSidebar && (
+          <button
+            type="button"
+            className={styles.planButton}
+            onClick={abrirModalPlanosAssinatura}
+            title={collapsed ? planoTitle : "Ver plano e assinatura"}
+            aria-label={planoTitle}
+          >
+            <span className={styles.planIcon}>
+              <CreditCard size={19} strokeWidth={2} />
+            </span>
+
+            {!collapsed && (
+              <span className={styles.planText}>
+                <span className={styles.planLabel}>Plano atual</span>
+                <strong>{planoNome}</strong>
+              </span>
+            )}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={toggleSidebar}

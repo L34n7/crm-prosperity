@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/can";
+import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -17,7 +18,10 @@ export async function GET() {
 
   const { usuario } = resultado;
 
-  const podeVisualizarEmpresas = await can(usuario.id, "empresas.visualizar");
+  const podeVisualizarEmpresas = await can(
+    usuario.id,
+    PERMISSAO_INTERNA_EMPRESAS
+  );
 
   if (!podeVisualizarEmpresas) {
     return NextResponse.json(
@@ -76,9 +80,12 @@ export async function POST(request: Request) {
 
   const { usuario } = resultado;
 
-  const podeCriarEmpresa = await can(usuario.id, "empresas.criar");
+  const [podeAcessarEmpresas, podeCriarEmpresa] = await Promise.all([
+    can(usuario.id, PERMISSAO_INTERNA_EMPRESAS),
+    can(usuario.id, "empresas.criar"),
+  ]);
 
-  if (!podeCriarEmpresa) {
+  if (!podeAcessarEmpresas || !podeCriarEmpresa) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para criar empresa" },
       { status: 403 }

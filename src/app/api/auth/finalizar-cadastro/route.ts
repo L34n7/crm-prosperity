@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -108,11 +109,14 @@ async function garantirBootstrapAdminEmpresa(params: {
     throw new Error(`Erro ao buscar permissoes: ${permissoesError.message}`);
   }
 
-  if (permissoes?.length) {
+  const permissoesGerenciaveis =
+    permissoes?.filter((item) => !isPermissaoInternaOculta(item.codigo)) || [];
+
+  if (permissoesGerenciaveis.length) {
     const { error: perfilPermissoesError } = await supabaseAdmin
       .from("perfil_permissoes")
       .insert(
-        permissoes.map((item) => ({
+        permissoesGerenciaveis.map((item) => ({
           perfil_empresa_id: perfil.id,
           permissao_codigo: item.codigo,
         }))

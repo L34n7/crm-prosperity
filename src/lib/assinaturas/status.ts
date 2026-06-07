@@ -50,6 +50,7 @@ export const PERMISSOES_ADMIN_ASSINATURA_BLOQUEADA = [
   "conversas.encerrar",
   "mensagens.visualizar",
   "mensagens.enviar",
+  "assinaturas.plano.visualizar",
 ];
 
 export function assinaturaEstaAtiva(

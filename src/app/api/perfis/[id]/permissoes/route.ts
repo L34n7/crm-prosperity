@@ -7,6 +7,7 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { empresaManteraAdminGerenciador } from "@/lib/permissoes/garantir-admin-gerenciador";
+import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -115,12 +116,14 @@ export async function GET(
       )
     );
 
-    const lista = ((permissoes || []) as PermissaoCatalogoRow[]).map((item) => ({
-      codigo: item.codigo,
-      descricao: item.descricao,
-      grupo: getGrupoFromCodigo(item.codigo),
-      marcada: marcadas.has(item.codigo),
-    }));
+    const lista = ((permissoes || []) as PermissaoCatalogoRow[])
+      .filter((item) => !isPermissaoInternaOculta(item.codigo))
+      .map((item) => ({
+        codigo: item.codigo,
+        descricao: item.descricao,
+        grupo: getGrupoFromCodigo(item.codigo),
+        marcada: marcadas.has(item.codigo),
+      }));
 
     return NextResponse.json({
       ok: true,
@@ -227,7 +230,7 @@ export async function PUT(
     const codigosValidos = new Set(
       ((catalogoPermissoes || []) as PermissaoCatalogoRow[]).map(
         (item) => item.codigo
-      )
+      ).filter((codigo) => !isPermissaoInternaOculta(codigo))
     );
 
     const contemCodigoInvalido = permissoesValidas.some(
@@ -268,6 +271,9 @@ export async function PUT(
     const permissoesAntes = (
       (permissoesAtuais || []) as PerfilPermissaoRow[]
     ).map((item) => item.permissao_codigo);
+    const permissoesInternasPreservadas = permissoesAntes.filter(
+      isPermissaoInternaOculta
+    );
 
     const { error: deleteError } = await supabaseAdmin
       .from("perfil_permissoes")
@@ -281,8 +287,12 @@ export async function PUT(
       );
     }
 
-    if (permissoesValidas.length > 0) {
-      const payload = permissoesValidas.map((codigo) => ({
+    const permissoesParaSalvar = Array.from(
+      new Set([...permissoesValidas, ...permissoesInternasPreservadas])
+    );
+
+    if (permissoesParaSalvar.length > 0) {
+      const payload = permissoesParaSalvar.map((codigo) => ({
         perfil_empresa_id: id,
         permissao_codigo: codigo,
       }));

@@ -8,6 +8,7 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { empresaManteraAdminGerenciador } from "@/lib/permissoes/garantir-admin-gerenciador";
+import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -153,7 +154,7 @@ export async function PUT(
       const codigosValidos = new Set(
         ((catalogoPermissoes || []) as CatalogoPermissaoRow[]).map(
           (item) => item.codigo
-        )
+        ).filter((codigo) => !isPermissaoInternaOculta(codigo))
       );
 
       const contemCodigoInvalido = overridesValidos.some(
@@ -220,6 +221,10 @@ export async function PUT(
           : null,
     });
 
+    const permissoesInternasPreservadas = (
+      (permissoesAntesRaw || []) as PermissaoUsuarioInput[]
+    ).filter((item) => isPermissaoInternaOculta(item.permissao_codigo));
+
     const { error: deletePermissoesError } = await supabaseAdmin
       .from("usuario_permissoes")
       .delete()
@@ -233,8 +238,13 @@ export async function PUT(
       );
     }
 
-    if (overridesValidos.length > 0) {
-      const payload = overridesValidos.map((item) => ({
+    const permissoesParaSalvar = [
+      ...overridesValidos,
+      ...permissoesInternasPreservadas,
+    ];
+
+    if (permissoesParaSalvar.length > 0) {
+      const payload = permissoesParaSalvar.map((item) => ({
         empresa_id: usuario.empresa_id,
         usuario_id: id,
         permissao_codigo: item.permissao_codigo,

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
@@ -116,6 +115,19 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
 
   if (!assinatura || status === "ativa") return null;
 
+  function abrirModalPlanos() {
+    const detail = { handled: false };
+
+    setPopupAberto(false);
+    window.dispatchEvent(
+      new CustomEvent("assinatura:abrir-modal-planos", { detail })
+    );
+
+    if (!detail.handled) {
+      router.push("/plano");
+    }
+  }
+
   const titulo = bloqueada
     ? "Plano bloqueado"
     : "Plano vencido";
@@ -123,7 +135,6 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
     ? "A renovacao nao foi identificada dentro do prazo. Os fluxos foram pausados e o acesso ficou limitado ate a renovacao."
     : "O ciclo do plano terminou. Renove em ate 7 dias para evitar bloqueio dos fluxos e das permissoes.";
   const podeFechar = vencida || (bloqueada && isAdmin);
-  const checkoutUrl = assinatura.checkout_url || "/plano";
   const bloquearTela = bloqueada && !isAdmin;
 
   return (
@@ -174,9 +185,13 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
             </div>
 
             <div className={styles.assinaturaActions}>
-              <Link href={checkoutUrl} className={styles.assinaturaPrimary}>
+              <button
+                type="button"
+                className={styles.assinaturaPrimary}
+                onClick={abrirModalPlanos}
+              >
                 Renovar plano
-              </Link>
+              </button>
 
               {podeFechar && (
                 <button

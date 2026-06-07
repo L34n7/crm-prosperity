@@ -10,11 +10,16 @@ import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { sendWhatsAppInteractiveCtaUrlMessage } from "@/lib/whatsapp/send-interactive-cta-url-message";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendAutomationNotificationEmail } from "@/lib/email/send-automation-notification-email";
+import { sendAppointmentCreatedEmail } from "@/lib/email/send-appointment-created-email";
 import { interpretarConexaoComIA } from "@/lib/ia/interpretar-conexao";
 import { interpretarArquivoComIA } from "@/lib/ia/interpretar-arquivo";
 import { baixarMidiaWhatsapp } from "@/lib/whatsapp/download-arquivo";
 import { salvarArquivoAnaliseStorage } from "@/lib/automacoes/salvar-arquivo-analise";
 import { obterConfiguracaoEncerramentoInatividade } from "@/lib/automacoes/normalizar-configuracao-fluxo";
+import {
+  chaveEhVariavelFixaContato,
+  montarMapaVariaveisFixasContato,
+} from "@/lib/automacoes/variaveis-fixas-contato";
 import {
   existeConflitoAgenda,
   filtrarSlotsPorPreferencia,
@@ -91,11 +96,65 @@ function normalizarNomeVariavelFluxo(valor: unknown) {
     .trim();
 }
 
+function normalizarEmailFluxo(valor: unknown) {
+  const email = String(valor || "").trim().toLowerCase();
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? email : "";
+}
+
 function lerVariavelExecucao(metadata: any, nome: string) {
   if (!nome) return null;
 
   const variaveis = metadata?.variaveis || {};
   return variaveis[nome] ?? metadata?.[nome] ?? null;
+}
+
+async function carregarVariaveisFixasContatoExecucao(params: {
+  empresaId: string;
+  execucaoId?: string | null;
+  chaves: string[];
+}) {
+  const { empresaId, execucaoId, chaves } = params;
+
+  if (!execucaoId || !chaves.some(chaveEhVariavelFixaContato)) {
+    return new Map<string, string>();
+  }
+
+  const { data: execucao, error: execucaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("contato_id")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (execucaoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao buscar execucao para variaveis fixas do contato:",
+      execucaoError
+    );
+
+    return new Map<string, string>();
+  }
+
+  if (!execucao?.contato_id) {
+    return montarMapaVariaveisFixasContato(null);
+  }
+
+  const { data: contato, error: contatoError } = await supabaseAdmin
+    .from("contatos")
+    .select("nome, email, telefone")
+    .eq("id", execucao.contato_id)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (contatoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao buscar contato para variaveis fixas:",
+      contatoError
+    );
+  }
+
+  return montarMapaVariaveisFixasContato(contato || null);
 }
 
 async function resolverValorConversaoEncerramento(params: {
@@ -2685,31 +2744,45 @@ async function substituirVariaveisMensagem(params: {
     new Set(matches.map((match) => match[1].trim().toLowerCase()))
   );
 
-  const { data: variaveis, error } = await supabaseAdmin
-    .from("automacao_variaveis")
-    .select("chave, valor")
-    .eq("empresa_id", empresaId)
-    .eq("execucao_id", execucaoId)
-    .in("chave", chaves);
+  const [variaveisResult, variaveisFixasContato] = await Promise.all([
+    supabaseAdmin
+      .from("automacao_variaveis")
+      .select("chave, valor")
+      .eq("empresa_id", empresaId)
+      .eq("execucao_id", execucaoId)
+      .in("chave", chaves),
+    carregarVariaveisFixasContatoExecucao({
+      empresaId,
+      execucaoId,
+      chaves,
+    }),
+  ]);
+
+  const { data: variaveis, error } = variaveisResult;
 
   if (error) {
     console.error("[AUTOMATION_ENGINE] Erro ao buscar variáveis:", error);
-    return texto;
   }
 
   const mapaVariaveis = new Map<string, string>();
 
-  for (const variavel of variaveis || []) {
+  for (const variavel of (error ? [] : variaveis || [])) {
     mapaVariaveis.set(
       String(variavel.chave || "").toLowerCase(),
       String(variavel.valor || "")
     );
   }
 
+  for (const [chave, valor] of variaveisFixasContato) {
+    mapaVariaveis.set(chave, valor);
+  }
+
   return texto.replace(regex, (_, chaveOriginal) => {
     const chave = String(chaveOriginal).trim().toLowerCase();
 
-    return mapaVariaveis.get(chave) || `{{${chave}}}`;
+    return mapaVariaveis.has(chave)
+      ? mapaVariaveis.get(chave) ?? ""
+      : `{{${chave}}}`;
   });
 }
 
@@ -2984,6 +3057,37 @@ async function obterContatoAutomacao(empresaId: string, execucao: any) {
     .maybeSingle();
 
   return data || null;
+}
+
+function resolverEmailAgendamentoAutomacao(params: {
+  contato: { email?: string | null } | null;
+  metadata: Record<string, unknown> | null | undefined;
+  config: Record<string, unknown>;
+}) {
+  const origem =
+    params.config.email_agendamento_origem === "variavel"
+      ? "variavel"
+      : "contato";
+
+  if (origem === "variavel") {
+    const variavelEmail = normalizarNomeVariavelFluxo(
+      String(params.config.email_agendamento_variavel || "email")
+    ).toLowerCase();
+
+    return {
+      email: normalizarEmailFluxo(
+        lerVariavelExecucao(params.metadata || {}, variavelEmail)
+      ),
+      origem,
+      variavel: variavelEmail,
+    };
+  }
+
+  return {
+    email: normalizarEmailFluxo(params.contato?.email),
+    origem,
+    variavel: null,
+  };
 }
 
 async function obterAgendaAutomacao(empresaId: string, agendaId: string) {
@@ -4270,6 +4374,12 @@ async function criarAgendamentoAutomacao(params: {
 
   const contato = await obterContatoAutomacao(empresaId, execucao);
   const agenda = await obterAgendaAutomacao(empresaId, agendaId);
+  const emailAgendamento = resolverEmailAgendamentoAutomacao({
+    contato,
+    metadata: metadataAtual,
+    config,
+  });
+  const deveEnviarEmailAgendamento = config.enviar_email_agendamento !== false;
   const statusInicial =
     config.status_inicial === "confirmado" ? "confirmado" : "agendado";
 
@@ -4287,7 +4397,7 @@ async function criarAgendamentoAutomacao(params: {
       titulo: String(config.titulo_agendamento || "").trim() || agenda?.nome || no.titulo || "Agendamento",
       nome_cliente: contato?.nome || null,
       telefone_cliente: contato?.telefone || numeroDestino || null,
-      email_cliente: contato?.email || null,
+      email_cliente: emailAgendamento.email || null,
       inicio_at: inicioAt,
       fim_at: fimAt,
       status: statusInicial,
@@ -4295,6 +4405,9 @@ async function criarAgendamentoAutomacao(params: {
       metadata_json: {
         slot_escolhido: slot,
         agenda_nome: agenda?.nome || null,
+        email_agendamento_origem: emailAgendamento.origem,
+        email_agendamento_variavel: emailAgendamento.variavel,
+        enviar_email_agendamento: deveEnviarEmailAgendamento,
       },
     })
     .select("*")
@@ -4313,6 +4426,25 @@ async function criarAgendamentoAutomacao(params: {
   );
 
   const valores = valoresAgendamentoAgenda(agendamento, agenda);
+
+  if (deveEnviarEmailAgendamento && emailAgendamento.email) {
+    await sendAppointmentCreatedEmail({
+      empresaId,
+      to: emailAgendamento.email,
+      agendamentoId: agendamento.id,
+      titulo: agendamento.titulo || agenda?.nome || no.titulo || "Agendamento",
+      agendaNome: agenda?.nome || null,
+      contatoNome: contato?.nome || agendamento.nome_cliente || null,
+      dataLabel: valores.agenda_data,
+      horaLabel: valores.agenda_hora,
+      label: valores.agenda_label,
+    }).catch((emailError) =>
+      console.error(
+        "[APPOINTMENT_EMAIL] Erro ao enviar confirmacao de agendamento:",
+        emailError
+      )
+    );
+  }
 
   await salvarVariaveisAutomacao({
     empresaId,
@@ -4365,6 +4497,10 @@ async function criarAgendamentoAutomacao(params: {
       agenda_id: agendaId,
       inicio_at: inicioAt,
       fim_at: fimAt,
+      email_cliente: emailAgendamento.email || null,
+      email_agendamento_origem: emailAgendamento.origem,
+      email_agendamento_variavel: emailAgendamento.variavel,
+      enviar_email_agendamento: deveEnviarEmailAgendamento,
     },
   });
 

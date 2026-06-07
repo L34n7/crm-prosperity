@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { can } from "@/lib/permissoes/frontend";
+import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
-
-function ehAdministrador(usuario: {
-  perfis_dinamicos?: Array<{ nome: string }>;
-}) {
-  const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
-  return nomesPerfis.includes("Administrador");
-}
 
 export async function GET() {
   const resultado = await getUsuarioContexto();
@@ -23,7 +18,7 @@ export async function GET() {
 
   const { usuario } = resultado;
 
-  if (ehAdministrador(usuario)) {
+  if (can(usuario.permissoes, PERMISSAO_INTERNA_EMPRESAS)) {
     const { data, error } = await supabaseAdmin
       .from("empresas")
       .select("id, nome_fantasia")

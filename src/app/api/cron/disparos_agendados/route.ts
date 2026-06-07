@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
+import {
+  chaveEhVariavelFixaContato,
+  montarMapaVariaveisFixasContato,
+  normalizarChaveVariavelFluxo,
+} from "@/lib/automacoes/variaveis-fixas-contato";
 
 type TemplateButton = {
   type?: string;
@@ -238,9 +243,7 @@ async function resolverVariaveisAgendamento(params: {
   }
 
   const chaves = variaveisConfig
-    .map((item) => String(item || "").trim())
-    .map((item) => item.replace(/^\{\{\s*/, "").replace(/\s*\}\}$/, ""))
-    .map((item) => item.toLowerCase())
+    .map((item) => normalizarChaveVariavelFluxo(item))
     .filter(Boolean);
 
   const { data: variaveisAutomacao } = execucaoId
@@ -261,7 +264,13 @@ async function resolverVariaveisAgendamento(params: {
     );
   }
 
+  const variaveisFixasContato = montarMapaVariaveisFixasContato(contato);
+
   return chaves.map((chave) => {
+    if (chaveEhVariavelFixaContato(chave)) {
+      return variaveisFixasContato.get(chave) || "";
+    }
+
     if (mapa.has(chave)) {
       return mapa.get(chave) || "";
     }

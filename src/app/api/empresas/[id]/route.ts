@@ -4,6 +4,7 @@ import {
   getUsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
+import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -24,7 +25,10 @@ export async function PUT(
 
   const { usuario } = resultado;
 
-  if (!can(usuario.permissoes, "empresas.editar")) {
+  if (
+    !can(usuario.permissoes, PERMISSAO_INTERNA_EMPRESAS) ||
+    !can(usuario.permissoes, "empresas.editar")
+  ) {
     return NextResponse.json(
       { ok: false, error: "Sem permissão para editar empresa" },
       { status: 403 }
