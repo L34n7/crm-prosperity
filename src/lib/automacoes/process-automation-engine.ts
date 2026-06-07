@@ -502,6 +502,52 @@ type FluxoRuntimeCache = {
   conexoesPorOrigem: Map<string, any[]>;
 };
 
+function normalizarVisitasNos(metadata: unknown): Record<string, number> {
+  const metadataRecord =
+    metadata && typeof metadata === "object"
+      ? (metadata as Record<string, unknown>)
+      : {};
+  const visitasOriginais = metadataRecord.visitas_nos;
+  const visitas: Record<string, number> = {};
+
+  if (!visitasOriginais || typeof visitasOriginais !== "object") {
+    return visitas;
+  }
+
+  for (const [noId, quantidade] of Object.entries(
+    visitasOriginais as Record<string, unknown>
+  )) {
+    const valor = Number(quantidade);
+
+    if (noId && Number.isFinite(valor) && valor > 0) {
+      visitas[noId] = Math.floor(valor);
+    }
+  }
+
+  return visitas;
+}
+
+function visitaAtualNo(metadata: unknown, noId: string) {
+  return normalizarVisitasNos(metadata)[noId] || 1;
+}
+
+async function obterVisitaAtualNoExecucao(params: {
+  empresaId: string;
+  execucaoId: string;
+  noId: string;
+}) {
+  const { empresaId, execucaoId, noId } = params;
+
+  const { data } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("metadata_json")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  return visitaAtualNo(data?.metadata_json || {}, noId);
+}
+
 const MENSAGEM_PADRAO_FALHA_ARQUIVO_IA =
   "Tive uma falha ao analisar o arquivo agora. Vou te transferir para um atendente para continuar o atendimento.";
 
@@ -1372,6 +1418,9 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         gatilho_id: gatilhoIdParaMetadata,
         tipo_inicio: tipoInicioExecucao,
         mensagem_inicial: mensagemTexto,
+        visitas_nos: {
+          [noInicial.id]: 1,
+        },
       },
     })
     .select("*")
@@ -1461,8 +1510,11 @@ async function tentarTravarExecucaoNo(params: {
   execucaoId: string;
   fluxoId: string;
   noId: string;
+  visitaNo: number;
 }) {
-  const { empresaId, execucaoId, fluxoId, noId } = params;
+  const { empresaId, execucaoId, fluxoId, noId, visitaNo } = params;
+  const visitaNormalizada =
+    Number.isFinite(visitaNo) && visitaNo > 0 ? Math.floor(visitaNo) : 1;
 
   const { error } = await supabaseAdmin
     .from("automacao_execucao_logs")
@@ -1471,9 +1523,11 @@ async function tentarTravarExecucaoNo(params: {
       execucao_id: execucaoId,
       fluxo_id: fluxoId,
       no_id: noId,
-      tipo_evento: "lock_execucao_no",
+      tipo_evento: `lock_execucao_no:${visitaNormalizada}`,
       descricao: "Trava de idempotência para impedir execução duplicada do nó.",
-      entrada_json: {},
+      entrada_json: {
+        visita_no: visitaNormalizada,
+      },
       saida_json: {},
     });
 
@@ -1515,11 +1569,18 @@ export async function executarNo(params: {
   });
 
   if (no.tipo_no !== "inicio") {
+    const visitaNo = await obterVisitaAtualNoExecucao({
+      empresaId,
+      execucaoId,
+      noId: no.id,
+    });
+
     const podeExecutar = await tentarTravarExecucaoNo({
       empresaId,
       execucaoId,
       fluxoId,
       noId: no.id,
+      visitaNo,
     });
 
     if (!podeExecutar) {
@@ -1527,6 +1588,7 @@ export async function executarNo(params: {
         execucaoId,
         noId: no.id,
         tipoNo: no.tipo_no,
+        visitaNo,
       });
 
       return;
@@ -4432,12 +4494,11 @@ async function criarAgendamentoAutomacao(params: {
       empresaId,
       to: emailAgendamento.email,
       agendamentoId: agendamento.id,
-      titulo: agendamento.titulo || agenda?.nome || no.titulo || "Agendamento",
-      agendaNome: agenda?.nome || null,
       contatoNome: contato?.nome || agendamento.nome_cliente || null,
       dataLabel: valores.agenda_data,
       horaLabel: valores.agenda_hora,
-      label: valores.agenda_label,
+      inicioAt: agendamento.inicio_at,
+      fimAt: agendamento.fim_at,
     }).catch((emailError) =>
       console.error(
         "[APPOINTMENT_EMAIL] Erro ao enviar confirmacao de agendamento:",
@@ -5716,34 +5777,6 @@ async function seguirParaProximoNo(params: {
     return;
   }
 
-  const { data: execucaoAtualParaLimpar } = await supabaseAdmin
-    .from("automacao_execucoes")
-    .select("metadata_json")
-    .eq("id", execucaoId)
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
-
-  if (execucaoAtualParaLimpar?.metadata_json?.tentativas_blocos) {
-    const metadataAtual = execucaoAtualParaLimpar.metadata_json;
-    const tentativasBlocos = {
-      ...(metadataAtual.tentativas_blocos || {}),
-    };
-
-    delete tentativasBlocos[noAtualId];
-
-    await supabaseAdmin
-      .from("automacao_execucoes")
-      .update({
-        metadata_json: {
-          ...metadataAtual,
-          tentativas_blocos: tentativasBlocos,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", execucaoId)
-      .eq("empresa_id", empresaId);
-  }
-
   let proximoNo: AutomacaoNo | null = null;
 
   if (runtimeCache) {
@@ -5761,15 +5794,77 @@ async function seguirParaProximoNo(params: {
 
   if (!proximoNo) return;
 
-  await supabaseAdmin
-    .from("automacao_execucoes")
-    .update({
-      no_atual_id: proximoNo.id,
-      status: "rodando",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", execucaoId)
-    .eq("empresa_id", empresaId);
+  const { data: execucaoAtualParaTransicao, error: buscarExecucaoError } =
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .select("metadata_json")
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+  if (buscarExecucaoError || !execucaoAtualParaTransicao) {
+    console.error("[AUTOMATION_ENGINE] Erro ao preparar transicao do fluxo:", {
+      execucaoId,
+      noAtualId,
+      proximoNoId: proximoNo.id,
+      error: buscarExecucaoError,
+    });
+
+    return;
+  }
+
+  const metadataAtual = execucaoAtualParaTransicao.metadata_json || {};
+  const visitasNos = normalizarVisitasNos(metadataAtual);
+  const tentativasBlocos = {
+    ...(metadataAtual.tentativas_blocos || {}),
+  };
+
+  delete tentativasBlocos[noAtualId];
+
+  const visitasNosAtualizadas = {
+    ...visitasNos,
+    [proximoNo.id]: (visitasNos[proximoNo.id] || 0) + 1,
+  };
+
+  const { data: transicaoAtualizada, error: atualizarTransicaoError } =
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        no_atual_id: proximoNo.id,
+        status: "rodando",
+        metadata_json: {
+          ...metadataAtual,
+          tentativas_blocos: tentativasBlocos,
+          visitas_nos: visitasNosAtualizadas,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId)
+      .eq("no_atual_id", noAtualId)
+      .select("id")
+      .maybeSingle();
+
+  if (atualizarTransicaoError) {
+    console.error("[AUTOMATION_ENGINE] Erro ao atualizar transicao do fluxo:", {
+      execucaoId,
+      noAtualId,
+      proximoNoId: proximoNo.id,
+      error: atualizarTransicaoError,
+    });
+
+    return;
+  }
+
+  if (!transicaoAtualizada) {
+    console.warn("[AUTOMATION_ENGINE] Transicao ja aplicada. Ignorando duplicado.", {
+      execucaoId,
+      noAtualId,
+      proximoNoId: proximoNo.id,
+    });
+
+    return;
+  }
 
   await registrarLog({
     empresaId,
