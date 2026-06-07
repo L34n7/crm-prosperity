@@ -237,13 +237,20 @@ function normalizarVariavelTemplate(valor: string) {
     .replace(/^_|_$/g, "");
 }
 
+function normalizarEntradaVariavelTemplate(valor: string) {
+  return String(valor || "")
+    .replace(/[{}]/g, "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+/g, "");
+}
+
 function resolverVariavelContato(valor: string, contato: ContatoOpcao) {
   const texto = String(valor || "").trim();
-  const chave = texto
-    .replace(/^\{\{\s*/, "")
-    .replace(/\s*\}\}$/, "")
-    .trim()
-    .toLowerCase();
+  const chave = normalizarVariavelTemplate(texto);
 
   if (!texto) return "";
 
@@ -1206,7 +1213,7 @@ export default function DisparosWhatsAppPage() {
                                 value={templateVariavel1}
                                 onChange={(e) =>
                                   setTemplateVariavel1(
-                                    normalizarVariavelTemplate(e.target.value)
+                                    normalizarEntradaVariavelTemplate(e.target.value)
                                   )
                                 }
                                 className={styles.input}
@@ -1221,7 +1228,7 @@ export default function DisparosWhatsAppPage() {
                                   value={templateVariavel2}
                                   onChange={(e) =>
                                     setTemplateVariavel2(
-                                      normalizarVariavelTemplate(e.target.value)
+                                      normalizarEntradaVariavelTemplate(e.target.value)
                                     )
                                   }
                                   className={styles.input}
@@ -1237,7 +1244,7 @@ export default function DisparosWhatsAppPage() {
                                   value={templateVariavel3}
                                   onChange={(e) =>
                                     setTemplateVariavel3(
-                                      normalizarVariavelTemplate(e.target.value)
+                                      normalizarEntradaVariavelTemplate(e.target.value)
                                     )
                                   }
                                   className={styles.input}

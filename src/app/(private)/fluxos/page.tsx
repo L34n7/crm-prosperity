@@ -168,13 +168,24 @@ function obterLinhasVariaveisTemplate(valor: string) {
   return [linhas[0] || "", linhas[1] || "", linhas[2] || ""];
 }
 
+function normalizarEntradaVariavelTemplate(valor: string) {
+  return String(valor || "")
+    .replace(/[{}]/g, "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+/g, "");
+}
+
 function atualizarLinhaVariavelTemplate(
   valorAtual: string,
   index: number,
   novoValor: string
 ) {
   const linhas = obterLinhasVariaveisTemplate(valorAtual);
-  linhas[index] = normalizarVariavelFluxo(novoValor);
+  linhas[index] = normalizarEntradaVariavelTemplate(novoValor);
   return linhas.join("\n");
 }
 
