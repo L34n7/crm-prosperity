@@ -1585,6 +1585,9 @@ async function criarFluxoRapido() {
                 "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}.",
               mensagem_conflito:
                 "Esse novo horario acabou de ficar indisponivel. Vamos escolher outro horario.",
+              enviar_email_agendamento: true,
+              email_agendamento_origem: "contato",
+              email_agendamento_variavel: "email",
             }
           : tipoNo === "agenda_cancelar_agendamento"
           ? {
@@ -1592,6 +1595,9 @@ async function criarFluxoRapido() {
               motivo: "Cancelado pelo cliente via automacao",
               mensagem:
                 "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar.",
+              enviar_email_agendamento: true,
+              email_agendamento_origem: "contato",
+              email_agendamento_variavel: "email",
             }
           : tipoNo === "encerrar"
           ? {
@@ -2167,9 +2173,15 @@ function aplicarEdicaoNoInterno() {
   }
 
   if (
-    tipoNodeEdicao === "agenda_criar_agendamento" &&
-    (agendaEnviarEmailNode ||
-      (agendaLembreteAtivoNode && agendaLembreteEmailNode)) &&
+    (([
+      "agenda_criar_agendamento",
+      "agenda_remarcar_agendamento",
+      "agenda_cancelar_agendamento",
+    ].includes(tipoNodeEdicao) &&
+      agendaEnviarEmailNode) ||
+      (tipoNodeEdicao === "agenda_criar_agendamento" &&
+        agendaLembreteAtivoNode &&
+        agendaLembreteEmailNode)) &&
     agendaEmailOrigemNode === "variavel" &&
     !agendaEmailVariavelNode.trim()
   ) {
@@ -2370,6 +2382,11 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.mensagem_conflito =
           agendaMensagemConflitoNode.trim() ||
           "Esse novo horario acabou de ficar indisponivel. Vamos escolher outro horario.";
+        configuracao_json.enviar_email_agendamento = agendaEnviarEmailNode;
+        configuracao_json.email_agendamento_origem =
+          agendaEmailOrigemNode === "variavel" ? "variavel" : "contato";
+        configuracao_json.email_agendamento_variavel =
+          agendaEmailVariavelNode.trim() || "email";
       }
 
       if (tipoFinal === "agenda_cancelar_agendamento") {
@@ -2381,6 +2398,11 @@ function aplicarEdicaoNoInterno() {
         configuracao_json.mensagem =
           mensagemNode.trim() ||
           "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar.";
+        configuracao_json.enviar_email_agendamento = agendaEnviarEmailNode;
+        configuracao_json.email_agendamento_origem =
+          agendaEmailOrigemNode === "variavel" ? "variavel" : "contato";
+        configuracao_json.email_agendamento_variavel =
+          agendaEmailVariavelNode.trim() || "email";
       }
 
       if (tipoFinal === "pergunta_opcoes") {
@@ -4588,6 +4610,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                 "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar."
                               );
                               setAgendaStatusAgendamentoNode("cancelado");
+                              setAgendaEnviarEmailNode(true);
+                              setAgendaEmailOrigemNode("contato");
+                              setAgendaEmailVariavelNode("email");
                             }
                           }
                         }}
@@ -5620,6 +5645,69 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         {"{{agenda_agendamento_id}}"}.
                       </span>
 
+                      {tipoNodeEdicao === "agenda_remarcar_agendamento" && (
+                        <>
+                          <label className={styles.switchField}>
+                            <input
+                              type="checkbox"
+                              checked={agendaEnviarEmailNode}
+                              onChange={(e) =>
+                                setAgendaEnviarEmailNode(e.target.checked)
+                              }
+                            />
+
+                            <div>
+                              <strong>Enviar email de confirmacao</strong>
+                              <p>
+                                O email sera enviado assim que o agendamento for remarcado, usando o mesmo formato do bloco Criar agendamento.
+                              </p>
+                            </div>
+                          </label>
+
+                          {agendaEnviarEmailNode && (
+                            <>
+                              <label className={styles.field}>
+                                <span className={styles.label}>Origem do email</span>
+                                <select
+                                  className={styles.input}
+                                  value={agendaEmailOrigemNode}
+                                  onChange={(e) =>
+                                    setAgendaEmailOrigemNode(
+                                      e.target.value === "variavel"
+                                        ? "variavel"
+                                        : "contato"
+                                    )
+                                  }
+                                >
+                                  <option value="contato">Email cadastrado no contato</option>
+                                  <option value="variavel">Email salvo em uma variavel</option>
+                                </select>
+                                <span className={styles.help}>
+                                  Informe qual email o sistema vai usar, email do Contato ou uma variavel do bloco Capturar resposta.
+                                </span>
+                              </label>
+
+                              {agendaEmailOrigemNode === "variavel" && (
+                                <label className={styles.field}>
+                                  <span className={styles.label}>Variavel do email</span>
+                                  <input
+                                    className={styles.input}
+                                    value={agendaEmailVariavelNode}
+                                    onChange={(e) =>
+                                      setAgendaEmailVariavelNode(e.target.value)
+                                    }
+                                    placeholder="email"
+                                  />
+                                  <span className={styles.help}>
+                                    Use o nome da variavel criada em Capturar resposta. Exemplo: email.
+                                  </span>
+                                </label>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
+
                       {tipoNodeEdicao === "agenda_criar_agendamento" && (
                         <>
                           <label className={styles.switchField}>
@@ -5678,7 +5766,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                   />
                                   <span className={styles.help}>
                                     Use o nome da variavel criada em Capturar resposta.
-                                    Exemplo: {"{{email}}"}.
+                                    Exemplo: email.
                                   </span>
                                 </label>
                               )}
@@ -5897,6 +5985,65 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               }
                             />
                           </label>
+
+                          <label className={styles.switchField}>
+                            <input
+                              type="checkbox"
+                              checked={agendaEnviarEmailNode}
+                              onChange={(e) =>
+                                setAgendaEnviarEmailNode(e.target.checked)
+                              }
+                            />
+
+                            <div>
+                              <strong>Enviar email de cancelamento</strong>
+                              <p>
+                                O email sera enviado assim que o agendamento for cancelado, usando o mesmo formato dos emails de agendamento.
+                              </p>
+                            </div>
+                          </label>
+
+                          {agendaEnviarEmailNode && (
+                            <>
+                              <label className={styles.field}>
+                                <span className={styles.label}>Origem do email</span>
+                                <select
+                                  className={styles.input}
+                                  value={agendaEmailOrigemNode}
+                                  onChange={(e) =>
+                                    setAgendaEmailOrigemNode(
+                                      e.target.value === "variavel"
+                                        ? "variavel"
+                                        : "contato"
+                                    )
+                                  }
+                                >
+                                  <option value="contato">Email cadastrado no contato</option>
+                                  <option value="variavel">Email salvo em uma variavel</option>
+                                </select>
+                                <span className={styles.help}>
+                                  Informe qual email o sistema vai usar, email do Contato ou uma variavel do bloco Capturar resposta.
+                                </span>
+                              </label>
+
+                              {agendaEmailOrigemNode === "variavel" && (
+                                <label className={styles.field}>
+                                  <span className={styles.label}>Variavel do email</span>
+                                  <input
+                                    className={styles.input}
+                                    value={agendaEmailVariavelNode}
+                                    onChange={(e) =>
+                                      setAgendaEmailVariavelNode(e.target.value)
+                                    }
+                                    placeholder="email"
+                                  />
+                                  <span className={styles.help}>
+                                    Use o nome da variavel criada em Capturar resposta. Exemplo: email.
+                                  </span>
+                                </label>
+                              )}
+                            </>
+                          )}
                         </>
                       )}
 

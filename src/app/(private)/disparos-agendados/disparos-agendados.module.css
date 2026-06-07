@@ -303,6 +303,7 @@
 .disparoMain {
   display: flex;
   gap: 14px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -321,6 +322,7 @@
 .disparoInfo {
   display: grid;
   gap: 5px;
+  width: 100%;
   min-width: 0;
 }
 
@@ -346,6 +348,28 @@
 
 .disparoMeta strong {
   color: #334155;
+}
+
+.disparoMetaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.disparoScheduledAt {
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.disparoScheduledAt strong {
+  color: #0f172a;
+  font-weight: 800;
 }
 
 .disparoActions {
@@ -1323,6 +1347,17 @@
 
   .metricsGrid {
     grid-template-columns: 1fr;
+  }
+
+  .disparoMetaRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .disparoScheduledAt {
+    text-align: left;
+    white-space: normal;
   }
 
   .searchBar {

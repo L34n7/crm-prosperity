@@ -5536,7 +5536,7 @@ const templateFooterTexto = useMemo(() => {
                           <p className={styles.previewLine}>{getPreviewConversa(c)}</p>
                             {c.tem_disparo_agendado_pendente && (
                               <div className={styles.scheduledDisparoMiniBadge}>
-                                ⏰ Mensagem agendada
+                                ⏰ Disparo agendado
                               </div>
                             )}
 
@@ -5650,7 +5650,7 @@ const templateFooterTexto = useMemo(() => {
                               href={`/disparos-agendados`}
                               className={`${styles.alertChip} ${styles.alertChipSchedule} ${styles.alertChipScheduleLink}`}
                             >
-                              ⏰ Mensagem agendada para{" "}
+                              ⏰ Disparo agendado para{" "}
                               {formatarDataCurtaDisparo(
                                 conversaSelecionada.disparo_agendado_pendente?.executar_em
                               )}

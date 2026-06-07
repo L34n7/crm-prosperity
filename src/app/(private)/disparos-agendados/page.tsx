@@ -902,9 +902,15 @@ export default function DisparosAgendadosPage() {
                             </span>
                           </div>
 
-                          <p className={styles.disparoMeta}>
-                            Número: <strong>{numero}</strong>
-                          </p>
+                          <div className={styles.disparoMetaRow}>
+                            <p className={styles.disparoMeta}>
+                              Número: <strong>{numero}</strong>
+                            </p>
+
+                            <p className={styles.disparoScheduledAt}>
+                              Agendado: <strong>{formatarData(disparo.executar_em)}</strong>
+                            </p>
+                          </div>
 
                           <p className={styles.disparoMeta}>
                             Fluxo: {fluxoNome} · Bloco: {blocoTitulo}

@@ -14,6 +14,7 @@ type SendAppointmentCreatedEmailParams = {
   horaLabel?: string | null;
   inicioAt?: string | null;
   fimAt?: string | null;
+  tipo?: "criacao" | "remarcacao" | "cancelamento";
 };
 
 function escaparHtml(valor: string) {
@@ -85,6 +86,10 @@ function montarConviteCalendario(params: {
   horaLabel: string;
   inicioAt?: string | null;
   fimAt?: string | null;
+  sequencia?: number;
+  descricaoStatus?: string;
+  metodo?: "REQUEST" | "CANCEL";
+  statusEvento?: "CONFIRMED" | "CANCELLED";
 }) {
   const inicio = dataIcsValida(params.inicioAt);
   const fim = dataIcsValida(params.fimAt);
@@ -92,8 +97,14 @@ function montarConviteCalendario(params: {
   if (!inicio || !fim || fim <= inicio) return null;
 
   const resumo = `Agendamento com ${params.empresaNome}`;
+  const metodo = params.metodo || "REQUEST";
+  const statusEvento = params.statusEvento || "CONFIRMED";
+  const partstat = statusEvento === "CANCELLED" ? "DECLINED" : "NEEDS-ACTION";
+  const rsvp = statusEvento === "CANCELLED" ? "FALSE" : "TRUE";
   const descricao = [
-    `Agendamento confirmado com ${params.empresaNome}.`,
+    `${params.descricaoStatus || "Agendamento confirmado"} com ${
+      params.empresaNome
+    }.`,
     params.dataLabel ? `Data: ${params.dataLabel}.` : "",
     params.horaLabel ? `Horario: ${params.horaLabel}.` : "",
   ]
@@ -105,7 +116,7 @@ function montarConviteCalendario(params: {
     "VERSION:2.0",
     "PRODID:-//CRM Prosperity//Agendamento//PT-BR",
     "CALSCALE:GREGORIAN",
-    "METHOD:REQUEST",
+    `METHOD:${metodo}`,
     "BEGIN:VEVENT",
     `UID:${escaparIcsTexto(params.agendamentoId)}@crmprosperity.com`,
     `DTSTAMP:${formatarDataIcs(new Date())}`,
@@ -118,10 +129,10 @@ function montarConviteCalendario(params: {
     )}:mailto:no-reply@crmprosperity.com`,
     `ATTENDEE;CN=${escaparIcsParametro(
       params.contatoNome
-    )};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${params.destinatario}`,
-    "STATUS:CONFIRMED",
+    )};ROLE=REQ-PARTICIPANT;PARTSTAT=${partstat};RSVP=${rsvp}:mailto:${params.destinatario}`,
+    `STATUS:${statusEvento}`,
     "TRANSP:OPAQUE",
-    "SEQUENCE:0",
+    `SEQUENCE:${Math.max(0, Number(params.sequencia || 0))}`,
     "END:VEVENT",
     "END:VCALENDAR",
   ];
@@ -156,6 +167,7 @@ export async function sendAppointmentCreatedEmail({
   horaLabel,
   inicioAt,
   fimAt,
+  tipo = "criacao",
 }: SendAppointmentCreatedEmailParams) {
   if (!resend) {
     console.warn("[APPOINTMENT_EMAIL] RESEND_API_KEY nao configurada.");
@@ -178,6 +190,34 @@ export async function sendAppointmentCreatedEmail({
   const contatoSeguro = escaparHtml(contatoNome || "Cliente");
   const dataSeguro = escaparHtml(dataLabel || "");
   const horaSeguro = escaparHtml(horaLabel || "");
+  const ehRemarcacao = tipo === "remarcacao";
+  const ehCancelamento = tipo === "cancelamento";
+  const tituloEmail = ehRemarcacao
+    ? "Agendamento remarcado"
+    : ehCancelamento
+    ? "Agendamento cancelado"
+    : "Agendamento confirmado";
+  const subtituloEmail = ehRemarcacao
+    ? "Seu novo horario foi reservado com sucesso"
+    : ehCancelamento
+    ? "Seu horario foi cancelado"
+    : "Seu horario foi reservado com sucesso";
+  const textoConfirmacao = ehRemarcacao
+    ? "Confirmamos a remarcacao do seu agendamento"
+    : ehCancelamento
+    ? "Confirmamos o cancelamento do seu agendamento"
+    : "Confirmamos seu agendamento";
+  const rodapeMotivo = ehRemarcacao
+    ? "um agendamento foi remarcado"
+    : ehCancelamento
+    ? "um agendamento foi cancelado"
+    : "um agendamento foi criado";
+  const textoCalendario = ehCancelamento
+    ? "A atualizacao de calendario para cancelar o evento esta anexada a este email."
+    : "O convite de calendario esta anexado a este email.";
+  const textoAcao = ehCancelamento
+    ? "Se precisar marcar novamente, responda pelo mesmo canal em que realizou o agendamento."
+    : "Para remarcar ou cancelar, responda pelo mesmo canal em que realizou o agendamento.";
   const conviteCalendario = montarConviteCalendario({
     agendamentoId,
     empresaNome,
@@ -187,20 +227,31 @@ export async function sendAppointmentCreatedEmail({
     horaLabel: horaLabel || "",
     inicioAt,
     fimAt,
+    sequencia: ehCancelamento ? 2 : ehRemarcacao ? 1 : 0,
+    descricaoStatus: ehCancelamento
+      ? "Agendamento cancelado"
+      : ehRemarcacao
+      ? "Agendamento remarcado"
+      : "Agendamento confirmado",
+    metodo: ehCancelamento ? "CANCEL" : "REQUEST",
+    statusEvento: ehCancelamento ? "CANCELLED" : "CONFIRMED",
   });
+  const conviteContentType = `text/calendar; charset=UTF-8; method=${
+    ehCancelamento ? "CANCEL" : "REQUEST"
+  }`;
 
   try {
     await resend.emails.send({
       from: "CRM Prosperity <no-reply@crmprosperity.com>",
       to: destinatario,
-      subject: `Agendamento confirmado - ${empresaCabecalho}`,
+      subject: `${tituloEmail} - ${empresaCabecalho}`,
       text: [
         `Ola, ${contatoNome || "Cliente"}.`,
-        `Confirmamos seu agendamento com ${empresaNome}.`,
+        `${textoConfirmacao} com ${empresaNome}.`,
         `Data: ${dataLabel || ""}`,
         `Horario: ${horaLabel || ""}`,
-        "O convite de calendario esta anexado a este email.",
-        "Para remarcar ou cancelar, responda pelo mesmo canal em que realizou o agendamento.",
+        textoCalendario,
+        textoAcao,
       ].join("\n"),
       ...(conviteCalendario
         ? {
@@ -208,7 +259,7 @@ export async function sendAppointmentCreatedEmail({
               {
                 filename: "agendamento.ics",
                 content: conviteCalendario,
-                contentType: "text/calendar; charset=UTF-8; method=REQUEST",
+                contentType: conviteContentType,
               },
             ],
           }
@@ -225,10 +276,10 @@ export async function sendAppointmentCreatedEmail({
                         ${empresaSeguro}
                       </div>
                       <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">
-                        Agendamento confirmado
+                        ${tituloEmail}
                       </h1>
                       <p style="margin:8px 0 0;font-size:18px;line-height:1.35;font-weight:700;opacity:0.95;">
-                        Seu horario foi reservado com sucesso
+                        ${subtituloEmail}
                       </p>
                     </td>
                   </tr>
@@ -239,7 +290,7 @@ export async function sendAppointmentCreatedEmail({
                         Ola, ${contatoSeguro}.
                       </p>
                       <p style="margin:10px 0 0;color:#334155;font-size:15px;line-height:1.6;">
-                        Confirmamos seu agendamento com <strong>${empresaSeguro}</strong>.
+                        ${textoConfirmacao} com <strong>${empresaSeguro}</strong>.
                       </p>
 
                       <div style="margin-top:20px;overflow:hidden;border:1px solid #dbe4ee;border-radius:14px;">
@@ -266,13 +317,17 @@ export async function sendAppointmentCreatedEmail({
                       ${
                         conviteCalendario
                           ? `<p style="display:inline-block;margin:18px 0 0;padding:9px 12px;color:#0f509a;background:#eef6ff;border:1px solid #cfe5ff;border-radius:999px;font-size:13px;font-weight:700;line-height:1.2;">
-                              Convite de calendario anexado
+                              ${
+                                ehCancelamento
+                                  ? "Atualizacao de calendario anexada"
+                                  : "Convite de calendario anexado"
+                              }
                             </p>`
                           : ""
                       }
 
                       <p style="margin:22px 0 0;color:#64748b;font-size:13px;line-height:1.6;">
-                        Para remarcar ou cancelar, responda pelo mesmo canal em que realizou o agendamento.
+                        ${textoAcao}
                       </p>
                     </td>
                   </tr>
@@ -280,7 +335,7 @@ export async function sendAppointmentCreatedEmail({
                   <tr>
                     <td style="background:#f8fafc;padding:16px 30px;border-top:1px solid #e2e8f0;">
                       <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">
-                        Este email foi enviado automaticamente porque um agendamento foi criado no CRM Prosperity.
+                        Este email foi enviado automaticamente porque ${rodapeMotivo} no CRM Prosperity.
                       </p>
                     </td>
                   </tr>

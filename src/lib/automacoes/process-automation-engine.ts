@@ -5098,6 +5098,16 @@ async function remarcarAgendamentoAutomacao(params: {
     .eq("empresa_id", empresaId)
     .maybeSingle();
   const metadataAgendamentoAtual = agendamentoAtual?.metadata_json || {};
+  const contato = await obterContatoAutomacao(empresaId, execucao);
+  const emailAgendamento = resolverEmailAgendamentoAutomacao({
+    contato,
+    metadata: metadataAtual,
+    config,
+  });
+  const emailDestinoRemarcacao =
+    emailAgendamento.email ||
+    normalizarEmailFluxo(agendamentoAtual?.email_cliente);
+  const deveEnviarEmailAgendamento = config.enviar_email_agendamento !== false;
   const configLembreteAgendamento =
     config.lembrete_agendamento_ativo === true
       ? normalizarConfigLembreteAgendamento(config)
@@ -5113,11 +5123,16 @@ async function remarcarAgendamentoAutomacao(params: {
       fim_at: fimAt,
       status:
         config.status_final === "confirmado" ? "confirmado" : "agendado",
+      email_cliente:
+        emailDestinoRemarcacao || agendamentoAtual?.email_cliente || null,
       metadata_json: {
         ...metadataAgendamentoAtual,
         remarcado_por: "automacao",
         slot_anterior_id: agendamentoId,
         slot_novo: slot,
+        email_agendamento_origem: emailAgendamento.origem,
+        email_agendamento_variavel: emailAgendamento.variavel,
+        enviar_email_agendamento: deveEnviarEmailAgendamento,
         lembrete_agendamento_config: configLembreteAgendamento.ativo
           ? configLembreteAgendamento
           : null,
@@ -5143,7 +5158,25 @@ async function remarcarAgendamentoAutomacao(params: {
 
   const agenda = await obterAgendaAutomacao(empresaId, agendaId);
   const valores = valoresAgendamentoAgenda(agendamento, agenda);
-  const contato = await obterContatoAutomacao(empresaId, execucao);
+
+  if (deveEnviarEmailAgendamento && emailDestinoRemarcacao) {
+    await sendAppointmentCreatedEmail({
+      empresaId,
+      to: emailDestinoRemarcacao,
+      agendamentoId: agendamento.id,
+      contatoNome: contato?.nome || agendamento.nome_cliente || null,
+      dataLabel: valores.agenda_data,
+      horaLabel: valores.agenda_hora,
+      inicioAt: agendamento.inicio_at,
+      fimAt: agendamento.fim_at,
+      tipo: "remarcacao",
+    }).catch((emailError) =>
+      console.error(
+        "[APPOINTMENT_EMAIL] Erro ao enviar confirmacao de remarcacao:",
+        emailError
+      )
+    );
+  }
 
   await salvarVariaveisAutomacao({
     empresaId,
@@ -5255,14 +5288,37 @@ async function cancelarAgendamentoAutomacao(params: {
   }
 
   const statusFinal = config.status_final === "faltou" ? "faltou" : "cancelado";
+  const { data: agendamentoAtual } = await supabaseAdmin
+    .from("agenda_agendamentos")
+    .select("metadata_json, email_cliente")
+    .eq("id", agendamentoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  const metadataAgendamentoAtual = agendamentoAtual?.metadata_json || {};
+  const contato = await obterContatoAutomacao(empresaId, execucao);
+  const emailAgendamento = resolverEmailAgendamentoAutomacao({
+    contato,
+    metadata: metadataAtual,
+    config,
+  });
+  const emailDestinoCancelamento =
+    emailAgendamento.email ||
+    normalizarEmailFluxo(agendamentoAtual?.email_cliente);
+  const deveEnviarEmailAgendamento = config.enviar_email_agendamento !== false;
 
   const { data: agendamento, error } = await supabaseAdmin
     .from("agenda_agendamentos")
     .update({
       status: statusFinal,
+      email_cliente:
+        emailDestinoCancelamento || agendamentoAtual?.email_cliente || null,
       metadata_json: {
+        ...metadataAgendamentoAtual,
         cancelado_por: "automacao",
         motivo: String(config.motivo || "").trim() || null,
+        email_agendamento_origem: emailAgendamento.origem,
+        email_agendamento_variavel: emailAgendamento.variavel,
+        enviar_email_agendamento: deveEnviarEmailAgendamento,
       },
       updated_at: new Date().toISOString(),
     })
@@ -5294,6 +5350,27 @@ async function cancelarAgendamentoAutomacao(params: {
     agenda_cancelado_em: new Date().toISOString(),
     agenda_cancelamento_motivo: String(config.motivo || "").trim(),
   };
+  const emailDestinoFinal =
+    emailDestinoCancelamento || normalizarEmailFluxo(agendamento.email_cliente);
+
+  if (deveEnviarEmailAgendamento && emailDestinoFinal) {
+    await sendAppointmentCreatedEmail({
+      empresaId,
+      to: emailDestinoFinal,
+      agendamentoId: agendamento.id,
+      contatoNome: contato?.nome || agendamento.nome_cliente || null,
+      dataLabel: valores.agenda_data,
+      horaLabel: valores.agenda_hora,
+      inicioAt: agendamento.inicio_at,
+      fimAt: agendamento.fim_at,
+      tipo: "cancelamento",
+    }).catch((emailError) =>
+      console.error(
+        "[APPOINTMENT_EMAIL] Erro ao enviar confirmacao de cancelamento:",
+        emailError
+      )
+    );
+  }
 
   await salvarVariaveisAutomacao({
     empresaId,
