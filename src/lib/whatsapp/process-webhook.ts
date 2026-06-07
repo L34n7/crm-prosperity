@@ -463,8 +463,8 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
 
         const mensagemAvisoAudio = falhaAoTranscreverAudio
-          ? "Nao foi possivel ouvir seu audio no momento. Por favor, envie sua resposta por texto."
-          : "Nao consegui entender o audio. Pode enviar novamente falando mais claro ou escrever sua resposta?";
+          ? "No momento não consegui ouvir seu áudio por aqui. Pode me enviar uma mensagem de texto, por favor?"
+          : "Nao consegui entender o áudio. Pode enviar novamente falando mais claro ou escrever uma mensagem";
 
         if (phoneNumberId && accessToken) {
           const envioAviso = await sendWhatsAppTextMessage({
