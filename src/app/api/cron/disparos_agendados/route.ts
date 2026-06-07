@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
+import { sendAppointmentReminderEmail } from "@/lib/email/send-appointment-reminder-email";
 import {
   chaveEhVariavelFixaContato,
   montarMapaVariaveisFixasContato,
@@ -585,6 +586,77 @@ async function executarDisparoAgendado(agendamento: any) {
   };
 }
 
+async function validarLembreteAgendamentoAtivo(agendamento: any) {
+  const payload = agendamento.payload_json || {};
+
+  if (payload.origem !== "lembrete_agendamento") {
+    return { ok: true };
+  }
+
+  const agendamentoId = String(payload.agenda_agendamento_id || "").trim();
+
+  if (!agendamentoId) {
+    return { ok: false, motivo: "lembrete_sem_agendamento_id" };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("agenda_agendamentos")
+    .select("id, status, inicio_at")
+    .eq("id", agendamentoId)
+    .eq("empresa_id", agendamento.empresa_id)
+    .maybeSingle();
+
+  if (error || !data) {
+    return { ok: false, motivo: "agendamento_nao_encontrado" };
+  }
+
+  if (!["agendado", "confirmado"].includes(String(data.status || ""))) {
+    return { ok: false, motivo: "agendamento_nao_esta_ativo" };
+  }
+
+  const inicioPayload = payload.agenda_inicio_at
+    ? new Date(String(payload.agenda_inicio_at)).getTime()
+    : null;
+  const inicioAtual = data.inicio_at
+    ? new Date(String(data.inicio_at)).getTime()
+    : null;
+
+  if (
+    inicioPayload &&
+    inicioAtual &&
+    Number.isFinite(inicioPayload) &&
+    Number.isFinite(inicioAtual) &&
+    inicioPayload !== inicioAtual
+  ) {
+    return { ok: false, motivo: "agendamento_foi_remarcado" };
+  }
+
+  return { ok: true };
+}
+
+async function executarEmailLembreteAgendamento(agendamento: any) {
+  const payload = agendamento.payload_json || {};
+  const emailDestino = String(payload.email_destino || "").trim().toLowerCase();
+
+  if (!emailDestino) {
+    throw new Error("Lembrete por email sem destinatario.");
+  }
+
+  await sendAppointmentReminderEmail({
+    empresaId: agendamento.empresa_id,
+    to: emailDestino,
+    agendamentoId: String(payload.agenda_agendamento_id || agendamento.id),
+    contatoNome: payload.contato_nome || null,
+    dataLabel: payload.agenda_data || null,
+    horaLabel: payload.agenda_hora || null,
+  });
+
+  return {
+    emailDestino,
+    agendamentoId: payload.agenda_agendamento_id || null,
+  };
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
 
@@ -605,7 +677,10 @@ export async function GET(request: Request) {
       .from("automacao_agendamentos")
       .select("*")
       .eq("status", "pendente")
-      .eq("tipo_agendamento", "disparo_template")
+      .in("tipo_agendamento", [
+        "disparo_template",
+        "email_lembrete_agendamento",
+      ])
       .lte("executar_em", agora)
       .order("executar_em", { ascending: true })
       .limit(25);
@@ -627,7 +702,32 @@ export async function GET(request: Request) {
 
     for (const agendamento of agendamentos || []) {
       try {
-        const resultado = await executarDisparoAgendado(agendamento);
+        const validadeLembrete = await validarLembreteAgendamentoAtivo(
+          agendamento
+        );
+
+        if (!validadeLembrete.ok) {
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "cancelado",
+              executed_at: new Date().toISOString(),
+              payload_json: {
+                ...(agendamento.payload_json || {}),
+                motivo_cancelamento: validadeLembrete.motivo,
+              },
+            })
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
+
+          continue;
+        }
+
+        const ehEmailLembrete =
+          agendamento.tipo_agendamento === "email_lembrete_agendamento";
+        const resultado: any = ehEmailLembrete
+          ? await executarEmailLembreteAgendamento(agendamento)
+          : await executarDisparoAgendado(agendamento);
 
         await supabaseAdmin
           .from("automacao_agendamentos")
@@ -636,14 +736,19 @@ export async function GET(request: Request) {
             executed_at: new Date().toISOString(),
             payload_json: {
               ...(agendamento.payload_json || {}),
-              resultado_envio: {
-                message_id: resultado.messageId,
-                conversa_id: resultado.conversaId,
-                protocolo_id: resultado.protocoloId,
-                template_nome: resultado.templateNome,
-                numero_destino: resultado.numeroDestino,
-                variaveis: resultado.variaveis,
-              },
+              resultado_envio: ehEmailLembrete
+                ? {
+                    email_destino: resultado.emailDestino,
+                    agendamento_id: resultado.agendamentoId,
+                  }
+                : {
+                    message_id: resultado.messageId,
+                    conversa_id: resultado.conversaId,
+                    protocolo_id: resultado.protocoloId,
+                    template_nome: resultado.templateNome,
+                    numero_destino: resultado.numeroDestino,
+                    variaveis: resultado.variaveis,
+                  },
             },
           })
           .eq("id", agendamento.id)

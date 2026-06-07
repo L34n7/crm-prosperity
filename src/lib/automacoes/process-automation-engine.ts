@@ -439,6 +439,71 @@ function calcularSegundosAgendamentoDisparo(config: Record<string, any>) {
   return quantidade * 60 * 60;
 }
 
+function calcularSegundosAntecedenciaAgendamento(config: Record<string, any>) {
+  const quantidade = Math.max(
+    1,
+    Number(
+      config.lembrete_agendamento_quantidade ||
+        config.lembrete_quantidade ||
+        2
+    )
+  );
+  const unidade = String(
+    config.lembrete_agendamento_unidade || config.lembrete_unidade || "horas"
+  );
+
+  if (unidade === "dias") return quantidade * 24 * 60 * 60;
+  if (unidade === "minutos") return quantidade * 60;
+
+  return quantidade * 60 * 60;
+}
+
+function normalizarConfigLembreteAgendamento(config: Record<string, any>) {
+  const ativo =
+    config.lembrete_agendamento_ativo === true || config.ativo === true;
+  const enviarWhatsapp =
+    config.lembrete_agendamento_whatsapp === true ||
+    config.enviar_whatsapp === true;
+  const enviarEmail =
+    config.lembrete_agendamento_email === true ||
+    config.enviar_email === true;
+  const quantidade = Math.max(
+    1,
+    Number(config.lembrete_agendamento_quantidade || config.quantidade || 2)
+  );
+  const unidadeRaw = String(config.lembrete_agendamento_unidade || "horas");
+  const unidadeConfig = String(
+    config.lembrete_agendamento_unidade || config.unidade || unidadeRaw
+  );
+  const unidade = ["minutos", "horas", "dias"].includes(unidadeConfig)
+    ? unidadeConfig
+    : "horas";
+
+  return {
+    ativo,
+    enviar_whatsapp: enviarWhatsapp,
+    enviar_email: enviarEmail,
+    quantidade,
+    unidade,
+    segundos: calcularSegundosAntecedenciaAgendamento({
+      lembrete_agendamento_quantidade: quantidade,
+      lembrete_agendamento_unidade: unidade,
+    }),
+    template_id: String(
+      config.lembrete_agendamento_template_id || config.template_id || ""
+    ).trim(),
+    variaveis: Array.isArray(config.lembrete_agendamento_variaveis)
+      ? config.lembrete_agendamento_variaveis
+          .map((item: any) => String(item || "").trim())
+          .filter(Boolean)
+      : Array.isArray(config.variaveis)
+      ? config.variaveis
+          .map((item: any) => String(item || "").trim())
+          .filter(Boolean)
+      : [],
+  };
+}
+
 function normalizarTexto(texto: string) {
   return String(texto || "").trim().toLowerCase();
 }
@@ -3165,6 +3230,327 @@ async function obterAgendaAutomacao(empresaId: string, agendaId: string) {
   return data || null;
 }
 
+function emailLembreteValido(valor: string | null | undefined) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(
+    String(valor || "").trim()
+  );
+}
+
+async function cancelarLembretesAgendamentoPendentes(params: {
+  empresaId: string;
+  agendamentoId: string;
+}) {
+  const { empresaId, agendamentoId } = params;
+
+  if (!agendamentoId) return;
+
+  const { error } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .update({
+      status: "cancelado",
+    })
+    .eq("empresa_id", empresaId)
+    .eq("status", "pendente")
+    .in("tipo_agendamento", [
+      "disparo_template",
+      "email_lembrete_agendamento",
+    ])
+    .contains("payload_json", {
+      origem: "lembrete_agendamento",
+      agenda_agendamento_id: agendamentoId,
+    });
+
+  if (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao cancelar lembretes do agendamento:",
+      error
+    );
+  }
+}
+
+async function agendarLembretesAgendamento(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  noId: string;
+  noTitulo?: string | null;
+  numeroDestino: string;
+  agendamento: any;
+  agenda: any | null;
+  contato: any | null;
+  valores: Record<string, string>;
+  config: Record<string, any>;
+  emailCliente?: string | null;
+}) {
+  const {
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noId,
+    noTitulo,
+    numeroDestino,
+    agendamento,
+    agenda,
+    contato,
+    valores,
+    config,
+    emailCliente,
+  } = params;
+
+  const configLembrete = normalizarConfigLembreteAgendamento(config);
+
+  if (!configLembrete.ativo) return;
+
+  if (!configLembrete.enviar_whatsapp && !configLembrete.enviar_email) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId,
+      tipoEvento: "agenda_lembrete_sem_canal",
+      descricao: "Lembrete de agendamento ativo, mas sem canal selecionado.",
+      entrada: configLembrete,
+      saida: {},
+    });
+
+    return;
+  }
+
+  const inicioMs = new Date(String(agendamento.inicio_at || "")).getTime();
+
+  if (!Number.isFinite(inicioMs)) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId,
+      tipoEvento: "agenda_lembrete_data_invalida",
+      descricao: "Nao foi possivel calcular o horario do lembrete.",
+      entrada: configLembrete,
+      saida: {
+        inicio_at: agendamento.inicio_at || null,
+      },
+    });
+
+    return;
+  }
+
+  const executarEmDate = new Date(inicioMs - configLembrete.segundos * 1000);
+
+  if (executarEmDate.getTime() <= Date.now()) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId,
+      tipoEvento: "agenda_lembrete_ignorado_passado",
+      descricao:
+        "Lembrete de agendamento ignorado porque o horario calculado ja passou.",
+      entrada: configLembrete,
+      saida: {
+        executar_em: executarEmDate.toISOString(),
+        inicio_at: agendamento.inicio_at || null,
+      },
+    });
+
+    return;
+  }
+
+  await cancelarLembretesAgendamentoPendentes({
+    empresaId,
+    agendamentoId: agendamento.id,
+  });
+
+  const executarEm = executarEmDate.toISOString();
+  const contatoId = agendamento.contato_id || contato?.id || null;
+  const contatoNome =
+    contato?.nome || agendamento.nome_cliente || "Contato";
+  const emailDestino = String(emailCliente || agendamento.email_cliente || "")
+    .trim()
+    .toLowerCase();
+  const registros: any[] = [];
+
+  const payloadBase = {
+    conversa_id: conversaId,
+    contato_id: contatoId,
+    conversa_protocolo_id: agendamento.conversa_protocolo_id || null,
+    numero_destino: numeroDestino || agendamento.telefone_cliente || null,
+    origem: "lembrete_agendamento",
+    agenda_agendamento_id: agendamento.id,
+    agenda_id: agendamento.agenda_id || agenda?.id || null,
+    agenda_nome: agenda?.nome || null,
+    agenda_inicio_at: agendamento.inicio_at || null,
+    agenda_fim_at: agendamento.fim_at || null,
+    agenda_data: valores.agenda_data || null,
+    agenda_hora: valores.agenda_hora || null,
+    contato_nome: contatoNome,
+    automacao_no_titulo: noTitulo || "Lembrete do agendamento",
+    lembrete_antecedencia_quantidade: configLembrete.quantidade,
+    lembrete_antecedencia_unidade: configLembrete.unidade,
+    segundos_para_agendar: configLembrete.segundos,
+  };
+
+  if (configLembrete.enviar_whatsapp) {
+    if (!configLembrete.template_id) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId,
+        tipoEvento: "agenda_lembrete_template_nao_configurado",
+        descricao:
+          "Lembrete WhatsApp ativo, mas sem template configurado.",
+        entrada: configLembrete,
+        saida: {},
+      });
+    } else {
+      const [{ data: conversa }, { data: template }] = await Promise.all([
+        supabaseAdmin
+          .from("conversas")
+          .select("id, contato_id, integracao_whatsapp_id")
+          .eq("id", conversaId)
+          .eq("empresa_id", empresaId)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("whatsapp_templates")
+          .select(
+            "id, nome, idioma, status, integracao_whatsapp_id, payload"
+          )
+          .eq("id", configLembrete.template_id)
+          .eq("empresa_id", empresaId)
+          .maybeSingle(),
+      ]);
+
+      if (!template) {
+        await registrarLog({
+          empresaId,
+          execucaoId,
+          fluxoId,
+          noId,
+          tipoEvento: "agenda_lembrete_template_nao_encontrado",
+          descricao: "Template do lembrete de agendamento nao encontrado.",
+          entrada: configLembrete,
+          saida: {
+            template_id: configLembrete.template_id,
+          },
+        });
+      } else if (String(template.status || "").toUpperCase() !== "APPROVED") {
+        await registrarLog({
+          empresaId,
+          execucaoId,
+          fluxoId,
+          noId,
+          tipoEvento: "agenda_lembrete_template_nao_aprovado",
+          descricao:
+            "Template do lembrete de agendamento nao esta aprovado.",
+          entrada: configLembrete,
+          saida: {
+            template_id: template.id,
+            template_nome: template.nome,
+            status: template.status,
+          },
+        });
+      } else {
+        registros.push({
+          empresa_id: empresaId,
+          execucao_id: execucaoId,
+          fluxo_id: fluxoId,
+          no_id: noId,
+          tipo_agendamento: "disparo_template",
+          executar_em: executarEm,
+          status: "pendente",
+          payload_json: {
+            ...payloadBase,
+            contato_id: contatoId || conversa?.contato_id || null,
+            template_id: template.id,
+            template_nome: template.nome,
+            template_idioma: template.idioma,
+            template_payload: template.payload || null,
+            integracao_whatsapp_id:
+              conversa?.integracao_whatsapp_id ||
+              template.integracao_whatsapp_id ||
+              null,
+            variaveis: configLembrete.variaveis,
+            tempo_quantidade: configLembrete.quantidade,
+            tempo_unidade: configLembrete.unidade,
+          },
+        });
+      }
+    }
+  }
+
+  if (configLembrete.enviar_email && emailLembreteValido(emailDestino)) {
+    registros.push({
+      empresa_id: empresaId,
+      execucao_id: execucaoId,
+      fluxo_id: fluxoId,
+      no_id: noId,
+      tipo_agendamento: "email_lembrete_agendamento",
+      executar_em: executarEm,
+      status: "pendente",
+      payload_json: {
+        ...payloadBase,
+        email_destino: emailDestino,
+      },
+    });
+  }
+
+  if (configLembrete.enviar_email && !emailLembreteValido(emailDestino)) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId,
+      tipoEvento: "agenda_lembrete_email_invalido",
+      descricao: "Lembrete por email ativo, mas contato sem email valido.",
+      entrada: configLembrete,
+      saida: {
+        email_destino: emailDestino || null,
+      },
+    });
+  }
+
+  if (registros.length === 0) return;
+
+  const { error } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .insert(registros);
+
+  if (error) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId,
+      tipoEvento: "agenda_lembrete_erro_insert",
+      descricao: "Erro ao criar lembrete de agendamento.",
+      entrada: configLembrete,
+      saida: {
+        erro: error.message,
+      },
+    });
+
+    return;
+  }
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId,
+    tipoEvento: "agenda_lembrete_agendado",
+    descricao: "Lembrete de agendamento criado com sucesso.",
+    entrada: configLembrete,
+    saida: {
+      executar_em: executarEm,
+      canais: registros.map((registro) => registro.tipo_agendamento),
+      agendamento_id: agendamento.id,
+    },
+  });
+}
+
 async function salvarVariaveisAutomacao(params: {
   empresaId: string;
   execucao: any;
@@ -4444,6 +4830,7 @@ async function criarAgendamentoAutomacao(params: {
   const deveEnviarEmailAgendamento = config.enviar_email_agendamento !== false;
   const statusInicial =
     config.status_inicial === "confirmado" ? "confirmado" : "agendado";
+  const configLembreteAgendamento = normalizarConfigLembreteAgendamento(config);
 
   const { data: agendamento, error } = await supabaseAdmin
     .from("agenda_agendamentos")
@@ -4470,6 +4857,9 @@ async function criarAgendamentoAutomacao(params: {
         email_agendamento_origem: emailAgendamento.origem,
         email_agendamento_variavel: emailAgendamento.variavel,
         enviar_email_agendamento: deveEnviarEmailAgendamento,
+        lembrete_agendamento_config: configLembreteAgendamento.ativo
+          ? configLembreteAgendamento
+          : null,
       },
     })
     .select("*")
@@ -4515,6 +4905,22 @@ async function criarAgendamentoAutomacao(params: {
     metadata: {
       agendamento_id: agendamento.id,
     },
+  });
+
+  await agendarLembretesAgendamento({
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noId: no.id,
+    noTitulo: no.titulo,
+    numeroDestino,
+    agendamento,
+    agenda,
+    contato,
+    valores,
+    config,
+    emailCliente: emailAgendamento.email || null,
   });
 
   await salvarEstadoExecucaoAgenda({
@@ -4654,6 +5060,20 @@ async function remarcarAgendamentoAutomacao(params: {
     return;
   }
 
+  const { data: agendamentoAtual } = await supabaseAdmin
+    .from("agenda_agendamentos")
+    .select("metadata_json, email_cliente")
+    .eq("id", agendamentoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  const metadataAgendamentoAtual = agendamentoAtual?.metadata_json || {};
+  const configLembreteAgendamento =
+    config.lembrete_agendamento_ativo === true
+      ? normalizarConfigLembreteAgendamento(config)
+      : normalizarConfigLembreteAgendamento(
+          metadataAgendamentoAtual.lembrete_agendamento_config || {}
+        );
+
   const { data: agendamento, error } = await supabaseAdmin
     .from("agenda_agendamentos")
     .update({
@@ -4663,9 +5083,13 @@ async function remarcarAgendamentoAutomacao(params: {
       status:
         config.status_final === "confirmado" ? "confirmado" : "agendado",
       metadata_json: {
+        ...metadataAgendamentoAtual,
         remarcado_por: "automacao",
         slot_anterior_id: agendamentoId,
         slot_novo: slot,
+        lembrete_agendamento_config: configLembreteAgendamento.ativo
+          ? configLembreteAgendamento
+          : null,
       },
       updated_at: new Date().toISOString(),
     })
@@ -4688,6 +5112,7 @@ async function remarcarAgendamentoAutomacao(params: {
 
   const agenda = await obterAgendaAutomacao(empresaId, agendaId);
   const valores = valoresAgendamentoAgenda(agendamento, agenda);
+  const contato = await obterContatoAutomacao(empresaId, execucao);
 
   await salvarVariaveisAutomacao({
     empresaId,
@@ -4697,6 +5122,27 @@ async function remarcarAgendamentoAutomacao(params: {
     metadata: {
       agendamento_id: agendamento.id,
     },
+  });
+
+  await cancelarLembretesAgendamentoPendentes({
+    empresaId,
+    agendamentoId: agendamento.id,
+  });
+
+  await agendarLembretesAgendamento({
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noId: no.id,
+    noTitulo: no.titulo,
+    numeroDestino,
+    agendamento,
+    agenda,
+    contato,
+    valores,
+    config: configLembreteAgendamento,
+    emailCliente: agendamento.email_cliente || agendamentoAtual?.email_cliente || null,
   });
 
   await salvarEstadoExecucaoAgenda({
@@ -4798,6 +5244,11 @@ async function cancelarAgendamentoAutomacao(params: {
     console.error("[AUTOMATION_ENGINE] Erro ao cancelar agendamento:", error);
     return;
   }
+
+  await cancelarLembretesAgendamentoPendentes({
+    empresaId,
+    agendamentoId: agendamento.id,
+  });
 
   await sincronizarAgendamentoGoogleCalendar({
     empresaId,

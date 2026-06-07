@@ -784,6 +784,20 @@ export default function FluxosPage() {
     useState<"contato" | "variavel">("contato");
   const [agendaEmailVariavelNode, setAgendaEmailVariavelNode] =
     useState("email");
+  const [agendaLembreteAtivoNode, setAgendaLembreteAtivoNode] =
+    useState(false);
+  const [agendaLembreteQuantidadeNode, setAgendaLembreteQuantidadeNode] =
+    useState("2");
+  const [agendaLembreteUnidadeNode, setAgendaLembreteUnidadeNode] =
+    useState<"minutos" | "horas" | "dias">("horas");
+  const [agendaLembreteWhatsappNode, setAgendaLembreteWhatsappNode] =
+    useState(true);
+  const [agendaLembreteEmailNode, setAgendaLembreteEmailNode] =
+    useState(false);
+  const [agendaLembreteTemplateIdNode, setAgendaLembreteTemplateIdNode] =
+    useState("");
+  const [agendaLembreteVariaveisNode, setAgendaLembreteVariaveisNode] =
+    useState("");
   const [agendaMotivoCancelamentoNode, setAgendaMotivoCancelamentoNode] =
     useState("Cancelado pelo cliente via automacao");
   const [encerrarResultadoNode, setEncerrarResultadoNode] =
@@ -829,6 +843,14 @@ export default function FluxosPage() {
       ) || null
     );
   }, [templatesWhatsapp, agendarDisparoTemplateIdNode]);
+
+  const templateAgendaLembreteSelecionado = useMemo(() => {
+    return (
+      templatesWhatsapp.find(
+        (template) => template.id === agendaLembreteTemplateIdNode
+      ) || null
+    );
+  }, [templatesWhatsapp, agendaLembreteTemplateIdNode]);
 
   async function carregarTemplatesWhatsapp() {
     try {
@@ -1548,6 +1570,13 @@ async function criarFluxoRapido() {
               enviar_email_agendamento: true,
               email_agendamento_origem: "contato",
               email_agendamento_variavel: "email",
+              lembrete_agendamento_ativo: false,
+              lembrete_agendamento_quantidade: 2,
+              lembrete_agendamento_unidade: "horas",
+              lembrete_agendamento_whatsapp: true,
+              lembrete_agendamento_email: false,
+              lembrete_agendamento_template_id: "",
+              lembrete_agendamento_variaveis: [],
             }
           : tipoNo === "agenda_remarcar_agendamento"
           ? {
@@ -1893,6 +1922,33 @@ function offsetLabelConexao(edgeId: string) {
     setAgendaEmailVariavelNode(
       String(configuracaoJson?.email_agendamento_variavel || "email")
     );
+    setAgendaLembreteAtivoNode(
+      configuracaoJson?.lembrete_agendamento_ativo === true
+    );
+    setAgendaLembreteQuantidadeNode(
+      String(configuracaoJson?.lembrete_agendamento_quantidade || 2)
+    );
+    setAgendaLembreteUnidadeNode(
+      configuracaoJson?.lembrete_agendamento_unidade === "minutos"
+        ? "minutos"
+        : configuracaoJson?.lembrete_agendamento_unidade === "dias"
+        ? "dias"
+        : "horas"
+    );
+    setAgendaLembreteWhatsappNode(
+      configuracaoJson?.lembrete_agendamento_whatsapp !== false
+    );
+    setAgendaLembreteEmailNode(
+      configuracaoJson?.lembrete_agendamento_email === true
+    );
+    setAgendaLembreteTemplateIdNode(
+      String(configuracaoJson?.lembrete_agendamento_template_id || "")
+    );
+    setAgendaLembreteVariaveisNode(
+      Array.isArray(configuracaoJson?.lembrete_agendamento_variaveis)
+        ? configuracaoJson.lembrete_agendamento_variaveis.join("\n")
+        : ""
+    );
     setAgendaMotivoCancelamentoNode(
       String(
         configuracaoJson?.motivo ||
@@ -2045,7 +2101,13 @@ function removerOpcaoPergunta(index: number) {
 }
 
 function aplicarEdicaoNo() {
-  if (tipoNodeEdicao === "agendar_disparo") {
+  const deveExibirAvisoDisparo =
+    tipoNodeEdicao === "agendar_disparo" ||
+    (tipoNodeEdicao === "agenda_criar_agendamento" &&
+      agendaLembreteAtivoNode &&
+      agendaLembreteWhatsappNode);
+
+  if (deveExibirAvisoDisparo) {
     setAcaoPendenteAplicarNo(() => () => {
       aplicarEdicaoNoInterno();
     });
@@ -2106,12 +2168,32 @@ function aplicarEdicaoNoInterno() {
 
   if (
     tipoNodeEdicao === "agenda_criar_agendamento" &&
-    agendaEnviarEmailNode &&
+    (agendaEnviarEmailNode ||
+      (agendaLembreteAtivoNode && agendaLembreteEmailNode)) &&
     agendaEmailOrigemNode === "variavel" &&
     !agendaEmailVariavelNode.trim()
   ) {
     setErro("Informe a variavel que contem o email do contato.");
     return;
+  }
+
+  if (tipoNodeEdicao === "agenda_criar_agendamento" && agendaLembreteAtivoNode) {
+    const quantidadeLembrete = Number(agendaLembreteQuantidadeNode || 0);
+
+    if (!Number.isFinite(quantidadeLembrete) || quantidadeLembrete <= 0) {
+      setErro("Informe uma antecedencia valida para o lembrete.");
+      return;
+    }
+
+    if (!agendaLembreteWhatsappNode && !agendaLembreteEmailNode) {
+      setErro("Selecione pelo menos um canal para o lembrete.");
+      return;
+    }
+
+    if (agendaLembreteWhatsappNode && !agendaLembreteTemplateIdNode.trim()) {
+      setErro("Selecione um template WhatsApp para o lembrete.");
+      return;
+    }
   }
 
   if (
@@ -2258,6 +2340,25 @@ function aplicarEdicaoNoInterno() {
           agendaEmailOrigemNode === "variavel" ? "variavel" : "contato";
         configuracao_json.email_agendamento_variavel =
           agendaEmailVariavelNode.trim() || "email";
+        configuracao_json.lembrete_agendamento_ativo =
+          agendaLembreteAtivoNode;
+        configuracao_json.lembrete_agendamento_quantidade = Math.max(
+          1,
+          Number(agendaLembreteQuantidadeNode || 2)
+        );
+        configuracao_json.lembrete_agendamento_unidade =
+          agendaLembreteUnidadeNode;
+        configuracao_json.lembrete_agendamento_whatsapp =
+          agendaLembreteWhatsappNode;
+        configuracao_json.lembrete_agendamento_email =
+          agendaLembreteEmailNode;
+        configuracao_json.lembrete_agendamento_template_id =
+          agendaLembreteTemplateIdNode;
+        configuracao_json.lembrete_agendamento_variaveis =
+          agendaLembreteVariaveisNode
+            .split("\n")
+            .map((item) => item.trim())
+            .filter(Boolean);
       }
 
       if (tipoFinal === "agenda_remarcar_agendamento") {
@@ -3424,6 +3525,38 @@ function validarFluxoAntesDeAtivar(params?: {
       return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para pedir o dia.`;
     }
 
+    if (tipoNo === "agenda_criar_agendamento") {
+      if (config.lembrete_agendamento_ativo === true) {
+        const quantidade = Number(config.lembrete_agendamento_quantidade || 0);
+
+        if (!Number.isFinite(quantidade) || quantidade <= 0) {
+          return `O bloco "${node.data?.titulo}" precisa ter uma antecedencia valida para o lembrete.`;
+        }
+
+        if (
+          !["minutos", "horas", "dias"].includes(
+            String(config.lembrete_agendamento_unidade || "")
+          )
+        ) {
+          return `O bloco "${node.data?.titulo}" precisa ter uma unidade valida para o lembrete.`;
+        }
+
+        if (
+          config.lembrete_agendamento_whatsapp !== true &&
+          config.lembrete_agendamento_email !== true
+        ) {
+          return `O bloco "${node.data?.titulo}" precisa ter pelo menos um canal de lembrete.`;
+        }
+
+        if (
+          config.lembrete_agendamento_whatsapp === true &&
+          !String(config.lembrete_agendamento_template_id || "").trim()
+        ) {
+          return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp para o lembrete.`;
+        }
+      }
+    }
+
     if (tipoNo === "interpretar_arquivo_ia") {
       if (!String(config.mensagem || "").trim()) {
         return `O bloco "${node.data?.titulo}" precisa ter uma mensagem solicitando o arquivo.`;
@@ -3563,13 +3696,24 @@ useEffect(() => {
 }, []);
 
 useEffect(() => {
-  if (tipoNodeEdicao !== "agendar_disparo") {
+  const deveCalcularCustoDisparo =
+    tipoNodeEdicao === "agendar_disparo" ||
+    (tipoNodeEdicao === "agenda_criar_agendamento" &&
+      agendaLembreteAtivoNode &&
+      agendaLembreteWhatsappNode);
+
+  if (!deveCalcularCustoDisparo) {
     setPreviewCustoAgendarDisparo(null);
     return;
   }
 
+  const templateSelecionado =
+    tipoNodeEdicao === "agendar_disparo"
+      ? templateAgendarDisparoSelecionado
+      : templateAgendaLembreteSelecionado;
+
   const categoria = String(
-    templateAgendarDisparoSelecionado?.categoria || ""
+    templateSelecionado?.categoria || ""
   ).toLowerCase();
 
   if (!categoria) {
@@ -3580,8 +3724,12 @@ useEffect(() => {
   calcularPreviewCustoAgendarDisparo(categoria);
 }, [
   tipoNodeEdicao,
+  agendaLembreteAtivoNode,
+  agendaLembreteWhatsappNode,
   templateAgendarDisparoSelecionado?.id,
   templateAgendarDisparoSelecionado?.categoria,
+  templateAgendaLembreteSelecionado?.id,
+  templateAgendaLembreteSelecionado?.categoria,
 ]);
 
 const nodesRenderizados = useMemo(
@@ -5491,7 +5639,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             </div>
                           </label>
 
-                          {agendaEnviarEmailNode && (
+                          {(agendaEnviarEmailNode ||
+                            (agendaLembreteAtivoNode &&
+                              agendaLembreteEmailNode)) && (
                             <>
                               <label className={styles.field}>
                                 <span className={styles.label}>Origem do email</span>
@@ -5532,6 +5682,190 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                   </span>
                                 </label>
                               )}
+                            </>
+                          )}
+
+                          <label className={styles.switchField}>
+                            <input
+                              type="checkbox"
+                              checked={agendaLembreteAtivoNode}
+                              onChange={(e) =>
+                                setAgendaLembreteAtivoNode(e.target.checked)
+                              }
+                            />
+
+                            <div>
+                              <strong>Enviar lembrete antes do agendamento</strong>
+                              <p>
+                                Agenda um template WhatsApp, email ou ambos antes do horario marcado.
+                              </p>
+                            </div>
+                          </label>
+
+                          {agendaLembreteAtivoNode && (
+                            <>
+                              <div className={styles.optionRow}>
+                                <label className={styles.field}>
+                                  <span className={styles.label}>Enviar antes</span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    className={styles.input}
+                                    value={agendaLembreteQuantidadeNode}
+                                    onChange={(e) =>
+                                      setAgendaLembreteQuantidadeNode(e.target.value)
+                                    }
+                                  />
+                                </label>
+
+                                <label className={styles.field}>
+                                  <span className={styles.label}>Unidade</span>
+                                  <select
+                                    className={styles.input}
+                                    value={agendaLembreteUnidadeNode}
+                                    onChange={(e) =>
+                                      setAgendaLembreteUnidadeNode(
+                                        e.target.value === "minutos"
+                                          ? "minutos"
+                                          : e.target.value === "dias"
+                                          ? "dias"
+                                          : "horas"
+                                      )
+                                    }
+                                  >
+                                    <option value="minutos">Minutos</option>
+                                    <option value="horas">Horas</option>
+                                    <option value="dias">Dias</option>
+                                  </select>
+                                </label>
+                              </div>
+
+                              <label className={styles.switchField}>
+                                <input
+                                  type="checkbox"
+                                  checked={agendaLembreteWhatsappNode}
+                                  onChange={(e) =>
+                                    setAgendaLembreteWhatsappNode(e.target.checked)
+                                  }
+                                />
+
+                                <div>
+                                  <strong>Lembrete por WhatsApp</strong>
+                                  <p>
+                                    Usa um template aprovado. Templates com botoes podem capturar confirmar, remarcar ou cancelar.
+                                  </p>
+                                </div>
+                              </label>
+
+                              {agendaLembreteWhatsappNode && (
+                                <>
+                                  <div className={styles.agendarDisparoCostAlert}>
+                                    <div className={styles.agendarDisparoCostAlertIcon}>⚠</div>
+
+                                    <div className={styles.agendarDisparoCostAlertContent}>
+                                      <strong>Este lembrete gera um disparo oficial do WhatsApp</strong>
+
+                                      <p>
+                                        O envio usara template aprovado e podera gerar cobranca da Meta quando o lembrete ocorrer.
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <label className={styles.field}>
+                                    <span className={styles.label}>Template WhatsApp</span>
+                                    <select
+                                      className={styles.input}
+                                      value={agendaLembreteTemplateIdNode}
+                                      onChange={(e) =>
+                                        setAgendaLembreteTemplateIdNode(e.target.value)
+                                      }
+                                      disabled={carregandoTemplatesWhatsapp}
+                                    >
+                                      <option value="">
+                                        {carregandoTemplatesWhatsapp
+                                          ? "Carregando templates..."
+                                          : "Selecione um template aprovado"}
+                                      </option>
+
+                                      {templatesWhatsapp.map((template) => (
+                                        <option key={template.id} value={template.id}>
+                                          {template.nome} - {template.idioma}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+
+                                  <label className={styles.field}>
+                                    <span className={styles.label}>Variaveis do template</span>
+                                    <textarea
+                                      className={styles.textarea}
+                                      value={agendaLembreteVariaveisNode}
+                                      onChange={(e) =>
+                                        setAgendaLembreteVariaveisNode(e.target.value)
+                                      }
+                                      placeholder={
+                                        "Uma variavel por linha.\nEx:\n{{nome_contato}}\n{{agenda_data}}\n{{agenda_hora}}"
+                                      }
+                                    />
+                                    <span className={styles.help}>
+                                      Variaveis do agendamento como {"{{agenda_data}}"} e {"{{agenda_hora}}"} ficam disponiveis para o template.
+                                    </span>
+
+                                    <div className={styles.agendarDisparoCostPreviewCard}>
+                                      <div className={styles.costPreviewTop}>
+                                        <span className={styles.costPreviewLabel}>Estimativa de custo Meta</span>
+
+                                        <span className={styles.costPreviewCategory}>
+                                          {templateAgendaLembreteSelecionado?.categoria || "Categoria"}
+                                        </span>
+                                      </div>
+
+                                      {loadingPreviewCustoAgendarDisparo ? (
+                                        <p className={styles.costPreviewMuted}>Calculando estimativa...</p>
+                                      ) : previewCustoAgendarDisparo ? (
+                                        <>
+                                          <strong className={styles.costPreviewValue}>
+                                            R$ {previewCustoAgendarDisparo.valorTotalBrlMin.toFixed(2)} ~ R${" "}
+                                            {previewCustoAgendarDisparo.valorTotalBrlMax.toFixed(2)}
+                                          </strong>
+
+                                          <p className={styles.costPreviewMeta}>
+                                            USD: US$ {previewCustoAgendarDisparo.valorTotalUsd.toFixed(4)} ·
+                                            Cobrado: {previewCustoAgendarDisparo.totalCobrados} contato
+                                          </p>
+
+                                          <p className={styles.costPreviewHelp}>
+                                            Esta é uma estimativa para 1 contato. A cobrança real pode variar
+                                            conforme categoria do template, país do contato, cotação, impostos e
+                                            regras da Meta.
+                                          </p>
+                                        </>
+                                      ) : (
+                                        <p className={styles.costPreviewMuted}>
+                                          Selecione um template aprovado para visualizar a estimativa.
+                                        </p>
+                                      )}
+                                    </div>
+                                  </label>
+                                </>
+                              )}
+
+                              <label className={styles.switchField}>
+                                <input
+                                  type="checkbox"
+                                  checked={agendaLembreteEmailNode}
+                                  onChange={(e) =>
+                                    setAgendaLembreteEmailNode(e.target.checked)
+                                  }
+                                />
+
+                                <div>
+                                  <strong>Lembrete por email</strong>
+                                  <p>
+                                    Envia um email simples de lembrete usando a mesma origem de email configurada acima.
+                                  </p>
+                                </div>
+                              </label>
                             </>
                           )}
                         </>
