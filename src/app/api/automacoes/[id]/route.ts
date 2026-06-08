@@ -6,6 +6,22 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 
+const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; // 82800 segundos = 23 horas
+
+function normalizarDelaySegundosApi(valor: unknown) {
+  if (valor === null || valor === undefined || valor === "") {
+    return null;
+  }
+
+  const numero = Number(valor);
+
+  if (!Number.isFinite(numero)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(LIMITE_DELAY_SEGUNDOS, Math.floor(numero)));
+}
+
 const supabaseAdmin = getSupabaseAdmin();
 
 type ResumoConexaoAuditoria = {
@@ -95,9 +111,9 @@ function resumirNoAuditoria(no: Record<string, unknown>): ResumoNoAuditoria {
     descricao: no.descricao ? String(no.descricao) : null,
     configuracao_json: no.configuracao_json || {},
     delay_segundos:
-      no.tipo_no === "inicio" || no.delay_segundos == null
+      no.tipo_no === "inicio"
         ? null
-        : Math.max(0, Number(no.delay_segundos)),
+        : normalizarDelaySegundosApi(no.delay_segundos),
   };
 }
 
@@ -291,9 +307,7 @@ export async function PUT(
           delay_segundos:
             tipoNo === "inicio"
               ? null
-              : no.delay_segundos != null
-              ? Math.max(0, Number(no.delay_segundos))
-              : null,
+              : normalizarDelaySegundosApi(no.delay_segundos),
           ativo: true,
           updated_at: agora,
         };

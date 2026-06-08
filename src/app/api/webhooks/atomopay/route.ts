@@ -169,8 +169,7 @@ function obterPlanoSlugFallback(payload: any, lead?: any) {
     normalizarPlanoSlug(lead?.plano_slug) ??
     normalizarPlanoSlug(payload.metadata_extra?.plano_slug) ??
     normalizarPlanoSlug(payload.metadata?.plano_slug) ??
-    normalizarPlanoSlug(payload.tracking?.utm_term) ??
-    "basico"
+    normalizarPlanoSlug(payload.tracking?.utm_term)
   );
 }
 
@@ -304,6 +303,7 @@ async function obterPlanoPagamento(params: {
   }
 
   const planoSlug = obterPlanoSlugFallback(params.payload, params.lead);
+  
   const planoId = await buscarPlanoIdPorSlug(planoSlug);
 
   if (!planoId) {
@@ -660,25 +660,60 @@ async function enviarConviteAuth(params: {
   const { email, nome, empresaId, telefone } = params;
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com";
+  const redirectTo = `${siteUrl}/api/auth/callback?next=/definir-senha`;
 
-  const { data, error } = await supabase.auth.admin.generateLink({
-    type: "invite",
-    email,
-    options: {
-      redirectTo: `${siteUrl}/auth/callback?next=/definir-senha`,
-      data: {
-        nome,
-        empresa_id: empresaId,
-        telefone: telefone ?? null,
+  let inviteLink: string | null = null;
+
+  const { data: inviteData, error: inviteError } =
+    await supabase.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        redirectTo,
+        data: {
+          nome,
+          empresa_id: empresaId,
+          telefone: telefone ?? null,
+        },
       },
-    },
-  });
+    });
 
-  if (error) {
-    throw new Error(error.message);
+  if (!inviteError) {
+    inviteLink = inviteData.properties?.action_link ?? null;
   }
 
-  const inviteLink = data.properties?.action_link;
+  if (inviteError) {
+    const mensagemErro = String(inviteError.message ?? "").toLowerCase();
+
+    const usuarioJaExiste =
+      mensagemErro.includes("already been registered") ||
+      mensagemErro.includes("already registered") ||
+      mensagemErro.includes("user already");
+
+    if (!usuarioJaExiste) {
+      throw new Error(inviteError.message);
+    }
+
+    console.warn(
+      "[WEBHOOK ATOMO] Usuário já existe no Supabase Auth. Enviando recovery link.",
+      email
+    );
+
+    const { data: recoveryData, error: recoveryError } =
+      await supabase.auth.admin.generateLink({
+        type: "recovery",
+        email,
+        options: {
+          redirectTo,
+        },
+      });
+
+    if (recoveryError) {
+      throw new Error(recoveryError.message);
+    }
+
+    inviteLink = recoveryData.properties?.action_link ?? null;
+  }
 
   if (!inviteLink) {
     throw new Error("Não foi possível gerar o link de definição de senha.");

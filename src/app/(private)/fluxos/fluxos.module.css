@@ -541,12 +541,12 @@
   align-items: center;
   justify-content: center;
   height: 13px;
-  padding: 4px 7px;
+  padding: 4px 4px;
   border-radius: 999px;
   background: #fef3c7;
   border: 1px solid #fde68a;
   color: #92400e;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;

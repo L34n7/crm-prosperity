@@ -279,6 +279,7 @@ const TIPOS_VALOR_CONVERSAO: TipoValorConversao[] = [
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
+const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; 
 const VARIAVEIS_FIXAS_CONTATO_HELP =
   "Variaveis fixas do contato: {{nome_contato}}, {{email_contato}} e {{numero_contato}}.";
 const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
@@ -526,6 +527,20 @@ function normalizarVariavelFluxo(valor: string) {
     .replace(/[^a-z0-9_]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "");
+}
+
+function normalizarDelaySegundos(valor: string | number | null | undefined) {
+  if (valor === null || valor === undefined || valor === "") {
+    return null;
+  }
+
+  const numero = Number(valor);
+
+  if (!Number.isFinite(numero)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(LIMITE_DELAY_SEGUNDOS, Math.floor(numero)));
 }
 
 function rotuloPadraoPorTipoNo(tipoNo: string) {
@@ -2801,9 +2816,7 @@ function aplicarEdicaoNoInterno() {
         delay_segundos:
           tipoFinal === "inicio"
             ? null
-            : delayNode !== ""
-            ? Math.max(0, Number(delayNode))
-            : null,
+            : normalizarDelaySegundos(delayNode),
       });
 
       return {
@@ -3212,7 +3225,7 @@ async function importarFluxoCompartilhado() {
       setSucesso("");
 
       const nosParaSalvar = nodes.map((node) => {
-        const tipoNo = String(node.data?.tipo_no || "");
+      const tipoNo = String(node.data?.tipo_no || "");
 
         return {
           id: node.id,
@@ -3225,9 +3238,7 @@ async function importarFluxoCompartilhado() {
           delay_segundos:
             node.data?.tipo_no === "inicio"
               ? null
-              : node.data?.delay_segundos != null
-              ? Math.max(0, Number(node.data.delay_segundos))
-              : null,
+              : normalizarDelaySegundos(node.data?.delay_segundos as any),
         };
       });
 
@@ -6613,36 +6624,50 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         <span className={styles.label}>Delay antes de enviar:</span>
 
                         <span className={styles.helpS}>Segundos:</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.5}
-                          placeholder="0"
-                          className={styles.delayInput}
-                          value={delayNode}
-                          onChange={(e) => {
-                            const valor = e.target.value;
+                          <input
+                            type="number"
+                            min={0}
+                            max={LIMITE_DELAY_SEGUNDOS}
+                            className={styles.delayInput}
+                            value={delayNode}
+                            onChange={(e) => {
+                              const valor = e.target.value;
 
-                            if (valor === "") {
-                              setDelayNode("");
-                              return;
-                            }
+                              if (valor === "") {
+                                setDelayNode("");
+                                return;
+                              }
 
-                            const numero = Number(valor);
+                              const somenteNumeros = valor.replace(/\D/g, "");
 
-                            if (numero < 0) {
-                              setDelayNode("0");
-                              return;
-                            }
+                              if (!somenteNumeros) {
+                                setDelayNode("");
+                                return;
+                              }
 
-                            setDelayNode(valor);
-                          }}
-                        />
+                              const numero = Number(somenteNumeros);
+
+                              if (!Number.isFinite(numero)) {
+                                setDelayNode("");
+                                return;
+                              }
+
+                              if (numero > LIMITE_DELAY_SEGUNDOS) {
+                                setDelayNode(String(LIMITE_DELAY_SEGUNDOS));
+                                return;
+                              }
+
+                              setDelayNode(String(Math.floor(numero)));
+                            }}
+                          />
 
                       </div>
 
                       <span className={styles.help}>
-                        Delay adicional antes do envio deste bloco. Deixe vazio para envio imediato.
+                        Delay adicional antes do envio deste bloco, é somado ao tempo minimo do sistema, entre 2 a 3 segundos. Deixe vazio para envio imediato.
+                      </span>
+                      <span className={styles.help}>
+                        Máximo: 82.800 segundos, equivalente a 23 horas.
                       </span>
                     </label>
                   )}
@@ -7049,8 +7074,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     {tipoCondicaoConexao !== "sempre" &&
                       tipoCondicaoConexao !== "timeout_sem_resposta" && (
                       <label className={styles.field}>
-                        <span className={styles.label}>Resposta esperada 
-                           <span className={styles.botaoRespostaLabel2}> * ID da resposta</span>
+                        <span className={styles.label}>ID da resposta 
                         </span>
                         <input
                           className={styles.input}
