@@ -79,7 +79,7 @@ export async function sendAutomationNotificationEmail({
   const appUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crm-prosperity.vercel.app";
+    "https://crmprosperity.com";
 
   const linkConversa = `${appUrl}/conversas?id=${conversaId}`;
 
