@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { Resend } from "resend";
 import { calcularJanelaAssinatura } from "@/lib/assinaturas/status";
@@ -7,7 +8,7 @@ const supabase = getSupabaseAdmin();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 /* =========================
-   HELPERS
+   HELPERS GERAIS
 ========================= */
 
 function limparTelefone(valor: string | null | undefined) {
@@ -22,9 +23,173 @@ function normalizarEmail(valor: string | null | undefined) {
 
 function somenteDataValida(valor: string | null | undefined) {
   if (!valor) return null;
+
   const data = new Date(valor);
+
   if (Number.isNaN(data.getTime())) return null;
+
   return data.toISOString();
+}
+
+function normalizarStatusPagamento(payload: any) {
+  return String(payload.status ?? payload.transaction?.status ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function obterMetodoPagamento(payload: any) {
+  return String(payload.payment_method ?? payload.method ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function obterValorPagamento(payload: any) {
+  const valor = payload.amount ?? payload.transaction?.amount ?? null;
+
+  if (valor === null || valor === undefined || valor === "") {
+    return null;
+  }
+
+  return Number(valor);
+}
+
+function obterValorLiquidoPagamento(payload: any) {
+  const valor =
+    payload.net_amount ??
+    payload.valor_liquido ??
+    payload.transaction?.net_amount ??
+    null;
+
+  if (valor === null || valor === undefined || valor === "") {
+    return null;
+  }
+
+  return Number(valor);
+}
+
+function obterTituloOferta(payload: any) {
+  return (
+    payload.offer?.title ??
+    payload.offer_titulo ??
+    payload.cart?.[0]?.title ??
+    null
+  );
+}
+
+function obterPrecoOferta(payload: any) {
+  const preco =
+    payload.offer?.price ??
+    payload.offer_preco ??
+    payload.cart?.[0]?.price ??
+    payload.amount ??
+    null;
+
+  if (preco === null || preco === undefined || preco === "") {
+    return null;
+  }
+
+  return Number(preco);
+}
+
+function obterOfferHash(payload: any) {
+  return String(
+    payload.offer_hash ??
+      payload.offer?.hash ??
+      payload.offer?.id ??
+      payload.product_hash ??
+      payload.cart?.[0]?.product_hash ??
+      ""
+  ).trim();
+}
+
+function obterPagoEm(payload: any) {
+  return (
+    somenteDataValida(payload.paid_at) ??
+    somenteDataValida(payload.paidAt) ??
+    somenteDataValida(payload.created_at) ??
+    somenteDataValida(payload.createdAt) ??
+    new Date().toISOString()
+  );
+}
+
+function criarHashPayload(payload: any) {
+  return createHash("sha256")
+    .update(JSON.stringify(payload))
+    .digest("hex");
+}
+
+function obterTransactionId(payload: any) {
+  const idDireto = String(
+    payload.transaction?.id ??
+      payload.transaction_id ??
+      payload.id ??
+      payload.token ??
+      payload.checkout_id ??
+      payload.order_id ??
+      payload.sale_id ??
+      payload.hash ??
+      ""
+  ).trim();
+
+  if (idDireto) {
+    return idDireto;
+  }
+
+  return `atomopay_${criarHashPayload(payload)}`;
+}
+
+function obterReferenciasOferta(payload: any) {
+  return [
+    payload.offer_hash,
+    payload.offer?.id,
+    payload.offer?.hash,
+    payload.product_hash,
+    payload.cart?.[0]?.product_hash,
+  ]
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+}
+
+function normalizarPlanoSlug(valor: unknown) {
+  const slug = String(valor ?? "").trim().toLowerCase();
+
+  if (slug === "basico" || slug === "basic") {
+    return "basico";
+  }
+
+  if (slug === "essencial") {
+    return "essencial";
+  }
+
+  return null;
+}
+
+function obterPlanoSlugFallback(payload: any, lead?: any) {
+  return (
+    normalizarPlanoSlug(lead?.plano_slug) ??
+    normalizarPlanoSlug(payload.metadata_extra?.plano_slug) ??
+    normalizarPlanoSlug(payload.metadata?.plano_slug) ??
+    normalizarPlanoSlug(payload.tracking?.utm_term) ??
+    "basico"
+  );
+}
+
+function obterTipoOferta(payload: any, lead?: any) {
+  const tipo = String(
+    lead?.tipo_oferta ??
+      payload.metadata_extra?.tipo_oferta ??
+      payload.metadata?.tipo_oferta ??
+      payload.tracking?.utm_content ??
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (tipo === "normal" || tipo === "vip" || tipo === "jv" || tipo === "free") {
+    return tipo;
+  }
+
+  return "normal";
 }
 
 function montarNomeEmpresa(lead: any, payload: any) {
@@ -37,50 +202,119 @@ function montarNomeEmpresa(lead: any, payload: any) {
   return "Empresa Cliente";
 }
 
-function obterReferenciasOferta(payload: any) {
-  return [
-    payload.offer?.id,
-    payload.offer?.hash,
-    payload.offer_hash,
-  ]
-    .map((item) => String(item ?? "").trim())
-    .filter(Boolean);
-}
-
-function obterPlanoSlug(payload: any, lead?: any) {
-  const slug = String(
-    lead?.plano_slug ||
-      payload.metadata_extra?.plano_slug ||
-      payload.metadata?.plano_slug ||
-      payload.tracking?.utm_term ||
-      ""
-  )
-    .trim()
-    .toLowerCase();
-
-  if (slug === "basico" || slug === "essencial") {
-    return slug;
+function normalizarPlanoRelacao(plano: any) {
+  if (Array.isArray(plano)) {
+    return plano[0] ?? null;
   }
 
-  return "basico";
+  return plano ?? null;
 }
 
-function obterTipoOferta(payload: any, lead?: any) {
-  const tipo = String(
-    lead?.tipo_oferta ||
-      payload.metadata_extra?.tipo_oferta ||
-      payload.metadata?.tipo_oferta ||
-      payload.tracking?.utm_content ||
-      ""
-  )
-    .trim()
-    .toLowerCase();
+/* =========================
+   OFERTA / PLANO
+========================= */
 
-  if (tipo === "normal" || tipo === "vip" || tipo === "jv" || tipo === "free") {
-    return tipo;
+async function buscarOfertaAtomopay(params: {
+  payload: any;
+  empresaId?: string | null;
+}) {
+  const referencias = obterReferenciasOferta(params.payload);
+
+  if (referencias.length === 0) {
+    return null;
   }
 
-  return "normal";
+  let query = supabase
+    .from("ia_token_ofertas")
+    .select(
+      `
+      id,
+      gateway,
+      referencia,
+      tipo,
+      nome,
+      plano_id,
+      empresa_id,
+      quantidade_tokens,
+      ativa,
+      planos (
+        id,
+        nome,
+        slug
+      )
+    `
+    )
+    .eq("gateway", "atomo")
+    .eq("ativa", true)
+    .in("referencia", referencias);
+
+  if (params.empresaId) {
+    query = query.or(`empresa_id.is.null,empresa_id.eq.${params.empresaId}`);
+  } else {
+    query = query.is("empresa_id", null);
+  }
+
+  const { data, error } = await query
+    .order("empresa_id", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Erro ao buscar oferta da AtomoPay: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function buscarPlanoIdPorSlug(planoSlug: string | null | undefined) {
+  if (!planoSlug) return null;
+
+  const { data, error } = await supabase
+    .from("planos")
+    .select("id, slug, nome")
+    .eq("slug", planoSlug)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Erro ao buscar plano: ${error.message}`);
+  }
+
+  return data?.id ?? null;
+}
+
+async function obterPlanoPagamento(params: {
+  payload: any;
+  lead?: any;
+  empresaId?: string | null;
+}) {
+  const oferta = await buscarOfertaAtomopay({
+    payload: params.payload,
+    empresaId: params.empresaId,
+  });
+
+  const planoOferta = normalizarPlanoRelacao(oferta?.planos);
+
+  if (oferta?.tipo === "mensalidade" && planoOferta?.id && planoOferta?.slug) {
+    return {
+      planoId: planoOferta.id as string,
+      planoSlug: normalizarPlanoSlug(planoOferta.slug) ?? planoOferta.slug,
+      oferta,
+    };
+  }
+
+  const planoSlug = obterPlanoSlugFallback(params.payload, params.lead);
+  const planoId = await buscarPlanoIdPorSlug(planoSlug);
+
+  if (!planoId) {
+    throw new Error(`Plano não encontrado para o slug: ${planoSlug}`);
+  }
+
+  return {
+    planoId,
+    planoSlug,
+    oferta,
+  };
 }
 
 /* =========================
@@ -95,12 +329,17 @@ async function buscarLeadCadastro(params: {
   const { email, telefone1, telefone2 } = params;
 
   if (email) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("leads_cadastro")
       .select("*")
       .ilike("email", email)
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (error) {
+      throw new Error(`Erro ao buscar lead por email: ${error.message}`);
+    }
 
     if (data) return data;
   }
@@ -108,12 +347,17 @@ async function buscarLeadCadastro(params: {
   const telefones = [telefone1, telefone2].filter(Boolean);
 
   for (const telefone of telefones) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("leads_cadastro")
       .select("*")
       .eq("telefone", telefone)
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (error) {
+      throw new Error(`Erro ao buscar lead por telefone: ${error.message}`);
+    }
 
     if (data) return data;
   }
@@ -122,7 +366,7 @@ async function buscarLeadCadastro(params: {
 }
 
 async function criarLeadAutomatico(payload: any) {
-  const planoSlug = obterPlanoSlug(payload);
+  const planoPagamento = await obterPlanoPagamento({ payload });
   const tipoOferta = obterTipoOferta(payload);
 
   const { data, error } = await supabase
@@ -133,18 +377,21 @@ async function criarLeadAutomatico(payload: any) {
       telefone: limparTelefone(
         payload.customer?.phone_number || payload.customer?.phone
       ),
-      empresa: payload.offer?.title ?? "Cliente Átomo",
+      empresa: obterTituloOferta(payload) ?? "Cliente Átomo",
       status: "novo",
       pago: false,
-      plano_slug: planoSlug,
+      plano_slug: planoPagamento.planoSlug,
       tipo_oferta: tipoOferta,
       metadata_json: payload,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
     .select("*")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(`Erro ao criar lead automatico: ${error.message}`);
+  }
 
   return data;
 }
@@ -153,32 +400,36 @@ async function criarLeadAutomatico(payload: any) {
    EMPRESA
 ========================= */
 
-async function buscarPlanoIdPorSlug(planoSlug: string | null | undefined) {
-  if (!planoSlug) return null;
+async function criarEmpresa(params: {
+  lead: any;
+  payload: any;
+  planoId: string;
+}) {
+  const { lead, payload, planoId } = params;
 
-  const { data } = await supabase
-    .from("planos")
-    .select("id")
-    .eq("slug", planoSlug)
-    .limit(1)
-    .maybeSingle();
-
-  return data?.id ?? null;
-}
-
-async function criarEmpresa(lead: any, payload: any) {
   if (lead?.empresa_id) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("empresas")
       .select("*")
       .eq("id", lead.empresa_id)
       .maybeSingle();
 
+    if (error) {
+      throw new Error(`Erro ao buscar empresa do lead: ${error.message}`);
+    }
+
     if (data) return data;
   }
 
-  const planoSlug = obterPlanoSlug(payload, lead);
-  const planoId = await buscarPlanoIdPorSlug(planoSlug);
+  if (!planoId) {
+    throw new Error("Plano não identificado para criar empresa.");
+  }
+
+  const emailEmpresa = normalizarEmail(payload.customer?.email || lead?.email);
+
+  if (!emailEmpresa) {
+    throw new Error("Não foi possível criar empresa sem email.");
+  }
 
   const { data, error } = await supabase
     .from("empresas")
@@ -187,14 +438,14 @@ async function criarEmpresa(lead: any, payload: any) {
       nome_fantasia: montarNomeEmpresa(lead, payload),
       razao_social: montarNomeEmpresa(lead, payload),
       documento: payload.customer?.document ?? null,
-      email: normalizarEmail(payload.customer?.email),
+      email: emailEmpresa,
       telefone: limparTelefone(
-        payload.customer?.phone_number || payload.customer?.phone
+        payload.customer?.phone_number || payload.customer?.phone || lead?.telefone
       ),
-      nome_responsavel: payload.customer?.name ?? null,
+      nome_responsavel: payload.customer?.name ?? lead?.nome ?? null,
       status: "ativa",
       timezone: "America/Sao_Paulo",
-      observacoes: "Criada automaticamente via webhook",
+      observacoes: "Criada automaticamente via webhook AtomoPay",
       termo_aceite: lead?.termo_aceite ?? false,
       termo_aceite_em: lead?.termo_aceite_em ?? null,
       termo_aceite_ip: lead?.termo_aceite_ip ?? null,
@@ -208,23 +459,25 @@ async function criarEmpresa(lead: any, payload: any) {
     .select("*")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(`Erro ao criar empresa: ${error.message}`);
+  }
 
   return data;
 }
 
 async function aplicarAssinaturaPlano(params: {
   empresaId: string;
-  planoId: string | null;
+  planoId: string;
   planoSlug: string;
   payload: any;
 }) {
-  const referencia = String(params.payload.transaction?.id ?? "").trim() || null;
-  const pagoEm =
-    somenteDataValida(params.payload.paid_at) ?? new Date().toISOString();
+  const referencia = obterTransactionId(params.payload);
+  const pagoEm = obterPagoEm(params.payload);
   const janela = calcularJanelaAssinatura(pagoEm);
 
   const atualizacao: Record<string, any> = {
+    plano_id: params.planoId,
     assinatura_status: "ativa",
     assinatura_inicio_em: janela.inicioEm,
     assinatura_vencimento_em: janela.vencimentoEm,
@@ -235,19 +488,15 @@ async function aplicarAssinaturaPlano(params: {
     assinatura_metadata_json: {
       origem: "webhook_atomopay",
       plano_slug: params.planoSlug,
-      status: params.payload.status ?? params.payload.transaction?.status ?? null,
-      offer_id: params.payload.offer?.id ?? null,
-      offer_hash:
-        params.payload.offer?.hash ?? params.payload.offer_hash ?? null,
+      status: normalizarStatusPagamento(params.payload),
+      payment_method: obterMetodoPagamento(params.payload),
+      offer_hash: obterOfferHash(params.payload),
+      offer_title: obterTituloOferta(params.payload),
       transaction_id: referencia,
     },
     assinatura_fluxos_pausados_em: null,
     updated_at: new Date().toISOString(),
   };
-
-  if (params.planoId) {
-    atualizacao.plano_id = params.planoId;
-  }
 
   const { error } = await supabase
     .from("empresas")
@@ -264,36 +513,51 @@ async function aplicarAssinaturaPlano(params: {
 ========================= */
 
 async function salvarPagamento(payload: any, leadId: string | null) {
+  const transactionId = obterTransactionId(payload);
+
+  if (!transactionId) {
+    throw new Error("Webhook da AtomoPay sem identificador de transação.");
+  }
+
+  const status = normalizarStatusPagamento(payload);
+
   const { data, error } = await supabase
     .from("pagamentos")
     .upsert(
       {
-        transaction_id: payload.transaction?.id,
-        status: payload.status,
-        metodo: payload.method,
-        valor: payload.transaction?.amount,
-        valor_liquido: payload.transaction?.net_amount,
-        customer_id: payload.customer?.id,
+        gateway: "atomo",
+        transaction_id: transactionId,
+        status,
+        metodo: obterMetodoPagamento(payload),
+        valor: obterValorPagamento(payload),
+        valor_liquido: obterValorLiquidoPagamento(payload),
+        customer_id: payload.customer?.id ?? null,
         customer_email: normalizarEmail(payload.customer?.email),
-        customer_nome: payload.customer?.name,
+        customer_nome: payload.customer?.name ?? null,
         customer_telefone: limparTelefone(
           payload.customer?.phone_number || payload.customer?.phone
         ),
-        customer_documento: payload.customer?.document,
-        offer_hash: payload.offer?.hash ?? payload.offer_hash,
-        offer_titulo: payload.offer?.title,
-        offer_preco: payload.offer?.price,
-        paid_at: somenteDataValida(payload.paid_at),
+        customer_documento: payload.customer?.document ?? null,
+        offer_hash: obterOfferHash(payload),
+        offer_titulo: obterTituloOferta(payload),
+        offer_preco: obterPrecoOferta(payload),
+        paid_at: status === "paid" ? obterPagoEm(payload) : somenteDataValida(payload.paid_at),
+        refunded_at:
+          status === "refunded"
+            ? somenteDataValida(payload.refunded_at) ?? new Date().toISOString()
+            : null,
         lead_id: leadId,
         payload,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "transaction_id" }
+      { onConflict: "gateway,transaction_id" }
     )
     .select("*")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(`Erro ao salvar pagamento: ${error.message}`);
+  }
 
   return data;
 }
@@ -303,14 +567,13 @@ async function aplicarPagamentoTokensIa(params: {
   payload: any;
 }) {
   const { empresaId, payload } = params;
-  const referencia = String(payload.transaction?.id ?? "").trim();
+  const referencia = obterTransactionId(payload);
 
   if (!referencia) {
-    throw new Error("Pagamento aprovado sem transaction_id para aplicar tokens de IA.");
+    throw new Error("Pagamento aprovado sem identificador para aplicar tokens de IA.");
   }
 
-  const pagoEm =
-    somenteDataValida(payload.paid_at) ?? new Date().toISOString();
+  const pagoEm = obterPagoEm(payload);
 
   const { data, error } = await supabase.rpc("aplicar_pagamento_tokens_ia", {
     p_empresa_id: empresaId,
@@ -319,9 +582,11 @@ async function aplicarPagamentoTokensIa(params: {
     p_pago_em: pagoEm,
     p_metadata_json: {
       origem: "webhook_atomopay",
-      status: payload.status ?? payload.transaction?.status ?? null,
-      offer_id: payload.offer?.id ?? null,
-      offer_title: payload.offer?.title ?? null,
+      status: normalizarStatusPagamento(payload),
+      payment_method: obterMetodoPagamento(payload),
+      offer_hash: obterOfferHash(payload),
+      offer_title: obterTituloOferta(payload),
+      amount: obterValorPagamento(payload),
     },
   });
 
@@ -343,34 +608,23 @@ async function pagamentoEhRecargaTokens(params: {
   empresaId: string;
   payload: any;
 }) {
-  const referencias = obterReferenciasOferta(params.payload);
+  const oferta = await buscarOfertaAtomopay({
+    payload: params.payload,
+    empresaId: params.empresaId,
+  });
 
-  if (referencias.length === 0) return false;
-
-  const { data } = await supabase
-    .from("ia_token_ofertas")
-    .select("tipo")
-    .eq("gateway", "atomo")
-    .eq("ativa", true)
-    .in("referencia", referencias)
-    .or(`empresa_id.is.null,empresa_id.eq.${params.empresaId}`)
-    .order("empresa_id", { ascending: false, nullsFirst: false })
-    .limit(1)
-    .maybeSingle();
-
-  return data?.tipo === "recarga";
+  return oferta?.tipo === "recarga";
 }
 
 async function renovarTokensPlanoSemOfertaConfigurada(params: {
   empresaId: string;
   payload: any;
 }) {
-  const referencia = String(params.payload.transaction?.id ?? "").trim();
+  const referencia = obterTransactionId(params.payload);
 
   if (!referencia) return;
 
-  const pagoEm =
-    somenteDataValida(params.payload.paid_at) ?? new Date().toISOString();
+  const pagoEm = obterPagoEm(params.payload);
 
   const { error } = await supabase.rpc("renovar_tokens_assinatura_plano", {
     p_empresa_id: params.empresaId,
@@ -378,9 +632,11 @@ async function renovarTokensPlanoSemOfertaConfigurada(params: {
     p_pago_em: pagoEm,
     p_metadata_json: {
       origem: "webhook_atomopay_fallback",
-      status: params.payload.status ?? params.payload.transaction?.status ?? null,
-      offer_id: params.payload.offer?.id ?? null,
-      offer_title: params.payload.offer?.title ?? null,
+      status: normalizarStatusPagamento(params.payload),
+      payment_method: obterMetodoPagamento(params.payload),
+      offer_hash: obterOfferHash(params.payload),
+      offer_title: obterTituloOferta(params.payload),
+      amount: obterValorPagamento(params.payload),
     },
   });
 
@@ -449,15 +705,26 @@ async function enviarConviteAuth(params: {
 ========================= */
 
 async function processarPagamentoAprovado(lead: any, payload: any) {
-  const empresa = await criarEmpresa(lead, payload);
-  const primeiroPagamento = lead?.pago !== true;
-  const planoSlug = obterPlanoSlug(payload, lead);
-  const planoId = await buscarPlanoIdPorSlug(planoSlug);
+  const transactionId = obterTransactionId(payload);
 
-  const email = normalizarEmail(lead.email || payload.customer?.email);
+  const planoPagamento = await obterPlanoPagamento({
+    payload,
+    lead,
+    empresaId: lead?.empresa_id ?? null,
+  });
+
+  const empresa = await criarEmpresa({
+    lead,
+    payload,
+    planoId: planoPagamento.planoId,
+  });
+
+  const primeiroPagamento = lead?.pago !== true;
+
+  const email = normalizarEmail(lead?.email || payload.customer?.email);
 
   if (!email) {
-    throw new Error("Pagamento sem email válido");
+    throw new Error("Pagamento sem email válido.");
   }
 
   const ehRecargaTokens = await pagamentoEhRecargaTokens({
@@ -468,8 +735,8 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
   if (!ehRecargaTokens) {
     await aplicarAssinaturaPlano({
       empresaId: empresa.id,
-      planoId,
-      planoSlug,
+      planoId: planoPagamento.planoId,
+      planoSlug: planoPagamento.planoSlug,
       payload,
     });
   }
@@ -492,16 +759,21 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
 
   await supabase
     .from("pagamentos")
-    .update({ empresa_id: empresa.id })
-    .eq("transaction_id", payload.transaction?.id);
+    .update({
+      empresa_id: empresa.id,
+      lead_id: lead?.id ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("gateway", "atomo")
+    .eq("transaction_id", transactionId);
 
   if (primeiroPagamento) {
     await enviarConviteAuth({
       email,
-      nome: lead.nome || payload.customer?.name,
+      nome: lead?.nome || payload.customer?.name || "Cliente",
       empresaId: empresa.id,
       telefone: limparTelefone(
-        lead.telefone ||
+        lead?.telefone ||
           payload.customer?.phone_number ||
           payload.customer?.phone
       ),
@@ -513,11 +785,11 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
     .update({
       status: "pago",
       pago: true,
-      pago_em: somenteDataValida(payload.paid_at) ?? new Date().toISOString(),
+      pago_em: obterPagoEm(payload),
       empresa_id: empresa.id,
-      plano_slug: planoSlug,
-      atomopay_checkout_id: payload.transaction?.id,
-      atomopay_customer_id: payload.customer?.id,
+      plano_slug: planoPagamento.planoSlug,
+      atomopay_checkout_id: transactionId,
+      atomopay_customer_id: payload.customer?.id ?? null,
       metadata_json: payload,
       updated_at: new Date().toISOString(),
     })
@@ -548,11 +820,9 @@ export async function POST(request: Request) {
       lead = await criarLeadAutomatico(body);
     }
 
-    const pagamento = await salvarPagamento(body, lead?.id);
+    const pagamento = await salvarPagamento(body, lead?.id ?? null);
 
-    const status = String(body.status ?? body.transaction?.status ?? "")
-      .toLowerCase()
-      .trim();
+    const status = normalizarStatusPagamento(body);
 
     if (status === "paid") {
       await processarPagamentoAprovado(lead, body);
@@ -562,17 +832,26 @@ export async function POST(request: Request) {
       ok: true,
       lead_id: lead?.id,
       pagamento_id: pagamento?.id,
+      status,
+      transaction_id: obterTransactionId(body),
+      offer_hash: obterOfferHash(body),
     });
   } catch (error: any) {
     console.error("[ERRO WEBHOOK ATOMO]", error);
 
     return NextResponse.json(
-      { ok: false, error: error.message },
+      {
+        ok: false,
+        error: error?.message ?? "Erro interno no webhook da AtomoPay.",
+      },
       { status: 500 }
     );
   }
 }
 
+/* =========================
+   TEMPLATE EMAIL
+========================= */
 
 function getDefinirSenhaTemplate({
   nome,
