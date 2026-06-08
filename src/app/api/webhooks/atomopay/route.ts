@@ -660,7 +660,7 @@ async function enviarConviteAuth(params: {
   const { email, nome, empresaId, telefone } = params;
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com";
-  const redirectTo = `${siteUrl}/api/auth/callback?next=/definir-senha`;
+  const redirectTo = `${siteUrl}/auth/callback?next=/definir-senha`;
 
   let inviteLink: string | null = null;
 
