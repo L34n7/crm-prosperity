@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
         conversa_id,
         conversa_protocolo_id,
         contato_id,
+        integracao_whatsapp_id,
         numero,
         nome_contato,
         template_nome,
@@ -71,6 +72,7 @@ export async function GET(req: NextRequest) {
         erro,
         status_http,
         message_id,
+        metadata_json,
         created_at
       `)
       .eq("empresa_id", usuario.empresa_id)
@@ -154,15 +156,49 @@ export async function GET(req: NextRequest) {
         ? mensagensPorMessageId.get(item.message_id)
         : null;
 
-      const metadataMensagem = mensagemVinculada?.metadata_json || null;
+      const metadataLog =
+        typeof item.metadata_json === "string"
+          ? (() => {
+              try {
+                return JSON.parse(item.metadata_json);
+              } catch {
+                return {};
+              }
+            })()
+          : item.metadata_json || {};
+
+      const metadataMensagem =
+        typeof mensagemVinculada?.metadata_json === "string"
+          ? (() => {
+              try {
+                return JSON.parse(mensagemVinculada.metadata_json);
+              } catch {
+                return {};
+              }
+            })()
+          : mensagemVinculada?.metadata_json || {};
+
+      const metadataFinal = {
+        ...metadataLog,
+        ...metadataMensagem,
+        log_metadata: metadataLog,
+        mensagem_metadata: metadataMensagem,
+      };
+
       const statusMensagem = mensagemVinculada?.status_envio || null;
 
-      const rawStatus = metadataMensagem?.whatsapp_status?.raw_status || null;
-      const erroMeta = rawStatus?.errors?.[0] || null;
+      const rawStatus = metadataFinal?.whatsapp_status?.raw_status || null;
+      const erroMeta =
+        rawStatus?.errors?.[0] ||
+        metadataFinal?.meta_error ||
+        metadataFinal?.meta_response?.error ||
+        null;
+
       const codigoErroMeta = erroMeta?.code || null;
 
       const erroTecnico =
-        metadataMensagem?.whatsapp_status?.error_message ||
+        metadataFinal?.whatsapp_status?.error_message ||
+        erroMeta?.error_data?.details ||
         erroMeta?.message ||
         erroMeta?.title ||
         item.erro ||
@@ -173,7 +209,11 @@ export async function GET(req: NextRequest) {
         erroTecnico
       );
 
-      const statusFinal =
+      const statusFinal:
+        | "falha"
+        | "sucesso"
+        | "processando"
+        | "pendente" =
         statusMensagem === "falha"
           ? "falha"
           : statusMensagem === "entregue" || statusMensagem === "lida"
@@ -182,7 +222,26 @@ export async function GET(req: NextRequest) {
           ? "processando"
           : item.status === "falha"
           ? "falha"
-          : item.status || "pendente";
+          : item.status === "sucesso"
+          ? "sucesso"
+          : item.status === "processando"
+          ? "processando"
+          : "pendente";
+
+      const tipoLog = String(
+        metadataLog?.tipo || metadataFinal?.tipo || ""
+      ).toLowerCase();
+
+      const origemLog = String(
+        metadataLog?.origem || metadataFinal?.origem || ""
+      ).toLowerCase();
+
+      const origemHistorico =
+        tipoLog === "disparo_template_individual" || origemLog === "individual"
+          ? "individual"
+          : tipoLog === "disparo_template_agendado" || origemLog === "agendado"
+          ? "agendado"
+          : "manual";
 
       return {
         id: item.id,
@@ -190,6 +249,7 @@ export async function GET(req: NextRequest) {
         conversa_id: item.conversa_id || null,
         conversa_protocolo_id: item.conversa_protocolo_id || null,
         contato_id: item.contato_id || null,
+        integracao_whatsapp_id: item.integracao_whatsapp_id || null,
         numero: item.numero || "-",
         nome_contato: item.nome_contato || "Sem nome",
         template_nome: item.template_nome || "-",
@@ -201,13 +261,16 @@ export async function GET(req: NextRequest) {
             ? "Entregue"
             : statusFinal === "processando"
             ? "Aguardando confirmação"
+            : statusFinal === "pendente"
+            ? "Pendente"
             : "Falhou",
         status_http: item.status_http || null,
         message_id: item.message_id || null,
         erro: erroTecnico,
         erro_amigavel: erroAmigavel,
         erro_codigo_meta: codigoErroMeta,
-        metadata_json: metadataMensagem,
+        metadata_json: metadataFinal,
+        origem_historico: origemHistorico,
         ok: statusFinal === "sucesso",
       };
     });
@@ -260,6 +323,8 @@ export async function GET(req: NextRequest) {
             ? "Entregue"
             : statusFinal === "processando"
             ? "Aguardando confirmação"
+            : statusFinal === "pendente"
+            ? "Pendente"
             : "Falhou",
         status_http: null,
         message_id: mensagem.mensagem_externa_id || null,
@@ -272,11 +337,22 @@ export async function GET(req: NextRequest) {
       };
     });
 
-
-    const todosResultados = [...resultados, ...resultadosAgendados].sort(
-      (a: any, b: any) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    const messageIdsLogs = new Set(
+      resultados
+        .map((item: any) => item.message_id)
+        .filter(Boolean)
     );
+
+    const resultadosAgendadosSemDuplicar = resultadosAgendados.filter(
+      (item: any) => !item.message_id || !messageIdsLogs.has(item.message_id)
+    );
+
+    const todosResultados = [...resultados, ...resultadosAgendadosSemDuplicar]
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+      .slice(0, limit);
 
     return NextResponse.json({
       ok: true,

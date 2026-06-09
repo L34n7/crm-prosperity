@@ -256,6 +256,62 @@ async function atualizarUltimaMensagemConversa(conversaId: string) {
   }
 }
 
+async function registrarLogDisparoIndividual(params: {
+  empresaId: string;
+  integracaoWhatsappId: string | null;
+  templateId: string | null;
+  conversaId: string | null;
+  conversaProtocoloId: string | null;
+  contatoId: string | null;
+  usuarioId: string | null;
+  numero: string;
+  nomeContato: string | null;
+  templateNome: string | null;
+  templateIdioma: string | null;
+  mensagem: string | null;
+  status: "sucesso" | "falha" | "processando" | "pendente";
+  erro: string | null;
+  statusHttp: number | null;
+  messageId: string | null;
+  variaveis: string[];
+  metaResponse: any;
+  metadataJson?: Record<string, any>;
+}) {
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseAdmin.from("whatsapp_disparos_logs").insert({
+    empresa_id: params.empresaId,
+    integracao_whatsapp_id: params.integracaoWhatsappId,
+    template_id: params.templateId,
+    conversa_id: params.conversaId,
+    conversa_protocolo_id: params.conversaProtocoloId,
+    contato_id: params.contatoId,
+    usuario_id: params.usuarioId,
+    numero: params.numero,
+    nome_contato: params.nomeContato,
+    template_nome: params.templateNome,
+    template_idioma: params.templateIdioma,
+    mensagem: params.mensagem,
+    status: params.status,
+    erro: params.erro,
+    status_http: params.statusHttp,
+    message_id: params.messageId,
+    variaveis: params.variaveis,
+    meta_response: params.metaResponse,
+    metadata_json: {
+      tipo: "disparo_template_individual",
+      origem: "individual",
+      ...(params.metadataJson || {}),
+    },
+    created_at: now,
+    updated_at: now,
+  });
+
+  if (error) {
+    console.error("[DISPARO INDIVIDUAL] Erro ao registrar log:", error);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -452,7 +508,45 @@ export async function POST(request: Request) {
       );
     }
 
+    
+    const payloadTemplate = (template.payload || null) as TemplatePayload | null;
+    const components = montarComponentesTemplate(payloadTemplate, bodyParams);
+
+
     if (integracao.payment_method_added === false) {
+      const payloadTemplate = (template.payload || null) as TemplatePayload | null;
+
+      const conteudoErro =
+        montarConteudoTextoTemplate(payloadTemplate, bodyParams) ||
+        `Template enviado: ${template.nome}`;
+
+      const erroPagamento =
+        "Conta WhatsApp Business sem método de pagamento cadastrado na Meta.";
+
+      await registrarLogDisparoIndividual({
+        empresaId: usuario.empresa_id,
+        integracaoWhatsappId,
+        templateId: template.id,
+        conversaId: conversa.id,
+        conversaProtocoloId: null,
+        contatoId: contato?.id || null,
+        usuarioId: usuario.id,
+        numero: telefone,
+        nomeContato,
+        templateNome: template.nome,
+        templateIdioma: template.idioma || payloadTemplate?.language || "pt_BR",
+        mensagem: conteudoErro,
+        status: "falha",
+        erro: erroPagamento,
+        statusHttp: 402,
+        messageId: null,
+        variaveis: bodyParams,
+        metaResponse: null,
+        metadataJson: {
+          motivo: "payment_method_missing",
+        },
+      });
+
       return NextResponse.json(
         {
           ok: false,
@@ -465,9 +559,6 @@ export async function POST(request: Request) {
         { status: 402 }
       );
     }
-
-    const payloadTemplate = (template.payload || null) as TemplatePayload | null;
-    const components = montarComponentesTemplate(payloadTemplate, bodyParams);
 
     const bodyMeta: Record<string, unknown> = {
       messaging_product: "whatsapp",
@@ -505,13 +596,51 @@ export async function POST(request: Request) {
       const erroMeta = metaData?.error;
       const codigoMeta = Number(erroMeta?.code || 0);
       const mensagemMeta = String(erroMeta?.message || "");
+      const detalheMeta = String(erroMeta?.error_data?.details || "");
+
+      const conteudoErro =
+        montarConteudoTextoTemplate(payloadTemplate, bodyParams) ||
+        `Template enviado: ${template.nome}`;
+
+      const erroFinal =
+        detalheMeta ||
+        mensagemMeta ||
+        "Erro ao enviar template para a Meta";
+
+      await registrarLogDisparoIndividual({
+        empresaId: usuario.empresa_id,
+        integracaoWhatsappId,
+        templateId: template.id,
+        conversaId: conversa.id,
+        conversaProtocoloId: null,
+        contatoId: contato?.id || null,
+        usuarioId: usuario.id,
+        numero: telefone,
+        nomeContato,
+        templateNome: template.nome,
+        templateIdioma: template.idioma || payloadTemplate?.language || "pt_BR",
+        mensagem: conteudoErro,
+        status: "falha",
+        erro: erroFinal,
+        statusHttp: metaRes.status,
+        messageId: null,
+        variaveis: bodyParams,
+        metaResponse: metaData,
+        metadataJson: {
+          meta_error: erroMeta || null,
+        },
+      });
 
       const erroPagamento =
         codigoMeta === 131042 ||
         mensagemMeta.toLowerCase().includes("payment") ||
         mensagemMeta.toLowerCase().includes("billing") ||
         mensagemMeta.toLowerCase().includes("pagamento") ||
-        mensagemMeta.toLowerCase().includes("cobrança");
+        mensagemMeta.toLowerCase().includes("cobrança") ||
+        detalheMeta.toLowerCase().includes("payment") ||
+        detalheMeta.toLowerCase().includes("billing") ||
+        detalheMeta.toLowerCase().includes("pagamento") ||
+        detalheMeta.toLowerCase().includes("cobrança");
 
       if (erroPagamento) {
         return NextResponse.json(
@@ -519,7 +648,7 @@ export async function POST(request: Request) {
             ok: false,
             error:
               "Não foi possível enviar o disparo porque a conta WhatsApp Business possui pendência financeira ou não possui método de pagamento válido na Meta.",
-            detalhe: mensagemMeta || "Erro financeiro retornado pela Meta.",
+            detalhe: erroFinal,
             motivo: "meta_payment_error",
             meta: metaData,
           },
@@ -531,7 +660,7 @@ export async function POST(request: Request) {
         {
           ok: false,
           error: mensagemMeta || "Erro ao enviar template para a Meta",
-          detalhe: erroMeta?.error_data?.details || null,
+          detalhe: detalheMeta || null,
           meta: metaData,
         },
         { status: metaRes.status }
@@ -591,6 +720,32 @@ export async function POST(request: Request) {
     });
 
     if (insertError) {
+      await registrarLogDisparoIndividual({
+        empresaId: usuario.empresa_id,
+        integracaoWhatsappId,
+        templateId: template.id,
+        conversaId: conversa.id,
+        conversaProtocoloId: novoProtocolo.id,
+        contatoId: contato?.id || null,
+        usuarioId: usuario.id,
+        numero: telefone,
+        nomeContato,
+        templateNome: template.nome,
+        templateIdioma: template.idioma || payloadTemplate?.language || "pt_BR",
+        mensagem: conteudoRenderizado,
+        status: "processando",
+        erro: `Template aceito pela Meta, mas falhou ao registrar mensagem no banco: ${insertError.message}`,
+        statusHttp: metaRes.status,
+        messageId: mensagemExternaId,
+        variaveis: bodyParams,
+        metaResponse: metaData,
+        metadataJson: {
+          aviso: "meta_aceitou_mas_insert_mensagem_falhou",
+          protocolo_reabertura_id: novoProtocolo.id,
+          protocolo_reabertura_numero: novoProtocolo.protocolo,
+        },
+      });
+
       return NextResponse.json(
         {
           ok: false,
@@ -600,6 +755,32 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    await registrarLogDisparoIndividual({
+      empresaId: usuario.empresa_id,
+      integracaoWhatsappId,
+      templateId: template.id,
+      conversaId: conversa.id,
+      conversaProtocoloId: novoProtocolo.id,
+      contatoId: contato?.id || null,
+      usuarioId: usuario.id,
+      numero: telefone,
+      nomeContato,
+      templateNome: template.nome,
+      templateIdioma: template.idioma || payloadTemplate?.language || "pt_BR",
+      mensagem: conteudoRenderizado,
+      status: "sucesso",
+      erro: null,
+      statusHttp: metaRes.status,
+      messageId: mensagemExternaId,
+      variaveis: bodyParams,
+      metaResponse: metaData,
+      metadataJson: {
+        protocolo_reabertura_id: novoProtocolo.id,
+        protocolo_reabertura_numero: novoProtocolo.protocolo,
+      },
+    });
+
 
     await atualizarUltimaMensagemConversa(conversa.id);
 

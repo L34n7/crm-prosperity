@@ -1722,6 +1722,15 @@ export default function DisparosWhatsAppPage() {
                             </span>
                           </>
                         ) : null}
+
+                        {item.origem_historico === "individual" ? (
+                          <>
+                            {" • "}
+                            <span className={styles.badgeIndividual}>
+                              👤 Disparo individual
+                            </span>
+                          </>
+                        ) : null}
                       </p>
                     </div>
 
