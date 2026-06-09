@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Header from "@/components/Header";
 import styles from "./page.module.css";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 function getStatusLabel(status: string | null) {
   if (!status) return "Não definido";
@@ -32,6 +33,7 @@ function getStatusClass(status: string | null) {
   }
 }
 
+
 const modulos = [
   {
     titulo: "Conversas",
@@ -39,9 +41,9 @@ const modulos = [
     href: "/conversas",
   },
   {
-    titulo: "Mensagens",
-    descricao: "Acompanhe o histórico e a comunicação com os clientes.",
-    href: "/mensagens",
+    titulo: "Disparos",
+    descricao: "Crie e acompanhe disparos de mensagens para seus contatos.",
+    href: "/disparos-whatsapp",
   },
   {
     titulo: "Contatos",
@@ -49,14 +51,14 @@ const modulos = [
     href: "/contatos",
   },
   {
-    titulo: "Usuários",
-    descricao: "Administre usuários, acessos, vínculos e estrutura interna.",
-    href: "/usuarios",
+    titulo: "Fluxos",
+    descricao: "Crie automações, respostas automáticas e jornadas de atendimento.",
+    href: "/fluxos",
   },
   {
-    titulo: "Setores",
-    descricao: "Distribua sua operação por setores e equipes.",
-    href: "/configuracoes/setores",
+    titulo: "Agenda",
+    descricao: "Gerencie agendamentos, horários disponíveis e compromissos.",
+    href: "/agendas",
   },
   {
     titulo: "Permissões",
@@ -67,6 +69,7 @@ const modulos = [
 
 export default async function HomePage() {
   const supabase = await createClient();
+  const supabaseAdmin = getSupabaseAdmin();
 
   const {
     data: { user },
@@ -91,11 +94,33 @@ export default async function HomePage() {
     redirect("/login");
   }
 
+  let empresaVinculada = "Sem empresa vinculada";
+
+  if (usuarioSistema.empresa_id) {
+    const { data: empresa, error: empresaError } = await supabaseAdmin
+      .from("empresas")
+      .select("id, nome_fantasia")
+      .eq("id", usuarioSistema.empresa_id)
+      .maybeSingle();
+
+    if (empresaError) {
+      console.error("Erro ao buscar empresa vinculada:", {
+        message: empresaError.message,
+        details: empresaError.details,
+        hint: empresaError.hint,
+        code: empresaError.code,
+      });
+    }
+
+    empresaVinculada = empresa?.nome_fantasia || "Sem empresa vinculada";
+  }
+
   const statusLabel = getStatusLabel(usuarioSistema.status);
   const statusClass = getStatusClass(usuarioSistema.status);
   const nomeExibicao = usuarioSistema.nome || "Usuário";
   const creditoPlataforma = "R$ 0,00";
 
+    
   return (
     <>
       <Header
@@ -148,7 +173,7 @@ export default async function HomePage() {
                 <div className={styles.infoItem}>
                   <span className={styles.infoKey}>Empresa vinculada</span>
                   <span className={styles.infoValue}>
-                    {usuarioSistema.empresa_id || "Sem empresa vinculada"}
+                    {empresaVinculada}
                   </span>
                 </div>
 

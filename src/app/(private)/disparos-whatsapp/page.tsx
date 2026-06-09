@@ -1276,6 +1276,9 @@ export default function DisparosWhatsAppPage() {
                               </div>
                             ) : null}
                           </div>
+                            <span className={styles.help}>
+                              Variaveis fixas do contato: {"{{nome_contato}}"}, {"{{email_contato}}"} e {"{{numero_contato}}"}.
+                            </span>
                         </>
                       ) : null}
                   </div>
