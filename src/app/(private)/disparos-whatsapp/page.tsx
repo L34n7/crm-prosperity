@@ -352,7 +352,8 @@ function normalizarMetadataJson(metadata: any) {
 }
 
 function obterFeedbackErroDisparo(item: ResultadoDisparo) {
-  if (item.ok) return null;
+  if (disparoEstaProcessando(item)) return null;
+  if (disparoTeveSucesso(item)) return null;
 
   const metadata = normalizarMetadataJson(item.metadata_json);
 
@@ -465,6 +466,28 @@ function formatarDataHora(data?: string | null) {
     return "";
   }
 }
+
+function normalizarStatusDisparo(item: ResultadoDisparo) {
+  return String(item.status_disparo || "").toLowerCase().trim();
+}
+
+function disparoEstaProcessando(item: ResultadoDisparo) {
+  return normalizarStatusDisparo(item) === "processando";
+}
+
+function disparoTeveSucesso(item: ResultadoDisparo) {
+  return item.ok === true || normalizarStatusDisparo(item) === "sucesso";
+}
+
+function disparoTeveFalha(item: ResultadoDisparo) {
+  const status = normalizarStatusDisparo(item);
+
+  if (status === "processando") return false;
+  if (status === "sucesso") return false;
+
+  return item.ok === false || status === "falha";
+}
+
 
 const ITENS_HISTORICO_POR_PAGINA = 7;
 
@@ -747,15 +770,15 @@ export default function DisparosWhatsAppPage() {
   }, [contatosDisponiveis]);
 
   const totalSucesso = useMemo(() => {
-    return resultado.filter((item) => item.ok).length;
+    return resultado.filter(disparoTeveSucesso).length;
   }, [resultado]);
 
   const totalFalha = useMemo(() => {
-    return resultado.filter((item) => !item.ok).length;
+    return resultado.filter(disparoTeveFalha).length;
   }, [resultado]);
 
   const totalProcessando = useMemo(() => {
-    return resultado.filter((item) => item.status_disparo === "processando").length;
+    return resultado.filter(disparoEstaProcessando).length;
   }, [resultado]);
 
   const resultadoFiltrado = useMemo(() => {
@@ -763,15 +786,15 @@ export default function DisparosWhatsAppPage() {
 
     return resultado.filter((item) => {
       if (filtroHistorico === "falha") {
-        return item.status_disparo === "falha";
+        return disparoTeveFalha(item);
       }
 
       if (filtroHistorico === "processando") {
-        return item.status_disparo === "processando";
+        return disparoEstaProcessando(item);
       }
 
       if (filtroHistorico === "sucesso") {
-        return item.status_disparo === "sucesso";
+        return disparoTeveSucesso(item);
       }
 
       return true;
@@ -1630,7 +1653,7 @@ export default function DisparosWhatsAppPage() {
               }
               onClick={() => setFiltroHistorico("sucesso")}
             >
-              <span className={styles.summaryLabel}>Entregues</span>
+              <span className={styles.summaryLabel}>Enviados</span>
               <strong className={styles.summaryValue}>{totalSucesso}</strong>
             </button>
 
@@ -1673,7 +1696,11 @@ export default function DisparosWhatsAppPage() {
                   <div
                     key={item.id || `${item.numero}-${index}`}
                     className={`${styles.resultItem} ${
-                      item.ok ? styles.resultSuccess : styles.resultError
+                      disparoEstaProcessando(item)
+                        ? styles.resultProcessing
+                        : disparoTeveSucesso(item)
+                        ? styles.resultSuccess
+                        : styles.resultError
                     }`}
                   >
                   <div className={styles.resultCompactHeader}>
@@ -1699,7 +1726,12 @@ export default function DisparosWhatsAppPage() {
                     </div>
 
                     <span className={styles.resultStatus}>
-                      {item.status_label || (item.ok ? "Enviado" : "Falha")}
+                      {item.status_label ||
+                        (disparoEstaProcessando(item)
+                          ? "Aguardando confirmação"
+                          : disparoTeveSucesso(item)
+                          ? "Enviado"
+                          : "Falha")}
                     </span>
                   </div>
 

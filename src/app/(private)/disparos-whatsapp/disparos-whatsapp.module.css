@@ -315,6 +315,17 @@
   background: #fef2f2;
 }
 
+.resultProcessing {
+  border-color: rgba(234, 179, 8, 0.35);
+  background: rgba(234, 179, 8, 0.06);
+}
+
+.resultProcessing .resultStatus {
+  color: #a16207;
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.28);
+}
+
 .resultTop {
   display: flex;
   justify-content: space-between;
