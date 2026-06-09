@@ -639,7 +639,20 @@ export async function POST(req: NextRequest) {
 
     const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")
-      .select("id, empresa_id, status, phone_number_id, token_ref, numero, nome_conexao")
+      .select(`
+        id,
+        empresa_id,
+        status,
+        phone_number_id,
+        token_ref,
+        numero,
+        nome_conexao,
+        config_json,
+        payment_method_added,
+        phone_registered,
+        app_assigned,
+        webhook_verificado
+      `)
       .eq("id", integracaoWhatsappId)
       .single();
 
@@ -717,23 +730,54 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const tokenEnvName =
-      integracao.token_ref && String(integracao.token_ref).trim()
-        ? String(integracao.token_ref).trim()
-        : "WHATSAPP_ACCESS_TOKEN";
+    type ConfigJsonWhatsapp = {
+      access_token?: string;
+      token_type?: string;
+      expires_in?: number;
+    };
 
-    const token = process.env[tokenEnvName as keyof typeof process.env];
+    const configJson = integracao.config_json as ConfigJsonWhatsapp | null;
+
+    const token =
+      typeof configJson?.access_token === "string"
+        ? configJson.access_token.trim()
+        : "";
+
     const phoneNumberId =
-      integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
+      typeof integracao.phone_number_id === "string"
+        ? integracao.phone_number_id.trim()
+        : "";
 
     if (!token || !phoneNumberId) {
+      console.error("[DISPAROS WHATSAPP] Integração sem token ou phone_number_id", {
+        integracao_id: integracao.id,
+        empresa_id: integracao.empresa_id,
+        tem_token: Boolean(token),
+        tem_phone_number_id: Boolean(phoneNumberId),
+        token_ref: integracao.token_ref,
+      });
+
       return NextResponse.json(
         {
           ok: false,
           error:
-            "Token ou phone_number_id do WhatsApp não configurado para esta integração.",
+            "Integração do WhatsApp incompleta. Reconecte a conta Meta ou atualize a integração.",
         },
-        { status: 500 }
+        { status: 400 }
+      );
+    }
+
+    if (integracao.payment_method_added === false) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Não foi possível enviar o disparo porque a conta WhatsApp Business ainda não possui cartão cadastrado na Meta.",
+          detalhe:
+            "Cadastre um método de pagamento na conta WhatsApp Business dentro do Gerenciador da Meta e tente novamente.",
+          motivo: "payment_method_missing",
+        },
+        { status: 402 }
       );
     }
 
@@ -893,8 +937,8 @@ export async function POST(req: NextRequest) {
               nome_contato: nomeContatoFinal,
               ok: false,
               status: response.status,
-              status_disparo: "processando",
-              status_label: "Aguardando confirmação",
+              status_disparo: "falha",
+              status_label: "Falhou",
               template_nome: template.nome,
               mensagem_template: mensagemTemplate,
               message_id: null,
