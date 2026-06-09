@@ -428,6 +428,11 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    if (body?.fluxo_padrao !== undefined) {
+      atualizacao.fluxo_padrao = Boolean(body.fluxo_padrao);
+    }
+
+
     if (atualizacao.nome !== undefined && !atualizacao.nome) {
       return NextResponse.json(
         { ok: false, error: "Nome do fluxo é obrigatório." },
@@ -455,6 +460,24 @@ export async function PATCH(req: NextRequest) {
         { ok: false, error: `Erro ao atualizar fluxo: ${error.message}` },
         { status: 500 }
       );
+    }
+
+    if (atualizacao.fluxo_padrao === true) {
+      const { error: gatilhosError } = await supabaseAdmin
+        .from("automacao_gatilhos")
+        .delete()
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("fluxo_id", id);
+
+      if (gatilhosError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Fluxo atualizado, mas houve erro ao remover gatilhos: ${gatilhosError.message}`,
+          },
+          { status: 500 }
+        );
+      }
     }
 
     const statusAntes = String(fluxoAntes?.status || "");

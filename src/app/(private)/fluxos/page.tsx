@@ -800,6 +800,8 @@ export default function FluxosPage() {
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
   const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
   const [erroEdicaoFluxo, setErroEdicaoFluxo] = useState("");
+  const [fluxoPadraoEdicao, setFluxoPadraoEdicao] = useState(false);
+  
   const [encerrarInatividadeQuantidade, setEncerrarInatividadeQuantidade] = useState("23");
   const [encerrarInatividadeUnidade, setEncerrarInatividadeUnidade] =
     useState<"minutos" | "horas">("horas");
@@ -2924,10 +2926,30 @@ function obterFluxoAlvoEdicao() {
   return fluxoEmEdicao || fluxoSelecionado;
 }
 
+function existeOutroFluxoPadraoNaEmpresa() {
+  const fluxoParaEditar = obterFluxoAlvoEdicao();
+
+  if (!fluxoParaEditar) return false;
+
+  return fluxos.some(
+    (fluxo) =>
+      fluxo.fluxo_padrao &&
+      fluxo.status !== "arquivado" &&
+      fluxo.id !== fluxoParaEditar.id
+  );
+}
+
 function abrirEdicaoFluxo(fluxoAlvo?: Fluxo) {
   const fluxoParaEditar = fluxoAlvo || fluxoSelecionado;
 
   if (!fluxoParaEditar) return;
+
+  if (fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa()) {
+    setErroEdicaoFluxo(
+      "Já existe outro fluxo padrão nesta empresa. Remova o padrão atual antes de definir este fluxo como padrão."
+    );
+    return;
+  }
 
   setErro("");
   setErroEdicaoFluxo("");
@@ -2935,6 +2957,7 @@ function abrirEdicaoFluxo(fluxoAlvo?: Fluxo) {
   setEditandoFluxo(true);
   setNomeFluxoEdicao(fluxoParaEditar.nome || "");
   setDescricaoFluxoEdicao(fluxoParaEditar.descricao || "");
+  setFluxoPadraoEdicao(Boolean(fluxoParaEditar.fluxo_padrao));
 
   const config = fluxoParaEditar.configuracao_json || {};
   const encerramento = config.encerramento_inatividade || {};
@@ -3006,6 +3029,7 @@ async function salvarEdicaoFluxo() {
         id: fluxoParaEditar.id,
         nome: nomeFluxoEdicao,
         descricao: descricaoFluxoEdicao,
+        fluxo_padrao: fluxoPadraoEdicao,
         configuracao_json: {
           ...(fluxoParaEditar.configuracao_json || {}),
           encerramento_inatividade: {
@@ -7194,15 +7218,49 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 </label>
 
                 <label className={styles.field}>
-                <span className={styles.label}>Descrição</span>
-                <textarea
-                    className={styles.textareadesc}
-                    value={descricaoFluxoEdicao}
-                    onChange={(e) => setDescricaoFluxoEdicao(e.target.value)}
-                />
+                  <span className={styles.label}>Descrição</span>
+                  <textarea
+                      className={styles.textareadesc}
+                      value={descricaoFluxoEdicao}
+                      onChange={(e) => setDescricaoFluxoEdicao(e.target.value)}
+                  />
                 </label>
 
-                {obterFluxoAlvoEdicao()?.fluxo_padrao ? (
+                <label className={styles.switchField}>
+                  <input
+                    type="checkbox"
+                    checked={fluxoPadraoEdicao}
+                    disabled={!fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa()}
+                    onChange={(e) => {
+                      const marcado = e.target.checked;
+
+                      setErroEdicaoFluxo("");
+                      setFluxoPadraoEdicao(marcado);
+
+                      if (marcado) {
+                        setNovoGatilhoValor("");
+                        setNovoGatilhoCondicao("contem");
+                      }
+                    }}
+                  />
+
+                  <div>
+                    <strong>Tornar este fluxo padrão</strong>
+
+                    <p>
+                      O fluxo padrão é iniciado automaticamente quando nenhuma palavra-chave de outro fluxo for encontrada.
+                    </p>
+
+                    {!fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa() && (
+                      <p className={styles.help}>
+                        Já existe outro fluxo padrão nesta empresa. Só pode existir 1 fluxo padrão por empresa.
+                      </p>
+                    )}
+                  </div>
+                </label>
+
+
+                {fluxoPadraoEdicao ? (
                   <div className={styles.defaultFlowNotice}>
                     <div className={styles.defaultFlowIcon}>↪</div>
 
