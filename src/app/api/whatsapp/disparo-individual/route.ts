@@ -42,6 +42,12 @@ type UsuarioContextoMinimo = {
   usuarios_setores?: UsuarioSetorVinculo[];
 };
 
+type ConfigJsonWhatsapp = {
+  access_token?: string;
+  token_type?: string;
+  expires_in?: number;
+};
+
 function limparNumero(numero: string) {
   return String(numero || "").replace(/\D/g, "");
 }
@@ -356,7 +362,18 @@ export async function POST(request: Request) {
 
     const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")
-      .select("id, empresa_id, status, phone_number_id, token_ref")
+      .select(`
+        id,
+        empresa_id,
+        status,
+        phone_number_id,
+        token_ref,
+        config_json,
+        payment_method_added,
+        phone_registered,
+        app_assigned,
+        webhook_verificado
+      `)
       .eq("id", integracaoWhatsappId)
       .single();
 
@@ -404,22 +421,48 @@ export async function POST(request: Request) {
       );
     }
 
-    const tokenEnvName =
-      integracao.token_ref && String(integracao.token_ref).trim()
-        ? String(integracao.token_ref).trim()
-        : "WHATSAPP_ACCESS_TOKEN";
+    const configJson = integracao.config_json as ConfigJsonWhatsapp | null;
 
-    const token = process.env[tokenEnvName as keyof typeof process.env];
+    const token =
+      typeof configJson?.access_token === "string"
+        ? configJson.access_token.trim()
+        : "";
+
     const phoneNumberId =
-      integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
+      typeof integracao.phone_number_id === "string"
+        ? integracao.phone_number_id.trim()
+        : "";
 
     if (!token || !phoneNumberId) {
+      console.error("[DISPARO INDIVIDUAL] Integração sem token ou phone_number_id", {
+        integracao_id: integracao.id,
+        empresa_id: integracao.empresa_id,
+        tem_token: Boolean(token),
+        tem_phone_number_id: Boolean(phoneNumberId),
+        token_ref: integracao.token_ref,
+      });
+
       return NextResponse.json(
         {
           ok: false,
-          error: "Token ou phone_number_id do WhatsApp não configurado para esta integração",
+          error:
+            "Integração do WhatsApp incompleta. Reconecte a conta Meta ou atualize a integração.",
         },
-        { status: 500 }
+        { status: 400 }
+      );
+    }
+
+    if (integracao.payment_method_added === false) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Não foi possível enviar o disparo porque a conta WhatsApp Business ainda não possui cartão cadastrado na Meta.",
+          detalhe:
+            "Cadastre um método de pagamento na conta WhatsApp Business dentro do Gerenciador da Meta e tente novamente.",
+          motivo: "payment_method_missing",
+        },
+        { status: 402 }
       );
     }
 
@@ -457,10 +500,38 @@ export async function POST(request: Request) {
     const metaData = await metaRes.json();
 
     if (!metaRes.ok) {
+      console.error("[DISPARO INDIVIDUAL] Erro da Meta:", metaData);
+
+      const erroMeta = metaData?.error;
+      const codigoMeta = Number(erroMeta?.code || 0);
+      const mensagemMeta = String(erroMeta?.message || "");
+
+      const erroPagamento =
+        codigoMeta === 131042 ||
+        mensagemMeta.toLowerCase().includes("payment") ||
+        mensagemMeta.toLowerCase().includes("billing") ||
+        mensagemMeta.toLowerCase().includes("pagamento") ||
+        mensagemMeta.toLowerCase().includes("cobrança");
+
+      if (erroPagamento) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Não foi possível enviar o disparo porque a conta WhatsApp Business possui pendência financeira ou não possui método de pagamento válido na Meta.",
+            detalhe: mensagemMeta || "Erro financeiro retornado pela Meta.",
+            motivo: "meta_payment_error",
+            meta: metaData,
+          },
+          { status: 402 }
+        );
+      }
+
       return NextResponse.json(
         {
           ok: false,
-          error: metaData?.error?.message || "Erro ao enviar template para a Meta",
+          error: mensagemMeta || "Erro ao enviar template para a Meta",
+          detalhe: erroMeta?.error_data?.details || null,
           meta: metaData,
         },
         { status: metaRes.status }

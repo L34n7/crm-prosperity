@@ -4323,6 +4323,53 @@ async function baixarConversaPDF() {
     }
   }
 
+
+    function montarMensagemErroDisparoIndividual(data: any) {
+      const error = String(data?.error || "").trim();
+      const detalhe = String(data?.detalhe || "").trim();
+      const motivo = String(data?.motivo || "").trim();
+
+      if (motivo === "payment_method_missing") {
+        return (
+          detalhe ||
+          error ||
+          "Não foi possível enviar o disparo porque a conta WhatsApp Business ainda não possui cartão cadastrado na Meta."
+        );
+      }
+
+      if (motivo === "meta_payment_error") {
+        return (
+          detalhe ||
+          error ||
+          "Não foi possível enviar o disparo porque a conta WhatsApp Business possui pendência financeira ou não possui método de pagamento válido na Meta."
+        );
+      }
+
+      const erroMeta =
+        data?.meta?.error?.message ||
+        data?.meta?.error?.error_data?.details ||
+        "";
+
+      if (error && detalhe && detalhe !== error) {
+        return `${error}\n\nDetalhe: ${detalhe}`;
+      }
+
+      if (error) {
+        return error;
+      }
+
+      if (detalhe) {
+        return detalhe;
+      }
+
+      if (erroMeta) {
+        return erroMeta;
+      }
+
+      return "Erro ao enviar disparo individual.";
+    }
+
+
   async function enviarDisparoIndividual() {
     if (!conversaSelecionada?.id) {
       setErro("Selecione uma conversa.");
@@ -4351,15 +4398,35 @@ async function baixarConversaPDF() {
         }),
       });
 
-      const data = await res.json();
+      let data: any = null;
 
-      if (!res.ok) {
-        setErro(data.error || "Erro ao enviar disparo individual");
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok || data?.ok === false) {
+        const mensagemErro = montarMensagemErroDisparoIndividual(data);
+
+        console.error("[DISPARO INDIVIDUAL FRONT] Erro ao enviar disparo:", {
+          status: res.status,
+          data,
+        });
+
+        setErro(mensagemErro);
         return;
       }
 
-      setMensagemSucesso(data.message || "Disparo enviado com sucesso.");
+      setMensagemSucesso(
+        data?.message ||
+          "Disparo enviado para a Meta. Aguardando confirmação de entrega pelo WhatsApp."
+      );
+
       setTemplateDisparoBody1("");
+      setParametros([]);
+      setDisparoIndividualAberto(false);
+      setPreviewCustoDisparoIndividual(null);
 
       await atualizarConversasCarregadas();
 
@@ -4370,8 +4437,13 @@ async function baixarConversaPDF() {
         inicioJanelaHistorico,
         fimJanelaHistorico
       );
-    } catch {
-      setErro("Erro ao enviar disparo individual");
+    } catch (error: any) {
+      console.error("[DISPARO INDIVIDUAL FRONT] Erro inesperado:", error);
+
+      setErro(
+        error?.message ||
+          "Erro inesperado ao enviar disparo individual. Tente novamente."
+      );
     } finally {
       setEnviandoDisparoIndividual(false);
     }
@@ -5229,7 +5301,7 @@ const templateFooterTexto = useMemo(() => {
     const timeout = window.setTimeout(() => {
       setMensagemSucesso("");
       setErro("");
-    }, 8000);
+    }, erro ? 15000 : 8000);
 
     return () => {
       window.clearTimeout(timeout);
