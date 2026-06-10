@@ -1188,92 +1188,134 @@ export default function FluxosPage() {
   }
 
 
+  async function enviarNovaMidiaMultipart(arquivo: File) {
+    const formData = new FormData();
+    formData.append("arquivo", arquivo);
+
+    const res = await fetch("/api/automacoes/midias/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    const json = await lerRespostaApi(
+      res,
+      "Erro ao enviar mídia para conversão."
+    );
+
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || "Erro ao enviar mídia para conversão.");
+    }
+
+    return json.midia;
+  }
+
+
   async function enviarNovaMidia(arquivo: File) {
     try {
       setEnviandoMidia(true);
       setErro("");
       setSucesso("");
 
-      const preparacaoRes = await fetch("/api/automacoes/midias/upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          acao: "preparar_upload",
-          nome: arquivo.name,
-          mimeType: arquivo.type,
-          tamanhoBytes: arquivo.size,
-        }),
-      });
+      let midiaEnviada: MidiaOpcao;
 
-      const preparacaoJson = await lerRespostaApi(
-        preparacaoRes,
-        "Erro ao preparar envio da mídia."
-      );
+      if (arquivo.type.startsWith("video/")) {
+        setSucesso("Convertendo vídeo para o formato aceito pelo WhatsApp...");
 
-      if (!preparacaoRes.ok || !preparacaoJson.ok) {
-        throw new Error(preparacaoJson.error || "Erro ao preparar envio da mídia.");
-      }
-
-      const upload = preparacaoJson.upload;
-
-      if (!upload?.bucket || !upload?.path || !upload?.token) {
-        throw new Error("Dados de upload inválidos.");
-      }
-
-      const supabase = createSupabaseBrowserClient();
-      const { error: uploadError } = await supabase.storage
-        .from(upload.bucket)
-        .uploadToSignedUrl(upload.path, upload.token, arquivo, {
-          contentType: arquivo.type,
-          upsert: false,
+        midiaEnviada = await enviarNovaMidiaMultipart(arquivo);
+      } else {
+        const preparacaoRes = await fetch("/api/automacoes/midias/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            acao: "preparar_upload",
+            nome: arquivo.name,
+            mimeType: arquivo.type,
+            tamanhoBytes: arquivo.size,
+          }),
         });
 
-      if (uploadError) {
-        throw new Error(uploadError.message || "Erro ao enviar mídia para o Storage.");
+        const preparacaoJson = await lerRespostaApi(
+          preparacaoRes,
+          "Erro ao preparar envio da mídia."
+        );
+
+        if (!preparacaoRes.ok || !preparacaoJson.ok) {
+          throw new Error(
+            preparacaoJson.error || "Erro ao preparar envio da mídia."
+          );
+        }
+
+        const upload = preparacaoJson.upload;
+
+        if (!upload?.bucket || !upload?.path || !upload?.token) {
+          throw new Error("Dados de upload inválidos.");
+        }
+
+        const supabase = createSupabaseBrowserClient();
+
+        const { error: uploadError } = await supabase.storage
+          .from(upload.bucket)
+          .uploadToSignedUrl(upload.path, upload.token, arquivo, {
+            contentType: arquivo.type,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(
+            uploadError.message || "Erro ao enviar mídia para o Storage."
+          );
+        }
+
+        const conclusaoRes = await fetch("/api/automacoes/midias/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            acao: "concluir_upload",
+            nome: arquivo.name,
+            mimeType: arquivo.type,
+            tamanhoBytes: arquivo.size,
+            storagePath: upload.path,
+          }),
+        });
+
+        const conclusaoJson = await lerRespostaApi(
+          conclusaoRes,
+          "Erro ao concluir envio da mídia."
+        );
+
+        if (!conclusaoRes.ok || !conclusaoJson.ok) {
+          throw new Error(
+            conclusaoJson.error || "Erro ao concluir envio da mídia."
+          );
+        }
+
+        midiaEnviada = conclusaoJson.midia;
       }
 
-      const conclusaoRes = await fetch("/api/automacoes/midias/upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          acao: "concluir_upload",
-          nome: arquivo.name,
-          mimeType: arquivo.type,
-          tamanhoBytes: arquivo.size,
-          storagePath: upload.path,
-        }),
-      });
-
-      const conclusaoJson = await lerRespostaApi(
-        conclusaoRes,
-        "Erro ao concluir envio da mídia."
-      );
-
-      if (!conclusaoRes.ok || !conclusaoJson.ok) {
-        throw new Error(conclusaoJson.error || "Erro ao concluir envio da mídia.");
-      }
-
-      setMidiaUrlNode(conclusaoJson.midia.url);
-      setMidiaNomeNode(conclusaoJson.midia.nome);
+      setMidiaUrlNode(midiaEnviada.url);
+      setMidiaNomeNode(midiaEnviada.nome);
 
       setMidias((atuais) => {
-        const jaExiste = atuais.some((m) => m.id === conclusaoJson.midia.id);
+        const jaExiste = atuais.some((m) => m.id === midiaEnviada.id);
 
         if (jaExiste) {
           return atuais;
         }
 
-        return [conclusaoJson.midia, ...atuais];
+        return [midiaEnviada, ...atuais];
       });
 
-      setSucesso("Mídia enviada com sucesso.");
+      setSucesso(
+        arquivo.type.startsWith("video/")
+          ? "Vídeo convertido e enviado com sucesso."
+          : "Mídia enviada com sucesso."
+      );
 
       await carregarMidias();
-
     } catch (error: unknown) {
       setErro(error instanceof Error ? error.message : "Erro ao enviar mídia.");
     } finally {
@@ -2946,7 +2988,7 @@ function abrirEdicaoFluxo(fluxoAlvo?: Fluxo) {
 
   if (fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa()) {
     setErroEdicaoFluxo(
-      "Já existe outro fluxo padrão nesta empresa. Remova o padrão atual antes de definir este fluxo como padrão."
+      "Já existe outro fluxo padrão cadastrado. Desmarque o fluxo padrão atual antes de definir este fluxo como padrão."
     );
     return;
   }
@@ -5401,7 +5443,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           </select>
 
                           <label className={styles.secondaryButton}>
-                            {enviandoMidia ? "Enviando..." : "Subir nova mídia"}
+                            {enviandoMidia
+                              ? tipoNodeEdicao === "enviar_video"
+                                ? "Convertendo vídeo..."
+                                : "Enviando..."
+                              : "Subir nova mídia"}
 
                             <input
                               type="file"
@@ -5454,10 +5500,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             />
                           </label>
 
-                          <span className={styles.help}>
-                            Imagens até 5MB, vídeos até 16MB e áudios até 16MB. Se o arquivo for maior, reduza antes
-                            de enviar.
-                          </span>
+                        <span className={styles.help}>
+                          Imagens até 5MB, vídeos até 16MB e áudios até 16MB.
+                          Vídeos são convertidos automaticamente para o formato aceito pelo WhatsApp.
+                        </span>
                         </>
                       )}
                     </div>

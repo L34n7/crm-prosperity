@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { createRequire } from "node:module";
+
+export const runtime = "nodejs";
+
+const require = createRequire(import.meta.url);
 
 type TipoMidia = "imagem" | "video" | "audio";
 
@@ -33,6 +42,145 @@ function obterCampoJson(body: unknown, campo: string) {
 
   return (body as Record<string, unknown>)[campo];
 }
+
+
+function normalizarCaminhoRootPlaceholder(caminho: string) {
+  const cwd = process.cwd();
+
+  if (caminho.startsWith("\\ROOT\\")) {
+    return path.join(cwd, caminho.replace(/^\\ROOT\\/, ""));
+  }
+
+  if (caminho.startsWith("/ROOT/")) {
+    return path.join(cwd, caminho.replace(/^\/ROOT\//, ""));
+  }
+
+  if (caminho.startsWith("ROOT\\")) {
+    return path.join(cwd, caminho.replace(/^ROOT\\/, ""));
+  }
+
+  if (caminho.startsWith("ROOT/")) {
+    return path.join(cwd, caminho.replace(/^ROOT\//, ""));
+  }
+
+  return caminho;
+}
+
+async function getFfmpegBinaryPath() {
+  const resolved = require("ffmpeg-static");
+
+  if (!resolved || typeof resolved !== "string") {
+    throw new Error("Não foi possível localizar o binário do FFmpeg.");
+  }
+
+  const caminhoNormalizado = normalizarCaminhoRootPlaceholder(resolved);
+
+  try {
+    await fs.access(caminhoNormalizado);
+    return caminhoNormalizado;
+  } catch {
+    throw new Error(
+      `Binário do FFmpeg não encontrado no caminho: ${caminhoNormalizado}`
+    );
+  }
+}
+
+function trocarExtensaoParaMp4(nome: string) {
+  const nomeLimpo = nome.trim() || `video-${Date.now()}.mp4`;
+  const semExtensao = nomeLimpo.replace(/\.[^/.]+$/, "");
+
+  return `${semExtensao}-whatsapp.mp4`;
+}
+
+async function converterVideoParaWhatsapp(file: File): Promise<File> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crm-video-"));
+  const inputPath = path.join(tmpDir, file.name || "input-video");
+  const outputPath = path.join(tmpDir, "output-whatsapp.mp4");
+
+  try {
+    await fs.writeFile(inputPath, buffer);
+
+    await new Promise<void>(async (resolve, reject) => {
+      let ffmpegBinaryPath = "";
+
+      try {
+        ffmpegBinaryPath = await getFfmpegBinaryPath();
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      const ffmpeg = spawn(ffmpegBinaryPath, [
+        "-i",
+        inputPath,
+
+        "-c:v",
+        "libx264",
+
+        "-profile:v",
+        "main",
+
+        "-pix_fmt",
+        "yuv420p",
+
+        "-preset",
+        "medium",
+
+        "-crf",
+        "23",
+
+        "-c:a",
+        "aac",
+
+        "-b:a",
+        "128k",
+
+        "-movflags",
+        "+faststart",
+
+        "-f",
+        "mp4",
+
+        "-y",
+        outputPath,
+      ]);
+
+      let stderr = "";
+
+      ffmpeg.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+
+      ffmpeg.on("error", (error) => {
+        reject(error);
+      });
+
+      ffmpeg.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+
+        reject(
+          new Error(
+            `Falha ao converter vídeo com FFmpeg. Código: ${code}. Detalhes: ${stderr}`
+          )
+        );
+      });
+    });
+
+    const convertidoBuffer = await fs.readFile(outputPath);
+
+    return new File([convertidoBuffer], trocarExtensaoParaMp4(file.name), {
+      type: "video/mp4",
+    });
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
 
 function validarMetadadosArquivo(params: {
   nome: string;
@@ -355,34 +503,72 @@ async function uploadMultipartLegado(req: NextRequest) {
     );
   }
 
-  const validacao = validarMetadadosArquivo({
+  const validacaoOriginal = validarMetadadosArquivo({
     nome: arquivo.name,
     mimeType: arquivo.type,
     tamanhoBytes: arquivo.size,
   });
 
-  if (!validacao.ok) {
-    return validacao.response;
+  if (!validacaoOriginal.ok) {
+    return validacaoOriginal.response;
+  }
+
+  let arquivoParaSalvar = arquivo;
+  let nomeArquivoParaSalvar = validacaoOriginal.nomeArquivoOriginal;
+  let mimeTypeParaSalvar = validacaoOriginal.mimeType;
+  let tamanhoBytesParaSalvar = validacaoOriginal.tamanhoBytes;
+  let extensao = extensaoPorNome(arquivo.name);
+
+  if (validacaoOriginal.tipo === "video") {
+    console.info("[UPLOAD MIDIA AUTOMAÇÃO] Convertendo vídeo para WhatsApp", {
+      nomeOriginal: arquivo.name,
+      mimeTypeOriginal: arquivo.type,
+      tamanhoOriginal: arquivo.size,
+    });
+
+    arquivoParaSalvar = await converterVideoParaWhatsapp(arquivo);
+    nomeArquivoParaSalvar = trocarExtensaoParaMp4(
+      validacaoOriginal.nomeArquivoOriginal
+    );
+    mimeTypeParaSalvar = "video/mp4";
+    tamanhoBytesParaSalvar = arquivoParaSalvar.size;
+    extensao = "mp4";
+
+    console.info("[UPLOAD MIDIA AUTOMAÇÃO] Vídeo convertido", {
+      nomeConvertido: arquivoParaSalvar.name,
+      mimeTypeConvertido: arquivoParaSalvar.type,
+      tamanhoConvertido: arquivoParaSalvar.size,
+    });
+
+    if (tamanhoBytesParaSalvar > LIMITE_VIDEO) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "O vídeo foi convertido para o formato aceito pelo WhatsApp, mas ainda ficou acima de 16MB. Reduza a duração ou a qualidade do vídeo e tente novamente.",
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const nomeIndisponivel = await verificarNomeDisponivel({
     supabaseAdmin: contexto.supabaseAdmin,
     empresaId: contexto.usuarioSistema.empresa_id,
-    nome: validacao.nomeArquivoOriginal,
+    nome: nomeArquivoParaSalvar,
   });
 
   if (nomeIndisponivel) {
     return nomeIndisponivel;
   }
 
-  const extensao = extensaoPorNome(arquivo.name);
-  const nomeArquivo = `${crypto.randomUUID()}.${extensao}`;
-  const storagePath = `${contexto.usuarioSistema.empresa_id}/${validacao.tipo}/${nomeArquivo}`;
+  const nomeArquivoStorage = `${crypto.randomUUID()}.${extensao}`;
+  const storagePath = `${contexto.usuarioSistema.empresa_id}/${validacaoOriginal.tipo}/${nomeArquivoStorage}`;
 
   const { error: uploadError } = await contexto.supabaseAdmin.storage
     .from(BUCKET_MIDIAS)
-    .upload(storagePath, arquivo, {
-      contentType: arquivo.type,
+    .upload(storagePath, arquivoParaSalvar, {
+      contentType: mimeTypeParaSalvar,
       upsert: false,
     });
 
@@ -393,11 +579,11 @@ async function uploadMultipartLegado(req: NextRequest) {
   const midia = await registrarMidia({
     supabaseAdmin: contexto.supabaseAdmin,
     usuarioSistema: contexto.usuarioSistema,
-    nomeArquivoOriginal: validacao.nomeArquivoOriginal,
-    tipo: validacao.tipo,
+    nomeArquivoOriginal: nomeArquivoParaSalvar,
+    tipo: validacaoOriginal.tipo,
     storagePath,
-    mimeType: validacao.mimeType,
-    tamanhoBytes: validacao.tamanhoBytes,
+    mimeType: mimeTypeParaSalvar,
+    tamanhoBytes: tamanhoBytesParaSalvar,
   });
 
   return NextResponse.json({

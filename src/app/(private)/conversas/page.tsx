@@ -138,6 +138,22 @@ type Mensagem = {
     midia_url?: string | null;
     tipo_midia?: string | null;
     legenda?: string | null;
+    erro?: string | null;
+    whatsapp_status?: {
+      error_message?: string | null;
+      ultimo_status?: string | null;
+      raw_status?: {
+        status?: string | null;
+        errors?: Array<{
+          code?: number | string | null;
+          title?: string | null;
+          message?: string | null;
+          error_data?: {
+            details?: string | null;
+          } | null;
+        }> | null;
+      } | null;
+    } | null;
   } | null;
 };
 
@@ -580,6 +596,65 @@ function getStatusEnvioLabel(status: Mensagem["status_envio"]) {
     default:
       return "";
   }
+}
+
+function getMensagemErroEnvio(msg: Mensagem) {
+  if (msg.status_envio !== "falha") return "";
+
+  const erroRaw =
+    msg.metadata_json?.whatsapp_status?.raw_status?.errors?.[0];
+
+  const codigo = erroRaw?.code ? String(erroRaw.code) : "";
+  const titulo = erroRaw?.title || erroRaw?.message || "";
+  const detalhes = erroRaw?.error_data?.details || "";
+
+  const tituloLower = titulo.toLowerCase();
+  const detalhesLower = detalhes.toLowerCase();
+
+  if (codigo === "131053" && detalhesLower.includes("videocodec=hevc")) {
+    return "A Meta/WhatsApp recusou este vídeo porque o arquivo está em codec HEVC/H.265. O envio saiu do CRM, mas o WhatsApp não entregou ao contato. Converta o vídeo para MP4 com vídeo H.264/AVC e áudio AAC.";
+  }
+
+  if (codigo === "131053") {
+    return "A Meta/WhatsApp não conseguiu processar esta mídia. O envio saiu do CRM, mas o WhatsApp recusou ou falhou ao entregar o arquivo. Verifique se a mídia está em formato compatível e dentro do limite permitido.";
+  }
+
+  if (
+    tituloLower.includes("media upload error") ||
+    detalhesLower.includes("media upload error")
+  ) {
+    return "A mídia foi enviada pelo CRM para a Meta, mas o WhatsApp retornou falha no processamento e não entregou ao contato.";
+  }
+
+  const erroDireto = msg.metadata_json?.erro;
+  if (erroDireto?.trim() && erroDireto !== "Media upload error") {
+    return erroDireto;
+  }
+
+  const erroStatus = msg.metadata_json?.whatsapp_status?.error_message;
+  if (erroStatus?.trim() && erroStatus !== "Media upload error") {
+    return erroStatus;
+  }
+
+  if (detalhes?.trim()) {
+    return `A Meta/WhatsApp recusou esta mensagem: ${detalhes}`;
+  }
+
+  if (titulo?.trim()) {
+    return `A Meta/WhatsApp retornou falha no envio: ${titulo}`;
+  }
+
+  return "A mensagem foi enviada pelo CRM, mas a Meta/WhatsApp retornou falha e não entregou ao contato.";
+}
+
+function mensagemFoiEnviadaPeloSistema(msg: Mensagem) {
+  return (
+    msg.origem === "enviada" ||
+    msg.origem === "automatica" ||
+    msg.remetente_tipo === "usuario" ||
+    msg.remetente_tipo === "bot" ||
+    msg.remetente_tipo === "ia"
+  );
 }
 
 
@@ -1953,27 +2028,43 @@ export default function ConversasPage() {
     }
 
     if (msg.tipo_mensagem === "video") {
+      const mensagemErroEnvio = getMensagemErroEnvio(msg);
+      const videoFalhou = msg.status_envio === "falha";
+
       return (
         <div>
           {url ? (
-            <video
-              controls
-              preload="metadata"
-              className={`${styles.messageVideo} ${
-                caption ? styles.messageVideoWithCaption : ""
-              }`}
-            >
-              <source src={url} type={mimeType || "video/mp4"} />
-              Seu navegador não suporta vídeo.
-            </video>
+            <div className={videoFalhou ? styles.failedMediaWrap : ""}>
+              <video
+                controls
+                preload="metadata"
+                className={`${styles.messageVideo} ${
+                  caption ? styles.messageVideoWithCaption : ""
+                } ${videoFalhou ? styles.messageVideoFailed : ""}`}
+              >
+                <source src={url} type={mimeType || "video/mp4"} />
+                Seu navegador não suporta vídeo.
+              </video>
+            </div>
           ) : (
-            <p className={styles.messageText}><TextoComEmoji texto={msg.conteudo} /></p>
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={msg.conteudo} />
+            </p>
           )}
 
           {caption && (
             <p className={styles.messageText}>
               <TextoComEmoji texto={caption} />
             </p>
+          )}
+
+          {videoFalhou && (
+            <div className={styles.messageSendErrorBox}>
+              <strong>Vídeo não entregue no WhatsApp</strong>
+              <span>
+                <TextoComEmoji texto={mensagemErroEnvio} />
+              </span>
+            </div>
           )}
         </div>
       );
@@ -6159,6 +6250,8 @@ const templateFooterTexto = useMemo(() => {
                                 const isOutgoing = msg.origem === "enviada";
                                 const isAutomatic = msg.origem === "automatica";
                                 const isSystem = msg.remetente_tipo === "sistema";
+                                const isMensagemDoSistema = mensagemFoiEnviadaPeloSistema(msg);
+                                const mensagemErroEnvio = getMensagemErroEnvio(msg);
 
                                 if (isSystem) {
                                   return (
@@ -6227,7 +6320,7 @@ const templateFooterTexto = useMemo(() => {
                                         <div className={styles.messageMetaBottom}>
                                           <span>{formatarHora(msg.created_at)}</span>
 
-                                          {isOutgoing && (
+                                          {isMensagemDoSistema && (
                                             <span
                                               className={`${styles.statusIcon} ${
                                                 msg.status_envio === "lida"
@@ -6236,7 +6329,7 @@ const templateFooterTexto = useMemo(() => {
                                                   ? styles.statusIconError
                                                   : styles.statusIconDefault
                                               }`}
-                                              title={msg.status_envio}
+                                              title={mensagemErroEnvio || msg.status_envio}
                                             >
                                               {getStatusEnvioLabel(msg.status_envio)}
                                             </span>
