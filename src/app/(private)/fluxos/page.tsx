@@ -4344,7 +4344,8 @@ async function alterarStatusFluxo(
 
   function badgeClass(status: string) {
     if (status === "ativo") return `${styles.badge} ${styles.badgeGreen}`;
-    if (status === "pausado") return `${styles.badge} ${styles.badgeYellow}`;
+    if (status === "pausado") return `${styles.badge} ${styles.badgeRed}`;
+    if (status === "arquivado") return `${styles.badge} ${styles.badgeYellow}`;
     return `${styles.badge} ${styles.badgeGray}`;
   }
 

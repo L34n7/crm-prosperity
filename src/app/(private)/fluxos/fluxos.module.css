@@ -382,16 +382,22 @@
   border-color: #bfdbfe;
 }
 
-.badgeYellow {
+.badgeRed {
   background: #fff7ed;
   color: #c2410c;
   border-color: #fdba74;
 }
 
+.badgeYellow {
+  background: #fffded;
+  color: #d59500;
+  border-color: #ffd324;
+}
+
 .badgeGray {
-  background: #f8fafc;
-  color: #475569;
-  border-color: #e2e8f0;
+  background: #e8f0f8;
+  color: #425167;
+  border-color: #b1b8bf;
 }
 
 .flowBadges {
