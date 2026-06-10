@@ -81,6 +81,7 @@ type MidiaOpcao = {
   url: string;
   mime_type: string | null;
   tamanho_bytes: number | null;
+  created_at?: string;
 };
 
 type TemplateWhatsappOpcao = {
@@ -276,6 +277,7 @@ const TIPOS_VALOR_CONVERSAO: TipoValorConversao[] = [
   "variavel",
 ];
 
+const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 100 * 1024 * 1024; // 100 MB
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
@@ -543,6 +545,81 @@ function normalizarDelaySegundos(valor: string | number | null | undefined) {
   return Math.max(0, Math.min(LIMITE_DELAY_SEGUNDOS, Math.floor(numero)));
 }
 
+function formatarTamanhoArquivo(bytes?: number | null) {
+  const valor = Number(bytes || 0);
+
+  if (!Number.isFinite(valor) || valor <= 0) {
+    return "Tamanho não informado";
+  }
+
+  if (valor < 1024) {
+    return `${valor} B`;
+  }
+
+  if (valor < 1024 * 1024) {
+    return `${(valor / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(valor / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatarStorageMidiasMb(bytes?: number | null) {
+  const valor = Number(bytes || 0);
+
+  if (!Number.isFinite(valor) || valor <= 0) {
+    return "0";
+  }
+
+  return (valor / 1024 / 1024).toFixed(1);
+}
+
+
+function formatarDataMidia(data?: string | null) {
+  if (!data) return "Data não informada";
+
+  try {
+    return new Date(data).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "Data não informada";
+  }
+}
+
+function labelTipoMidia(tipo: string) {
+  if (tipo === "imagem") return "Imagem";
+  if (tipo === "video") return "Vídeo";
+  if (tipo === "audio") return "Áudio";
+  return "Mídia";
+}
+
+function iconeTipoMidia(tipo: string) {
+  if (tipo === "imagem") return "🖼️";
+  if (tipo === "video") return "🎬";
+  if (tipo === "audio") return "🎧";
+  return "📎";
+}
+
+function classeUsoStorageMidias(usadoBytes: number, limiteBytes: number) {
+  if (!limiteBytes || limiteBytes <= 0) return "";
+
+  const percentual = (Number(usadoBytes || 0) / limiteBytes) * 100;
+
+  if (percentual >= 90) {
+    return styles.mediaLimitPremiumCardRed;
+  }
+
+  if (percentual >= 70) {
+    return styles.mediaLimitPremiumCardYellow;
+  }
+
+  return styles.mediaLimitPremiumCardGreen;
+}
+
 function rotuloPadraoPorTipoNo(tipoNo: string) {
   return tipoNoEsperaResposta(tipoNo) ? "Nova condição" : "Sempre seguir";
 }
@@ -789,6 +866,17 @@ export default function FluxosPage() {
   const [carregandoMidias, setCarregandoMidias] = useState(false);
   const [enviandoMidia, setEnviandoMidia] = useState(false);
   const [timeoutQuantidade, setTimeoutQuantidade] = useState("2");
+  const [modalMidiasAberto, setModalMidiasAberto] = useState(false);
+  const [abaMidias, setAbaMidias] = useState<"todas" | "imagem" | "video" | "audio">("todas");
+  const [midiaExcluindoId, setMidiaExcluindoId] = useState<string | null>(null);
+  const [confirmandoExclusaoMidiaId, setConfirmandoExclusaoMidiaId] = useState<string | null>(null);
+
+  const [uploadMidiaMensagem, setUploadMidiaMensagem] = useState("");
+  const [uploadMidiaProgresso, setUploadMidiaProgresso] = useState(0);
+  const [uploadMidiaCancelado, setUploadMidiaCancelado] = useState(false);
+
+  const uploadMidiaAbortRef = useRef<AbortController | null>(null);
+  const uploadMidiaProgressoIntervaloRef = useRef<number | null>(null);
 
   const [timeoutUnidade, setTimeoutUnidade] =
     useState<"minutos" | "horas">("horas");
@@ -1063,6 +1151,34 @@ export default function FluxosPage() {
     );
   }, [totalVariaveisTemplateAgendaLembrete]);
 
+    const resumoMidias = useMemo(() => {
+      const imagens = midias.filter((midia) => midia.tipo === "imagem");
+      const videos = midias.filter((midia) => midia.tipo === "video");
+      const audios = midias.filter((midia) => midia.tipo === "audio");
+
+      const tamanhoTotal = midias.reduce(
+        (total, midia) => total + Number(midia.tamanho_bytes || 0),
+        0
+      );
+
+      return {
+        total: midias.length,
+        imagens: imagens.length,
+        videos: videos.length,
+        audios: audios.length,
+        tamanhoTotal,
+      };
+    }, [midias]);
+
+    const midiasFiltradasModal = useMemo(() => {
+      if (abaMidias === "todas") return midias;
+
+      return midias.filter((midia) => midia.tipo === abaMidias);
+    }, [midias, abaMidias]);
+
+    const limiteStorageMidiasAtingido =
+      resumoMidias.tamanhoTotal >= LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES;
+
   async function carregarTemplatesWhatsapp() {
     try {
       setCarregandoTemplatesWhatsapp(true);
@@ -1189,24 +1305,124 @@ export default function FluxosPage() {
 
 
   async function enviarNovaMidiaMultipart(arquivo: File) {
-    const formData = new FormData();
-    formData.append("arquivo", arquivo);
+    iniciarProgressoVideoSimulado();
 
-    const res = await fetch("/api/automacoes/midias/upload", {
-      method: "POST",
-      body: formData,
-    });
+    const controller = new AbortController();
+    uploadMidiaAbortRef.current = controller;
 
-    const json = await lerRespostaApi(
-      res,
-      "Erro ao enviar mídia para conversão."
-    );
+    try {
+      const formData = new FormData();
+      formData.append("arquivo", arquivo);
 
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao enviar mídia para conversão.");
+      const res = await fetch("/api/automacoes/midias/upload", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+
+      const json = await lerRespostaApi(
+        res,
+        "Erro ao enviar mídia para conversão."
+      );
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao enviar mídia para conversão.");
+      }
+
+      await finalizarProgressoVideoRapido();
+
+      return json.midia;
+      
+    } catch (error: any) {
+      limparProgressoVideoSimulado();
+
+      if (error?.name === "AbortError") {
+        setUploadMidiaCancelado(true);
+        throw new Error("Envio de vídeo cancelado.");
+      }
+
+      throw error;
+    } finally {
+      uploadMidiaAbortRef.current = null;
     }
+  }
 
-    return json.midia;
+
+  function limparProgressoVideoSimulado() {
+    if (uploadMidiaProgressoIntervaloRef.current !== null) {
+      window.clearInterval(uploadMidiaProgressoIntervaloRef.current);
+      uploadMidiaProgressoIntervaloRef.current = null;
+    }
+  }
+
+  function iniciarProgressoVideoSimulado() {
+    limparProgressoVideoSimulado();
+
+    setUploadMidiaCancelado(false);
+    setUploadMidiaMensagem("Analisando vídeo...");
+    setUploadMidiaProgresso(1);
+
+    uploadMidiaProgressoIntervaloRef.current = window.setInterval(() => {
+      setUploadMidiaProgresso((progressoAtual) => {
+        if (progressoAtual < 12) {
+          setUploadMidiaMensagem("Analisando vídeo...");
+          return progressoAtual + 1;
+        }
+
+        if (progressoAtual < 60) {
+          setUploadMidiaMensagem("Convertendo vídeo...");
+          return progressoAtual + 1;
+        }
+
+        if (progressoAtual < 80) {
+          setUploadMidiaMensagem("Enviando vídeo...");
+          return progressoAtual + 1;
+        }
+
+        setUploadMidiaMensagem("Aguardando finalização...");
+        return 80;
+      });
+    }, 700);
+  }
+
+  async function finalizarProgressoVideoRapido() {
+    limparProgressoVideoSimulado();
+
+    setUploadMidiaMensagem("Finalizando envio...");
+    setUploadMidiaProgresso(90);
+
+    await new Promise((resolve) => window.setTimeout(resolve, 350));
+
+    setUploadMidiaMensagem("Salvando mídia...");
+    setUploadMidiaProgresso(95);
+
+    await new Promise((resolve) => window.setTimeout(resolve, 350));
+
+    setUploadMidiaMensagem("Vídeo enviado com sucesso.");
+    setUploadMidiaProgresso(100);
+
+    await new Promise((resolve) => window.setTimeout(resolve, 1000));
+  }
+
+  function excedeLimiteStorageMidias(tamanhoArquivoBytes: number) {
+    return (
+      resumoMidias.tamanhoTotal + Number(tamanhoArquivoBytes || 0) >
+      LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
+    );
+  }
+
+
+  function cancelarUploadMidia() {
+    uploadMidiaAbortRef.current?.abort();
+    uploadMidiaAbortRef.current = null;
+
+    limparProgressoVideoSimulado();
+
+    setUploadMidiaCancelado(true);
+    setUploadMidiaMensagem("Envio cancelado.");
+    setUploadMidiaProgresso(0);
+    setEnviandoMidia(false);
+    setErro("Envio de vídeo cancelado.");
   }
 
 
@@ -1215,6 +1431,18 @@ export default function FluxosPage() {
       setEnviandoMidia(true);
       setErro("");
       setSucesso("");
+
+      if (excedeLimiteStorageMidias(arquivo.size)) {
+        throw new Error(
+          `Limite de ${formatarTamanhoArquivo(
+            LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
+          )} de mídias atingido. Exclua uma mídia antes de enviar outra.`
+        );
+      }
+
+      setUploadMidiaMensagem("");
+      setUploadMidiaProgresso(0);
+      setUploadMidiaCancelado(false);
 
       let midiaEnviada: MidiaOpcao;
 
@@ -1311,7 +1539,7 @@ export default function FluxosPage() {
 
       setSucesso(
         arquivo.type.startsWith("video/")
-          ? "Vídeo convertido e enviado com sucesso."
+          ? "Vídeo enviado com sucesso."
           : "Mídia enviada com sucesso."
       );
 
@@ -1319,6 +1547,12 @@ export default function FluxosPage() {
     } catch (error: unknown) {
       setErro(error instanceof Error ? error.message : "Erro ao enviar mídia.");
     } finally {
+        window.setTimeout(() => {
+          setUploadMidiaMensagem("");
+          setUploadMidiaProgresso(0);
+          setUploadMidiaCancelado(false);
+        }, 1800);
+      limparProgressoVideoSimulado();
       setEnviandoMidia(false);
     }
   }
@@ -1347,6 +1581,44 @@ export default function FluxosPage() {
       setCarregandoMidias(false);
     }
   }
+
+    async function excluirMidiaDefinitivamente(midia: MidiaOpcao) {
+      try {
+        setErro("");
+        setSucesso("");
+        setMidiaExcluindoId(midia.id);
+
+        const res = await fetch("/api/automacoes/midias", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: midia.id,
+          }),
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error || "Erro ao excluir mídia.");
+        }
+
+        setMidias((atuais) => atuais.filter((item) => item.id !== midia.id));
+
+        if (midiaUrlNode === midia.url) {
+          setMidiaUrlNode("");
+          setMidiaNomeNode("");
+        }
+
+        setConfirmandoExclusaoMidiaId(null);
+        setSucesso("Mídia excluída definitivamente.");
+      } catch (error: any) {
+        setErro(error?.message || "Erro ao excluir mídia.");
+      } finally {
+        setMidiaExcluindoId(null);
+      }
+    }
 
   async function carregarFluxos() {
     try {
@@ -2875,6 +3147,7 @@ function aplicarEdicaoNoInterno() {
   );
 
   setSucesso("Bloco atualizado. Clique em Salvar fluxo para gravar no banco.");
+  fecharPainelEdicao();
 }
 
 function aplicarEdicaoConexao() {
@@ -4106,6 +4379,27 @@ function removerConexao(edgeId: string) {
   setSucesso("Conexão removida. Clique em Salvar fluxo para gravar no banco.");
 }
 
+function fecharPainelEdicao() {
+  setEditandoNodeId(null);
+  setEditandoEdgeId(null);
+  setConfirmandoExclusaoNo(false);
+  setConfirmandoExclusaoConexao(false);
+  marcarNodeSelecionado(null);
+
+  setEdges((atuais) =>
+    atuais.map((edge) => ({
+      ...edge,
+      selected: false,
+      style: {
+        ...(edge.style || {}),
+        stroke: "#cbd5e1",
+        strokeWidth: 2,
+        strokeDasharray: "6 6",
+      },
+    }))
+  );
+}
+
 useEffect(() => {
   function handleClick() {
     setMenuFluxo(null);
@@ -4830,26 +5124,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     <button
                       type="button"
                       className={styles.closePanelButton}
-                      onClick={() => {
-                        setEditandoNodeId(null);
-                        setEditandoEdgeId(null);
-                        setConfirmandoExclusaoNo(false);
-                        setConfirmandoExclusaoConexao(false);
-                        marcarNodeSelecionado(null);
-                        
-                        setEdges((atuais) =>
-                          atuais.map((edge) => ({
-                            ...edge,
-                            selected: false,
-                            style: {
-                              ...(edge.style || {}),
-                              stroke: "#cbd5e1",
-                              strokeWidth: 2,
-                              strokeDasharray: "6 6",
-                            },
-                          }))
-                        );
-                      }}
+                      onClick={fecharPainelEdicao}
                       >
                       ×
                     </button>
@@ -5409,101 +5684,207 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         </div>
                       ) : (
                         <>
-                          <select
-                            className={styles.input}
-                            value={midiaUrlNode}
-                            onChange={(e) => {
-                              const urlSelecionada = e.target.value;
-                              const midiaSelecionada = midias.find(
-                                (m) => m.url === urlSelecionada
-                              );
-
-                              setMidiaUrlNode(urlSelecionada);
-                              setMidiaNomeNode(midiaSelecionada?.nome || "");
-                            }}
-                            disabled={carregandoMidias || enviandoMidia}
+                          <div
+                            className={`${styles.optionsBox} ${
+                              tipoNodeEdicao === "enviar_imagem"
+                                ? styles.mediaOptionsBoxImagem
+                                : tipoNodeEdicao === "enviar_video"
+                                ? styles.mediaOptionsBoxVideo
+                                : styles.mediaOptionsBoxAudio
+                            }`}
                           >
-                            <option value="">
-                              {carregandoMidias ? "Carregando mídias..." : "Selecione uma mídia"}
-                            </option>
+                              <select
+                                className={styles.input}
+                                value={midiaUrlNode}
+                                onChange={(e) => {
+                                  const urlSelecionada = e.target.value;
+                                  const midiaSelecionada = midias.find(
+                                    (m) => m.url === urlSelecionada
+                                  );
 
-                            {midias
-                              .filter((midia) =>
-                                tipoNodeEdicao === "enviar_imagem"
-                                  ? midia.tipo === "imagem"
-                                  : tipoNodeEdicao === "enviar_video"
-                                  ? midia.tipo === "video"
-                                  : midia.tipo === "audio"
-                              )
-                              .map((midia) => (
-                                <option key={midia.id} value={midia.url}>
-                                  {midia.nome}
+                                  setMidiaUrlNode(urlSelecionada);
+                                  setMidiaNomeNode(midiaSelecionada?.nome || "");
+                                }}
+                                disabled={carregandoMidias || enviandoMidia}
+                              >
+                                <option value="">
+                                  {carregandoMidias ? "Carregando mídias..." : "Selecione uma mídia"}
                                 </option>
-                              ))}
-                          </select>
 
-                          <label className={styles.secondaryButton}>
-                            {enviandoMidia
-                              ? tipoNodeEdicao === "enviar_video"
-                                ? "Convertendo vídeo..."
-                                : "Enviando..."
-                              : "Subir nova mídia"}
+                                {midias
+                                  .filter((midia) =>
+                                    tipoNodeEdicao === "enviar_imagem"
+                                      ? midia.tipo === "imagem"
+                                      : tipoNodeEdicao === "enviar_video"
+                                      ? midia.tipo === "video"
+                                      : midia.tipo === "audio"
+                                  )
+                                  .map((midia) => (
+                                    <option key={midia.id} value={midia.url}>
+                                      {midia.nome}
+                                    </option>
+                                  ))}
+                              </select>
 
-                            <input
-                              type="file"
-                              accept={
-                                tipoNodeEdicao === "enviar_imagem"
-                                  ? "image/*"
-                                  : tipoNodeEdicao === "enviar_video"
-                                  ? "video/*"
-                                  : "audio/*"
-                              }
-                              style={{ display: "none" }}
-                              disabled={enviandoMidia}
-                              onChange={(e) => {
-                                const arquivo = e.target.files?.[0];
+                              <label
+                                className={`${styles.secondaryButton} ${
+                                  limiteStorageMidiasAtingido ? styles.disabledButton : ""
+                                }`}
+                              >
+                                  {enviandoMidia
+                                    ? tipoNodeEdicao === "enviar_video"
+                                      ? uploadMidiaMensagem || "Analisando vídeo..."
+                                      : "Enviando..."
+                                    : "Subir nova mídia"}
 
-                                if (!arquivo) return;
-
-                                setErro("");
-                                setSucesso("");
-
-                                if (arquivo.type.startsWith("image/")) {
-                                  if (arquivo.size > LIMITE_IMAGEM_BYTES) {
-                                    setErro("A imagem deve ter no máximo 5MB.");
-                                    return;
+                                <input
+                                  type="file"
+                                  accept={
+                                    tipoNodeEdicao === "enviar_imagem"
+                                      ? "image/*"
+                                      : tipoNodeEdicao === "enviar_video"
+                                      ? "video/*"
+                                      : "audio/*"
                                   }
-                                }
+                                  style={{ display: "none" }}
+                                  disabled={enviandoMidia || limiteStorageMidiasAtingido}
+                                  onChange={(e) => {
+                                    const arquivo = e.target.files?.[0];
 
-                                if (arquivo.type.startsWith("video/")) {
-                                  if (arquivo.size > LIMITE_VIDEO_BYTES) {
-                                    setErro(
-                                      "O vídeo deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
+                                    if (!arquivo) return;
+
+                                    setErro("");
+                                    setSucesso("");
+
+                                    if (arquivo.type.startsWith("image/")) {
+                                      if (arquivo.size > LIMITE_IMAGEM_BYTES) {
+                                        setErro("A imagem deve ter no máximo 5MB.");
+                                        return;
+                                      }
+                                    }
+
+                                    if (arquivo.type.startsWith("video/")) {
+                                      if (arquivo.size > LIMITE_VIDEO_BYTES) {
+                                        setErro(
+                                          "O vídeo deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
+                                        );
+                                        return;
+                                      }
+                                    }
+
+                                    if (arquivo.type.startsWith("audio/")) {
+                                      if (arquivo.size > LIMITE_AUDIO_BYTES) {
+                                        setErro(
+                                          "O áudio deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
+                                        );
+                                        return;
+                                      }
+                                    }
+
+                                    enviarNovaMidia(arquivo);
+
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+
+                              <span className={styles.help}>
+                                Imagens até 5MB, vídeos até 16MB e áudios até 16MB.
+                                Para envio rápido, use vídeo MP4 com codec H.264/AVC e áudio AAC.
+                              </span>
+                              <span className={styles.help}>
+                                Se o vídeo estiver em outro formato, o sistema converte automaticamente antes de salvar,
+                                o que pode demorar alguns minutos.
+                              </span>
+
+                              {enviandoMidia && tipoNodeEdicao === "enviar_video" && (
+                                <div className={styles.videoUploadProgressBox}>
+                                  <div className={styles.videoUploadProgressTop}>
+                                    <span>{uploadMidiaMensagem || "Analisando vídeo..."}</span>
+                                    <strong>{Math.max(0, Math.min(100, uploadMidiaProgresso))}%</strong>
+                                  </div>
+
+                                  <div className={styles.videoUploadProgressTrack}>
+                                    <div
+                                      className={styles.videoUploadProgressBar}
+                                      style={{
+                                        width: `${Math.max(0, Math.min(100, uploadMidiaProgresso))}%`,
+                                      }}
+                                    />
+                                  </div>
+
+                                  <div className={styles.videoUploadProgressFooter}>
+                                    <p className={styles.videoUploadProgressHelp}>
+                                      {uploadMidiaProgresso < 12
+                                        ? "Verificando se o vídeo já está no formato aceito pelo WhatsApp."
+                                        : uploadMidiaProgresso < 60
+                                        ? "Se necessário, o sistema está convertendo o vídeo para MP4 H.264/AAC."
+                                        : uploadMidiaProgresso < 80
+                                        ? "Enviando e salvando a mídia no sistema."
+                                        : "Aguardando a finalização do processamento no servidor."}
+                                    </p>
+
+                                    <button
+                                      type="button"
+                                      className={styles.videoUploadCancelButton}
+                                      onClick={cancelarUploadMidia}
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className={styles.mediaLimitPremiumRow}>
+                                <button
+                                  type="button"
+                                  className={styles.mediaManagePremiumCard}
+                                  onClick={() => {
+                                    setAbaMidias(
+                                      tipoNodeEdicao === "enviar_imagem"
+                                        ? "imagem"
+                                        : tipoNodeEdicao === "enviar_video"
+                                        ? "video"
+                                        : "audio"
                                     );
-                                    return;
-                                  }
-                                }
+                                    setModalMidiasAberto(true);
+                                  }}
+                                >
+                                  <span className={styles.mediaManagePremiumIcon}>
+                                    {tipoNodeEdicao === "enviar_imagem"
+                                      ? "🖼️"
+                                      : tipoNodeEdicao === "enviar_video"
+                                      ? "🎬"
+                                      : "🎧"}
+                                  </span>
 
-                                if (arquivo.type.startsWith("audio/")) {
-                                  if (arquivo.size > LIMITE_AUDIO_BYTES) {
-                                    setErro(
-                                      "O áudio deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
-                                    );
-                                    return;
-                                  }
-                                }
+                                  <span className={styles.mediaManagePremiumContent}>
+                                    <strong>Gerenciar mídias</strong>
+                                    <small>Abrir biblioteca</small>
+                                  </span>
+                                </button>
 
-                                enviarNovaMidia(arquivo);
+                                <div
+                                  className={`${styles.mediaLimitPremiumCard} ${classeUsoStorageMidias(
+                                    resumoMidias.tamanhoTotal,
+                                    LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
+                                  )}`}
+                                >
+                                  <div className={styles.mediaLimitPremiumNumbers}>
+                                    <strong>{formatarStorageMidiasMb(resumoMidias.tamanhoTotal)} /</strong>
+                                    <span>100 MB</span>
+                                  </div>
 
-                                e.target.value = "";
-                              }}
-                            />
-                          </label>
+                                  <small>Limite usado</small>
+                                </div>
+                              </div>
 
-                        <span className={styles.help}>
-                          Imagens até 5MB, vídeos até 16MB e áudios até 16MB.
-                          Vídeos são convertidos automaticamente para o formato aceito pelo WhatsApp.
-                        </span>
+                              {limiteStorageMidiasAtingido && (
+                                <span className={styles.help}>
+                                   Limite de 100 MB atingido. Exclua uma mídia no gerenciador antes de subir outra.
+                                </span>
+                              )}
+                          </div>
                         </>
                       )}
                     </div>
@@ -6978,7 +7359,15 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     )}
 
                     <button
-                      type="submit"
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={fecharPainelEdicao}
+                    >
+                      Cancelar
+                    </button>
+
+                    <button
+                      type="button"
                       className={styles.primaryButton}
                       onClick={aplicarEdicaoNo}
                     >
@@ -7195,6 +7584,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                       <button
                         type="button"
+                        className={styles.secondaryButton}
+                        onClick={fecharPainelEdicao}
+                      >
+                        Cancelar
+                      </button>
+
+                      <button
+                        type="button"
                         className={styles.primaryButton}
                         onClick={aplicarEdicaoConexao}
                       >
@@ -7221,6 +7618,181 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
           }}
         >
           {tooltipAlertaFluxo.texto}
+        </div>
+      )}
+
+      {modalMidiasAberto && (
+        <div className={styles.modalOverlay}>
+          <div className={`${styles.modalCard} ${styles.mediaManagerModal}`}>
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.eyebrow}>Biblioteca de mídias</p>
+                <h3 className={styles.modalTitle}>Gerenciar mídias</h3>
+                <p className={styles.modalSubtitle}>
+                  Baixe, consulte ou exclua definitivamente mídias da empresa.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.closePanelButton}
+                onClick={() => {
+                  setModalMidiasAberto(false);
+                  setConfirmandoExclusaoMidiaId(null);
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.mediaSummaryGrid}>
+              <div className={styles.mediaSummaryCard}>
+                <span>Total</span>
+                <strong>{resumoMidias.total}</strong>
+              </div>
+
+              <div className={styles.mediaSummaryCard}>
+                <span>Imagens</span>
+                <strong>{resumoMidias.imagens}</strong>
+              </div>
+
+              <div className={styles.mediaSummaryCard}>
+                <span>Vídeos</span>
+                <strong>{resumoMidias.videos}</strong>
+              </div>
+
+              <div className={styles.mediaSummaryCard}>
+                <span>Áudios</span>
+                <strong>{resumoMidias.audios}</strong>
+              </div>
+
+              <div
+                className={`${styles.mediaSummaryCard} ${styles.mediaSummaryStorageCard} ${classeUsoStorageMidias(
+                  resumoMidias.tamanhoTotal,
+                  LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
+                )}`}
+              >
+                <span>Storage</span>
+
+                <div className={styles.mediaSummaryStorageValue}>
+                  <strong>{formatarStorageMidiasMb(resumoMidias.tamanhoTotal)}</strong>
+                  <small>100 MB</small>
+                </div>
+
+                <div className={styles.mediaSummaryStorageTrack}>
+                  <div
+                    className={styles.mediaSummaryStorageBar}
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          (resumoMidias.tamanhoTotal / LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES) *
+                            100
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.mediaTabs}>
+              <button
+                type="button"
+                className={abaMidias === "todas" ? styles.mediaTabActive : styles.mediaTab}
+                onClick={() => setAbaMidias("todas")}
+              >
+                Todas ({resumoMidias.total})
+              </button>
+
+              <button
+                type="button"
+                className={abaMidias === "imagem" ? styles.mediaTabActive : styles.mediaTab}
+                onClick={() => setAbaMidias("imagem")}
+              >
+                Imagens ({resumoMidias.imagens})
+              </button>
+
+              <button
+                type="button"
+                className={abaMidias === "video" ? styles.mediaTabActive : styles.mediaTab}
+                onClick={() => setAbaMidias("video")}
+              >
+                Vídeos ({resumoMidias.videos})
+              </button>
+
+              <button
+                type="button"
+                className={abaMidias === "audio" ? styles.mediaTabActive : styles.mediaTab}
+                onClick={() => setAbaMidias("audio")}
+              >
+                Áudios ({resumoMidias.audios})
+              </button>
+            </div>
+
+            <div className={styles.mediaManagerList}>
+              {carregandoMidias ? (
+                <div className={styles.emptyMini}>Carregando mídias...</div>
+              ) : midiasFiltradasModal.length === 0 ? (
+                <div className={styles.emptyMini}>Nenhuma mídia encontrada.</div>
+              ) : (
+                midiasFiltradasModal.map((midia) => (
+                  <div key={midia.id} className={styles.mediaManagerItem}>
+                    <div className={styles.mediaManagerIcon}>
+                      {iconeTipoMidia(midia.tipo)}
+                    </div>
+
+                    <div className={styles.mediaManagerInfo}>
+                      <strong>{midia.nome}</strong>
+
+                      <span>
+                        {labelTipoMidia(midia.tipo)} · {formatarTamanhoArquivo(midia.tamanho_bytes)}
+                      </span>
+
+                      <small>
+                        {midia.mime_type || "Tipo não informado"} · {formatarDataMidia(midia.created_at)}
+                      </small>
+                    </div>
+
+                    <div className={styles.mediaManagerActions}>
+                      <a
+                        className={styles.smallButton}
+                        href={midia.url}
+                        download={midia.nome}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Baixar
+                      </a>
+
+                      {confirmandoExclusaoMidiaId === midia.id ? (
+                        <button
+                          type="button"
+                          className={styles.dangerSmallButton}
+                          disabled={midiaExcluindoId === midia.id}
+                          onClick={() => excluirMidiaDefinitivamente(midia)}
+                        >
+                          {midiaExcluindoId === midia.id ? "Excluindo..." : "Confirmar"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.dangerSmallButton}
+                          onClick={() => setConfirmandoExclusaoMidiaId(midia.id)}
+                        >
+                          Excluir
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <p className={styles.help}>
+              A exclusão é definitiva: remove o registro da tabela e o arquivo do Storage. Se algum bloco estiver usando essa mídia, ele ficará sem mídia selecionada e precisará ser ajustado antes de ativar/salvar o fluxo.
+            </p>
+          </div>
         </div>
       )}
 

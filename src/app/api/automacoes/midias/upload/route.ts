@@ -11,6 +11,15 @@ export const runtime = "nodejs";
 
 const require = createRequire(import.meta.url);
 
+type VideoCodecInfo = {
+  precisaConverter: boolean;
+  motivo: string | null;
+  videoCodec: string | null;
+  audioCodec: string | null;
+  container: string | null;
+};
+
+
 type TipoMidia = "imagem" | "video" | "audio";
 
 type UsuarioSistema = {
@@ -22,6 +31,7 @@ const BUCKET_MIDIAS = "midias";
 const LIMITE_IMAGEM = 5 * 1024 * 1024;
 const LIMITE_VIDEO = 16 * 1024 * 1024;
 const LIMITE_AUDIO = 16 * 1024 * 1024;
+const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 100 * 1024 * 1024; // 100 MB
 
 function tipoMidiaPorMime(mimeType: string): TipoMidia | "" {
   if (mimeType.startsWith("image/")) return "imagem";
@@ -84,6 +94,147 @@ async function getFfmpegBinaryPath() {
     );
   }
 }
+
+async function getFfprobeBinaryPath() {
+  const ffprobeStatic = require("ffprobe-static");
+  const resolved =
+    typeof ffprobeStatic === "string"
+      ? ffprobeStatic
+      : ffprobeStatic?.path;
+
+  if (!resolved || typeof resolved !== "string") {
+    throw new Error("Não foi possível localizar o binário do FFprobe.");
+  }
+
+  const caminhoNormalizado = normalizarCaminhoRootPlaceholder(resolved);
+
+  try {
+    await fs.access(caminhoNormalizado);
+    return caminhoNormalizado;
+  } catch {
+    throw new Error(
+      `Binário do FFprobe não encontrado no caminho: ${caminhoNormalizado}`
+    );
+  }
+}
+
+
+async function inspecionarVideoParaWhatsapp(file: File): Promise<VideoCodecInfo> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crm-probe-video-"));
+  const inputPath = path.join(tmpDir, file.name || "input-video");
+
+  try {
+    await fs.writeFile(inputPath, buffer);
+
+    const ffprobeBinaryPath = await getFfprobeBinaryPath();
+
+    const saida = await new Promise<string>((resolve, reject) => {
+      const ffprobe = spawn(ffprobeBinaryPath, [
+        "-v",
+        "error",
+        "-print_format",
+        "json",
+        "-show_format",
+        "-show_streams",
+        inputPath,
+      ]);
+
+      let stdout = "";
+      let stderr = "";
+
+      ffprobe.stdout.on("data", (chunk) => {
+        stdout += chunk.toString();
+      });
+
+      ffprobe.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+
+      ffprobe.on("error", reject);
+
+      ffprobe.on("close", (code) => {
+        if (code === 0) {
+          resolve(stdout);
+          return;
+        }
+
+        reject(
+          new Error(
+            `Falha ao inspecionar vídeo com FFprobe. Código: ${code}. Detalhes: ${stderr}`
+          )
+        );
+      });
+    });
+
+    const json = JSON.parse(saida || "{}");
+
+    const streams = Array.isArray(json.streams) ? json.streams : [];
+
+    const videoStream = streams.find(
+      (stream: any) => String(stream.codec_type || "") === "video"
+    );
+
+    const audioStream = streams.find(
+      (stream: any) => String(stream.codec_type || "") === "audio"
+    );
+
+    const videoCodec = String(videoStream?.codec_name || "").toLowerCase() || null;
+    const audioCodec = String(audioStream?.codec_name || "").toLowerCase() || null;
+    const container = String(json.format?.format_name || "").toLowerCase() || null;
+
+    const nomeLower = file.name.toLowerCase();
+    const mimeLower = file.type.toLowerCase();
+
+    const containerEhMp4 =
+      nomeLower.endsWith(".mp4") ||
+      mimeLower === "video/mp4" ||
+      String(container || "").includes("mp4") ||
+      String(container || "").includes("mov");
+
+    const videoAceito = videoCodec === "h264";
+
+    // Se não tiver áudio, pode aceitar. Se tiver áudio, precisa ser AAC.
+    const audioAceito = !audioCodec || audioCodec === "aac";
+
+    if (containerEhMp4 && videoAceito && audioAceito) {
+      return {
+        precisaConverter: false,
+        motivo: null,
+        videoCodec,
+        audioCodec,
+        container,
+      };
+    }
+
+    const motivos: string[] = [];
+
+    if (!containerEhMp4) {
+      motivos.push("container diferente de MP4");
+    }
+
+    if (!videoAceito) {
+      motivos.push(`codec de vídeo ${videoCodec || "desconhecido"}`);
+    }
+
+    if (!audioAceito) {
+      motivos.push(`codec de áudio ${audioCodec || "desconhecido"}`);
+    }
+
+    return {
+      precisaConverter: true,
+      motivo: motivos.join(", "),
+      videoCodec,
+      audioCodec,
+      container,
+    };
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+
 
 function trocarExtensaoParaMp4(nome: string) {
   const nomeLimpo = nome.trim() || `video-${Date.now()}.mp4`;
@@ -304,6 +455,45 @@ async function obterUsuarioSistema() {
   };
 }
 
+
+async function verificarLimiteStorageMidiasEmpresa(params: {
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>;
+  empresaId: string;
+  tamanhoNovoArquivoBytes: number;
+}) {
+  const { data, error } = await params.supabaseAdmin
+    .from("midias")
+    .select("tamanho_bytes")
+    .eq("empresa_id", params.empresaId);
+
+  if (error) {
+    throw error;
+  }
+
+  const totalAtualBytes = (data || []).reduce(
+    (total, midia) => total + Number(midia.tamanho_bytes || 0),
+    0
+  );
+
+  const tamanhoNovoArquivoBytes = Number(params.tamanhoNovoArquivoBytes || 0);
+  const totalDepoisUpload = totalAtualBytes + tamanhoNovoArquivoBytes;
+
+  if (totalDepoisUpload > LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Limite de 100 MB de mídias atingido. Exclua uma mídia antes de enviar outra.`,
+        limite_bytes: LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES,
+        usado_bytes: totalAtualBytes,
+        arquivo_bytes: tamanhoNovoArquivoBytes,
+      },
+      { status: 409 }
+    );
+  }
+
+  return null;
+}
+
 async function verificarNomeDisponivel(params: {
   supabaseAdmin: ReturnType<typeof getSupabaseAdmin>;
   empresaId: string;
@@ -389,6 +579,16 @@ async function prepararUploadDireto(body: unknown) {
     return validacao.response;
   }
 
+  const limiteAtingido = await verificarLimiteStorageMidiasEmpresa({
+    supabaseAdmin: contexto.supabaseAdmin,
+    empresaId: contexto.usuarioSistema.empresa_id,
+    tamanhoNovoArquivoBytes: Number(obterCampoJson(body, "tamanhoBytes") || 0),
+  });
+
+  if (limiteAtingido) {
+    return limiteAtingido;
+  }
+
   const nomeIndisponivel = await verificarNomeDisponivel({
     supabaseAdmin: contexto.supabaseAdmin,
     empresaId: contexto.usuarioSistema.empresa_id,
@@ -460,6 +660,16 @@ async function concluirUploadDireto(body: unknown) {
     );
   }
 
+  const limiteAtingido = await verificarLimiteStorageMidiasEmpresa({
+    supabaseAdmin: contexto.supabaseAdmin,
+    empresaId: contexto.usuarioSistema.empresa_id,
+    tamanhoNovoArquivoBytes: Number(obterCampoJson(body, "tamanhoBytes") || 0),
+  });
+
+  if (limiteAtingido) {
+    return limiteAtingido;
+  }
+
   const nomeIndisponivel = await verificarNomeDisponivel({
     supabaseAdmin: contexto.supabaseAdmin,
     empresaId: contexto.usuarioSistema.empresa_id,
@@ -520,36 +730,67 @@ async function uploadMultipartLegado(req: NextRequest) {
   let extensao = extensaoPorNome(arquivo.name);
 
   if (validacaoOriginal.tipo === "video") {
-    console.info("[UPLOAD MIDIA AUTOMAÇÃO] Convertendo vídeo para WhatsApp", {
+    const codecInfo = await inspecionarVideoParaWhatsapp(arquivo);
+
+    console.info("[UPLOAD MIDIA AUTOMAÇÃO] Inspeção do vídeo", {
       nomeOriginal: arquivo.name,
       mimeTypeOriginal: arquivo.type,
       tamanhoOriginal: arquivo.size,
+      precisaConverter: codecInfo.precisaConverter,
+      motivo: codecInfo.motivo,
+      videoCodec: codecInfo.videoCodec,
+      audioCodec: codecInfo.audioCodec,
+      container: codecInfo.container,
     });
 
-    arquivoParaSalvar = await converterVideoParaWhatsapp(arquivo);
-    nomeArquivoParaSalvar = trocarExtensaoParaMp4(
-      validacaoOriginal.nomeArquivoOriginal
-    );
-    mimeTypeParaSalvar = "video/mp4";
-    tamanhoBytesParaSalvar = arquivoParaSalvar.size;
-    extensao = "mp4";
+    if (codecInfo.precisaConverter) {
+      console.info("[UPLOAD MIDIA AUTOMAÇÃO] Convertendo vídeo para WhatsApp", {
+        nomeOriginal: arquivo.name,
+        motivo: codecInfo.motivo,
+      });
 
-    console.info("[UPLOAD MIDIA AUTOMAÇÃO] Vídeo convertido", {
-      nomeConvertido: arquivoParaSalvar.name,
-      mimeTypeConvertido: arquivoParaSalvar.type,
-      tamanhoConvertido: arquivoParaSalvar.size,
-    });
-
-    if (tamanhoBytesParaSalvar > LIMITE_VIDEO) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "O vídeo foi convertido para o formato aceito pelo WhatsApp, mas ainda ficou acima de 16MB. Reduza a duração ou a qualidade do vídeo e tente novamente.",
-        },
-        { status: 400 }
+      arquivoParaSalvar = await converterVideoParaWhatsapp(arquivo);
+      nomeArquivoParaSalvar = trocarExtensaoParaMp4(
+        validacaoOriginal.nomeArquivoOriginal
       );
+      mimeTypeParaSalvar = "video/mp4";
+      tamanhoBytesParaSalvar = arquivoParaSalvar.size;
+      extensao = "mp4";
+
+      console.info("[UPLOAD MIDIA AUTOMAÇÃO] Vídeo convertido", {
+        nomeConvertido: arquivoParaSalvar.name,
+        mimeTypeConvertido: arquivoParaSalvar.type,
+        tamanhoConvertido: arquivoParaSalvar.size,
+      });
+
+      if (tamanhoBytesParaSalvar > LIMITE_VIDEO) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "O vídeo foi convertido para o formato aceito pelo WhatsApp, mas ainda ficou acima de 16MB. Reduza a duração ou a qualidade do vídeo e tente novamente.",
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      console.info("[UPLOAD MIDIA AUTOMAÇÃO] Vídeo já compatível com WhatsApp. Conversão ignorada.", {
+        nomeOriginal: arquivo.name,
+        videoCodec: codecInfo.videoCodec,
+        audioCodec: codecInfo.audioCodec,
+        container: codecInfo.container,
+      });
     }
+  }
+    
+  const limiteAtingido = await verificarLimiteStorageMidiasEmpresa({
+    supabaseAdmin: contexto.supabaseAdmin,
+    empresaId: contexto.usuarioSistema.empresa_id,
+    tamanhoNovoArquivoBytes: arquivo.size,
+  });
+
+  if (limiteAtingido) {
+    return limiteAtingido;
   }
 
   const nomeIndisponivel = await verificarNomeDisponivel({
