@@ -109,6 +109,66 @@ type ContatoOpcao = {
   updated_at?: string | null;
 };
 
+type VariavelPersonalizada = {
+  id: string;
+  chave: string;
+  valor: string;
+  descricao: string | null;
+  escopo: "global" | "disparos" | "fluxos";
+  ativo: boolean;
+};
+
+type ProtocolosContatoMap = Record<
+  string,
+  {
+    protocolo_atual: string;
+    ultimo_protocolo: string;
+  }
+>;
+
+const VARIAVEIS_FIXAS_SISTEMA = [
+  {
+    chave: "nome_contato",
+    exemplo: "{{nome_contato}}",
+    descricao: "Nome salvo no cadastro do contato.",
+  },
+  {
+    chave: "email_contato",
+    exemplo: "{{email_contato}}",
+    descricao: "E-mail salvo no cadastro do contato.",
+  },
+  {
+    chave: "numero_contato",
+    exemplo: "{{numero_contato}}",
+    descricao: "Número/telefone salvo no cadastro do contato.",
+  },
+  {
+    chave: "campanha",
+    exemplo: "{{campanha}}",
+    descricao: "Campanha vinculada ao contato.",
+  },
+  {
+    chave: "origem",
+    exemplo: "{{origem}}",
+    descricao: "Origem do contato.",
+  },
+  {
+    chave: "status_lead",
+    exemplo: "{{status_lead}}",
+    descricao: "Status atual do lead.",
+  },
+  {
+    chave: "protocolo_atual",
+    exemplo: "{{protocolo_atual}}",
+    descricao: "Protocolo ativo da conversa atual do contato.",
+  },
+  {
+    chave: "ultimo_protocolo",
+    exemplo: "{{ultimo_protocolo}}",
+    descricao: "Último protocolo encerrado/inativo do contato.",
+  },
+];
+
 function extrairBody(payload: WhatsAppTemplate["payload"]) {
   const body = payload?.components?.find((item) => item.type === "BODY");
   return body?.text || "";
@@ -248,7 +308,12 @@ function normalizarEntradaVariavelTemplate(valor: string) {
     .replace(/^_+/g, "");
 }
 
-function resolverVariavelContato(valor: string, contato: ContatoOpcao) {
+function resolverVariavelContato(
+  valor: string,
+  contato: ContatoOpcao,
+  variaveisPersonalizadas: VariavelPersonalizada[] = [],
+  protocolosPorContato: ProtocolosContatoMap = {}
+) {
   const texto = String(valor || "").trim();
   const chave = normalizarVariavelTemplate(texto);
 
@@ -281,6 +346,22 @@ function resolverVariavelContato(valor: string, contato: ContatoOpcao) {
 
   if (chave === "origem") {
     return contato.origem || "";
+  }
+
+  if (chave === "protocolo_atual") {
+    return protocolosPorContato[contato.id]?.protocolo_atual || "";
+  }
+
+  if (chave === "ultimo_protocolo") {
+    return protocolosPorContato[contato.id]?.ultimo_protocolo || "";
+  }
+
+  const variavelPersonalizada = variaveisPersonalizadas.find(
+    (item) => normalizarVariavelTemplate(item.chave) === chave
+  );
+
+  if (variavelPersonalizada) {
+    return variavelPersonalizada.valor || "";
   }
 
   return texto;
@@ -527,6 +608,18 @@ export default function DisparosWhatsAppPage() {
 
   const [modalConfirmacaoAberto, setModalConfirmacaoAberto] = useState(false);
   const [confirmacaoCobranca, setConfirmacaoCobranca] = useState(false);
+  const [modalVariaveisAberto, setModalVariaveisAberto] = useState(false);
+  const [variaveisPersonalizadas, setVariaveisPersonalizadas] = useState<
+    VariavelPersonalizada[]
+  >([]);
+  const [loadingVariaveis, setLoadingVariaveis] = useState(false);
+  const [salvandoVariavel, setSalvandoVariavel] = useState(false);
+  const [novaVariavelChave, setNovaVariavelChave] = useState("");
+  const [novaVariavelValor, setNovaVariavelValor] = useState("");
+  const [novaVariavelDescricao, setNovaVariavelDescricao] = useState("");
+  const [novaVariavelEscopo, setNovaVariavelEscopo] = useState<
+    "global" | "disparos" | "fluxos"
+  >("global");
 
   const [filtroHistorico, setFiltroHistorico] = useState<
     "todos" | "sucesso" | "falha" | "processando"
@@ -705,6 +798,7 @@ export default function DisparosWhatsAppPage() {
     carregarIntegracoes();
     carregarContatos("", "", "");
     carregarHistorico();
+    carregarVariaveisPersonalizadas();
   }, []);
 
   useEffect(() => {
@@ -884,6 +978,175 @@ export default function DisparosWhatsAppPage() {
     });
   }
 
+  async function carregarVariaveisPersonalizadas() {
+    try {
+      setLoadingVariaveis(true);
+
+      const res = await fetch("/api/variaveis", {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar variáveis.");
+      }
+
+      setVariaveisPersonalizadas(
+        Array.isArray(json.variaveis) ? json.variaveis : []
+      );
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao carregar variáveis.");
+    } finally {
+      setLoadingVariaveis(false);
+    }
+  }
+
+  async function salvarVariavelPersonalizada() {
+    try {
+      setErro("");
+      setMensagem("");
+
+      const chave = normalizarEntradaVariavelTemplate(novaVariavelChave);
+      const valor = novaVariavelValor.trim();
+
+      if (!chave) {
+        setErro("Informe o nome da variável.");
+        return;
+      }
+
+      if (!valor) {
+        setErro("Informe o valor da variável.");
+        return;
+      }
+
+      setSalvandoVariavel(true);
+
+      const res = await fetch("/api/variaveis", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chave,
+          valor,
+          descricao: novaVariavelDescricao.trim(),
+          escopo: novaVariavelEscopo,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao salvar variável.");
+      }
+
+      setNovaVariavelChave("");
+      setNovaVariavelValor("");
+      setNovaVariavelDescricao("");
+      setNovaVariavelEscopo("global");
+
+      setMensagem("Variável salva com sucesso.");
+      await carregarVariaveisPersonalizadas();
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao salvar variável.");
+    } finally {
+      setSalvandoVariavel(false);
+    }
+  }
+
+  async function removerVariavelPersonalizada(id: string) {
+    try {
+      setErro("");
+      setMensagem("");
+
+      const res = await fetch("/api/variaveis", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao remover variável.");
+      }
+
+      setMensagem("Variável removida com sucesso.");
+      await carregarVariaveisPersonalizadas();
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao remover variável.");
+    }
+  }
+
+  function aplicarVariavelNoCampo(chave: string) {
+    const valor = normalizarEntradaVariavelTemplate(chave);
+
+    if (!valor) return;
+
+    if (totalVariaveis <= 1) {
+      setTemplateVariavel1(valor);
+      return;
+    }
+
+    if (!templateVariavel1.trim()) {
+      setTemplateVariavel1(valor);
+      return;
+    }
+
+    if (totalVariaveis >= 2 && !templateVariavel2.trim()) {
+      setTemplateVariavel2(valor);
+      return;
+    }
+
+    if (totalVariaveis >= 3 && !templateVariavel3.trim()) {
+      setTemplateVariavel3(valor);
+      return;
+    }
+
+    setTemplateVariavel1(valor);
+  }
+
+
+  function variaveisUsamProtocolo(variaveis: string[]) {
+    return variaveis.some((variavel) => {
+      const chave = normalizarVariavelTemplate(variavel);
+
+      return chave === "protocolo_atual" || chave === "ultimo_protocolo";
+    });
+  }
+
+  async function carregarProtocolosDosContatos(
+    contatosLista: ContatoOpcao[]
+  ): Promise<ProtocolosContatoMap> {
+    try {
+      if (contatosLista.length === 0) return {};
+
+      const res = await fetch("/api/variaveis/protocolos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contato_ids: contatosLista.map((contato) => contato.id),
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao buscar protocolos dos contatos.");
+      }
+
+      return json.protocolos || {};
+    } catch (error: any) {
+      throw new Error(error?.message || "Erro ao buscar protocolos dos contatos.");
+    }
+  }
+
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -927,12 +1190,21 @@ export default function DisparosWhatsAppPage() {
     try {
       setDisparando(true);
 
+      const protocolosPorContato = variaveisUsamProtocolo(variaveisObrigatorias)
+        ? await carregarProtocolosDosContatos(contatosSelecionados)
+        : {};
+
       const destinatarios = contatosSelecionados.map((contato) => ({
         numero: limparNumero(contato.telefone),
         variaveis:
           totalVariaveis > 0
             ? variaveisObrigatorias.map((variavel) =>
-                resolverVariavelContato(variavel, contato)
+                resolverVariavelContato(
+                  variavel,
+                  contato,
+                  variaveisPersonalizadas,
+                  protocolosPorContato
+                )
               )
             : [],
       }));
@@ -1223,10 +1495,20 @@ export default function DisparosWhatsAppPage() {
                     
                       {totalVariaveis > 0 ? (
                         <>
-                          <div className={styles.templateHint}>
-                            Este template usa <strong>{totalVariaveis}</strong> variável(is).
-                            Variável 1 substitui <strong>{" {{1}}"}</strong>, Variável 2 substitui
-                            <strong>{" {{2}}"}</strong> e Variável 3 substitui <strong>{" {{3}}"}</strong>.
+                          <div className={styles.templateHintRow}>
+                            <div className={styles.templateHint}>
+                              Este template usa <strong>{totalVariaveis}</strong> variável(is).
+                              Variável 1 substitui <strong>{" {{1}}"}</strong>, Variável 2 substitui
+                              <strong>{" {{2}}"}</strong> e Variável 3 substitui <strong>{" {{3}}"}</strong>.
+                            </div>
+
+                            <button
+                              type="button"
+                              className={styles.variablesButton}
+                              onClick={() => setModalVariaveisAberto(true)}
+                            >
+                              Gerenciar variáveis
+                            </button>
                           </div>
 
                           <div className={styles.templateVariablesGrid}>
@@ -1277,7 +1559,7 @@ export default function DisparosWhatsAppPage() {
                             ) : null}
                           </div>
                             <span className={styles.help}>
-                              Variaveis fixas do contato: {"{{nome_contato}}"}, {"{{email_contato}}"} e {"{{numero_contato}}"}.
+                              Variáveis fixas: {"{{nome_contato}}"}, {"{{email_contato}}"}, {"{{numero_contato}}"}, {"{{campanha}}"}, {"{{origem}}"}, {"{{status_lead}}"}, {"{{protocolo_atual}}"} e {"{{ultimo_protocolo}}"}.
                             </span>
                         </>
                       ) : null}
@@ -1844,6 +2126,211 @@ export default function DisparosWhatsAppPage() {
           </section>
         </div>
       </div>
+
+      {modalVariaveisAberto && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => setModalVariaveisAberto(false)}
+        >
+          <div
+            className={styles.modalConfirmacao}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.modalEyebrow}>Variáveis</p>
+                <h3 className={styles.modalTitle}>Gerenciar variáveis</h3>
+                <p className={styles.modalSubtitle}>
+                  Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para disparos e fluxos.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setModalVariaveisAberto(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Variáveis fixas do sistema</h4>
+
+                <div className={styles.variablesList}>
+                  {VARIAVEIS_FIXAS_SISTEMA.map((item) => (
+                    <div key={item.chave} className={styles.variableItem}>
+                      <div className={styles.variableMain}>
+                        <strong className={styles.variableCode}>{item.exemplo}</strong>
+                        <p className={styles.variableDescription}>{item.descricao}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={styles.variableUseButton}
+                        onClick={() => aplicarVariavelNoCampo(item.chave)}
+                      >
+                        Usar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Cadastrar variável personalizada</h4>
+
+                <div className={styles.variableFormGrid}>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Nome da variável</label>
+                    <input
+                      value={novaVariavelChave}
+                      onChange={(e) =>
+                        setNovaVariavelChave(
+                          normalizarEntradaVariavelTemplate(e.target.value)
+                        )
+                      }
+                      className={styles.input}
+                      placeholder="ex: desconto"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.label}>Valor</label>
+                    <input
+                      value={novaVariavelValor}
+                      onChange={(e) => setNovaVariavelValor(e.target.value)}
+                      className={styles.input}
+                      placeholder="ex: 20%"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.label}>Uso</label>
+                    <select
+                      value={novaVariavelEscopo}
+                      onChange={(e) =>
+                        setNovaVariavelEscopo(
+                          e.target.value as "global" | "disparos" | "fluxos"
+                        )
+                      }
+                      className={styles.input}
+                    >
+                      <option value="global">Disparos e fluxos</option>
+                      <option value="disparos">Somente disparos</option>
+                      <option value="fluxos">Somente fluxos</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Descrição</label>
+                  <input
+                    value={novaVariavelDescricao}
+                    onChange={(e) => setNovaVariavelDescricao(e.target.value)}
+                    className={styles.input}
+                    placeholder="ex: desconto usado em campanhas promocionais"
+                  />
+                </div>
+
+                <div className={styles.variablePreviewBox}>
+                  A variável será usada assim:{" "}
+                  <strong>
+                    {"{{"}
+                    {normalizarEntradaVariavelTemplate(novaVariavelChave) || "nome_variavel"}
+                    {"}}"}
+                  </strong>
+                </div>
+
+                <div className={styles.variableFormActions}>
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={salvarVariavelPersonalizada}
+                    disabled={salvandoVariavel}
+                  >
+                    {salvandoVariavel ? "Salvando..." : "Salvar variável"}
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Variáveis cadastradas</h4>
+
+                {loadingVariaveis ? (
+                  <div className={styles.emptyMiniState}>Carregando variáveis...</div>
+                ) : variaveisPersonalizadas.length === 0 ? (
+                  <div className={styles.emptyMiniState}>
+                    Nenhuma variável personalizada cadastrada.
+                  </div>
+                ) : (
+                  <div className={styles.variablesList}>
+                    {variaveisPersonalizadas.map((item) => (
+                      <div key={item.id} className={styles.variableItem}>
+                        <div className={styles.variableMain}>
+                          <strong className={styles.variableCode}>
+                            {"{{"}
+                            {item.chave}
+                            {"}}"}
+                          </strong>
+
+                          <p className={styles.variableDescription}>
+                            Valor: <strong>{item.valor}</strong>
+                          </p>
+
+                          {item.descricao ? (
+                            <p className={styles.variableDescription}>
+                              {item.descricao}
+                            </p>
+                          ) : null}
+
+                          <span className={styles.variableScope}>
+                            {item.escopo === "global"
+                              ? "Disparos e fluxos"
+                              : item.escopo === "disparos"
+                              ? "Somente disparos"
+                              : "Somente fluxos"}
+                          </span>
+                        </div>
+
+                        <div className={styles.variableActions}>
+                          <button
+                            type="button"
+                            className={styles.variableUseButton}
+                            onClick={() => aplicarVariavelNoCampo(item.chave)}
+                          >
+                            Usar
+                          </button>
+
+                          <button
+                            type="button"
+                            className={styles.variableDeleteButton}
+                            onClick={() => removerVariavelPersonalizada(item.id)}
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setModalVariaveisAberto(false)}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalConfirmacaoAberto && (
         <div className={styles.modalOverlay} onClick={() => setModalConfirmacaoAberto(false)}>
           <div

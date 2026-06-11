@@ -1325,6 +1325,186 @@
   transform: translateY(-1px);
 }
 
+
+.templateHintRow {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.templateHintRow .templateHint {
+  flex: 1;
+}
+
+.variablesButton {
+  flex-shrink: 0;
+  border: 1px solid #cfe0f5;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.variablesButton:hover {
+  border-color: #94b7e8;
+  background: #f8fbff;
+  transform: translateY(-1px);
+}
+
+.variablesList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.variableItem {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.variableMain {
+  min-width: 0;
+  flex: 1;
+}
+
+.variableCode {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+  word-break: break-word;
+}
+
+.variableDescription {
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.variableScope {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #dbe3f0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.variableActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.variableUseButton,
+.variableDeleteButton {
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.variableUseButton {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.variableUseButton:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.variableDeleteButton {
+  border: 1px solid #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.variableDeleteButton:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.variableFormGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 180px;
+  gap: 12px;
+}
+
+.variablePreviewBox {
+  border: 1px dashed #cbd5e1;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.variablePreviewBox strong {
+  color: #0f172a;
+}
+
+.variableFormActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .templateHintRow {
+    flex-direction: column;
+  }
+
+  .variablesButton {
+    min-height: 42px;
+  }
+
+  .variableFormGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .variableItem {
+    flex-direction: column;
+  }
+
+  .variableActions {
+    width: 100%;
+  }
+
+  .variableUseButton,
+  .variableDeleteButton {
+    flex: 1;
+  }
+}
+
 @media (max-width: 980px) {
   .setupPreviewGrid {
     grid-template-columns: 1fr;

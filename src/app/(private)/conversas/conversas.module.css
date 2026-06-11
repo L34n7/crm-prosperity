@@ -348,7 +348,11 @@
   justify-content: center;
   text-align: center;
   padding: 18px;
-  color: #64748b;
+  color: #64748bcb;
+}
+
+.emptyListState {
+  font-size: 16px;
 }
 
 .conversationItem {
