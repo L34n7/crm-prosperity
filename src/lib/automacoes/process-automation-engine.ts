@@ -7224,7 +7224,7 @@ export async function processarTimeoutSemRespostaAgendado(params: {
   await supabaseAdmin
     .from("automacao_agendamentos")
     .update({
-      status: "concluido",
+      status: "executado",
       updated_at: new Date().toISOString(),
     })
     .eq("id", agendamentoId)
@@ -7302,7 +7302,7 @@ async function finalizarExecucao(execucaoId: string, empresaId: string) {
 async function registrarLog(params: {
   empresaId: string;
   execucaoId: string;
-  fluxoId: string;
+  fluxoId?: string | null;
   noId?: string;
   conexaoId?: string;
   tipoEvento: string;
@@ -7313,7 +7313,7 @@ async function registrarLog(params: {
   await supabaseAdmin.from("automacao_execucao_logs").insert({
     empresa_id: params.empresaId,
     execucao_id: params.execucaoId,
-    fluxo_id: params.fluxoId,
+    fluxo_id: params.fluxoId || null,
     no_id: params.noId || null,
     conexao_id: params.conexaoId || null,
     tipo_evento: params.tipoEvento,
@@ -7678,7 +7678,7 @@ async function enviarBotoesAutomacao({
       conteudo: mensagemComVariaveis,
       tipo_mensagem: "botao",
       origem: "automatica",
-      status_envio: response.ok ? "enviada" : "erro",
+      status_envio: response.ok ? "enviada" : "falha",
       mensagem_externa_id: mensagemExternaId,
       automacao_execucao_id: execucaoId,
       automacao_no_id: noId,
@@ -7967,7 +7967,7 @@ async function enviarMidiaAutomacao(params: {
       erro: validacaoExecucao.motivo,
     };
   }
-  
+
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
     .select(

@@ -268,6 +268,29 @@ export async function GET(request: Request) {
           continue;
         }
 
+        const validacaoExecucao = await validarExecucaoAutomacaoAtiva({
+          empresaId: agendamento.empresa_id,
+          conversaId: payload.conversa_id,
+          execucaoId: agendamento.execucao_id,
+        });
+
+        if (!validacaoExecucao.ok) {
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "cancelado",
+              executed_at: new Date().toISOString(),
+              payload_json: {
+                ...payload,
+                motivo_cancelamento: validacaoExecucao.motivo,
+              },
+            })
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
+
+          continue;
+        }
+
         const { data: ultimaMensagemAutomacao } = await supabaseAdmin
           .from("mensagens")
           .select("id, status_envio, origem, created_at")
@@ -443,26 +466,46 @@ export async function GET(request: Request) {
           .eq("status", "pendente");
 
 
-          await supabaseAdmin
-            .from("automacao_execucoes")
-            .update({
-              no_atual_id: proximoNo.id,
-              status: "rodando",
-              updated_at: new Date().toISOString(),
-              metadata_json: {
-                ...(execucao.metadata_json || {}),
-                timeout_sem_resposta: {
-                  no_origem_id: agendamento.no_id,
-                  no_destino_id: proximoNo.id,
-                  agendamento_id: agendamento.id,
-                  executado_em: new Date().toISOString(),
+          const { data: transicaoAtualizada, error: transicaoError } =
+            await supabaseAdmin
+              .from("automacao_execucoes")
+              .update({
+                no_atual_id: proximoNo.id,
+                status: "rodando",
+                updated_at: new Date().toISOString(),
+                metadata_json: {
+                  ...(execucao.metadata_json || {}),
+                  timeout_sem_resposta: {
+                    no_origem_id: agendamento.no_id,
+                    no_destino_id: proximoNo.id,
+                    agendamento_id: agendamento.id,
+                    executado_em: new Date().toISOString(),
+                  },
                 },
-              },
-            })
-            .eq("id", agendamento.execucao_id)
-            .eq("empresa_id", agendamento.empresa_id)
-            .eq("status", "aguardando")
-            .eq("no_atual_id", agendamento.no_id);
+              })
+              .eq("id", agendamento.execucao_id)
+              .eq("empresa_id", agendamento.empresa_id)
+              .eq("status", "aguardando")
+              .eq("no_atual_id", agendamento.no_id)
+              .select("id")
+              .maybeSingle();
+
+          if (transicaoError || !transicaoAtualizada) {
+            await supabaseAdmin
+              .from("automacao_agendamentos")
+              .update({
+                status: "cancelado",
+                executed_at: new Date().toISOString(),
+                payload_json: {
+                  ...payload,
+                  motivo_cancelamento: "transicao_timeout_nao_aplicada",
+                },
+              })
+              .eq("id", agendamento.id)
+              .eq("empresa_id", agendamento.empresa_id);
+
+            continue;
+          }
             
           await executarNo({
             empresaId: agendamento.empresa_id,
