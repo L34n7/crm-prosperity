@@ -165,7 +165,7 @@
 .propertiesPanel {
   position: absolute;
   top: 28px;
-  right: 28px;
+  left: 28px;
   z-index: 20;
   width: 360px;
   max-width: calc(100% - 56px);
@@ -1622,25 +1622,35 @@
 }
 
 
-.deleteNodeIconButton {
-  width: 42px;
-  height: 42px;
-
-  flex-shrink: 0;
-
+.deleteNodeIconButton,
+.deleteNodeConfirmButton {
+  width: 60px;
+  min-width: 60px;
+  max-width: 78px;
+  height: 40px;
+  border-radius: 12px;
   border: 1px solid #fecaca;
-  border-radius: 14px;
+  background: #fff1f2;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 60px;
+  transition: none !important;
+}
 
+.deleteNodeIconButton {
+  border: 1px solid #fecaca;
   background: #fff5f5;
   color: #dc2626;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   font-size: 18px;
   cursor: pointer;
-
   transition: 0.18s ease;
 }
 
@@ -1651,11 +1661,7 @@
 }
 
 .deleteNodeConfirmButton {
-  margin-left: auto;
-  height: 42px;
-  padding: 0 5px;
   border: 1px solid #fecaca;
-  border-radius: 14px;
   background: #dc2626;
   color: #ffffff;
   font-size: 13px;
