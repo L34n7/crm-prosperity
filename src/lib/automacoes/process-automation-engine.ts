@@ -1268,7 +1268,17 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           return capturaRegistrada;
         }
 
+
         if (!capturaRegistrada.valido && !capturaRegistrada.excedeuTentativas) {
+          await agendarTimeoutSemRespostaSeExistir({
+            empresaId,
+            conversaId,
+            execucaoId: execucaoExistente.id,
+            fluxoId: execucaoExistente.fluxo_id,
+            noId: execucaoExistente.no_atual_id,
+            numeroDestino,
+          });
+
           await agendarEncerramentoInatividadeFluxoSeAtivo({
             empresaId,
             conversaId,
@@ -2441,6 +2451,15 @@ export async function executarNo(params: {
       descricao: "Automação aguardando resposta para captura.",
       entrada: no.configuracao_json,
       saida: {},
+    });
+
+    await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      numeroDestino,
     });
 
     await agendarEncerramentoInatividadeFluxoSeAtivo({
@@ -6881,6 +6900,206 @@ async function cancelarAgendamentosTimeoutPendentes(params: {
   }
 }
 
+
+export async function processarTimeoutSemRespostaAgendado(params: {
+  empresaId: string;
+  agendamentoId: string;
+}) {
+  const { empresaId, agendamentoId } = params;
+
+  const { data: agendamento, error: agendamentoError } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .select("*")
+    .eq("id", agendamentoId)
+    .eq("empresa_id", empresaId)
+    .eq("tipo_agendamento", "timeout_sem_resposta")
+    .eq("status", "pendente")
+    .maybeSingle();
+
+  if (agendamentoError) {
+    console.error("[AUTOMATION_TIMEOUT] Erro ao buscar agendamento:", agendamentoError);
+    return { ok: false, error: "Erro ao buscar agendamento de timeout." };
+  }
+
+  if (!agendamento) {
+    return { ok: true, status: "agendamento_nao_encontrado_ou_ja_processado" };
+  }
+
+  const payload = agendamento.payload_json || {};
+  const execucaoId = agendamento.execucao_id;
+  const fluxoId = agendamento.fluxo_id;
+  const noOrigemId = String(payload.no_origem_id || agendamento.no_id || "");
+  const noDestinoId = String(payload.no_destino_id || "");
+  const conversaId = String(payload.conversa_id || "");
+  const numeroDestino = String(payload.numero_destino || "");
+
+  if (!execucaoId || !fluxoId || !noOrigemId || !noDestinoId || !conversaId) {
+    await supabaseAdmin
+      .from("automacao_agendamentos")
+      .update({
+        status: "erro",
+        updated_at: new Date().toISOString(),
+        payload_json: {
+          ...payload,
+          erro: "Payload incompleto para timeout sem resposta.",
+        },
+      })
+      .eq("id", agendamentoId)
+      .eq("empresa_id", empresaId);
+
+    return { ok: false, error: "Payload incompleto para timeout sem resposta." };
+  }
+
+  const { data: execucaoAtual, error: execucaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("*")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (execucaoError || !execucaoAtual) {
+    await supabaseAdmin
+      .from("automacao_agendamentos")
+      .update({
+        status: "cancelado",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", agendamentoId)
+      .eq("empresa_id", empresaId);
+
+    return { ok: true, status: "execucao_nao_encontrada" };
+  }
+
+  const execucaoAindaEstaAguardandoMesmoNo =
+    execucaoAtual.status === "aguardando" &&
+    execucaoAtual.no_atual_id === noOrigemId;
+
+  if (!execucaoAindaEstaAguardandoMesmoNo) {
+    await supabaseAdmin
+      .from("automacao_agendamentos")
+      .update({
+        status: "cancelado",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", agendamentoId)
+      .eq("empresa_id", empresaId);
+
+    return { ok: true, status: "timeout_ignorado_execucao_avancou" };
+  }
+
+  const { data: proximoNo, error: proximoNoError } = await supabaseAdmin
+    .from("automacao_nos")
+    .select("*")
+    .eq("id", noDestinoId)
+    .eq("empresa_id", empresaId)
+    .eq("ativo", true)
+    .maybeSingle();
+
+  if (proximoNoError || !proximoNo) {
+    await supabaseAdmin
+      .from("automacao_agendamentos")
+      .update({
+        status: "erro",
+        updated_at: new Date().toISOString(),
+        payload_json: {
+          ...payload,
+          erro: "Bloco de destino do timeout não encontrado.",
+        },
+      })
+      .eq("id", agendamentoId)
+      .eq("empresa_id", empresaId);
+
+    return { ok: false, error: "Bloco de destino do timeout não encontrado." };
+  }
+
+  const metadataAtual = execucaoAtual.metadata_json || {};
+  const visitasNos = normalizarVisitasNos(metadataAtual);
+
+  const visitasNosAtualizadas = {
+    ...visitasNos,
+    [proximoNo.id]: (visitasNos[proximoNo.id] || 0) + 1,
+  };
+
+  const { data: transicaoAtualizada, error: transicaoError } =
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        no_atual_id: proximoNo.id,
+        status: "rodando",
+        metadata_json: {
+          ...metadataAtual,
+          visitas_nos: visitasNosAtualizadas,
+          timeout_sem_resposta: {
+            no_origem_id: noOrigemId,
+            no_destino_id: noDestinoId,
+            agendamento_id: agendamentoId,
+            executado_em: new Date().toISOString(),
+          },
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId)
+      .eq("status", "aguardando")
+      .eq("no_atual_id", noOrigemId)
+      .select("id")
+      .maybeSingle();
+
+  if (transicaoError || !transicaoAtualizada) {
+    await supabaseAdmin
+      .from("automacao_agendamentos")
+      .update({
+        status: "cancelado",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", agendamentoId)
+      .eq("empresa_id", empresaId);
+
+    return { ok: true, status: "timeout_ignorado_transicao_ja_aplicada" };
+  }
+
+  await supabaseAdmin
+    .from("automacao_agendamentos")
+    .update({
+      status: "concluido",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", agendamentoId)
+    .eq("empresa_id", empresaId);
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId: noOrigemId,
+    conexaoId: payload.conexao_id || null,
+    tipoEvento: "timeout_sem_resposta_executado",
+    descricao: "Contato não respondeu no tempo configurado; motor seguiu pela conexão de timeout.",
+    entrada: payload,
+    saida: {
+      proximo_no_id: proximoNo.id,
+      proximo_tipo_no: proximoNo.tipo_no,
+    },
+  });
+
+  const runtimeCache = await carregarFluxoRuntimeCache({
+    empresaId,
+    fluxoId,
+  });
+
+  await executarNo({
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    no: proximoNo,
+    mensagemTexto: "",
+    numeroDestino,
+    runtimeCache,
+  });
+
+  return { ok: true, status: "timeout_processado" };
+}
 
 async function finalizarExecucao(execucaoId: string, empresaId: string) {
   const agora = new Date().toISOString();

@@ -621,6 +621,10 @@ function classeUsoStorageMidias(usadoBytes: number, limiteBytes: number) {
 }
 
 function rotuloPadraoPorTipoNo(tipoNo: string) {
+  if (tipoNo === "capturar_resposta") {
+    return "Resposta recebida";
+  }
+
   return tipoNoEsperaResposta(tipoNo) ? "Nova condição" : "Sempre seguir";
 }
 

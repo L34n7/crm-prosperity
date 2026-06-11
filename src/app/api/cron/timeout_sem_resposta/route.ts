@@ -418,45 +418,67 @@ export async function GET(request: Request) {
           .eq("tipo_agendamento", "encerramento_inatividade_fluxo")
           .eq("status", "pendente");
 
-        await executarNo({
-          empresaId: agendamento.empresa_id,
-          conversaId: payload.conversa_id,
-          execucaoId: agendamento.execucao_id,
-          fluxoId: agendamento.fluxo_id,
-          no: proximoNo,
-          numeroDestino: payload.numero_destino,
-        });
 
-        await supabaseAdmin
-        .from("automacao_agendamentos")
-        .update({
-            status: "executado",
-            executed_at: new Date().toISOString(),
-        })
-          .eq("id", agendamento.id);
-      } catch (error) {
-        console.error("[CRON TIMEOUT] Erro ao executar timeout:", error);
+          await supabaseAdmin
+            .from("automacao_execucoes")
+            .update({
+              no_atual_id: proximoNo.id,
+              status: "rodando",
+              updated_at: new Date().toISOString(),
+              metadata_json: {
+                ...(execucao.metadata_json || {}),
+                timeout_sem_resposta: {
+                  no_origem_id: agendamento.no_id,
+                  no_destino_id: proximoNo.id,
+                  agendamento_id: agendamento.id,
+                  executado_em: new Date().toISOString(),
+                },
+              },
+            })
+            .eq("id", agendamento.execucao_id)
+            .eq("empresa_id", agendamento.empresa_id)
+            .eq("status", "aguardando")
+            .eq("no_atual_id", agendamento.no_id);
+            
+          await executarNo({
+            empresaId: agendamento.empresa_id,
+            conversaId: payload.conversa_id,
+            execucaoId: agendamento.execucao_id,
+            fluxoId: agendamento.fluxo_id,
+            no: proximoNo,
+            numeroDestino: payload.numero_destino,
+          });
 
-        await supabaseAdmin
+          await supabaseAdmin
           .from("automacao_agendamentos")
           .update({
-            status: "cancelado",
-            executed_at: new Date().toISOString(),
+              status: "executado",
+              executed_at: new Date().toISOString(),
           })
-          .eq("empresa_id", agendamento.empresa_id)
-          .eq("execucao_id", agendamento.execucao_id)
-          .eq("no_id", agendamento.no_id)
-          .eq("tipo_agendamento", "timeout_sem_resposta")
-          .eq("status", "pendente")
-          .neq("id", agendamento.id);
-          
-        await supabaseAdmin
-          .from("automacao_agendamentos")
-          .update({
-            status: "erro",
-          })
-          .eq("id", agendamento.id)
-          .eq("empresa_id", agendamento.empresa_id);
+            .eq("id", agendamento.id);
+        } catch (error) {
+          console.error("[CRON TIMEOUT] Erro ao executar timeout:", error);
+
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "cancelado",
+              executed_at: new Date().toISOString(),
+            })
+            .eq("empresa_id", agendamento.empresa_id)
+            .eq("execucao_id", agendamento.execucao_id)
+            .eq("no_id", agendamento.no_id)
+            .eq("tipo_agendamento", "timeout_sem_resposta")
+            .eq("status", "pendente")
+            .neq("id", agendamento.id);
+            
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "erro",
+            })
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
       }
     }
 
