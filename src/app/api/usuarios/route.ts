@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
@@ -22,6 +23,9 @@ import {
 } from "@/lib/planos/limites";
 
 const supabaseAdmin = getSupabaseAdmin();
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 type UsuarioPayload = {
   nome?: string;
@@ -60,6 +64,226 @@ type PlanoEmpresaRow = {
       }>
     | null;
 };
+
+type EmpresaConviteRow = {
+  nome_fantasia?: string | null;
+  razao_social?: string | null;
+};
+
+function escaparHtml(valor: string) {
+  return String(valor || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function textoCabecalhoSeguro(valor: string) {
+  return String(valor || "")
+    .replace(/[\r\n<>]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function buscarNomeEmpresaConvite(empresaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("empresas")
+    .select("nome_fantasia, razao_social")
+    .eq("id", empresaId)
+    .maybeSingle<EmpresaConviteRow>();
+
+  if (error) {
+    throw new Error(`Erro ao buscar empresa do convite: ${error.message}`);
+  }
+
+  return (
+    String(data?.nome_fantasia || "").trim() ||
+    String(data?.razao_social || "").trim() ||
+    "sua empresa"
+  );
+}
+
+async function enviarEmailConviteUsuario(params: {
+  email: string;
+  nome: string;
+  empresaNome: string;
+  link: string;
+}) {
+  if (!resend) {
+    throw new Error("Envio de email nao configurado.");
+  }
+
+  const empresaCabecalho =
+    textoCabecalhoSeguro(params.empresaNome) || "sua empresa";
+
+  const { error } = await resend.emails.send({
+    from: "CRM Prosperity <no-reply@crmprosperity.com>",
+    to: params.email,
+    subject: `Convite para acessar ${empresaCabecalho} no CRM Prosperity`,
+    text: [
+      `Ola, ${params.nome}.`,
+      `${params.empresaNome} convidou voce para acessar o ambiente da empresa no CRM Prosperity.`,
+      "Para aceitar o convite, crie sua senha pelo link abaixo:",
+      params.link,
+      "Se voce nao esperava este convite, pode ignorar este email.",
+    ].join("\n"),
+    html: getConviteUsuarioTemplate({
+      nome: params.nome,
+      empresaNome: params.empresaNome,
+      link: params.link,
+    }),
+  });
+
+  if (error) {
+    console.error("[USUARIOS_CONVITE_EMAIL] Erro ao enviar email:", error);
+    throw new Error("Erro ao enviar email de convite.");
+  }
+}
+
+function getConviteUsuarioTemplate({
+  nome,
+  empresaNome,
+  link,
+}: {
+  nome: string;
+  empresaNome: string;
+  link: string;
+}) {
+  const siteUrlBruto =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com";
+  const siteUrl =
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(siteUrlBruto)
+      ? "https://crmprosperity.com"
+      : siteUrlBruto.replace(/\/$/, "");
+  const logoUrl = `${siteUrl}/logo-png-crm-prosperity.png`;
+  const nomeSeguro = escaparHtml(nome || "colaborador");
+  const empresaSeguro = escaparHtml(empresaNome || "sua empresa");
+  const linkSeguro = escaparHtml(link);
+
+  return `
+  <!DOCTYPE html>
+  <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Convite de acesso</title>
+    </head>
+
+    <body style="margin:0; padding:0; background:#eef3ff; font-family:Arial, Helvetica, sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef3ff; padding:40px 16px;">
+        <tr>
+          <td align="center">
+
+            <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px; background:#ffffff; border-radius:24px; overflow:hidden; box-shadow:0 20px 60px rgba(15, 23, 42, 0.14);">
+
+              <tr>
+                <td style="
+                  background: linear-gradient(135deg, #04254d 0%, #0b1526 25%, #0b1526 75%, #082d29 100%);
+                  padding: 34px 32px 38px 32px;
+                  text-align: center;
+                  position: relative;
+                ">
+
+                  <div style="
+                    position:absolute;
+                    inset:0;
+                    background:
+                      radial-gradient(circle at top left, rgba(59,130,246,0.18), transparent 40%),
+                      radial-gradient(circle at bottom right, rgba(16,185,129,0.12), transparent 40%);
+                    opacity:0.6;
+                  "></div>
+
+                  <div style="position:relative; z-index:1;">
+
+                    <img
+                      src="${logoUrl}"
+                      alt="CRM Prosperity"
+                      width="96"
+                      style="display:block; margin:0 auto 18px auto; max-width:96px; height:auto;"
+                    />
+
+                    <h1 style="margin:0; color:#ffffff; font-size:25px; line-height:1.3; font-weight:700;">
+                      Convite para acessar ${empresaSeguro}
+                    </h1>
+
+                    <p style="margin:10px 0 0 0; color:#cbd5f5; font-size:15px; line-height:1.6;">
+                      Acesse o ambiente da empresa e crie sua senha de acesso.
+                    </p>
+
+                  </div>
+
+                </td>
+              </tr>
+
+              <tr>
+                <td style="padding:40px 34px 32px 34px;">
+                  <p style="margin:0 0 18px 0; color:#0f172a; font-size:18px; line-height:1.6; font-weight:700;">
+                    Ol&aacute;, ${nomeSeguro}!
+                  </p>
+
+                  <p style="margin:0 0 18px 0; color:#475569; font-size:15px; line-height:1.7;">
+                    Voc&ecirc; recebeu um convite para colaborar com a equipe da <strong>${empresaSeguro}</strong>.
+                  </p>
+
+                  <p style="margin:0 0 18px 0; color:#475569; font-size:15px; line-height:1.7;">
+                    Para aceitar o convite, clique no bot&atilde;o abaixo e crie sua senha com seguran&ccedil;a.
+                  </p>
+
+                  <p style="margin:0 0 28px 0; color:#475569; font-size:15px; line-height:1.7;">
+                    Ap&oacute;s concluir o cadastro, voc&ecirc; poder&aacute; acessar o ambiente da empresa de acordo com as permiss&otilde;es definidas pela <strong>${empresaSeguro}</strong>.
+                  </p>
+
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td align="center" style="padding:8px 0 32px 0;">
+                        <a
+                          href="${linkSeguro}"
+                          style="display:inline-block; background: linear-gradient(135deg, #0f509a 10%, #0b2551 100%); color:#ffffff; text-decoration:none; padding:16px 30px; border-radius:999px; font-size:15px; font-weight:700; box-shadow:0 10px 24px rgba(37,99,235,0.35);"
+                        >
+                          Aceitar convite e criar senha
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:18px 20px; margin-bottom:26px;">
+                    <p style="margin:0; color:#64748b; font-size:13px; line-height:1.6;">
+                      Se o bot&atilde;o n&atilde;o funcionar, copie e cole este link no seu navegador:
+                    </p>
+
+                    <p style="margin:10px 0 0 0; color:#0b5ebd; font-size:12px; line-height:1.6; word-break:break-all;">
+                      ${linkSeguro}
+                    </p>
+                  </div>
+
+                  <p style="margin:0; color:#64748b; font-size:13px; line-height:1.7;">
+                    Se voc&ecirc; n&atilde;o reconhece este convite, pode ignorar este email com seguran&ccedil;a.
+                  </p>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:24px 32px; text-align:center;">
+                  <p style="margin:0 0 8px 0; color:#0f172a; font-size:14px; font-weight:700;">
+                    CRM Prosperity
+                  </p>
+
+                  <p style="margin:0; color:#94a3b8; font-size:12px; line-height:1.6;">
+                    &copy; ${new Date().getFullYear()} CRM Prosperity. Todos os direitos reservados.
+                  </p>
+                </td>
+              </tr>
+
+            </table>
+
+          </td>
+        </tr>
+      </table>
+    </body>
+  </html>
+  `;
+}
 
 function normalizarSetoresEntrada(body: UsuarioPayload) {
   const setorIdsBrutos = Array.isArray(body?.setor_ids) ? body.setor_ids : [];
@@ -500,11 +724,41 @@ export async function POST(request: Request) {
 
   const redirectTo = `${siteUrl}/auth/callback?next=/definir-senha`;
 
+  if (!resend) {
+    return NextResponse.json(
+      { ok: false, error: "Envio de email nao configurado." },
+      { status: 500 }
+    );
+  }
+
+  let empresaNome: string;
+
+  try {
+    empresaNome = await buscarNomeEmpresaConvite(usuario.empresa_id);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao buscar empresa do convite.",
+      },
+      { status: 500 }
+    );
+  }
+
   const { data: inviteData, error: inviteError } =
-    await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo,
-      data: {
-        nome,
+    await supabaseAdmin.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        redirectTo,
+        data: {
+          nome,
+          empresa_id: usuario.empresa_id,
+          telefone,
+        },
       },
     });
 
@@ -522,6 +776,38 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: "Convite enviado, mas o auth_user_id não foi retornado",
+      },
+      { status: 500 }
+    );
+  }
+
+  const inviteLink = inviteData.properties?.action_link;
+
+  if (!inviteLink) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Nao foi possivel gerar o link do convite",
+      },
+      { status: 500 }
+    );
+  }
+
+  try {
+    await enviarEmailConviteUsuario({
+      email,
+      nome,
+      empresaNome,
+      link: inviteLink,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao enviar email de convite.",
       },
       { status: 500 }
     );

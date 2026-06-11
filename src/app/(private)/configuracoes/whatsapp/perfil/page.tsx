@@ -332,6 +332,35 @@ export default function WhatsappPerfilPage() {
     setArrastando(false);
     }
 
+  const carregandoPagina = carregando && integracoes.length === 0 && !perfil;
+
+  if (carregandoPagina) {
+    return (
+      <>
+        <Header
+          title="Perfil do WhatsApp"
+          subtitle="Configure como sua empresa aparece para o cliente no WhatsApp."
+        />
+
+        <main className={styles.pageContent}>
+          <div className={styles.loadingPage}>
+            <div className={styles.loadingCardFull}>
+              <div className={styles.loadingSpinner}></div>
+
+              <div>
+                <h2>Carregando perfil do WhatsApp</h2>
+                <p>
+                  Estamos buscando as informações da sua conta no Meta. Aguarde
+                  alguns segundos.
+                </p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </>
+    );
+  }
+
   return (
     <>
       <Header

@@ -587,6 +587,32 @@ function formatarStorageMidiasMb(bytes?: number | null) {
   return (valor / 1024 / 1024).toFixed(1);
 }
 
+function formatarUltimoSalvamento(data: Date | null) {
+  if (!data) return "Ainda não salvo nesta sessão";
+
+  const agora = new Date();
+
+  const mesmoDia =
+    data.getDate() === agora.getDate() &&
+    data.getMonth() === agora.getMonth() &&
+    data.getFullYear() === agora.getFullYear();
+
+  const hora = data.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  if (mesmoDia) {
+    return `Salvo hoje, às ${hora}`;
+  }
+
+  const diaMes = data.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+
+  return `Salvo em ${diaMes}, às ${hora}`;
+}
 
 function formatarDataMidia(data?: string | null) {
   if (!data) return "Data não informada";
@@ -843,6 +869,7 @@ export default function FluxosPage() {
   const [carregandoFluxos, setCarregandoFluxos] = useState(true);
   const [carregandoEstrutura, setCarregandoEstrutura] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [ultimoSalvamento, setUltimoSalvamento] = useState<Date | null>(null);
   const [solicitarComentarioNode, setSolicitarComentarioNode] =
     useState(false);
 
@@ -2674,7 +2701,7 @@ function aplicarEdicaoNo() {
   aplicarEdicaoNoInterno();
 }
 
-function aplicarEdicaoNoInterno() {
+async function aplicarEdicaoNoInterno() {
   if (!editandoNodeId) return;
 
   const valorFixoEncerramento = normalizarValorMonetario(encerrarValorFixoNode);
@@ -2833,8 +2860,7 @@ function aplicarEdicaoNoInterno() {
 
   setErro("");
 
-  setNodes((atuais) =>
-    atuais.map((node) => {
+    const nodesAtualizados = nodes.map((node) => {
       if (node.id !== editandoNodeId) return node;
 
       const tipoAtual = String(node.data?.tipo_no || "enviar_texto");
@@ -3161,98 +3187,110 @@ function aplicarEdicaoNoInterno() {
           isSelecionado: true,
         },
       };
-    })
-  );
+    });
 
-  setSucesso("Bloco atualizado. Clique em Salvar fluxo para gravar no banco.");
+  setNodes(nodesAtualizados);
+
+  await salvarEstrutura({
+    nodesParaSalvar: nodesAtualizados,
+    edgesParaSalvar: edges,
+    mensagemSucesso: "Bloco atualizado e fluxo salvo com sucesso.",
+  });
+
   fecharPainelEdicao();
 }
 
-function aplicarEdicaoConexao() {
+async function aplicarEdicaoConexao() {
   if (!editandoEdgeId) return;
 
-  setEdges((atuais) =>
-    atuais.map((edge) => {
-      if (edge.id !== editandoEdgeId) return edge;
+  const ehSempreSeguir = tipoCondicaoConexao === "sempre";
+  const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
 
-      const ehSempreSeguir = tipoCondicaoConexao === "sempre";
-      const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
-      const labelBase = ehTimeout
-        ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
-        : rotuloConexao || valorCondicao || "Condição";
+  if (ehTimeout) {
+    const quantidade = Math.max(1, Number(timeoutQuantidade || 1));
+    const multiplicador = timeoutUnidade === "horas" ? 3600 : 60;
+    const timeoutSegundos = quantidade * multiplicador;
 
-      const labelFinal =
-        usarIaConexao && !ehSempreSeguir
-          ? `✨ ${labelBase}`
-          : labelBase;
-          
-      let condicaoJson: Record<string, any> = {};
+    if (timeoutSegundos < 300) {
+      setErro("O tempo mínimo para timeout sem resposta é de 5 minutos.");
+      return;
+    }
 
-      if (ehSempreSeguir) {
-        condicaoJson = {
-          tipo: "sempre",
-        };
-      } else if (ehTimeout) {
-        const quantidade = Math.max(1, Number(timeoutQuantidade || 1));
+    const LIMITE_TIMEOUT_SEGUNDOS = 79200; // 22 horas
 
-        const multiplicador =
-          timeoutUnidade === "horas" ? 3600 : 60;
+    if (timeoutSegundos > LIMITE_TIMEOUT_SEGUNDOS) {
+      setErro("Para mensagens comuns, o tempo máximo sem resposta é de 22 horas.");
+      return;
+    }
+  }
 
-        const timeoutSegundos = quantidade * multiplicador;
+  setErro("");
 
-        if (timeoutSegundos < 300) {
-          setErro(
-            "O tempo mínimo para timeout sem resposta é de 5 minutos."
-          );
+  const edgesAtualizados = edges.map((edge) => {
+    if (edge.id !== editandoEdgeId) return edge;
 
-          return edge;
-        }
+    const labelBase = ehTimeout
+      ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
+      : rotuloConexao || valorCondicao || "Condição";
 
-        const LIMITE_TIMEOUT_SEGUNDOS = 79200; // 22 horas
+    const labelFinal =
+      usarIaConexao && !ehSempreSeguir
+        ? `✨ ${labelBase}`
+        : labelBase;
 
-        if (timeoutSegundos > LIMITE_TIMEOUT_SEGUNDOS) {
-          setErro(
-            "Para mensagens comuns, o tempo máximo sem resposta é de 22 horas."
-          );
+    let condicaoJson: Record<string, any> = {};
 
-          return edge;
-        }
-
-        condicaoJson = {
-          tipo: "timeout_sem_resposta",
-          timeout_segundos: timeoutSegundos,
-          tempo_quantidade: quantidade,
-          tempo_unidade: timeoutUnidade,
-          status_envio: statusEnvioTimeout,
-        };
-      } else if (valorCondicao) {
-        condicaoJson = {
-          tipo: tipoCondicaoConexao,
-          valor: valorCondicao,
-        };
-      }
-
-      return {
-        ...edge,
-        label: ehSempreSeguir ? "" : labelFinal,
-
-        data: {
-          ...(edge.data || {}),
-          rotulo: ehSempreSeguir
-            ? "Sempre seguir"
-            : ehTimeout
-            ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
-            : rotuloConexao,
-
-          condicao_json: condicaoJson,
-          usar_ia: usarIaConexao,
-          descricao_ia: descricaoIaConexao.trim(),
-        },
+    if (ehSempreSeguir) {
+      condicaoJson = {
+        tipo: "sempre",
       };
-    })
-  );
+    } else if (ehTimeout) {
+      const quantidade = Math.max(1, Number(timeoutQuantidade || 1));
+      const multiplicador = timeoutUnidade === "horas" ? 3600 : 60;
+      const timeoutSegundos = quantidade * multiplicador;
 
-  setSucesso("Conexão atualizada. Clique em Salvar fluxo para gravar no banco.");
+      condicaoJson = {
+        tipo: "timeout_sem_resposta",
+        timeout_segundos: timeoutSegundos,
+        tempo_quantidade: quantidade,
+        tempo_unidade: timeoutUnidade,
+        status_envio: statusEnvioTimeout,
+      };
+    } else if (valorCondicao) {
+      condicaoJson = {
+        tipo: tipoCondicaoConexao,
+        valor: valorCondicao,
+      };
+    }
+
+    return {
+      ...edge,
+      label: ehSempreSeguir ? "" : labelFinal,
+
+      data: {
+        ...(edge.data || {}),
+        rotulo: ehSempreSeguir
+          ? "Sempre seguir"
+          : ehTimeout
+          ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
+          : rotuloConexao,
+
+        condicao_json: condicaoJson,
+        usar_ia: usarIaConexao,
+        descricao_ia: descricaoIaConexao.trim(),
+      },
+    };
+  });
+
+  setEdges(edgesAtualizados);
+
+  await salvarEstrutura({
+    nodesParaSalvar: nodes,
+    edgesParaSalvar: edgesAtualizados,
+    mensagemSucesso: "Conexão atualizada e fluxo salvo com sucesso.",
+  });
+
+  fecharPainelEdicao();
 }
 
 function obterFluxoAlvoEdicao() {
@@ -3570,7 +3608,11 @@ async function importarFluxoCompartilhado() {
   }
 }
 
-  async function salvarEstrutura() {
+  async function salvarEstrutura(params?: {
+    nodesParaSalvar?: Node[];
+    edgesParaSalvar?: Edge[];
+    mensagemSucesso?: string;
+  }) {
     if (!fluxoSelecionado) {
       setErro("Selecione um fluxo primeiro.");
       return;
@@ -3581,7 +3623,10 @@ async function importarFluxoCompartilhado() {
       setErro("");
       setSucesso("");
 
-      const nosParaSalvar = nodes.map((node) => {
+      const nodesBase = params?.nodesParaSalvar || nodes;
+      const edgesBase = params?.edgesParaSalvar || edges;
+
+      const nosParaSalvar = nodesBase.map((node) => {
       const tipoNo = String(node.data?.tipo_no || "");
 
         return {
@@ -3599,7 +3644,7 @@ async function importarFluxoCompartilhado() {
         };
       });
 
-    const conexoesParaSalvar = edges.map((edge, index) => {
+    const conexoesParaSalvar = edgesBase.map((edge, index) => {
     const data = edge.data as
         | {
             condicao_json?: Record<string, any>;
@@ -3643,8 +3688,8 @@ async function importarFluxoCompartilhado() {
         throw new Error(json.error || "Erro ao salvar estrutura.");
       }
 
-      setSucesso("Fluxo salvo com sucesso.");
-      await carregarEstrutura(fluxoSelecionado.id);
+      setUltimoSalvamento(new Date());
+      setSucesso(params?.mensagemSucesso || "Fluxo salvo com sucesso.");
     } catch (error: any) {
       setErro(error?.message || "Erro ao salvar estrutura.");
     } finally {
@@ -4716,25 +4761,26 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
           </div>
 
           <div className={styles.headerActions}>
-            {fluxoSelecionado?.status === "arquivado" ? (
-              <>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => restaurarFluxo(fluxoSelecionado)}
-                >
-                  Restaurar
-                </button>
+            <div className={styles.headerActionsButtons}>
+              {fluxoSelecionado?.status === "arquivado" ? (
+                <>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => restaurarFluxo(fluxoSelecionado)}
+                  >
+                    Restaurar
+                  </button>
 
-                <button
-                  type="button"
-                  className={styles.dangerButton}
-                  onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}
-                >
-                  Apagar definitivo
-                </button>
-              </>
-            ) : (
+                  <button
+                    type="button"
+                    className={styles.dangerButton}
+                    onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}
+                  >
+                    Apagar definitivo
+                  </button>
+                </>
+              ) : (
               <>
                 <button
                   type="button"
@@ -4757,7 +4803,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 <button
                   type="button"
                   className={styles.primaryButton}
-                  onClick={salvarEstrutura}
+                  onClick={() => salvarEstrutura()}
                   disabled={!fluxoSelecionado || salvando}
                 >
                   {salvando ? "Salvando..." : "Salvar fluxo"}
@@ -5054,7 +5100,12 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 </div>
               </>
             )}
-          </div>
+              </div>
+
+              <span className={styles.lastSaveText}>
+                {salvando ? "Salvando..." : formatarUltimoSalvamento(ultimoSalvamento)}
+              </span>
+            </div>
           </header>
 
           {fluxoSelecionado?.status === "arquivado" && (
@@ -7605,6 +7656,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         type="button"
                         className={styles.secondaryButton}
                         onClick={fecharPainelEdicao}
+                        
                       >
                         Cancelar
                       </button>
@@ -7612,7 +7664,8 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       <button
                         type="button"
                         className={styles.primaryButton}
-                        onClick={aplicarEdicaoConexao}
+                        onClick={() => aplicarEdicaoConexao()}
+                        disabled={salvando}
                       >
                         Aplicar na conexão
                       </button>

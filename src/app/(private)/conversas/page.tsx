@@ -7084,7 +7084,7 @@ const templateFooterTexto = useMemo(() => {
                             </div>
 
                             <div className={styles.detailCard}>
-                              <span className={styles.detailLabel}>Origem</span>
+                              <span className={styles.detailLabel}>Origem Atendimento</span>
                               <strong className={styles.detailValue}>
                                 {conversaSelecionada.origem_atendimento ||
                                   "Não informada"}
