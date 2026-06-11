@@ -283,16 +283,30 @@ const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
 const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; 
 const VARIAVEIS_FIXAS_CONTATO_HELP =
-  "Variaveis fixas do contato: {{nome_contato}}, {{email_contato}} e {{numero_contato}}.";
+    "Variáveis fixas: {{nome_contato}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
 const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
+  "nome",
   "nome_contato",
   "contato_nome",
+
+  "email",
   "email_contato",
   "contato_email",
+
+  "telefone",
+  "numero",
   "numero_contato",
   "contato_numero",
   "telefone_contato",
   "contato_telefone",
+
+  "campanha",
+  "origem",
+  "status",
+  "status_lead",
+
+  "protocolo_atual",
+  "ultimo_protocolo",
 ];
 
 async function lerRespostaApi(res: Response, mensagemPadrao: string) {

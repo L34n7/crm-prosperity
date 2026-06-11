@@ -122,7 +122,7 @@ async function carregarVariaveisFixasContatoExecucao(params: {
 
   const { data: execucao, error: execucaoError } = await supabaseAdmin
     .from("automacao_execucoes")
-    .select("contato_id")
+    .select("contato_id, conversa_id, conversa_protocolo_id")
     .eq("id", execucaoId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -142,7 +142,7 @@ async function carregarVariaveisFixasContatoExecucao(params: {
 
   const { data: contato, error: contatoError } = await supabaseAdmin
     .from("contatos")
-    .select("nome, email, telefone")
+    .select("id, nome, email, telefone, campanha, origem, status_lead")
     .eq("id", execucao.contato_id)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -154,7 +154,129 @@ async function carregarVariaveisFixasContatoExecucao(params: {
     );
   }
 
-  return montarMapaVariaveisFixasContato(contato || null);
+  let protocoloAtual = "";
+  let ultimoProtocolo = "";
+
+  if (execucao.conversa_protocolo_id) {
+    const { data: protocoloAtivo, error: protocoloAtivoError } =
+      await supabaseAdmin
+        .from("conversa_protocolos")
+        .select("protocolo")
+        .eq("id", execucao.conversa_protocolo_id)
+        .eq("empresa_id", empresaId)
+        .eq("ativo", true)
+        .maybeSingle();
+
+    if (protocoloAtivoError) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao buscar protocolo atual:",
+        protocoloAtivoError
+      );
+    }
+
+    protocoloAtual = protocoloAtivo?.protocolo || "";
+  }
+
+  if (!protocoloAtual && execucao.conversa_id) {
+    const { data: protocoloAtivoDaConversa } = await supabaseAdmin
+      .from("conversa_protocolos")
+      .select("protocolo")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", execucao.conversa_id)
+      .eq("ativo", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    protocoloAtual = protocoloAtivoDaConversa?.protocolo || "";
+  }
+
+  const { data: conversasContato, error: conversasContatoError } =
+    await supabaseAdmin
+      .from("conversas")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("contato_id", execucao.contato_id);
+
+  if (conversasContatoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao buscar conversas do contato para ultimo protocolo:",
+      conversasContatoError
+    );
+  }
+
+  const conversaIds = (conversasContato || [])
+    .map((conversa) => conversa.id)
+    .filter(Boolean);
+
+  if (conversaIds.length > 0) {
+    const { data: ultimoProtocoloInativo, error: ultimoProtocoloError } =
+      await supabaseAdmin
+        .from("conversa_protocolos")
+        .select("protocolo")
+        .eq("empresa_id", empresaId)
+        .in("conversa_id", conversaIds)
+        .eq("ativo", false)
+        .order("closed_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (ultimoProtocoloError) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao buscar ultimo protocolo:",
+        ultimoProtocoloError
+      );
+    }
+
+    ultimoProtocolo = ultimoProtocoloInativo?.protocolo || "";
+  }
+
+  return montarMapaVariaveisFixasContato(contato || null, {
+    protocolo_atual: protocoloAtual,
+    ultimo_protocolo: ultimoProtocolo,
+  });
+}
+
+async function carregarVariaveisGlobaisEmpresa(params: {
+  empresaId: string;
+  chaves: string[];
+}) {
+  const { empresaId, chaves } = params;
+
+  if (chaves.length === 0) {
+    return new Map<string, string>();
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("automacao_variaveis")
+    .select("chave, valor")
+    .eq("empresa_id", empresaId)
+    .is("execucao_id", null)
+    .is("contato_id", null)
+    .eq("metadata_json->>tipo", "global_empresa")
+    .eq("metadata_json->>ativo", "true")
+    .in("chave", chaves);
+
+  if (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao buscar variaveis globais da empresa:",
+      error
+    );
+
+    return new Map<string, string>();
+  }
+
+  const mapa = new Map<string, string>();
+
+  for (const item of data || []) {
+    mapa.set(
+      String(item.chave || "").trim().toLowerCase(),
+      String(item.valor || "")
+    );
+  }
+
+  return mapa;
 }
 
 async function resolverValorConversaoEncerramento(params: {
@@ -1899,9 +2021,21 @@ export async function executarNo(params: {
       Date.now() + segundosParaAgendar * 1000
     ).toISOString();
 
-    const variaveis = Array.isArray(config.variaveis)
+    const variaveisConfiguradas = Array.isArray(config.variaveis)
       ? config.variaveis
+          .map((item: any) => String(item || "").trim())
+          .filter(Boolean)
       : [];
+
+    const variaveis = await Promise.all(
+      variaveisConfiguradas.map((variavel: string) =>
+        substituirVariaveisMensagem({
+          empresaId,
+          execucaoId,
+          texto: `{{${variavel}}}`,
+        })
+      )
+    );
 
     const { data: execucaoAtual } = await supabaseAdmin
       .from("automacao_execucoes")
@@ -3050,24 +3184,37 @@ async function substituirVariaveisMensagem(params: {
   }
 
   const chaves = Array.from(
-    new Set(matches.map((match) => match[1].trim().toLowerCase()))
+    new Set(
+      matches.map((match) =>
+        String(match[1] || "")
+          .trim()
+          .toLowerCase()
+      )
+    )
   );
 
-  const [variaveisResult, variaveisFixasContato] = await Promise.all([
-    supabaseAdmin
-      .from("automacao_variaveis")
-      .select("chave, valor")
-      .eq("empresa_id", empresaId)
-      .eq("execucao_id", execucaoId)
-      .in("chave", chaves),
-    carregarVariaveisFixasContatoExecucao({
-      empresaId,
-      execucaoId,
-      chaves,
-    }),
-  ]);
+  const [variaveisExecucaoResult, variaveisFixasContato, variaveisGlobais] =
+    await Promise.all([
+      supabaseAdmin
+        .from("automacao_variaveis")
+        .select("chave, valor")
+        .eq("empresa_id", empresaId)
+        .eq("execucao_id", execucaoId)
+        .in("chave", chaves),
 
-  const { data: variaveis, error } = variaveisResult;
+      carregarVariaveisFixasContatoExecucao({
+        empresaId,
+        execucaoId,
+        chaves,
+      }),
+
+      carregarVariaveisGlobaisEmpresa({
+        empresaId,
+        chaves,
+      }),
+    ]);
+
+  const { data: variaveisExecucao, error } = variaveisExecucaoResult;
 
   if (error) {
     console.error("[AUTOMATION_ENGINE] Erro ao buscar variáveis:", error);
@@ -3075,19 +3222,33 @@ async function substituirVariaveisMensagem(params: {
 
   const mapaVariaveis = new Map<string, string>();
 
-  for (const variavel of (error ? [] : variaveis || [])) {
-    mapaVariaveis.set(
-      String(variavel.chave || "").toLowerCase(),
-      String(variavel.valor || "")
-    );
+  /*
+    Ordem de prioridade:
+    1. Variáveis globais cadastradas pela empresa
+    2. Variáveis fixas do contato/sistema
+    3. Variáveis capturadas na execução do fluxo
+
+    A última que entrar no mapa vence.
+    Assim, se o fluxo capturar uma variável com mesmo nome, ela pode sobrescrever.
+  */
+
+  for (const [chave, valor] of variaveisGlobais) {
+    mapaVariaveis.set(chave, valor);
   }
 
   for (const [chave, valor] of variaveisFixasContato) {
     mapaVariaveis.set(chave, valor);
   }
 
+  for (const variavel of (error ? [] : variaveisExecucao || [])) {
+    mapaVariaveis.set(
+      String(variavel.chave || "").trim().toLowerCase(),
+      String(variavel.valor || "")
+    );
+  }
+
   return texto.replace(regex, (_, chaveOriginal) => {
-    const chave = String(chaveOriginal).trim().toLowerCase();
+    const chave = String(chaveOriginal || "").trim().toLowerCase();
 
     return mapaVariaveis.has(chave)
       ? mapaVariaveis.get(chave) ?? ""
