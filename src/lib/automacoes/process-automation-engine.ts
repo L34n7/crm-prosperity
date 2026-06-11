@@ -428,6 +428,128 @@ function delaySegundosDoNo(no: {
   return Math.max(0, delay);
 }
 
+
+export async function validarExecucaoAutomacaoAtiva(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+}) {
+  const { empresaId, conversaId, execucaoId } = params;
+
+  const { data: execucao, error: execucaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("id, status, finished_at, metadata_json, conversa_protocolo_id")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (execucaoError || !execucao) {
+    return {
+      ok: false,
+      motivo: "execucao_nao_encontrada",
+    };
+  }
+
+  const metadata = execucao.metadata_json || {};
+
+  if (
+    execucao.finished_at ||
+    metadata.cancelado_em ||
+    !["rodando", "aguardando"].includes(String(execucao.status || ""))
+  ) {
+    return {
+      ok: false,
+      motivo: "execucao_cancelada_ou_finalizada",
+    };
+  }
+
+  const { data: conversa, error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .select("id, status, bot_ativo, responsavel_id, origem_atendimento")
+    .eq("id", conversaId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (conversaError || !conversa) {
+    return {
+      ok: false,
+      motivo: "conversa_nao_encontrada",
+    };
+  }
+
+  if (
+    conversa.bot_ativo !== true ||
+    conversa.origem_atendimento === "manual" ||
+    !!conversa.responsavel_id
+  ) {
+    return {
+      ok: false,
+      motivo: "conversa_assumida_ou_bot_desativado",
+    };
+  }
+
+  if (execucao.conversa_protocolo_id) {
+    const { data: protocolo } = await supabaseAdmin
+      .from("conversa_protocolos")
+      .select("id, ativo, closed_at")
+      .eq("id", execucao.conversa_protocolo_id)
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .maybeSingle();
+
+    if (!protocolo || protocolo.ativo !== true || protocolo.closed_at) {
+      return {
+        ok: false,
+        motivo: "protocolo_da_execucao_nao_esta_ativo",
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    motivo: null,
+  };
+}
+
+async function interromperExecucaoSeInativa(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  noId: string;
+  etapa: string;
+}) {
+  const { empresaId, conversaId, execucaoId, fluxoId, noId, etapa } = params;
+
+  const validacao = await validarExecucaoAutomacaoAtiva({
+    empresaId,
+    conversaId,
+    execucaoId,
+  });
+
+  if (validacao.ok) {
+    return false;
+  }
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId,
+    tipoEvento: "execucao_interrompida_por_cancelamento",
+    descricao:
+      "Execução interrompida porque a conversa foi assumida, o bot foi desativado ou a automação foi cancelada.",
+    entrada: {
+      etapa,
+      motivo: validacao.motivo,
+    },
+    saida: {},
+  });
+
+  return true;
+}
+
+
 function calcularSegundosAgendamentoDisparo(config: Record<string, any>) {
   const quantidade = Math.max(1, Number(config.tempo_quantidade || 1));
   const unidade = String(config.tempo_unidade || "horas");
@@ -1638,6 +1760,19 @@ export async function executarNo(params: {
     runtimeCache,
   } = params;
 
+  const execucaoInterrompidaAntesDoNo = await interromperExecucaoSeInativa({
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noId: no.id,
+    etapa: "antes_de_executar_no",
+  });
+
+  if (execucaoInterrompidaAntesDoNo) {
+    return;
+  }
+
   console.log("[AUTOMATION_ENGINE] Executando nó", {
     noId: no.id,
     tipoNo: no.tipo_no,
@@ -1696,6 +1831,20 @@ export async function executarNo(params: {
     });
 
     await aguardar(delaySegundos * 1000);
+
+    const execucaoInterrompidaDepoisDoDelay =
+      await interromperExecucaoSeInativa({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        etapa: "depois_do_delay_do_no",
+      });
+
+    if (execucaoInterrompidaDepoisDoDelay) {
+      return;
+    }
   }
 
   if (no.tipo_no === "inicio") {
@@ -2537,6 +2686,20 @@ export async function executarNo(params: {
     });
 
     await aguardar(delayAposMidia(tipoMidia));
+
+    const execucaoInterrompidaDepoisDaMidia =
+      await interromperExecucaoSeInativa({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        etapa: "depois_do_delay_pos_midia",
+      });
+
+    if (execucaoInterrompidaDepoisDaMidia) {
+      return;
+    }
 
     await registrarLog({
       empresaId,
@@ -7181,6 +7344,36 @@ export async function enviarMensagemAutomacao(params: {
     texto: conteudo,
   });
 
+  const validacaoExecucao = await validarExecucaoAutomacaoAtiva({
+    empresaId,
+    conversaId,
+    execucaoId,
+  });
+
+  if (!validacaoExecucao.ok) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId: "",
+      noId,
+      tipoEvento: "envio_texto_bloqueado_execucao_inativa",
+      descricao:
+        "Mensagem automática não enviada porque a execução foi cancelada ou a conversa foi assumida.",
+      entrada: {
+        motivo: validacaoExecucao.motivo,
+        conteudo,
+      },
+      saida: {},
+    });
+
+    return {
+      ok: false,
+      status_envio: "cancelado",
+      messageId: null,
+      erro: validacaoExecucao.motivo,
+    };
+  }
+
   perf("SEND / substituir variáveis", inicioEnvioAutomacao, {
     conversaId,
     noId,
@@ -7361,6 +7554,37 @@ async function enviarBotoesAutomacao({
     texto: mensagem,
   });
 
+  const validacaoExecucao = await validarExecucaoAutomacaoAtiva({
+    empresaId,
+    conversaId,
+    execucaoId,
+  });
+
+  if (!validacaoExecucao.ok) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId: "",
+      noId,
+      tipoEvento: "envio_botoes_bloqueado_execucao_inativa",
+      descricao:
+        "Botões não enviados porque a execução foi cancelada ou a conversa foi assumida.",
+      entrada: {
+        motivo: validacaoExecucao.motivo,
+        mensagem,
+        botoes,
+      },
+      saida: {},
+    });
+
+    return {
+      ok: false,
+      status_envio: "cancelado",
+      messageId: null,
+      erro: validacaoExecucao.motivo,
+    };
+  }
+
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
       .select(
@@ -7518,6 +7742,38 @@ async function enviarBotaoRedirectAutomacao({
         texto: url,
       }),
     ]);
+
+  const validacaoExecucao = await validarExecucaoAutomacaoAtiva({
+    empresaId,
+    conversaId,
+    execucaoId,
+  });
+
+  if (!validacaoExecucao.ok) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId: "",
+      noId,
+      tipoEvento: "envio_botao_redirect_bloqueado_execucao_inativa",
+      descricao:
+        "Botão redirect não enviado porque a execução foi cancelada ou a conversa foi assumida.",
+      entrada: {
+        motivo: validacaoExecucao.motivo,
+        mensagem,
+        botaoTexto,
+        url,
+      },
+      saida: {},
+    });
+
+    return {
+      ok: false,
+      status_envio: "cancelado",
+      messageId: null,
+      erro: validacaoExecucao.motivo,
+    };
+  }
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
@@ -7681,6 +7937,37 @@ async function enviarMidiaAutomacao(params: {
     noId,
   } = params;
 
+  const validacaoExecucao = await validarExecucaoAutomacaoAtiva({
+    empresaId,
+    conversaId,
+    execucaoId,
+  });
+
+  if (!validacaoExecucao.ok) {
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId: "",
+      noId,
+      tipoEvento: "envio_midia_bloqueado_execucao_inativa",
+      descricao:
+        "Mídia não enviada porque a execução foi cancelada ou a conversa foi assumida.",
+      entrada: {
+        motivo: validacaoExecucao.motivo,
+        tipo,
+        midiaUrl,
+      },
+      saida: {},
+    });
+
+    return {
+      ok: false,
+      status_envio: "cancelado",
+      messageId: null,
+      erro: validacaoExecucao.motivo,
+    };
+  }
+  
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
     .select(

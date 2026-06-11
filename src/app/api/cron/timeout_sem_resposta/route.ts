@@ -6,6 +6,7 @@ import {
   executarAcaoExcessoTentativas,
   enviarMensagemAutomacao,
   registrarEventoRastreamentoFluxo,
+  validarExecucaoAutomacaoAtiva,
 } from "@/lib/automacoes/process-automation-engine";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -120,6 +121,29 @@ export async function GET(request: Request) {
           }
 
           const mensagem = String(payload.mensagem || "").trim();
+
+          const validacaoExecucao = await validarExecucaoAutomacaoAtiva({
+            empresaId: agendamento.empresa_id,
+            conversaId: payload.conversa_id,
+            execucaoId: agendamento.execucao_id,
+          });
+
+          if (!validacaoExecucao.ok) {
+            await supabaseAdmin
+              .from("automacao_agendamentos")
+              .update({
+                status: "cancelado",
+                executed_at: new Date().toISOString(),
+                payload_json: {
+                  ...payload,
+                  motivo_cancelamento: validacaoExecucao.motivo,
+                },
+              })
+              .eq("id", agendamento.id)
+              .eq("empresa_id", agendamento.empresa_id);
+
+            continue;
+          }
 
           if (mensagem) {
             await enviarMensagemAutomacao({

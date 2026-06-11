@@ -198,7 +198,11 @@ export async function POST(
       }
     }
 
-    if (conversaJaEhMinha && !conversaEncerradaReabrivel) {
+    if (
+      conversaJaEhMinha &&
+      !conversaEncerradaReabrivel &&
+      conversa.bot_ativo !== true
+    ) {
       return NextResponse.json({
         ok: true,
         message: "A conversa já está sob sua responsabilidade",
@@ -249,7 +253,7 @@ export async function POST(
 
     const { data: execucoesAtivas } = await supabaseAdmin
       .from("automacao_execucoes")
-      .select("id")
+      .select("id, metadata_json")
       .eq("empresa_id", usuario.empresa_id)
       .eq("conversa_id", id)
       .in("status", ["rodando", "aguardando"]);
@@ -257,21 +261,26 @@ export async function POST(
     const execucaoIds = (execucoesAtivas || []).map((execucao) => execucao.id);
 
     if (execucaoIds.length > 0) {
-      await supabaseAdmin
-        .from("automacao_execucoes")
-        .update({
-          status: "cancelado",
-          finished_at: agora,
-          updated_at: agora,
-          metadata_json: {
-            motivo_cancelamento: "atendente_assumiu_conversa",
-            cancelado_em: agora,
-            usuario_responsavel_id: usuario.id,
-          },
-        })
-        .eq("empresa_id", usuario.empresa_id)
-        .eq("conversa_id", id)
-        .in("status", ["rodando", "aguardando"]);
+      await Promise.all(
+        (execucoesAtivas || []).map((execucao) =>
+          supabaseAdmin
+            .from("automacao_execucoes")
+            .update({
+              status: "cancelado",
+              finished_at: agora,
+              updated_at: agora,
+              metadata_json: {
+                ...(execucao.metadata_json || {}),
+                motivo_cancelamento: "atendente_assumiu_conversa",
+                cancelado_em: agora,
+                usuario_responsavel_id: usuario.id,
+              },
+            })
+            .eq("empresa_id", usuario.empresa_id)
+            .eq("id", execucao.id)
+            .in("status", ["rodando", "aguardando"])
+        )
+      );
 
       await supabaseAdmin
         .from("automacao_agendamentos")
