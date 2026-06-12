@@ -445,6 +445,33 @@ async function resolverVariaveisAgendamento(params: {
   });
 }
 
+function obterCredenciaisIntegracaoWhatsapp(integracao: any) {
+  const configJson =
+    integracao?.config_json &&
+    typeof integracao.config_json === "object"
+      ? integracao.config_json
+      : {};
+
+  const token = String(
+    configJson.access_token ||
+      configJson.meta_token_response?.access_token ||
+      ""
+  ).trim();
+
+  const phoneNumberId = String(
+    integracao?.phone_number_id ||
+      configJson.phone_number_id ||
+      configJson.embedded_signup?.phone_number_id ||
+      configJson.embedded_signup?.raw?.data?.phone_number_id ||
+      ""
+  ).trim();
+
+  return {
+    token,
+    phoneNumberId,
+  };
+}
+
 async function executarDisparoAgendado(agendamento: any) {
   const payload = agendamento.payload_json || {};
   const empresaId = agendamento.empresa_id;
@@ -567,7 +594,9 @@ async function executarDisparoAgendado(agendamento: any) {
 
   const { data: integracao, error: integracaoError } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("id, empresa_id, status, phone_number_id, token_ref")
+    .select(
+      "id, empresa_id, status, phone_number_id, token_ref, config_json"
+    )
     .eq("id", integracaoWhatsappId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -576,17 +605,26 @@ async function executarDisparoAgendado(agendamento: any) {
     throw new Error("Integração WhatsApp não encontrada.");
   }
 
-  const tokenEnvName =
-    integracao.token_ref && String(integracao.token_ref).trim()
-      ? String(integracao.token_ref).trim()
-      : "WHATSAPP_ACCESS_TOKEN";
-
-  const token = process.env[tokenEnvName as keyof typeof process.env];
-  const phoneNumberId =
-    integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const { token, phoneNumberId } =
+    obterCredenciaisIntegracaoWhatsapp(integracao);
 
   if (!token || !phoneNumberId) {
-    throw new Error("Token ou phone_number_id do WhatsApp não configurado.");
+    console.error(
+      "[CRON DISPAROS] Credenciais da integração não encontradas:",
+      {
+        agendamento_id: agendamento.id,
+        empresa_id: empresaId,
+        integracao_whatsapp_id: integracao.id,
+        token_ref: integracao.token_ref || null,
+        possui_config_json: Boolean(integracao.config_json),
+        possui_token: Boolean(token),
+        possui_phone_number_id: Boolean(phoneNumberId),
+      }
+    );
+
+    throw new Error(
+      "Token ou phone_number_id do WhatsApp não configurado."
+    );
   }
 
   const variaveisConfig = Array.isArray(payload.variaveis)
