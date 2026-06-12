@@ -43,6 +43,39 @@ function normalizarTelefone(telefone: string) {
   return numeros;
 }
 
+function obterRelacaoUnica<T>(relacao: T | T[] | null | undefined): T | null {
+  if (Array.isArray(relacao)) {
+    return relacao[0] ?? null;
+  }
+
+  return relacao ?? null;
+}
+
+async function buscarCampanhaRastreamento(empresaId: string, campanhaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("rastreamento_campanhas")
+    .select(
+      `
+        id,
+        nome,
+        origem_id,
+        rastreamento_origens (
+          id,
+          nome
+        )
+      `
+    )
+    .eq("empresa_id", empresaId)
+    .eq("id", campanhaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
 export async function PUT(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -160,6 +193,55 @@ if (body?.origem !== undefined) {
 // campanha
 if (body?.campanha !== undefined) {
   payload.campanha = body.campanha?.trim() || null;
+}
+
+if (body?.rastreamento_campanha_id !== undefined) {
+  const rastreamentoCampanhaId =
+    String(body.rastreamento_campanha_id || "").trim() || null;
+
+  payload.rastreamento_campanha_id = rastreamentoCampanhaId;
+
+  if (!rastreamentoCampanhaId) {
+    payload.campanha = null;
+  } else {
+    let campanhaRastreamento = null;
+
+    try {
+      campanhaRastreamento = await buscarCampanhaRastreamento(
+        usuario.empresa_id,
+        rastreamentoCampanhaId
+      );
+    } catch (error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Erro ao buscar campanha de rastreamento.",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!campanhaRastreamento) {
+      return NextResponse.json(
+        { ok: false, error: "Campanha de rastreamento nao encontrada." },
+        { status: 404 }
+      );
+    }
+
+    const origemDaCampanha = obterRelacaoUnica(
+      campanhaRastreamento.rastreamento_origens
+    );
+
+    payload.campanha = campanhaRastreamento.nome;
+    payload.rastreamento_origem_id = campanhaRastreamento.origem_id;
+
+    if (origemDaCampanha?.nome) {
+      payload.origem = origemDaCampanha.nome;
+    }
+  }
 }
 
 // status_lead

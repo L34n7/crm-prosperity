@@ -182,9 +182,10 @@
 .alertSuccess,
 .alertError {
   border-radius: 18px;
-  padding: 16px 18px;
+  padding: 10px 18px;
   font-size: 14px;
   font-weight: 600;
+  margin: -15px 0px -15px 0px;
 }
 
 .alertSuccess {

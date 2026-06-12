@@ -228,7 +228,20 @@ export async function POST(
           id,
           nome,
           telefone,
-          email
+          email,
+          empresa,
+          observacoes,
+          campanha,
+          rastreamento_campanha_id,
+          rastreamento_campanhas (
+            id,
+            nome,
+            status,
+            rastreamento_origens (
+              id,
+              nome
+            )
+          )
         ),
         setores (
           id,

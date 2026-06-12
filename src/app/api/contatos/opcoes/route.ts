@@ -1,87 +1,91 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export async function GET(_req: NextRequest) {
+function nomesUnicos(valores: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      valores.map((valor) => String(valor || "").trim()).filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+export async function GET() {
   try {
-    const supabase = await createClient();
+    const resultado = await getUsuarioContexto();
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    console.log("[CONTATOS OPCOES] auth user:", user?.id || null);
-    console.log("[CONTATOS OPCOES] auth error:", authError || null);
-
-    if (authError || !user) {
+    if (!resultado.ok) {
       return NextResponse.json(
-        { ok: false, error: "Não autenticado." },
-        { status: 401 }
+        { ok: false, error: resultado.error },
+        { status: resultado.status }
       );
     }
 
-    const { data: usuarioSistema, error: usuarioError } = await supabase
-      .from("usuarios")
-      .select("id, empresa_id, status")
-      .eq("auth_user_id", user.id)
-      .single();
+    const { usuario } = resultado;
 
-    console.log("[CONTATOS OPCOES] usuarioSistema:", usuarioSistema || null);
-    console.log("[CONTATOS OPCOES] usuarioError:", usuarioError || null);
-
-    if (usuarioError || !usuarioSistema) {
+    if (!usuario.empresa_id) {
       return NextResponse.json(
-        { ok: false, error: "Usuário do sistema não encontrado." },
-        { status: 403 }
-      );
-    }
-
-    if (usuarioSistema.status !== "ativo") {
-      return NextResponse.json(
-        { ok: false, error: "Usuário inativo ou bloqueado." },
-        { status: 403 }
-      );
-    }
-
-    console.log(
-      "[CONTATOS OPCOES] empresa_id:",
-      usuarioSistema.empresa_id
-    );
-
-    const { data, error } = await supabase
-      .from("contatos")
-      .select("origem")
-      .eq("empresa_id", usuarioSistema.empresa_id)
-      .not("origem", "is", null);
-
-    console.log("[CONTATOS OPCOES] raw error:", error || null);
-    console.log("[CONTATOS OPCOES] raw total:", data?.length || 0);
-
-    if (error) {
-      return NextResponse.json(
-        { ok: false, error: error.message || "Erro ao buscar origens." },
+        { ok: false, error: "Usuario sem empresa vinculada." },
         { status: 400 }
       );
     }
 
-    // 🔥 Remove duplicados + limpa valores
-    const origens = Array.from(
-      new Set(
-        (data || [])
-          .map((item) => String(item.origem || "").trim())
-          .filter((origem) => origem.length > 0)
-      )
-    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const supabase = getSupabaseAdmin();
 
-    console.log("[CONTATOS OPCOES] origens:", origens);
+    const [{ data: contatosData, error: contatosError }, { data: origensRastreamentoData }, { data: campanhasRastreamentoData }] =
+      await Promise.all([
+        supabase
+          .from("contatos")
+          .select("origem, campanha")
+          .eq("empresa_id", usuario.empresa_id),
+        supabase
+          .from("rastreamento_origens")
+          .select("nome")
+          .eq("empresa_id", usuario.empresa_id)
+          .order("nome", { ascending: true }),
+        supabase
+          .from("rastreamento_campanhas")
+          .select(
+            `
+              id,
+              nome,
+              codigo,
+              status,
+              origem_id,
+              rastreamento_origens (
+                id,
+                nome
+              )
+            `
+          )
+          .eq("empresa_id", usuario.empresa_id)
+          .order("created_at", { ascending: false }),
+      ]);
+
+    if (contatosError) {
+      return NextResponse.json(
+        { ok: false, error: contatosError.message || "Erro ao buscar opcoes." },
+        { status: 400 }
+      );
+    }
+
+    const origens = nomesUnicos([
+      ...(contatosData || []).map((item) => item.origem),
+      ...(origensRastreamentoData || []).map((item) => item.nome),
+    ]);
+
+    const campanhas = nomesUnicos([
+      ...(contatosData || []).map((item) => item.campanha),
+      ...(campanhasRastreamentoData || []).map((item) => item.nome),
+    ]);
 
     return NextResponse.json({
       ok: true,
       origens,
+      campanhas,
+      campanhas_rastreamento: campanhasRastreamentoData || [],
     });
   } catch (error: any) {
-    console.error("[CONTATOS OPCOES] erro interno:", error);
-
     return NextResponse.json(
       { ok: false, error: error?.message || "Erro interno." },
       { status: 500 }

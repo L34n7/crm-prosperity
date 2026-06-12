@@ -634,11 +634,33 @@
 }
 
 .chatTitle {
+  min-width: 0;
   margin: 0;
   font-size: 18px;
   font-weight: 700;
   color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   transition: opacity 0.2s ease;
+}
+
+.chatCampaignBadge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 150px;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid #aadbed;
+  border-radius: 999px;
+  color: #509ea9;
+  background: #e4edf8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 
 .chatSubtitle {
@@ -820,6 +842,7 @@
 .alertChipWarn {
   background: #fff7ed;
   color: #c2410c;
+  border: 1px solid #fed7aa;
 }
 
 .alertChipDanger {
@@ -3324,13 +3347,19 @@
 }
 
 /* Inputs inline */
-.inlineInput {
+.inlineInput,
+.inlineSelect {
   width: 100%;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 6px 10px;
   font-size: 14px;
   outline: none;
+}
+
+.inlineSelect {
+  min-height: 36px;
+  background: #ffffff;
 }
 
 .inlineTextarea {

@@ -10,6 +10,70 @@ function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
 }
 
+function normalizarVariavelTemplate(valor: unknown) {
+  return String(valor || "")
+    .replace(/[{}]/g, "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+function contarVariaveisTemplate(payload: any) {
+  const componentes = Array.isArray(payload?.components)
+    ? payload.components
+    : [];
+
+  const header = componentes.find(
+    (item: any) =>
+      String(item?.type || "").toUpperCase() === "HEADER"
+  );
+
+  const body = componentes.find(
+    (item: any) =>
+      String(item?.type || "").toUpperCase() === "BODY"
+  );
+
+  const buttons = componentes.find(
+    (item: any) =>
+      String(item?.type || "").toUpperCase() === "BUTTONS"
+  );
+
+  function contarTexto(texto?: string | null) {
+    const matches =
+      String(texto || "").match(/\{\{(\d+)\}\}/g) || [];
+
+    const numeros = matches
+      .map((item) => Number(item.replace(/[{}]/g, "")))
+      .filter((numero) => Number.isFinite(numero));
+
+    if (numeros.length === 0) return 0;
+
+    return Math.max(...numeros);
+  }
+
+  const totalHeader = contarTexto(header?.text);
+  const totalBody = contarTexto(body?.text);
+
+  const totalBotoes = (buttons?.buttons || []).reduce(
+    (total: number, button: any) => {
+      if (
+        String(button?.type || "").toUpperCase() !== "URL"
+      ) {
+        return total;
+      }
+
+      return total + contarTexto(button?.url);
+    },
+    0
+  );
+
+  return totalHeader + totalBody + totalBotoes;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const resultado = await getUsuarioContexto();
@@ -47,7 +111,14 @@ export async function POST(request: NextRequest) {
     const integracaoWhatsappId = String(body.integracao_whatsapp_id || "").trim();
     const templateId = String(body.template_id || "").trim();
     const executarEm = String(body.executar_em || "").trim();
-    const variaveis = Array.isArray(body.variaveis) ? body.variaveis : [];
+    const variaveis = Array.isArray(body.variaveis)
+      ? body.variaveis
+          .map((variavel: unknown) =>
+            normalizarVariavelTemplate(variavel)
+          )
+          .slice(0, 3)
+      : [];
+    
     const contatos = Array.isArray(body.contatos) ? body.contatos : [];
 
     if (!integracaoWhatsappId) {
@@ -147,6 +218,99 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const totalVariaveisTemplate = contarVariaveisTemplate(
+      template.payload
+    );
+
+    if (totalVariaveisTemplate > 3) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Este template usa mais de 3 variáveis e não pode ser utilizado nesta tela.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const variaveisObrigatorias = variaveis.slice(
+      0,
+      totalVariaveisTemplate
+    );
+
+    if (
+      totalVariaveisTemplate > 0 &&
+      variaveisObrigatorias.length !== totalVariaveisTemplate
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Preencha todas as variáveis exigidas pelo template.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      variaveisObrigatorias.some(
+        (variavel: string) => !variavel
+      )
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Uma ou mais variáveis do template estão vazias.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const contatosIds = contatosValidos
+      .map((contato: any) => contato.id)
+      .filter((id: string | null): id is string => Boolean(id));
+
+    const conversaPorContatoId = new Map<string, string>();
+
+    if (contatosIds.length > 0) {
+      const { data: conversasDosContatos, error: conversasError } =
+        await supabase
+          .from("conversas")
+          .select("id, contato_id, integracao_whatsapp_id, last_message_at")
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("integracao_whatsapp_id", integracaoWhatsappId)
+          .in("contato_id", contatosIds)
+          .order("last_message_at", {
+            ascending: false,
+            nullsFirst: false,
+          });
+
+      if (conversasError) {
+        console.error(
+          "[CRIAR_DISPARO_AGENDADO] Erro ao localizar conversas:",
+          conversasError
+        );
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Erro ao localizar as conversas dos contatos selecionados.",
+          },
+          { status: 500 }
+        );
+      }
+
+      for (const conversa of conversasDosContatos || []) {
+        if (
+          conversa.contato_id &&
+          !conversaPorContatoId.has(conversa.contato_id)
+        ) {
+          conversaPorContatoId.set(conversa.contato_id, conversa.id);
+        }
+      }
+    }
+
     const registros = contatosValidos.map((contato: any) => ({
       empresa_id: usuario.empresa_id,
       execucao_id: null,
@@ -156,7 +320,9 @@ export async function POST(request: NextRequest) {
       executar_em: executarEm,
       status: "pendente",
       payload_json: {
-        conversa_id: null,
+        conversa_id: contato.id
+          ? conversaPorContatoId.get(contato.id) || null
+          : null,
         contato_id: contato.id,
         conversa_protocolo_id: null,
         numero_destino: contato.telefone,
@@ -167,7 +333,7 @@ export async function POST(request: NextRequest) {
         template_payload: template.payload || null,
         integracao_whatsapp_id: integracaoWhatsappId,
 
-        variaveis,
+        variaveis: variaveisObrigatorias,
         tempo_quantidade: null,
         tempo_unidade: null,
         segundos_para_agendar: null,

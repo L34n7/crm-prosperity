@@ -18,6 +18,43 @@ function podeGerenciarContatos(usuario: UsuarioContexto) {
   );
 }
 
+function obterRelacaoUnica<T>(relacao: T | T[] | null | undefined): T | null {
+  if (Array.isArray(relacao)) {
+    return relacao[0] ?? null;
+  }
+
+  return relacao ?? null;
+}
+
+async function buscarCampanhaRastreamento(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  empresaId: string,
+  campanhaId: string
+) {
+  const { data, error } = await supabaseAdmin
+    .from("rastreamento_campanhas")
+    .select(
+      `
+        id,
+        nome,
+        origem_id,
+        rastreamento_origens (
+          id,
+          nome
+        )
+      `
+    )
+    .eq("empresa_id", empresaId)
+    .eq("id", campanhaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
 export async function GET(request: Request) {
   const resultado = await getUsuarioContexto();
 
@@ -50,6 +87,8 @@ export async function GET(request: Request) {
   const busca = searchParams.get("busca")?.trim() || "";
   const origem = searchParams.get("origem")?.trim() || "";
   const campanha = searchParams.get("campanha")?.trim() || "";
+  const rastreamentoCampanhaId =
+    searchParams.get("rastreamento_campanha_id")?.trim() || "";
   const telefoneRevisar = searchParams.get("telefone_revisar");
   const ordenacao = searchParams.get("ordenacao") || "recentes";
 
@@ -75,11 +114,25 @@ export async function GET(request: Request) {
         email,
         origem,
         campanha,
+        rastreamento_origem_id,
+        rastreamento_campanha_id,
+        rastreamento_link_id,
+        rastreamento_clique_id,
         status_lead,
         observacoes,
         telefone_revisar,
         created_at,
-        updated_at
+        updated_at,
+        rastreamento_campanhas (
+          id,
+          nome,
+          codigo,
+          status,
+          rastreamento_origens (
+            id,
+            nome
+          )
+        )
       `,
       { count: "exact" }
     )
@@ -98,7 +151,9 @@ export async function GET(request: Request) {
     query = query.eq("origem", origem);
   }
 
-  if (campanha) {
+  if (rastreamentoCampanhaId) {
+    query = query.eq("rastreamento_campanha_id", rastreamentoCampanhaId);
+  } else if (campanha) {
     query = query.ilike("campanha", `%${campanha}%`);
   }
 
@@ -143,11 +198,25 @@ export async function GET(request: Request) {
           email,
           origem,
           campanha,
+          rastreamento_origem_id,
+          rastreamento_campanha_id,
+          rastreamento_link_id,
+          rastreamento_clique_id,
           status_lead,
           observacoes,
           telefone_revisar,
           created_at,
-          updated_at
+          updated_at,
+          rastreamento_campanhas (
+            id,
+            nome,
+            codigo,
+            status,
+            rastreamento_origens (
+              id,
+              nome
+            )
+          )
         `,
         { count: "exact" }
       )
@@ -166,7 +235,9 @@ export async function GET(request: Request) {
       queryLote = queryLote.eq("origem", origem);
     }
 
-    if (campanha) {
+    if (rastreamentoCampanhaId) {
+      queryLote = queryLote.eq("rastreamento_campanha_id", rastreamentoCampanhaId);
+    } else if (campanha) {
       queryLote = queryLote.eq("campanha", campanha);
     }
 
@@ -247,10 +318,27 @@ export async function GET(request: Request) {
     .eq("empresa_id", usuario.empresa_id)
     .not("campanha", "is", null);
 
-  const campanhas = Array.from(
+  const { data: campanhasRastreamentoData } = await supabaseAdmin
+    .from("rastreamento_campanhas")
+    .select("nome")
+    .eq("empresa_id", usuario.empresa_id);
+
+  const campanhasLegadas = Array.from(
     new Set(
       (campanhasData || [])
         .map((item) => String(item.campanha || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  const campanhas = Array.from(
+    new Set(
+      [
+        ...campanhasLegadas,
+        ...(campanhasRastreamentoData || []).map((item) =>
+          String(item.nome || "").trim()
+        ),
+      ]
         .filter(Boolean)
     )
   ).sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -264,6 +352,7 @@ export async function GET(request: Request) {
     totalPaginas: Math.max(1, Math.ceil((count ?? 0) / limite)),
     origens, 
     campanhas,
+    campanhas_legadas: campanhasLegadas,
   });
 }
 
@@ -305,8 +394,8 @@ export async function POST(request: Request) {
     : "";
     
   const email = body?.email?.trim()?.toLowerCase() || null;
-  const origem = body?.origem?.trim() || null;
-  const campanha = body?.campanha?.trim() || null;
+  const rastreamentoCampanhaId =
+    String(body?.rastreamento_campanha_id || "").trim() || null;
   const status_lead = body?.status_lead || "novo";
   const observacoes = body?.observacoes?.trim() || null;
   const empresa_id = usuario.empresa_id;
@@ -364,6 +453,42 @@ export async function POST(request: Request) {
     );
   }
 
+  let campanhaRastreamento = null;
+
+  if (rastreamentoCampanhaId) {
+    try {
+      campanhaRastreamento = await buscarCampanhaRastreamento(
+        supabaseAdmin,
+        empresa_id,
+        rastreamentoCampanhaId
+      );
+    } catch (error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Erro ao buscar campanha de rastreamento.",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!campanhaRastreamento) {
+      return NextResponse.json(
+        { ok: false, error: "Campanha de rastreamento nao encontrada." },
+        { status: 404 }
+      );
+    }
+  }
+
+  const origemDaCampanha = obterRelacaoUnica(
+    campanhaRastreamento?.rastreamento_origens
+  );
+  const origem = origemDaCampanha?.nome || body?.origem?.trim() || null;
+  const campanha = campanhaRastreamento?.nome || body?.campanha?.trim() || null;
+
   const { data, error } = await supabaseAdmin
     .from("contatos")
     .insert({
@@ -373,6 +498,8 @@ export async function POST(request: Request) {
       email,
       origem,
       campanha,
+      rastreamento_origem_id: campanhaRastreamento?.origem_id || null,
+      rastreamento_campanha_id: campanhaRastreamento?.id || null,
       status_lead,
       observacoes,
       telefone_revisar: false,

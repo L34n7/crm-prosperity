@@ -130,6 +130,7 @@ export default function SetoresPage() {
 
   function fecharModal() {
     if (salvando) return;
+    setErro("");
     setModalAberto(false);
     setSetorEditando(null);
     setForm(formInicial);
@@ -214,7 +215,9 @@ export default function SetoresPage() {
             )}
           </div>
 
-          {erro && <div className={styles.errorAlert}>{erro}</div>}
+            {erro && !modalAberto && (
+              <div className={styles.errorAlert}>{erro}</div>
+            )}
           <FeedbackToast
             success={sucesso}
             onSuccessDismiss={() => setSucesso("")}
@@ -362,6 +365,12 @@ export default function SetoresPage() {
                 Fechar
               </button>
             </div>
+
+            {erro && (
+              <div className={styles.errorAlert}>
+                {erro}
+              </div>
+            )}
 
             <div className={styles.formGrid}>
               <label className={styles.field}>

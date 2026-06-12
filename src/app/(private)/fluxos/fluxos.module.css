@@ -1645,11 +1645,11 @@
 .deleteNodeIconButton {
   border: 1px solid #fecaca;
   background: #fff5f5;
-  color: #dc2626;
+  color: #e34d4d;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 22px;
   cursor: pointer;
   transition: 0.18s ease;
 }

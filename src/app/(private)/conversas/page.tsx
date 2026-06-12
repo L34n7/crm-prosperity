@@ -54,6 +54,9 @@ type Conversa = {
     email?: string | null;
     empresa?: string | null;
     observacoes?: string | null;
+    campanha?: string | null;
+    rastreamento_campanha_id?: string | null;
+    rastreamento_campanhas?: CampanhaRastreamentoContato | null;
   } | null;
 
   setores: {
@@ -387,9 +390,42 @@ type ContatoCadastroForm = {
   email: string;
   origem: string;
   campanha: string;
+  rastreamento_campanha_id: string;
   status_lead: StatusLeadContato;
   observacoes: string;
 };
+
+type CampanhaRastreamentoContato = {
+  id: string;
+  nome: string;
+  status: "ativo" | "inativo";
+  rastreamento_origens?: { id: string; nome: string } | null;
+};
+
+function obterNomeCampanhaContato(
+  contato: Conversa["contatos"] | null | undefined
+) {
+  return contato?.rastreamento_campanhas?.nome || contato?.campanha || "";
+}
+
+function limitarTextoCampanha(texto: string, limite = 24) {
+  const valor = texto.trim();
+
+  if (valor.length <= limite) return valor;
+
+  return `${valor.slice(0, Math.max(0, limite - 1)).trim()}...`;
+}
+
+function formatarCampanhaRastreamentoContato(
+  campanha: CampanhaRastreamentoContato
+) {
+  const origem = campanha.rastreamento_origens?.nome;
+  const status = campanha.status === "inativo" ? " - inativa" : "";
+
+  return origem
+    ? `${campanha.nome} (${origem})${status}`
+    : `${campanha.nome}${status}`;
+}
 
 type ProtocoloConversa = {
   id: string;
@@ -1242,6 +1278,108 @@ function CampoContatoEditavel({
   );
 }
 
+function CampanhaContatoEditavel({
+  valorInicial,
+  campanhaIdInicial,
+  campanhas,
+  editando,
+  onEditar,
+  onCancelar,
+  onSalvar,
+}: {
+  valorInicial: string;
+  campanhaIdInicial: string;
+  campanhas: CampanhaRastreamentoContato[];
+  editando: boolean;
+  onEditar: () => void;
+  onCancelar: () => void;
+  onSalvar: (campanhaId: string) => void;
+}) {
+  const valorLegado = "__campanha_legada__";
+  const campanhaSelectInicial =
+    campanhaIdInicial || (valorInicial ? valorLegado : "");
+  const [campanhaId, setCampanhaId] = useState(campanhaSelectInicial);
+
+  useEffect(() => {
+    setCampanhaId(campanhaSelectInicial);
+  }, [campanhaSelectInicial]);
+
+  return (
+    <div className={styles.whatsInfoRow}>
+      <span className={styles.whatsInfoLabel}>Campanha</span>
+
+      {editando ? (
+        <div className={styles.infoEditBlock}>
+          <select
+            className={styles.inlineSelect}
+            value={campanhaId}
+            onChange={(event) => setCampanhaId(event.target.value)}
+            autoFocus
+          >
+            {valorInicial && !campanhaIdInicial ? (
+              <option value={valorLegado}>{valorInicial} (campanha antiga)</option>
+            ) : (
+              <option value="">Sem campanha</option>
+            )}
+
+            {valorInicial && !campanhaIdInicial && (
+              <option value="">Sem campanha</option>
+            )}
+
+            {campanhas.map((campanha) => (
+              <option key={campanha.id} value={campanha.id}>
+                {formatarCampanhaRastreamentoContato(campanha)}
+              </option>
+            ))}
+          </select>
+
+          <div className={styles.infoEditActions}>
+            <button
+              type="button"
+              className={styles.inlineCancelButton}
+              onClick={() => {
+                setCampanhaId(campanhaSelectInicial);
+                onCancelar();
+              }}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className={styles.inlineSaveButton}
+              onClick={() => {
+                if (campanhaId === valorLegado) {
+                  onCancelar();
+                  return;
+                }
+
+                onSalvar(campanhaId);
+              }}
+            >
+              Salvar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.infoValueRow}>
+          <span className={styles.whatsInfoValue}>
+            {valorInicial || "Não informado"}
+          </span>
+
+          <button
+            type="button"
+            className={styles.editIconButton}
+            onClick={onEditar}
+          >
+            ✎
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TranscricaoAudioBox({
   mensagemId,
   textoInicial,
@@ -1820,6 +1958,8 @@ export default function ConversasPage() {
   const [modalAdicionarContatoAberto, setModalAdicionarContatoAberto] = useState(false);
   const [salvandoContatoCompartilhado, setSalvandoContatoCompartilhado] =
     useState(false);
+  const [campanhasRastreamentoContato, setCampanhasRastreamentoContato] =
+    useState<CampanhaRastreamentoContato[]>([]);
 
   const [contatoCadastroForm, setContatoCadastroForm] = useState<ContatoCadastroForm>({
     nome: "",
@@ -1827,6 +1967,7 @@ export default function ConversasPage() {
     email: "",
     origem: "whatsapp_compartilhado",
     campanha: "",
+    rastreamento_campanha_id: "",
     status_lead: "novo",
     observacoes: "",
   });
@@ -2473,6 +2614,7 @@ export default function ConversasPage() {
       email,
       origem: "whatsapp_compartilhado",
       campanha: "",
+      rastreamento_campanha_id: "",
       status_lead: "novo",
       observacoes:
         [
@@ -2496,9 +2638,43 @@ export default function ConversasPage() {
       email: "",
       origem: "whatsapp_compartilhado",
       campanha: "",
+      rastreamento_campanha_id: "",
       status_lead: "novo",
       observacoes: "",
     });
+  }
+
+  function selecionarCampanhaContatoCompartilhado(campanhaId: string) {
+    const campanhaSelecionada = campanhasRastreamentoContato.find(
+      (campanha) => campanha.id === campanhaId
+    );
+
+    setContatoCadastroForm((atual) => ({
+      ...atual,
+      campanha: campanhaSelecionada?.nome || "",
+      rastreamento_campanha_id: campanhaId,
+      origem:
+        campanhaSelecionada?.rastreamento_origens?.nome ||
+        atual.origem ||
+        "whatsapp_compartilhado",
+    }));
+  }
+
+  async function carregarCampanhasRastreamentoContato() {
+    try {
+      const res = await fetch("/api/contatos/opcoes", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) return;
+
+      setCampanhasRastreamentoContato(
+        Array.isArray(data.campanhas_rastreamento)
+          ? data.campanhas_rastreamento
+          : []
+      );
+    } catch {
+      // opcional para o modal de contato compartilhado
+    }
   }
 
   function selecionarArquivo(
@@ -4103,6 +4279,39 @@ async function baixarConversaPDF() {
     }
   }
 
+  async function salvarContatoCampanha(campanhaId: string) {
+    if (!conversaSelecionada?.contatos?.id) return;
+
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/contatos/${conversaSelecionada.contatos.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rastreamento_campanha_id: campanhaId || null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar campanha do contato");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Campanha atualizada com sucesso.");
+      setEditandoCampo(null);
+
+      await atualizarConversasCarregadas();
+    } catch {
+      setErro("Erro ao atualizar campanha do contato");
+    }
+  }
+
   async function carregarProtocolosDaConversa() {
     if (!conversaSelecionada?.id) return;
 
@@ -5023,6 +5232,7 @@ const templateFooterTexto = useMemo(() => {
     carregarSetores();
     carregarListasEmpresa();
     carregarEtiquetasEmpresa();
+    carregarCampanhasRastreamentoContato();
   }, []);
 
   useEffect(() => {
@@ -5798,6 +6008,23 @@ const templateFooterTexto = useMemo(() => {
                                   {conversaSelecionada.contatos?.nome || "Sem nome"}
                                 </h2>
 
+                                {obterNomeCampanhaContato(
+                                  conversaSelecionada.contatos
+                                ) && (
+                                  <span
+                                    className={styles.chatCampaignBadge}
+                                    title={obterNomeCampanhaContato(
+                                      conversaSelecionada.contatos
+                                    )}
+                                  >
+                                    {limitarTextoCampanha(
+                                      obterNomeCampanhaContato(
+                                        conversaSelecionada.contatos
+                                      )
+                                    )}
+                                  </span>
+                                )}
+
                                 <EtiquetaCor etiqueta={conversaSelecionada.etiquetas} />
                               </div>
                               <p className={styles.chatSubtitle}>
@@ -5838,7 +6065,7 @@ const templateFooterTexto = useMemo(() => {
                             </span>
                           )}
 
-                          {alertaParadaMuitoTempo && (
+                          {!painelDireitoAberto && alertaParadaMuitoTempo && (
                             <span className={`${styles.alertChip} ${styles.alertChipWarn}`}>
                               Conversa parada há muito tempo
                             </span>
@@ -7274,6 +7501,21 @@ const templateFooterTexto = useMemo(() => {
                                 onEditar={() => setEditandoCampo("empresa")}
                                 onCancelar={() => setEditandoCampo(null)}
                                 onSalvar={(valor) => salvarContatoCampo("empresa", valor)}
+                              />
+
+                              <CampanhaContatoEditavel
+                                valorInicial={obterNomeCampanhaContato(
+                                  conversaSelecionada.contatos
+                                )}
+                                campanhaIdInicial={
+                                  conversaSelecionada.contatos
+                                    ?.rastreamento_campanha_id || ""
+                                }
+                                campanhas={campanhasRastreamentoContato}
+                                editando={editandoCampo === "campanha"}
+                                onEditar={() => setEditandoCampo("campanha")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={salvarContatoCampanha}
                               />
 
                               <CampoContatoEditavel
@@ -8761,17 +9003,20 @@ const templateFooterTexto = useMemo(() => {
 
                 <div className={styles.contactModalField}>
                   <label className={styles.actionLabel}>Campanha</label>
-                  <input
-                    className={styles.messageInput}
-                    value={contatoCadastroForm.campanha}
+                  <select
+                    className={styles.actionSelect}
+                    value={contatoCadastroForm.rastreamento_campanha_id}
                     onChange={(e) =>
-                      setContatoCadastroForm((atual) => ({
-                        ...atual,
-                        campanha: e.target.value,
-                      }))
+                      selecionarCampanhaContatoCompartilhado(e.target.value)
                     }
-                    placeholder="Campanha"
-                  />
+                  >
+                    <option value="">Sem campanha</option>
+                    {campanhasRastreamentoContato.map((campanha) => (
+                      <option key={campanha.id} value={campanha.id}>
+                        {formatarCampanhaRastreamentoContato(campanha)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className={styles.contactModalField}>

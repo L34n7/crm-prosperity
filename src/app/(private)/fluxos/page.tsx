@@ -6596,7 +6596,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                   }
                                 >
                                   <option value="contato">Email cadastrado no contato</option>
-                                  <option value="variavel">Email salvo em uma variavel</option>
+                                  <option value="variavel">Email salvo em uma variável</option>
                                 </select>
                                 <span className={styles.help}>
                                   Informe qual email o sistema vai usar, email do Contato ou uma variavel do bloco Capturar resposta.

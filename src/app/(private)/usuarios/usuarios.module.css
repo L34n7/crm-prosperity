@@ -38,7 +38,7 @@
 }
 
 .cardDescription {
-  margin: 10px 0 0;
+  margin: 5px 0 0;
   font-size: 15px;
   line-height: 1.6;
   color: #64748b;
@@ -229,9 +229,18 @@
 .alertSuccess,
 .alertError {
   border-radius: 18px;
-  padding: 16px 18px;
+  padding: 10px 18px;
   font-size: 14px;
   font-weight: 600;
+  margin: -15px 0px 10px 0px;
+}
+
+.alertErrorPag {
+  border-radius: 18px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0px 0px -15px 0px;
 }
 
 .alertSuccess {
@@ -240,7 +249,8 @@
   border: 1px solid #a7f3d0;
 }
 
-.alertError {
+.alertError,
+.alertErrorPag {
   background: #fef2f2;
   color: #b91c1c;
   border: 1px solid #fecaca;

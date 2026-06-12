@@ -131,6 +131,130 @@ function renderizarTextoTemplate(payload: Record<string, any>) {
   return partes.join("\n\n").trim() || "Não foi possível gerar a prévia do template.";
 }
 
+function contarVariaveisTemplate(template: any) {
+  if (!template?.payload?.components?.length) return 0;
+
+  const components = template.payload.components;
+
+  const header = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+
+  const body = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "BODY"
+  );
+
+  const buttons = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "BUTTONS"
+  );
+
+  function contarTexto(texto?: string | null) {
+    const matches = String(texto || "").match(/\{\{\d+\}\}/g) || [];
+
+    const numeros = matches
+      .map((item) => Number(item.replace(/[{}]/g, "")))
+      .filter((numero) => !Number.isNaN(numero));
+
+    if (numeros.length === 0) return 0;
+
+    return Math.max(...numeros);
+  }
+
+  const totalHeader = contarTexto(header?.text);
+  const totalBody = contarTexto(body?.text);
+
+  const totalBotoes = (buttons?.buttons || []).reduce(
+    (total: number, button: any) =>
+      String(button?.type || "").toUpperCase() === "URL"
+        ? total + contarTexto(button?.url)
+        : total,
+    0
+  );
+
+  return totalHeader + totalBody + totalBotoes;
+}
+
+function normalizarEntradaVariavelTemplate(valor: string) {
+  return String(valor || "")
+    .replace(/[{}]/g, "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+/g, "");
+}
+
+function substituirPreviewSequencial(
+  texto: string,
+  variaveis: string[],
+  offset: number
+) {
+  return String(texto || "").replace(/\{\{(\d+)\}\}/g, (_, numero) => {
+    const index = offset + Number(numero) - 1;
+
+    const variavel = variaveis[index]?.trim();
+
+    return variavel ? `{{${variavel}}}` : `{{${numero}}}`;
+  });
+}
+
+function montarPreviewTemplateAgendado(
+  template: any,
+  variaveis: string[]
+) {
+  if (!template) {
+    return "Selecione um template.";
+  }
+
+  const components = Array.isArray(template?.payload?.components)
+    ? template.payload.components
+    : [];
+
+  const header = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+
+  const body = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "BODY"
+  );
+
+  const footer = components.find(
+    (item: any) => String(item.type || "").toUpperCase() === "FOOTER"
+  );
+
+  const partes: string[] = [];
+
+  let offset = 0;
+
+  if (header?.text) {
+    partes.push(
+      substituirPreviewSequencial(header.text, variaveis, offset)
+    );
+
+    const variaveisHeader =
+      String(header.text || "").match(/\{\{\d+\}\}/g) || [];
+
+    const numerosHeader = variaveisHeader
+      .map((item) => Number(item.replace(/[{}]/g, "")))
+      .filter((numero) => !Number.isNaN(numero));
+
+    offset +=
+      numerosHeader.length > 0 ? Math.max(...numerosHeader) : 0;
+  }
+
+  if (body?.text) {
+    partes.push(
+      substituirPreviewSequencial(body.text, variaveis, offset)
+    );
+  }
+
+  if (footer?.text) {
+    partes.push(String(footer.text));
+  }
+
+  return partes.join("\n\n").trim() || "Template sem conteúdo para prévia.";
+}
 
 function extrairPreviewTemplateCompleto(payload: any) {
   const components = Array.isArray(payload?.components)
@@ -209,6 +333,15 @@ export default function DisparosAgendadosPage() {
 
   const [integracaoSelecionada, setIntegracaoSelecionada] = useState("");
   const [templateSelecionado, setTemplateSelecionado] = useState("");
+
+  const [templateVariavel1, setTemplateVariavel1] =
+    useState("nome_contato");
+
+  const [templateVariavel2, setTemplateVariavel2] =
+    useState("campanha");
+
+  const [templateVariavel3, setTemplateVariavel3] =
+    useState("numero_contato");
 
   const [agendamentoData, setAgendamentoData] = useState("");
   const [agendamentoHora, setAgendamentoHora] = useState("");
@@ -441,6 +574,26 @@ export default function DisparosAgendadosPage() {
         return;
       }
 
+      if (totalVariaveis > 3) {
+        setErroModal(
+          "Este template usa mais de 3 variáveis. Selecione um template com no máximo 3 variáveis."
+        );
+        return;
+      }
+
+      const variaveisObrigatorias = variaveisTemplate
+        .slice(0, totalVariaveis)
+        .map((variavel) =>
+          normalizarEntradaVariavelTemplate(variavel)
+        );
+
+      if (variaveisObrigatorias.some((variavel) => !variavel)) {
+        setErroModal(
+          "Preencha todas as variáveis exigidas pelo template."
+        );
+        return;
+      }
+
       setSalvandoDisparo(true);
       setErro("");
       setSucesso("");
@@ -460,10 +613,17 @@ export default function DisparosAgendadosPage() {
             integracao_whatsapp_id: integracaoSelecionada,
             template_id: templateSelecionado,
             executar_em,
+
+            variaveis: variaveisObrigatorias,
+
             contatos: contatosSelecionados.map((contato) => ({
               id: contato.id,
               nome: contato.nome,
               telefone: limparNumero(contato.telefone),
+              email: contato.email || null,
+              origem: contato.origem || null,
+              campanha: contato.campanha || null,
+              status_lead: contato.status_lead || null,
             })),
           }),
         }
@@ -483,6 +643,11 @@ export default function DisparosAgendadosPage() {
 
       setIntegracaoSelecionada("");
       setTemplateSelecionado("");
+
+      setTemplateVariavel1("nome_contato");
+      setTemplateVariavel2("campanha");
+      setTemplateVariavel3("numero_contato");
+
       setAgendamentoData("");
       setAgendamentoHora("");
       setContatosSelecionados([]);
@@ -506,6 +671,10 @@ export default function DisparosAgendadosPage() {
 
   useEffect(() => {
     setTemplateSelecionado("");
+
+    setTemplateVariavel1("nome_contato");
+    setTemplateVariavel2("campanha");
+    setTemplateVariavel3("numero_contato");
 
     if (integracaoSelecionada) {
       carregarTemplates(integracaoSelecionada);
@@ -708,10 +877,29 @@ export default function DisparosAgendadosPage() {
       (item) => item.id === templateSelecionado
     ) || null;
 
-  const previewTemplate = templateAtual
-    ? extrairPreviewTemplateCompleto(templateAtual.payload) ||
-      "Template sem conteúdo para prévia."
-    : "Selecione um template.";
+  const totalVariaveis = useMemo(() => {
+    return contarVariaveisTemplate(templateAtual);
+  }, [templateAtual]);
+
+  const variaveisTemplate = useMemo(
+    () => [
+      templateVariavel1,
+      templateVariavel2,
+      templateVariavel3,
+    ],
+    [
+      templateVariavel1,
+      templateVariavel2,
+      templateVariavel3,
+    ]
+  );
+
+  const previewTemplate = useMemo(() => {
+    return montarPreviewTemplateAgendado(
+      templateAtual,
+      variaveisTemplate
+    );
+  }, [templateAtual, variaveisTemplate]);
 
 
   useEffect(() => {
@@ -1196,6 +1384,10 @@ export default function DisparosAgendadosPage() {
                   onClick={() => {
                     setErroModal("");
                     setModalNovoDisparo(false);
+
+                    setTemplateVariavel1("nome_contato");
+                    setTemplateVariavel2("campanha");
+                    setTemplateVariavel3("numero_contato");
                   }}
                 >
                   ×
@@ -1304,7 +1496,108 @@ export default function DisparosAgendadosPage() {
                             onChange={(e) => setAgendamentoHora(e.target.value)}
                           />
                         </div>
+
                       </div>
+                        {totalVariaveis > 0 ? (
+                          <div className={styles.templateVariablesSection}>
+                            <div className={styles.templateVariablesHint}>
+                              Este template usa <strong>{totalVariaveis}</strong>{" "}
+                              variável(is).
+
+                              {" "}Variável 1 substitui{" "}
+                              <strong>{"{{1}}"}</strong>
+
+                              {totalVariaveis >= 2 ? (
+                                <>
+                                  , Variável 2 substitui{" "}
+                                  <strong>{"{{2}}"}</strong>
+                                </>
+                              ) : null}
+
+                              {totalVariaveis >= 3 ? (
+                                <>
+                                  {" "}e Variável 3 substitui{" "}
+                                  <strong>{"{{3}}"}</strong>
+                                </>
+                              ) : null}
+                              .
+                            </div>
+
+                            <div className={styles.templateVariablesGrid}>
+                              <div className={styles.fieldGroup}>
+                                <label className={styles.label}>
+                                  Variável 1
+                                </label>
+
+                                <input
+                                  type="text"
+                                  className={styles.input}
+                                  value={templateVariavel1}
+                                  onChange={(e) =>
+                                    setTemplateVariavel1(
+                                      normalizarEntradaVariavelTemplate(
+                                        e.target.value
+                                      )
+                                    )
+                                  }
+                                  placeholder="nome_contato"
+                                />
+                              </div>
+
+                              {totalVariaveis >= 2 ? (
+                                <div className={styles.fieldGroup}>
+                                  <label className={styles.label}>
+                                    Variável 2
+                                  </label>
+
+                                  <input
+                                    type="text"
+                                    className={styles.input}
+                                    value={templateVariavel2}
+                                    onChange={(e) =>
+                                      setTemplateVariavel2(
+                                        normalizarEntradaVariavelTemplate(
+                                          e.target.value
+                                        )
+                                      )
+                                    }
+                                    placeholder="campanha"
+                                  />
+                                </div>
+                              ) : null}
+
+                              {totalVariaveis >= 3 ? (
+                                <div className={styles.fieldGroup}>
+                                  <label className={styles.label}>
+                                    Variável 3
+                                  </label>
+
+                                  <input
+                                    type="text"
+                                    className={styles.input}
+                                    value={templateVariavel3}
+                                    onChange={(e) =>
+                                      setTemplateVariavel3(
+                                        normalizarEntradaVariavelTemplate(
+                                          e.target.value
+                                        )
+                                      )
+                                    }
+                                    placeholder="numero_contato"
+                                  />
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <span className={styles.templateVariablesHelp}>
+                                Variáveis fixas: {"{{nome_contato}}"}, {"{{email_contato}}"}, {"{{numero_contato}}"}, {"{{campanha}}"}, {"{{origem}}"}, {"{{status_lead}}"}, {"{{protocolo_atual}}"} e {"{{ultimo_protocolo}}"}.
+                            </span>
+                          </div>
+                        ) : templateAtual ? (
+                          <div className={styles.templateWithoutVariables}>
+                            Este template não possui variáveis.
+                          </div>
+                        ) : null}
                     </div>
 
                     <div className={styles.formSection}>
@@ -1647,7 +1940,14 @@ export default function DisparosAgendadosPage() {
                 <button
                   type="button"
                   className={styles.secondaryButton}
-                  onClick={() => setModalNovoDisparo(false)}
+                  onClick={() => {
+                    setErroModal("");
+                    setModalNovoDisparo(false);
+
+                    setTemplateVariavel1("nome_contato");
+                    setTemplateVariavel2("campanha");
+                    setTemplateVariavel3("numero_contato");
+                  }}
                 >
                   Cancelar
                 </button>
@@ -1669,7 +1969,7 @@ export default function DisparosAgendadosPage() {
 
         {disparoParaCancelar && (
           <div className={styles.modalOverlay}>
-            <div className={`${styles.modalCard} ${styles.modalDisparoCard}`}>
+            <div className={`${styles.modalCard}`}>
               <div className={styles.modalHeader}>
                 <div>
                   <p className={styles.eyebrow}>Cancelar disparo</p>

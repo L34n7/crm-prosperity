@@ -644,7 +644,10 @@ export default function UsuariosPage() {
               <button
                 type="button"
                 className={styles.modalCloseButton}
-                onClick={() => setModalNovoUsuarioAberto(false)}
+                onClick={() => {
+                  setErro("");
+                  setModalNovoUsuarioAberto(false);
+                }}
                 aria-label="Fechar modal"
               >
                 <X size={18} />
@@ -661,6 +664,12 @@ export default function UsuariosPage() {
                 </p>
               </div>
             </div>
+
+            {erro && (
+              <div className={styles.alertError}>
+                {erro}
+              </div>
+            )}
 
             <div className={styles.formGrid}>
               <div className={styles.field}>
@@ -781,7 +790,10 @@ export default function UsuariosPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setModalNovoUsuarioAberto(false)}
+                onClick={() => {
+                  setErro("");
+                  setModalNovoUsuarioAberto(false);
+                }}
                 className={styles.secondaryButton}
               >
                 Cancelar
@@ -795,7 +807,9 @@ export default function UsuariosPage() {
           success={mensagem}
           onSuccessDismiss={() => setMensagem("")}
         />
-        {erro && <div className={styles.alertError}>{erro}</div>}
+        {erro && !modalNovoUsuarioAberto && (
+          <div className={styles.alertErrorPag}>{erro}</div>
+        )}
 
         <section className={styles.card}>
           <div className={styles.listHeader}>
@@ -815,7 +829,11 @@ export default function UsuariosPage() {
                 <button
                   type="button"
                   className={styles.primaryButton}
-                  onClick={() => setModalNovoUsuarioAberto(true)}
+                  onClick={() => {
+                    setErro("");
+                    setMensagem("");
+                    setModalNovoUsuarioAberto(true);
+                  }}
                 >
                   Novo usuário
                 </button>

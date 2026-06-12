@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./contatos.module.css";
@@ -23,8 +23,18 @@ type Contato = {
   status_lead: StatusLead;
   observacoes: string | null;
   telefone_revisar: boolean;
+  rastreamento_campanha_id?: string | null;
+  rastreamento_campanhas?: CampanhaRastreamento | null;
   created_at: string;
   updated_at?: string;
+};
+
+type CampanhaRastreamento = {
+  id: string;
+  nome: string;
+  codigo: string | null;
+  status: "ativo" | "inativo";
+  rastreamento_origens?: { id: string; nome: string } | null;
 };
 
 function getStatusLeadLabel(status: StatusLead) {
@@ -71,6 +81,19 @@ function getIniciais(nome?: string | null) {
   return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
 }
 
+function getNomeCampanhaContato(contato: Contato) {
+  return contato.rastreamento_campanhas?.nome || contato.campanha || "—";
+}
+
+function getLabelCampanhaRastreamento(campanha: CampanhaRastreamento) {
+  const origem = campanha.rastreamento_origens?.nome;
+  const status = campanha.status === "inativo" ? " - inativa" : "";
+
+  return origem
+    ? `${campanha.nome} (${origem})${status}`
+    : `${campanha.nome}${status}`;
+}
+
 export default function ContatosPage() {
   const [contatos, setContatos] = useState<Contato[]>([]);
 
@@ -79,6 +102,7 @@ export default function ContatosPage() {
   const [email, setEmail] = useState("");
   const [origem, setOrigem] = useState("");
   const [campanha, setCampanha] = useState("");
+  const [rastreamentoCampanhaId, setRastreamentoCampanhaId] = useState("");
   const [statusLead, setStatusLead] = useState<StatusLead>("novo");
   const [observacoes, setObservacoes] = useState("");
 
@@ -100,6 +124,8 @@ export default function ContatosPage() {
   const [editEmail, setEditEmail] = useState("");
   const [editOrigem, setEditOrigem] = useState("");
   const [editCampanha, setEditCampanha] = useState("");
+  const [editRastreamentoCampanhaId, setEditRastreamentoCampanhaId] =
+    useState("");
   const [editStatusLead, setEditStatusLead] = useState<StatusLead>("novo");
   const [editObservacoes, setEditObservacoes] = useState("");
 
@@ -112,6 +138,9 @@ export default function ContatosPage() {
 
   const [opcoesOrigem, setOpcoesOrigem] = useState<string[]>([]);
   const [opcoesCampanha, setOpcoesCampanha] = useState<string[]>([]);
+  const [campanhasRastreamento, setCampanhasRastreamento] = useState<
+    CampanhaRastreamento[]
+  >([]);
   const [filtroOrigem, setFiltroOrigem] = useState("");
   const [filtroCampanha, setFiltroCampanha] = useState("");
   const [filtroTelefoneRevisar, setFiltroTelefoneRevisar] = useState(false);
@@ -149,6 +178,42 @@ export default function ContatosPage() {
     invalidos: any[];
   } | null>(null);
 
+  const campanhasLegadasSemVinculo = useMemo(() => {
+    const nomesRastreamento = new Set(
+      campanhasRastreamento.map((item) => item.nome.trim().toLowerCase())
+    );
+
+    return opcoesCampanha.filter(
+      (nomeCampanha) => !nomesRastreamento.has(nomeCampanha.trim().toLowerCase())
+    );
+  }, [campanhasRastreamento, opcoesCampanha]);
+
+  function selecionarCampanhaCadastro(campanhaId: string) {
+    const campanhaSelecionada = campanhasRastreamento.find(
+      (item) => item.id === campanhaId
+    );
+
+    setRastreamentoCampanhaId(campanhaId);
+    setCampanha(campanhaSelecionada?.nome || "");
+
+    if (campanhaSelecionada?.rastreamento_origens?.nome) {
+      setOrigem(campanhaSelecionada.rastreamento_origens.nome);
+    }
+  }
+
+  function selecionarCampanhaEdicao(campanhaId: string) {
+    const campanhaSelecionada = campanhasRastreamento.find(
+      (item) => item.id === campanhaId
+    );
+
+    setEditRastreamentoCampanhaId(campanhaId);
+    setEditCampanha(campanhaSelecionada?.nome || "");
+
+    if (campanhaSelecionada?.rastreamento_origens?.nome) {
+      setEditOrigem(campanhaSelecionada.rastreamento_origens.nome);
+    }
+  }
+
 
   function limparFormularioCriacao() {
     setNome("");
@@ -156,6 +221,7 @@ export default function ContatosPage() {
     setEmail("");
     setOrigem("");
     setCampanha("");
+    setRastreamentoCampanhaId("");
     setStatusLead("novo");
     setObservacoes("");
   }
@@ -189,7 +255,12 @@ export default function ContatosPage() {
       params.set("origem", filtroOrigem.trim());
     }
 
-    if (filtroCampanha.trim()) {
+    if (filtroCampanha.startsWith("rastreamento:")) {
+      params.set(
+        "rastreamento_campanha_id",
+        filtroCampanha.replace("rastreamento:", "")
+      );
+    } else if (filtroCampanha.trim()) {
       params.set("campanha", filtroCampanha.trim());
     }
 
@@ -243,6 +314,7 @@ export default function ContatosPage() {
           email,
           origem,
           campanha,
+          rastreamento_campanha_id: rastreamentoCampanhaId || null,
           status_lead: statusLead,
           observacoes,
         }),
@@ -418,6 +490,15 @@ export default function ContatosPage() {
   }
 
   function iniciarEdicao(contato: Contato) {
+    const campanhaVinculada =
+      contato.rastreamento_campanha_id ||
+      campanhasRastreamento.find(
+        (campanhaItem) =>
+          campanhaItem.nome.trim().toLowerCase() ===
+          String(contato.campanha || "").trim().toLowerCase()
+      )?.id ||
+      "";
+
     setEditandoId(contato.id);
     setExpandidoId(contato.id);
     setEditNome(contato.nome || "");
@@ -425,6 +506,7 @@ export default function ContatosPage() {
     setEditEmail(contato.email || "");
     setEditOrigem(contato.origem || "");
     setEditCampanha(contato.campanha || "");
+    setEditRastreamentoCampanhaId(campanhaVinculada);
     setEditStatusLead(contato.status_lead);
     setEditObservacoes(contato.observacoes || "");
     setMensagem("");
@@ -438,6 +520,7 @@ export default function ContatosPage() {
     setEditEmail("");
     setEditOrigem("");
     setEditCampanha("");
+    setEditRastreamentoCampanhaId("");
     setEditStatusLead("novo");
     setEditObservacoes("");
   }
@@ -521,20 +604,27 @@ export default function ContatosPage() {
       return;
     }
 
+    const payloadEdicao: Record<string, unknown> = {
+      nome: editNome,
+      telefone: editTelefone,
+      email: editEmail,
+      origem: editOrigem,
+      campanha: editCampanha,
+      status_lead: editStatusLead,
+      observacoes: editObservacoes,
+    };
+
+    if (editRastreamentoCampanhaId || !editCampanha.trim()) {
+      payloadEdicao.rastreamento_campanha_id =
+        editRastreamentoCampanhaId || null;
+    }
+
     const res = await fetch(`/api/contatos/${editandoId}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        nome: editNome,
-        telefone: editTelefone,
-        email: editEmail,
-        origem: editOrigem,
-        campanha: editCampanha,
-        status_lead: editStatusLead,
-        observacoes: editObservacoes,
-      }),
+      body: JSON.stringify(payloadEdicao),
     });
 
     const data = await res.json();
@@ -560,9 +650,13 @@ export default function ContatosPage() {
 
       const origens = Array.isArray(data.origens) ? data.origens : [];
       const campanhas = Array.isArray(data.campanhas) ? data.campanhas : [];
+      const campanhasRastreamento = Array.isArray(data.campanhas_rastreamento)
+        ? data.campanhas_rastreamento
+        : [];
 
       setOpcoesOrigem(origens);
       setOpcoesCampanha(campanhas);
+      setCampanhasRastreamento(campanhasRastreamento);
     } catch {
       // pode deixar silencioso
     }
@@ -684,15 +778,7 @@ export default function ContatosPage() {
       />
 
       <div className={styles.pageContent}>
-
-      {!modalCriarAberto && !modalImportarAberto && erro && (
-        <div className={styles.alertError}>{erro}</div>
-      )}
-      <FeedbackToast
-        success={mensagem}
-        onSuccessDismiss={() => setMensagem("")}
-      />
-        
+      
       <section className={styles.card}>
         <div className={styles.cardHeader}>
           <div>
@@ -756,16 +842,28 @@ export default function ContatosPage() {
                 >
                   <option value="">Todas</option>
 
-                  {opcoesCampanha.length === 0 ? (
+                  {campanhasRastreamento.length === 0 &&
+                  campanhasLegadasSemVinculo.length === 0 ? (
                     <option value="" disabled>
                       Sem campanhas
                     </option>
                   ) : (
-                    opcoesCampanha.map((campanha) => (
-                      <option key={campanha} value={campanha}>
-                        {campanha}
-                      </option>
-                    ))
+                    <>
+                      {campanhasRastreamento.map((campanhaItem) => (
+                        <option
+                          key={campanhaItem.id}
+                          value={`rastreamento:${campanhaItem.id}`}
+                        >
+                          {getLabelCampanhaRastreamento(campanhaItem)}
+                        </option>
+                      ))}
+
+                      {campanhasLegadasSemVinculo.map((campanhaLegada) => (
+                        <option key={campanhaLegada} value={campanhaLegada}>
+                          {campanhaLegada}
+                        </option>
+                      ))}
+                    </>
                   )}
                 </select>
               </div>
@@ -875,6 +973,14 @@ export default function ContatosPage() {
         </div>
       </section>
 
+      {!modalCriarAberto && !modalImportarAberto && erro && (
+        <div className={styles.alertError}>{erro}</div>
+      )}
+      <FeedbackToast
+        success={mensagem}
+        onSuccessDismiss={() => setMensagem("")}
+      />
+      
         <section className={styles.card}>
           <div className={styles.listHeader}>
             <div>
@@ -964,7 +1070,7 @@ export default function ContatosPage() {
                               <strong>Origem:</strong> {contato.origem || "—"}
                             </span>
                             <span className={styles.metaItem}>
-                              <strong>Campanha:</strong> {contato.campanha || "—"}
+                              <strong>Campanha:</strong> {getNomeCampanhaContato(contato)}
                             </span>
                           </div>
                         </div>
@@ -1029,10 +1135,10 @@ export default function ContatosPage() {
                               <label className={styles.label}>Origem</label>
                               <select
                                 className={styles.select}
-                                value={filtroOrigem}
-                                onChange={(e) => setFiltroOrigem(e.target.value)}
+                                value={editOrigem}
+                                onChange={(e) => setEditOrigem(e.target.value)}
                               >
-                                <option value="">Todas</option>
+                                <option value="">Sem origem</option>
                                 {opcoesOrigem.map((origem) => (
                                   <option key={origem} value={origem}>
                                     {origem}
@@ -1043,12 +1149,26 @@ export default function ContatosPage() {
 
                             <div className={styles.field}>
                               <label className={styles.label}>Campanha</label>
-                              <input
-                                className={styles.input}
-                                value={editCampanha}
-                                onChange={(e) => setEditCampanha(e.target.value)}
-                                placeholder="Campanha"
-                              />
+                              <select
+                                className={styles.select}
+                                value={editRastreamentoCampanhaId}
+                                onChange={(e) =>
+                                  selecionarCampanhaEdicao(e.target.value)
+                                }
+                              >
+                                {editCampanha && !editRastreamentoCampanhaId ? (
+                                  <option value="">
+                                    {editCampanha} (campanha antiga)
+                                  </option>
+                                ) : (
+                                  <option value="">Sem campanha</option>
+                                )}
+                                {campanhasRastreamento.map((campanhaItem) => (
+                                  <option key={campanhaItem.id} value={campanhaItem.id}>
+                                    {getLabelCampanhaRastreamento(campanhaItem)}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
 
                             <div className={styles.field}>
@@ -1109,7 +1229,7 @@ export default function ContatosPage() {
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>Campanha</span>
                               <span className={styles.infoValue}>
-                                {contato.campanha || "—"}
+                                {getNomeCampanhaContato(contato)}
                               </span>
                             </div>
 
@@ -1325,10 +1445,10 @@ export default function ContatosPage() {
                 <label className={styles.label}>Origem</label>
                 <select
                   className={styles.select}
-                  value={filtroOrigem}
-                  onChange={(e) => setFiltroOrigem(e.target.value)}
+                  value={origem}
+                  onChange={(e) => setOrigem(e.target.value)}
                 >
-                  <option value="">Todas</option>
+                  <option value="">Sem origem</option>
                   {opcoesOrigem.map((origem) => (
                     <option key={origem} value={origem}>
                       {origem}
@@ -1339,12 +1459,18 @@ export default function ContatosPage() {
 
               <div className={styles.field}>
                 <label className={styles.label}>Campanha</label>
-                <input
-                  className={styles.input}
-                  value={campanha}
-                  onChange={(e) => setCampanha(e.target.value)}
-                  placeholder="Nome da campanha"
-                />
+                <select
+                  className={styles.select}
+                  value={rastreamentoCampanhaId}
+                  onChange={(e) => selecionarCampanhaCadastro(e.target.value)}
+                >
+                  <option value="">Sem campanha</option>
+                  {campanhasRastreamento.map((campanhaItem) => (
+                    <option key={campanhaItem.id} value={campanhaItem.id}>
+                      {getLabelCampanhaRastreamento(campanhaItem)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className={styles.field}>
