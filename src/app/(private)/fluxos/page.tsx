@@ -1349,50 +1349,6 @@ export default function FluxosPage() {
   }
 
 
-  async function enviarNovaMidiaMultipart(arquivo: File) {
-    iniciarProgressoVideoSimulado();
-
-    const controller = new AbortController();
-    uploadMidiaAbortRef.current = controller;
-
-    try {
-      const formData = new FormData();
-      formData.append("arquivo", arquivo);
-
-      const res = await fetch("/api/automacoes/midias/upload", {
-        method: "POST",
-        body: formData,
-        signal: controller.signal,
-      });
-
-      const json = await lerRespostaApi(
-        res,
-        "Erro ao enviar mídia para conversão."
-      );
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao enviar mídia para conversão.");
-      }
-
-      await finalizarProgressoVideoRapido();
-
-      return json.midia;
-      
-    } catch (error: any) {
-      limparProgressoVideoSimulado();
-
-      if (error?.name === "AbortError") {
-        setUploadMidiaCancelado(true);
-        throw new Error("Envio de vídeo cancelado.");
-      }
-
-      throw error;
-    } finally {
-      uploadMidiaAbortRef.current = null;
-    }
-  }
-
-
   function limparProgressoVideoSimulado() {
     if (uploadMidiaProgressoIntervaloRef.current !== null) {
       window.clearInterval(uploadMidiaProgressoIntervaloRef.current);
@@ -1492,81 +1448,95 @@ export default function FluxosPage() {
       let midiaEnviada: MidiaOpcao;
 
       if (arquivo.type.startsWith("video/")) {
-        setSucesso("Convertendo vídeo para o formato aceito pelo WhatsApp...");
+        iniciarProgressoVideoSimulado();
+        setSucesso("");
+        setUploadMidiaMensagem("Preparando envio do vídeo...");
+      }
 
-        midiaEnviada = await enviarNovaMidiaMultipart(arquivo);
-      } else {
-        const preparacaoRes = await fetch("/api/automacoes/midias/upload", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            acao: "preparar_upload",
-            nome: arquivo.name,
-            mimeType: arquivo.type,
-            tamanhoBytes: arquivo.size,
-          }),
+      const preparacaoRes = await fetch("/api/automacoes/midias/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          acao: "preparar_upload",
+          nome: arquivo.name,
+          mimeType: arquivo.type,
+          tamanhoBytes: arquivo.size,
+        }),
+      });
+
+      const preparacaoJson = await lerRespostaApi(
+        preparacaoRes,
+        "Erro ao preparar envio da mídia."
+      );
+
+      if (!preparacaoRes.ok || !preparacaoJson.ok) {
+        throw new Error(
+          preparacaoJson.error || "Erro ao preparar envio da mídia."
+        );
+      }
+
+      const upload = preparacaoJson.upload;
+
+      if (!upload?.bucket || !upload?.path || !upload?.token) {
+        throw new Error("Dados de upload inválidos.");
+      }
+
+      if (arquivo.type.startsWith("video/")) {
+        setUploadMidiaMensagem("Enviando vídeo...");
+        setUploadMidiaProgresso(60);
+      }
+
+      const supabase = createSupabaseBrowserClient();
+
+      const { error: uploadError } = await supabase.storage
+        .from(upload.bucket)
+        .uploadToSignedUrl(upload.path, upload.token, arquivo, {
+          contentType: arquivo.type || "application/octet-stream",
+          upsert: false,
         });
 
-        const preparacaoJson = await lerRespostaApi(
-          preparacaoRes,
-          "Erro ao preparar envio da mídia."
+      if (uploadError) {
+        throw new Error(
+          uploadError.message || "Erro ao enviar mídia para o Storage."
         );
+      }
 
-        if (!preparacaoRes.ok || !preparacaoJson.ok) {
-          throw new Error(
-            preparacaoJson.error || "Erro ao preparar envio da mídia."
-          );
-        }
+      if (arquivo.type.startsWith("video/")) {
+        setUploadMidiaMensagem("Finalizando envio...");
+        setUploadMidiaProgresso(85);
+      }
 
-        const upload = preparacaoJson.upload;
+      const conclusaoRes = await fetch("/api/automacoes/midias/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          acao: "concluir_upload",
+          nome: arquivo.name,
+          mimeType: arquivo.type,
+          tamanhoBytes: arquivo.size,
+          storagePath: upload.path,
+        }),
+      });
 
-        if (!upload?.bucket || !upload?.path || !upload?.token) {
-          throw new Error("Dados de upload inválidos.");
-        }
+      const conclusaoJson = await lerRespostaApi(
+        conclusaoRes,
+        "Erro ao concluir envio da mídia."
+      );
 
-        const supabase = createSupabaseBrowserClient();
-
-        const { error: uploadError } = await supabase.storage
-          .from(upload.bucket)
-          .uploadToSignedUrl(upload.path, upload.token, arquivo, {
-            contentType: arquivo.type,
-            upsert: false,
-          });
-
-        if (uploadError) {
-          throw new Error(
-            uploadError.message || "Erro ao enviar mídia para o Storage."
-          );
-        }
-
-        const conclusaoRes = await fetch("/api/automacoes/midias/upload", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            acao: "concluir_upload",
-            nome: arquivo.name,
-            mimeType: arquivo.type,
-            tamanhoBytes: arquivo.size,
-            storagePath: upload.path,
-          }),
-        });
-
-        const conclusaoJson = await lerRespostaApi(
-          conclusaoRes,
-          "Erro ao concluir envio da mídia."
+      if (!conclusaoRes.ok || !conclusaoJson.ok) {
+        throw new Error(
+          conclusaoJson.error || "Erro ao concluir envio da mídia."
         );
+      }
 
-        if (!conclusaoRes.ok || !conclusaoJson.ok) {
-          throw new Error(
-            conclusaoJson.error || "Erro ao concluir envio da mídia."
-          );
-        }
+      midiaEnviada = conclusaoJson.midia;
 
-        midiaEnviada = conclusaoJson.midia;
+      if (arquivo.type.startsWith("video/")) {
+        await finalizarProgressoVideoRapido();
       }
 
       setMidiaUrlNode(midiaEnviada.url);
@@ -5860,11 +5830,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                               <span className={styles.help}>
                                 Imagens até 5MB, vídeos até 16MB e áudios até 16MB.
-                                Para envio rápido, use vídeo MP4 com codec H.264/AVC e áudio AAC.
-                              </span>
-                              <span className={styles.help}>
-                                Se o vídeo estiver em outro formato, o sistema converte automaticamente antes de salvar,
-                                o que pode demorar alguns minutos.
+                                Para garantir o envio pelo WhatsApp, utilize vídeo MP4 com codec H.264/AVC e áudio AAC.
                               </span>
 
                               {enviandoMidia && tipoNodeEdicao === "enviar_video" && (

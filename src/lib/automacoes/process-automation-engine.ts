@@ -32,6 +32,7 @@ import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calen
 import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
 
 const supabaseAdmin = getSupabaseAdmin();
+const LIMITE_DELAY_DIRETO_SEGUNDOS = 3 * 60;
 
 function perf(label: string, inicio: number, extra?: Record<string, any>) {
   console.log(`[PERF] ${label}`, {
@@ -550,6 +551,72 @@ function delaySegundosDoNo(no: {
   return Math.max(0, delay);
 }
 
+
+async function agendarDelayBloco(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  no: AutomacaoNo;
+  numeroDestino: string;
+  delaySegundos: number;
+}) {
+  const {
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    no,
+    numeroDestino,
+    delaySegundos,
+  } = params;
+
+  const executarEm = new Date(
+    Date.now() + delaySegundos * 1000
+  ).toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .insert({
+      empresa_id: empresaId,
+      execucao_id: execucaoId,
+      fluxo_id: fluxoId,
+      no_id: no.id,
+      tipo_agendamento: "delay_bloco",
+      executar_em: executarEm,
+      status: "pendente",
+      payload_json: {
+        conversa_id: conversaId,
+        numero_destino: numeroDestino,
+        delay_segundos: delaySegundos,
+        no_titulo: no.titulo,
+        no_tipo: no.tipo_no,
+      },
+    });
+
+  if (error) {
+    throw new Error(
+      `Erro ao agendar delay do bloco: ${error.message}`
+    );
+  }
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId: no.id,
+    tipoEvento: "delay_bloco_agendado",
+    descricao: `Delay de ${delaySegundos}s registrado para execução pelo cron.`,
+    entrada: {
+      delay_segundos: delaySegundos,
+    },
+    saida: {
+      executar_em: executarEm,
+    },
+  });
+
+  return executarEm;
+}
 
 export async function validarExecucaoAutomacaoAtiva(params: {
   empresaId: string;
@@ -1870,6 +1937,7 @@ export async function executarNo(params: {
   mensagemTexto?: string;
   numeroDestino: string;
   runtimeCache?: FluxoRuntimeCache;
+  retomadaDelayAgendado?: boolean;
 }) {
   const {
     empresaId,
@@ -1880,6 +1948,7 @@ export async function executarNo(params: {
     mensagemTexto,
     numeroDestino,
     runtimeCache,
+    retomadaDelayAgendado = false,
   } = params;
 
   const execucaoInterrompidaAntesDoNo = await interromperExecucaoSeInativa({
@@ -1900,7 +1969,7 @@ export async function executarNo(params: {
     tipoNo: no.tipo_no,
   });
 
-  if (no.tipo_no !== "inicio") {
+  if (no.tipo_no !== "inicio" && !retomadaDelayAgendado) {
     const visitaNo = await obterVisitaAtualNoExecucao({
       empresaId,
       execucaoId,
@@ -1927,18 +1996,40 @@ export async function executarNo(params: {
     }
   }
 
-  await registrarNotificacaoChegadaNoBloco({
-    empresaId,
-    conversaId,
-    execucaoId,
-    fluxoId,
-    no,
-    numeroDestino,
-  });
+  if (!retomadaDelayAgendado) {
+    await registrarNotificacaoChegadaNoBloco({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      no,
+      numeroDestino,
+    });
+  }
 
   const delaySegundos = delaySegundosDoNo(no);
 
-  if (delaySegundos > 0) {
+  if (
+    delaySegundos > LIMITE_DELAY_DIRETO_SEGUNDOS &&
+    !retomadaDelayAgendado
+  ) {
+    await agendarDelayBloco({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      no,
+      numeroDestino,
+      delaySegundos,
+    });
+
+    return;
+  }
+
+  if (
+    delaySegundos > 0 &&
+    !retomadaDelayAgendado
+  ) {
     await registrarLog({
       empresaId,
       execucaoId,

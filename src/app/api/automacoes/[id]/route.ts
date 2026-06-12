@@ -16,10 +16,22 @@ function normalizarDelaySegundosApi(valor: unknown) {
   const numero = Number(valor);
 
   if (!Number.isFinite(numero)) {
-    return null;
+    throw new Error("O delay informado é inválido.");
   }
 
-  return Math.max(0, Math.min(LIMITE_DELAY_SEGUNDOS, Math.floor(numero)));
+  const delayInteiro = Math.floor(numero);
+
+  if (delayInteiro < 0) {
+    throw new Error("O delay não pode ser negativo.");
+  }
+
+  if (delayInteiro > LIMITE_DELAY_SEGUNDOS) {
+    throw new Error(
+      "O tempo máximo de delay permitido é de 23 horas, equivalente a 82.800 segundos."
+    );
+  }
+
+  return delayInteiro;
 }
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -271,6 +283,29 @@ export async function PUT(
         .eq("ativo", true),
     ]);
 
+    for (const no of nos) {
+      const noId = String(no?.id || "").trim();
+      const tipoNo = String(no?.tipo_no || "").trim();
+
+      if (!noId) {
+        return NextResponse.json(
+          { ok: false, error: "Existe um bloco sem ID válido no fluxo." },
+          { status: 400 }
+        );
+      }
+
+      if (!tipoNo) {
+        return NextResponse.json(
+          { ok: false, error: `O bloco ${noId} não possui um tipo válido.` },
+          { status: 400 }
+        );
+      }
+
+      if (tipoNo !== "inicio") {
+        normalizarDelaySegundosApi(no?.delay_segundos);
+      }
+    }
+
     const agora = new Date().toISOString();
     const conexoesAlteradas = listarConexoesAlteradas(
       conexoesAntes || [],
@@ -396,9 +431,16 @@ export async function PUT(
       ok: true,
     });
   } catch (error: any) {
+    const mensagem = error?.message || "Erro interno.";
+
+    const erroDeValidacaoDelay =
+      mensagem.includes("delay") ||
+      mensagem.includes("23 horas") ||
+      mensagem.includes("82.800 segundos");
+
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
-      { status: 500 }
+      { ok: false, error: mensagem },
+      { status: erroDeValidacaoDelay ? 400 : 500 }
     );
   }
 }

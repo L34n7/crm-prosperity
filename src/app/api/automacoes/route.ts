@@ -765,6 +765,7 @@ export async function PUT(req: NextRequest) {
         posicao_x: no.posicao_x,
         posicao_y: no.posicao_y,
         configuracao_json: no.configuracao_json || {},
+        delay_segundos: no.tipo_no === "inicio" ? null : no.delay_segundos ?? null,
         ativo: true,
       };
     });
