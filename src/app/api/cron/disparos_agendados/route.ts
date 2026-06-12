@@ -352,11 +352,19 @@ async function buscarOuCriarProtocoloAtivo(params: {
 async function resolverVariaveisAgendamento(params: {
   empresaId: string;
   execucaoId: string | null;
+  conversaId: string;
   contato: any;
   variaveisConfig: string[];
   payload?: Record<string, any>;
 }) {
-  const { empresaId, execucaoId, contato, variaveisConfig, payload = {} } = params;
+  const {
+    empresaId,
+    execucaoId,
+    conversaId,
+    contato,
+    variaveisConfig,
+    payload = {},
+  } = params;
 
   if (!variaveisConfig.length) {
     return [];
@@ -382,6 +390,61 @@ async function resolverVariaveisAgendamento(params: {
       String(variavel.chave || "").toLowerCase(),
       String(variavel.valor || "")
     );
+  }
+
+  let protocoloAtual = "";
+  let ultimoProtocolo = "";
+
+  const precisaProtocoloAtual = chaves.includes("protocolo_atual");
+  const precisaUltimoProtocolo = chaves.includes("ultimo_protocolo");
+
+  if (conversaId && precisaProtocoloAtual) {
+    const { data: protocoloAtivo, error: protocoloAtivoError } =
+      await supabaseAdmin
+        .from("conversa_protocolos")
+        .select("protocolo")
+        .eq("empresa_id", empresaId)
+        .eq("conversa_id", conversaId)
+        .eq("ativo", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (protocoloAtivoError) {
+      console.error(
+        "[CRON DISPAROS] Erro ao buscar protocolo atual:",
+        protocoloAtivoError
+      );
+    }
+
+    protocoloAtual = String(protocoloAtivo?.protocolo || "").trim();
+  }
+
+  if (conversaId && precisaUltimoProtocolo) {
+    const { data: protocoloEncerrado, error: protocoloEncerradoError } =
+      await supabaseAdmin
+        .from("conversa_protocolos")
+        .select("protocolo")
+        .eq("empresa_id", empresaId)
+        .eq("conversa_id", conversaId)
+        .eq("ativo", false)
+        .order("closed_at", {
+          ascending: false,
+          nullsFirst: false,
+        })
+        .limit(1)
+        .maybeSingle();
+
+    if (protocoloEncerradoError) {
+      console.error(
+        "[CRON DISPAROS] Erro ao buscar último protocolo:",
+        protocoloEncerradoError
+      );
+    }
+
+    ultimoProtocolo = String(
+      protocoloEncerrado?.protocolo || ""
+    ).trim();
   }
 
   const variaveisFixasContato = montarMapaVariaveisFixasContato(contato);
@@ -439,6 +502,38 @@ async function resolverVariaveisAgendamento(params: {
 
     if (chave === "empresa") {
       return String(contato?.empresa || "");
+    }
+
+    if (chave === "campanha") {
+      return String(
+        contato?.campanha ||
+          payload?.campanha ||
+          ""
+      ).trim();
+    }
+
+    if (chave === "origem") {
+      return String(
+        contato?.origem ||
+          payload?.origem_contato ||
+          ""
+      ).trim();
+    }
+
+    if (chave === "status_lead" || chave === "status") {
+      return String(
+        contato?.status_lead ||
+          payload?.status_lead ||
+          ""
+      ).trim();
+    }
+
+    if (chave === "protocolo_atual") {
+      return protocoloAtual;
+    }
+
+    if (chave === "ultimo_protocolo") {
+      return ultimoProtocolo;
     }
 
     return "";
@@ -504,7 +599,10 @@ async function executarDisparoAgendado(agendamento: any) {
           nome,
           telefone,
           email,
-          empresa
+          empresa,
+          origem,
+          campanha,
+          status_lead
         )
       `)
       .eq("id", conversaIdPayload)
@@ -519,7 +617,9 @@ async function executarDisparoAgendado(agendamento: any) {
   } else {
     const { data: contato, error: contatoError } = await supabaseAdmin
       .from("contatos")
-      .select("id, nome, telefone, email, empresa")
+      .select(
+        "id, nome, telefone, email, empresa, origem, campanha, status_lead"
+      )
       .eq("id", contatoIdPayload)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -627,6 +727,11 @@ async function executarDisparoAgendado(agendamento: any) {
     );
   }
 
+  const protocoloAtivo = await buscarOuCriarProtocoloAtivo({
+    empresaId,
+    conversaId: conversa.id,
+  });
+
   const variaveisConfig = Array.isArray(payload.variaveis)
     ? payload.variaveis
     : [];
@@ -634,6 +739,7 @@ async function executarDisparoAgendado(agendamento: any) {
   const variaveis = await resolverVariaveisAgendamento({
     empresaId,
     execucaoId,
+    conversaId: conversa.id,
     contato,
     variaveisConfig,
     payload,
@@ -683,11 +789,6 @@ async function executarDisparoAgendado(agendamento: any) {
     `Template enviado: ${template.nome}`;
 
   const messageId = metaData?.messages?.[0]?.id || null;
-
-  const protocoloAtivo = await buscarOuCriarProtocoloAtivo({
-    empresaId,
-    conversaId: conversa.id,
-  });
 
   const now = new Date().toISOString();
 
