@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -254,12 +255,21 @@ export default function Sidebar({
       <div className={styles.sidebarTop}>
         <div className={styles.topBar}>
           <div className={styles.brand}>
-            <div className={styles.logo}>CRM</div>
+            <div className={styles.logo}>
+              <Image
+                src="/logo.png"
+                alt="CRM Prosperity"
+                width={2096}
+                height={2048}
+                className={styles.logoImage}
+                priority
+              />
+            </div>
 
             {!collapsed && (
               <div className={styles.brandText}>
                 <p className={styles.brandLabel}>Plataforma</p>
-                <h1 className={styles.brandTitle}>CRM Prosperity</h1>
+                <h1 className={styles.brandTitle}>Prosperity CRM</h1>
               </div>
             )}
           </div>

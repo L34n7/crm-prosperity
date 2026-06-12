@@ -48,7 +48,7 @@ export default function SobrePage() {
         <Link href="/sobre" className={styles.brand}>
           <span className={styles.logoBox}>
             <Image
-              src="/logo-png-crm-prosperity.png"
+              src="/logo.png"
               alt="CRM Prosperity"
               width={42}
               height={42}

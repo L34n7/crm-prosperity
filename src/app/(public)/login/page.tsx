@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -145,7 +146,16 @@ export default function LoginPage() {
 
       <section className={styles.wrapper}>
         <div className={styles.brandPanel}>
-          <div className={styles.brandBadge}>CRM</div>
+          <div className={styles.brandBadge}>
+            <Image
+              src="/logo.png"
+              alt="CRM Prosperity"
+              width={2096}
+              height={2048}
+              className={styles.brandLogo}
+              priority
+            />
+          </div>
 
           <p className={styles.eyebrow}>Plataforma empresarial</p>
 

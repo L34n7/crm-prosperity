@@ -584,8 +584,8 @@ async function executarDisparoAgendado(agendamento: any) {
   }
 
   const integracaoWhatsappId =
-    conversa.integracao_whatsapp_id ||
     payload.integracao_whatsapp_id ||
+    conversa.integracao_whatsapp_id ||
     template.integracao_whatsapp_id;
 
   if (!integracaoWhatsappId) {
@@ -878,6 +878,12 @@ export async function GET(request: Request) {
       .lte("executar_em", agora)
       .order("executar_em", { ascending: true })
       .limit(25);
+            
+      console.log("[CRON DISPAROS] Resultado da busca:", {
+        agora,
+        quantidade: agendamentos?.length || 0,
+        ids: (agendamentos || []).map((item) => item.id),
+      });
 
     if (error) {
       console.error("[CRON DISPAROS] Erro ao buscar agendamentos:", error);

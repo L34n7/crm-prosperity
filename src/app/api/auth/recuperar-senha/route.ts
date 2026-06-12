@@ -42,7 +42,9 @@ export async function POST(req: Request) {
 }
 
 function getEmailTemplate(link: string) {
-  const logoUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/logo-crm-prosperity.png`;
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com";
+  const logoUrl = `${siteUrl}/logo.png`;
 
   return `
   <!DOCTYPE html>

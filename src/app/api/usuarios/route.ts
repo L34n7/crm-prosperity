@@ -156,7 +156,7 @@ function getConviteUsuarioTemplate({
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(siteUrlBruto)
       ? "https://crmprosperity.com"
       : siteUrlBruto.replace(/\/$/, "");
-  const logoUrl = `${siteUrl}/logo-png-crm-prosperity.png`;
+  const logoUrl = `${siteUrl}/logo.png`;
   const nomeSeguro = escaparHtml(nome || "colaborador");
   const empresaSeguro = escaparHtml(empresaNome || "sua empresa");
   const linkSeguro = escaparHtml(link);
