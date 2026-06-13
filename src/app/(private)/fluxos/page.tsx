@@ -916,13 +916,6 @@ export default function FluxosPage() {
   const [midiaExcluindoId, setMidiaExcluindoId] = useState<string | null>(null);
   const [confirmandoExclusaoMidiaId, setConfirmandoExclusaoMidiaId] = useState<string | null>(null);
 
-  const [uploadMidiaMensagem, setUploadMidiaMensagem] = useState("");
-  const [uploadMidiaProgresso, setUploadMidiaProgresso] = useState(0);
-  const [uploadMidiaCancelado, setUploadMidiaCancelado] = useState(false);
-
-  const uploadMidiaAbortRef = useRef<AbortController | null>(null);
-  const uploadMidiaProgressoIntervaloRef = useRef<number | null>(null);
-
   const [timeoutUnidade, setTimeoutUnidade] =
     useState<"minutos" | "horas">("horas");
   const [statusEnvioTimeout, setStatusEnvioTimeout] =
@@ -1349,81 +1342,11 @@ export default function FluxosPage() {
   }
 
 
-  function limparProgressoVideoSimulado() {
-    if (uploadMidiaProgressoIntervaloRef.current !== null) {
-      window.clearInterval(uploadMidiaProgressoIntervaloRef.current);
-      uploadMidiaProgressoIntervaloRef.current = null;
-    }
-  }
-
-  function iniciarProgressoVideoSimulado() {
-    limparProgressoVideoSimulado();
-
-    setUploadMidiaCancelado(false);
-    setUploadMidiaMensagem("Analisando vídeo...");
-    setUploadMidiaProgresso(1);
-
-    uploadMidiaProgressoIntervaloRef.current = window.setInterval(() => {
-      setUploadMidiaProgresso((progressoAtual) => {
-        if (progressoAtual < 12) {
-          setUploadMidiaMensagem("Analisando vídeo...");
-          return progressoAtual + 1;
-        }
-
-        if (progressoAtual < 60) {
-          setUploadMidiaMensagem("Convertendo vídeo...");
-          return progressoAtual + 1;
-        }
-
-        if (progressoAtual < 80) {
-          setUploadMidiaMensagem("Enviando vídeo...");
-          return progressoAtual + 1;
-        }
-
-        setUploadMidiaMensagem("Aguardando finalização...");
-        return 80;
-      });
-    }, 700);
-  }
-
-  async function finalizarProgressoVideoRapido() {
-    limparProgressoVideoSimulado();
-
-    setUploadMidiaMensagem("Finalizando envio...");
-    setUploadMidiaProgresso(90);
-
-    await new Promise((resolve) => window.setTimeout(resolve, 350));
-
-    setUploadMidiaMensagem("Salvando mídia...");
-    setUploadMidiaProgresso(95);
-
-    await new Promise((resolve) => window.setTimeout(resolve, 350));
-
-    setUploadMidiaMensagem("Vídeo enviado com sucesso.");
-    setUploadMidiaProgresso(100);
-
-    await new Promise((resolve) => window.setTimeout(resolve, 1000));
-  }
-
   function excedeLimiteStorageMidias(tamanhoArquivoBytes: number) {
     return (
       resumoMidias.tamanhoTotal + Number(tamanhoArquivoBytes || 0) >
       LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
     );
-  }
-
-
-  function cancelarUploadMidia() {
-    uploadMidiaAbortRef.current?.abort();
-    uploadMidiaAbortRef.current = null;
-
-    limparProgressoVideoSimulado();
-
-    setUploadMidiaCancelado(true);
-    setUploadMidiaMensagem("Envio cancelado.");
-    setUploadMidiaProgresso(0);
-    setEnviandoMidia(false);
-    setErro("Envio de vídeo cancelado.");
   }
 
 
@@ -1439,18 +1362,6 @@ export default function FluxosPage() {
             LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
           )} de mídias atingido. Exclua uma mídia antes de enviar outra.`
         );
-      }
-
-      setUploadMidiaMensagem("");
-      setUploadMidiaProgresso(0);
-      setUploadMidiaCancelado(false);
-
-      let midiaEnviada: MidiaOpcao;
-
-      if (arquivo.type.startsWith("video/")) {
-        iniciarProgressoVideoSimulado();
-        setSucesso("");
-        setUploadMidiaMensagem("Preparando envio do vídeo...");
       }
 
       const preparacaoRes = await fetch("/api/automacoes/midias/upload", {
@@ -1483,11 +1394,6 @@ export default function FluxosPage() {
         throw new Error("Dados de upload inválidos.");
       }
 
-      if (arquivo.type.startsWith("video/")) {
-        setUploadMidiaMensagem("Enviando vídeo...");
-        setUploadMidiaProgresso(60);
-      }
-
       const supabase = createSupabaseBrowserClient();
 
       const { error: uploadError } = await supabase.storage
@@ -1501,11 +1407,6 @@ export default function FluxosPage() {
         throw new Error(
           uploadError.message || "Erro ao enviar mídia para o Storage."
         );
-      }
-
-      if (arquivo.type.startsWith("video/")) {
-        setUploadMidiaMensagem("Finalizando envio...");
-        setUploadMidiaProgresso(85);
       }
 
       const conclusaoRes = await fetch("/api/automacoes/midias/upload", {
@@ -1533,17 +1434,19 @@ export default function FluxosPage() {
         );
       }
 
-      midiaEnviada = conclusaoJson.midia;
+      const midiaEnviada: MidiaOpcao = conclusaoJson.midia;
 
-      if (arquivo.type.startsWith("video/")) {
-        await finalizarProgressoVideoRapido();
+      if (!midiaEnviada?.id || !midiaEnviada?.url) {
+        throw new Error("A API não retornou os dados da mídia enviada.");
       }
 
       setMidiaUrlNode(midiaEnviada.url);
       setMidiaNomeNode(midiaEnviada.nome);
 
       setMidias((atuais) => {
-        const jaExiste = atuais.some((m) => m.id === midiaEnviada.id);
+        const jaExiste = atuais.some(
+          (midia) => midia.id === midiaEnviada.id
+        );
 
         if (jaExiste) {
           return atuais;
@@ -1560,14 +1463,12 @@ export default function FluxosPage() {
 
       await carregarMidias();
     } catch (error: unknown) {
-      setErro(error instanceof Error ? error.message : "Erro ao enviar mídia.");
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao enviar mídia."
+      );
     } finally {
-        window.setTimeout(() => {
-          setUploadMidiaMensagem("");
-          setUploadMidiaProgresso(0);
-          setUploadMidiaCancelado(false);
-        }, 1800);
-      limparProgressoVideoSimulado();
       setEnviandoMidia(false);
     }
   }
@@ -5771,19 +5672,15 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                   limiteStorageMidiasAtingido ? styles.disabledButton : ""
                                 }`}
                               >
-                                  {enviandoMidia
-                                    ? tipoNodeEdicao === "enviar_video"
-                                      ? uploadMidiaMensagem || "Analisando vídeo..."
-                                      : "Enviando..."
-                                    : "Subir nova mídia"}
+                                {enviandoMidia ? "Enviando..." : "Subir nova mídia"}
 
                                 <input
                                   type="file"
                                   accept={
                                     tipoNodeEdicao === "enviar_imagem"
-                                      ? "image/*"
+                                      ? "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                                       : tipoNodeEdicao === "enviar_video"
-                                      ? "video/*"
+                                      ? "video/mp4,.mp4"
                                       : "audio/*"
                                   }
                                   style={{ display: "none" }}
@@ -5803,11 +5700,26 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                       }
                                     }
 
-                                    if (arquivo.type.startsWith("video/")) {
+                                    if (tipoNodeEdicao === "enviar_video") {
+                                      const nomeMinusculo = arquivo.name.toLowerCase();
+
+                                      const ehMp4 =
+                                        arquivo.type === "video/mp4" ||
+                                        nomeMinusculo.endsWith(".mp4");
+
+                                      if (!ehMp4) {
+                                        setErro(
+                                          "Formato de vídeo não permitido. Envie somente um arquivo MP4 com vídeo H.264/AVC e áudio AAC."
+                                        );
+                                        e.target.value = "";
+                                        return;
+                                      }
+
                                       if (arquivo.size > LIMITE_VIDEO_BYTES) {
                                         setErro(
                                           "O vídeo deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
                                         );
+                                        e.target.value = "";
                                         return;
                                       }
                                     }
@@ -5829,47 +5741,12 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               </label>
 
                               <span className={styles.help}>
-                                Imagens até 5MB, vídeos até 16MB e áudios até 16MB.
-                                Para garantir o envio pelo WhatsApp, utilize vídeo MP4 com codec H.264/AVC e áudio AAC.
+                                {tipoNodeEdicao === "enviar_imagem"
+                                  ? "São aceitas imagens de até 5MB nos formatos JPG, JPEG, PNG ou WEBP."
+                                  : tipoNodeEdicao === "enviar_video"
+                                  ? "São aceitos vídeos de até 16MB no formato MP4, com vídeo H.264/AVC e áudio AAC. Arquivos incompatíveis serão recusados."
+                                  : "São aceitos arquivos de áudio de até 16MB."}
                               </span>
-
-                              {enviandoMidia && tipoNodeEdicao === "enviar_video" && (
-                                <div className={styles.videoUploadProgressBox}>
-                                  <div className={styles.videoUploadProgressTop}>
-                                    <span>{uploadMidiaMensagem || "Analisando vídeo..."}</span>
-                                    <strong>{Math.max(0, Math.min(100, uploadMidiaProgresso))}%</strong>
-                                  </div>
-
-                                  <div className={styles.videoUploadProgressTrack}>
-                                    <div
-                                      className={styles.videoUploadProgressBar}
-                                      style={{
-                                        width: `${Math.max(0, Math.min(100, uploadMidiaProgresso))}%`,
-                                      }}
-                                    />
-                                  </div>
-
-                                  <div className={styles.videoUploadProgressFooter}>
-                                    <p className={styles.videoUploadProgressHelp}>
-                                      {uploadMidiaProgresso < 12
-                                        ? "Verificando se o vídeo já está no formato aceito pelo WhatsApp."
-                                        : uploadMidiaProgresso < 60
-                                        ? "Se necessário, o sistema está convertendo o vídeo para MP4 H.264/AAC."
-                                        : uploadMidiaProgresso < 80
-                                        ? "Enviando e salvando a mídia no sistema."
-                                        : "Aguardando a finalização do processamento no servidor."}
-                                    </p>
-
-                                    <button
-                                      type="button"
-                                      className={styles.videoUploadCancelButton}
-                                      onClick={cancelarUploadMidia}
-                                    >
-                                      Cancelar
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
 
                               <div className={styles.mediaLimitPremiumRow}>
                                 <button

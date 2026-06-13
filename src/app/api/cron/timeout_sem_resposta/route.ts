@@ -117,23 +117,6 @@ export async function GET(request: Request) {
           continue;
           }
 
-          if (agendamento.tipo_agendamento !== "timeout_sem_resposta") {
-            await supabaseAdmin
-              .from("automacao_agendamentos")
-              .update({
-                status: "erro",
-                executed_at: new Date().toISOString(),
-                payload_json: {
-                  ...payload,
-                  motivo_erro: "tipo_agendamento_nao_suportado_neste_cron",
-                },
-              })
-              .eq("id", agendamento.id)
-              .eq("empresa_id", agendamento.empresa_id);
-
-            continue;
-          }
-
           const { data: execucao, error: execucaoError } = await supabaseAdmin
             .from("automacao_execucoes")
             .select("*")
@@ -381,6 +364,23 @@ export async function GET(request: Request) {
               payload_json: {
                 ...payload,
                 resultado: "fluxo_encerrado_por_inatividade",
+              },
+            })
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
+
+          continue;
+        }
+
+        if (agendamento.tipo_agendamento !== "timeout_sem_resposta") {
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "erro",
+              executed_at: new Date().toISOString(),
+              payload_json: {
+                ...payload,
+                motivo_erro: "tipo_agendamento_nao_suportado_neste_cron",
               },
             })
             .eq("id", agendamento.id)
