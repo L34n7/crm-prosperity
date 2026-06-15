@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Archive,
   ArchiveRestore,
@@ -319,7 +320,12 @@ function feedbackGoogleCalendar(status: string) {
   };
 }
 
-export default function AgendasPage() {
+function AgendasPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const agendaParam = searchParams.get("agenda");
+  const mobileDetailActive = Boolean(agendaParam);
+
   const [agendas, setAgendas] = useState<Agenda[]>([]);
   const [agendaSelecionadaId, setAgendaSelecionadaId] = useState("");
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
@@ -555,11 +561,17 @@ export default function AgendasPage() {
       const proximasAgendas = json.agendas || [];
       setAgendas(proximasAgendas);
 
+      const agendaDaUrl = agendaParam
+        ? proximasAgendas.find((agenda: Agenda) => agenda.id === agendaParam)
+        : null;
       const agendaAindaExiste = proximasAgendas.some(
         (agenda: Agenda) => agenda.id === agendaSelecionadaId
       );
 
-      if (!agendaSelecionadaId || !agendaAindaExiste) {
+      if (agendaDaUrl && agendaSelecionadaId !== agendaDaUrl.id) {
+        setAgendaSelecionadaId(agendaDaUrl.id);
+        setDiaSelecionado(null);
+      } else if (!agendaSelecionadaId || !agendaAindaExiste) {
         setAgendaSelecionadaId(proximasAgendas[0]?.id || "");
         setDiaSelecionado(null);
       }
@@ -568,7 +580,7 @@ export default function AgendasPage() {
     } finally {
       setCarregando(false);
     }
-  }, [agendaSelecionadaId, busca, filtroStatusAgenda]);
+  }, [agendaParam, agendaSelecionadaId, busca, filtroStatusAgenda]);
 
   useEffect(() => {
     carregarAgendas();
@@ -626,6 +638,7 @@ export default function AgendasPage() {
   function selecionarAgenda(agendaId: string) {
     setAgendaSelecionadaId(agendaId);
     setDiaSelecionado(null);
+    router.push(`/agendas?agenda=${encodeURIComponent(agendaId)}`);
   }
 
   function abrirModalNovaAgenda() {
@@ -1176,12 +1189,16 @@ export default function AgendasPage() {
     <>
       <Header
         title="Agendas"
+        mobileBackHref={mobileDetailActive ? "/agendas" : undefined}
+        mobileBackLabel="Voltar para agendas"
         subtitle="Horarios comerciais e marcacoes automaticas do WhatsApp"
       />
 
       <main
         className={`${styles.pageContent} ${
           diaSelecionado ? styles.pageContentWithDayPanel : ""
+        } ${
+          mobileDetailActive ? styles.mobileDetailActive : ""
         }`}
       >
         <aside className={styles.sidebar}>
@@ -1995,5 +2012,13 @@ export default function AgendasPage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function AgendasPage() {
+  return (
+    <Suspense fallback={null}>
+      <AgendasPageContent />
+    </Suspense>
   );
 }

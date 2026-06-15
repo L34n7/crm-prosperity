@@ -133,6 +133,19 @@ type WhatsAppButtonMessage = {
   payload?: string;
 };
 
+export type WhatsAppReferral = {
+  source_url?: string;
+  source_type?: string;
+  source_id?: string;
+  headline?: string;
+  body?: string;
+  media_type?: string;
+  image_url?: string;
+  video_url?: string;
+  thumbnail_url?: string;
+  ctwa_clid?: string;
+};
+
 type WhatsAppIncomingRawMessage = {
   from?: string;
   id?: string;
@@ -149,6 +162,7 @@ type WhatsAppIncomingRawMessage = {
   contacts?: WhatsAppSharedContact[];
   button?: WhatsAppButtonMessage;
   interactive?: WhatsAppInteractiveMessage;
+  referral?: WhatsAppReferral;
 };
 
 type WhatsAppStatusConversation = {
@@ -163,6 +177,7 @@ type WhatsAppStatusPricing = {
   billable?: boolean;
   pricing_model?: string;
   category?: string;
+  type?: string;
 };
 
 type WhatsAppStatusError = {
@@ -195,6 +210,7 @@ export type ExtractedMessageStatus = {
   conversationOriginType: string | null;
   expirationTimestamp: string | null;
   pricingCategory: string | null;
+  pricingType: string | null;
   pricingModel: string | null;
   pricingBillable: boolean | null;
   errorMessage: string | null;
@@ -236,6 +252,7 @@ export type NormalizedMessageMetadata = {
     type?: string | null;
     details?: string | null;
   } | null;
+  referral?: WhatsAppReferral | null;
 };
 
 export type ExtractedIncomingMessage = {
@@ -250,6 +267,7 @@ export type ExtractedIncomingMessage = {
   text: string | null;
   tipoMensagem: string;
   conteudo: string;
+  referral: WhatsAppReferral | null;
   metadataJson: NormalizedMessageMetadata;
   rawMessage: WhatsAppIncomingRawMessage;
 };
@@ -370,6 +388,7 @@ function buildMetadataJson(
       contacts: null,
       location: null,
       unsupported: null,
+      referral: rawMessage.referral ?? null,
     };
   }
 
@@ -386,6 +405,7 @@ function buildMetadataJson(
       contacts: null,
       location: null,
       unsupported: null,
+      referral: rawMessage.referral ?? null,
     };
   }
 
@@ -402,6 +422,7 @@ function buildMetadataJson(
       contacts: null,
       location: null,
       unsupported: null,
+      referral: rawMessage.referral ?? null,
     };
   }
 
@@ -418,6 +439,7 @@ function buildMetadataJson(
       contacts: null,
       location: null,
       unsupported: null,
+      referral: rawMessage.referral ?? null,
     };
   }
 
@@ -434,6 +456,7 @@ function buildMetadataJson(
       contacts: rawMessage.contacts ?? null,
       location: null,
       unsupported: null,
+      referral: rawMessage.referral ?? null,
     };
   }
 
@@ -455,6 +478,7 @@ function buildMetadataJson(
         address: rawMessage.location?.address ?? null,
       },
       unsupported: null,
+      referral: rawMessage.referral ?? null,
     };
   }
 
@@ -472,6 +496,7 @@ function buildMetadataJson(
       location: null,
       interactive: rawMessage.interactive ?? null,
       unsupported: null,
+      referral: rawMessage.referral ?? null,
     };
   }
 
@@ -491,6 +516,7 @@ function buildMetadataJson(
         type: rawMessage.unsupported?.type ?? null,
         details: rawMessage.errors?.[0]?.error_data?.details ?? null,
       },
+      referral: rawMessage.referral ?? null,
     };
   }
 
@@ -506,6 +532,7 @@ function buildMetadataJson(
     contacts: null,
     location: null,
     unsupported: null,
+    referral: rawMessage.referral ?? null,
   };
 }
 
@@ -561,6 +588,7 @@ export function extractIncomingMessages(
           text: textoExtraido,
           tipoMensagem,
           conteudo,
+          referral: message.referral ?? null,
           metadataJson,
           rawMessage: message,
         });
@@ -638,6 +666,7 @@ export function extractMessageStatuses(
           expirationTimestamp:
             statusItem.conversation?.expiration_timestamp ?? null,
           pricingCategory: statusItem.pricing?.category ?? null,
+          pricingType: statusItem.pricing?.type ?? null,
           pricingModel: statusItem.pricing?.pricing_model ?? null,
           pricingBillable:
             typeof statusItem.pricing?.billable === "boolean"

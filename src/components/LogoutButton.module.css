@@ -1,7 +1,7 @@
 .button {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   border-radius: 14px;
   padding: 11px 18px;
   font-size: 14px;
@@ -11,6 +11,6 @@
 }
 
 .button:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-border-strong);
 }

@@ -1,6 +1,6 @@
 .page {
   min-height: 100vh;
-  background: #f6f8fb;
+  background: var(--crm-surface-soft);
   padding: 24px;
 }
 
@@ -12,8 +12,8 @@
 }
 
 .hero {
-  background: linear-gradient(135deg, #0f172a, #1e293b);
-  color: #fff;
+  background: linear-gradient(135deg, var(--crm-primary-strong), var(--crm-primary-strong-hover));
+  color: var(--crm-text-inverse);
   border-radius: 24px;
   padding: 28px;
   display: flex;
@@ -32,7 +32,7 @@
 }
 
 .backLink:hover {
-  color: #fff;
+  color: var(--crm-text-inverse);
 }
 
 .title {
@@ -69,33 +69,33 @@
 }
 
 .primaryButton {
-  background: #2563eb;
-  color: #fff;
+  background: var(--crm-primary);
+  color: var(--crm-text-inverse);
   padding: 14px 18px;
 }
 
 .primaryButton:hover {
-  background: #1d4ed8;
+  background: var(--crm-primary-hover);
 }
 
 .secondaryButton {
-  background: #eef2ff;
-  color: #1e3a8a;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
   padding: 10px 14px;
 }
 
 .secondaryButton:hover {
-  background: #e0e7ff;
+  background: var(--crm-primary-soft);
 }
 
 .ghostButton {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-strong);
   padding: 10px 14px;
 }
 
 .ghostButton:hover {
-  background: #cbd5e1;
+  background: var(--crm-surface-muted);
 }
 
 .primaryButton:disabled,
@@ -117,7 +117,7 @@
 .errorCard,
 .errorAlert,
 .successAlert {
-  background: #fff;
+  background: var(--crm-surface);
   border-radius: 22px;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
 }
@@ -133,7 +133,7 @@
 
 .explainCard p {
   margin: 0;
-  color: #475569;
+  color: var(--crm-text);
   line-height: 1.6;
 }
 
@@ -157,12 +157,12 @@
 .groupTitle {
   margin: 0;
   font-size: 22px;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .groupSubtitle {
   margin: 8px 0 0;
-  color: #64748b;
+  color: var(--crm-text-muted);
 }
 
 .groupActions {
@@ -182,10 +182,10 @@
   justify-content: space-between;
   gap: 18px;
   align-items: center;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 18px;
   padding: 18px;
-  background: #fcfdff;
+  background: var(--crm-surface-subtle);
 }
 
 .permissionText {
@@ -196,11 +196,11 @@
 
 .permissionCode {
   font-weight: 800;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .permissionDescription {
-  color: #64748b;
+  color: var(--crm-text-muted);
   line-height: 1.5;
 }
 
@@ -221,7 +221,7 @@
   position: absolute;
   inset: 0;
   border-radius: 999px;
-  background: #cbd5e1;
+  background: var(--crm-surface-muted);
   transition: 0.2s ease;
 }
 
@@ -231,7 +231,7 @@
   width: 24px;
   height: 24px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--crm-surface);
   top: 4px;
   left: 4px;
   transition: 0.2s ease;
@@ -239,7 +239,7 @@
 }
 
 .switchInput:checked + .switchSlider {
-  background: #2563eb;
+  background: var(--crm-primary);
 }
 
 .switchInput:checked + .switchSlider::before {
@@ -255,15 +255,15 @@
 
 .errorCard,
 .errorAlert {
-  background: #fef2f2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  border: 1px solid var(--crm-danger-border);
 }
 
 .successAlert {
-  background: #ecfdf5;
-  color: #166534;
-  border: 1px solid #bbf7d0;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  border: 1px solid var(--crm-success-border);
 }
 
 @media (max-width: 1000px) {
@@ -276,5 +276,27 @@
   .permissionsGrid,
   .explainGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .page {
+    min-height: auto;
+    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .shell {
+    gap: 16px;
+  }
+
+  .hero,
+  .card {
+    border-radius: 18px;
+    padding: 18px;
+  }
+
+  .permissionRow {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

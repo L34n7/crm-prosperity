@@ -68,6 +68,11 @@ type Evento = {
 type EventoMetadata = {
   fluxo_nome?: string | null;
   resultado_fluxo?: string | null;
+  origem_anuncio?: string | null;
+  meta_ctwa_clid?: string | null;
+  meta_source_id?: string | null;
+  meta_source_type?: string | null;
+  meta_headline?: string | null;
 };
 
 type IntegracaoWhatsapp = {
@@ -180,6 +185,27 @@ function obterResultadoFluxo(evento: Evento) {
   }
 
   return null;
+}
+
+function limitarTexto(valor: string, limite: number) {
+  return valor.length > limite ? `${valor.slice(0, limite - 1)}...` : valor;
+}
+
+function obterResumoMetaEvento(metadata: EventoMetadata) {
+  const ehMeta =
+    metadata.origem_anuncio === "meta_click_to_whatsapp" ||
+    Boolean(metadata.meta_source_id || metadata.meta_headline);
+
+  if (!ehMeta) return null;
+
+  const headline = String(metadata.meta_headline || "").trim();
+  const sourceId = String(metadata.meta_source_id || "").trim();
+  const detalhe = headline || (sourceId ? `ID ${sourceId}` : "Click-to-WhatsApp");
+
+  return {
+    detalhe: limitarTexto(detalhe, 90),
+    sourceId: sourceId ? limitarTexto(sourceId, 42) : null,
+  };
 }
 
 function eventoContaComoVenda(evento: Evento) {
@@ -958,6 +984,7 @@ export default function RastreamentoPage() {
                     {eventosPaginados.map((evento) => {
                       const metadata = obterMetadataEvento(evento);
                       const resultadoFluxo = obterResultadoFluxo(evento);
+                      const resumoMeta = obterResumoMetaEvento(metadata);
 
                       return (
                         <article className={styles.eventItem} key={evento.id}>
@@ -977,12 +1004,25 @@ export default function RastreamentoPage() {
                                   {resultadoFluxo.label}
                                 </span>
                               )}
+                              {resumoMeta && (
+                                <span className={styles.eventMetaSourceBadge}>
+                                  Anuncio Meta
+                                </span>
+                              )}
                             </div>
                             <p>
                               {evento.contatos?.nome || evento.contatos?.telefone || "Visitante ainda nao identificado"}
                               {evento.rastreamento_campanhas?.nome ? ` | ${evento.rastreamento_campanhas.nome}` : ""}
                               {evento.origem_registro === "manual" ? " | Manual" : ""}
                             </p>
+                            {resumoMeta && (
+                              <p className={styles.eventAdSummary}>
+                                {resumoMeta.detalhe}
+                                {resumoMeta.sourceId
+                                  ? ` | ID anuncio: ${resumoMeta.sourceId}`
+                                  : ""}
+                              </p>
+                            )}
                           </div>
                           <div className={styles.eventMeta}>
                             {formatarValor(evento.valor) && <b>{formatarValor(evento.valor)}</b>}

@@ -17,7 +17,7 @@
   background:
     linear-gradient(135deg, rgba(7, 17, 31, 0.98) 0%, rgba(11, 21, 38, 0.98) 46%, rgba(15, 23, 42, 0.98) 100%);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 20px 54px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--crm-shadow-md);
 }
 
 .hero::before {
@@ -52,13 +52,13 @@
   padding: 8px 13px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #cbd5e1;
+  color: var(--crm-on-strong-muted);
 }
 
 .hero h2 {
   max-width: 760px;
   margin: 0;
-  color: #ffffff;
+  color: var(--crm-text-inverse);
   font-size: 36px;
   line-height: 1.08;
   font-weight: 900;
@@ -67,7 +67,7 @@
 .heroText p:not(.heroKicker) {
   max-width: 760px;
   margin: 14px 0 0;
-  color: #cbd5e1;
+  color: var(--crm-on-strong-soft);
   font-size: 16px;
   line-height: 1.65;
 }
@@ -75,7 +75,7 @@
 .heroPanel {
   border-radius: 20px;
   padding: 18px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--crm-surface);
   border: 1px solid rgba(255, 255, 255, 0.45);
   display: grid;
   align-content: center;
@@ -83,7 +83,7 @@
 }
 
 .heroPanel span {
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
@@ -91,13 +91,13 @@
 }
 
 .heroPanel strong {
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 15px;
 }
 
 .heroLink {
   margin-top: 8px;
-  color: #1d4ed8;
+  color: var(--crm-primary-text);
   font-size: 13px;
   font-weight: 900;
   text-decoration: none;
@@ -118,16 +118,16 @@
   min-height: 100%;
   padding: 24px;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
+  box-shadow: var(--crm-shadow-md);
 }
 
 .packageCardFeatured {
   border-color: rgba(37, 99, 235, 0.32);
   box-shadow:
-    0 18px 44px rgba(15, 23, 42, 0.1),
-    0 0 0 1px rgba(37, 99, 235, 0.14);
+    var(--crm-shadow-md),
+    0 0 0 1px var(--crm-primary-border);
 }
 
 .cornerSeal {
@@ -139,7 +139,7 @@
   text-align: center;
   padding: 8px 0;
   background: linear-gradient(135deg, rgba(250, 204, 21, 0.98), rgba(249, 115, 22, 0.94));
-  color: #ffffff;
+  color: var(--crm-text-inverse);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.1em;
@@ -157,15 +157,15 @@
   display: inline-flex;
   align-items: center;
   padding: 8px 11px;
-  color: #475569;
-  background: #00ffc31e;
-  border: 1px solid #00ffc374;
+  color: var(--crm-text);
+  background: var(--crm-accent-soft);
+  border: 1px solid var(--crm-success-border);
 }
 
 .packageHeader h3,
 .planCard h3 {
   margin: 8px 0 0;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 28px;
   line-height: 1.1;
   font-weight: 900;
@@ -173,7 +173,7 @@
 
 .packageHeader p {
   margin: 0px 0px 0px;
-  color: #334155;
+  color: var(--crm-text);
   font-size: 15px;
   font-weight: 800;
 }
@@ -181,14 +181,14 @@
 .packageDescription,
 .planCard p {
   margin: 0px 0px 0px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 15px;
   line-height: 1.55;
 }
 
 .planCard span {
   margin: 0px 0px 0px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 10.5px;
   line-height: 1.55;
 }
@@ -198,8 +198,8 @@
   margin-top: 18px;
   padding: 16px;
   border-radius: 18px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--crm-surface-soft);
+  border: 1px solid var(--crm-border);
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -215,14 +215,14 @@
 }
 
 .priceRow small {
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 13px;
   font-weight: 800;
 }
 
 .savings {
   margin: 10px 0 0;
-  color: #0f766e;
+  color: var(--crm-success-text);
   font-size: 13px;
   font-weight: 900;
 }
@@ -241,7 +241,7 @@
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 14px;
   line-height: 1.55;
 }
@@ -256,7 +256,7 @@
   justify-content: center;
   background: rgba(16, 185, 129, 0.14);
   border: 1px solid rgba(16, 185, 129, 0.24);
-  color: #059669;
+  color: var(--crm-success-text);
   font-size: 12px;
   font-weight: 900;
 }
@@ -289,9 +289,9 @@
 }
 
 .primaryButton {
-  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
-  color: #ffffff;
-  box-shadow: 0 14px 30px rgba(29, 78, 216, 0.24);
+  background: linear-gradient(135deg, var(--crm-primary-strong) 0%, var(--crm-primary-hover) 100%);
+  color: var(--crm-text-inverse);
+  box-shadow: var(--crm-shadow-sm);
 }
 
 .primaryButton:hover {
@@ -300,8 +300,8 @@
 }
 
 .secondaryButton {
-  background: linear-gradient(135deg, #047857 0%, #0f766e 100%);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--crm-success-strong) 0%, var(--crm-accent) 100%);
+  color: var(--crm-text-inverse);
   box-shadow: 0 14px 30px rgba(15, 118, 110, 0.22);
 }
 
@@ -324,7 +324,7 @@
 
 @media (max-width: 640px) {
   .pageContent {
-    padding: 12px;
+    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
   }
 
   .hero,

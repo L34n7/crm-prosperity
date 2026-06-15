@@ -202,6 +202,47 @@
   box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.08);
 }
 
+.passwordWrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.passwordInput {
+  padding-right: 52px;
+}
+
+.eyeButton {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.eyeButton:hover {
+  color: #0f172a;
+}
+
+.eyeButton:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
+}
+
 .submitButton {
   margin-top: 8px;
   width: 100%;

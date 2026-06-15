@@ -6,11 +6,11 @@
 }
 
 .card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
   border-radius: 28px;
   padding: 28px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--crm-shadow-xs);
 }
 
 .cardHeader,
@@ -26,7 +26,7 @@
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--crm-text-muted);
 }
 
 .cardTitle {
@@ -34,14 +34,14 @@
   font-size: 28px;
   line-height: 1.2;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .cardDescription {
   margin: 5px 0 0;
   font-size: 15px;
   line-height: 1.6;
-  color: #64748b;
+  color: var(--crm-text-muted);
   max-width: 840px;
 }
 
@@ -61,16 +61,16 @@
 .label {
   font-size: 13px;
   font-weight: 700;
-  color: #334155;
+  color: var(--crm-text);
 }
 
 .input,
 .select {
   width: 100%;
   min-height: 46px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   border-radius: 14px;
   padding: 0 14px;
   font-size: 14px;
@@ -81,21 +81,21 @@
 
 .input:focus,
 .select:focus {
-  border-color: #0f172a;
-  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
 }
 
 .input:disabled,
 .select:disabled {
-  background: #f8fafc;
-  color: #94a3b8;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-soft);
   cursor: not-allowed;
 }
 
 .subCard {
   margin-top: 22px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
   border-radius: 22px;
   padding: 22px;
 }
@@ -108,14 +108,14 @@
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .subCardText {
   margin: 8px 0 0;
   font-size: 14px;
   line-height: 1.6;
-  color: #64748b;
+  color: var(--crm-text-muted);
 }
 
 .checkboxGrid {
@@ -131,10 +131,10 @@
   gap: 12px;
   min-height: 52px;
   padding: 0 14px;
-  border: 1px solid #dbe3ec;
+  border: 1px solid var(--crm-border);
   border-radius: 16px;
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   font-size: 14px;
   font-weight: 500;
 }
@@ -159,13 +159,13 @@
 .expandedActions {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--crm-border);
 }
 
 .primaryButton {
   border: none;
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
   border-radius: 14px;
   padding: 12px 18px;
   font-size: 14px;
@@ -176,7 +176,7 @@
 
 .primaryButton:hover {
   transform: translateY(-1px);
-  background: #111827;
+  background: var(--crm-primary-strong-hover);
 }
 
 .primaryButton:disabled {
@@ -186,9 +186,9 @@
 }
 
 .dangerButton {
-  border: 1px solid #fecaca;
-  background: #fff1f2;
-  color: #b91c1c;
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
   border-radius: 14px;
   padding: 12px 16px;
   font-size: 14px;
@@ -198,8 +198,8 @@
 }
 
 .dangerButton:hover:not(:disabled) {
-  background: #fee2e2;
-  border-color: #fca5a5;
+  background: var(--crm-danger-bg-strong);
+  border-color: var(--crm-danger-border);
 }
 
 .dangerButton:disabled {
@@ -209,9 +209,9 @@
 
 .secondaryButton,
 .expandButton {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   border-radius: 14px;
   padding: 12px 16px;
   font-size: 14px;
@@ -222,8 +222,8 @@
 
 .secondaryButton:hover,
 .expandButton:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-border-strong);
 }
 
 .alertSuccess,
@@ -244,16 +244,16 @@
 }
 
 .alertSuccess {
-  background: #ecfdf5;
-  color: #047857;
-  border: 1px solid #a7f3d0;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  border: 1px solid var(--crm-success-border);
 }
 
 .alertError,
 .alertErrorPag {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  border: 1px solid var(--crm-danger-border);
 }
 
 .infoBadge {
@@ -263,22 +263,22 @@
   min-height: 36px;
   padding: 0 14px;
   border-radius: 999px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #475569;
+  background: var(--crm-surface-soft);
+  border: 1px solid var(--crm-border);
+  color: var(--crm-text);
   font-size: 12px;
   font-weight: 700;
 }
 
 .emptyState {
   min-height: 180px;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--crm-border-strong);
   border-radius: 24px;
-  background: #f8fafc;
+  background: var(--crm-surface-soft);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 15px;
 }
 
@@ -289,15 +289,15 @@
 }
 
 .userCard {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
   border-radius: 22px;
   overflow: hidden;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .userCard:hover {
-  border-color: #cbd5e1;
+  border-color: var(--crm-border-strong);
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
 }
 
@@ -321,8 +321,8 @@
   width: 52px;
   height: 52px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #0f172a, #334155);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--crm-primary-strong), var(--crm-primary-strong-hover));
+  color: var(--crm-text-inverse);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -347,13 +347,13 @@
   margin: 0;
   font-size: 19px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .userEmail {
   margin: 6px 0 0;
   font-size: 14px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   word-break: break-word;
 }
 
@@ -366,7 +366,7 @@
 
 .metaItem {
   font-size: 13px;
-  color: #475569;
+  color: var(--crm-text);
 }
 
 .userRight {
@@ -378,8 +378,8 @@
 }
 
 .userExpanded {
-  border-top: 1px solid #e2e8f0;
-  background: #fbfdff;
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface-subtle);
   padding: 20px;
 }
 
@@ -393,8 +393,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
   border-radius: 18px;
   padding: 16px;
 }
@@ -404,13 +404,13 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #94a3b8;
+  color: var(--crm-text-soft);
 }
 
 .infoValue {
   font-size: 14px;
   line-height: 1.6;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   word-break: break-word;
 }
 
@@ -427,27 +427,27 @@
 }
 
 .statusAtivo {
-  background: #ecfdf5;
-  color: #047857;
-  border-color: #a7f3d0;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  border-color: var(--crm-success-border);
 }
 
 .statusInativo {
-  background: #fffbeb;
-  color: #b45309;
-  border-color: #fde68a;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+  border-color: var(--crm-warning-border);
 }
 
 .statusBloqueado {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  border-color: var(--crm-danger-border);
 }
 
 .statusPadrao {
-  background: #f8fafc;
-  color: #475569;
-  border-color: #cbd5e1;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  border-color: var(--crm-border-strong);
 }
 
 .editFullWidth {
@@ -470,7 +470,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(15, 23, 42, 0.54);
+  background: var(--crm-overlay);
   backdrop-filter: blur(6px);
 }
 
@@ -480,8 +480,8 @@
   max-height: calc(100vh - 48px);
   overflow: auto;
   border-radius: 24px;
-  border: 1px solid #dbeafe;
-  background: #ffffff;
+  border: 1px solid var(--crm-primary-border);
+  background: var(--crm-surface);
   padding: 28px;
   box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
 }
@@ -492,8 +492,8 @@
   max-height: calc(100vh - 48px);
   overflow: auto;
   border-radius: 24px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
   padding: 28px;
   box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
 }
@@ -502,18 +502,18 @@
   position: relative;
   width: min(100%, 540px);
   border-radius: 24px;
-  border: 1px solid #fecaca;
-  background: #ffffff;
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-surface);
   padding: 28px;
   box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
 }
 
 .deleteWarningBox {
   margin-top: 18px;
-  border: 1px solid #fecaca;
+  border: 1px solid var(--crm-danger-border);
   border-radius: 16px;
-  background: #fff1f2;
-  color: #7f1d1d;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
   padding: 16px;
 }
 
@@ -531,16 +531,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 12px;
-  background: #ffffff;
-  color: #475569;
+  background: var(--crm-surface);
+  color: var(--crm-text);
   cursor: pointer;
 }
 
 .modalCloseButton:hover {
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-strong);
 }
 
 .upgradeHeader {
@@ -555,13 +555,13 @@
   justify-content: center;
   margin-bottom: 16px;
   border-radius: 16px;
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
 }
 
 .upgradeTitle {
   margin: 0;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 30px;
   line-height: 1.15;
   font-weight: 800;
@@ -569,7 +569,7 @@
 
 .upgradeText {
   margin: 12px 0 0;
-  color: #475569;
+  color: var(--crm-text);
   font-size: 15px;
   line-height: 1.65;
 }
@@ -581,12 +581,12 @@
   margin: 22px 0;
   padding: 18px;
   border-radius: 18px;
-  border: 1px solid #bfdbfe;
-  background: #eff6ff;
+  border: 1px solid var(--crm-primary-border);
+  background: var(--crm-primary-soft);
 }
 
 .priceLabel {
-  color: #1e40af;
+  color: var(--crm-primary-text);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
@@ -594,13 +594,13 @@
 }
 
 .priceValue {
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 28px;
   line-height: 1.2;
 }
 
 .priceHint {
-  color: #475569;
+  color: var(--crm-text);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -615,14 +615,14 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  color: #334155;
+  color: var(--crm-text);
   font-size: 14px;
   line-height: 1.5;
 }
 
 .benefitItem svg {
   flex-shrink: 0;
-  color: #059669;
+  color: var(--crm-success-text);
   margin-top: 1px;
 }
 
@@ -731,5 +731,12 @@
 
   .modalActions button {
     width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .pageContent {
+    gap: 16px;
+    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
   }
 }

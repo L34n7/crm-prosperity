@@ -14,9 +14,9 @@
 
 .summaryCard,
 .card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
+  box-shadow: var(--crm-shadow-xs);
 }
 
 .summaryCard {
@@ -28,7 +28,7 @@
 
 .summaryCard span,
 .eyebrow {
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -41,12 +41,12 @@
 .summaryCard strong {
   font-size: 24px;
   line-height: 1.1;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .summaryCard p {
   margin: 0;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -74,12 +74,12 @@
   margin: 0;
   font-size: 24px;
   line-height: 1.2;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .cardDescription {
   margin: 8px 0 0;
-  color: #64748b;
+  color: var(--crm-text-muted);
   line-height: 1.6;
   font-size: 14px;
 }
@@ -88,9 +88,9 @@
   min-height: 44px;
   border-radius: 12px;
   padding: 0 16px;
-  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
-  color: #ffffff;
-  box-shadow: 0 12px 24px rgba(29, 78, 216, 0.2);
+  background: linear-gradient(135deg, var(--crm-primary-strong) 0%, var(--crm-primary-hover) 100%);
+  color: var(--crm-text-inverse);
+  box-shadow: var(--crm-shadow-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -119,7 +119,7 @@
 }
 
 .label {
-  color: #334155;
+  color: var(--crm-text);
   font-size: 13px;
   font-weight: 700;
 }
@@ -127,9 +127,9 @@
 .input {
   width: 100%;
   min-height: 44px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   border-radius: 12px;
   padding: 10px 12px;
   font-size: 14px;
@@ -137,8 +137,8 @@
 }
 
 .input:focus {
-  border-color: #0f172a;
-  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
 }
 
 .actionsRow {
@@ -157,7 +157,7 @@
 
 .shortcutRow span {
   margin-right: 2px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -166,11 +166,11 @@
 
 .shortcutRow button {
   min-height: 28px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 999px;
   padding: 0 10px;
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
@@ -178,9 +178,9 @@
 }
 
 .shortcutRow button:hover {
-  border-color: #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border-color: var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
 }
 
 .primaryButton,
@@ -196,22 +196,22 @@
 
 .primaryButton {
   border: none;
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
 }
 
 .primaryButton:hover {
-  background: #111827;
+  background: var(--crm-primary-strong-hover);
 }
 
 .secondaryButton {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
 }
 
 .secondaryButton:hover {
-  background: #f8fafc;
+  background: var(--crm-surface-soft);
 }
 
 .primaryButton:disabled,
@@ -226,9 +226,9 @@
   padding: 14px 16px;
   font-size: 14px;
   font-weight: 700;
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  border: 1px solid var(--crm-danger-border);
 }
 
 .infoBadge {
@@ -237,9 +237,9 @@
   min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #475569;
+  background: var(--crm-surface-soft);
+  border: 1px solid var(--crm-border);
+  color: var(--crm-text);
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
@@ -247,10 +247,10 @@
 
 .emptyState {
   min-height: 220px;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--crm-border-strong);
   border-radius: 20px;
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -261,7 +261,7 @@
 
 .tableWrap {
   overflow-x: auto;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 18px;
 }
 
@@ -275,14 +275,14 @@
 .table td {
   padding: 14px 16px;
   text-align: left;
-  border-bottom: 1px solid #edf2f7;
+  border-bottom: 1px solid var(--crm-border-soft);
   font-size: 13px;
-  color: #334155;
+  color: var(--crm-text);
 }
 
 .table th {
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
@@ -290,7 +290,7 @@
 }
 
 .table tbody tr:hover {
-  background: #fbfdff;
+  background: var(--crm-surface-subtle);
 }
 
 .table tbody tr:last-child td {
@@ -298,7 +298,7 @@
 }
 
 .table td strong {
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-weight: 900;
 }
 
@@ -316,27 +316,27 @@
 }
 
 .badgeBlue {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border-color: #bfdbfe;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  border-color: var(--crm-primary-border);
 }
 
 .badgeGreen {
-  background: #ecfdf5;
-  color: #047857;
-  border-color: #a7f3d0;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  border-color: var(--crm-success-border);
 }
 
 .badgeYellow {
-  background: #fff7ed;
-  color: #c2410c;
-  border-color: #fed7aa;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+  border-color: var(--crm-warning-border);
 }
 
 .badgeGray {
-  background: #f8fafc;
-  color: #475569;
-  border-color: #e2e8f0;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  border-color: var(--crm-border);
 }
 
 .modalOverlay {
@@ -347,18 +347,18 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(15, 23, 42, 0.48);
+  background: var(--crm-overlay);
 }
 
 .modalCard {
   width: min(960px, 100%);
   max-height: min(720px, calc(100vh - 40px));
   overflow-y: auto;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 16px;
   padding: 22px;
-  background: #ffffff;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
 }
 
 .modalHeader {
@@ -376,17 +376,17 @@
   flex: 0 0 36px;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #475569;
+  background: var(--crm-surface);
+  color: var(--crm-text);
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
 }
 
 .modalClose:hover {
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-strong);
 }
 
 @media (max-width: 1180px) {
@@ -397,7 +397,7 @@
 
 @media (max-width: 760px) {
   .pageContent {
-    padding: 12px;
+    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
   }
 
   .summaryGrid,

@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import styles from "./login.module.css";
 import Link from "next/link";
-
+import { Eye, EyeOff } from "lucide-react";
+import { enviarEventoSessao, getClientSessionId } from "@/lib/auth/browser-session";
 
 type IntegracaoWhatsappAmbiente = {
   status?: string | null;
@@ -70,6 +71,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState("");
 
@@ -125,6 +127,12 @@ export default function LoginPage() {
     window.sessionStorage.removeItem("crm_ambiente_redirect_apos_login");
     window.sessionStorage.removeItem("crm_ambiente_redirect_inicial");
     window.sessionStorage.removeItem("crm_ambiente_configurado");
+    try {
+      getClientSessionId();
+      await enviarEventoSessao("login");
+    } catch {
+      // O registro de sessao nao deve bloquear o login.
+    }
     
     const rota = await obterRotaAposLogin();
 
@@ -207,15 +215,32 @@ export default function LoginPage() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Senha</label>
-              <input
-                type="password"
-                className={styles.input}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="********"
-                required
-              />
+              <label htmlFor="password" className={styles.label}>
+                Senha
+              </label>
+
+              <div className={styles.passwordWrapper}>
+                <input
+                  id="password"
+                  type={mostrarSenha ? "text" : "password"}
+                  className={`${styles.input} ${styles.passwordInput}`}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="********"
+                  autoComplete="current-password"
+                  required
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setMostrarSenha((valorAtual) => !valorAtual)}
+                  className={styles.eyeButton}
+                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  aria-pressed={mostrarSenha}
+                >
+                  {mostrarSenha ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
 
             <button

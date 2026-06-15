@@ -16,6 +16,7 @@ export type UsuarioBase = {
   nome: string | null;
   email: string | null;
   avatar_url?: string | null;
+  assinatura_whatsapp?: string | null;
   empresa_id: string | null;
   status: "ativo" | "inativo" | "bloqueado";
 };
@@ -36,6 +37,7 @@ export type UsuarioContexto = {
   nome: string | null;
   email: string | null;
   avatar_url?: string | null;
+  assinatura_whatsapp?: string | null;
   empresa_id: string | null;
   status: "ativo" | "inativo" | "bloqueado";
   is_admin: boolean;
@@ -85,7 +87,9 @@ export async function getUsuarioContexto(): Promise<ResultadoUsuarioContexto> {
 
     const { data: usuarioBase, error: usuarioError } = await supabase
       .from("usuarios")
-      .select("id, auth_user_id, nome, email, avatar_url, empresa_id, status")
+      .select(
+        "id, auth_user_id, nome, email, avatar_url, assinatura_whatsapp, empresa_id, status"
+      )
       .eq("auth_user_id", user.id)
       .maybeSingle<UsuarioBase>();
 
@@ -158,6 +162,7 @@ export async function getUsuarioContexto(): Promise<ResultadoUsuarioContexto> {
         nome: usuarioBase.nome,
         email: usuarioBase.email,
         avatar_url: usuarioBase.avatar_url,
+        assinatura_whatsapp: usuarioBase.assinatura_whatsapp,
         empresa_id: usuarioBase.empresa_id,
         status: usuarioBase.status,
         is_admin: isAdmin,

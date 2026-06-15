@@ -1,6 +1,7 @@
 import Sidebar from "@/components/Sidebar";
 import AssinaturaStatusGuard from "@/components/AssinaturaStatusGuard";
 import { HeaderUserProvider } from "@/components/header-user-context";
+import SessionActivityTracker from "@/components/SessionActivityTracker";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import styles from "./CrmShell.module.css";
 
@@ -28,6 +29,8 @@ export default function CrmShell({
       value={{ profileName, avatarUrl, permissoes, assinatura, isAdmin }}
     >
       <div className={styles.shell}>
+        <SessionActivityTracker />
+
         <Sidebar
           initialCollapsed={initialCollapsed}
           permissoes={permissoes}

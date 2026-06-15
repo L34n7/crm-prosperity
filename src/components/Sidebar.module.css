@@ -2,8 +2,9 @@
   width: 280px;
   min-width: 280px;
   height: 100vh;
-  background: #ffffff;
-  border-right: 1px solid #e5e7eb;
+  background: var(--crm-sidebar-bg);
+  border-right: 1px solid var(--crm-sidebar-border);
+  box-shadow: inset -1px 0 0 #ffffff0d, 18px 0 45px rgba(7, 28, 41, 0.08);
   display: flex;
   flex-direction: column;
   padding: 20px 16px 16px;
@@ -38,7 +39,7 @@
   margin-top: auto;
   position: relative;
   z-index: 2;
-  background: #ffffff;
+  background: var(--crm-sidebar-bottom-bg);
 }
 
 .topBar {
@@ -47,7 +48,7 @@
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 18px;
-  border-bottom: 1px solid #edf0f3;
+  border-bottom: 1px solid var(--crm-sidebar-border);
 }
 
 .brand {
@@ -62,16 +63,16 @@
 }
 
 .logo {
-  width: 60px;
-  height: 60px;
+  width: 65px;
+  height: 65px;
   border-radius: 14px;
-  background: transparents;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   flex-shrink: 0;
-  margin: -15px -3px -10px -0px;
+  margin: -15px -3px -10px -1px;
 }
 
 .logoImage {
@@ -87,14 +88,14 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--crm-sidebar-text-muted);
 }
 
 .brandTitle {
   margin: 4px 0 0;
   font-size: 22px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-sidebar-text-strong);
   white-space: nowrap;
 }
 
@@ -115,7 +116,7 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--crm-sidebar-text-muted);
   white-space: nowrap;
   overflow: hidden;
   transition: opacity 0.2s ease;
@@ -150,7 +151,7 @@
   min-height: 28px;
   padding: 10px 12px;
   border-radius: 26px;
-  color: #475569;
+  color: var(--crm-sidebar-text);
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
@@ -160,23 +161,27 @@
 }
 
 .link:hover {
-  background: #012f5d29;
-  color: #0f172a;
+  background: var(--crm-sidebar-hover);
+  color: var(--crm-sidebar-text-strong);
 }
 
 .linkActive {
-  background: #0f172a;
-  color: #ffffff;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  background: var(--crm-sidebar-active-bg);
+  color: var(--crm-sidebar-active-text);
+  box-shadow: var(--crm-sidebar-active-shadow);
 }
 
 .linkWhatsappActive {
-  background: #eeeeee;
-  color: #0f172a;
+  background: var(--crm-sidebar-active-bg);
+  color: var(--crm-sidebar-active-text);
 }
 
 .linkWhatsappActive .linkIcon {
-  color: #0f172a;
+  color: var(--crm-sidebar-active-text);
+}
+
+.linkWhatsappActive .linkText {
+  color: var(--crm-sidebar-active-text);
 }
 
 .linkIcon {
@@ -187,16 +192,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #475569;
+  color: var(--crm-sidebar-text);
   transition: color 0.2s ease, background 0.2s ease;
 }
 
 .link:hover .linkIcon {
-  color: #0f172a;
+  color: var(--crm-sidebar-text-strong);
 }
 
 .linkActive .linkIcon {
-  color: #ffffff;
+  color: var(--crm-sidebar-active-text);
 }
 
 .linkText {
@@ -213,17 +218,17 @@
   min-height: 28px;
   padding: 8px 18px;
   border-radius: 26px;
-  background: #f8fafc;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-  cursor: pointer;  
+  background: var(--crm-sidebar-button-bg);
+  color: var(--crm-sidebar-text);
+  border: 1px solid var(--crm-sidebar-button-border);
+  cursor: pointer;
   margin-bottom: 10px;
   transition: all 0.2s ease;
   box-sizing: border-box;
 }
 
 .menuButton:hover {
-  background: #012f5d1d;
+  background: var(--crm-sidebar-hover);
 }
 
 .menuIcon {
@@ -242,14 +247,14 @@
   display: block;
   width: 20px;
   height: 10px;
-  background: #0f172a94;
+  background: color-mix(in srgb, var(--crm-sidebar-text-strong) 64%, transparent);
   border-radius: 2px;
 }
 
 .menuText {
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--crm-sidebar-text-strong);
   white-space: nowrap;
   margin-left: 10px;
 }
@@ -276,7 +281,7 @@
   padding: 0 5px;
 
   border-radius: 999px;
-  background: #efbc44;
+  background: var(--crm-warning-strong);
   color: #111111;
 
   display: inline-flex;
@@ -291,7 +296,8 @@
 }
 
 .conversationsNotificationDot {
-  background: #0aff91c6;
+  background: #2fee98;
+  border: 1px solid  #009652a6;
   color: #000000;
   box-shadow: 0 4px 10px rgba(34, 197, 94, 0.28);
 }
@@ -301,10 +307,10 @@
   height: 40px;
   border-radius: 999px;
   object-fit: cover;
-  border: 1px solid #ffffff;
-  background: #f8fafc;
+  border: 1px solid var(--crm-sidebar-avatar-ring);
+  background: var(--crm-surface-soft);
   display: block;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 10px rgba(18, 65, 78, 0.144);
 }
 
 .planButton {
@@ -312,10 +318,10 @@
   min-height: 38px;
   margin: 0 0 8px;
   padding: 0px 15px;
-  border: 1px transparent;
+  border: 1px solid #f7fffc;
   border-radius: 22px;
   background: #ffffff;
-  color: #475569;
+  color: var(--crm-sidebar-text);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -328,8 +334,7 @@
 }
 
 .planButton:hover {
-  background: #f8fafc;
-  border-color: #dbe4ee;
+  background: #f1f8f5;
   box-shadow: none;
 }
 
@@ -338,7 +343,7 @@
   min-width: 26px;
   height: 26px;
   border-radius: 999px;
-  color: #64748b;
+  color: var(--crm-sidebar-text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -354,7 +359,7 @@
 }
 
 .planLabel {
-  color: #94a3b8;
+  color: var(--crm-sidebar-text-muted);
   font-size: 9px;
   font-weight: 800;
   line-height: 1;
@@ -363,7 +368,7 @@
 }
 
 .planText strong {
-  color: #334155;
+  color: var(--crm-sidebar-text);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
@@ -391,9 +396,13 @@
 }
 
 .linkWhatsappPerfil:hover {
-  background: #f8fafc;
+  background: var(--crm-sidebar-hover);
 }
 
+.mobileNav,
+.mobileMoreOverlay {
+  display: none;
+}
 
 .linkWhatsappPerfil .linkIcon {
   width: 58px;
@@ -406,7 +415,7 @@
   height: 40px;
   border-radius: 999px;
   object-fit: cover;
-  border:2px solid #ffffff;
+  border: 2px solid var(--crm-sidebar-avatar-ring);
 
   transition: transform 0.2s ease;
 }
@@ -418,7 +427,11 @@
 .linkWhatsappPerfil .linkText {
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-sidebar-text-strong);
+}
+
+.linkWhatsappPerfil.linkWhatsappActive .linkText {
+  color: var(--crm-sidebar-active-text);
 }
 
 @media (max-width: 1024px) {
@@ -446,5 +459,322 @@
   .menuButton {
     justify-content: center;
     padding: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar,
+  .sidebarCollapsed {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 70;
+    width: 100%;
+    min-width: 0;
+    height: calc(70px + env(safe-area-inset-bottom));
+    padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-top: 1px solid var(--crm-border);
+    background: var(--crm-surface);
+    box-shadow: 0 -14px 36px rgba(15, 23, 42, 0.14);
+    overflow: visible;
+  }
+
+  .sidebarTop,
+  .sidebarMiddle,
+  .sidebarBottom,
+  .linkWhatsappPerfil {
+    display: none;
+  }
+
+  .mobileNav {
+    height: 100%;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .mobileNavItem {
+    min-width: 0;
+    min-height: 56px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--crm-text-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 1.1;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+
+  .mobileNavItem:hover,
+  .mobileNavItemActive {
+    background: var(--crm-primary-soft);
+    color: var(--crm-primary-text);
+  }
+
+  .mobileNavIcon {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .mobileNotificationDot {
+    position: absolute;
+    top: -7px;
+    right: -10px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--crm-success-strong);
+    color: #000000;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    box-shadow: 0 4px 10px rgba(34, 197, 94, 0.28);
+  }
+
+  .mobileMoreOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 240;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 14px 12px calc(82px + env(safe-area-inset-bottom));
+    background: var(--crm-overlay);
+  }
+
+  .mobileMorePanel {
+    width: min(100%, 520px);
+    max-height: min(76vh, 680px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--crm-border);
+    border-radius: 22px 22px 16px 16px;
+    background: var(--crm-surface);
+    box-shadow: var(--crm-shadow-lg);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .mobileMoreHandle {
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--crm-border-strong);
+    align-self: center;
+    margin: 2px 0 4px;
+  }
+
+  .mobileProfileCard {
+    border: 1px solid var(--crm-border);
+    border-radius: 16px;
+    background: var(--crm-surface-soft);
+    overflow: hidden;
+  }
+
+  .mobileProfileLink {
+    min-width: 0;
+    min-height: 66px;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 24px;
+    align-items: center;
+    gap: 12px;
+    color: var(--crm-text-strong);
+    text-decoration: none;
+  }
+
+  .mobileAvatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--crm-surface-muted);
+    border: 1px solid var(--crm-primary-border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--crm-text);
+    font-size: 15px;
+    font-weight: 900;
+  }
+
+  .mobileAvatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .mobileProfileText {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mobileProfileText strong,
+  .mobileProfileText small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileProfileText strong {
+    color: var(--crm-text-strong);
+    font-size: 14px;
+    font-weight: 900;
+  }
+
+  .mobileProfileText small {
+    color: var(--crm-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .mobilePlanButton {
+    width: 100%;
+    min-height: 54px;
+    border: 1px solid var(--crm-primary-border);
+    border-radius: 16px;
+    background: var(--crm-primary-soft);
+    color: var(--crm-primary-text);
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .mobilePlanButton span {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mobilePlanButton small {
+    color: var(--crm-primary-text);
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .mobilePlanButton strong {
+    color: var(--crm-text-strong);
+    font-size: 13px;
+    font-weight: 900;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileMoreList,
+  .mobileProfileActions {
+    display: grid;
+    gap: 6px;
+  }
+
+  .mobileMoreLink,
+  .mobileProfileAction {
+    width: 100%;
+    min-height: 46px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--crm-text);
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    text-align: left;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .mobileProfileAction {
+    grid-template-columns: 34px minmax(0, 1fr);
+    border: 1px solid var(--crm-border);
+    background: var(--crm-surface);
+    font-family: inherit;
+  }
+
+  .mobileMoreLink:hover,
+  .mobileMoreLinkActive,
+  .mobileProfileAction:hover {
+    background: var(--crm-surface-soft);
+    color: var(--crm-text-strong);
+  }
+
+  .mobileMoreIcon {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    background: var(--crm-surface-soft);
+    color: var(--crm-primary-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobileMoreIcon .whatsappSidebarAvatar {
+    width: 34px;
+    height: 34px;
+    border-width: 1px;
+  }
+
+  .mobileMoreBadge {
+    min-width: 22px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--crm-warning-bg-strong);
+    color: var(--crm-warning-text);
+    border: 1px solid var(--crm-warning-border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .mobileProfileActions {
+    padding-top: 2px;
+    border-top: 1px solid var(--crm-border-soft);
+  }
+
+  .mobileLogout :global(button) {
+    width: 100%;
+    min-height: 46px;
+    border-radius: 14px;
+    border-color: var(--crm-danger-border);
+    background: var(--crm-danger-bg);
+    color: var(--crm-danger-text);
+    text-align: center;
   }
 }

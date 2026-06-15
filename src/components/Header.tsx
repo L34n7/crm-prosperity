@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowLeft, Moon, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/LogoutButton";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./Header.module.css";
+import { createPortal } from "react-dom";
 
 type HeaderProps = {
   title: string;
@@ -13,6 +15,8 @@ type HeaderProps = {
   profileName?: string;
   creditLabel?: string;
   avatarUrl?: string;
+  mobileBackHref?: string;
+  mobileBackLabel?: string;
 };
 
 type Notificacao = {
@@ -64,7 +68,10 @@ type CheckoutPlanoResponse = {
   error?: string;
 };
 
+type TemaVisual = "light" | "dark";
+
 const AJUDA_WHATSAPP_URL = "https://wa.me/5531975117638";
+const THEME_STORAGE_KEY = "crm-theme";
 
 const PLANOS_RENOVACAO: PlanoRenovacao[] = [
   {
@@ -129,6 +136,8 @@ export default function Header({
   subtitle,
   profileName,
   avatarUrl,
+  mobileBackHref,
+  mobileBackLabel = "Voltar",
 }: HeaderProps) {
   const router = useRouter();
 
@@ -145,6 +154,8 @@ export default function Header({
   const [modalPlanosOpen, setModalPlanosOpen] = useState(false);
   const [planoCheckoutLoading, setPlanoCheckoutLoading] =
     useState<PlanoRenovacaoSlug | null>(null);
+  const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
+  const [mounted, setMounted] = useState(false);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notificacoesRef = useRef<HTMLDivElement | null>(null);
@@ -185,6 +196,17 @@ export default function Header({
 
   const temMaisDeSessentaNotificacoes =
     notificacoes.length > LIMITE_NOTIFICACOES_POR_PAGINA;
+
+  function aplicarTemaVisual(tema: TemaVisual) {
+    document.documentElement.dataset.theme = tema;
+    document.documentElement.style.colorScheme = tema;
+    window.localStorage.setItem(THEME_STORAGE_KEY, tema);
+    setTemaVisual(tema);
+  }
+
+  function alternarTemaVisual() {
+    aplicarTemaVisual(temaVisual === "dark" ? "light" : "dark");
+  }
     
   async function carregarNotificacoes() {
     try {
@@ -402,6 +424,10 @@ export default function Header({
   }
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     carregarNotificacoes();
     carregarSaldoTokensIa();
 
@@ -411,6 +437,13 @@ export default function Header({
     }, 30000);
 
     return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const temaAtual =
+      document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+
+    setTemaVisual(temaAtual);
   }, []);
 
   useEffect(() => {
@@ -627,10 +660,24 @@ export default function Header({
   const avisoAssinaturaMensagem = assinaturaBloqueada
     ? "Renove para liberar o sistema"
     : "Renove em ate 7 dias";
+  const temaEscuroAtivo = temaVisual === "dark";
+  const temaBotaoLabel = temaEscuroAtivo ? "Tema claro" : "Tema escuro";
+  const temaBotaoStatus = temaEscuroAtivo ? "Escuro" : "Claro";
 
   return (
     <header className={styles.header}>
       <div className={styles.left}>
+        {mobileBackHref && (
+          <Link
+            href={mobileBackHref}
+            className={styles.mobileBackButton}
+            aria-label={mobileBackLabel}
+            title={mobileBackLabel}
+          >
+            <ArrowLeft size={20} strokeWidth={2.4} />
+          </Link>
+        )}
+
         <h1 className={styles.title}>{title}</h1>
         {subtitle && <span className={styles.subtitle}>{subtitle}</span>}
       </div>
@@ -1040,6 +1087,30 @@ export default function Header({
 
               <div className={styles.dropdownDivider} />
 
+              <button
+                type="button"
+                className={`${styles.dropdownItem} ${styles.themeMenuButton}`}
+                onClick={alternarTemaVisual}
+                aria-pressed={temaEscuroAtivo}
+              >
+                <span className={styles.themeMenuMain}>
+                  <span className={styles.themeMenuIcon}>
+                    {temaEscuroAtivo ? (
+                      <Sun size={16} strokeWidth={2.2} />
+                    ) : (
+                      <Moon size={16} strokeWidth={2.2} />
+                    )}
+                  </span>
+                  <span>{temaBotaoLabel}</span>
+                </span>
+
+                <span className={styles.themeMenuBadge}>
+                  {temaBotaoStatus}
+                </span>
+              </button>
+
+              <div className={styles.dropdownDivider} />
+
               <div className={styles.dropdownLogout}>
                 <LogoutButton />
               </div>
@@ -1048,83 +1119,96 @@ export default function Header({
         </div>
       </div>
 
-      {alertaTokensOpen && saldoTokensIa && (
-        <div className={styles.tokenAlertOverlay} role="dialog" aria-modal="true">
+      {mounted &&
+        alertaTokensOpen &&
+        saldoTokensIa &&
+        createPortal(
           <div
-            className={`${styles.tokenAlertCard} ${
-              tokensCriticos
-                ? styles.tokenAlertCardDanger
-                : styles.tokenAlertCardWarning
-            }`}
+            className={styles.tokenAlertOverlay}
+            role="dialog"
+            aria-modal="true"
+            onClick={fecharAlertaTokens}
           >
-            <button
-              type="button"
-              className={styles.tokenAlertClose}
-              onClick={fecharAlertaTokens}
-              aria-label="Fechar aviso de tokens"
+            <div
+              className={`${styles.tokenAlertCard} ${
+                tokensCriticos
+                  ? styles.tokenAlertCardDanger
+                  : styles.tokenAlertCardWarning
+              }`}
+              onClick={(event) => event.stopPropagation()}
             >
-              x
-            </button>
-
-            <div className={styles.tokenAlertHero}>
-              <span className={styles.tokenAlertEyebrow}>
-                {saldoTokensZerado(saldoTokensIa)
-                  ? "Tokens esgotados"
-                  : tokensCriticos
-                    ? "Tokens quase acabando"
-                    : "Atencao aos tokens"}
-              </span>
-
-              <h2>
-                {saldoTokensZerado(saldoTokensIa)
-                  ? "Sua IA pode parar no atendimento"
-                  : tokensCriticos
-                    ? "Seu saldo de IA esta critico"
-                    : "Seu saldo de IA esta ficando baixo"}
-              </h2>
-
-              <p>
-                Restam <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>{" "}
-                tokens disponíveis, incluindo pacotes avulsos.
-                Sem tokens, automacoes podem deixar de interpretar respostas,
-                analisar arquivos e transcrever audios.
-              </p>
-            </div>
-
-            <div className={styles.tokenAlertOffers}>
-              <div>
-                <span>Pacote rapido</span>
-                <strong>1 mi tokens</strong>
-                <small>R$ 25</small>
-              </div>
-
-              <div>
-                <span>Melhor valor</span>
-                <strong>5 mi tokens</strong>
-                <small>R$ 100</small>
-              </div>
-            </div>
-
-            <div className={styles.tokenAlertActions}>
-              <Link
-                href="/ia/tokens/pacotes"
-                className={styles.tokenAlertPrimary}
-                onClick={fecharAlertaTokens}
-              >
-                Comprar tokens
-              </Link>
-
               <button
                 type="button"
-                className={styles.tokenAlertSecondary}
+                className={styles.tokenAlertClose}
                 onClick={fecharAlertaTokens}
+                aria-label="Fechar aviso de tokens"
               >
-                Ver depois
+                ×
               </button>
+
+              <div className={styles.tokenAlertHero}>
+                <span className={styles.tokenAlertEyebrow}>
+                  {saldoTokensZerado(saldoTokensIa)
+                    ? "Tokens esgotados"
+                    : tokensCriticos
+                      ? "Tokens quase acabando"
+                      : "Atenção aos tokens"}
+                </span>
+
+                <h2>
+                  {saldoTokensZerado(saldoTokensIa)
+                    ? "Sua IA pode parar no atendimento"
+                    : tokensCriticos
+                      ? "Seu saldo de IA está crítico"
+                      : "Seu saldo de IA está ficando baixo"}
+                </h2>
+
+                <p>
+                  Restam{" "}
+                  <strong>
+                    {formatarTokens(saldoTokensIa.tokens_restantes)}
+                  </strong>{" "}
+                  tokens disponíveis, incluindo pacotes avulsos. Sem tokens,
+                  automações podem deixar de interpretar respostas, analisar arquivos
+                  e transcrever áudios.
+                </p>
+              </div>
+
+              <div className={styles.tokenAlertOffers}>
+                <div>
+                  <span>Pacote rápido</span>
+                  <strong>1 mi tokens</strong>
+                  <small>R$ 25</small>
+                </div>
+
+                <div>
+                  <span>Melhor valor</span>
+                  <strong>5 mi tokens</strong>
+                  <small>R$ 100</small>
+                </div>
+              </div>
+
+              <div className={styles.tokenAlertActions}>
+                <Link
+                  href="/ia/tokens/pacotes"
+                  className={styles.tokenAlertPrimary}
+                  onClick={fecharAlertaTokens}
+                >
+                  Comprar tokens
+                </Link>
+
+                <button
+                  type="button"
+                  className={styles.tokenAlertSecondary}
+                  onClick={fecharAlertaTokens}
+                >
+                  Ver depois
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </header>
   );
 }

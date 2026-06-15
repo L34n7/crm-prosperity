@@ -7,7 +7,7 @@
   min-height: 54px;
   padding: 0 24px;
   margin: 0 0 0px 0;
-  background: linear-gradient(135deg, #f8fafc 0%, #f8fafc 75%, #ededed 100%);
+  background: transparent;
   box-sizing: border-box;
 }
 
@@ -18,16 +18,20 @@
   min-width: 0;
 }
 
+.mobileBackButton {
+  display: none;
+}
+
 .title {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-primary-strong);
 }
 
 .subtitle {
   font-size: 13px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -44,10 +48,10 @@
   height: 34px;
   padding: 0 10px;
   margin-right: 0;
-  border: 1px solid #dbeafe;
+  border: 1px solid #bbe7ea;
   border-radius: 10px;
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: linear-gradient(135deg, #e1f4f4 0%, #def2f2 100%);
+  color: #09dbdb;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -55,75 +59,76 @@
   line-height: 1;
   white-space: nowrap;
   text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .tokensBadge:hover {
-  background: #dbeafe;
-  border-color: #bfdbfe;
+  background: linear-gradient(135deg, #ddf2f3 0%, #cbe4f1 100%);
+  border-color: #96d6e7;
 }
 
 .tokensBadgeStatic:hover {
-  background: #eff6ff;
-  border-color: #dbeafe;
+  background: var(--crm-primary-soft);
+  border-color: var(--crm-primary-border);
 }
 
 .tokensLabel {
   font-weight: 800;
-  color: #2563eb;
+  color: #0195c2;
 }
 
 .tokensBadge strong {
   font-size: 12px;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .tokensBadgeWarning {
-  background: #fffbeb;
-  border-color: #fde68a;
-  color: #92400e;
+  background: var(--crm-warning-bg);
+  border-color: var(--crm-warning-border);
+  color: var(--crm-warning-text);
 }
 
 .tokensBadgeWarning:hover {
-  background: #fef3c7;
-  border-color: #fcd34d;
+  background: var(--crm-warning-bg-strong);
+  border-color: var(--crm-warning-border);
 }
 
 .tokensBadgeWarning.tokensBadgeStatic:hover {
-  background: #fffbeb;
-  border-color: #fde68a;
+  background: var(--crm-warning-bg);
+  border-color: var(--crm-warning-border);
 }
 
 .tokensBadgeWarning .tokensLabel {
-  color: #d97706;
+  color: var(--crm-warning-strong);
 }
 
 .tokensBadgeWarning strong {
-  color: #78350f;
+  color: var(--crm-warning-text);
 }
 
 .tokensBadgeDanger {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #991b1b;
+  background: var(--crm-danger-bg);
+  border-color: var(--crm-danger-border);
+  color: var(--crm-danger-text);
 }
 
 .tokensBadgeDanger:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
+  background: var(--crm-danger-bg-strong);
+  border-color: var(--crm-danger-border);
 }
 
 .tokensBadgeDanger.tokensBadgeStatic:hover {
-  background: #fef2f2;
-  border-color: #fecaca;
+  background: var(--crm-danger-bg);
+  border-color: var(--crm-danger-border);
 }
 
 .tokensBadgeDanger .tokensLabel {
-  color: #dc2626;
+  color: var(--crm-danger-strong);
 }
 
 .tokensBadgeDanger strong {
-  color: #7f1d1d;
+  color: var(--crm-danger-text);
 }
 
 .tokensWarningInline {
@@ -132,11 +137,11 @@
   margin-right: 4px;
   margin-bottom: -5px;
   padding: 5px 10px 5px 10px;
-  border: 1px solid #fecaca;
-  border-left: 3px solid #dc2626;
+  border: 1px solid var(--crm-danger-border);
+  border-left: 3px solid var(--crm-danger-strong);
   border-radius: 10px;
-  background: #fff7f7;
-  color: #7f1d1d;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
@@ -158,35 +163,35 @@
 }
 
 .tokensWarningInlineWarning {
-  border-color: #fde68a;
-  border-left-color: #d97706;
-  background: #fffbeb;
-  color: #78350f;
+  border-color: var(--crm-warning-border);
+  border-left-color: var(--crm-warning-strong);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
 }
 
 .tokensWarningInlineWarning:hover {
-  background: #fef3c7;
-  border-color: #fcd34d;
+  background: var(--crm-warning-bg-strong);
+  border-color: var(--crm-warning-border);
 }
 
 .tokensWarningInlineWarning strong {
-  color: #92400e;
+  color: var(--crm-warning-text);
 }
 
 .tokensWarningInlineDanger {
-  border-color: #fecaca;
-  border-left-color: #dc2626;
-  background: #fff7f7;
-  color: #7f1d1d;
+  border-color: var(--crm-danger-border);
+  border-left-color: var(--crm-danger-strong);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
 }
 
 .tokensWarningInlineDanger:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
+  background: var(--crm-danger-bg-strong);
+  border-color: var(--crm-danger-border);
 }
 
 .tokensWarningInlineDanger strong {
-  color: #991b1b;
+  color: var(--crm-danger-text);
 }
 
 .assinaturaWarningInline {
@@ -195,11 +200,11 @@
   margin-right: 4px;
   margin-bottom: -5px;
   padding: 5px 10px;
-  border: 1px solid #fde68a;
-  border-left: 3px solid #d97706;
+  border: 1px solid var(--crm-warning-border);
+  border-left: 3px solid var(--crm-warning-strong);
   border-radius: 8px;
-  background: #fffbeb;
-  color: #78350f;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
@@ -213,8 +218,8 @@
 }
 
 .assinaturaWarningInline:hover {
-  background: #fef3c7;
-  border-color: #fcd34d;
+  background: var(--crm-warning-bg-strong);
+  border-color: var(--crm-warning-border);
 }
 
 .assinaturaWarningInline span {
@@ -225,32 +230,32 @@
 }
 
 .assinaturaWarningInline strong {
-  color: #92400e;
+  color: var(--crm-warning-text);
   font-size: 11px;
   font-weight: 700;
 }
 
 .assinaturaWarningInlineWarning {
-  border-color: #fde68a;
-  border-left-color: #d97706;
-  background: #fffbeb;
-  color: #78350f;
+  border-color: var(--crm-warning-border);
+  border-left-color: var(--crm-warning-strong);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
 }
 
 .assinaturaWarningInlineDanger {
-  border-color: #fecaca;
-  border-left-color: #dc2626;
-  background: #fff7f7;
-  color: #7f1d1d;
+  border-color: var(--crm-danger-border);
+  border-left-color: var(--crm-danger-strong);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
 }
 
 .assinaturaWarningInlineDanger:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
+  background: var(--crm-danger-bg-strong);
+  border-color: var(--crm-danger-border);
 }
 
 .assinaturaWarningInlineDanger strong {
-  color: #991b1b;
+  color: var(--crm-danger-text);
 }
 
 .planRenewalOverlay {
@@ -261,7 +266,7 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(15, 23, 42, 0.54);
+  background: var(--crm-overlay);
 }
 
 .planRenewalModal {
@@ -270,15 +275,15 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
   border-radius: 8px;
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: var(--crm-shadow-lg);
 }
 
 .planRenewalHeader {
   padding: 18px 20px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--crm-border);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -287,7 +292,7 @@
 
 .planRenewalHeader h2 {
   margin: 4px 0 6px;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 24px;
   font-weight: 900;
   letter-spacing: 0;
@@ -296,13 +301,13 @@
 .planRenewalHeader p {
   max-width: 680px;
   margin: 0;
-  color: #475569;
+  color: var(--crm-text);
   font-size: 13px;
   line-height: 1.45;
 }
 
 .planRenewalEyebrow {
-  color: #2563eb;
+  color: var(--crm-primary-text);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0;
@@ -313,10 +318,10 @@
   width: 34px;
   height: 34px;
   flex: 0 0 auto;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #334155;
+  background: var(--crm-surface);
+  color: var(--crm-text);
   font-size: 22px;
   font-weight: 800;
   line-height: 1;
@@ -325,14 +330,14 @@
 }
 
 .planRenewalClose:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-border-strong);
 }
 
 .planCurrentSummary {
   padding: 14px 18px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #ffffff;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -348,7 +353,7 @@
 
 .planCurrentMain span,
 .planCurrentMeta span {
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 11px;
   font-weight: 900;
   line-height: 1;
@@ -357,7 +362,7 @@
 }
 
 .planCurrentMain strong {
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 18px;
   font-weight: 900;
   line-height: 1.2;
@@ -374,16 +379,16 @@
 .planCurrentMeta div {
   min-width: 118px;
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--crm-surface-soft);
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .planCurrentMeta strong {
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 13px;
   font-weight: 900;
 }
@@ -397,18 +402,18 @@
 }
 
 .planCurrentStatusActive {
-  background: #dcfce7;
-  color: #166534 !important;
+  background: var(--crm-success-bg-strong);
+  color: var(--crm-success-text) !important;
 }
 
 .planCurrentStatusWarning {
-  background: #fef3c7;
-  color: #92400e !important;
+  background: var(--crm-warning-bg-strong);
+  color: var(--crm-warning-text) !important;
 }
 
 .planCurrentStatusDanger {
-  background: #fee2e2;
-  color: #991b1b !important;
+  background: var(--crm-danger-bg-strong);
+  color: var(--crm-danger-text) !important;
 }
 
 .planRenewalGrid {
@@ -417,23 +422,23 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
-  background: #f8fafc;
+  background: var(--crm-surface-soft);
 }
 
 .planRenewalCard {
   min-height: 100%;
   padding: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--crm-surface);
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
 .planRenewalCardFeatured {
-  border-color: #93c5fd;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.2);
+  border-color: var(--crm-primary-border);
+  box-shadow: inset 0 0 0 1px var(--crm-primary-border);
 }
 
 .planRenewalCardTop {
@@ -446,8 +451,8 @@
   width: fit-content;
   border-radius: 999px;
   padding: 5px 9px;
-  background: #eef2ff;
-  color: #3730a3;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
   font-size: 11px;
   font-weight: 900;
   line-height: 1;
@@ -455,7 +460,7 @@
 
 .planRenewalCard h3 {
   margin: 0;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 18px;
   font-weight: 900;
   letter-spacing: 0;
@@ -464,7 +469,7 @@
 .planRenewalCard p {
   min-height: 58px;
   margin: 0;
-  color: #475569;
+  color: var(--crm-text);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -476,21 +481,21 @@
 }
 
 .planRenewalOldPrice {
-  color: #94a3b8;
+  color: var(--crm-text-soft);
   font-size: 13px;
   font-weight: 700;
   text-decoration: line-through;
 }
 
 .planRenewalPriceBlock strong {
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 28px;
   font-weight: 900;
   letter-spacing: 0;
 }
 
 .planRenewalPriceBlock small {
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
@@ -507,7 +512,7 @@
 .planRenewalFeatures li {
   position: relative;
   padding-left: 18px;
-  color: #334155;
+  color: var(--crm-text);
   font-size: 12px;
   font-weight: 650;
   line-height: 1.35;
@@ -521,7 +526,7 @@
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: #22c55e;
+  background: var(--crm-success-strong);
 }
 
 .planRenewalPrimary,
@@ -543,31 +548,31 @@
 }
 
 .planRenewalPrimary {
-  border: 1px solid #0f172a;
-  background: #0f172a;
-  color: #ffffff;
+  border: 1px solid var(--crm-primary-strong);
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
 }
 
 .planRenewalPrimary:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: var(--crm-primary-hover);
+  border-color: var(--crm-primary-hover);
 }
 
 .planRenewalSecondary {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
 }
 
 .planRenewalSecondary:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #94a3b8;
+  background: var(--crm-surface-muted);
+  border-color: var(--crm-border-strong);
 }
 
 .planRenewalCurrent {
-  border: 1px solid #bbf7d0;
-  background: #f0fdf4;
-  color: #166534;
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
   cursor: default;
 }
 
@@ -583,7 +588,7 @@
 }
 
 .tokensLimit {
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 11px;
   font-weight: 600;
 }
@@ -591,7 +596,7 @@
 .credit {
   font-size: 13px;
   font-weight: 600;
-  color: #334155;
+  color: var(--crm-text);
 }
 
 .profile {
@@ -603,7 +608,7 @@
 .profileName {
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 
@@ -619,7 +624,7 @@
   height: 36px;
   border-radius: 50%;
   overflow: hidden;
-  background: #e2e8f0;
+  background: var(--crm-surface-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -638,7 +643,7 @@
 .avatarFallback {
   font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: var(--crm-text);
 }
 
 .profileName {
@@ -663,7 +668,7 @@
 }
 
 .profileButton:hover {
-  background: rgba(15, 23, 42, 0.06);
+  background: #d1dcd9;
 }
 
 .avatar {
@@ -671,7 +676,8 @@
   height: 36px;
   border-radius: 999px;
   overflow: hidden;
-  background: #e2e8f0;
+  background: var(--crm-surface-muted);
+  border: 1px solid var(--crm-primary-border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -688,19 +694,19 @@
 .avatarFallback {
   font-size: 14px;
   font-weight: 700;
-  color: #334155;
+  color: var(--crm-text);
 }
 
 .profileName {
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   white-space: nowrap;
 }
 
 .chevron {
   font-size: 12px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   line-height: 1;
 }
 
@@ -708,11 +714,11 @@
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  min-width: 190px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  min-width: 200px;
+  background: linear-gradient(180deg, var(--crm-surface) 0%, var(--crm-surface-soft) 100%);
+  border: 1px solid var(--crm-primary-border);
   border-radius: 14px;
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--crm-shadow-md);
   padding: 8px;
   z-index: 50;
 }
@@ -723,19 +729,57 @@
   padding: 10px 12px;
   border-radius: 10px;
   text-decoration: none;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 14px;
   font-weight: 500;
   transition: background 0.2s ease;
 }
 
 .dropdownItem:hover {
-  background: #f8fafc;
+  background: #e6efec;
+}
+
+.themeMenuButton {
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;  padding: 7px 8px;
+
+}
+
+.themeMenuMain {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.themeMenuIcon {
+  color: var(--crm-primary-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.themeMenuBadge {
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--crm-primary-soft) 0%, var(--crm-surface) 100%);
+  color: var(--crm-primary-text);
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .dropdownDivider {
   height: 1px;
-  background: #e2e8f0;
+  background: #e6efec;
   margin: 8px 0;
 }
 
@@ -751,6 +795,7 @@
 .notificationButton {
   width: 38px;
   height: 38px;
+  left: 7px;
   border: none;
   background: transparent;
   border-radius: 12px;
@@ -760,11 +805,11 @@
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease;  
 }
 
 .notificationButton:hover {
-  background: rgba(15, 23, 42, 0.06);
+  background: #d1dcd9;
 }
 
 .notificationBadge {
@@ -775,8 +820,8 @@
   height: 17px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #ef4444;
-  color: #ffffff;
+  background: var(--crm-danger-strong);
+  color: var(--crm-text-inverse);
   font-size: 10px;
   font-weight: 800;
   line-height: 17px;
@@ -790,16 +835,16 @@
   width: 340px;
   max-height: 430px;
   overflow: hidden;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, var(--crm-surface) 0%, var(--crm-surface-soft) 100%);
+  border: 1px solid var(--crm-primary-border);
   border-radius: 16px;
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.14);
+  box-shadow: var(--crm-shadow-md);
   z-index: 60;
 }
 
 .notificationHeader {
   padding: 14px 14px 10px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--crm-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -808,12 +853,12 @@
 
 .notificationHeader strong {
   font-size: 14px;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .notificationHeader span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--crm-text-muted);
 }
 
 .notificationHeaderActions {
@@ -826,7 +871,7 @@
 .markAllReadButton {
   border: none;
   background: transparent;
-  color: #8b9aaf;
+  color: var(--crm-text-muted);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -834,7 +879,7 @@
 }
 
 .markAllReadButton:hover {
-  color: #6e8fd8;
+  color: var(--crm-primary-text);
 }
 
 .notificationList {
@@ -849,17 +894,18 @@
   background: transparent;
   text-align: left;
   padding: 11px 10px;
+  margin-bottom: 1px;
   border-radius: 12px;
   cursor: pointer;
   transition: background 0.2s ease;
 }
 
 .notificationItem:hover {
-  background: #f8fafc;
+  background: #e9f1ee;
 }
 
 .notificationItemUnread {
-  background: #eff6ff;
+  background: #d1f7ec;
 }
 
 .notificationItemTop {
@@ -871,13 +917,13 @@
 
 .notificationItemTop strong {
   font-size: 13px;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .notificationItem p {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   line-height: 1.35;
 }
 
@@ -885,27 +931,27 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #2563eb;
+  background: var(--crm-primary);
   flex-shrink: 0;
 }
 
 .notificationEmpty {
   padding: 18px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   text-align: center;
 }
 
 .notificationViewAllWrapper {
   padding: 8px 6px 4px;
-  background: #ffffff;
+  background: var(--crm-surface);
 }
 
 .notificationViewAllButton {
   width: 100%;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border: 1px solid var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
   border-radius: 12px;
   padding: 10px 12px;
   font-size: 13px;
@@ -915,14 +961,14 @@
 }
 
 .notificationViewAllButton:hover {
-  background: #dbeafe;
-  border-color: #bfdbfe;
+  background: var(--crm-primary-soft-hover);
+  border-color: var(--crm-primary-border);
 }
 
 .notificationModalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.38);
+  background: var(--crm-overlay);
   z-index: 200;
   display: flex;
   align-items: center;
@@ -933,10 +979,10 @@
 .notificationModal {
   width: min(720px, 100%);
   max-height: min(760px, 90vh);
-  background: #ffffff;
+  background: var(--crm-surface);
   border-radius: 18px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+  border: 1px solid var(--crm-border);
+  box-shadow: var(--crm-shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -944,7 +990,7 @@
 
 .notificationModalHeader {
   padding: 16px 18px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--crm-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -966,12 +1012,12 @@
 
 .notificationModalHeader strong {
   font-size: 15px;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .notificationModalHeader span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--crm-text-muted);
 }
 
 .notificationModalClose {
@@ -979,15 +1025,15 @@
   height: 34px;
   border: none;
   border-radius: 10px;
-  background: #f8fafc;
-  color: #334155;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
   font-size: 24px;
   line-height: 1;
   cursor: pointer;
 }
 
 .notificationModalClose:hover {
-  background: #e2e8f0;
+  background: var(--crm-surface-muted);
 }
 
 .notificationModalList {
@@ -998,7 +1044,7 @@
 
 .notificationModalFooter {
   padding: 12px 14px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--crm-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1007,14 +1053,14 @@
 
 .notificationModalFooter span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-weight: 600;
 }
 
 .notificationPageButton {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   border-radius: 10px;
   padding: 9px 12px;
   font-size: 13px;
@@ -1024,8 +1070,8 @@
 }
 
 .notificationPageButton:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-border-strong);
 }
 
 .notificationPageButton:disabled {
@@ -1036,8 +1082,8 @@
 .tokenAlertOverlay {
   position: fixed;
   inset: 0;
-  z-index: 120;
-  background: rgba(15, 23, 42, 0.58);
+  z-index: 300;
+  background: var(--crm-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1049,8 +1095,8 @@
   width: min(620px, 100%);
   overflow: hidden;
   border-radius: 24px;
-  background: #ffffff;
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
   display: grid;
 }
 
@@ -1064,7 +1110,7 @@
   border: none;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  color: var(--crm-text-inverse);
   font-size: 15px;
   font-weight: 900;
   cursor: pointer;
@@ -1095,7 +1141,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #cbd5e1;
+  color: var(--crm-on-strong-muted);
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
@@ -1104,7 +1150,7 @@
 
 .tokenAlertHero h2 {
   margin: 5px 0px 0px 0px;
-  color: #ffffff;
+  color: var(--crm-text-inverse);
   font-size: 28px;
   line-height: 1.12;
   font-weight: 900;
@@ -1112,21 +1158,21 @@
 
 .tokenAlertHero p {
   margin: 12px 0 0;
-  color: #cbd5e1;
+  color: var(--crm-on-strong-soft);
   font-size: 15px;
   line-height: 1.6;
   max-width: 520px;
 }
 
 .tokenAlertHero span {
-  color: #cbd5e1;
+  color: var(--crm-on-strong-muted);
   font-size: 11px;
   line-height: 4.6;
   max-width: 520px;
 }
 
 .tokenAlertHero strong {
-  color: #ffffff;
+  color: var(--crm-text-inverse);
 }
 
 .tokenAlertOffers {
@@ -1137,16 +1183,16 @@
 }
 
 .tokenAlertOffers div {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 16px;
   padding: 14px;
-  background: #f8fafc;
+  background: var(--crm-surface-soft);
   display: grid;
   gap: 5px;
 }
 
 .tokenAlertOffers span {
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -1154,13 +1200,13 @@
 }
 
 .tokenAlertOffers strong {
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 18px;
   font-weight: 900;
 }
 
 .tokenAlertOffers small {
-  color: #047857;
+  color: var(--crm-success-text);
   font-size: 16px;
   font-weight: 900;
 }
@@ -1188,61 +1234,104 @@
 
 .tokenAlertPrimary {
   border: none;
-  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
-  color: #ffffff;
-  box-shadow: 0 14px 30px rgba(29, 78, 216, 0.24);
+  background: linear-gradient(135deg, var(--crm-primary-strong) 0%, var(--crm-primary-hover) 100%);
+  color: var(--crm-text-inverse);
+  box-shadow: var(--crm-shadow-sm);
 }
 
 .tokenAlertPrimary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 34px rgba(29, 78, 216, 0.3);
+  box-shadow: 0 18px 14px rgba(16, 68, 84, 0.261);
 }
 
 .tokenAlertSecondary {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
 }
 
 .tokenAlertSecondary:hover {
-  background: #f8fafc;
+  background: var(--crm-surface-soft);
 }
 
 
 @media (max-width: 768px) {
   .header {
-    min-height: auto;
-    padding: 12px 16px;
-    flex-direction: column;
-    align-items: flex-start;
+    min-height: 54px;
+    padding: 0 14px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
   }
 
   .left {
-    width: 100%;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    width: auto;
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .mobileBackButton {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--crm-border);
+    border-radius: 999px;
+    background: var(--crm-surface);
+    color: var(--crm-text-strong);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    text-decoration: none;
+    box-shadow: var(--crm-shadow-xs);
+  }
+
+  .title {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 17px;
   }
 
   .right {
-    width: 100%;
-    justify-content: space-between;
+    width: auto;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    gap: 0;
+    flex-wrap: nowrap;
   }
 
   .tokensWarningInline {
-    width: 100%;
-    max-width: none;
-    margin-right: 0;
+    display: none;
   }
 
   .assinaturaWarningInline {
-    width: 100%;
-    max-width: none;
-    margin-right: 0;
+    display: none;
   }
 
   .subtitle {
-    white-space: normal;
+    display: none;
+  }
+
+  .notificationWrapper,
+  .userMenuWrapper {
+    display: none;
+  }
+
+  .tokensBadge {
+    height: 34px;
+    max-width: 118px;
+    padding: 0 9px;
+    border-radius: 999px;
+  }
+
+  .tokensBadge strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .notificationDropdown {

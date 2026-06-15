@@ -1,7 +1,7 @@
 .shell {
   min-height: 100vh;
   display: flex;
-  background: #f8fafc;
+  background: var(--crm-shell-bg);
 }
 
 .contentArea {
@@ -20,7 +20,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--crm-overlay);
   backdrop-filter: blur(8px);
 }
 
@@ -33,16 +33,16 @@
   width: min(100%, 520px);
   position: relative;
   border-radius: 8px;
-  border: 1px solid #fee2e2;
-  background: #ffffff;
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-surface);
   padding: 28px;
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: var(--crm-shadow-lg);
 }
 
 .assinaturaEyebrow {
   display: inline-flex;
   margin-bottom: 10px;
-  color: #b91c1c;
+  color: var(--crm-danger-text);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0;
@@ -51,14 +51,14 @@
 
 .assinaturaModal h2 {
   margin: 0 0 10px;
-  color: #111827;
+  color: var(--crm-text-strong);
   font-size: 1.45rem;
   line-height: 1.2;
 }
 
 .assinaturaModal p {
   margin: 0;
-  color: #4b5563;
+  color: var(--crm-text);
   font-size: 0.95rem;
   line-height: 1.6;
 }
@@ -71,8 +71,8 @@
   height: 34px;
   border: 0;
   border-radius: 50%;
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text);
   cursor: pointer;
   font-weight: 800;
 }
@@ -85,22 +85,22 @@
 }
 
 .assinaturaDates div {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--crm-border);
   border-radius: 8px;
   padding: 14px;
-  background: #f9fafb;
+  background: var(--crm-surface-soft);
 }
 
 .assinaturaDates span {
   display: block;
   margin-bottom: 4px;
-  color: #6b7280;
+  color: var(--crm-text-muted);
   font-size: 0.78rem;
   font-weight: 700;
 }
 
 .assinaturaDates strong {
-  color: #111827;
+  color: var(--crm-text-strong);
   font-size: 1rem;
 }
 
@@ -125,20 +125,20 @@
 }
 
 .assinaturaPrimary {
-  border: 1px solid #b91c1c;
-  background: #b91c1c;
-  color: #ffffff;
+  border: 1px solid var(--crm-danger-strong);
+  background: var(--crm-danger-strong);
+  color: var(--crm-text-inverse);
 }
 
 .assinaturaSecondary {
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  color: #374151;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text);
 }
 
 .assinaturaHint {
   margin-top: 18px !important;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--crm-border);
   padding-top: 14px;
   font-size: 0.85rem !important;
 }
@@ -150,8 +150,19 @@
 }
 
 @media (max-width: 768px) {
+  .shell {
+    display: block;
+    min-height: 100dvh;
+  }
+
+  .contentArea {
+    width: 100%;
+    min-height: 100dvh;
+    padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+
   .main {
-    padding: 88px 16px 16px;
+    padding: 16px 16px calc(96px + env(safe-area-inset-bottom));
   }
 
   .assinaturaModal {

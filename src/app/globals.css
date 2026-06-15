@@ -2,14 +2,162 @@
   box-sizing: border-box;
 }
 
+:root {
+  color-scheme: light;
+  --crm-bg: #1dbd88;
+  --crm-bg-soft: #e2f0ec;
+  --crm-shell-bg:
+    linear-gradient(135deg, #dbdbdb10 0%, #113e500c 34%),
+    linear-gradient(160deg, #10a58500 0%, #10a58500 46%, #ffffff00 74%),
+    linear-gradient(180deg, #f8fafc 0%, #e8f1f3 100%);
+  --crm-header-bg:
+    linear-gradient(135deg, #113e500c 0%, #113e500c 52%, #113e500c 100%);
+  --crm-sidebar-bg: 
+    linear-gradient(180deg, #ffffff 0%, #ffffff 38%, #ffffff 130%);
+  --crm-sidebar-border: #e5e7eb;
+  --crm-sidebar-text-strong: #14283b;
+  --crm-sidebar-text: #0d2638;
+  --crm-sidebar-text-muted: #8b8b8b;
+  --crm-sidebar-hover: #14283b1f;
+  --crm-sidebar-active-bg: linear-gradient(135deg, #0d2231 0%, #0d2638 100%);
+  --crm-sidebar-active-text: #d4d4d4;
+  --crm-sidebar-active-shadow: 0 10px 10px rgba(3, 24, 36, 0.168);
+  --crm-sidebar-button-bg: #e4ecf2fa;
+  --crm-sidebar-button-border: #e5e7eb;
+  --crm-sidebar-bottom-bg: #ffffff;
+  --crm-sidebar-avatar-ring: #dff5efd6;
+  --crm-surface: #ffffff;
+  --crm-surface-raised: #bf2525;
+  --crm-surface-soft: #fcfdfd;
+                    --crm-surface-backgroundtest: #fcfdfd;
+  --crm-surface-muted: #e3edf2;
+  --crm-surface-subtle: #ffffff;
+  --crm-text-strong: #102230;
+  --crm-text: #314653;
+  --crm-text-muted: #637985;
+  --crm-text-soft: #8aa0a8;
+  --crm-text-inverse: #ffffff;
+  --crm-on-strong-muted: #b9d8d8;
+  --crm-on-strong-soft: #e5f4f1;
+  --crm-border: #c9d0df81;
+  --crm-border-soft: #dbe1e0;
+  --crm-border-strong: #dbe1e0;
+  --crm-hover: rgba(18, 52, 72, 0.023);
+  --crm-hover-strong: rgba(18, 52, 72, 0.12);
+  --crm-primary: #1c7b83;
+  --crm-primary-hover: #155e70;
+  --crm-primary-strong: #123448;
+  --crm-primary-strong-hover: #0d2638;
+  --crm-primary-soft: #e4f6f1;
+  --crm-primary-soft-hover: #c9eee5;
+  --crm-primary-border: #c6d8d1;
+  --crm-primary-text: #2e8b92;
+  --crm-accent: #12a584;
+  --crm-accent-soft: rgba(18, 165, 132, 0.14);
+  --crm-success-bg: #e6f8ef;
+  --crm-success-bg-strong: #cef1df;
+  --crm-success-border: #a3d993;
+  --crm-success-text: #087455;
+  --crm-success-strong: #15a678;
+  --crm-warning-bg: #fffbeb;
+  --crm-warning-bg-strong: #fef3c7;
+  --crm-warning-border: #f5d67a;
+  --crm-warning-text: #8a4b0b;
+  --crm-warning-strong: #c87913;
+  --crm-danger-bg: #fff0f0;
+  --crm-danger-bg-strong: #ffe1e1;
+  --crm-danger-border: #f6bcbc;
+  --crm-danger-text: #9f1f2f;
+  --crm-danger-strong: #d73548;
+  --crm-overlay: rgba(9, 31, 45, 0.54);
+  --crm-shadow-xs: 0 8px 22px rgba(18, 65, 78, 0.08);
+  --crm-shadow-sm: 0 14px 34px rgba(18, 65, 78, 0.11);
+  --crm-shadow-md: 0 20px 52px rgba(18, 65, 78, 0.15);
+  --crm-shadow-lg: 0 30px 92px rgba(18, 65, 78, 0.24);
+  --crm-focus-ring: 0 0 0 4px rgba(208, 208, 208, 0.18);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --crm-bg: #080d14;
+  --crm-bg-soft: #0d141f;
+  --crm-shell-bg:
+    linear-gradient(180deg, #080d14 0%, #0c1320 100%);
+  --crm-header-bg:
+    linear-gradient(135deg, rgba(13, 20, 31, 0.96) 0%, rgba(15, 23, 42, 0.96) 68%, rgba(17, 32, 45, 0.96) 100%);
+  --crm-sidebar-bg:
+    linear-gradient(180deg, #08111c 0%, #0c2630 58%, #0b3937 140%);
+  --crm-sidebar-border: rgba(125, 211, 252, 0.16);
+  --crm-sidebar-text-strong: #f8fafc;
+  --crm-sidebar-text: #d9e2ee;
+  --crm-sidebar-text-muted: #8aa4b8;
+  --crm-sidebar-hover: rgba(226, 232, 240, 0.08);
+  --crm-sidebar-active-bg: linear-gradient(135deg, #155e75 0%, #0f9f84 100%);
+  --crm-sidebar-active-text: #ffffff;
+  --crm-sidebar-active-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+  --crm-sidebar-button-bg: rgba(226, 232, 240, 0.07);
+  --crm-sidebar-button-border: rgba(148, 163, 184, 0.2);
+  --crm-sidebar-bottom-bg:
+    linear-gradient(180deg, rgba(8, 17, 28, 0) 0%, rgba(8, 17, 28, 0.88) 38%, rgba(8, 17, 28, 0.98) 100%);
+  --crm-sidebar-avatar-ring: rgba(226, 232, 240, 0.4);
+  --crm-surface: #111827;
+  --crm-surface-raised: #162131;
+  --crm-surface-soft: #0f172a;
+  --crm-surface-muted: #1e293b;
+  --crm-surface-subtle: #141f2e;
+  --crm-text-strong: #f8fafc;
+  --crm-text: #d9e2ee;
+  --crm-text-muted: #a6b4c6;
+  --crm-text-soft: #7c8da3;
+  --crm-text-inverse: #ffffff;
+  --crm-on-strong-muted: #cbd5e1;
+  --crm-on-strong-soft: #e2e8f0;
+  --crm-border: rgba(148, 163, 184, 0.2);
+  --crm-border-soft: rgba(148, 163, 184, 0.12);
+  --crm-border-strong: rgba(203, 213, 225, 0.34);
+  --crm-hover: rgba(226, 232, 240, 0.08);
+  --crm-hover-strong: rgba(226, 232, 240, 0.13);
+  --crm-primary: #38bdf8;
+  --crm-primary-hover: #0ea5e9;
+  --crm-primary-strong: #0e7490;
+  --crm-primary-strong-hover: #0891b2;
+  --crm-primary-soft: rgba(56, 189, 248, 0.13);
+  --crm-primary-soft-hover: rgba(56, 189, 248, 0.2);
+  --crm-primary-border: rgba(125, 211, 252, 0.34);
+  --crm-primary-text: #7dd3fc;
+  --crm-accent: #34d399;
+  --crm-accent-soft: rgba(52, 211, 153, 0.12);
+  --crm-success-bg: rgba(16, 185, 129, 0.13);
+  --crm-success-bg-strong: rgba(16, 185, 129, 0.19);
+  --crm-success-border: rgba(52, 211, 153, 0.35);
+  --crm-success-text: #86efac;
+  --crm-success-strong: #34d399;
+  --crm-warning-bg: rgba(245, 158, 11, 0.13);
+  --crm-warning-bg-strong: rgba(245, 158, 11, 0.2);
+  --crm-warning-border: rgba(251, 191, 36, 0.38);
+  --crm-warning-text: #fcd34d;
+  --crm-warning-strong: #f59e0b;
+  --crm-danger-bg: rgba(239, 68, 68, 0.13);
+  --crm-danger-bg-strong: rgba(239, 68, 68, 0.21);
+  --crm-danger-border: rgba(248, 113, 113, 0.34);
+  --crm-danger-text: #fca5a5;
+  --crm-danger-strong: #f87171;
+  --crm-overlay: rgba(2, 6, 23, 0.68);
+  --crm-shadow-xs: 0 4px 14px rgba(0, 0, 0, 0.18);
+  --crm-shadow-sm: 0 12px 28px rgba(0, 0, 0, 0.26);
+  --crm-shadow-md: 0 18px 48px rgba(0, 0, 0, 0.34);
+  --crm-shadow-lg: 0 28px 90px rgba(0, 0, 0, 0.46);
+  --crm-focus-ring: 0 0 0 4px rgba(56, 189, 248, 0.18);
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   min-height: 100%;
   font-family: Arial, Helvetica, sans-serif;
-  background: #f7f9f1;
-  color: #0f172a;
+  background: var(--crm-bg);
+  color: var(--crm-text-strong);
 }
 
 a {
@@ -21,4 +169,13 @@ input,
 select,
 textarea {
   font: inherit;
+  accent-color: var(--crm-primary);
+}
+
+@media (max-width: 768px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
 }

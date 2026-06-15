@@ -7,11 +7,11 @@
 
 .card,
 .summaryCard {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
   border-radius: 24px;
   padding: 24px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--crm-shadow-xs);
 }
 
 .summaryCard {
@@ -27,14 +27,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  background: #0f172a;
+  color: var(--crm-text-inverse);
+  background: var(--crm-primary-strong);
   flex-shrink: 0;
 }
 
 .eyebrow {
   margin: 0 0 6px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -44,7 +44,7 @@
 .cardTitle,
 .sectionTitle {
   margin: 0;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .cardTitle {
@@ -57,7 +57,7 @@
 
 .cardDescription {
   margin: 8px 0 0;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -69,14 +69,14 @@
   margin-left: auto;
   padding: 12px 16px;
   border-radius: 16px;
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
   text-align: right;
   font-size: 12px;
 }
 
 .totalBadge strong {
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 22px;
 }
 
@@ -107,7 +107,7 @@
 .field span,
 .descriptionBox span,
 .technicalInfo span {
-  color: #334155;
+  color: var(--crm-text);
   font-size: 12px;
   font-weight: 700;
 }
@@ -118,18 +118,18 @@
   min-height: 42px;
   box-sizing: border-box;
   padding: 0 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--crm-border-strong);
   border-radius: 12px;
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   outline: none;
   font-size: 14px;
 }
 
 .field input:focus,
 .field select:focus {
-  border-color: #0f172a;
-  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
 }
 
 .filterActions {
@@ -158,42 +158,42 @@
 .secondaryButton {
   min-height: 42px;
   padding: 0 14px;
-  border: 1px solid #0f172a;
+  border: 1px solid var(--crm-primary-strong);
 }
 
 .primaryButton {
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
 }
 
 .secondaryButton {
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
 }
 
 .primaryButton:hover,
 .viewButton:hover {
-  background: #1e293b;
+  background: var(--crm-primary-strong-hover);
 }
 
 .secondaryButton:hover,
 .iconButton:hover,
 .paginationButton:hover:not(:disabled) {
-  background: #f1f5f9;
+  background: var(--crm-surface-muted);
 }
 
 .iconButton,
 .paginationButton {
   width: 38px;
   height: 38px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #475569;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  color: var(--crm-text);
 }
 
 .tableWrapper {
   overflow-x: auto;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 16px;
 }
 
@@ -201,21 +201,21 @@
   width: 100%;
   border-collapse: collapse;
   min-width: 1120px;
-  color: #334155;
+  color: var(--crm-text);
   font-size: 13px;
 }
 
 .table th,
 .table td {
   padding: 14px;
-  border-bottom: 1px solid #edf2f7;
+  border-bottom: 1px solid var(--crm-border-soft);
   text-align: left;
   vertical-align: top;
 }
 
 .table th {
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -226,7 +226,7 @@
 }
 
 .table tbody tr:hover {
-  background: #fbfdff;
+  background: var(--crm-surface-subtle);
 }
 
 .dateCell {
@@ -238,7 +238,7 @@
   max-width: 180px;
   margin-top: 4px;
   overflow: hidden;
-  color: #94a3b8;
+  color: var(--crm-text-soft);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -248,23 +248,23 @@
   display: inline-flex;
   border-radius: 999px;
   padding: 5px 9px;
-  background: #e2e8f0;
-  color: #334155;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text);
   font-size: 11px;
   font-weight: 700;
 }
 
 .descriptionCell {
   max-width: 280px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   line-height: 1.45;
 }
 
 .viewButton {
   padding: 8px 10px;
   border: 0;
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
   font-size: 12px;
 }
 
@@ -277,13 +277,13 @@
 }
 
 .emptyState {
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
 }
 
 .errorState {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
 }
 
 .paginationBar,
@@ -296,7 +296,7 @@
   justify-content: space-between;
   gap: 14px;
   margin-top: 18px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 13px;
 }
 
@@ -315,7 +315,7 @@
   z-index: 50;
   display: flex;
   justify-content: flex-end;
-  background: rgba(15, 23, 42, 0.42);
+  background: var(--crm-overlay);
 }
 
 .modal {
@@ -324,18 +324,18 @@
   overflow-y: auto;
   box-sizing: border-box;
   padding: 24px;
-  background: #ffffff;
+  background: var(--crm-surface);
   box-shadow: -16px 0 40px rgba(15, 23, 42, 0.15);
 }
 
 .modalHeader {
   padding-bottom: 18px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--crm-border);
 }
 
 .modalHeader h2 {
   margin: 0;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 23px;
 }
 
@@ -353,16 +353,16 @@
 .descriptionBox,
 .technicalInfo,
 .jsonCard {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 14px;
   padding: 13px;
-  background: #f8fafc;
+  background: var(--crm-surface-soft);
 }
 
 .detailsGrid span {
   display: block;
   margin-bottom: 5px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -372,7 +372,7 @@
 .detailsGrid strong {
   display: block;
   overflow-wrap: anywhere;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 13px;
 }
 
@@ -384,7 +384,7 @@
 .descriptionBox p,
 .technicalInfo p {
   margin: 7px 0 0;
-  color: #475569;
+  color: var(--crm-text);
   font-size: 13px;
   line-height: 1.55;
   overflow-wrap: anywhere;
@@ -398,7 +398,7 @@
 
 .jsonCard h4 {
   margin: 0 0 9px;
-  color: #334155;
+  color: var(--crm-text);
   font-size: 13px;
 }
 
@@ -406,7 +406,7 @@
   max-height: 280px;
   margin: 0;
   overflow: auto;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 12px;
   line-height: 1.55;
   white-space: pre-wrap;
@@ -456,5 +456,11 @@
 
   .paginationActions {
     justify-content: space-between;
+  }
+}
+
+@media (max-width: 768px) {
+  .pageContent {
+    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
   }
 }

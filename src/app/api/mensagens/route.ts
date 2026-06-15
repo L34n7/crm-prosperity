@@ -14,6 +14,10 @@ import {
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { encerrarConversaExpirada } from "@/lib/whatsapp/encerrar-conversa-expirada";
+import {
+  aplicarAssinaturaWhatsapp,
+  normalizarAssinaturaWhatsapp,
+} from "@/lib/whatsapp/message-signature";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -140,7 +144,7 @@ export async function GET(request: Request) {
     }
 
     if (exportar) {
-      const todasMensagens: any[] = [];
+      const todasMensagens: unknown[] = [];
       const tamanhoLote = 1000;
       let pagina = 0;
 
@@ -605,11 +609,17 @@ export async function POST(request: Request) {
     );
   }
 
+  const assinaturaWhatsapp =
+    remetente_tipo === "usuario" && remetente_id === usuario.id
+      ? normalizarAssinaturaWhatsapp(usuario.assinatura_whatsapp)
+      : "";
+  const conteudoFinal = aplicarAssinaturaWhatsapp(conteudo, assinaturaWhatsapp);
+
   const envioWhatsApp = await sendWhatsAppTextMessage({
     phoneNumberId,
     accessToken,
     to: contato.telefone,
-    body: conteudo,
+    body: conteudoFinal,
   });
 
   if (!envioWhatsApp.ok) {
@@ -626,6 +636,14 @@ export async function POST(request: Request) {
 
   const metadataFinal = {
     ...(metadata_json ?? {}),
+    ...(assinaturaWhatsapp
+      ? {
+          assinatura_whatsapp: {
+            texto: assinaturaWhatsapp,
+            aplicada: true,
+          },
+        }
+      : {}),
     whatsapp: {
       phone_number_id: phoneNumberId,
       destino: contato.telefone,
@@ -646,7 +664,7 @@ export async function POST(request: Request) {
         conversa_protocolo_id: protocoloAtivo.id,
         remetente_tipo,
         remetente_id,
-        conteudo,
+        conteudo: conteudoFinal,
         tipo_mensagem,
         origem: "enviada",
         status_envio: "enviada",

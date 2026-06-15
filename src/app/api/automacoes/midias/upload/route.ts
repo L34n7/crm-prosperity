@@ -32,7 +32,7 @@ const BUCKET_MIDIAS = "midias";
 const LIMITE_IMAGEM = 5 * 1024 * 1024;
 const LIMITE_VIDEO = 16 * 1024 * 1024;
 const LIMITE_AUDIO = 16 * 1024 * 1024;
-const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 100 * 1024 * 1024; // 100 MB
+const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 50 * 1024 * 1024; // 50 MB
 
 function tipoMidiaPorMime(mimeType: string): TipoMidia | "" {
   if (mimeType.startsWith("image/")) return "imagem";
@@ -416,7 +416,7 @@ async function verificarLimiteStorageMidiasEmpresa(params: {
     return NextResponse.json(
       {
         ok: false,
-        error: `Limite de 100 MB de mídias atingido. Exclua uma mídia antes de enviar outra.`,
+        error: `Limite de 50 MB de mídias atingido. Exclua uma mídia antes de enviar outra.`,
         limite_bytes: LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES,
         usado_bytes: totalAtualBytes,
         arquivo_bytes: tamanhoNovoArquivoBytes,

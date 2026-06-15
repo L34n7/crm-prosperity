@@ -24,6 +24,7 @@ type ConversaAtual = {
   responsavel_id: string | null;
   integracao_whatsapp_id: string | null;
   status: string;
+  bot_ativo: boolean | null;
   canal: string;
   origem_atendimento: string;
   prioridade: string | null;
@@ -280,14 +281,27 @@ export async function PUT(
     );
   }
 
-  if (!(await usuarioPodeEditarConversa(usuario, conversaAtual))) {
+  const body = await request.json();
+
+  const parandoAutomacaoEEncerrando =
+    body?.acao === "parar_automacao_encerrar";
+
+  if (parandoAutomacaoEEncerrando) {
+    if (!(await usuarioPodeEncerrar(usuario, conversaAtual))) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Você não pode parar a automação e encerrar esta conversa",
+        },
+        { status: 403 }
+      );
+    }
+  } else if (!(await usuarioPodeEditarConversa(usuario, conversaAtual))) {
     return NextResponse.json(
       { ok: false, error: "Você não pode editar esta conversa" },
       { status: 403 }
     );
   }
-
-  const body = await request.json();
 
   const empresa_id = conversaAtual.empresa_id;
   const contato_id = body?.contato_id ?? conversaAtual.contato_id;
@@ -299,6 +313,10 @@ export async function PUT(
   const integracao_whatsapp_id =
     body?.integracao_whatsapp_id ?? conversaAtual.integracao_whatsapp_id;
   const status = body?.status ?? conversaAtual.status;
+  const bot_ativo =
+    "bot_ativo" in body
+      ? Boolean(body.bot_ativo)
+      : conversaAtual.bot_ativo;
   const canal = body?.canal ?? conversaAtual.canal;
   const origem_atendimento =
     body?.origem_atendimento ?? conversaAtual.origem_atendimento;
@@ -353,7 +371,8 @@ export async function PUT(
   const mudouResponsavel = responsavel_id !== conversaAtual.responsavel_id;
 
   const conversaAtualEstaEncerrada = STATUS_ENCERRADOS.includes(conversaAtual.status);
-  const novoStatusEhEncerrado = STATUS_ENCERRADOS.includes(status);
+  const novoStatusEhEncerrado =
+    STATUS_ENCERRADOS.includes(status) || parandoAutomacaoEEncerrando;
 
   const estaEncerrando =
     novoStatusEhEncerrado && !conversaAtualEstaEncerrada;
@@ -575,6 +594,7 @@ export async function PUT(
     responsavel_id,
     integracao_whatsapp_id,
     status,
+    bot_ativo,
     canal,
     origem_atendimento,
     prioridade,
@@ -604,6 +624,13 @@ export async function PUT(
     } else {
       updateData.status = "fila";
     }
+  }
+
+  if (parandoAutomacaoEEncerrando) {
+    updateData.status = "encerrado_manual";
+    updateData.bot_ativo = false;
+    updateData.responsavel_id = null;
+    updateData.origem_atendimento = "manual";
   }
 
   let dataFechamento: string | null = null;
@@ -691,7 +718,9 @@ export async function PUT(
     );
   }
 
-  const acao = estaEncerrando
+  const acao = parandoAutomacaoEEncerrando
+    ? "automacao_parada_conversa_encerrada"
+    : estaEncerrando
     ? "conversa_encerrada"
     : estaReabrindo
     ? "conversa_reaberta"
@@ -707,7 +736,9 @@ export async function PUT(
     entidade: "conversa",
     entidade_id: id,
     acao,
-    descricao: "Conversa atualizada",
+    descricao: parandoAutomacaoEEncerrando
+      ? "Automação parada e conversa encerrada manualmente"
+      : "Conversa atualizada",
     usuario_id: usuario.id,
     usuario_nome: usuario.nome,
     usuario_email: usuario.email,
@@ -716,6 +747,7 @@ export async function PUT(
       setor_id: conversaAtual.setor_id,
       responsavel_id: conversaAtual.responsavel_id,
       status: conversaAtual.status,
+      bot_ativo: conversaAtual.bot_ativo,
       prioridade: conversaAtual.prioridade,
       assunto: conversaAtual.assunto,
       closed_at: conversaAtual.closed_at ?? null,
@@ -725,6 +757,7 @@ export async function PUT(
       setor_id: data.setor_id,
       responsavel_id: data.responsavel_id,
       status: data.status,
+      bot_ativo: data.bot_ativo,
       prioridade: data.prioridade,
       assunto: data.assunto,
       closed_at: data.closed_at ?? null,
@@ -735,7 +768,9 @@ export async function PUT(
 
   return NextResponse.json({
     ok: true,
-    message: "Conversa atualizada com sucesso",
+    message: parandoAutomacaoEEncerrando
+      ? "Automação parada e conversa encerrada com sucesso."
+      : "Conversa atualizada com sucesso",
     conversa: data,
   });
 }

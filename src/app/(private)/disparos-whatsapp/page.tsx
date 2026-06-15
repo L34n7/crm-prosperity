@@ -1765,7 +1765,7 @@ export default function DisparosWhatsAppPage() {
 
                               <button
                                 type="button"
-                                className={styles.secondaryButton}
+                                className={styles.ButtonAdd}
                                 onClick={() => adicionarContato(contato)}
                                 disabled={!telefoneValido}
                               >

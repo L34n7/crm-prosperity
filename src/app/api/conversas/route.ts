@@ -47,6 +47,8 @@ type ConversaComRelacionamentos = {
     nome: string | null;
     telefone: string | null;
     email: string | null;
+    origem?: string | null;
+    status_lead?: string | null;
     empresa?: string | null;
     observacoes?: string | null;
   } | null;
@@ -584,6 +586,8 @@ export async function GET(request: Request) {
         nome,
         telefone,
         email,
+        origem,
+        status_lead,
         empresa,
         observacoes,
         campanha,

@@ -1,6 +1,6 @@
 .page {
   height: 100dvh;
-  background: #efeae2;
+  background: var(--crm-surface-soft);
   padding: 0;
 }
 
@@ -11,7 +11,7 @@
   width: 100%;
   max-width: 1600px;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--crm-surface);
   box-shadow: none;
 }
 
@@ -20,13 +20,13 @@
   width: 100%;
   max-width: 100%;
   flex-direction: column;
-  border-right: 1px solid #e5e7eb;
-  background: #ffffff;
+  border-right: 1px solid var(--crm-border);
+  background: var(--crm-surface);
 }
 
 .sidebarHeader {
-  border-bottom: 1px solid #e5e7eb;
-  background: #f0f2f5;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface-muted);
   padding: 1rem;
 }
 
@@ -40,29 +40,29 @@
 .sidebarTitle {
   font-size: 1.125rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--crm-text-strong);
 }
 
 .sidebarSubtitle {
   margin-top: 0.125rem;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .refreshButton {
   border-radius: 0.75rem;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--crm-text);
   transition: background 0.2s ease;
   cursor: pointer;
 }
 
 .refreshButton:hover {
-  background: #f9fafb;
+  background: var(--crm-surface-soft);
 }
 
 .searchWrapper {
@@ -72,8 +72,8 @@
 .searchInput {
   width: 100%;
   border-radius: 0.75rem;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
   outline: none;
@@ -88,20 +88,20 @@
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  background: #ffffff;
+  background: var(--crm-surface);
 }
 
 .sidebarMessage {
   padding: 1rem;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .conversationButton {
   width: 100%;
   border: 0;
   border-bottom: 1px solid #f3f4f6;
-  background: #ffffff;
+  background: var(--crm-surface);
   padding: 1rem;
   text-align: left;
   transition: background 0.2s ease;
@@ -109,11 +109,11 @@
 }
 
 .conversationButton:hover {
-  background: #f9fafb;
+  background: var(--crm-surface-soft);
 }
 
 .conversationButtonActive {
-  background: #f0f2f5;
+  background: var(--crm-surface-muted);
 }
 
 .conversationRow {
@@ -134,7 +134,7 @@
   white-space: nowrap;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--crm-text-strong);
 }
 
 .conversationPhone {
@@ -143,7 +143,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .conversationSubject {
@@ -152,7 +152,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.875rem;
-  color: #4b5563;
+  color: var(--crm-text);
 }
 
 .statusBadge {
@@ -163,13 +163,13 @@
 }
 
 .statusBadgeOpen {
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--crm-success-bg-strong);
+  color: var(--crm-success-text);
 }
 
 .statusBadgeDefault {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text);
 }
 
 .desktopChat {
@@ -180,8 +180,8 @@
 }
 
 .chatHeader {
-  border-bottom: 1px solid #e5e7eb;
-  background: #f0f2f5;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface-muted);
   padding: 1rem 1.5rem;
 }
 
@@ -202,7 +202,7 @@
   white-space: nowrap;
   font-size: 1rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--crm-text-strong);
 }
 
 .chatHeaderSubtitle {
@@ -210,22 +210,22 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .testButton {
   border-radius: 0.75rem;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--crm-text);
   transition: background 0.2s ease;
   cursor: pointer;
 }
 
 .testButton:hover {
-  background: #f9fafb;
+  background: var(--crm-surface-soft);
 }
 
 .testPanel {
@@ -233,8 +233,8 @@
   display: grid;
   gap: 0.75rem;
   border-radius: 1rem;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
   padding: 1rem;
 }
 
@@ -245,13 +245,13 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .fieldSelect {
   width: 100%;
   border-radius: 0.75rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--crm-border-strong);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   outline: none;
@@ -261,7 +261,7 @@
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  background-color: #efeae2;
+  background-color: var(--crm-surface-soft);
   background-image: radial-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px);
   background-size: 18px 18px;
   padding: 1.5rem 1rem;
@@ -269,7 +269,7 @@
 
 .messagesInfo {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .emptyConversationCard {
@@ -280,7 +280,7 @@
   padding: 0.75rem 1rem;
   text-align: center;
   font-size: 0.875rem;
-  color: #4b5563;
+  color: var(--crm-text);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
@@ -301,7 +301,7 @@
   padding: 0.25rem 1rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: #4b5563;
+  color: var(--crm-text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -325,24 +325,24 @@
 }
 
 .messageBubbleOutgoing {
-  background: #d9fdd3;
-  color: #111827;
+  background: var(--crm-success-bg-strong);
+  color: var(--crm-text-strong);
 }
 
 .messageBubbleIncoming {
-  background: #ffffff;
-  color: #111827;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
 }
 
 .messageBubbleAutomatic {
-  background: #fff3c4;
-  color: #111827;
+  background: var(--crm-warning-bg-strong);
+  color: var(--crm-text-strong);
 }
 
 .editTextarea {
   width: 100%;
   border-radius: 0.75rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--crm-border-strong);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   outline: none;
@@ -362,31 +362,31 @@
 .saveButton {
   border: 0;
   border-radius: 0.75rem;
-  background: #16a34a;
+  background: var(--crm-success-strong);
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #ffffff;
+  color: var(--crm-text-inverse);
   cursor: pointer;
 }
 
 .saveButton:hover {
-  background: #15803d;
+  background: var(--crm-success-strong);
 }
 
 .cancelButton {
   border-radius: 0.75rem;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--crm-text);
   cursor: pointer;
 }
 
 .cancelButton:hover {
-  background: #f9fafb;
+  background: var(--crm-surface-soft);
 }
 
 .messageMetaTop {
@@ -401,17 +401,17 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .automaticBadge {
   border-radius: 9999px;
-  background: #fef3c7;
+  background: var(--crm-warning-bg-strong);
   padding: 0.125rem 0.5rem;
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  color: #a16207;
+  color: var(--crm-warning-text);
 }
 
 .messageText {
@@ -428,7 +428,7 @@
   justify-content: flex-end;
   gap: 0.5rem;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .statusIcon {
@@ -436,15 +436,15 @@
 }
 
 .statusIconDefault {
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .statusIconRead {
-  color: #0284c7;
+  color: var(--crm-primary-text);
 }
 
 .statusIconError {
-  color: #dc2626;
+  color: var(--crm-danger-strong);
 }
 
 .messageActions {
@@ -460,7 +460,7 @@
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: #4b5563;
+  color: var(--crm-text);
   cursor: pointer;
 }
 
@@ -469,29 +469,29 @@
 }
 
 .chatFooter {
-  border-top: 1px solid #e5e7eb;
-  background: #f0f2f5;
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface-muted);
   padding: 1rem;
 }
 
 .successAlert {
   margin-bottom: 0.75rem;
   border-radius: 0.75rem;
-  border: 1px solid #bbf7d0;
-  background: #f0fdf4;
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-success-bg);
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #15803d;
+  color: var(--crm-success-text);
 }
 
 .errorAlert {
   margin-bottom: 0.75rem;
   border-radius: 0.75rem;
-  border: 1px solid #fecaca;
-  background: #fef2f2;
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #b91c1c;
+  color: var(--crm-danger-text);
 }
 
 .inputRow {
@@ -504,8 +504,8 @@
   min-height: 52px;
   flex: 1;
   border-radius: 1rem;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
   outline: none;
@@ -520,17 +520,17 @@
 .sendButton {
   border: 0;
   border-radius: 1rem;
-  background: #16a34a;
+  background: var(--crm-success-strong);
   padding: 0.75rem 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--crm-text-inverse);
   transition: background 0.2s ease, opacity 0.2s ease;
   cursor: pointer;
 }
 
 .sendButton:hover:not(:disabled) {
-  background: #15803d;
+  background: var(--crm-success-strong);
 }
 
 .sendButton:disabled {
@@ -541,7 +541,7 @@
 .footerHint {
   margin-top: 0.5rem;
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .emptyState {
@@ -550,7 +550,7 @@
   flex: 1;
   align-items: center;
   justify-content: center;
-  background: #f8f9fa;
+  background: var(--crm-surface-soft);
   padding: 2rem;
 }
 
@@ -562,13 +562,13 @@
 .emptyStateTitle {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--crm-text-strong);
 }
 
 .emptyStateText {
   margin-top: 0.5rem;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .mobileChat {
@@ -579,8 +579,8 @@
 }
 
 .mobileHeader {
-  border-bottom: 1px solid #e5e7eb;
-  background: #f0f2f5;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface-muted);
   padding: 1rem;
 }
 
@@ -590,7 +590,7 @@
   white-space: nowrap;
   font-size: 1rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--crm-text-strong);
 }
 
 .mobileHeaderSubtitle {
@@ -598,14 +598,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .mobileMessagesArea {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  background: #efeae2;
+  background: var(--crm-surface-soft);
   padding: 1.5rem 1rem;
 }
 
@@ -629,12 +629,12 @@
   justify-content: flex-end;
   gap: 0.5rem;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 .mobileFooter {
-  border-top: 1px solid #e5e7eb;
-  background: #f0f2f5;
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface-muted);
   padding: 1rem;
 }
 
@@ -647,7 +647,7 @@
   padding: 1.5rem;
   text-align: center;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--crm-text-muted);
 }
 
 @media (min-width: 768px) {
@@ -682,5 +682,19 @@
 
   .messageBubble {
     max-width: 70%;
+  }
+}
+
+@media (max-width: 767px) {
+  .page {
+    height: calc(100dvh - 78px - env(safe-area-inset-bottom));
+  }
+
+  .layout {
+    height: 100%;
+  }
+
+  .mobileFooter {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   }
 }

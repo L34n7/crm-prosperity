@@ -14,6 +14,7 @@ import { baixarAudioWhatsApp } from "@/lib/whatsapp/baixar-audio-whatsapp";
 import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { atribuirCampanhaPorMensagemWhatsApp } from "@/lib/rastreamento/atribuir-campanha-whatsapp";
+import { salvarAtribuicaoMetaAnuncio } from "@/lib/whatsapp/meta-attribution";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -213,12 +214,43 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           conversation_origin_type: statusItem.conversationOriginType,
           expiration_timestamp: statusItem.expirationTimestamp,
           pricing_category: statusItem.pricingCategory,
+          pricing_type: statusItem.pricingType,
           pricing_model: statusItem.pricingModel,
           pricing_billable: statusItem.pricingBillable,
           error_message: statusItem.errorMessage,
           raw_status: statusItem.rawStatus,
         },
       });
+
+      try {
+        const integration = await findWhatsAppIntegrationByPhoneNumberId(
+          statusItem.phoneNumberId
+        );
+
+        if (integration) {
+          await salvarAtribuicaoMetaAnuncio({
+            empresaId: integration.empresa_id,
+            integracaoWhatsappId: integration.id,
+            mensagemId: updateResult.messageId ?? null,
+            mensagemExternaId: statusItem.mensagemExternaId,
+            conversationOriginType: statusItem.conversationOriginType,
+            pricingType: statusItem.pricingType,
+            pricingCategory: statusItem.pricingCategory,
+            pricingModel: statusItem.pricingModel,
+            pricingBillable: statusItem.pricingBillable,
+            payloadTipo: "status",
+            payloadJson: statusItem.rawStatus as Record<string, unknown>,
+          });
+        }
+      } catch (attributionError) {
+        console.error("[META REFERRAL] Erro ao salvar status de atribuicao", {
+          messageId: statusItem.mensagemExternaId,
+          erro:
+            attributionError instanceof Error
+              ? attributionError.message
+              : String(attributionError),
+        });
+      }
 
       processedResults.push({
         type: "status",
@@ -318,12 +350,43 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         conversaId: conversation.id,
       });
 
-      await atribuirCampanhaPorMensagemWhatsApp({
+      const atribuicaoCampanhaMensagem = await atribuirCampanhaPorMensagemWhatsApp({
         empresaId: integration.empresa_id,
         contatoId: contact.id,
         conversaId: conversation.id,
         conteudo: message.conteudo || message.text,
       });
+
+      if (message.referral) {
+        console.log("[META REFERRAL]", {
+          messageId: message.messageId,
+          sourceId: message.referral?.source_id ?? null,
+          ctwaClid: message.referral?.ctwa_clid ?? null,
+        });
+
+        try {
+          await salvarAtribuicaoMetaAnuncio({
+            empresaId: integration.empresa_id,
+            contatoId: contact.id,
+            conversaId: conversation.id,
+            integracaoWhatsappId: integration.id,
+            mensagemExternaId: message.messageId,
+            referral: message.referral,
+            numeroWhatsapp: integration.numero,
+            atribuirRastreamento: !atribuicaoCampanhaMensagem,
+            payloadTipo: "message",
+            payloadJson: message.rawMessage as Record<string, unknown>,
+          });
+        } catch (attributionError) {
+          console.error("[META REFERRAL] Erro ao salvar atribuicao da mensagem", {
+            messageId: message.messageId,
+            erro:
+              attributionError instanceof Error
+                ? attributionError.message
+                : String(attributionError),
+          });
+        }
+      }
 
       await atualizarUltimaMensagemRecebidaConversa({
         empresaId: integration.empresa_id,
@@ -442,6 +505,31 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
       const mensagemInternaId =
         savedMessage.messageId || mensagemExistente?.id || null;
+
+      if (message.referral) {
+        try {
+          await salvarAtribuicaoMetaAnuncio({
+            empresaId: integration.empresa_id,
+            contatoId: contact.id,
+            conversaId: conversation.id,
+            mensagemId: mensagemInternaId,
+            integracaoWhatsappId: integration.id,
+            mensagemExternaId: message.messageId,
+            referral: message.referral,
+            atribuirRastreamento: false,
+            payloadTipo: "message",
+            payloadJson: message.rawMessage as Record<string, unknown>,
+          });
+        } catch (attributionError) {
+          console.error("[META REFERRAL] Erro ao salvar atribuicao da mensagem", {
+            messageId: message.messageId,
+            erro:
+              attributionError instanceof Error
+                ? attributionError.message
+                : String(attributionError),
+          });
+        }
+      }
 
       const conversaIdParaProcessar =
         mensagemExistente?.conversa_id || conversation.id;

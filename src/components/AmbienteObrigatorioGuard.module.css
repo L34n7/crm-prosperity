@@ -8,9 +8,9 @@
   gap: 14px;
   padding: 16px;
   border-radius: 22px;
-  background: linear-gradient(100deg, #ffffff 0%, #fff9f9 50%, #ffb3b3 150%);
-  border: 1px transparent;
-  box-shadow: 0 14px 70px rgba(15, 23, 42, 0.494);
+  background: linear-gradient(100deg, var(--crm-surface) 0%, var(--crm-danger-bg) 60%, var(--crm-danger-bg-strong) 150%);
+  border: 1px solid var(--crm-danger-border);
+  box-shadow: var(--crm-shadow-lg);
   animation: popupEntrada 0.25s ease both;
 }
 
@@ -19,8 +19,8 @@
   height: 38px;
   flex-shrink: 0;
   border-radius: 999px;
-  background: #ffebeb;
-  color: #d81d1d;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -43,14 +43,14 @@
 
 .topRow strong {
   display: block;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   font-size: 18px;
   font-weight: 900;
 }
 
 .content p {
   margin: 0;
-  color: #2a323d;
+  color: var(--crm-text);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -59,10 +59,10 @@
   width: 28px;
   height: 28px;
   flex-shrink: 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--crm-border);
   border-radius: 999px;
-  background: #ffffff;
-  color: #64748b;
+  background: var(--crm-surface);
+  color: var(--crm-text-muted);
   font-size: 14px;
   font-weight: 900;
   cursor: pointer;
@@ -74,9 +74,9 @@
 }
 
 .refreshButton:hover {
-  background: #f8fafc;
-  color: #334155;
-  border-color: #cbd5e1;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  border-color: var(--crm-border-strong);
   transform: translateY(-1px);
 }
 
@@ -92,8 +92,8 @@
   border: 0;
   border-radius: 12px;
   padding: 0 14px;
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--crm-primary);
+  color: var(--crm-text-inverse);
   font-size: 13px;
   font-weight: 900;
   cursor: pointer;

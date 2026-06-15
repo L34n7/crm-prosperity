@@ -18,8 +18,8 @@
 
 .formCard,
 .resultsCard {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
   border-radius: 28px;
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
   overflow: hidden;
@@ -29,15 +29,15 @@
 
 .cardHeader {
   padding: 22px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #fbfdff;
+  border-bottom: 1px solid var(--crm-border);
+  background: #fafeff;
 }
 
 .eyebrow {
   margin: 0 0 6px;
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--crm-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -46,13 +46,13 @@
   margin: 0;
   font-size: 24px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .cardSubtitle {
   margin: 8px 0 0;
   font-size: 14px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   line-height: 1.6;
 }
 
@@ -114,15 +114,15 @@
 .label {
   font-size: 13px;
   font-weight: 700;
-  color: #334155;
+  color: var(--crm-text);
 }
 
 .input,
 .textarea {
   width: 100%;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   border-radius: 12px;
   padding: 10px 12px;
   font-size: 13px;
@@ -133,8 +133,16 @@
 
 .input:focus,
 .textarea:focus {
-  border-color: #0f172a;
-  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.input:disabled,
+.textarea:disabled {
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .textarea {
@@ -147,19 +155,19 @@
 .help {
   margin: 0;
   font-size: 12px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   line-height: 1.55;
 }
 
 .infoBox {
-  border: 1px solid #dbe3f0;
-  background: #f8fafc;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
   border-radius: 16px;
   padding: 12px 14px;
   display: grid;
   gap: 8px;
   font-size: 14px;
-  color: #334155;
+  color: var(--crm-text);
 }
 
 .whatsappPreviewCard {
@@ -254,8 +262,8 @@
 }
 
 .previewCard {
-  border: 1px solid #dbe3f0;
-  background: #f8fafc;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
   border-radius: 18px;
   padding: 14px;
   display: flex;
@@ -274,13 +282,13 @@
   margin: 0;
   font-size: 16px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .previewSubtitle {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #64748b;
+  color: var(--crm-text-muted);
 }
 
 .previewGrid {
@@ -290,8 +298,8 @@
 }
 
 .previewBlock {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
   border-radius: 14px;
   padding: 10px 12px;
 }
@@ -303,13 +311,13 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #94a3b8;
+  color: var(--crm-text-soft);
 }
 
 .previewText {
   margin: 0;
   font-size: 13px;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -323,8 +331,8 @@
 }
 
 .summaryCard {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
   border-radius: 18px;
   padding: 10px 18px 10px;
   text-align: left;
@@ -333,15 +341,15 @@
 }
 
 .summaryCard:hover {
-  background: #f8fafcac;
-  border-color: #94a3b8;
+  border-color:  #bbe4da;
+  background: #efffff13;
   transform: translateY(-1px);
 }
 
 .summaryCardActive {
-  border-color: #0b1f4d65;
-  background: #f8fafc45;
-  box-shadow: 0 0 10 3px rgba(15, 23, 42, 0.041);
+  border-color:  #d6e3ea;
+  background: #ffffff;
+  box-shadow: 0 0 10 3px rgba(15, 42, 39, 0.05);
 }
 
 .summaryLabel {
@@ -350,7 +358,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #94a3b8;
+  color: var(--crm-text-soft);
 }
 
 .summaryValue {
@@ -358,7 +366,7 @@
   margin-top: 8px;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-text-strong);
 }
 
 .summaryValueSmall {
@@ -366,7 +374,7 @@
   margin-top: 8px;
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -390,24 +398,24 @@
 
 .primaryButton {
   border: none;
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
 }
 
 .primaryButton:hover {
-  background: #111827;
+  background: var(--crm-primary-strong-hover);
   transform: translateY(-1px);
 }
 
 .secondaryButton {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
 }
 
 .secondaryButton:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-border-strong);
 }
 
 .primaryButton:disabled,
@@ -426,15 +434,15 @@
 }
 
 .successAlert {
-  background: #ecfdf5;
-  color: #047857;
-  border: 1px solid #a7f3d0;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  border: 1px solid var(--crm-success-border);
 }
 
 .errorAlert {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  border: 1px solid var(--crm-danger-border);
 }
 
 .resultsList {
@@ -447,8 +455,8 @@
 .compactTemplateCard {
   border-radius: 18px;
   padding: 14px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -478,7 +486,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   line-height: 1.3;
   word-break: break-word;
 }
@@ -486,21 +494,21 @@
 .compactTemplateMeta {
   margin: 0;
   font-size: 12px;
-  color: #64748b;
+  color: var(--crm-text-muted);
   line-height: 1.45;
   word-break: break-word;
 }
 
 .compactBlock {
-  border: 1px solid #e2e8f0;
-  background: #fbfdff;
+  border: 1px solid var(--crm-border);
+  background: #fbfeff;
   border-radius: 14px;
   padding: 10px 12px;
 }
 
 .compactMiniBlock {
-  border: 1px solid #e2e8f0;
-  background: #fbfdff;
+  border: 1px solid var(--crm-border);
+  background: #fbfeff;
   border-radius: 14px;
   padding: 10px 12px;
   min-width: 0;
@@ -519,13 +527,13 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #94a3b8;
+  color: var(--crm-text-soft);
 }
 
 .compactText {
   margin: 0;
   font-size: 13px;
-  color: #0f172a;
+  color: var(--crm-text-strong);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -534,7 +542,7 @@
 .resultText {
   margin: 0;
   font-size: 12px;
-  color: #334155;
+  color: var(--crm-text);
   line-height: 1.45;
   word-break: break-word;
 }
@@ -542,7 +550,7 @@
 .resultCompactError {
   margin: 0;
   font-size: 12px;
-  color: #b91c1c;
+  color: var(--crm-danger-text);
   line-height: 1.45;
 }
 
@@ -552,11 +560,11 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  color: #64748b;
+  color: var(--crm-text-muted);
   padding: 24px;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--crm-border-strong);
   border-radius: 22px;
-  background: #f8fafc;
+  background: var(--crm-surface-soft);
   margin: 18px;
 }
 
@@ -573,33 +581,33 @@
 }
 
 .badgeGreen {
-  background: #ecfdf5;
-  color: #047857;
-  border-color: #a7f3d0;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  border-color: var(--crm-success-border);
 }
 
 .badgeYellow {
-  background: #fff7ed;
-  color: #c2410c;
-  border-color: #fdba74;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+  border-color: var(--crm-warning-border);
 }
 
 .badgeRed {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  border-color: var(--crm-danger-border);
 }
 
 .badgeGray {
-  background: #f8fafc;
-  color: #475569;
-  border-color: #e2e8f0;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  border-color: var(--crm-border);
 }
 
 .badgeBlue {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border-color: #bfdbfe;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  border-color: var(--crm-primary-border);
 }
 
 .quickRepliesList {
@@ -612,8 +620,8 @@
   position: sticky;
   bottom: 0;
   z-index: 5;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
   border-radius: 20px;
   padding: 16px 18px;
   display: flex;
@@ -628,7 +636,7 @@
   display: flex;
   gap: 18px;
   flex-wrap: wrap;
-  color: #475569;
+  color: var(--crm-text);
   font-size: 14px;
   font-weight: 600;
 }
@@ -646,17 +654,17 @@
   height: 38px;
   padding: 0 16px;
   border-radius: 12px;
-  border: 1px solid #dbe3f0;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
 }
 
 .paginationButton:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #94a3b8;
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-border-strong);
 }
 
 .paginationButton:disabled {
@@ -667,7 +675,7 @@
 .paginationInfo {
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--crm-text-muted);
 }
 
 
@@ -720,5 +728,51 @@
   .previewHeader {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .pageContent {
+    gap: 14px;
+    min-height: auto;
+    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .formCard,
+  .resultsCard {
+    border-radius: 18px;
+  }
+
+  .cardHeader,
+  .form,
+  .resultsList,
+  .inlineBlock {
+    padding: 16px;
+  }
+
+  .creatorGrid,
+  .topGrid,
+  .resultsSummary,
+  .searchRow,
+  .compactFooterRow {
+    grid-template-columns: 1fr;
+  }
+
+  .submitBar {
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    align-items: stretch;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .submitInfo,
+  .actions,
+  .inlineActions {
+    width: 100%;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    width: 100%;
   }
 }

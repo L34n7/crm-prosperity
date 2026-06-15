@@ -241,7 +241,31 @@ export default function TemplatesWhatsAppPage() {
         throw new Error(json.error || "Erro ao carregar integrações.");
       }
 
-      setIntegracoes(Array.isArray(json.data) ? json.data : []);
+      const listaIntegracoes: IntegracaoWhatsApp[] = Array.isArray(json.data)
+        ? json.data
+        : [];
+
+      setIntegracoes(listaIntegracoes);
+
+      setIntegracaoId((integracaoAtual) => {
+        if (listaIntegracoes.length === 1) {
+          return listaIntegracoes[0].id;
+        }
+
+        return listaIntegracoes.some((item) => item.id === integracaoAtual)
+          ? integracaoAtual
+          : "";
+      });
+
+      setFiltroIntegracao((filtroAtual) => {
+        if (listaIntegracoes.length === 1) {
+          return listaIntegracoes[0].id;
+        }
+
+        return listaIntegracoes.some((item) => item.id === filtroAtual)
+          ? filtroAtual
+          : "";
+      });
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar integrações.");
     } finally {
@@ -288,6 +312,9 @@ export default function TemplatesWhatsAppPage() {
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
   }, [integracoes, integracaoId]);
+
+  const selectIntegracaoBloqueado =
+    loadingIntegracoes || integracoes.length <= 1;
 
   const quickRepliesPreview = [quickReply1, quickReply2, quickReply3]
     .map((item) => item.trim())
@@ -547,6 +574,7 @@ export default function TemplatesWhatsAppPage() {
                             value={integracaoId}
                             onChange={(e) => setIntegracaoId(e.target.value)}
                             className={styles.input}
+                            disabled={selectIntegracaoBloqueado}
                             required
                           >
                             <option value="">
@@ -903,6 +931,7 @@ export default function TemplatesWhatsAppPage() {
                         setPaginaAtual(1);
                       }}
                       className={styles.input}
+                      disabled={selectIntegracaoBloqueado}
                     >
                       <option value="">Todas as integrações</option>
                       {integracoes.map((item) => (

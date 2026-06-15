@@ -4,6 +4,7 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Cropper, { Area } from "react-easy-crop";
 import FeedbackToast from "@/components/FeedbackToast";
 import { createClient } from "@/lib/supabase/client";
+import { ASSINATURA_WHATSAPP_MAX_LENGTH } from "@/lib/whatsapp/message-signature";
 import styles from "./perfil.module.css";
 import Header from "@/components/Header";
 
@@ -29,6 +30,7 @@ type UsuarioPerfil = {
   nome: string | null;
   email: string | null;
   avatar_url: string | null;
+  assinatura_whatsapp?: string | null;
   data_nascimento?: string | null;
   cpf?: string | null;
   rg?: string | null;
@@ -206,6 +208,7 @@ export default function PerfilPage() {
   const [form, setForm] = useState({
     nome: "",
     email: "",
+    assinatura_whatsapp: "",
     data_nascimento: "",
     cpf: "",
     rg: "",
@@ -252,6 +255,7 @@ export default function PerfilPage() {
         setForm({
           nome: usuario.nome ?? "",
           email: usuario.email ?? "",
+          assinatura_whatsapp: usuario.assinatura_whatsapp ?? "",
           data_nascimento: usuario.data_nascimento ?? "",
           cpf: usuario.cpf ?? "",
           rg: usuario.rg ?? "",
@@ -318,6 +322,7 @@ export default function PerfilPage() {
 
       const payload = {
         nome: form.nome.trim(),
+        assinatura_whatsapp: form.assinatura_whatsapp.trim() || null,
         data_nascimento: form.data_nascimento || null,
         cpf: form.cpf.trim() || null,
         rg: form.rg.trim() || null,
@@ -333,7 +338,7 @@ export default function PerfilPage() {
         .eq("id", usuario.id)
         .eq("auth_user_id", usuario.auth_user_id)
         .select(
-          "id, nome, data_nascimento, cpf, rg, rg_uf, cidade, estado, avatar_url, updated_at"
+          "id, nome, assinatura_whatsapp, data_nascimento, cpf, rg, rg_uf, cidade, estado, avatar_url, updated_at"
         );
 
       if (error) {
@@ -354,6 +359,7 @@ export default function PerfilPage() {
           ? {
               ...prev,
               nome: atualizado.nome,
+              assinatura_whatsapp: atualizado.assinatura_whatsapp,
               data_nascimento: atualizado.data_nascimento,
               cpf: atualizado.cpf,
               rg: atualizado.rg,
@@ -368,6 +374,7 @@ export default function PerfilPage() {
       setForm((prev) => ({
         ...prev,
         nome: atualizado.nome ?? "",
+        assinatura_whatsapp: atualizado.assinatura_whatsapp ?? "",
         data_nascimento: atualizado.data_nascimento ?? "",
         cpf: atualizado.cpf ?? "",
         rg: atualizado.rg ?? "",
@@ -679,6 +686,36 @@ export default function PerfilPage() {
                     value={form.nome}
                     onChange={(e) => atualizarCampo("nome", e.target.value)}
                     placeholder="Seu nome"
+                  />
+                </div>
+
+                <div className={`${styles.field} ${styles.fieldFull}`}>
+                  <div className={styles.labelWithHelp}>
+                    <label htmlFor="assinatura_whatsapp">
+                      Nome exibido nas mensagens
+                    </label>
+                    <span
+                      className={styles.helpTooltip}
+                      tabIndex={0}
+                      aria-label="Explicacao sobre o nome exibido nas mensagens"
+                    >
+                      ?
+                      <span className={styles.helpTooltipText} role="tooltip">
+                        Este nome aparece em negrito na primeira linha das mensagens
+                        manuais enviadas pelo WhatsApp. Se ficar vazio, nenhuma
+                        assinatura sera adicionada.
+                      </span>
+                    </span>
+                  </div>
+                  <input
+                    id="assinatura_whatsapp"
+                    type="text"
+                    value={form.assinatura_whatsapp}
+                    maxLength={ASSINATURA_WHATSAPP_MAX_LENGTH}
+                    onChange={(e) =>
+                      atualizarCampo("assinatura_whatsapp", e.target.value)
+                    }
+                    placeholder="Ex.: Joao atendente"
                   />
                 </div>
 

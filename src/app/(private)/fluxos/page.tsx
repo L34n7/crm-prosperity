@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   addEdge,
   Background,
@@ -277,7 +278,7 @@ const TIPOS_VALOR_CONVERSAO: TipoValorConversao[] = [
   "variavel",
 ];
 
-const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 100 * 1024 * 1024; // 100 MB
+const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 50 * 1024 * 1024; // 50 MB
 const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
 const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
@@ -855,7 +856,12 @@ function NodeCustom({ data, dragging }: any) {
   );
 }
 
-export default function FluxosPage() {
+function FluxosPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const fluxoParam = searchParams.get("fluxo");
+  const mobileDetailActive = Boolean(fluxoParam);
+
   const headerUser = useHeaderUser();
   const [fluxos, setFluxos] = useState<Fluxo[]>([]);
   const [fluxoSelecionado, setFluxoSelecionado] = useState<Fluxo | null>(null);
@@ -1551,10 +1557,17 @@ export default function FluxosPage() {
         throw new Error(json.error || "Erro ao carregar fluxos.");
       }
 
-      setFluxos(json.fluxos || []);
+      const listaFluxos = json.fluxos || [];
+      setFluxos(listaFluxos);
 
-      if (!fluxoSelecionado && json.fluxos?.length > 0) {
-        setFluxoSelecionado(json.fluxos[0]);
+      const fluxoDaUrl = fluxoParam
+        ? listaFluxos.find((item: Fluxo) => item.id === fluxoParam)
+        : null;
+
+      if (fluxoDaUrl) {
+        setFluxoSelecionado(fluxoDaUrl);
+      } else if (!fluxoSelecionado && listaFluxos.length > 0) {
+        setFluxoSelecionado(listaFluxos[0]);
       }
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar fluxos.");
@@ -1859,9 +1872,16 @@ async function criarFluxoRapido() {
     setSucesso("Fluxo criado com sucesso.");
     await carregarFluxos();
     setFluxoSelecionado(fluxoCriado);
+    router.push(`/fluxos?fluxo=${encodeURIComponent(fluxoCriado.id)}`);
   } catch (error: any) {
     setErroCriacaoFluxo(error?.message || "Erro ao criar fluxo.");
   }
+}
+
+function abrirFluxo(fluxo: Fluxo) {
+  setFluxoSelecionado(fluxo);
+  setMenuFluxoAbertoId(null);
+  router.push(`/fluxos?fluxo=${encodeURIComponent(fluxo.id)}`);
 }
 
   function adicionarNo(tipoNo: string) {
@@ -4415,10 +4435,16 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
   return (
     <>
       <Header
+        mobileBackHref={mobileDetailActive ? "/fluxos" : undefined}
+        mobileBackLabel="Voltar para fluxos"
         title="Fluxos de automação"
         subtitle="Monte fluxos para automatizar atendimentos, direcionar clientes e escalar suas conversas no WhatsApp."
       />
-    <main className={styles.pageContent}>
+    <main
+      className={`${styles.pageContent} ${
+        mobileDetailActive ? styles.mobileDetailActive : ""
+      }`}
+    >
       <aside className={styles.sidebarFluxos}>
         <div className={styles.sidebarHeader}>
           <p className={styles.eyebrow}>Automações</p>
@@ -4534,14 +4560,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     ? styles.flowItemActive
                     : styles.flowItem
                 }
-                onClick={() => {
-                  setFluxoSelecionado(fluxo);
-                  setMenuFluxoAbertoId(null);
-                }}
+                onClick={() => abrirFluxo(fluxo)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
-                    setFluxoSelecionado(fluxo);
-                    setMenuFluxoAbertoId(null);
+                    e.preventDefault();
+                    abrirFluxo(fluxo);
                   }
                 }}
               >
@@ -5785,7 +5808,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                 >
                                   <div className={styles.mediaLimitPremiumNumbers}>
                                     <strong>{formatarStorageMidiasMb(resumoMidias.tamanhoTotal)} /</strong>
-                                    <span>100 MB</span>
+                                    <span>50 MB</span>
                                   </div>
 
                                   <small>Limite usado</small>
@@ -5794,7 +5817,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                               {limiteStorageMidiasAtingido && (
                                 <span className={styles.help}>
-                                   Limite de 100 MB atingido. Exclua uma mídia no gerenciador antes de subir outra.
+                                   Limite de 50 MB atingido. Exclua uma mídia no gerenciador antes de subir outra.
                                 </span>
                               )}
                           </div>
@@ -7471,7 +7494,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       </label>
                     )}
 
-                    <div className={styles.actionButtonsRow}>
+                    <div
+                      className={`${styles.actionButtonsRow} ${styles.connectionActionButtonsRow}`}
+                    >
                       {edgeEditada && (
                         <>
                           {confirmandoExclusaoConexao ? (
@@ -7591,7 +7616,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                 <div className={styles.mediaSummaryStorageValue}>
                   <strong>{formatarStorageMidiasMb(resumoMidias.tamanhoTotal)}</strong>
-                  <small>100 MB</small>
+                  <small>50 MB</small>
                 </div>
 
                 <div className={styles.mediaSummaryStorageTrack}>
@@ -8748,5 +8773,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
     </main>
   </>
+  );
+}
+
+export default function FluxosPage() {
+  return (
+    <Suspense fallback={null}>
+      <FluxosPageContent />
+    </Suspense>
   );
 }

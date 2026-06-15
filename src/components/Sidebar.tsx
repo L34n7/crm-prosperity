@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
+  BarChart3,
   MessageSquare,
   Send,
   CalendarClock,
@@ -23,7 +24,15 @@ import {
   ScrollText,
   MousePointerClick,
   CreditCard,
+  MoreHorizontal,
+  UserCircle,
+  HelpCircle,
+  Moon,
+  Sun,
+  X,
 } from "lucide-react";
+import LogoutButton from "@/components/LogoutButton";
+import { useHeaderUser } from "@/components/header-user-context";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 import styles from "./Sidebar.module.css";
@@ -49,6 +58,23 @@ type WhatsappSidebarPerfil = {
 };
 
 const PERMISSAO_VISUALIZAR_PLANO_SIDEBAR = "assinaturas.plano.visualizar";
+const AJUDA_WHATSAPP_URL = "https://wa.me/5531975117638";
+const THEME_STORAGE_KEY = "crm-theme";
+const mobilePrimaryHrefs = [
+  "/conversas",
+  "/agendas",
+  "/disparos-whatsapp",
+  "/fluxos",
+];
+
+type TemaVisual = "light" | "dark";
+
+const mobileLabelByHref: Record<string, string> = {
+  "/conversas": "Conversas",
+  "/agendas": "Agenda",
+  "/disparos-whatsapp": "Disparo",
+  "/fluxos": "Fluxo",
+};
 
 const menuItems: MenuItem[] = [
   { label: "Painel", href: "/", icon: LayoutDashboard },
@@ -70,6 +96,12 @@ const menuItems: MenuItem[] = [
     label: "Empresas",
     href: "/empresas",
     icon: Building2,
+    permissao: PERMISSAO_INTERNA_EMPRESAS,
+  },
+  {
+    label: "Relatórios BuyGain",
+    href: "/relatorios-internos",
+    icon: BarChart3,
     permissao: PERMISSAO_INTERNA_EMPRESAS,
   },
   {
@@ -117,9 +149,15 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const headerUser = useHeaderUser();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [disparosPendentes, setDisparosPendentes] = useState(0);
   const [conversasNaoLidas, setConversasNaoLidas] = useState(0);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [temaVisual, setTemaVisual] = useState<TemaVisual>(() => {
+    if (typeof document === "undefined") return "light";
+    return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  });
   const [whatsappPerfil, setWhatsappPerfil] =
     useState<WhatsappSidebarPerfil | null>(null);
     
@@ -132,6 +170,31 @@ export default function Sidebar({
   const podeVisualizarPlanoSidebar = permissoes.includes(
     PERMISSAO_VISUALIZAR_PLANO_SIDEBAR
   );
+  const nomeFinal = headerUser.profileName || "Usuario";
+  const avatarFinal = headerUser.avatarUrl || "";
+  const letraAvatar = nomeFinal?.trim()?.charAt(0)?.toUpperCase() || "U";
+  const temaEscuroAtivo = temaVisual === "dark";
+  const temaBotaoLabel = temaEscuroAtivo ? "Tema claro" : "Tema escuro";
+
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (assinaturaBloqueada) {
+      return isAdmin && item.href === "/conversas";
+    }
+
+    return !item.permissao || permissoes.includes(item.permissao);
+  });
+  const desktopMenuItems = visibleMenuItems.filter(
+    (item) => item.href !== "/configuracoes/whatsapp/perfil"
+  );
+  const mobilePrimaryItems = mobilePrimaryHrefs
+    .map((href) => visibleMenuItems.find((item) => item.href === href))
+    .filter((item): item is MenuItem => Boolean(item));
+  const mobileMoreItems = visibleMenuItems.filter(
+    (item) => !mobilePrimaryHrefs.includes(item.href)
+  );
+  const mobileMoreActive =
+    mobileMoreItems.some((item) => isActivePath(pathname, item.href)) ||
+    isActivePath(pathname, "/perfil");
 
   useEffect(() => {
     if (assinaturaBloqueada) {
@@ -246,6 +309,23 @@ export default function Sidebar({
     }
   }
 
+  function alternarTemaVisual() {
+    const proximoTema = temaVisual === "dark" ? "light" : "dark";
+
+    document.documentElement.dataset.theme = proximoTema;
+    document.documentElement.style.colorScheme = proximoTema;
+    window.localStorage.setItem(THEME_STORAGE_KEY, proximoTema);
+    setTemaVisual(proximoTema);
+  }
+
+  function toggleMobileMore() {
+    const temaAtual =
+      document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+
+    setTemaVisual(temaAtual);
+    setMobileMoreOpen((current) => !current);
+  }
+
   return (
     <aside
       className={`${styles.sidebar} ${
@@ -287,21 +367,7 @@ export default function Sidebar({
           </p>
 
           <nav className={styles.nav}>
-            {menuItems.map((item) => {
-              if (assinaturaBloqueada) {
-                if (!isAdmin || item.href !== "/conversas") {
-                  return null;
-                }
-              }
-
-              if (item.href === "/configuracoes/whatsapp/perfil") {
-                return null;
-              }
-
-              if (item.permissao && !permissoes.includes(item.permissao)) {
-                return null;
-              }
-
+            {desktopMenuItems.map((item) => {
               const active = isActivePath(pathname, item.href);
               const Icon = item.icon;
 
@@ -416,6 +482,184 @@ export default function Sidebar({
           {!collapsed && <span className={styles.menuText}>Menu</span>}
         </button>
       </div>
+
+      <nav className={styles.mobileNav} aria-label="Navegacao mobile">
+        {mobilePrimaryItems.map((item) => {
+          const active = isActivePath(pathname, item.href);
+          const Icon = item.icon;
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`${styles.mobileNavItem} ${
+                active ? styles.mobileNavItemActive : ""
+              }`}
+              aria-current={active ? "page" : undefined}
+            >
+              <span className={styles.mobileNavIcon}>
+                <Icon size={20} strokeWidth={2.2} />
+
+                {item.href === "/conversas" && conversasNaoLidas > 0 && (
+                  <span className={styles.mobileNotificationDot}>
+                    {conversasNaoLidas > 9 ? "9+" : conversasNaoLidas}
+                  </span>
+                )}
+              </span>
+
+              <span>{mobileLabelByHref[item.href] || item.label}</span>
+            </Link>
+          );
+        })}
+
+        <button
+          type="button"
+          className={`${styles.mobileNavItem} ${
+            mobileMoreActive || mobileMoreOpen ? styles.mobileNavItemActive : ""
+          }`}
+          onClick={toggleMobileMore}
+          aria-expanded={mobileMoreOpen}
+          aria-controls="mobile-sidebar-menu"
+        >
+          <span className={styles.mobileNavIcon}>
+            {mobileMoreOpen ? (
+              <X size={20} strokeWidth={2.2} />
+            ) : (
+              <MoreHorizontal size={22} strokeWidth={2.2} />
+            )}
+          </span>
+
+          <span>Mais</span>
+        </button>
+      </nav>
+
+      {mobileMoreOpen && (
+        <div
+          className={styles.mobileMoreOverlay}
+          onClick={() => setMobileMoreOpen(false)}
+        >
+          <div
+            id="mobile-sidebar-menu"
+            className={styles.mobileMorePanel}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.mobileMoreHandle} />
+
+            <div className={styles.mobileProfileCard}>
+              <Link
+                href="/perfil"
+                className={styles.mobileProfileLink}
+                onClick={() => setMobileMoreOpen(false)}
+              >
+                <span className={styles.mobileAvatar}>
+                  {avatarFinal ? (
+                    <img src={avatarFinal} alt={`Foto de ${nomeFinal}`} />
+                  ) : (
+                    <span>{letraAvatar}</span>
+                  )}
+                </span>
+
+                <span className={styles.mobileProfileText}>
+                  <strong>{nomeFinal}</strong>
+                  <small>Meu perfil</small>
+                </span>
+
+                <UserCircle size={20} strokeWidth={2.2} />
+              </Link>
+            </div>
+
+            {podeVisualizarPlanoSidebar && (
+              <button
+                type="button"
+                className={styles.mobilePlanButton}
+                onClick={() => {
+                  setMobileMoreOpen(false);
+                  abrirModalPlanosAssinatura();
+                }}
+              >
+                <CreditCard size={18} strokeWidth={2.2} />
+                <span>
+                  <small>Plano atual</small>
+                  <strong>{planoNome}</strong>
+                </span>
+              </button>
+            )}
+
+            <div className={styles.mobileMoreList}>
+              {mobileMoreItems.map((item) => {
+                const active = isActivePath(pathname, item.href);
+                const Icon = item.icon;
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`${styles.mobileMoreLink} ${
+                      active ? styles.mobileMoreLinkActive : ""
+                    }`}
+                    onClick={() => setMobileMoreOpen(false)}
+                  >
+                    <span className={styles.mobileMoreIcon}>
+                      {item.href === "/configuracoes/whatsapp/perfil" &&
+                      whatsappPerfil?.foto ? (
+                        <img
+                          src={whatsappPerfil.foto}
+                          alt={whatsappPerfil.nome}
+                          className={styles.whatsappSidebarAvatar}
+                        />
+                      ) : (
+                        <Icon size={18} strokeWidth={2.1} />
+                      )}
+                    </span>
+
+                    <span>{item.label}</span>
+
+                    {item.href === "/disparos-agendados" &&
+                      disparosPendentesVisiveis > 0 && (
+                        <span className={styles.mobileMoreBadge}>
+                          {disparosPendentesVisiveis > 9
+                            ? "9+"
+                            : disparosPendentesVisiveis}
+                        </span>
+                      )}
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className={styles.mobileProfileActions}>
+              <a
+                href={AJUDA_WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.mobileProfileAction}
+                onClick={() => setMobileMoreOpen(false)}
+              >
+                <HelpCircle size={18} strokeWidth={2.2} />
+                <span>Ajuda</span>
+              </a>
+
+              <button
+                type="button"
+                className={styles.mobileProfileAction}
+                onClick={alternarTemaVisual}
+                aria-pressed={temaEscuroAtivo}
+              >
+                {temaEscuroAtivo ? (
+                  <Sun size={18} strokeWidth={2.2} />
+                ) : (
+                  <Moon size={18} strokeWidth={2.2} />
+                )}
+                <span>{temaBotaoLabel}</span>
+              </button>
+
+              <div className={styles.mobileLogout}>
+                <LogoutButton />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

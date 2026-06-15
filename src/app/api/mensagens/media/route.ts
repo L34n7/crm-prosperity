@@ -13,6 +13,10 @@ import {
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { uploadWhatsAppMedia } from "@/lib/whatsapp/upload-media";
 import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
+import {
+  aplicarAssinaturaWhatsapp,
+  normalizarAssinaturaWhatsapp,
+} from "@/lib/whatsapp/message-signature";
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -90,6 +94,10 @@ function getConteudoPadrao(tipoMensagem: string, fileName?: string | null) {
     default:
       return "Mídia enviada";
   }
+}
+
+function midiaSuportaLegenda(tipoMensagem: string) {
+  return ["imagem", "video", "documento"].includes(tipoMensagem);
 }
 
 function normalizarCaminhoRootPlaceholder(caminho: string) {
@@ -236,7 +244,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
 
     const conversaId = String(formData.get("conversa_id") || "");
-    const legenda = String(formData.get("caption") || "");
+    const legenda = String(formData.get("caption") || "").trim();
     const file = formData.get("file");
 
     if (!conversaId) {
@@ -408,13 +416,24 @@ export async function POST(request: Request) {
       );
     }
 
+    const assinaturaWhatsapp = normalizarAssinaturaWhatsapp(
+      usuario.assinatura_whatsapp
+    );
+    const suportaLegenda = midiaSuportaLegenda(tipoMensagem);
+    const legendaFinal = suportaLegenda
+      ? aplicarAssinaturaWhatsapp(legenda, assinaturaWhatsapp)
+      : legenda;
+    const assinaturaAplicada = Boolean(
+      suportaLegenda && legendaFinal && assinaturaWhatsapp
+    );
+
     const sendResult = await sendWhatsAppMediaMessage({
       phoneNumberId,
       accessToken,
       to: contato.telefone,
       tipoMensagem,
       mediaId: uploadResult.mediaId,
-      caption: legenda || null,
+      caption: legendaFinal || null,
       fileName: arquivoPreparado.name || null,
     });
 
@@ -430,8 +449,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const conteudoFinal = legenda?.trim()
-      ? legenda.trim()
+    const conteudoFinal = legendaFinal
+      ? legendaFinal
       : getConteudoPadrao(tipoMensagem, arquivoPreparado.name);
 
     const metadataJson = {
@@ -446,7 +465,15 @@ export async function POST(request: Request) {
       media_id: uploadResult.mediaId,
       mime_type: mimeType,
       sha256: null,
-      caption: legenda?.trim() || null,
+      caption: legendaFinal || null,
+      caption_original: legenda || null,
+      assinatura_whatsapp:
+        assinaturaAplicada
+          ? {
+              texto: assinaturaWhatsapp,
+              aplicada: true,
+            }
+          : null,
       filename: arquivoPreparado.name || null,
       url: null,
       voice: false,

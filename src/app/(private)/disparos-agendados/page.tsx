@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./disparos-agendados.module.css";
@@ -310,7 +311,12 @@ function contatoTemTelefoneValido(contato: any) {
   return telefone.length >= 10;
 }
 
-export default function DisparosAgendadosPage() {
+function DisparosAgendadosPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const disparoParam = searchParams.get("disparo");
+  const mobileDetailActive = Boolean(disparoParam);
+
   const [disparos, setDisparos] = useState<DisparoAgendado[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -404,7 +410,16 @@ export default function DisparosAgendadosPage() {
         throw new Error(json.error || "Erro ao carregar disparos agendados.");
       }
 
-      setDisparos(json.disparos || []);
+      const listaDisparos = json.disparos || [];
+      setDisparos(listaDisparos);
+
+      const disparoDaUrl = disparoParam
+        ? listaDisparos.find((item: DisparoAgendado) => item.id === disparoParam)
+        : null;
+
+      if (disparoDaUrl) {
+        setDisparoSelecionado(disparoDaUrl);
+      }
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar disparos agendados.");
     } finally {
@@ -436,6 +451,7 @@ export default function DisparosAgendadosPage() {
       setSucesso("Disparo cancelado com sucesso.");
       setDisparoParaCancelar(null);
       setDisparoSelecionado(null);
+      router.push("/disparos-agendados");
 
       await carregarDisparos();
     } catch (error: any) {
@@ -797,6 +813,11 @@ export default function DisparosAgendadosPage() {
     setErro("");
   }
 
+  function abrirDisparo(disparo: DisparoAgendado) {
+    setDisparoSelecionado(disparo);
+    router.push(`/disparos-agendados?disparo=${encodeURIComponent(disparo.id)}`);
+  }
+
   async function calcularPreviewCustoAgendamento(
     categoria: string,
     contatosLista: any[]
@@ -921,11 +942,17 @@ export default function DisparosAgendadosPage() {
   return (
     <>
       <Header
+        mobileBackHref={mobileDetailActive ? "/disparos-agendados" : undefined}
+        mobileBackLabel="Voltar para disparos"
         title="Disparos agendados"
         subtitle="Acompanhe, gerencie e cancele disparos de templates WhatsApp criados pelos fluxos de automação."
       />
 
-      <main className={styles.pageContent}>
+      <main
+        className={`${styles.pageContent} ${
+          mobileDetailActive ? styles.mobileDetailActive : ""
+        }`}
+      >
         <section className={styles.mainPanel}>
           <header className={styles.editorHeader}>
             <div>
@@ -1074,7 +1101,7 @@ export default function DisparosAgendadosPage() {
                     <article
                       key={disparo.id}
                       className={styles.disparoCard}
-                      onClick={() => setDisparoSelecionado(disparo)}
+                      onClick={() => abrirDisparo(disparo)}
                     >
                       <div className={styles.disparoMain}>
                         <div className={styles.disparoIcon}>📨</div>
@@ -1208,7 +1235,10 @@ export default function DisparosAgendadosPage() {
               <button
                 type="button"
                 className={styles.closePanelButton}
-                onClick={() => setDisparoSelecionado(null)}
+                onClick={() => {
+                  setDisparoSelecionado(null);
+                  router.push("/disparos-agendados");
+                }}
               >
                 ×
               </button>
@@ -1672,7 +1702,7 @@ export default function DisparosAgendadosPage() {
                           <div className={styles.contactsHeaderActions}>
                             <button
                               type="button"
-                              className={styles.contactsMiniButton}
+                              className={styles.TextButtonAdd}
                               onClick={adicionarTodosDisponiveis}
                               disabled={contatosDisponiveisValidos.length === 0}
                             >
@@ -1740,7 +1770,7 @@ export default function DisparosAgendadosPage() {
 
                                   <button
                                     type="button"
-                                    className={styles.secondaryButton}
+                                    className={styles.ButtonAdd}
                                     onClick={() => adicionarContato(contato)}
                                     disabled={!telefoneValido}
                                   >
@@ -1762,7 +1792,7 @@ export default function DisparosAgendadosPage() {
                           <div className={styles.contactsHeaderActions}>
                             <button
                               type="button"
-                              className={styles.contactsMiniButton}
+                              className={styles.TextButtonRemover}
                               onClick={() => setContatosSelecionados([])}
                               disabled={contatosSelecionados.length === 0}
                             >
@@ -1819,7 +1849,7 @@ export default function DisparosAgendadosPage() {
 
                                 <button
                                   type="button"
-                                  className={styles.secondaryButton}
+                                  className={styles.dangerButton}
                                   onClick={() => removerContato(contato.id)}
                                 >
                                   Remover
@@ -2022,5 +2052,13 @@ export default function DisparosAgendadosPage() {
         )}
       </main>
     </>
+  );
+}
+
+export default function DisparosAgendadosPage() {
+  return (
+    <Suspense fallback={null}>
+      <DisparosAgendadosPageContent />
+    </Suspense>
   );
 }

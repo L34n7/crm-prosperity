@@ -1,13 +1,30 @@
 "use client";
 
-import React, { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, {
+  Fragment,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./conversas.module.css";
 import { can } from "@/lib/permissoes/frontend";
 import EmojiPicker from "emoji-picker-react";
-import { RefreshCw } from "lucide-react";
+import {
+  MessageSquareText,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Send,
+  Trash2,
+  Variable,
+} from "lucide-react";
 import twemoji from "twemoji";
 
 type Conversa = {
@@ -52,6 +69,8 @@ type Conversa = {
     nome: string | null;
     telefone: string;
     email?: string | null;
+    origem?: string | null;
+    status_lead?: string | null;
     empresa?: string | null;
     observacoes?: string | null;
     campanha?: string | null;
@@ -191,6 +210,8 @@ type UsuarioOpcao = {
 
 type UsuarioLogado = {
   id: string;
+  nome?: string | null;
+  email?: string | null;
   empresa_id?: string | null;
   setores_ids?: string[];
   usuarios_setores?: UsuarioSetorVinculo[];
@@ -288,6 +309,39 @@ type EtiquetaForm = {
   cor: string;
 };
 
+type MacroChat = {
+  id: string;
+  titulo: string;
+  conteudo: string;
+  ativo?: boolean;
+  ordem?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type MacroForm = {
+  titulo: string;
+  conteudo: string;
+};
+
+type VariavelGlobal = {
+  id: string;
+  chave: string;
+  valor: string;
+  descricao?: string;
+  escopo?: string;
+  ativo?: boolean;
+};
+
+type VariavelForm = {
+  chave: string;
+  valor: string;
+  descricao: string;
+};
+
+const TEXTO_VARIAVEIS_FIXAS_MACRO =
+  "Variáveis fixas: {{nome_contato}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+
 const ETIQUETAS_PADRAO = [
   "#60A5FA",
   "#4ADE80",
@@ -306,6 +360,7 @@ type AbaPainelDireito =
   | "mensagens_favoritas"
   | "listas"
   | "etiquetas"
+  | "macros"
   | "midia_docs_links";
 
 type NotaConversa = {
@@ -425,6 +480,28 @@ function formatarCampanhaRastreamentoContato(
   return origem
     ? `${campanha.nome} (${origem})${status}`
     : `${campanha.nome}${status}`;
+}
+
+function normalizarChaveVariavelMacro(valor: unknown) {
+  return String(valor || "")
+    .replace(/[{}]/g, "")
+    .trim()
+    .replace(/^variaveis\./, "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+function limitarPreviewMacro(texto: string, limite = 96) {
+  const valor = texto.replace(/\s+/g, " ").trim();
+
+  if (valor.length <= limite) return valor;
+
+  return `${valor.slice(0, Math.max(0, limite - 3)).trim()}...`;
 }
 
 type ProtocoloConversa = {
@@ -1566,7 +1643,12 @@ function formatarTempoRestanteJanela(createdAt?: string | null) {
 
 
 
-export default function ConversasPage() {
+function ConversasPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const conversaParam = searchParams.get("id") || searchParams.get("conversaId");
+  const mobileDetailActive = Boolean(conversaParam);
+
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
   const [politicaAtendimento, setPoliticaAtendimento] =
     useState<PoliticaAtendimento | null>(null);
@@ -1587,6 +1669,16 @@ export default function ConversasPage() {
   useEffect(() => {
     conversasRef.current = conversas;
   }, [conversas]);
+
+  useEffect(() => {
+    if (!conversaParam) return;
+
+    const conversaDaUrl = conversas.find((conversa) => conversa.id === conversaParam);
+
+    if (conversaDaUrl && conversaSelecionada?.id !== conversaDaUrl.id) {
+      setConversaSelecionada(conversaDaUrl);
+    }
+  }, [conversaParam, conversas, conversaSelecionada?.id]);
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioOpcao[]>([]);
@@ -1638,6 +1730,7 @@ export default function ConversasPage() {
   const [menuContatoAberto, setMenuContatoAberto] = useState(false);
   const menuContatoRef = useRef<HTMLDivElement | null>(null);
   const menuAnexoRef = useRef<HTMLDivElement | null>(null);
+  const macroCardRef = useRef<HTMLDivElement | null>(null);
 
   const conteudoRef = useRef("");
   const legendaArquivoRef = useRef("");
@@ -1645,6 +1738,13 @@ export default function ConversasPage() {
   const mensagensFavoritas = useMemo(() => {
     return mensagens.filter((msg) => msg.favorita);
   }, [mensagens]);
+
+  function abrirConversa(conversa: Conversa) {
+    setMensagemSucesso("");
+    setErro("");
+    setConversaSelecionada(conversa);
+    router.push(`/conversas?id=${encodeURIComponent(conversa.id)}`);
+  }
   const [arquivoEnvio, setArquivoEnvio] = useState<File | null>(null);
   const [legendaArquivo, setLegendaArquivo] = useState("");
   const [gravandoAudio, setGravandoAudio] = useState(false);
@@ -1667,6 +1767,7 @@ export default function ConversasPage() {
   const [menuAnexoAberto, setMenuAnexoAberto] = useState(false);
 
   const [emojiAberto, setEmojiAberto] = useState(false);
+  const [macroCardAberto, setMacroCardAberto] = useState(false);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const legendaEditorRef = useRef<HTMLDivElement | null>(null);
@@ -1943,6 +2044,27 @@ export default function ConversasPage() {
   const [notaEditandoId, setNotaEditandoId] = useState<string | null>(null);
   const [notaEditandoTexto, setNotaEditandoTexto] = useState("");
 
+  const [macrosChat, setMacrosChat] = useState<MacroChat[]>([]);
+  const [carregandoMacros, setCarregandoMacros] = useState(false);
+  const [modalMacroAberto, setModalMacroAberto] = useState(false);
+  const [macroEditandoId, setMacroEditandoId] = useState<string | null>(null);
+  const [macroForm, setMacroForm] = useState<MacroForm>({
+    titulo: "",
+    conteudo: "",
+  });
+  const [salvandoMacro, setSalvandoMacro] = useState(false);
+  const [excluindoMacroId, setExcluindoMacroId] = useState<string | null>(null);
+
+  const [variaveisGlobais, setVariaveisGlobais] = useState<VariavelGlobal[]>([]);
+  const [carregandoVariaveis, setCarregandoVariaveis] = useState(false);
+  const [modalVariavelAberto, setModalVariavelAberto] = useState(false);
+  const [variavelForm, setVariavelForm] = useState<VariavelForm>({
+    chave: "",
+    valor: "",
+    descricao: "",
+  });
+  const [salvandoVariavel, setSalvandoVariavel] = useState(false);
+
   const [imagemModalUrl, setImagemModalUrl] = useState<string | null>(null);
   const [imagemModalTitulo, setImagemModalTitulo] = useState<string | null>(null);
   const [imagemZoom, setImagemZoom] = useState(1);
@@ -1971,6 +2093,74 @@ export default function ConversasPage() {
     status_lead: "novo",
     observacoes: "",
   });
+
+  const variaveisMacroDisponiveis = useMemo(() => {
+    const mapa = new Map<string, string>();
+    const contato = conversaSelecionada?.contatos;
+    const protocoloAtual =
+      protocolosConversa.find((protocolo) => protocolo.ativo)?.protocolo ||
+      conversaSelecionada?.protocolo ||
+      "";
+    const ultimoProtocolo = protocolosConversa[0]?.protocolo || protocoloAtual;
+
+    const registrar = (chaves: string[], valor?: string | null) => {
+      const texto = String(valor || "").trim();
+
+      chaves.forEach((chave) => {
+        mapa.set(normalizarChaveVariavelMacro(chave), texto);
+      });
+    };
+
+    variaveisGlobais.forEach((variavel) => {
+      mapa.set(
+        normalizarChaveVariavelMacro(variavel.chave),
+        String(variavel.valor || "")
+      );
+    });
+
+    registrar(
+      ["nome", "nome_contato", "contato_nome"],
+      contato?.nome || "Contato"
+    );
+    registrar(
+      ["telefone", "numero", "numero_contato", "contato_numero", "telefone_contato", "contato_telefone"],
+      contato?.telefone
+    );
+    registrar(["email", "email_contato", "contato_email"], contato?.email);
+    registrar(["empresa", "empresa_contato", "contato_empresa"], contato?.empresa);
+    registrar(["campanha"], obterNomeCampanhaContato(contato));
+    registrar(["origem"], contato?.origem || conversaSelecionada?.origem_atendimento);
+    registrar(["status", "status_lead"], contato?.status_lead || conversaSelecionada?.status);
+    registrar(["protocolo", "protocolo_atual"], protocoloAtual);
+    registrar(["ultimo_protocolo"], ultimoProtocolo);
+    registrar(["usuario_nome", "nome_usuario"], usuarioLogado?.nome || "Atendente");
+    registrar(["usuario_email", "email_usuario"], usuarioLogado?.email);
+
+    return mapa;
+  }, [
+    conversaSelecionada,
+    protocolosConversa,
+    usuarioLogado,
+    variaveisGlobais,
+  ]);
+
+  const variaveisCustomizadasMacro = useMemo(() => {
+    return variaveisGlobais
+      .filter((variavel) => variavel.ativo !== false)
+      .sort((a, b) => a.chave.localeCompare(b.chave));
+  }, [variaveisGlobais]);
+
+  function resolverVariaveisMacro(texto: string) {
+    return texto.replace(/{{\s*([^}]+)\s*}}/g, (_, chaveOriginal) => {
+      const chave = normalizarChaveVariavelMacro(chaveOriginal);
+
+      if (!chave) return "";
+
+      return variaveisMacroDisponiveis.has(chave)
+        ? variaveisMacroDisponiveis.get(chave) ?? ""
+        : `{{${chave}}}`;
+    });
+  }
 
   async function abrirCamera() {
     try {
@@ -2047,7 +2237,7 @@ export default function ConversasPage() {
     })
   );
 }
-  
+
   function renderizarConteudoMensagem(msg: Mensagem) {
     const mediaId = msg.metadata_json?.media_id || null;
 
@@ -2770,6 +2960,282 @@ export default function ConversasPage() {
     }
   }
 
+  async function carregarMacros() {
+    try {
+      setCarregandoMacros(true);
+
+      const res = await fetch("/api/macros", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar macros");
+        return;
+      }
+
+      setMacrosChat(data.macros || []);
+    } catch {
+      setErro("Erro ao carregar macros");
+    } finally {
+      setCarregandoMacros(false);
+    }
+  }
+
+  async function carregarVariaveisGlobais() {
+    try {
+      setCarregandoVariaveis(true);
+
+      const res = await fetch("/api/variaveis", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar variáveis");
+        return;
+      }
+
+      setVariaveisGlobais(data.variaveis || []);
+    } catch {
+      setErro("Erro ao carregar variáveis");
+    } finally {
+      setCarregandoVariaveis(false);
+    }
+  }
+
+  async function abrirAbaMacros() {
+    setPainelDireitoAberto(true);
+    setAbaPainelDireito("macros");
+    setMenuContatoAberto(false);
+
+    await Promise.all([carregarMacros(), carregarVariaveisGlobais()]);
+  }
+
+  async function alternarMacroCard() {
+    const abrir = !macroCardAberto;
+
+    setMacroCardAberto(abrir);
+    setEmojiAberto(false);
+    setMenuAnexoAberto(false);
+
+    if (abrir) {
+      await Promise.all([carregarMacros(), carregarVariaveisGlobais()]);
+    }
+  }
+
+  function abrirModalNovaMacro() {
+    setMacroCardAberto(false);
+    setMacroEditandoId(null);
+    setMacroForm({
+      titulo: "",
+      conteudo: "",
+    });
+    setModalMacroAberto(true);
+  }
+
+  function abrirModalEditarMacro(macro: MacroChat) {
+    setMacroCardAberto(false);
+    setMacroEditandoId(macro.id);
+    setMacroForm({
+      titulo: macro.titulo,
+      conteudo: macro.conteudo,
+    });
+    setModalMacroAberto(true);
+  }
+
+  function fecharModalMacro() {
+    setModalMacroAberto(false);
+    setMacroEditandoId(null);
+    setMacroForm({
+      titulo: "",
+      conteudo: "",
+    });
+  }
+
+  async function salvarMacro() {
+    setMensagemSucesso("");
+    setErro("");
+
+    const titulo = macroForm.titulo.trim();
+    const conteudoMacro = macroForm.conteudo.trim();
+
+    if (!conteudoMacro) {
+      setErro("Informe o texto da macro.");
+      return;
+    }
+
+    try {
+      setSalvandoMacro(true);
+
+      const res = await fetch("/api/macros", {
+        method: macroEditandoId ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          macro_id: macroEditandoId,
+          titulo,
+          conteudo: conteudoMacro,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao salvar macro");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Macro salva com sucesso.");
+      fecharModalMacro();
+      await carregarMacros();
+    } catch {
+      setErro("Erro ao salvar macro");
+    } finally {
+      setSalvandoMacro(false);
+    }
+  }
+
+  async function excluirMacro(macroId: string) {
+    if (!window.confirm("Remover esta macro salva?")) return;
+
+    setMensagemSucesso("");
+    setErro("");
+
+    try {
+      setExcluindoMacroId(macroId);
+
+      const res = await fetch("/api/macros", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          macro_id: macroId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao remover macro");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Macro removida com sucesso.");
+      fecharModalMacro();
+      await carregarMacros();
+    } catch {
+      setErro("Erro ao remover macro");
+    } finally {
+      setExcluindoMacroId(null);
+    }
+  }
+
+  async function abrirModalVariavel() {
+    setMacroCardAberto(false);
+    setVariavelForm({
+      chave: "",
+      valor: "",
+      descricao: "",
+    });
+    setModalVariavelAberto(true);
+    await carregarVariaveisGlobais();
+  }
+
+  function fecharModalVariavel() {
+    setModalVariavelAberto(false);
+    setVariavelForm({
+      chave: "",
+      valor: "",
+      descricao: "",
+    });
+  }
+
+  async function salvarVariavelGlobal() {
+    setMensagemSucesso("");
+    setErro("");
+
+    if (!variavelForm.chave.trim() || !variavelForm.valor.trim()) {
+      setErro("Informe o nome e o valor da variável.");
+      return;
+    }
+
+    try {
+      setSalvandoVariavel(true);
+
+      const res = await fetch("/api/variaveis", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chave: variavelForm.chave,
+          valor: variavelForm.valor,
+          descricao: variavelForm.descricao,
+          escopo: "global",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao salvar variável");
+        return;
+      }
+
+      setMensagemSucesso("Variável salva com sucesso.");
+      fecharModalVariavel();
+      await carregarVariaveisGlobais();
+    } catch {
+      setErro("Erro ao salvar variável");
+    } finally {
+      setSalvandoVariavel(false);
+    }
+  }
+
+  function acionarEnvioMacro(macro: MacroChat) {
+    setMensagemSucesso("");
+    setErro("");
+
+    if (!conversaSelecionada?.id) {
+      setErro("Selecione uma conversa.");
+      return;
+    }
+
+    if (!podeEnviarMensagem) {
+      setErro("Você não pode enviar mensagem nesta conversa.");
+      return;
+    }
+
+    const textoResolvido = resolverVariaveisMacro(macro.conteudo).trim();
+
+    if (!textoResolvido) {
+      setErro("O texto da macro ficou vazio depois de aplicar as variáveis.");
+      return;
+    }
+
+    const alvo = arquivoEnvio ? legendaEditorRef.current : editorRef.current;
+
+    if (!alvo) {
+      setErro("Não foi possível preencher o campo de mensagem.");
+      return;
+    }
+
+    alvo.textContent = textoResolvido;
+
+    if (arquivoEnvio) {
+      legendaArquivoRef.current = textoResolvido;
+      setLegendaArquivo(textoResolvido);
+    } else {
+      conteudoRef.current = textoResolvido;
+      setConteudo(textoResolvido);
+    }
+
+    setMacroCardAberto(false);
+
+    requestAnimationFrame(() => {
+      focarEditorNoFinal();
+    });
+  }
+
   async function carregarPoliticaAtendimento() {
     try {
       const res = await fetch("/api/me/politica", { cache: "no-store" });
@@ -3438,6 +3904,65 @@ export default function ConversasPage() {
       "Conversa encerrada com sucesso."
     );
   }
+
+  async function pararAutomacaoEEncerrar() {
+  if (!conversaSelecionada?.id) return;
+
+  try {
+    setAssumindo(true);
+    setErro("");
+    setMensagemSucesso("");
+
+    const res = await fetch(
+      `/api/conversas/${conversaSelecionada.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: "encerrado_manual",
+          bot_ativo: false,
+          responsavel_id: null,
+          acao: "parar_automacao_encerrar",
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setErro(data.error || "Erro ao parar automação e encerrar conversa.");
+      return;
+    }
+
+    setMensagemSucesso(
+      data.message || "Automação parada e conversa encerrada com sucesso."
+    );
+
+    const listaAtualizada = await atualizarConversasCarregadas();
+
+    const conversaAtualizada = listaAtualizada.find(
+      (conversa: Conversa) => conversa.id === conversaSelecionada.id
+    );
+
+    if (conversaAtualizada) {
+      setConversaSelecionada(conversaAtualizada);
+    }
+
+    await carregarMensagens(
+      conversaSelecionada.id,
+      true,
+      protocoloSelecionadoId,
+      inicioJanelaHistorico,
+      fimJanelaHistorico
+    );
+  } catch {
+    setErro("Erro ao parar automação e encerrar conversa.");
+  } finally {
+    setAssumindo(false);
+  }
+}
 
   async function reabrirConversa() {
     if (!conversaSelecionada?.id) return;
@@ -5302,6 +5827,8 @@ const templateFooterTexto = useMemo(() => {
     setInfoExpandida(false);
     setAbaPainelDireito("contato");
     setMenuContatoAberto(false);
+    setMacroCardAberto(false);
+    setEmojiAberto(false);
 
     setProtocoloSelecionadoId(null);
     setProtocoloSelecionadoNumero(null);
@@ -5504,6 +6031,24 @@ const templateFooterTexto = useMemo(() => {
   }, []);
 
   useEffect(() => {
+    function handleClickOutsideMacroCard(event: MouseEvent) {
+      if (!macroCardRef.current) return;
+
+      const target = event.target as Node;
+
+      if (!macroCardRef.current.contains(target)) {
+        setMacroCardAberto(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutsideMacroCard);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutsideMacroCard);
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (intervaloGravacaoRef.current) {
         window.clearInterval(intervaloGravacaoRef.current);
@@ -5627,10 +6172,16 @@ const templateFooterTexto = useMemo(() => {
     <>
       <Header
         title="Conversas"
+        mobileBackHref={mobileDetailActive ? "/conversas" : undefined}
+        mobileBackLabel="Voltar para conversas"
         subtitle="Atendimento ao cliente com interface limpa, focada na operação e no contexto do contato."
       />
 
-      <div className={styles.pageContent}>
+      <div
+        className={`${styles.pageContent} ${
+          mobileDetailActive ? styles.mobileDetailActive : ""
+        }`}
+      >
         <div
           className={`${styles.chatLayout} ${
             painelDireitoAberto ? styles.chatLayoutWithPanel : ""
@@ -5872,11 +6423,7 @@ const templateFooterTexto = useMemo(() => {
                   return (
                     <button
                       key={c.id}
-                      onClick={() => {
-                        setMensagemSucesso("");
-                        setErro("");
-                        setConversaSelecionada(c);
-                      }}
+                      onClick={() => abrirConversa(c)}
                       className={`${styles.conversationItem} ${
                         ativo ? styles.conversationItemActive : ""
                       }`}
@@ -5930,6 +6477,10 @@ const templateFooterTexto = useMemo(() => {
                                 ? styles.statusMiniWaiting
                                 : c.status === "aguardando_cliente"
                                 ? styles.statusMiniWaiting
+                                : c.status === "bot"
+                                ? styles.statusMiniBot
+                                : c.status === "em_atendimento"
+                                ? styles.statusMiniAtendimento
                                 : styles.statusMiniDefault
                             }`}
                           >
@@ -6216,6 +6767,21 @@ const templateFooterTexto = useMemo(() => {
                                     {quantidadeNotas > 0 && (
                                       <span className={styles.dropdownBadge}>
                                         {quantidadeNotas}
+                                      </span>
+                                    )}
+                                  </span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={styles.headerDropdownItem}
+                                  onClick={abrirAbaMacros}
+                                >
+                                  <span className={styles.dropdownItemContent}>
+                                    <span>Macros</span>
+                                    {macrosChat.length > 0 && (
+                                      <span className={styles.dropdownBadge}>
+                                        {macrosChat.length}
                                       </span>
                                     )}
                                   </span>
@@ -6659,7 +7225,7 @@ const templateFooterTexto = useMemo(() => {
                                     }
                                   }}
                                 >
-                                  Remover
+                                  Apagar
                                 </button>
                               </div>
 
@@ -6751,8 +7317,8 @@ const templateFooterTexto = useMemo(() => {
                                     </strong>
 
                                     <p className={styles.botStopText}>
-                                      Esta conversa está com o bot ativo. Para assumir o atendimento
-                                      manualmente, clique em "Parar automação".
+                                      Esta conversa está com o bot ativo. Ao parar a automação, o atendimento
+                                      será encerrado. Depois, você poderá reabrir e assumir a conversa.
                                     </p>
                                   </div>
                                 </div>
@@ -6760,7 +7326,7 @@ const templateFooterTexto = useMemo(() => {
                                 <button
                                   type="button"
                                   className={styles.dangerButton}
-                                  onClick={assumirConversa}
+                                  onClick={pararAutomacaoEEncerrar}
                                   disabled={assumindo}
                                 >
                                   {assumindo ? "Parando automação..." : "Parar automação"}
@@ -7018,7 +7584,11 @@ const templateFooterTexto = useMemo(() => {
                                     <button
                                       type="button"
                                       className={styles.toolButton}
-                                      onClick={() => setMenuAnexoAberto((prev) => !prev)}
+                                      onClick={() => {
+                                        setMacroCardAberto(false);
+                                        setEmojiAberto(false);
+                                        setMenuAnexoAberto((prev) => !prev);
+                                      }}
                                       title="Anexos"
                                     >
                                       ＋
@@ -7071,12 +7641,94 @@ const templateFooterTexto = useMemo(() => {
                                       className={`${styles.toolButton} ${styles.emojiButton} ${
                                         emojiAberto ? styles.emojiButtonActive : ""
                                       }`}
-                                      onClick={() => setEmojiAberto((prev) => !prev)}
+                                      onClick={() => {
+                                        setMacroCardAberto(false);
+                                        setMenuAnexoAberto(false);
+                                        setEmojiAberto((prev) => !prev);
+                                      }}
                                       title="Emoji"
                                       aria-label="Abrir emojis"
                                     >
                                       <span className={styles.emojiButtonIcon}>😊</span>
                                     </button>
+                                  </div>
+
+                                  <div className={styles.macroPickerWrap} ref={macroCardRef}>
+                                    <button
+                                      type="button"
+                                      className={`${styles.toolButton} ${styles.macroButton} ${
+                                        macroCardAberto ? styles.macroButtonActive : ""
+                                      }`}
+                                      onClick={alternarMacroCard}
+                                      title="Macros"
+                                      aria-label="Abrir macros"
+                                    >
+                                      <MessageSquareText size={18} />
+                                    </button>
+
+                                    {macroCardAberto && (
+                                      <div className={styles.macroPopover}>
+                                        <div className={styles.macroPopoverHeader}>
+                                          <strong>Macros</strong>
+                                          <button
+                                            type="button"
+                                            className={styles.macroPopoverNewButton}
+                                            onClick={abrirModalNovaMacro}
+                                          >
+                                            <Plus size={14} />
+                                            Nova
+                                          </button>
+                                        </div>
+
+                                        {carregandoMacros ? (
+                                          <div className={styles.macroPopoverEmpty}>
+                                            Carregando macros...
+                                          </div>
+                                        ) : macrosChat.length === 0 ? (
+                                          <div className={styles.macroPopoverEmpty}>
+                                            Nenhuma macro salva ainda.
+                                          </div>
+                                        ) : (
+                                          <div className={styles.macroPopoverList}>
+                                            {macrosChat.map((macro) => {
+                                              return (
+                                                <div
+                                                  key={macro.id}
+                                                  className={styles.macroPopoverItem}
+                                                >
+                                                  <div className={styles.macroPopoverTextButton}>
+                                                    <strong>{macro.titulo}</strong>
+                                                    <span>
+                                                      {limitarPreviewMacro(macro.conteudo, 80)}
+                                                    </span>
+                                                  </div>
+
+                                                  <button
+                                                    type="button"
+                                                    className={styles.macroSendButton}
+                                                    title="Enviar macro para o campo de mensagem"
+                                                    onClick={() => acionarEnvioMacro(macro)}
+                                                    disabled={enviando || !podeEnviarMensagem}
+                                                  >
+                                                    <Send size={14} />
+                                                    Enviar
+                                                  </button>
+
+                                                  <button
+                                                    type="button"
+                                                    className={styles.macroIconButton}
+                                                    title="Editar macro"
+                                                    onClick={() => abrirModalEditarMacro(macro)}
+                                                  >
+                                                    <Pencil size={15} />
+                                                  </button>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
 
@@ -7227,6 +7879,8 @@ const templateFooterTexto = useMemo(() => {
                                 ? "Listas"
                                 : abaPainelDireito === "etiquetas"
                                 ? "Etiquetas"
+                                : abaPainelDireito === "macros"
+                                ? "Macros"
                                 : abaPainelDireito === "midia_docs_links"
                                 ? "Mídias, links e documentos"
                                 : "Mensagens favoritas"}
@@ -7929,6 +8583,83 @@ const templateFooterTexto = useMemo(() => {
                                 )}
                               </div>
                             ))
+                          )}
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "macros" && (
+                        <div className={styles.macroPanel}>
+                          <div className={styles.macroPanelActions}>
+                            <button
+                              type="button"
+                              className={`${styles.primaryButton} ${styles.macroActionButton}`}
+                              onClick={abrirModalNovaMacro}
+                            >
+                              <Plus size={14} />
+                              Nova macro
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`${styles.secondaryButton} ${styles.macroActionButton}`}
+                              onClick={abrirModalVariavel}
+                            >
+                              <Variable size={14} />
+                              Variáveis
+                            </button>
+                          </div>
+
+                          <p className={styles.macroFixedVariablesText}>
+                            {TEXTO_VARIAVEIS_FIXAS_MACRO}
+                          </p>
+
+                          {carregandoMacros ? (
+                            <div className={styles.infoBoxMuted}>
+                              Carregando macros...
+                            </div>
+                          ) : macrosChat.length === 0 ? (
+                            <div className={styles.infoBoxMuted}>
+                              Nenhuma macro salva ainda.
+                            </div>
+                          ) : (
+                            <div className={styles.macroList}>
+                              {macrosChat.map((macro) => {
+                                return (
+                                  <div key={macro.id} className={styles.macroCard}>
+                                    <div className={styles.macroCardText}>
+                                      <strong className={styles.macroCardTitle}>
+                                        {macro.titulo}
+                                      </strong>
+                                      <p className={styles.macroCardPreview}>
+                                        {limitarPreviewMacro(macro.conteudo)}
+                                      </p>
+                                    </div>
+
+                                    <div className={styles.macroCardActions}>
+                                      <button
+                                        type="button"
+                                        className={styles.macroSendButton}
+                                        title="Enviar macro para o campo de mensagem"
+                                        onClick={() => acionarEnvioMacro(macro)}
+                                        disabled={enviando || !podeEnviarMensagem}
+                                      >
+                                        <Send size={15} />
+                                        Enviar
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className={styles.macroIconButton}
+                                        title="Editar macro"
+                                        onClick={() => abrirModalEditarMacro(macro)}
+                                      >
+                                        <Pencil size={15} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
                       )}
@@ -8787,6 +9518,245 @@ const templateFooterTexto = useMemo(() => {
         </div>
       </div>
 
+      {modalMacroAberto && (
+        <div className={styles.contactModalOverlay} onClick={fecharModalMacro}>
+          <div
+            className={`${styles.contactModalCard} ${styles.macroModalCard}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.contactModalHeader}>
+              <div>
+                <h3 className={styles.contactModalTitle}>
+                  {macroEditandoId ? "Editar macro" : "Nova macro"}
+                </h3>
+                <p className={styles.contactModalSubtitle}>
+                  Use variáveis entre duas chaves, como {"{{nome_contato}}"}.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.textButton}
+                onClick={fecharModalMacro}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.contactModalBody}>
+              <div className={styles.contactModalField}>
+                <label className={styles.actionLabel}>Título</label>
+                <input
+                  className={styles.messageInput}
+                  value={macroForm.titulo}
+                  onChange={(e) =>
+                    setMacroForm((atual) => ({
+                      ...atual,
+                      titulo: e.target.value,
+                    }))
+                  }
+                  placeholder="Ex: Boas-vindas"
+                  maxLength={80}
+                />
+              </div>
+
+              <div className={styles.contactModalField}>
+                <label className={styles.actionLabel}>Texto</label>
+                <textarea
+                  className={`${styles.noteInput} ${styles.macroTextarea}`}
+                  rows={9}
+                  value={macroForm.conteudo}
+                  onChange={(e) =>
+                    setMacroForm((atual) => ({
+                      ...atual,
+                      conteudo: e.target.value,
+                    }))
+                  }
+                  placeholder="Olá {{nome_contato}}, tudo bem?"
+                  maxLength={4000}
+                />
+              </div>
+
+              <div className={styles.macroFixedVariablesRow}>
+                <p className={styles.macroFixedVariablesText}>
+                  {TEXTO_VARIAVEIS_FIXAS_MACRO}
+                </p>
+
+                <button
+                  type="button"
+                  className={`${styles.secondaryButton} ${styles.macroActionButton}`}
+                  onClick={abrirModalVariavel}
+                >
+                  <Variable size={14} />
+                  Cadastrar variável
+                </button>
+              </div>
+
+              <div className={styles.macroPreviewBox}>
+                <span>Prévia com variáveis aplicadas</span>
+                <p>
+                  {resolverVariaveisMacro(macroForm.conteudo).trim() ||
+                    "A prévia aparece aqui enquanto você escreve."}
+                </p>
+              </div>
+
+              <div className={styles.macroModalFooter}>
+                <div className={styles.actionButtons}>
+                  {macroEditandoId && (
+                    <button
+                      type="button"
+                      className={`${styles.dangerButton} ${styles.macroActionButton}`}
+                      onClick={() => excluirMacro(macroEditandoId)}
+                      disabled={excluindoMacroId === macroEditandoId}
+                    >
+                      <Trash2 size={14} />
+                      {excluindoMacroId === macroEditandoId ? "Removendo..." : "Remover"}
+                    </button>
+                  )}
+                </div>
+
+                <div className={styles.actionButtons}>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={fecharModalMacro}
+                    disabled={salvandoMacro}
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={salvarMacro}
+                    disabled={salvandoMacro || !macroForm.conteudo.trim()}
+                  >
+                    {salvandoMacro ? "Salvando..." : "Salvar macro"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalVariavelAberto && (
+        <div className={styles.contactModalOverlay} onClick={fecharModalVariavel}>
+          <div
+            className={`${styles.contactModalCard} ${styles.variableModalCard}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.contactModalHeader}>
+              <div>
+                <h3 className={styles.contactModalTitle}>Cadastrar variável</h3>
+                <p className={styles.contactModalSubtitle}>
+                  Variáveis personalizadas ficam disponíveis em macros e automações.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.textButton}
+                onClick={fecharModalVariavel}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.contactModalBody}>
+              <div className={styles.contactModalGrid}>
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Nome da variável</label>
+                  <input
+                    className={styles.messageInput}
+                    value={variavelForm.chave}
+                    onChange={(e) =>
+                      setVariavelForm((atual) => ({
+                        ...atual,
+                        chave: e.target.value,
+                      }))
+                    }
+                    placeholder="ex: link_pagamento"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Valor</label>
+                  <input
+                    className={styles.messageInput}
+                    value={variavelForm.valor}
+                    onChange={(e) =>
+                      setVariavelForm((atual) => ({
+                        ...atual,
+                        valor: e.target.value,
+                      }))
+                    }
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
+
+              <div className={styles.contactModalField}>
+                <label className={styles.actionLabel}>Descrição</label>
+                <input
+                  className={styles.messageInput}
+                  value={variavelForm.descricao}
+                  onChange={(e) =>
+                    setVariavelForm((atual) => ({
+                      ...atual,
+                      descricao: e.target.value,
+                    }))
+                  }
+                  placeholder="Ajuda para identificar onde usar"
+                />
+              </div>
+
+              <div className={styles.variableListBox}>
+                <strong>Variáveis cadastradas</strong>
+                {carregandoVariaveis ? (
+                  <span>Carregando...</span>
+                ) : variaveisCustomizadasMacro.length === 0 ? (
+                  <span>Nenhuma variável personalizada cadastrada.</span>
+                ) : (
+                  <div className={styles.variableList}>
+                    {variaveisCustomizadasMacro.map((variavel) => (
+                      <div key={variavel.id} className={styles.variableListItem}>
+                        <code>{`{{${variavel.chave}}}`}</code>
+                        <span>{variavel.descricao || variavel.valor}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className={styles.actionButtons}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={fecharModalVariavel}
+                  disabled={salvandoVariavel}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={salvarVariavelGlobal}
+                  disabled={
+                    salvandoVariavel ||
+                    !variavelForm.chave.trim() ||
+                    !variavelForm.valor.trim()
+                  }
+                >
+                  {salvandoVariavel ? "Salvando..." : "Salvar variável"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalEventoRastreamentoAberto && (
         <div
           className={styles.contactModalOverlay}
@@ -9252,5 +10222,13 @@ const templateFooterTexto = useMemo(() => {
       )}
 
     </>
+  );
+}
+
+export default function ConversasPage() {
+  return (
+    <Suspense fallback={null}>
+      <ConversasPageContent />
+    </Suspense>
   );
 }

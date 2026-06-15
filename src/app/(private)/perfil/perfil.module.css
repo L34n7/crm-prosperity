@@ -11,14 +11,14 @@
   margin: 0;
   font-size: 28px;
   font-weight: 700;
-  color: #18181b;
+  color: var(--crm-text-strong);
   letter-spacing: -0.02em;
 }
 
 .header p {
   margin: 6px 0 0;
   font-size: 14px;
-  color: #71717a;
+  color: var(--crm-text-muted);
 }
 
 .alert {
@@ -30,15 +30,15 @@
 }
 
 .success {
-  background: #ecfdf3;
-  border-color: #a7f3d0;
-  color: #047857;
+  background: var(--crm-success-bg);
+  border-color: var(--crm-success-border);
+  color: var(--crm-success-text);
 }
 
 .error {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #b91c1c;
+  background: var(--crm-danger-bg);
+  border-color: var(--crm-danger-border);
+  color: var(--crm-danger-text);
 }
 
 .grid {
@@ -49,8 +49,8 @@
 }
 
 .card {
-  background: #ffffff;
-  border: 1px solid #e4e4e7;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
   border-radius: 20px;
   padding: 24px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
@@ -74,8 +74,8 @@
   height: 112px;
   border-radius: 999px;
   overflow: hidden;
-  border: 1px solid #e4e4e7;
-  background: #f4f4f5;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-muted);
 }
 
 .avatar img {
@@ -92,7 +92,7 @@
   justify-content: center;
   font-size: 36px;
   font-weight: 700;
-  color: #52525b;
+  color: var(--crm-text);
 }
 
 .avatarButtons {
@@ -111,9 +111,9 @@
   min-height: 42px;
   padding: 0 16px;
   border-radius: 12px;
-  border: 1px solid #d4d4d8;
-  background: #ffffff;
-  color: #27272a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -121,16 +121,16 @@
 }
 
 .uploadBtn:hover {
-  background: #fafafa;
+  background: var(--crm-surface-soft);
 }
 
 .removeBtn {
   min-height: 42px;
   padding: 0 16px;
   border-radius: 12px;
-  border: 1px solid #fecaca;
-  background: #fff5f5;
-  color: #b91c1c;
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -138,7 +138,7 @@
 }
 
 .removeBtn:hover:not(:disabled) {
-  background: #fee2e2;
+  background: var(--crm-danger-bg-strong);
 }
 
 .removeBtn:disabled {
@@ -149,11 +149,11 @@
 .uploadHint {
   margin-top: 10px;
   font-size: 12px;
-  color: #71717a;
+  color: var(--crm-text-muted);
 }
 
 .infoBox {
-  background: #fafafa;
+  background: var(--crm-surface-soft);
   border-radius: 16px;
   padding: 16px;
 }
@@ -168,14 +168,14 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #71717a;
+  color: var(--crm-text-muted);
 }
 
 .infoValue {
   margin: 8px 0 0;
   font-size: 14px;
   font-weight: 600;
-  color: #18181b;
+  color: var(--crm-text-strong);
 }
 
 .tags {
@@ -188,15 +188,15 @@
 .tag {
   padding: 6px 12px;
   border-radius: 999px;
-  background: #f1f5f9;
-  color: #334155;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text);
   font-size: 12px;
   font-weight: 600;
 }
 
 .empty {
   font-size: 14px;
-  color: #71717a;
+  color: var(--crm-text-muted);
 }
 
 .formCard {
@@ -224,7 +224,83 @@
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #3f3f46;
+  color: var(--crm-text);
+}
+
+.labelWithHelp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.labelWithHelp label {
+  margin-bottom: 0;
+}
+
+.helpTooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 999px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  outline: none;
+}
+
+.helpTooltip:focus {
+  box-shadow: var(--crm-focus-ring);
+}
+
+.helpTooltipText {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 5;
+  width: min(280px, calc(100vw - 48px));
+  padding: 10px 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-text-strong);
+  color: var(--crm-text-inverse);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  visibility: hidden;
+}
+
+.helpTooltipText::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid var(--crm-border);
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-text-strong);
+  transform: translate(-50%, -5px) rotate(45deg);
+}
+
+.helpTooltip:hover .helpTooltipText,
+.helpTooltip:focus .helpTooltipText {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  visibility: visible;
 }
 
 .field input,
@@ -233,9 +309,9 @@
   min-height: 48px;
   padding: 0 14px;
   border-radius: 14px;
-  border: 1px solid #d4d4d8;
-  background: #ffffff;
-  color: #18181b;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -243,14 +319,14 @@
 
 .field input:focus,
 .select:focus {
-  border-color: #18181b;
-  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.08);
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
 }
 
 .field input:disabled {
-  background: #f4f4f5;
-  color: #71717a;
-  border-color: #e4e4e7;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-muted);
+  border-color: var(--crm-border);
   cursor: not-allowed;
 }
 
@@ -282,23 +358,23 @@
 }
 
 .btnPrimary {
-  border: 1px solid #18181b;
-  background: #18181b;
-  color: #ffffff;
+  border: 1px solid var(--crm-primary-strong);
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: #27272a;
+  background: var(--crm-primary-strong-hover);
 }
 
 .btnSecondary {
-  border: 1px solid #d4d4d8;
-  background: #ffffff;
-  color: #27272a;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
 }
 
 .btnSecondary:hover:not(:disabled) {
-  background: #fafafa;
+  background: var(--crm-surface-soft);
 }
 
 .cropOverlay {
@@ -316,7 +392,7 @@
   width: 100%;
   max-width: 720px;
   border-radius: 24px;
-  background: #ffffff;
+  background: var(--crm-surface);
   box-shadow: 0 20px 80px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
@@ -329,20 +405,20 @@
   margin: 0;
   font-size: 22px;
   font-weight: 700;
-  color: #18181b;
+  color: var(--crm-text-strong);
 }
 
 .cropHeader p {
   margin: 6px 0 0;
   font-size: 14px;
-  color: #71717a;
+  color: var(--crm-text-muted);
 }
 
 .cropArea {
   position: relative;
   width: 100%;
   height: 420px;
-  background: #111827;
+  background: var(--crm-primary-strong-hover);
 }
 
 .cropControls {
@@ -355,7 +431,7 @@
   gap: 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #27272a;
+  color: var(--crm-text-strong);
 }
 
 .zoomRange {
@@ -421,6 +497,16 @@
   }
 
   .avatarButtons {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .container {
     max-width: 100%;
   }
 }
