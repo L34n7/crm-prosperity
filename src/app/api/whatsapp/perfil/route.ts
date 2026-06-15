@@ -3,6 +3,10 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { createClient } from "@/lib/supabase/server";
 
 const GRAPH_VERSION = "v23.0";
+const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
+const PROFILE_PHOTO_TYPES = new Set(["image/jpeg", "image/png"]);
+
+type ConfigJson = Record<string, unknown> | null;
 
 type IntegracaoWhatsapp = {
   id: string;
@@ -11,34 +15,53 @@ type IntegracaoWhatsapp = {
   numero: string;
   status: string;
   phone_number_id: string | null;
+  waba_id: string | null;
+  business_account_id: string | null;
+  meta_business_id: string | null;
   verified_name: string | null;
   phone_number_display_name: string | null;
-  config_json: any;
+  config_json: ConfigJson;
   token_ref: string | null;
 
 };
 
-function extrairToken(integracao: IntegracaoWhatsapp) {
-  const tokenDoConfig =
-    integracao.config_json?.access_token ||
-    integracao.config_json?.accessToken ||
-    integracao.config_json?.token ||
-    integracao.config_json?.meta_access_token ||
-    integracao.config_json?.long_lived_token ||
-    null;
+function extrairStringConfig(
+  configJson: ConfigJson,
+  chaves: string[]
+) {
+  for (const chave of chaves) {
+    const valor = configJson?.[chave];
 
-  if (tokenDoConfig) {
-    return tokenDoConfig;
-  }
-
-  if (integracao.token_ref) {
-    return process.env[integracao.token_ref] || null;
+    if (typeof valor === "string" && valor.trim()) {
+      return valor.trim();
+    }
   }
 
   return null;
 }
 
-function jsonErro(error: string, status = 400, extra?: any) {
+function extrairToken(integracao: IntegracaoWhatsapp) {
+  const tokenDoConfig = extrairStringConfig(integracao.config_json, [
+    "access_token",
+    "accessToken",
+    "token",
+    "meta_access_token",
+    "long_lived_token",
+  ]);
+
+  if (typeof tokenDoConfig === "string" && tokenDoConfig.trim()) {
+    return tokenDoConfig.trim();
+  }
+
+  if (integracao.token_ref) {
+    const tokenDoEnv = process.env[integracao.token_ref];
+    return tokenDoEnv?.trim() || null;
+  }
+
+  return null;
+}
+
+function jsonErro(error: string, status = 400, extra?: unknown) {
   return NextResponse.json({ ok: false, error, extra }, { status });
 }
 
@@ -51,7 +74,7 @@ async function buscarIntegracao(
   let query = supabase
     .from("integracoes_whatsapp")
     .select(
-      "id, empresa_id, nome_conexao, numero, status, phone_number_id, verified_name, phone_number_display_name, config_json, token_ref"
+      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, config_json, token_ref"
     )
     .eq("empresa_id", empresaId)
     .eq("provider", "meta_official")
@@ -68,6 +91,94 @@ async function buscarIntegracao(
   }
 
   return (data || []) as IntegracaoWhatsapp[];
+}
+
+type MetaErrorBody = {
+  error?: {
+    message?: string;
+    code?: number;
+    error_subcode?: number;
+    type?: string;
+    fbtrace_id?: string;
+    error_data?: {
+      details?: string;
+    };
+  };
+};
+
+type PhoneInfoMeta = {
+  verified_name?: string;
+  display_phone_number?: string;
+  name_status?: string;
+  new_name_status?: string;
+};
+
+class MetaApiError extends Error {
+  status: number;
+  meta: unknown;
+
+  constructor(message: string, status = 400, meta: unknown = null) {
+    super(message);
+    this.name = "MetaApiError";
+    this.status = status;
+    this.meta = meta;
+  }
+}
+
+function isMetaApiError(error: unknown): error is MetaApiError {
+  return error instanceof MetaApiError;
+}
+
+function extrairMensagemMeta(body: MetaErrorBody, fallback: string) {
+  const message = body?.error?.message?.trim();
+  const details = body?.error?.error_data?.details?.trim();
+  const code = Number(body?.error?.code);
+
+  if (code === 131000 && message?.toLowerCase().includes("something went wrong")) {
+    return "A Meta recusou a criação do upload da foto. Verifique se META_APP_ID é o App ID correto do aplicativo usado no Embedded Signup e tente novamente com uma imagem PNG ou JPG de até 5 MB.";
+  }
+
+  if (message && details && !message.includes(details)) {
+    return `${message} ${details}`;
+  }
+
+  return message || details || fallback;
+}
+
+function isFotoPerfilValida(file: File) {
+  return PROFILE_PHOTO_TYPES.has(file.type) && file.size <= MAX_PROFILE_PHOTO_BYTES;
+}
+
+function resolverAppIdPerfil(integracao: IntegracaoWhatsapp) {
+  const appId =
+    process.env.META_APP_ID?.trim() ||
+    process.env.NEXT_PUBLIC_META_APP_ID?.trim() ||
+    "";
+
+  if (!appId) {
+    return {
+      ok: false as const,
+      error:
+        "META_APP_ID não configurado no .env. Ele é necessário para atualizar a foto.",
+    };
+  }
+
+  const idsDaConta = [
+    integracao.phone_number_id,
+    integracao.waba_id,
+    integracao.business_account_id,
+    integracao.meta_business_id,
+  ].filter(Boolean);
+
+  if (idsDaConta.includes(appId)) {
+    return {
+      ok: false as const,
+      error:
+        "META_APP_ID parece estar configurado com o ID do número, WABA ou Business. Configure com o App ID da Meta usado no Embedded Signup.",
+    };
+  }
+
+  return { ok: true as const, appId };
 }
 
 export async function GET(req: NextRequest) {
@@ -147,7 +258,7 @@ export async function GET(req: NextRequest) {
 
     const perfil = Array.isArray(metaJson?.data) ? metaJson.data[0] : metaJson;
 
-    let phoneJson: any = null;
+    let phoneJson: PhoneInfoMeta | null = null;
 
     const phoneRes = await fetch(
       `https://graph.facebook.com/${GRAPH_VERSION}/${integracaoSelecionada.phone_number_id}?fields=verified_name,display_phone_number,name_status,new_name_status`,
@@ -160,7 +271,7 @@ export async function GET(req: NextRequest) {
       }
     );
 
-    phoneJson = await phoneRes.json();
+    phoneJson = (await phoneRes.json()) as PhoneInfoMeta;
 
     if (!phoneRes.ok) {
       console.warn("[WHATSAPP PHONE INFO ERROR]", phoneJson);
@@ -203,9 +314,12 @@ export async function GET(req: NextRequest) {
       },
       perfil,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[WHATSAPP PERFIL GET ERROR]", error);
-    return jsonErro(error?.message || "Erro interno ao buscar perfil.", 500);
+    return jsonErro(
+      error instanceof Error ? error.message : "Erro interno ao buscar perfil.",
+      500
+    );
   }
 }
 
@@ -216,25 +330,51 @@ async function uploadFotoPerfil(params: {
 }) {
   const { appId, token, file } = params;
 
+  if (!isFotoPerfilValida(file)) {
+    throw new MetaApiError(
+      "A foto precisa ser PNG ou JPG e ter no máximo 5 MB.",
+      400,
+      null
+    );
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  const sessionRes = await fetch(
-    `https://graph.facebook.com/${GRAPH_VERSION}/${appId}/uploads?file_length=${buffer.length}&file_type=${encodeURIComponent(
-      file.type
-    )}&file_name=${encodeURIComponent(file.name)}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
+  const sessionUrl = new URL(
+    `https://graph.facebook.com/${GRAPH_VERSION}/${appId}/uploads`
   );
+  sessionUrl.searchParams.set("file_length", String(buffer.length));
+  sessionUrl.searchParams.set("file_type", file.type);
+  sessionUrl.searchParams.set("file_name", file.name);
+
+  const sessionRes = await fetch(sessionUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 
   const sessionJson = await sessionRes.json();
 
   if (!sessionRes.ok || !sessionJson?.id) {
-    throw new Error(
+    const sessionErrorMessage = extrairMensagemMeta(
+      sessionJson,
+      "Erro ao criar sessão de upload da foto no Meta."
+    );
+
+    if (sessionJson && typeof sessionJson === "object") {
+      sessionJson.error = {
+        ...(sessionJson.error || {}),
+        message: sessionErrorMessage,
+      };
+    }
+
+    if (sessionErrorMessage) {
+      throw new MetaApiError(sessionErrorMessage, sessionRes.status, sessionJson);
+    }
+
+    throw new MetaApiError(
       sessionJson?.error?.message || "Erro ao criar sessão de upload da foto."
     );
   }
@@ -255,7 +395,23 @@ async function uploadFotoPerfil(params: {
   const uploadJson = await uploadRes.json();
 
   if (!uploadRes.ok || !uploadJson?.h) {
-    throw new Error(
+    const uploadErrorMessage = extrairMensagemMeta(
+      uploadJson,
+      "Erro ao enviar foto para o Meta."
+    );
+
+    if (uploadJson && typeof uploadJson === "object") {
+      uploadJson.error = {
+        ...(uploadJson.error || {}),
+        message: uploadErrorMessage,
+      };
+    }
+
+    if (uploadErrorMessage) {
+      throw new MetaApiError(uploadErrorMessage, uploadRes.status, uploadJson);
+    }
+
+    throw new MetaApiError(
       uploadJson?.error?.message || "Erro ao enviar foto para o Meta."
     );
   }
@@ -303,7 +459,7 @@ export async function PATCH(req: NextRequest) {
       return jsonErro("Essa integração não possui phone_number_id.", 400);
     }
 
-    const token = extrairToken(integracao)
+    const token = extrairToken(integracao);
 
     if (!token) {
       return jsonErro(
@@ -314,7 +470,7 @@ export async function PATCH(req: NextRequest) {
 
     const websites = [website1, website2].filter(Boolean);
 
-    const payload: Record<string, any> = {
+    const payload: Record<string, unknown> = {
       messaging_product: "whatsapp",
       about,
       address,
@@ -325,8 +481,12 @@ export async function PATCH(req: NextRequest) {
     };
 
     if (foto instanceof File && foto.size > 0) {
-      const appId =
-        process.env.META_APP_ID || process.env.NEXT_PUBLIC_META_APP_ID || "";
+      const appIdResult = resolverAppIdPerfil(integracao);
+      if (!appIdResult.ok) {
+        return jsonErro(appIdResult.error, 400);
+      }
+
+      const appId = appIdResult.appId;
 
       if (!appId) {
         return jsonErro(
@@ -360,7 +520,7 @@ export async function PATCH(req: NextRequest) {
 
     if (!metaRes.ok) {
       return jsonErro(
-        metaJson?.error?.message || "Erro ao atualizar perfil no Meta.",
+        extrairMensagemMeta(metaJson, "Erro ao atualizar perfil no Meta."),
         metaRes.status,
         metaJson
       );
@@ -382,8 +542,17 @@ export async function PATCH(req: NextRequest) {
       message: "Perfil atualizado com sucesso.",
       meta: metaJson,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[WHATSAPP PERFIL PATCH ERROR]", error);
-    return jsonErro(error?.message || "Erro interno ao atualizar perfil.", 500);
+    if (isMetaApiError(error)) {
+      return jsonErro(error.message, error.status, error.meta);
+    }
+
+    return jsonErro(
+      error instanceof Error
+        ? error.message
+        : "Erro interno ao atualizar perfil.",
+      500
+    );
   }
 }

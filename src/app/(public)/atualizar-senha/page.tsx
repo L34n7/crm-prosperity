@@ -47,7 +47,7 @@ function AtualizarSenhaContent() {
 
   const totalRequisitos = Object.values(requisitos).filter(Boolean).length;
   const senhasIguais = password.length > 0 && password === confirmarSenha;
-  const senhaValida = totalRequisitos === 4 && senhasIguais;
+  const senhaValida = totalRequisitos >= 4 && senhasIguais;
 
   const forcaSenha =
     totalRequisitos <= 2 ? "fraca" : totalRequisitos < 4 ? "media" : "forte";
@@ -287,7 +287,7 @@ function AtualizarSenhaContent() {
               <div className={styles.strengthBar}>
                 <div
                   className={`${styles.strengthFill} ${styles[forcaSenha]}`}
-                  style={{ width: `${(totalRequisitos / 4) * 100}%` }}
+                  style={{ width: `${(totalRequisitos / 5) * 100}%` }}
                 />
               </div>
             </div>

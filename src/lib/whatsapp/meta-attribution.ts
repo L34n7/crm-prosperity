@@ -33,6 +33,10 @@ type RastreamentoMeta = {
 };
 
 const ORIGEM_META_NOME = "Meta Ads / Click-to-WhatsApp";
+const CAMPANHA_META_DESCRICAO =
+  "Campanha criada automaticamente a partir de anuncio Click-to-WhatsApp da Meta.";
+const CAMPANHA_META_MENSAGEM =
+  "Mensagem iniciada por anuncio Click-to-WhatsApp da Meta.";
 
 function semUndefined<T extends Record<string, unknown>>(payload: T) {
   return Object.fromEntries(
@@ -187,6 +191,32 @@ async function buscarOuCriarCampanhaMeta(params: {
     return data || null;
   }
 
+  async function buscarPorNomeAutomatico() {
+    let query = supabase
+      .from("rastreamento_campanhas")
+      .select("id, nome, origem_id")
+      .eq("empresa_id", empresaId)
+      .eq("origem_id", origem.id)
+      .eq("descricao", CAMPANHA_META_DESCRICAO)
+      .ilike("nome", nome)
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    query = params.integracaoWhatsappId
+      ? query.eq("integracao_whatsapp_id", params.integracaoWhatsappId)
+      : query.is("integracao_whatsapp_id", null);
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      throw new Error(
+        `Erro ao buscar campanha Meta Ads por nome: ${error.message}`
+      );
+    }
+
+    return data || null;
+  }
+
   const existente = await buscar();
 
   if (existente?.id) {
@@ -198,6 +228,17 @@ async function buscarOuCriarCampanhaMeta(params: {
     };
   }
 
+  const existentePorNome = await buscarPorNomeAutomatico();
+
+  if (existentePorNome?.id) {
+    return {
+      origemId: existentePorNome.origem_id || origem.id,
+      origemNome: ORIGEM_META_NOME,
+      campanhaId: existentePorNome.id,
+      campanhaNome: existentePorNome.nome || nome,
+    };
+  }
+
   const { data, error } = await supabase
     .from("rastreamento_campanhas")
     .insert({
@@ -206,10 +247,9 @@ async function buscarOuCriarCampanhaMeta(params: {
       integracao_whatsapp_id: params.integracaoWhatsappId || null,
       nome,
       codigo,
-      descricao:
-        "Campanha criada automaticamente a partir de anuncio Click-to-WhatsApp da Meta.",
+      descricao: CAMPANHA_META_DESCRICAO,
       numero_whatsapp: somenteDigitos(params.numeroWhatsapp || "") || "0",
-      mensagem_inicial: "Mensagem iniciada por anuncio Click-to-WhatsApp da Meta.",
+      mensagem_inicial: CAMPANHA_META_MENSAGEM,
       status: "ativo",
     })
     .select("id, nome, origem_id")
@@ -224,6 +264,16 @@ async function buscarOuCriarCampanhaMeta(params: {
           origemNome: ORIGEM_META_NOME,
           campanhaId: campanha.id,
           campanhaNome: campanha.nome || nome,
+        };
+      }
+
+      const campanhaPorNome = await buscarPorNomeAutomatico();
+      if (campanhaPorNome?.id) {
+        return {
+          origemId: campanhaPorNome.origem_id || origem.id,
+          origemNome: ORIGEM_META_NOME,
+          campanhaId: campanhaPorNome.id,
+          campanhaNome: campanhaPorNome.nome || nome,
         };
       }
     }

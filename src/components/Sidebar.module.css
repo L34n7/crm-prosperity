@@ -172,7 +172,7 @@
 }
 
 .linkWhatsappActive {
-  background: var(--crm-sidebar-active-bg);
+  background: #e2e2e2;
   color: var(--crm-sidebar-active-text);
 }
 
@@ -415,8 +415,7 @@
   height: 40px;
   border-radius: 999px;
   object-fit: cover;
-  border: 2px solid var(--crm-sidebar-avatar-ring);
-
+  border: 1px transparent;
   transition: transform 0.2s ease;
 }
 
