@@ -8,7 +8,9 @@ import Header from "@/components/Header";
 import styles from "./usuarios.module.css";
 
 const CHECKOUT_PLANO_ESSENCIAL =
-  process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL || "";
+  process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL_ESSENCIAL ||
+  process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL ||
+  "";
 const VALOR_PLANO_ESSENCIAL = "R$ 267/mês";
 
 type Setor = {

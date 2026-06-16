@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import styles from "./comecar.module.css";
 
-type TipoOferta = "normal" | "vip" | "jv" | "free";
+type TipoOferta = "normal" | "vip" | "jv" | "af" | "free";
 
 export default function ComecarPage() {
   const router = useRouter();
@@ -56,6 +56,10 @@ export default function ComecarPage() {
 
     if (oferta === "jv" || oferta === "jv2026") {
       return "jv";
+    }
+
+    if (oferta === "af" || oferta === "afiliado") {
+      return "af";
     }
 
     if (oferta === "free_beta_crm_2026_liberado_92xa!kl") {

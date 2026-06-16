@@ -184,7 +184,13 @@ function obterTipoOferta(payload: any, lead?: any) {
     .trim()
     .toLowerCase();
 
-  if (tipo === "normal" || tipo === "vip" || tipo === "jv" || tipo === "free") {
+  if (
+    tipo === "normal" ||
+    tipo === "vip" ||
+    tipo === "jv" ||
+    tipo === "af" ||
+    tipo === "free"
+  ) {
     return tipo;
   }
 

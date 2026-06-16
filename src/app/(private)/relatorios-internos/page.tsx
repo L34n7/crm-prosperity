@@ -3007,7 +3007,7 @@ export default async function RelatoriosInternosPage({
   return (
     <>
       <Header
-        title="Relatórios Interno"
+        title="Relatórios Internos"
         subtitle="Visão interna por empresa, período, conversas, mensagens, disparos, contatos, usuários e planos."
       />
 

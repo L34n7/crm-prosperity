@@ -18,7 +18,8 @@ type PacoteTokens = {
 const whatsappComercial =
   process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975233266";
 
-const checkoutEssencial = process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL || "";
+const checkoutEssencial =
+  process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL_ESSENCIAL || "";
 
 const pacotes: PacoteTokens[] = [
   {

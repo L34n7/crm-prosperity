@@ -99,12 +99,6 @@ const menuItems: MenuItem[] = [
     permissao: PERMISSAO_INTERNA_EMPRESAS,
   },
   {
-    label: "Relatórios BuyGain",
-    href: "/relatorios-internos",
-    icon: BarChart3,
-    permissao: PERMISSAO_INTERNA_EMPRESAS,
-  },
-  {
     label: "Configuração de setores",
     href: "/configuracoes/setores",
     icon: Layers3,
@@ -126,6 +120,12 @@ const menuItems: MenuItem[] = [
     href: "/auditoria",
     icon: ScrollText,
     permissao: "auditoria.visualizar",
+  },
+  {
+    label: "Relatórios Internos",
+    href: "/relatorios-internos",
+    icon: BarChart3,
+    permissao: PERMISSAO_INTERNA_EMPRESAS,
   },
   { label: "Perfil WhatsApp", href: "/configuracoes/whatsapp/perfil", icon: Settings2 },
 ];

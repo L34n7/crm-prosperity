@@ -12,7 +12,7 @@ const supabase = getSupabaseAdmin();
 function normalizarTipoOferta(
   valor: unknown,
   chaveFree?: string
-): "normal" | "vip" | "jv" | "free" {
+): "normal" | "vip" | "jv" | "af" | "free" {
   if (typeof valor !== "string") {
     return "normal";
   }
@@ -25,6 +25,10 @@ function normalizarTipoOferta(
 
   if (valorNormalizado === "jv") {
     return "jv";
+  }
+
+  if (valorNormalizado === "af" || valorNormalizado === "afiliado") {
+    return "af";
   }
 
   // 🔐 proteção do free

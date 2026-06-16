@@ -10,10 +10,16 @@ function obterCheckoutUrl(tipoOferta: string | null, planoSlug: string | null) {
   const checkoutFree = process.env.CRM_CHECKOUT_FREE_URL ?? "";
 
   if (tipoOferta === "free") {
-    return checkoutFree;
+    return adicionarPlanoAoCheckoutFree(checkoutFree, planoSlug);
   }
 
   const checkoutPlano = obterCheckoutUrlPorPlano(planoSlug);
+
+  if (tipoOferta === "af") {
+    return (
+      obterCheckoutUrlAfPorPlano(planoSlug) || checkoutPlano || checkoutPadrao
+    );
+  }
 
   if (planoSlug === "basico" && tipoOferta === "vip") {
     return checkoutVip || checkoutPlano || checkoutPadrao;
@@ -24,6 +30,38 @@ function obterCheckoutUrl(tipoOferta: string | null, planoSlug: string | null) {
   }
 
   return checkoutPlano || checkoutPadrao;
+}
+
+function obterCheckoutUrlAfPorPlano(planoSlug: string | null) {
+  const checkoutAfPadrao = process.env.ATOMOPAY_CHECKOUT_URL_AF || "";
+
+  if (planoSlug === "basico") {
+    return process.env.ATOMOPAY_CHECKOUT_URL_AF_BASICO || checkoutAfPadrao;
+  }
+
+  if (planoSlug === "essencial") {
+    return process.env.ATOMOPAY_CHECKOUT_URL_AF_ESSENCIAL || checkoutAfPadrao;
+  }
+
+  return checkoutAfPadrao;
+}
+
+function adicionarPlanoAoCheckoutFree(
+  checkoutFree: string,
+  planoSlug: string | null
+) {
+  if (!checkoutFree || !planoSlug) {
+    return checkoutFree;
+  }
+
+  try {
+    const url = new URL(checkoutFree);
+    url.searchParams.set("plano", planoSlug);
+    return url.toString();
+  } catch {
+    const separador = checkoutFree.includes("?") ? "&" : "?";
+    return `${checkoutFree}${separador}plano=${encodeURIComponent(planoSlug)}`;
+  }
 }
 
 function obterCheckoutUrlPorPlano(planoSlug: string | null) {

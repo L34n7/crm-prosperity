@@ -20,8 +20,7 @@ export default function RootLayout({
             (() => {
               try {
                 const saved = window.localStorage.getItem("crm-theme");
-                const system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-                const theme = saved === "dark" || saved === "light" ? saved : system;
+                const theme = saved === "dark" || saved === "light" ? saved : "light";
                 document.documentElement.dataset.theme = theme;
                 document.documentElement.style.colorScheme = theme;
               } catch {
