@@ -695,7 +695,7 @@
 
   .contentGrid,
   .eventsLayout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -748,3 +748,111 @@
     padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
   }
 }
+
+/* =========================================================
+   RASTREAMENTO DE LEADS — AJUSTES MOBILE
+   ========================================================= */
+@media (max-width: 640px) {
+  .contentGrid,
+  .eventsLayout {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    min-width: 0;
+  }
+
+  .contentGrid > *,
+  .eventsLayout > * {
+    min-width: 0;
+  }
+
+  /* Campanhas */
+  .listItem {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .listItem > div:first-child {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .listItem strong,
+  .listItem p {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .listItem .statusActions {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  /* Links rastreáveis */
+  .linkItem {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .linkItem .linkTop {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .linkItem .linkTop > div:first-child {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .linkItem .linkTop strong,
+  .linkItem .linkTop p {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .linkItem .statusActions {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .linkItem .urlRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .linkItem .urlRow code {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .linkItem .urlRow button {
+    width: 100%;
+    min-height: 38px;
+  }
+}
+

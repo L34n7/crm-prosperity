@@ -816,7 +816,14 @@ function NodeCustom({ data, dragging }: any) {
           !dragging && data.isSelecionado ? styles.nodeSelecionado : ""
         }`}
       >
-      <Handle type="target" position={Position.Left} className={styles.nodeHandle} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className={styles.nodeHandle}
+        isConnectable={true}
+        onClick={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+      />
 
       <div className={styles.nodeHeader}>
         <div className={styles.nodeTypeRow}>
@@ -851,7 +858,14 @@ function NodeCustom({ data, dragging }: any) {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} className={styles.nodeHandle} />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className={styles.nodeHandle}
+        isConnectable={true}
+        onClick={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+      />
     </div>
   );
 }
@@ -5036,6 +5050,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
+                connectOnClick={true}
                 onNodeDragStart={() => {
                   ignorarCliqueNodeAposArrasteRef.current = true;
                 }}

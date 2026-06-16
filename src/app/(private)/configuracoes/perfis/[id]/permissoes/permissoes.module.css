@@ -275,28 +275,257 @@
 
   .permissionsGrid,
   .explainGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
+/* =========================================================
+   PERMISSÕES DO PERFIL — RESPONSIVO
+   ========================================================= */
 @media (max-width: 768px) {
   .page {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     min-height: auto;
-    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+    box-sizing: border-box;
+
+    padding:
+      10px
+      10px
+      calc(96px + env(safe-area-inset-bottom));
+
+    overflow-x: hidden;
   }
 
   .shell {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    gap: 16px;
+    box-sizing: border-box;
+  }
+
+  /* Cabeçalho */
+  .hero {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+
+    padding: 18px;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .hero > div {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .backLink {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .title {
+    max-width: 100%;
+    font-size: 26px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .subtitle {
+    width: 100%;
+    max-width: 100%;
+    font-size: 14px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+
+  .profileBox {
+    display: flex;
+    width: fit-content;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .profileBox strong,
+  .profileBox span {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .hero .primaryButton {
+    width: 100%;
+    max-width: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  /* Cards explicativos */
+  .explainGrid {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .explainCard {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+
+    padding: 18px;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .explainCard h2,
+  .explainCard p {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* Área dos grupos */
+  .groupsSection {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     gap: 16px;
   }
 
-  .hero,
-  .card {
-    border-radius: 18px;
+  .groupCard {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+
     padding: 18px;
+    border-radius: 18px;
+    overflow: hidden;
   }
 
-  .permissionRow {
-    align-items: flex-start;
+  .groupHeader {
+    width: 100%;
+    min-width: 0;
+
+    display: flex;
     flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+
+    margin-bottom: 16px;
+  }
+
+  .groupHeader > div:first-child {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .groupTitle,
+  .groupSubtitle {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .groupTitle {
+    font-size: 21px;
+  }
+
+  /* Botões Marcar todas e Limpar */
+  .groupActions {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .groupActions .secondaryButton,
+  .groupActions .ghostButton {
+    width: auto;
+    min-width: 0;
+    padding: 10px 13px;
+  }
+
+  /* Uma permissão por linha */
+  .permissionsGrid {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  /* Card individual */
+  .permissionCard {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+
+    padding: 16px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .permissionText {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .permissionCode,
+  .permissionDescription {
+    display: block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .permissionCode {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .permissionDescription {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  /* Switch um pouco menor no celular */
+  .switchWrap {
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
+    height: 28px;
+    flex: 0 0 48px;
+    justify-self: end;
+  }
+
+  .switchSlider::before {
+    width: 20px;
+    height: 20px;
+    top: 4px;
+    left: 4px;
+  }
+
+  .switchInput:checked + .switchSlider::before {
+    transform: translateX(20px);
   }
 }

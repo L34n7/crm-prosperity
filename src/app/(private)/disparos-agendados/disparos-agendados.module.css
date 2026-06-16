@@ -1385,12 +1385,6 @@
 }
 
 @media (max-width: 720px) {
-  .modalDisparoCard {
-    max-width: none;
-    height: calc(100vh - 24px);
-    overflow-y: auto;
-  }
-
   .formGrid {
     grid-template-columns: 1fr;
   }
@@ -1539,5 +1533,220 @@
     max-width: none;
     max-height: none;
     min-height: calc(100dvh - 150px);
+  }
+}
+
+
+/* =========================================================
+   MODAL AGENDAR DISPARO — MOBILE
+   ========================================================= */
+@media (max-width: 768px) {
+  .modalOverlay {
+    padding:
+      12px
+      12px
+      calc(82px + env(safe-area-inset-bottom));
+    align-items: stretch;
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+
+  .modalDisparoCard {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    min-height: 0;
+    margin: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: hidden;
+    border-radius: 20px;
+  }
+
+  .modalHeader {
+    flex: 0 0 auto;
+    padding: 16px;
+  }
+
+  .modalBody {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    display: block;
+    padding: 12px 16px 20px;
+
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modalFooter {
+    flex: 0 0 auto;
+    padding: 12px 16px 16px;
+    background: var(--crm-surface);
+    z-index: 5;
+  }
+
+  /* Formulário e prévia ficam em uma única coluna */
+  .disparoModalGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .disparoModalMain {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .formSection {
+    width: 100%;
+    min-width: 0;
+    margin-top: 0;
+    padding: 14px;
+    box-sizing: border-box;
+  }
+
+  .formGrid,
+  .contactsSearchRow,
+  .templateVariablesGrid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Prévia e data não ficam mais sobrepostas */
+  .disparoPreviewSidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .previewCard,
+  .scheduleCard,
+  .disparoCustoBox {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    margin-top: 0;
+    box-sizing: border-box;
+  }
+
+  .previewCard {
+    overflow: hidden;
+    border-radius: 18px;
+  }
+
+  .scheduleCard {
+    border-radius: 18px;
+    padding: 16px;
+  }
+
+  .scheduleDate {
+    font-size: 18px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .previewBadge {
+    top: 8px;
+    right: 8px;
+  }
+
+  .whatsappPreviewArea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .whatsappBubble {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Disponíveis em cima e Selecionados embaixo */
+  .contactsSection {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .contactsColumn {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 280px;
+    max-height: 420px;
+    margin-top: 0;
+  }
+
+  .contactsList {
+    flex: 1;
+    min-height: 220px;
+    max-height: 340px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px;
+
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .contactsHeader {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .contactsHeaderActions {
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .TextButtonAdd,
+  .TextButtonRemover {
+    margin-right: 0;
+    white-space: normal;
+    text-align: right;
+  }
+
+  .contactCard,
+  .contactCardSelected {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .contactMain {
+    min-width: 0;
+  }
+
+  .contactCard .ButtonAdd,
+  .contactCardSelected .dangerButton {
+    width: auto;
+    min-width: 86px;
+    padding: 10px 12px;
+  }
+
+  .modalFooter .secondaryButton,
+  .modalFooter .primaryButton {
+    width: auto;
+    flex: 1;
   }
 }

@@ -42,7 +42,7 @@ const pacotes: PacoteTokens[] = [
     preco: "R$ 100",
     descricao:
       "Melhor custo por volume para operacoes que usam IA com frequencia durante o atendimento. Garanta a sua operação até a renovacao",
-    economia: "Economize R$ 25 comparado a 5 pacotes menores.",
+    economia: "Economize R$25 comparado a 5 pacotes de 1mi.",
     recursos: [
       "Maior folga para automacoes com IA",
       "Melhor custo por milhao de tokens",

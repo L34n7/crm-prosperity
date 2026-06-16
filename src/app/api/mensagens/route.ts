@@ -143,6 +143,8 @@ export async function GET(request: Request) {
       );
     }
 
+    const janela24h = await canSendFreeformWhatsAppMessage({ conversaId });
+
     if (exportar) {
       const todasMensagens: unknown[] = [];
       const tamanhoLote = 1000;
@@ -265,6 +267,7 @@ export async function GET(request: Request) {
         ok: true,
         mensagens,
         temMaisHistorico: (count || 0) > 0,
+        janela_24h: janela24h,
         modo: "antes_de",
       });
     }
@@ -348,6 +351,7 @@ export async function GET(request: Request) {
       ok: true,
       mensagens: mensagensComFavorita,
       temMaisHistorico,
+      janela_24h: janela24h,
     });
   } catch (error) {
     console.error("Erro ao carregar mensagens:", error);

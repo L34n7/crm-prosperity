@@ -179,6 +179,21 @@ type Mensagem = {
   } | null;
 };
 
+type Janela24hConversa = {
+  podeEnviarMensagemLivre: boolean;
+  ultimaMensagemRecebidaEm: string | null;
+  janelaExpiraEm: string | null;
+  motivoBloqueio: string | null;
+};
+
+type Janela24hApiPayload = Partial<Janela24hConversa> & {
+  pode_enviar_mensagem_livre?: boolean | null;
+  ultima_mensagem_recebida_em?: string | null;
+  expira_em?: string | null;
+  janela_expira_em?: string | null;
+  motivo_bloqueio?: string | null;
+};
+
 type SetorOpcao = {
   id: string;
   nome: string;
@@ -1641,6 +1656,36 @@ function formatarTempoRestanteJanela(createdAt?: string | null) {
   return `${horas}h ${minutos}min`;
 }
 
+function normalizarJanela24hConversa(
+  valor: unknown
+): Janela24hConversa | null {
+  if (!valor || typeof valor !== "object") return null;
+
+  const janela = valor as Janela24hApiPayload;
+  const ultimaMensagemRecebidaEm =
+    janela.ultimaMensagemRecebidaEm ??
+    janela.ultima_mensagem_recebida_em ??
+    null;
+  const janelaExpiraEm =
+    janela.janelaExpiraEm ??
+    janela.expira_em ??
+    janela.janela_expira_em ??
+    null;
+  const motivoBloqueio =
+    janela.motivoBloqueio ?? janela.motivo_bloqueio ?? null;
+  const podeEnviarMensagemLivre =
+    janela.podeEnviarMensagemLivre ??
+    janela.pode_enviar_mensagem_livre ??
+    Boolean(janelaExpiraEm && new Date(janelaExpiraEm).getTime() >= Date.now());
+
+  return {
+    podeEnviarMensagemLivre: Boolean(podeEnviarMensagemLivre),
+    ultimaMensagemRecebidaEm,
+    janelaExpiraEm,
+    motivoBloqueio,
+  };
+}
+
 
 
 function ConversasPageContent() {
@@ -1655,6 +1700,8 @@ function ConversasPageContent() {
 
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+  const [janela24hConversa, setJanela24hConversa] =
+    useState<Janela24hConversa | null>(null);
 
   const LIMITE_CONVERSAS = 20;
   const [temMaisConversas, setTemMaisConversas] = useState(true);
@@ -1665,18 +1712,33 @@ function ConversasPageContent() {
   const atualizandoConversasAutomaticamenteRef = useRef(false);
   const [conversaSelecionada, setConversaSelecionada] =
     useState<Conversa | null>(null);
+  const conversaSelecionadaIdRef = useRef<string | null>(null);
+  const conversaUrlPendenteRef = useRef<string | null>(null);
 
   useEffect(() => {
     conversasRef.current = conversas;
   }, [conversas]);
 
   useEffect(() => {
-    if (!conversaParam) return;
+    if (!conversaParam) {
+      conversaUrlPendenteRef.current = null;
+      return;
+    }
+
+    const conversaUrlPendente = conversaUrlPendenteRef.current;
+
+    if (conversaUrlPendente && conversaParam !== conversaUrlPendente) {
+      return;
+    }
+
+    if (conversaUrlPendente === conversaParam) {
+      conversaUrlPendenteRef.current = null;
+    }
 
     const conversaDaUrl = conversas.find((conversa) => conversa.id === conversaParam);
 
     if (conversaDaUrl && conversaSelecionada?.id !== conversaDaUrl.id) {
-      setConversaSelecionada(conversaDaUrl);
+      selecionarConversa(conversaDaUrl);
     }
   }, [conversaParam, conversas, conversaSelecionada?.id]);
 
@@ -1742,7 +1804,8 @@ function ConversasPageContent() {
   function abrirConversa(conversa: Conversa) {
     setMensagemSucesso("");
     setErro("");
-    setConversaSelecionada(conversa);
+    conversaUrlPendenteRef.current = conversa.id;
+    selecionarConversa(conversa);
     router.push(`/conversas?id=${encodeURIComponent(conversa.id)}`);
   }
   const [arquivoEnvio, setArquivoEnvio] = useState<File | null>(null);
@@ -1786,6 +1849,7 @@ function ConversasPageContent() {
   const [carregandoProtocolos, setCarregandoProtocolos] = useState(false);
   const [protocoloSelecionadoId, setProtocoloSelecionadoId] = useState<string | null>(null);
   const [protocoloSelecionadoNumero, setProtocoloSelecionadoNumero] = useState<string | null>(null);
+  const protocoloSelecionadoIdRef = useRef<string | null>(null);
   const [eventosRastreamentoConversa, setEventosRastreamentoConversa] = useState<
     RastreamentoEventoConversa[]
   >([]);
@@ -1804,6 +1868,61 @@ function ConversasPageContent() {
     useState("");
   const [salvandoEventoRastreamento, setSalvandoEventoRastreamento] =
     useState(false);
+
+  function conversaEstaSelecionada(conversaId: string) {
+    return conversaSelecionadaIdRef.current === conversaId;
+  }
+
+  function cargaMensagensAindaAtual(
+    conversaId: string,
+    conversaProtocoloId?: string | null
+  ) {
+    return (
+      conversaEstaSelecionada(conversaId) &&
+      protocoloSelecionadoIdRef.current === (conversaProtocoloId ?? null)
+    );
+  }
+
+  function definirProtocoloSelecionado(
+    protocoloId: string | null,
+    protocoloNumero: string | null = null
+  ) {
+    protocoloSelecionadoIdRef.current = protocoloId;
+    setProtocoloSelecionadoId(protocoloId);
+    setProtocoloSelecionadoNumero(protocoloNumero);
+  }
+
+  function selecionarConversa(conversa: Conversa | null) {
+    const proximaConversaId = conversa?.id ?? null;
+    const mudouConversa = conversaSelecionadaIdRef.current !== proximaConversaId;
+
+    conversaSelecionadaIdRef.current = proximaConversaId;
+
+    if (mudouConversa) {
+      protocoloSelecionadoIdRef.current = null;
+      setProtocoloSelecionadoId(null);
+      setProtocoloSelecionadoNumero(null);
+      setMensagens([]);
+      setJanela24hConversa(null);
+      setLoadingMensagens(Boolean(conversa));
+      setInicioJanelaHistorico(null);
+      setFimJanelaHistorico(null);
+      setTemMaisHistorico(false);
+      setCarregandoMaisHistorico(false);
+      setCarregandoProtocolos(false);
+      setCarregandoEventosRastreamento(false);
+    }
+
+    setConversaSelecionada(conversa);
+  }
+
+  useEffect(() => {
+    conversaSelecionadaIdRef.current = conversaSelecionada?.id ?? null;
+  }, [conversaSelecionada?.id]);
+
+  useEffect(() => {
+    protocoloSelecionadoIdRef.current = protocoloSelecionadoId;
+  }, [protocoloSelecionadoId]);
 
   const [templateDisparoId, setTemplateDisparoId] = useState("");
   const [templateDisparoNome, setTemplateDisparoNome] = useState("");
@@ -3365,6 +3484,7 @@ function ConversasPageContent() {
 
           if (!encontrada) return atual;
 
+          conversaSelecionadaIdRef.current = encontrada.id;
           return encontrada;
         });
 
@@ -3436,6 +3556,12 @@ function ConversasPageContent() {
       modoMergeNovas?: boolean;
     }
   ) {
+    const protocoloAlvoId = conversaProtocoloId ?? null;
+
+    if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+      return;
+    }
+
     try {
       usuarioEstavaNoFinalRef.current = verificarSeUsuarioEstaNoFinal();
       if (!silencioso) {
@@ -3467,21 +3593,43 @@ function ConversasPageContent() {
 
       const data = await res.json();
 
+      if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+        return;
+      }
+
       if (!res.ok) {
         setErro(data.error || "Erro ao carregar mensagens");
         return;
       }
 
+      const janela24hAtualizada = normalizarJanela24hConversa(data.janela_24h);
+
+      if (janela24hAtualizada) {
+        setJanela24hConversa(janela24hAtualizada);
+      }
+
+      const mensagensRecebidas: Mensagem[] = Array.isArray(data.mensagens)
+        ? data.mensagens.filter(
+            (msg: Mensagem) => msg.conversa_id === conversaId
+          )
+        : [];
+
       if (opcoes?.modoAppendHistorico) {
         setMensagens((atuais) => {
-          const antigas = data.mensagens || [];
-          const idsAtuais = new Set(atuais.map((msg) => msg.id));
+          if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+            return atuais;
+          }
 
-          const antigasSemDuplicar = antigas.filter(
+          const atuaisDaConversa = atuais.filter(
+            (msg) => msg.conversa_id === conversaId
+          );
+          const idsAtuais = new Set(atuaisDaConversa.map((msg) => msg.id));
+
+          const antigasSemDuplicar = mensagensRecebidas.filter(
             (msg: Mensagem) => !idsAtuais.has(msg.id)
           );
 
-          const novaLista = [...antigasSemDuplicar, ...atuais];
+          const novaLista = [...antigasSemDuplicar, ...atuaisDaConversa];
 
           const maisAntiga = novaLista[0]?.created_at || null;
           mensagemMaisAntigaCarregadaRef.current = maisAntiga;
@@ -3491,10 +3639,16 @@ function ConversasPageContent() {
         });
       } else if (opcoes?.modoMergeNovas) {
         setMensagens((atuais) => {
-          const recebidas = data.mensagens || [];
+          if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+            return atuais;
+          }
+
+          const atuaisDaConversa = atuais.filter(
+            (msg) => msg.conversa_id === conversaId
+          );
           const mapa = new Map<string, Mensagem>();
 
-          [...atuais, ...recebidas].forEach((msg) => {
+          [...atuaisDaConversa, ...mensagensRecebidas].forEach((msg) => {
             mapa.set(msg.id, msg);
           });
 
@@ -3511,13 +3665,17 @@ function ConversasPageContent() {
           return novaLista;
         });
       } else {
-        const lista = data.mensagens || [];
+        const lista = mensagensRecebidas;
 
         setMensagens(lista);
 
         const maisAntiga = lista[0]?.created_at || null;
         mensagemMaisAntigaCarregadaRef.current = maisAntiga;
         setInicioJanelaHistorico(maisAntiga);
+      }
+
+      if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+        return;
       }
 
       setTemMaisHistorico(!!data.temMaisHistorico);
@@ -3530,9 +3688,11 @@ function ConversasPageContent() {
         setFimJanelaHistorico(fimJanela);
       }
     } catch {
-      setErro("Erro ao carregar mensagens");
+      if (cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+        setErro("Erro ao carregar mensagens");
+      }
     } finally {
-      if (!silencioso) {
+      if (!silencioso && cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
         setLoadingMensagens(false);
       }
     }
@@ -3947,7 +4107,7 @@ function ConversasPageContent() {
     );
 
     if (conversaAtualizada) {
-      setConversaSelecionada(conversaAtualizada);
+      selecionarConversa(conversaAtualizada);
     }
 
     await carregarMensagens(
@@ -3990,7 +4150,7 @@ function ConversasPageContent() {
         );
 
         if (conversaAtualizada) {
-          setConversaSelecionada(conversaAtualizada);
+          selecionarConversa(conversaAtualizada);
         }
 
         return;
@@ -4007,7 +4167,7 @@ function ConversasPageContent() {
       );
 
       if (conversaAtualizada) {
-        setConversaSelecionada(conversaAtualizada);
+        selecionarConversa(conversaAtualizada);
       }
 
       await carregarMensagens(
@@ -4136,12 +4296,16 @@ function ConversasPageContent() {
   async function carregarListasDaConversa() {
     if (!conversaSelecionada?.id) return;
 
+    const conversaId = conversaSelecionada.id;
+
     try {
-      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/listas`, {
+      const res = await fetch(`/api/conversas/${conversaId}/listas`, {
         cache: "no-store",
       });
 
       const data = await res.json();
+
+      if (!conversaEstaSelecionada(conversaId)) return;
 
       if (!res.ok) {
         setErro(data.error || "Erro ao carregar listas");
@@ -4150,7 +4314,9 @@ function ConversasPageContent() {
 
       setListasConversa(data.listas || []);
     } catch {
-      setErro("Erro ao carregar listas");
+      if (conversaEstaSelecionada(conversaId)) {
+        setErro("Erro ao carregar listas");
+      }
     }
   }
 
@@ -4547,12 +4713,16 @@ async function baixarConversaPDF() {
   async function carregarNotasDaConversa() {
     if (!conversaSelecionada?.id) return;
 
+    const conversaId = conversaSelecionada.id;
+
     try {
-      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/notas`, {
+      const res = await fetch(`/api/conversas/${conversaId}/notas`, {
         cache: "no-store",
       });
 
       const data = await res.json();
+
+      if (!conversaEstaSelecionada(conversaId)) return;
 
       if (!res.ok) {
         setErro(data.error || "Erro ao carregar notas");
@@ -4561,7 +4731,9 @@ async function baixarConversaPDF() {
 
       setNotasConversa(data.notas || []);
     } catch {
-      setErro("Erro ao carregar notas");
+      if (conversaEstaSelecionada(conversaId)) {
+        setErro("Erro ao carregar notas");
+      }
     }
   }
 
@@ -4840,14 +5012,20 @@ async function baixarConversaPDF() {
   async function carregarProtocolosDaConversa() {
     if (!conversaSelecionada?.id) return;
 
+    const conversaId = conversaSelecionada.id;
+
     try {
+      if (!conversaEstaSelecionada(conversaId)) return;
+
       setCarregandoProtocolos(true);
 
-      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/protocolos`, {
+      const res = await fetch(`/api/conversas/${conversaId}/protocolos`, {
         cache: "no-store",
       });
 
       const data = await res.json();
+
+      if (!conversaEstaSelecionada(conversaId)) return;
 
       if (!res.ok) {
         setErro(data.error || "Erro ao carregar protocolos");
@@ -4856,9 +5034,13 @@ async function baixarConversaPDF() {
 
       setProtocolosConversa(data.protocolos || []);
     } catch {
-      setErro("Erro ao carregar protocolos");
+      if (conversaEstaSelecionada(conversaId)) {
+        setErro("Erro ao carregar protocolos");
+      }
     } finally {
-      setCarregandoProtocolos(false);
+      if (conversaEstaSelecionada(conversaId)) {
+        setCarregandoProtocolos(false);
+      }
     }
   }
 
@@ -4908,6 +5090,8 @@ async function baixarConversaPDF() {
     if (!idConversa) return;
 
     try {
+      if (!conversaEstaSelecionada(idConversa)) return;
+
       setCarregandoEventosRastreamento(true);
 
       const params = new URLSearchParams({
@@ -4922,6 +5106,8 @@ async function baixarConversaPDF() {
 
       const data = await res.json();
 
+      if (!conversaEstaSelecionada(idConversa)) return;
+
       if (!res.ok || !data.ok) {
         setErro(data.error || "Erro ao carregar eventos comerciais");
         setEventosRastreamentoConversa([]);
@@ -4930,10 +5116,14 @@ async function baixarConversaPDF() {
 
       setEventosRastreamentoConversa(data.eventos || []);
     } catch {
-      setErro("Erro ao carregar eventos comerciais");
-      setEventosRastreamentoConversa([]);
+      if (conversaEstaSelecionada(idConversa)) {
+        setErro("Erro ao carregar eventos comerciais");
+        setEventosRastreamentoConversa([]);
+      }
     } finally {
-      setCarregandoEventosRastreamento(false);
+      if (conversaEstaSelecionada(idConversa)) {
+        setCarregandoEventosRastreamento(false);
+      }
     }
   }
 
@@ -5034,8 +5224,7 @@ async function baixarConversaPDF() {
   async function limparFiltroDeProtocolo() {
     if (!conversaSelecionada?.id) return;
 
-    setProtocoloSelecionadoId(null);
-    setProtocoloSelecionadoNumero(null);
+    definirProtocoloSelecionado(null);
 
     const janelaInicial = calcularJanelaInicialPorUltimaMensagem(
       conversaSelecionada.last_message_at
@@ -5641,6 +5830,12 @@ async function baixarConversaPDF() {
   }, [mensagens]);
 
   const referenciaJanela24hComposer = useMemo(() => {
+    if (janela24hConversa?.ultimaMensagemRecebidaEm) {
+      return {
+        created_at: janela24hConversa.ultimaMensagemRecebidaEm,
+      } as Pick<Mensagem, "created_at">;
+    }
+
     if (protocoloSelecionadoId) {
       if (!conversaSelecionada?.last_message_at) return null;
 
@@ -5650,13 +5845,22 @@ async function baixarConversaPDF() {
     }
 
     return ultimaMensagemRecebidaDoContato;
-  }, [protocoloSelecionadoId, conversaSelecionada?.last_message_at, ultimaMensagemRecebidaDoContato]);
+  }, [
+    janela24hConversa?.ultimaMensagemRecebidaEm,
+    protocoloSelecionadoId,
+    conversaSelecionada?.last_message_at,
+    ultimaMensagemRecebidaDoContato,
+  ]);
 
   const janela24hAberta = useMemo(() => {
+    if (janela24hConversa) {
+      return janela24hConversa.podeEnviarMensagemLivre;
+    }
+
     return isJanela24hMetaAberta(
       referenciaJanela24hComposer as Mensagem | null
     );
-  }, [referenciaJanela24hComposer]);
+  }, [janela24hConversa, referenciaJanela24hComposer]);
 
   const tempoRestanteJanela24h = useMemo(() => {
     return formatarTempoRestanteJanela(referenciaJanela24hComposer?.created_at);
@@ -5818,20 +6022,23 @@ const templateFooterTexto = useMemo(() => {
   useEffect(() => {
     if (!conversaSelecionada?.id) {
       setMensagens([]);
+      setJanela24hConversa(null);
       return;
     }
 
     const conversaId = conversaSelecionada.id;
     const conversaLastMessageAt = conversaSelecionada.last_message_at;
 
+    setMensagens([]);
+    setJanela24hConversa(null);
+    setLoadingMensagens(true);
     setInfoExpandida(false);
     setAbaPainelDireito("contato");
     setMenuContatoAberto(false);
     setMacroCardAberto(false);
     setEmojiAberto(false);
 
-    setProtocoloSelecionadoId(null);
-    setProtocoloSelecionadoNumero(null);
+    definirProtocoloSelecionado(null);
     setProtocolosConversa([]);
     setEventosRastreamentoConversa([]);
     fecharModalEventoRastreamento();
@@ -5873,11 +6080,18 @@ const templateFooterTexto = useMemo(() => {
         null
       );
 
+      if (!conversaEstaSelecionada(conversaId)) return;
+
       if (conversaLidaRef.current !== conversaId) {
         await marcarConversaComoLida(conversaId);
+
+        if (!conversaEstaSelecionada(conversaId)) return;
+
         conversaLidaRef.current = conversaId;
         await atualizarConversasCarregadas();
       }
+
+      if (!conversaEstaSelecionada(conversaId)) return;
 
       await carregarProtocolosDaConversa();
       await carregarNotasDaConversa();
@@ -6528,7 +6742,11 @@ const templateFooterTexto = useMemo(() => {
                   onSuccessDismiss={() => setMensagemSucesso("")}
                   onErrorDismiss={() => setErro("")}
                 />
-                <div className={styles.chatMainColumn}>
+                <div
+                  className={`${styles.chatMainColumn} ${
+                    painelDireitoAberto ? styles.chatMainColumnPanelOpen : ""
+                  }`}
+                >
                   <header className={styles.chatHeader}>
                     <div className={styles.chatHeaderLeft}>
                       <button
@@ -8383,8 +8601,7 @@ const templateFooterTexto = useMemo(() => {
                               onClick={async () => {
                                 if (!conversaSelecionada?.id) return;
 
-                                setProtocoloSelecionadoId(null);
-                                setProtocoloSelecionadoNumero(null);
+                                definirProtocoloSelecionado(null);
                                 const janelaInicial = calcularJanelaInicialPorUltimaMensagem(
                                   conversaSelecionada.last_message_at
                                 );
@@ -8458,8 +8675,10 @@ const templateFooterTexto = useMemo(() => {
                                     onClick={async () => {
                                       if (!conversaSelecionada?.id) return;
 
-                                      setProtocoloSelecionadoId(protocolo.id);
-                                      setProtocoloSelecionadoNumero(protocolo.protocolo);
+                                      definirProtocoloSelecionado(
+                                        protocolo.id,
+                                        protocolo.protocolo
+                                      );
 
                                       setInicioJanelaHistorico(null);
                                       setFimJanelaHistorico(null);
