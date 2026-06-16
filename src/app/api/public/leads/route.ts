@@ -109,8 +109,8 @@ export async function POST(request: Request) {
       .single();
 
     if (error || !data) {
-      console.error("Erro Supabase ao criar lead:", error);
-      throw new Error("Erro ao criar lead.");
+      console.error("Erro Supabase ao criar cadastro:", error);
+      throw new Error("Erro ao criar cadastro.");
     }
 
     return NextResponse.json({
@@ -119,7 +119,7 @@ export async function POST(request: Request) {
       tipo_oferta: tipoOferta,
     });
   } catch (error) {
-    console.error("Erro ao criar lead:", error);
+    console.error("Erro ao criar cadastro:", error);
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erro interno" },
