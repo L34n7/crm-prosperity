@@ -2,7 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import {
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
@@ -148,7 +152,15 @@ export default function Sidebar({
   isAdmin = false,
 }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
+
+  const conversaAbertaNoMobile =
+    pathname === "/conversas" &&
+    Boolean(
+      searchParams.get("id") ||
+      searchParams.get("conversaId")
+    );
   const headerUser = useHeaderUser();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [disparosPendentes, setDisparosPendentes] = useState(0);
@@ -330,6 +342,10 @@ export default function Sidebar({
     <aside
       className={`${styles.sidebar} ${
         collapsed ? styles.sidebarCollapsed : ""
+      } ${
+        conversaAbertaNoMobile
+          ? styles.sidebarHiddenDuringMobileChat
+          : ""
       }`}
     >
       <div className={styles.sidebarTop}>

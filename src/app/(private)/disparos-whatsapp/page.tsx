@@ -2155,28 +2155,6 @@ export default function DisparosWhatsAppPage() {
             </div>
 
             <div className={styles.modalBody}>
-              <div className={styles.modalSection}>
-                <h4 className={styles.modalSectionTitle}>Variáveis fixas do sistema</h4>
-
-                <div className={styles.variablesList}>
-                  {VARIAVEIS_FIXAS_SISTEMA.map((item) => (
-                    <div key={item.chave} className={styles.variableItem}>
-                      <div className={styles.variableMain}>
-                        <strong className={styles.variableCode}>{item.exemplo}</strong>
-                        <p className={styles.variableDescription}>{item.descricao}</p>
-                      </div>
-
-                      <button
-                        type="button"
-                        className={styles.variableUseButton}
-                        onClick={() => aplicarVariavelNoCampo(item.chave)}
-                      >
-                        Usar
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
               <div className={styles.modalSection}>
                 <h4 className={styles.modalSectionTitle}>Cadastrar variável personalizada</h4>
@@ -2193,16 +2171,6 @@ export default function DisparosWhatsAppPage() {
                       }
                       className={styles.input}
                       placeholder="ex: desconto"
-                    />
-                  </div>
-
-                  <div className={styles.field}>
-                    <label className={styles.label}>Valor</label>
-                    <input
-                      value={novaVariavelValor}
-                      onChange={(e) => setNovaVariavelValor(e.target.value)}
-                      className={styles.input}
-                      placeholder="ex: 20%"
                     />
                   </div>
 
@@ -2225,12 +2193,25 @@ export default function DisparosWhatsAppPage() {
                 </div>
 
                 <div className={styles.field}>
-                  <label className={styles.label}>Descrição</label>
-                  <input
+                  <label className={styles.label}>Mensagem da variável</label>
+
+                  <textarea
+                    value={novaVariavelValor}
+                    onChange={(e) => setNovaVariavelValor(e.target.value)}
+                    className={styles.textarea}
+                    placeholder="Digite a mensagem da variável..."
+                    rows={4}
+                  />
+                </div>
+
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Descrição Interna</label>
+                  <textarea
                     value={novaVariavelDescricao}
                     onChange={(e) => setNovaVariavelDescricao(e.target.value)}
-                    className={styles.input}
-                    placeholder="ex: desconto usado em campanhas promocionais"
+                    className={styles.textareadesc}
+                    placeholder="ex: essa váriavel é sobre desconto."
                   />
                 </div>
 
@@ -2315,6 +2296,28 @@ export default function DisparosWhatsAppPage() {
                     ))}
                   </div>
                 )}
+              </div>
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Variáveis fixas do sistema</h4>
+
+                <div className={styles.variablesList}>
+                  {VARIAVEIS_FIXAS_SISTEMA.map((item) => (
+                    <div key={item.chave} className={styles.variableItem}>
+                      <div className={styles.variableMain}>
+                        <strong className={styles.variableCode}>{item.exemplo}</strong>
+                        <p className={styles.variableDescription}>{item.descricao}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={styles.variableUseButton}
+                        onClick={() => aplicarVariavelNoCampo(item.chave)}
+                      >
+                        Usar
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 

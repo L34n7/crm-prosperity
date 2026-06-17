@@ -44,6 +44,10 @@ const categorias = [
   { value: "OTHER", label: "Outro" },
 ];
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function WhatsappPerfilPage() {
   const [integracoes, setIntegracoes] = useState<Integracao[]>([]);
   const [integracaoId, setIntegracaoId] = useState("");
@@ -85,11 +89,17 @@ export default function WhatsappPerfilPage() {
     integracaoSelecionada?.verified_name ||
     "Empresa";
 
-  async function carregarPerfil(id?: string) {
+  async function carregarPerfil(
+    id?: string,
+    options?: { preservarMensagens?: boolean }
+  ) {
     try {
       setCarregando(true);
-      setErro("");
-      setSucesso("");
+
+      if (!options?.preservarMensagens) {
+        setErro("");
+        setSucesso("");
+      }
 
       const params = new URLSearchParams();
 
@@ -142,8 +152,8 @@ export default function WhatsappPerfilPage() {
       setVertical(novoPerfil?.vertical || "");
       setPreviewFoto(novoPerfil?.profile_picture_url || "");
       setFoto(null);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar perfil.");
+    } catch (error: unknown) {
+      setErro(getErrorMessage(error, "Erro ao carregar perfil."));
     } finally {
       setCarregando(false);
     }
@@ -181,10 +191,10 @@ export default function WhatsappPerfilPage() {
         throw new Error(json.error || "Erro ao salvar perfil.");
       }
 
-      setSucesso("Perfil do WhatsApp atualizado com sucesso.");
-      await carregarPerfil(integracaoId);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao salvar perfil.");
+      setSucesso(json.message || "Perfil do WhatsApp atualizado com sucesso.");
+      await carregarPerfil(integracaoId, { preservarMensagens: true });
+    } catch (error: unknown) {
+      setErro(getErrorMessage(error, "Erro ao salvar perfil."));
     } finally {
       setSalvando(false);
     }
@@ -221,8 +231,8 @@ export default function WhatsappPerfilPage() {
       setNovoNomeExibicao("");
 
       await carregarPerfil(integracaoId);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao solicitar alteração do nome.");
+    } catch (error: unknown) {
+      setErro(getErrorMessage(error, "Erro ao solicitar alteração do nome."));
     } finally {
       setSalvandoNome(false);
     }

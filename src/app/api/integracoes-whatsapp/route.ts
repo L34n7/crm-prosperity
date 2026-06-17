@@ -135,7 +135,7 @@ export async function GET() {
           onboarding_etapa: "inicio",
           onboarding_status: "pendente",
           phone_registered: false,
-          payment_method_added: false,
+          payment_method_added: true,
           app_assigned: false,
 
           config_json: {},

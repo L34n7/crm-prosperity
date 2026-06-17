@@ -176,6 +176,170 @@ async function marcarMensagemAutomacaoProcessada(params: {
     .eq("id", mensagemId);
 }
 
+function extrairErroStatusMeta(statusItem: any) {
+  const rawStatus = statusItem?.rawStatus || {};
+
+  const primeiroErro =
+    Array.isArray(rawStatus?.errors) && rawStatus.errors.length > 0
+      ? rawStatus.errors[0]
+      : null;
+
+  const codigo = primeiroErro?.code
+    ? Number(primeiroErro.code)
+    : null;
+
+  const detalhe =
+    primeiroErro?.error_data?.details ||
+    primeiroErro?.message ||
+    primeiroErro?.title ||
+    statusItem?.errorMessage ||
+    null;
+
+  let mensagemTraduzida: string | null = detalhe;
+
+  if (codigo === 131026) {
+    mensagemTraduzida =
+      "Não foi possível entregar a mensagem ao destinatário. Verifique se o número possui WhatsApp ativo e está informado corretamente.";
+  } else if (codigo === 131042) {
+    mensagemTraduzida =
+      "Não foi possível enviar a mensagem devido a uma pendência de pagamento na conta do WhatsApp Business.";
+  } else if (codigo === 131047) {
+    mensagemTraduzida =
+      "Não foi possível enviar a mensagem porque a janela de atendimento de 24 horas foi encerrada.";
+  } else if (codigo === 131049) {
+    mensagemTraduzida =
+      "A mensagem não foi entregue devido aos limites de qualidade ou frequência definidos pela Meta.";
+  } else if (!mensagemTraduzida) {
+    mensagemTraduzida =
+      "A Meta informou uma falha ao entregar a mensagem.";
+  }
+
+  return {
+    codigo,
+    detalhe,
+    mensagemTraduzida,
+    erroOriginal: primeiroErro,
+  };
+}
+
+async function atualizarLogDisparoPeloWebhook(statusItem: any) {
+  const mensagemExternaId = String(
+    statusItem?.mensagemExternaId || ""
+  ).trim();
+
+  const statusMeta = String(statusItem?.status || "").toLowerCase();
+
+  if (!mensagemExternaId) {
+    return {
+      found: false,
+      updated: false,
+      reason: "mensagem_externa_id_ausente",
+    };
+  }
+
+  /*
+   * O status "sent" ainda não confirma que a mensagem foi entregue.
+   * Nesse caso, mantemos o log como "processando".
+   *
+   * Somente "delivered", "read" e "failed" alteram o resultado final.
+   */
+  if (
+    statusMeta !== "failed" &&
+    statusMeta !== "delivered" &&
+    statusMeta !== "read"
+  ) {
+    return {
+      found: false,
+      updated: false,
+      reason: "status_sem_atualizacao_definitiva",
+    };
+  }
+
+  const { data: logDisparo, error: erroBusca } = await supabaseAdmin
+    .from("whatsapp_disparos_logs")
+    .select("id, status, erro, metadata_json")
+    .eq("message_id", mensagemExternaId)
+    .maybeSingle();
+
+  if (erroBusca) {
+    throw new Error(
+      `Erro ao buscar log do disparo pelo message_id: ${erroBusca.message}`
+    );
+  }
+
+  if (!logDisparo) {
+    return {
+      found: false,
+      updated: false,
+      reason: "log_disparo_nao_encontrado",
+    };
+  }
+
+  const agora = new Date().toISOString();
+
+  const metadataAnterior =
+    logDisparo.metadata_json &&
+    typeof logDisparo.metadata_json === "object" &&
+    !Array.isArray(logDisparo.metadata_json)
+      ? logDisparo.metadata_json
+      : {};
+
+  let novoStatus: "sucesso" | "falha";
+  let erroDisparo: string | null = null;
+  let erroMeta: ReturnType<typeof extrairErroStatusMeta> | null = null;
+
+  if (statusMeta === "failed") {
+    novoStatus = "falha";
+    erroMeta = extrairErroStatusMeta(statusItem);
+    erroDisparo = erroMeta.mensagemTraduzida;
+  } else {
+    // delivered ou read confirmam que a mensagem chegou.
+    novoStatus = "sucesso";
+    erroDisparo = null;
+  }
+
+  const metadataAtualizada = {
+    ...metadataAnterior,
+    aguardando_webhook: false,
+    ultimo_status_meta: statusMeta,
+    status_meta_recebido_em: agora,
+
+    erro_meta:
+      statusMeta === "failed"
+        ? {
+            codigo: erroMeta?.codigo ?? null,
+            detalhe: erroMeta?.detalhe ?? null,
+            original: erroMeta?.erroOriginal ?? null,
+          }
+        : null,
+
+    webhook_status_raw: statusItem?.rawStatus || null,
+  };
+
+  const { error: erroAtualizacao } = await supabaseAdmin
+    .from("whatsapp_disparos_logs")
+    .update({
+      status: novoStatus,
+      erro: erroDisparo,
+      metadata_json: metadataAtualizada,
+      updated_at: agora,
+    })
+    .eq("id", logDisparo.id);
+
+  if (erroAtualizacao) {
+    throw new Error(
+      `Erro ao atualizar log do disparo: ${erroAtualizacao.message}`
+    );
+  }
+
+  return {
+    found: true,
+    updated: true,
+    status: novoStatus,
+    erro: erroDisparo,
+  };
+}
+
 export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
   const inicioProcessamentoWebhook = Date.now();
   if (body.object !== "whatsapp_business_account") {
@@ -222,6 +386,44 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         },
       });
 
+      let resultadoLogDisparo: {
+        found: boolean;
+        updated: boolean;
+        reason?: string;
+        status?: string;
+        erro?: string | null;
+      } = {
+        found: false,
+        updated: false,
+        reason: "nao_processado",
+      };
+
+      try {
+        resultadoLogDisparo =
+          await atualizarLogDisparoPeloWebhook(statusItem);
+      } catch (logDisparoError) {
+        console.error(
+          "[WEBHOOK WHATSAPP] Erro ao atualizar whatsapp_disparos_logs:",
+          {
+            mensagemExternaId: statusItem.mensagemExternaId,
+            status: statusItem.status,
+            erro:
+              logDisparoError instanceof Error
+                ? logDisparoError.message
+                : String(logDisparoError),
+          }
+        );
+
+        resultadoLogDisparo = {
+          found: false,
+          updated: false,
+          reason:
+            logDisparoError instanceof Error
+              ? logDisparoError.message
+              : "erro_desconhecido",
+        };
+      }
+
       try {
         const integration = await findWhatsAppIntegrationByPhoneNumberId(
           statusItem.phoneNumberId
@@ -257,10 +459,17 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         mensagemExternaId: statusItem.mensagemExternaId,
         status: statusItem.status,
         success: true,
+
         found: updateResult.found,
         updated: updateResult.updated,
         reason: updateResult.reason ?? null,
         messageIdInterno: updateResult.messageId ?? null,
+
+        logDisparoFound: resultadoLogDisparo.found,
+        logDisparoUpdated: resultadoLogDisparo.updated,
+        logDisparoStatus: resultadoLogDisparo.status ?? null,
+        logDisparoReason: resultadoLogDisparo.reason ?? null,
+        logDisparoErro: resultadoLogDisparo.erro ?? null,
       });
     } catch (statusError) {
       console.error(

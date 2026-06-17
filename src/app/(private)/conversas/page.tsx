@@ -1847,6 +1847,10 @@ function ConversasPageContent() {
 
   const [protocolosConversa, setProtocolosConversa] = useState<ProtocoloConversa[]>([]);
   const [carregandoProtocolos, setCarregandoProtocolos] = useState(false);
+  const PROTOCOLOS_POR_PAGINA = 15;
+
+  const [paginaHistorico, setPaginaHistorico] = useState(1);
+
   const [protocoloSelecionadoId, setProtocoloSelecionadoId] = useState<string | null>(null);
   const [protocoloSelecionadoNumero, setProtocoloSelecionadoNumero] = useState<string | null>(null);
   const protocoloSelecionadoIdRef = useRef<string | null>(null);
@@ -4187,9 +4191,17 @@ function ConversasPageContent() {
   function abrirTransferir() {
     setErro("");
     setMensagemSucesso("");
+
     setNovoSetorId(
-      conversaSelecionada?.setor_id || conversaSelecionada?.setores?.id || ""
+      conversaSelecionada?.setor_id ||
+        conversaSelecionada?.setores?.id ||
+        ""
     );
+
+    // Fecha o painel de detalhes para exibir o card no chat.
+    setPainelDireitoAberto(false);
+    setMenuContatoAberto(false);
+
     setAcaoAberta("transferir");
   }
 
@@ -5466,6 +5478,11 @@ async function baixarConversaPDF() {
   function abrirEncerrar() {
     setErro("");
     setMensagemSucesso("");
+
+    // Fecha o painel de detalhes para exibir o card no chat.
+    setPainelDireitoAberto(false);
+    setMenuContatoAberto(false);
+
     setAcaoAberta("encerrar");
   }
 
@@ -5952,7 +5969,32 @@ const templateFooterTexto = useMemo(() => {
 
     return null;
   }, [conversaEncerrada, mostrarDisparoIndividual]);
-  
+    
+  const totalPaginasHistorico = useMemo(() => {
+    return Math.max(
+      1,
+      Math.ceil(protocolosConversa.length / PROTOCOLOS_POR_PAGINA)
+    );
+  }, [protocolosConversa.length]);
+
+  const protocolosPaginaHistorico = useMemo(() => {
+    const inicio =
+      (paginaHistorico - 1) * PROTOCOLOS_POR_PAGINA;
+
+    const fim = inicio + PROTOCOLOS_POR_PAGINA;
+
+    return protocolosConversa.slice(inicio, fim);
+  }, [protocolosConversa, paginaHistorico]);
+
+  const primeiroRegistroHistorico =
+    protocolosConversa.length === 0
+      ? 0
+      : (paginaHistorico - 1) * PROTOCOLOS_POR_PAGINA + 1;
+
+  const ultimoRegistroHistorico = Math.min(
+    paginaHistorico * PROTOCOLOS_POR_PAGINA,
+    protocolosConversa.length
+  );
 
   useEffect(() => {
     carregarUsuarioLogado();
@@ -6040,6 +6082,7 @@ const templateFooterTexto = useMemo(() => {
 
     definirProtocoloSelecionado(null);
     setProtocolosConversa([]);
+    setPaginaHistorico(1);
     setEventosRastreamentoConversa([]);
     fecharModalEventoRastreamento();
 
@@ -6367,6 +6410,15 @@ const templateFooterTexto = useMemo(() => {
       window.clearTimeout(timeout);
     };
   }, [mensagemSucesso, erro]);
+
+  useEffect(() => {
+    setPaginaHistorico((paginaAtual) =>
+      Math.min(
+        Math.max(paginaAtual, 1),
+        totalPaginasHistorico
+      )
+    );
+  }, [totalPaginasHistorico]);
 
   useLayoutEffect(() => {
     const container = mensagensRef.current;
@@ -6964,6 +7016,8 @@ const templateFooterTexto = useMemo(() => {
                                     setAbaPainelDireito("historico");
                                     setPainelDireitoAberto(true);
                                     setMenuContatoAberto(false);
+                                    setPaginaHistorico(1);
+
                                     await carregarProtocolosDaConversa();
                                   }}
                                 >
@@ -8341,6 +8395,9 @@ const templateFooterTexto = useMemo(() => {
                                     onClick={async () => {
                                       setAbaPainelDireito("historico");
                                       setPainelDireitoAberto(true);
+                                      setMenuContatoAberto(false);
+                                      setPaginaHistorico(1);
+
                                       await carregarProtocolosDaConversa();
                                     }}
                                     className={styles.protocolSmallButton}
@@ -8430,14 +8487,14 @@ const templateFooterTexto = useMemo(() => {
                             <button
                               type="button"
                               className={styles.whatsListActionButton}
-                              onClick={async () => {
-                                setAbaPainelDireito("historico");
+                              onClick={() => {
+                                setAbaPainelDireito("mensagens_favoritas");
                                 setPainelDireitoAberto(true);
-                                await carregarProtocolosDaConversa();
                               }}
                             >
                               <span className={styles.whatsListActionLeft}>
                                 <span className={styles.whatsListActionIcon}>⭐</span>
+
                                 <span className={styles.whatsListActionLabel}>
                                   Mensagens favoritas
                                 </span>
@@ -8621,83 +8678,160 @@ const templateFooterTexto = useMemo(() => {
                             <button
                               type="button"
                               className={styles.secondaryButton}
-                              onClick={carregarProtocolosDaConversa}
+                              onClick={async () => {
+                                setPaginaHistorico(1);
+                                await carregarProtocolosDaConversa();
+                              }}
+                              disabled={carregandoProtocolos}
                             >
-                              Atualizar protocolos
+                              {carregandoProtocolos
+                                ? "Atualizando..."
+                                : "Atualizar protocolos"}
                             </button>
                           </div>
-
                           {carregandoProtocolos ? (
-                            <div className={styles.infoBoxMuted}>Carregando protocolos...</div>
+                            <div className={styles.infoBoxMuted}>
+                              Carregando protocolos...
+                            </div>
                           ) : protocolosConversa.length === 0 ? (
                             <div className={styles.infoBoxMuted}>
                               Nenhum protocolo encontrado para esta conversa.
                             </div>
                           ) : (
-                            protocolosConversa.map((protocolo) => (
-                              <div key={protocolo.id} className={styles.historyCard}>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: 12,
-                                    alignItems: "flex-start",
-                                    marginBottom: 8,
-                                  }}
-                                >
-                                  <div>
-                                    <h4 className={styles.historyTitle}>{protocolo.protocolo}</h4>
-                                    <p className={styles.historyText}>
-                                      {protocolo.tipo === "abertura" ? "Abertura" : "Reabertura"}
-                                      {protocolo.ativo ? " • Ativo" : " • Encerrado"}
-                                    </p>
-                                  </div>
+                            <div className={styles.historyPaginationLayout}>
+                              <div className={styles.historyPaginationList}>
+                                {protocolosPaginaHistorico.map((protocolo) => (
+                                  <div
+                                    key={protocolo.id}
+                                    className={styles.historyCard}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: 12,
+                                        alignItems: "flex-start",
+                                        marginBottom: 8,
+                                      }}
+                                    >
+                                      <div>
+                                        <h4 className={styles.historyTitle}>
+                                          {protocolo.protocolo}
+                                        </h4>
 
-                                  {protocolo.ativo && (
-                                    <span className={styles.statusMiniBadge}>
-                                      Atual
-                                    </span>
-                                  )}
+                                        <p className={styles.historyText}>
+                                          {protocolo.tipo === "abertura"
+                                            ? "Abertura"
+                                            : "Reabertura"}
+
+                                          {protocolo.ativo
+                                            ? " • Ativo"
+                                            : " • Encerrado"}
+                                        </p>
+                                      </div>
+
+                                      {protocolo.ativo && (
+                                        <span className={styles.statusMiniBadge}>
+                                          Atual
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <p className={styles.historyText}>
+                                      Início:{" "}
+                                      {formatarDataCompleta(protocolo.started_at)}
+                                    </p>
+
+                                    <p className={styles.historyText}>
+                                      Encerramento:{" "}
+                                      {protocolo.closed_at
+                                        ? formatarDataCompleta(protocolo.closed_at)
+                                        : "Em aberto"}
+                                    </p>
+
+                                    <div className={styles.listaInlineActions}>
+                                      <button
+                                        type="button"
+                                        className={styles.primaryButton}
+                                        onClick={async () => {
+                                          if (!conversaSelecionada?.id) return;
+
+                                          definirProtocoloSelecionado(
+                                            protocolo.id,
+                                            protocolo.protocolo
+                                          );
+
+                                          setInicioJanelaHistorico(null);
+                                          setFimJanelaHistorico(null);
+                                          setTemMaisHistorico(false);
+
+                                          await carregarMensagens(
+                                            conversaSelecionada.id,
+                                            false,
+                                            protocolo.id,
+                                            null,
+                                            null
+                                          );
+                                        }}
+                                      >
+                                        Ver mensagens deste protocolo
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className={styles.historyPagination}>
+                                <div className={styles.historyPaginationInfo}>
+                                  <strong>
+                                    {primeiroRegistroHistorico}–
+                                    {ultimoRegistroHistorico}
+                                  </strong>
+
+                                  <span>
+                                    de {protocolosConversa.length} protocolos
+                                  </span>
                                 </div>
 
-                                <p className={styles.historyText}>
-                                  Início: {formatarDataCompleta(protocolo.started_at)}
-                                </p>
-
-                                <p className={styles.historyText}>
-                                  Encerramento: {protocolo.closed_at ? formatarDataCompleta(protocolo.closed_at) : "Em aberto"}
-                                </p>
-
-                                <div className={styles.listaInlineActions}>
+                                <div className={styles.historyPaginationControls}>
                                   <button
                                     type="button"
-                                    className={styles.primaryButton}
-                                    onClick={async () => {
-                                      if (!conversaSelecionada?.id) return;
-
-                                      definirProtocoloSelecionado(
-                                        protocolo.id,
-                                        protocolo.protocolo
-                                      );
-
-                                      setInicioJanelaHistorico(null);
-                                      setFimJanelaHistorico(null);
-                                      setTemMaisHistorico(false);
-
-                                      await carregarMensagens(
-                                        conversaSelecionada.id,
-                                        false,
-                                        protocolo.id,
-                                        null,
-                                        null
+                                    className={styles.historyPaginationButton}
+                                    onClick={() => {
+                                      setPaginaHistorico((paginaAtual) =>
+                                        Math.max(1, paginaAtual - 1)
                                       );
                                     }}
+                                    disabled={paginaHistorico === 1}
                                   >
-                                    Ver mensagens deste protocolo
+                                    Anterior
+                                  </button>
+
+                                  <span className={styles.historyPaginationPage}>
+                                    Página {paginaHistorico} de{" "}
+                                    {totalPaginasHistorico}
+                                  </span>
+
+                                  <button
+                                    type="button"
+                                    className={styles.historyPaginationButton}
+                                    onClick={() => {
+                                      setPaginaHistorico((paginaAtual) =>
+                                        Math.min(
+                                          totalPaginasHistorico,
+                                          paginaAtual + 1
+                                        )
+                                      );
+                                    }}
+                                    disabled={
+                                      paginaHistorico === totalPaginasHistorico
+                                    }
+                                  >
+                                    Próxima
                                   </button>
                                 </div>
                               </div>
-                            ))
+                            </div>
                           )}
                         </div>
                       )}

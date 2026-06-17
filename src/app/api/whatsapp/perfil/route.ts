@@ -129,13 +129,27 @@ function isMetaApiError(error: unknown): error is MetaApiError {
   return error instanceof MetaApiError;
 }
 
+function isErroMetaTemporario(body: MetaErrorBody) {
+  const message = body?.error?.message?.trim().toLowerCase();
+  const code = Number(body?.error?.code);
+
+  return code === 131000 && Boolean(message?.includes("something went wrong"));
+}
+
 function extrairMensagemMeta(body: MetaErrorBody, fallback: string) {
   const message = body?.error?.message?.trim();
   const details = body?.error?.error_data?.details?.trim();
-  const code = Number(body?.error?.code);
+  const fallbackLower = fallback.toLowerCase();
 
-  if (code === 131000 && message?.toLowerCase().includes("something went wrong")) {
-    return "A Meta recusou a criação do upload da foto. Verifique se META_APP_ID é o App ID correto do aplicativo usado no Embedded Signup e tente novamente com uma imagem PNG ou JPG de até 5 MB.";
+  if (
+    isErroMetaTemporario(body) &&
+    (fallbackLower.includes("upload") || fallbackLower.includes("foto"))
+  ) {
+    return "A Meta recusou o upload da foto. Verifique se META_APP_ID é o App ID correto do aplicativo usado no Embedded Signup e tente novamente com uma imagem PNG ou JPG de até 5 MB.";
+  }
+
+  if (isErroMetaTemporario(body)) {
+    return "A Meta retornou um erro temporario ao confirmar o perfil. A foto pode levar alguns segundos para aparecer no WhatsApp.";
   }
 
   if (message && details && !message.includes(details)) {
@@ -419,6 +433,22 @@ async function uploadFotoPerfil(params: {
   return uploadJson.h as string;
 }
 
+async function marcarIntegracaoSincronizada(
+  integracaoId: string,
+  empresaId: string
+) {
+  const supabase = await createClient();
+
+  await supabase
+    .from("integracoes_whatsapp")
+    .update({
+      ultimo_sync_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", integracaoId)
+    .eq("empresa_id", empresaId);
+}
+
 export async function PATCH(req: NextRequest) {
   try {
     const contexto = await getUsuarioContexto();
@@ -480,6 +510,8 @@ export async function PATCH(req: NextRequest) {
       vertical,
     };
 
+    let atualizacaoComFoto = false;
+
     if (foto instanceof File && foto.size > 0) {
       const appIdResult = resolverAppIdPerfil(integracao);
       if (!appIdResult.ok) {
@@ -502,6 +534,7 @@ export async function PATCH(req: NextRequest) {
       });
 
       payload.profile_picture_handle = handle;
+      atualizacaoComFoto = true;
     }
 
     const metaRes = await fetch(
@@ -519,6 +552,23 @@ export async function PATCH(req: NextRequest) {
     const metaJson = await metaRes.json();
 
     if (!metaRes.ok) {
+      if (atualizacaoComFoto && isErroMetaTemporario(metaJson)) {
+        console.warn("[WHATSAPP PERFIL PATCH META TEMPORARY ERROR]", metaJson);
+
+        await marcarIntegracaoSincronizada(integracao.id, empresaId);
+
+        return NextResponse.json(
+          {
+            ok: true,
+            pending: true,
+            message:
+              "A Meta recebeu a foto. A imagem pode levar alguns segundos para aparecer no WhatsApp.",
+            meta: metaJson,
+          },
+          { status: 202 }
+        );
+      }
+
       return jsonErro(
         extrairMensagemMeta(metaJson, "Erro ao atualizar perfil no Meta."),
         metaRes.status,
@@ -526,16 +576,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
-
-    await supabase
-      .from("integracoes_whatsapp")
-      .update({
-        ultimo_sync_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", integracao.id)
-      .eq("empresa_id", empresaId);
+    await marcarIntegracaoSincronizada(integracao.id, empresaId);
 
     return NextResponse.json({
       ok: true,

@@ -546,21 +546,34 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const resultados = (data || []).map((item: any) => ({
-      id: item.id,
-      created_at: item.created_at,
-      conversa_id: item.conversa_id,
-      numero: item.numero || "-",
-      nome_contato: item.nome_contato || "Sem nome",
-      template_nome: item.template_nome || "-",
-      mensagem_template: item.mensagem || "Sem conteúdo",
-      status_disparo: item.status || "falha",
-      status_label: item.status === "sucesso" ? "Enviado" : "Falhou",
-      erro: item.erro || null,
-      status_http: item.status_http || null,
-      message_id: item.message_id || null,
-      ok: item.status === "sucesso",
-    }));
+    const resultados = (data || []).map((item: any) => {
+      const statusDisparo = String(item.status || "falha").toLowerCase();
+
+      const statusLabel =
+        statusDisparo === "sucesso"
+          ? "Enviado"
+          : statusDisparo === "processando"
+            ? "Aguardando confirmação"
+            : "Falhou";
+
+      return {
+        id: item.id,
+        created_at: item.created_at,
+        conversa_id: item.conversa_id,
+        numero: item.numero || "-",
+        nome_contato: item.nome_contato || "Sem nome",
+        template_nome: item.template_nome || "-",
+        mensagem_template: item.mensagem || "Sem conteúdo",
+        status_disparo: statusDisparo,
+        status_label: statusLabel,
+        erro: item.erro || null,
+        status_http: item.status_http ?? null,
+        message_id: item.message_id || null,
+
+        // "ok" indica que não houve falha definitiva.
+        ok: statusDisparo !== "falha",
+      };
+    });
 
     return NextResponse.json({
       ok: true,
@@ -981,7 +994,12 @@ export async function POST(req: NextRequest) {
             templateNome: template.nome,
             templateIdioma: template.idioma || null,
             mensagem: mensagemTemplate,
-            status: "sucesso",
+
+            // A resposta HTTP 200 da Meta apenas confirma que o disparo
+            // foi aceito para processamento. O resultado definitivo
+            // chegará posteriormente pelo webhook.
+            status: "processando",
+
             erro: null,
             statusHttp: response.status,
             messageId,
@@ -989,6 +1007,9 @@ export async function POST(req: NextRequest) {
             metaResponse: data,
             metadataJson: {
               tipo: "disparo_template",
+              status_meta_inicial:
+                data?.messages?.[0]?.message_status || "accepted",
+              aguardando_webhook: true,
             },
           });
 
@@ -999,8 +1020,11 @@ export async function POST(req: NextRequest) {
             nome_contato: nomeContatoFinal,
             ok: true,
             status: response.status,
-            status_disparo: "enviada",
-            status_label: "Enviado",
+
+            // Ainda não existe confirmação definitiva de entrega.
+            status_disparo: "processando",
+            status_label: "Aguardando confirmação",
+
             template_nome: template.nome,
             mensagem_template: mensagemTemplate,
             message_id: messageId,
@@ -1055,8 +1079,17 @@ export async function POST(req: NextRequest) {
       })
     );
 
-    const sucessos = resultados.filter((item) => item.ok).length;
-    const falhas = resultados.filter((item) => !item.ok).length;
+    const aceitos = resultados.filter(
+      (item) => item.status_disparo === "processando"
+    ).length;
+
+    const sucessos = resultados.filter(
+      (item) => item.status_disparo === "sucesso"
+    ).length;
+
+    const falhas = resultados.filter(
+      (item) => item.status_disparo === "falha"
+    ).length;
 
     await registrarLogAuditoriaSeguro({
       empresa_id: empresaId,
@@ -1070,6 +1103,7 @@ export async function POST(req: NextRequest) {
       usuario_email: usuario.email,
       depois: {
         total: resultados.length,
+        aceitos,
         sucessos,
         falhas,
         template_id: template.id,
@@ -1083,6 +1117,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       total: resultados.length,
+      aceitos,
       sucessos,
       falhas,
       resultados,

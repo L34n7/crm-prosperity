@@ -45,6 +45,7 @@
 }
 
 .tokensBadge {
+  position: relative;
   height: 34px;
   padding: 0 10px;
   margin-right: 0;
@@ -1256,6 +1257,9 @@
   background: var(--crm-surface-soft);
 }
 
+.mobileTokensNotification {
+  display: none;
+}
 
 @media (max-width: 768px) {
   .header {
@@ -1276,8 +1280,10 @@
   }
 
   .mobileBackButton {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     border: 1px solid var(--crm-border);
     border-radius: 999px;
     background: var(--crm-surface);
@@ -1288,6 +1294,15 @@
     flex: 0 0 auto;
     text-decoration: none;
     box-shadow: var(--crm-shadow-xs);
+  }
+
+  .mobileBackButton:hover {
+    background: rgba(15, 23, 42, 0.06);
+  }
+
+  .mobileBackButton:active {
+    background: rgba(15, 23, 42, 0.12);
+    transform: scale(0.96);
   }
 
   .title {
@@ -1418,6 +1433,41 @@
   .tokenAlertPrimary,
   .tokenAlertSecondary {
     width: 100%;
+  }
+
+  .mobileTokensNotification {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+
+    width: 17px;
+    height: 17px;
+    padding: 0;
+
+    border: 2px solid var(--crm-surface);
+    border-radius: 999px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+
+    box-sizing: border-box;
+    z-index: 2;
+  }
+
+  .mobileTokensNotificationWarning {
+    background: var(--crm-warning-strong);
+    box-shadow: 0 3px 8px rgba(245, 158, 11, 0.38);
+  }
+
+  .mobileTokensNotificationDanger {
+    background: var(--crm-danger-strong);
+    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
   }
 
 }

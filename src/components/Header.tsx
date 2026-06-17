@@ -719,22 +719,54 @@ export default function Header({
           podeExibirSaldoTokensIa &&
           saldoTokensIa &&
           (podeAcessarExtratoTokensIa ? (
-            <Link
-              href="/ia/tokens"
-              className={tokensBadgeClassName}
-              title="Abrir extrato de tokens de IA"
-            >
-              <span className={styles.tokensLabel}>IA</span>
-              <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>
-            </Link>
+          <Link
+            href="/ia/tokens"
+            className={tokensBadgeClassName}
+            title="Abrir extrato de tokens de IA"
+          >
+            <span className={styles.tokensLabel}>IA</span>
+
+            <strong>
+              {formatarTokens(saldoTokensIa.tokens_restantes)}
+            </strong>
+
+            {tokensEmAlerta && (
+              <span
+                className={`${styles.mobileTokensNotification} ${
+                  tokensCriticos
+                    ? styles.mobileTokensNotificationDanger
+                    : styles.mobileTokensNotificationWarning
+                }`}
+                aria-label={avisoTokensTitulo}
+              >
+                !
+              </span>
+            )}
+          </Link>
           ) : (
-            <span
-              className={`${tokensBadgeClassName} ${styles.tokensBadgeStatic}`}
-              title="Tokens de IA restantes no ciclo mensal"
-            >
-              <span className={styles.tokensLabel}>IA</span>
-              <strong>{formatarTokens(saldoTokensIa.tokens_restantes)}</strong>
-            </span>
+          <span
+            className={`${tokensBadgeClassName} ${styles.tokensBadgeStatic}`}
+            title="Tokens de IA restantes no ciclo mensal"
+          >
+            <span className={styles.tokensLabel}>IA</span>
+
+            <strong>
+              {formatarTokens(saldoTokensIa.tokens_restantes)}
+            </strong>
+
+            {tokensEmAlerta && (
+              <span
+                className={`${styles.mobileTokensNotification} ${
+                  tokensCriticos
+                    ? styles.mobileTokensNotificationDanger
+                    : styles.mobileTokensNotificationWarning
+                }`}
+                aria-label={avisoTokensTitulo}
+              >
+                !
+              </span>
+            )}
+          </span>
           ))}
 
         <div className={styles.notificationWrapper} ref={notificacoesRef}>

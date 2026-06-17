@@ -154,40 +154,71 @@ export default function LoginPage() {
 
       <section className={styles.wrapper}>
         <div className={styles.brandPanel}>
-          <div className={styles.brandBadge}>
-            <Image
-              src="/logo.png"
-              alt="CRM Prosperity"
-              width={2096}
-              height={2048}
-              className={styles.brandLogo}
-              priority
-            />
+          <div className={styles.brandHeader}>
+            <div className={styles.brandBadge}>
+              <Image
+                src="/logo.png"
+                alt="CRM Prosperity"
+                width={2096}
+                height={2048}
+                className={styles.brandLogo}
+                priority
+              />
+            </div>
+
+            <div className={styles.brandIdentity}>
+              <p className={styles.eyebrow}>Plataforma empresarial</p>
+              <h1 className={styles.title}>CRM Prosperity</h1>
+            </div>
           </div>
 
-          <p className={styles.eyebrow}>Plataforma empresarial</p>
-
-          <h1 className={styles.title}>CRM Prosperity</h1>
-
           <p className={styles.description}>
-            Centralize conversas, contatos, usuários, setores e regras de
-            atendimento em uma experiência profissional, organizada e moderna.
+            Centralize o atendimento pelo WhatsApp, automatize conversas, realize
+            disparos e acompanhe a jornada dos seus leads em um único sistema.
           </p>
 
           <div className={styles.featureList}>
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Suporte a múltiplos setores</span>
+              <span>Integração com a API Oficial do WhatsApp da Meta</span>
             </div>
 
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Permissões dinâmicas por perfil</span>
+              <span>Automações, fluxos e disparos programados</span>
             </div>
 
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Operação integrada com WhatsApp</span>
+              <span>Rastreamento de leads, campanhas e conversões com Pixel</span>
+            </div>
+          </div>
+
+          <div className={styles.integrationFooter}>
+            <span className={styles.integrationLabel}>Integrações com</span>
+
+            <div className={styles.integrationBrands}>
+              <div className={styles.integrationBrand}>
+                <Image
+                  src="/meta-logo.png"
+                  alt="Meta"
+                  width={120}
+                  height={40}
+                  className={styles.integrationLogo}
+                />
+              </div>
+
+              <span className={styles.integrationDivider} />
+
+              <div className={styles.integrationBrand}>
+                <Image
+                  src="/google-logo.png"
+                  alt="Google"
+                  width={120}
+                  height={40}
+                  className={styles.integrationLogo}
+                />
+              </div>
             </div>
           </div>
         </div>

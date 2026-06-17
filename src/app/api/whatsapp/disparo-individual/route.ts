@@ -731,7 +731,8 @@ export async function POST(request: Request) {
         numero: telefone,
         nomeContato,
         templateNome: template.nome,
-        templateIdioma: template.idioma || payloadTemplate?.language || "pt_BR",
+        templateIdioma:
+          template.idioma || payloadTemplate?.language || "pt_BR",
         mensagem: conteudoRenderizado,
         status: "processando",
         erro: `Template aceito pela Meta, mas falhou ao registrar mensagem no banco: ${insertError.message}`,
@@ -743,6 +744,9 @@ export async function POST(request: Request) {
           aviso: "meta_aceitou_mas_insert_mensagem_falhou",
           protocolo_reabertura_id: novoProtocolo.id,
           protocolo_reabertura_numero: novoProtocolo.protocolo,
+          status_meta_inicial:
+            metaData?.messages?.[0]?.message_status || "accepted",
+          aguardando_webhook: true,
         },
       });
 
@@ -769,7 +773,10 @@ export async function POST(request: Request) {
       templateNome: template.nome,
       templateIdioma: template.idioma || payloadTemplate?.language || "pt_BR",
       mensagem: conteudoRenderizado,
-      status: "sucesso",
+
+      // A Meta aceitou a solicitação, mas ainda não confirmou a entrega.
+      status: "processando",
+
       erro: null,
       statusHttp: metaRes.status,
       messageId: mensagemExternaId,
@@ -778,6 +785,11 @@ export async function POST(request: Request) {
       metadataJson: {
         protocolo_reabertura_id: novoProtocolo.id,
         protocolo_reabertura_numero: novoProtocolo.protocolo,
+
+        status_meta_inicial:
+          metaData?.messages?.[0]?.message_status || "accepted",
+
+        aguardando_webhook: true,
       },
     });
 
@@ -789,8 +801,8 @@ export async function POST(request: Request) {
       categoria: "disparos",
       entidade: "disparo",
       entidade_id: conversa.id,
-      acao: "disparo_individual_enviado",
-      descricao: `Disparo individual enviado para ${nomeContato}`,
+      acao: "disparo_individual_aceito",
+      descricao: `Disparo individual aceito pela Meta para ${nomeContato}`,
       usuario_id: usuario.id,
       usuario_nome: "nome" in usuario ? usuario.nome : null,
       usuario_email: "email" in usuario ? usuario.email : null,
@@ -801,6 +813,9 @@ export async function POST(request: Request) {
         template_nome: template.nome,
         mensagem_externa_id: mensagemExternaId,
         protocolo_id: novoProtocolo.id,
+        status_disparo: "processando",
+        status_meta_inicial:
+          metaData?.messages?.[0]?.message_status || "accepted",
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
@@ -808,11 +823,15 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: `Disparo individual enviado com sucesso para ${nomeContato}`,
+      message: `Disparo individual enviado para processamento para ${nomeContato}`,
+      status_disparo: "processando",
+      status_label: "Aguardando confirmação",
       data: {
         mensagem_externa_id: mensagemExternaId,
         protocolo_id: novoProtocolo.id,
         protocolo: novoProtocolo.protocolo,
+        status_disparo: "processando",
+        status_label: "Aguardando confirmação",
         meta: metaData,
       },
     });

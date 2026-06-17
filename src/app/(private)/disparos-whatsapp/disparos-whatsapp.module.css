@@ -96,7 +96,8 @@
 }
 
 .input,
-.textarea {
+.textarea,
+.textareadesc {
   width: 100%;
   border: 1px solid var(--crm-border-strong);
   background: var(--crm-surface);
@@ -116,9 +117,18 @@
 
 .textarea {
   resize: vertical;
-  min-height: 220px;
+  height: 60px;
+  min-height: 80px;
   line-height: 1.6;
 }
+
+.textareadesc {
+  resize: vertical;
+  height: 55px;
+  min-height: 40px;
+  line-height: 1.6;
+}
+
 
 .help {
   margin: 0;
@@ -1469,7 +1479,7 @@
 
 .variableFormGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr 180px;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 

@@ -1319,8 +1319,14 @@
 .rightPanelBody {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+
   padding: 16px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .panelSectionStack {
@@ -4691,6 +4697,97 @@
   }
 }
 
+.historyPagination {
+  z-index: 5;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  margin-top: 15px;
+  padding: 12px;
+
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 14px;
+
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+
+  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.06);
+}
+
+
+.historyPaginationLayout {
+  display: block;
+  width: 100%;
+  min-height: 0;
+}
+
+.historyPaginationList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  width: 100%;
+  min-height: 0;
+
+  overflow: visible;
+}
+
+.historyPaginationInfo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.historyPaginationInfo strong {
+  color: var(--crm-text-strong);
+}
+
+.historyPaginationControls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.historyPaginationButton {
+  min-height: 36px;
+  padding: 0 10px;
+
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.historyPaginationButton:hover:not(:disabled) {
+  background: var(--crm-surface-soft);
+}
+
+.historyPaginationButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.historyPaginationPage {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: center;
+}
+
 @media (max-width: 980px) {
   .disparoCardResumo {
     grid-template-columns: 1fr;
@@ -4953,51 +5050,13 @@ a.buttonMessageOption:hover {
   font-weight: 700;
 }
 
-@media (max-width: 640px) {
-  .expiringMediaNoticeBadge {
-    max-width: 92%;
-    font-size: 11px;
-  }
+/* =========================================================
+   RESPONSIVIDADE — TABLETS E MOBILE
+   ========================================================= */
 
-  .mediaExpiryInfoTooltip {
-    width: 220px;
-  }
-}
-
-
-@media (max-width: 640px) {
-  .mediaBrowserThumbGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .mediaBrowserTabs {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .contactModalCard {
-    max-width: 100%;
-    border-radius: 16px;
-  }
-
-  .contactModalGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .macroPanelActions,
-  .macroVariableGrid,
-  .variableList {
-    grid-template-columns: 1fr;
-  }
-
-  .macroFixedVariablesRow,
-  .macroVariableHelperHeader,
-  .macroModalFooter {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
+/* ---------------------------------------------------------
+   TELAS GRANDES MENORES
+   --------------------------------------------------------- */
 
 @media (max-width: 1400px) {
   .rightPanel {
@@ -5010,6 +5069,11 @@ a.buttonMessageOption:hover {
     max-width: 82%;
   }
 }
+
+
+/* ---------------------------------------------------------
+   TABLETS E NOTEBOOKS MENORES
+   --------------------------------------------------------- */
 
 @media (max-width: 1200px) {
   .pageContent {
@@ -5031,9 +5095,14 @@ a.buttonMessageOption:hover {
     width: 100%;
     min-width: 0;
     max-width: none;
-    min-height: 4 20px;
+    min-height: 420px;
   }
 }
+
+
+/* ---------------------------------------------------------
+   TABLETS
+   --------------------------------------------------------- */
 
 @media (max-width: 980px) {
   .chatLayout,
@@ -5066,88 +5135,292 @@ a.buttonMessageOption:hover {
   }
 }
 
-@media (max-width: 640px) {
-  .pageContent {
-    padding: 14px;
-  }
 
-  .sidebar,
-  .content {
+/* =========================================================
+   MOBILE PRINCIPAL
+   ========================================================= */
+
+@media (max-width: 768px) {
+  /* -------------------------------------------------------
+     MODAIS E PAINÉIS AUXILIARES
+     ------------------------------------------------------- */
+
+  .contactModalCard {
+    max-width: 100%;
     border-radius: 16px;
   }
 
-  .sidebarHeader,
-  .chatHeader,
-  .chatMetaBar,
-  .alertsBar,
-  .timelineArea,
-  .composerArea,
-  .rightPanelHeader,
-  .rightPanelBody {
-    padding-left: 14px;
-    padding-right: 14px;
-  }
-
-  .composerRow {
+  .contactModalGrid {
     grid-template-columns: 1fr;
   }
 
-  .macroPopover {
-    position: fixed;
-    left: 14px;
-    right: 14px;
-    bottom: calc(96px + env(safe-area-inset-bottom));
-    width: auto;
-    max-height: min(420px, calc(100dvh - 132px));
+  .macroPanelActions,
+  .macroVariableGrid,
+  .variableList {
+    grid-template-columns: 1fr;
   }
 
-  .chatHeaderActions,
-  .actionButtons,
-  .botActions {
+  .macroFixedVariablesRow,
+  .macroVariableHelperHeader,
+  .macroModalFooter {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .chatHeaderActions button,
-  .actionButtons button,
-  .botActions button,
-  .sendButton {
-    width: 100%;
-  }
+  /* -------------------------------------------------------
+     ESTRUTURA GERAL DA PÁGINA
+     ------------------------------------------------------- */
 
-  .messageBubble {
-    max-width: 100%;
-  }
-
-  .conversationTopLine {
-    align-items: flex-start;
-  }
-
-  .previewLine {
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 768px) {
   .pageContent {
+    width: 100%;
+    min-width: 0;
     height: auto;
-    min-height: calc(100dvh - 54px);
-    padding: 0px 10px calc(96px + env(safe-area-inset-bottom));
+    min-height: calc(100dvh - 64px);
+
+    padding:
+      0
+      10px
+      calc(80px + env(safe-area-inset-bottom));
+
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   .chatLayout,
   .chatLayoutWithPanel {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 1fr;
     gap: 10px;
   }
 
-  .sidebar {
-    max-height: 44dvh;
-    min-height: 790px;
+  /* -------------------------------------------------------
+     LISTA DE CONVERSAS
+     ------------------------------------------------------- */
+
+  .pageContent:not(.mobileDetailActive) .content {
+    display: none;
   }
 
-  .content {
-    min-height: min(620px, calc(100dvh - 148px));
+  .pageContent:not(.mobileDetailActive) .sidebar {
+    width: 100%;
+    min-width: 0;
+
+    height: calc(
+      100dvh -
+      64px -
+      70px -
+      env(safe-area-inset-bottom)
+    );
+
+    min-height: 0;
+    max-height: none;
+
+    border-radius: 16px;
+    box-sizing: border-box;
+    overflow: hidden;
   }
+
+  .pageContent:not(.mobileDetailActive) .sidebarBody {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* -------------------------------------------------------
+     CHAT ABERTO
+     ------------------------------------------------------- */
+
+  .pageContent.mobileDetailActive {
+    width: 100%;
+
+    height: calc(100dvh - 64px);
+    min-height: calc(100dvh - 64px);
+    max-height: calc(100dvh - 64px);
+
+    padding: 0;
+    margin: 0;
+
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .pageContent.mobileDetailActive .sidebar {
+    display: none;
+  }
+
+  .pageContent.mobileDetailActive .chatLayout,
+  .pageContent.mobileDetailActive .chatLayoutWithPanel {
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .pageContent.mobileDetailActive .content {
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+
+    border: 0;
+    border-radius: 0;
+
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .pageContent.mobileDetailActive .chatShell {
+    position: relative;
+
+    display: flex;
+    flex: 1 1 auto;
+
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+
+    overflow: hidden;
+  }
+
+  /* Painel de contato no mobile */
+  .pageContent.mobileDetailActive .rightPanel {
+    position: absolute;
+
+    inset: 0;
+    z-index: 80;
+
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+
+    margin: 0;
+
+    border: 0;
+    border-radius: 0;
+
+    background: var(--crm-surface-soft);
+
+    overflow: hidden;
+    box-sizing: border-box;
+
+    box-shadow: -8px 0 28px rgba(15, 23, 42, 0.16);
+  }
+
+  /* Cabeçalho não pode encolher */
+  .pageContent.mobileDetailActive .rightPanelHeader {
+    flex: 0 0 auto;
+  }
+
+  /* Somente o conteúdo interno rola */
+  .pageContent.mobileDetailActive .rightPanelBody {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .pageContent.mobileDetailActive .chatMainColumn {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+
+    width: 100%;
+    height: auto;
+    min-height: 0;
+
+    overflow: hidden;
+  }
+
+  .pageContent.mobileDetailActive .mainBody {
+    display: flex;
+    flex: 1 1 auto;
+
+    width: 100%;
+    height: auto;
+    min-height: 0;
+
+    overflow: hidden;
+  }
+
+  .pageContent.mobileDetailActive .chatCenter {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+
+    width: 100%;
+    height: auto;
+    min-height: 0;
+
+    overflow: hidden;
+  }
+
+  .pageContent.mobileDetailActive .timelineWrapper {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+
+    width: 100%;
+    height: auto;
+    min-height: 0;
+
+    border-radius: 0;
+    overflow: hidden;
+  }
+
+  .pageContent.mobileDetailActive .timelineArea {
+    flex: 1 1 auto;
+
+    width: 100%;
+    height: auto;
+    min-height: 0;
+
+    padding-bottom: 16px;
+
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+
+    box-sizing: border-box;
+  }
+
+  .pageContent.mobileDetailActive .composerArea {
+    position: relative;
+    z-index: 10;
+
+    flex: 0 0 auto;
+
+    width: 100%;
+    margin: 0;
+    padding-bottom: calc(
+      10px + env(safe-area-inset-bottom)
+    );
+
+    background: var(--crm-surface);
+    border-radius: 0;
+    box-sizing: border-box;
+  }
+
+  /* -------------------------------------------------------
+     CABEÇALHO DO CHAT
+     ------------------------------------------------------- */
 
   .chatHeader {
     gap: 10px;
@@ -5159,166 +5432,165 @@ a.buttonMessageOption:hover {
     gap: 8px;
   }
 
-  .timelineArea {
-    padding-bottom: 16px;
-  }
+  /* -------------------------------------------------------
+     MENSAGENS
+     ------------------------------------------------------- */
 
   .messageBubble {
     max-width: 92%;
   }
 
-  .composerArea {
-    padding-bottom: 14px;
-  }
-
-  .pageContent:not(.mobileDetailActive) .content {
-    display: none;
-  }
-
-  .pageContent.mobileDetailActive .sidebar {
-    display: none;
-  }
-
-  .pageContent.mobileDetailActive .content {
+  .actionPanelHeader {
     display: flex;
-    min-height: calc(100dvh - 150px);
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+
+    width: 100%;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .actionPanelTitle {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+
+    font-size: 17px;
+    line-height: 1.3;
+  }
+
+  .actionPanelHeader .textButton {
+    flex: 0 0 auto;
+
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin: 0;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 999px;
+    font-size: 28px;
+    line-height: 1;
   }
 }
 
-@media (max-width: 600px) {
-  .composerArea {
-    padding: 10px 12px 0;
-  }
-
-  .composerRow {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "esquerda direita"
-      "campo campo";
-    gap: 8px;
-    align-items: center;
-    width: 100%;
-  }
-
-  .composerLeft {
-    grid-area: esquerda;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
-
-  .composerRight {
-    grid-area: direita;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    min-width: max-content;
-  }
-
-  .composerCenter {
-    grid-area: campo;
-    display: flex;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .messageEditor {
-    width: 100%;
-    min-width: 0;
-    min-height: 44px;
-    box-sizing: border-box;
-    padding: 11px 14px;
-    word-break: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .toolButton {
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    flex: 0 0 38px;
-  }
-
-  .sendButton {
-    width: auto;
-    height: 38px;
-    padding: 0 14px;
-  }
-
-  .footerHint {
-    margin: 7px 4px 10px;
-    font-size: 11px;
-  }
-}
 
 /* =========================================================
-   AJUSTES MOBILE DO CHAT
+   MOBILE COMPACTO
    ========================================================= */
+
+@media (max-width: 640px) {
+  /* -------------------------------------------------------
+     AVISOS E MÍDIAS
+     ------------------------------------------------------- */
+
+  .expiringMediaNoticeBadge {
+    max-width: 92%;
+    font-size: 11px;
+  }
+
+  .mediaExpiryInfoTooltip {
+    width: 220px;
+  }
+
+  .mediaBrowserThumbGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mediaBrowserTabs {
+    grid-template-columns: 1fr;
+  }
+
+  /* -------------------------------------------------------
+     ESPAÇAMENTOS
+     ------------------------------------------------------- */
+
+  .sidebarHeader,
+  .chatHeader,
+  .chatMetaBar,
+  .alertsBar,
+  .timelineArea,
+  .rightPanelHeader,
+  .rightPanelBody {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .pageContent:not(.mobileDetailActive) {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  /* -------------------------------------------------------
+     POPOVER DE MACROS
+     ------------------------------------------------------- */
+
+  .macroPopover {
+    position: fixed;
+
+    left: 14px;
+    right: 14px;
+    bottom: calc(
+      96px + env(safe-area-inset-bottom)
+    );
+
+    width: auto;
+    max-height: min(
+      420px,
+      calc(100dvh - 132px)
+    );
+  }
+
+  /* -------------------------------------------------------
+     BOTÕES E AÇÕES
+     ------------------------------------------------------- */
+
+  .actionButtons,
+  .botActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actionButtons button,
+  .botActions button {
+    width: 100%;
+  }
+
+  /* -------------------------------------------------------
+     LISTA DE CONVERSAS
+     ------------------------------------------------------- */
+
+  .conversationTopLine {
+    align-items: flex-start;
+  }
+
+  .previewLine {
+    max-width: 100%;
+  }
+
+  /* -------------------------------------------------------
+     MENSAGENS
+     ------------------------------------------------------- */
+
+  .messageBubble {
+    max-width: 100%;
+  }
+
+}
+
+
+/* =========================================================
+   COMPOSITOR E CABEÇALHO DO CHAT
+   ========================================================= */
+
 @media (max-width: 600px) {
-  .composerArea {
-    padding: 10px 12px 0;
-  }
-
-  .composerRow {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "esquerda direita"
-      "campo campo";
-    gap: 8px;
-    align-items: center;
-    width: 100%;
-  }
-
-  .composerLeft {
-    grid-area: esquerda;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
-
-  .composerRight {
-    grid-area: direita;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    min-width: max-content;
-  }
-
-  .composerCenter {
-    grid-area: campo;
-    display: flex;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .messageEditor {
-    width: 100%;
-    min-width: 0;
-    min-height: 44px;
-    box-sizing: border-box;
-    padding: 11px 14px;
-    word-break: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .toolButton {
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    flex: 0 0 38px;
-  }
-
-  .sendButton {
-    width: auto !important;
-    height: 38px;
-    padding: 0 14px;
-  }
+  /* -------------------------------------------------------
+     CABEÇALHO DO CHAT
+     ------------------------------------------------------- */
 
   .chatHeader {
     position: relative;
@@ -5327,9 +5599,12 @@ a.buttonMessageOption:hover {
 
   .chatHeaderActions {
     position: absolute;
+
     top: 14px;
     right: 14px;
+
     width: auto;
+
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
@@ -5343,147 +5618,484 @@ a.buttonMessageOption:hover {
     width: 38px !important;
     min-width: 38px;
     height: 38px;
+
     padding: 0;
     border-radius: 999px;
   }
 
   .headerDropdownMenu {
     right: 0;
-    width: min(260px, calc(100vw - 28px));
+    width: min(260px, calc(100vw - 20px));
+    max-height: calc(100dvh - 150px);
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+
+    padding-bottom: 8px;
   }
 
-  .footerHint {
-    margin: 7px 4px 10px;
-    font-size: 11px;
-  }
-}
-
-@media (max-width: 600px) {
-  .composerArea {
-    padding: 10px 12px 0;
-  }
-
-  .composerRow {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "esquerda direita"
-      "campo campo";
-    gap: 8px;
-    align-items: center;
-    width: 100%;
-  }
-
-  .composerLeft {
-    grid-area: esquerda;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
-
-  .composerRight {
-    grid-area: direita;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    min-width: max-content;
-  }
-
-  .composerCenter {
-    grid-area: campo;
-    display: flex;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .messageEditor {
-    width: 100%;
-    min-width: 0;
-    min-height: 44px;
-    box-sizing: border-box;
-    padding: 11px 14px;
-    word-break: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .toolButton {
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    flex: 0 0 38px;
-  }
-
-  .sendButton {
-    width: auto !important;
-    height: 38px;
-    padding: 0 14px;
-  }
-
-  .chatHeader {
-    position: relative;
-    padding-right: 64px;
-  }
-
-  .chatHeaderActions {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    width: auto;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-end;
-  }
-
-  .chatHeaderActions .headerMenuWrap {
-    width: auto;
-  }
-
-  .chatHeaderActions .moreButton {
-    width: 38px !important;
-    min-width: 38px;
-    height: 38px;
-    padding: 0;
-    border-radius: 999px;
-  }
-
-  /* Oculta os badges do header no mobile */
-  .chatHeaderAlerts {
-    display: none;
-  }
-
-  .chatCampaignBadge {
-    display: none;
-  }
-
+  /* Oculta informações que ocupam muito espaço */
+  .chatHeaderAlerts,
+  .chatCampaignBadge,
   .chatTitleRow .etiquetaTooltipWrap {
     display: none;
   }
 
-  .headerDropdownMenu {
-    right: 0;
-    width: min(260px, calc(100vw - 28px));
+  /* -------------------------------------------------------
+     CAIXA DE MENSAGEM
+     ------------------------------------------------------- */
+
+  .composerArea {
+    padding:
+      10px
+      12px
+      calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .composerRow {
+    display: grid;
+
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "esquerda direita"
+      "campo campo";
+
+    gap: 8px;
+    align-items: center;
+
+    width: 100%;
+  }
+
+  .composerLeft {
+    grid-area: esquerda;
+
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    min-width: 0;
+  }
+
+  .composerRight {
+    grid-area: direita;
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+
+    min-width: max-content;
+  }
+
+  .composerCenter {
+    grid-area: campo;
+
+    display: flex;
+
+    width: 100%;
+    min-width: 0;
+  }
+
+  .messageEditor {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    max-height: 120px;
+
+    padding: 11px 14px;
+
+    word-break: normal;
+    overflow-wrap: anywhere;
+    overflow-y: auto;
+
+    box-sizing: border-box;
+  }
+
+  .toolButton {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+
+    flex: 0 0 38px;
+  }
+
+  .sendButton {
+    width: auto !important;
+    height: 38px;
+
+    padding: 0 14px;
   }
 
   .footerHint {
-    margin: 7px 4px 10px;
+    margin: 7px 4px 0;
+    font-size: 11px;
+  }
+}
+
+
+/* =========================================================
+   SMARTPHONES PEQUENOS E ESTREITOS
+   iPhone 4, Galaxy Z Fold fechado e similares
+   ========================================================= */
+
+@media (max-width: 380px) {
+  /* -------------------------------------------------------
+     ESTRUTURA GERAL
+     ------------------------------------------------------- */
+
+  .pageContent {
+    width: 100%;
+    min-width: 0;
+
+    padding:
+      0
+      6px
+      calc(76px + env(safe-area-inset-bottom));
+
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+
+  .pageContent.mobileDetailActive {
+    height: calc(100dvh - 64px);
+    min-height: calc(100dvh - 64px);
+    max-height: calc(100dvh - 64px);
+
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .chatLayout,
+  .chatLayoutWithPanel {
+    width: 100%;
+    min-width: 0;
+    gap: 0;
+  }
+
+  .sidebar,
+  .content {
+    width: 100%;
+    min-width: 0;
+
+    border-radius: 14px;
+    box-sizing: border-box;
+  }
+
+  /* -------------------------------------------------------
+     CABEÇALHO DA LISTA
+     ------------------------------------------------------- */
+
+  .sidebarHeader {
+    padding: 12px 10px 10px;
+  }
+
+  .sidebarTopRow {
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .sidebarTitle {
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  .sidebarCount {
+    margin-top: 3px;
     font-size: 11px;
   }
 
-  /* Quando os detalhes estiverem abertos, oculta o chat no mobile */
-  .chatMainColumnPanelOpen {
-    display: none;
+  .sidebarHeaderActions {
+    gap: 5px;
+    flex-shrink: 0;
   }
 
-  /* Faz o painel ocupar toda a área disponível */
-  .rightPanel {
-    width: 100%;
+  .sidebarHeaderActions .iconButton {
+    min-width: 38px;
+    height: 36px;
+
+    padding: 0 9px;
+    gap: 5px;
+
+    border-radius: 11px;
+    font-size: 11px;
+  }
+
+  /* Deixa o botão Atualizar apenas com o ícone */
+  .sidebarHeaderActions .iconButton:last-child {
+    width: 38px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .sidebarHeaderActions .iconButton:last-child svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* -------------------------------------------------------
+     BUSCA E FILTROS
+     ------------------------------------------------------- */
+
+  .searchInput {
+    height: 40px;
+
+    padding: 9px 11px;
+
+    border-radius: 11px;
+    font-size: 12px;
+  }
+
+  .filtersGrid {
+    grid-template-columns: 1fr;
+
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 4px;
+  }
+
+  .filterSelect {
     min-width: 0;
-    max-width: none;
-    height: 100%;
-    flex: 1;
-    border-left: none;
-    border-right: none;
+
+    padding: 10px 11px;
+    font-size: 12px;
+  }
+
+  .quickFilters {
+    gap: 10px 6px;
+
+    margin-top: 10px;
+    padding-top: 6px;
+  }
+
+  .quickChip {
+    min-height: 34px;
+
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+  .quickChipRobot {
+    gap: 7px;
+  }
+
+  /* -------------------------------------------------------
+     ITENS DA LISTA
+     ------------------------------------------------------- */
+
+  .conversationItem {
+    grid-template-columns: 42px minmax(0, 1fr);
+
+    gap: 10px;
+    padding: 12px 10px;
+  }
+
+  .conversationAvatar {
+    width: 42px;
+    height: 42px;
+
+    font-size: 12px;
+  }
+
+  .contactName {
+    font-size: 14px;
+  }
+
+  .previewLine {
+    font-size: 12px;
+  }
+
+  .timeLabel {
+    font-size: 11px;
+  }
+
+  .conversationPreviewRow {
+    gap: 5px;
+  }
+
+  .conversationBottomLine {
+    margin-top: 5px;
+    gap: 5px;
+  }
+
+  .statusMiniBadge,
+  .priorityMiniBadge {
+    min-height: 21px;
+
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .robotMiniBadge {
+    min-width: 20px;
+    height: 20px;
+
+    margin-left: 5px;
+    padding: 0 5px;
+  }
+
+  .unreadSlot {
+    width: 26px;
+    min-width: 26px;
+  }
+
+  .unreadBadge {
+    min-width: 18px;
+    height: 18px;
+
+    padding: 0 5px;
+    font-size: 10px;
+  }
+
+  /* -------------------------------------------------------
+     CABEÇALHO DO CHAT
+     ------------------------------------------------------- */
+
+  .chatHeader {
+    padding-left: 10px;
+    padding-right: 56px;
+  }
+
+  .chatHeaderActions {
+    top: 10px;
+    right: 10px;
+  }
+
+  .chatHeaderActions .moreButton {
+    width: 36px !important;
+    min-width: 36px;
+    height: 36px;
+  }
+
+  /* -------------------------------------------------------
+     CAIXA DE MENSAGEM
+     ------------------------------------------------------- */
+
+  .composerArea {
+    padding:
+      8px
+      8px
+      calc(7px + env(safe-area-inset-bottom));
+  }
+
+  .composerRow {
+    gap: 6px;
+  }
+
+  .composerLeft,
+  .composerRight {
+    gap: 4px;
+  }
+
+  .toolButton {
+    width: 35px;
+    min-width: 35px;
+    height: 35px;
+
+    flex-basis: 35px;
+  }
+
+  .sendButton {
+    height: 35px;
+
+    padding-left: 11px;
+    padding-right: 11px;
+
+    font-size: 12px;
+  }
+
+  .messageEditor {
+    min-height: 40px;
+
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+
+  .footerHint {
+    margin-top: 5px;
+    font-size: 10px;
+  }
+
+  .headerDropdownMenu {
+    width: min(250px, calc(100vw - 12px));
+    max-height: calc(100dvh - 135px);
+
+    right: -2px;
+  }
+
+  .headerDropdownItem {
+    padding: 11px 12px;
+    font-size: 13px;
+  }
+
+  .historyPagination {
+    padding: 10px 8px;
+    gap: 8px;
+    border-radius: 12px;
+  }
+
+  .historyPaginationControls {
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
+
+  .historyPaginationPage {
+    grid-column: 1 / -1;
+    grid-row: 1;
+
+    font-size: 10px;
+  }
+
+  .historyPaginationButton {
+    grid-row: 2;
+    min-height: 34px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+}
+
+
+/* =========================================================
+   SMARTPHONES COM POUCA ALTURA
+   ========================================================= */
+
+@media (max-width: 380px) and (max-height: 600px) {
+  .sidebarHeader {
+    padding-top: 9px;
+    padding-bottom: 8px;
+  }
+
+  .sidebarTopRow {
+    margin-bottom: 8px;
+  }
+
+  .quickFilters {
+    margin-top: 8px;
+    padding-top: 4px;
+  }
+
+  .conversationItem {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .conversationAvatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .pageContent.mobileDetailActive .timelineArea {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .composerArea {
+    padding-top: 6px;
   }
 }
+
+
