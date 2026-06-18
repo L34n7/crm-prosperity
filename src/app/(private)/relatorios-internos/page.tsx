@@ -28,6 +28,18 @@ const MAX_SESSOES = 5000;
 const ONLINE_TIMEOUT_MS = 5 * 60 * 1000;
 const MODAL_PAGE_SIZE = 10;
 const DASHBOARD_LIMIT = 5;
+const CAMPANHA_LABEL_MAX_LENGTH = 10;
+const CAMPANHA_NA_LABEL = "Campanha N/A";
+const CAMPAIGN_SEGMENT_COLORS = [
+  "#16a34a",
+  "#2563eb",
+  "#f59e0b",
+  "#dc2626",
+  "#7c3aed",
+  "#0891b2",
+  "#ea580c",
+  "#64748b",
+];
 
 type SearchParams = Record<string, string | string[] | undefined>;
 type PeriodoAtalho = "1h" | "24h" | "3d" | "7d" | "30d";
@@ -61,7 +73,7 @@ type OrdenacaoRelatorios = {
   conversas: "empresa" | "total" | "percentual" | "primeira" | "ultima";
   mensagens: "empresa" | "contato" | "total" | "recebidas" | "enviadas" | "ultima";
   disparos: "empresa" | "total" | "sucesso" | "falha" | "processando";
-  contatos: "empresa" | "direto" | "total" | "percentual" | "outras";
+  contatos: "empresa" | "total" | "campanha" | "na" | "percentual";
   usuarios: "presenca" | "nome" | "empresa" | "login" | "ultimo" | "logout";
   planos: "empresa" | "plano" | "status" | "inicio" | "renovacao" | "expira";
 };
@@ -93,9 +105,14 @@ type EmpresaRow = {
 
 type ContatoRelacao = {
   id?: string | null;
+  empresa_id?: string | null;
   nome?: string | null;
   telefone?: string | null;
   empresa?: string | null;
+  origem?: string | null;
+  rastreamento_origem_id?: string | null;
+  rastreamento_campanha_id?: string | null;
+  created_at?: string | null;
 };
 
 type ConversaRow = {
@@ -130,8 +147,7 @@ type DisparoRow = {
 type ContatoRow = {
   id: string;
   empresa_id: string | null;
-  origem: string | null;
-  rastreamento_origem_id: string | null;
+  campanha: string | null;
   created_at: string;
 };
 
@@ -195,10 +211,21 @@ type DisparosEmpresaResumo = {
   percentual: number;
 };
 
+type CampanhaContatoResumo = {
+  nome: string;
+  total: number;
+  percentual: number;
+};
+
 type ContatosEmpresaResumo = {
   empresaId: string;
   nome: string;
   total: number;
+  campanhas: CampanhaContatoResumo[];
+  campanhaPrincipal: string;
+  campanhaPrincipalTotal: number;
+  campanhaNaoInformada: number;
+  percentualNaoInformada: number;
   diretoNaoIdentificado: number;
   outrasOrigens: number;
   percentualDireto: number;
@@ -230,7 +257,10 @@ type RelatoriosDados = {
     conversas: number;
     mensagens: number;
     disparos: number;
+    contatosNovos: number;
+    contatosCampanhaNaoInformada: number;
     contatosDiretoNaoIdentificado: number;
+    contatosOutrasCampanhas: number;
     usuarios: number;
     usuariosOnline: number;
     usuariosOffline: number;
@@ -257,7 +287,7 @@ const ordenacaoPadrao: OrdenacaoRelatorios = {
   conversas: "total",
   mensagens: "total",
   disparos: "total",
-  contatos: "direto",
+  contatos: "total",
   usuarios: "presenca",
   planos: "empresa",
 };
@@ -774,6 +804,78 @@ function Pagination({
   );
 }
 
+function CampaignSegmentTrack({
+  campanhas,
+  total,
+}: {
+  campanhas: CampanhaContatoResumo[];
+  total: number;
+}) {
+  const segmentos = campanhas.filter((campanha) => campanha.total > 0);
+
+  if (segmentos.length === 0) {
+    return (
+      <div className={`${styles.miniBarTrack} ${styles.segmentedTrack}`}>
+        <span style={{ "--bar-width": "0%" } as CSSProperties} />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${styles.miniBarTrack} ${styles.segmentedTrack}`}>
+      {segmentos.map((campanha, index) => (
+        <span
+          key={campanha.nome}
+          title={`${campanha.nome}: ${formatarNumero(campanha.total)}`}
+          style={
+            {
+              "--bar-width": larguraPercentual(campanha.total, total, 0),
+              "--segment-color": getCampaignSegmentColor(index),
+            } as CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+function CampaignBreakdown({
+  campanhas,
+  total,
+  limite = 4,
+}: {
+  campanhas: CampanhaContatoResumo[];
+  total: number;
+  limite?: number;
+}) {
+  const visiveis = campanhas.slice(0, limite);
+  const restantes = Math.max(0, campanhas.length - visiveis.length);
+
+  return (
+    <div className={styles.campaignBreakdown}>
+      <CampaignSegmentTrack campanhas={campanhas} total={total} />
+      <div className={styles.campaignLegend}>
+        {visiveis.map((campanha, index) => (
+          <span
+            key={campanha.nome}
+            title={`${campanha.nome}: ${formatarNumero(campanha.total)}`}
+          >
+            <i
+              style={
+                {
+                  "--segment-color": getCampaignSegmentColor(index),
+                } as CSSProperties
+              }
+            />
+            <CampanhaNome nome={campanha.nome} />: {formatarNumero(campanha.total)}
+          </span>
+        ))}
+        {restantes > 0 ? <span>+{restantes} campanhas</span> : null}
+      </div>
+    </div>
+  );
+}
+
 function MiniBarChart({
   items,
   emptyText,
@@ -786,6 +888,8 @@ function MiniBarChart({
     valueLabel?: string;
     labelSuffix?: string;
     detail?: string;
+    detailTitle?: string;
+    segments?: CampanhaContatoResumo[];
   }>;
   emptyText: string;
   tone?: "blue" | "green" | "amber" | "rose";
@@ -818,16 +922,20 @@ function MiniBarChart({
             </strong>
             <span>{item.valueLabel ?? formatarNumero(item.value)}</span>
           </div>
-          <div className={`${styles.miniBarTrack} ${styles[`miniBar${tone}`]}`}>
-            <span
-              style={
-                {
-                  "--bar-width": larguraPercentual(item.value, maximo),
-                } as CSSProperties
-              }
-            />
-          </div>
-          {item.detail ? <small>{item.detail}</small> : null}
+          {item.segments ? (
+            <CampaignSegmentTrack campanhas={item.segments} total={item.value} />
+          ) : (
+            <div className={`${styles.miniBarTrack} ${styles[`miniBar${tone}`]}`}>
+              <span
+                style={
+                  {
+                    "--bar-width": larguraPercentual(item.value, maximo),
+                  } as CSSProperties
+                }
+              />
+            </div>
+          )}
+          {item.detail ? <small title={item.detailTitle}>{item.detail}</small> : null}
         </div>
       ))}
     </div>
@@ -1058,25 +1166,43 @@ function getContatoLabel(conversa: ConversaRow | null | undefined) {
   );
 }
 
-function normalizarTexto(valor: string | null | undefined) {
-  return String(valor || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
+function getCampanhaLabel(valor: string | null | undefined) {
+  return valor?.trim() || CAMPANHA_NA_LABEL;
 }
 
-function contatoEhDiretoNaoIdentificado(contato: ContatoRow) {
-  const origem = normalizarTexto(contato.origem);
+function getTextoCurto(valor: string, limite = CAMPANHA_LABEL_MAX_LENGTH) {
+  const caracteres = Array.from(valor);
 
-  if (!origem) return false;
+  if (caracteres.length <= limite) return valor;
+  return `${caracteres.slice(0, limite).join("")}...`;
+}
 
-  return (
-    origem === "direto" ||
-    origem === "nao identificado" ||
-    origem === "direto / nao identificado" ||
-    origem.startsWith("direto /")
-  );
+function CampanhaNome({ nome }: { nome: string }) {
+  return <span title={nome}>{getTextoCurto(nome)}</span>;
+}
+
+function getCampaignSegmentColor(index: number) {
+  return CAMPAIGN_SEGMENT_COLORS[index % CAMPAIGN_SEGMENT_COLORS.length];
+}
+
+function formatarCampanhasResumo(
+  campanhas: CampanhaContatoResumo[],
+  limite = 3,
+  truncado = true
+) {
+  if (campanhas.length === 0) return "Sem campanhas";
+
+  const visiveis = campanhas
+    .slice(0, limite)
+    .map((campanha) => {
+      const nome = truncado ? getTextoCurto(campanha.nome) : campanha.nome;
+      return `${nome}: ${formatarNumero(campanha.total)}`;
+    });
+  const restantes = campanhas.length - visiveis.length;
+
+  return restantes > 0
+    ? `${visiveis.join(" - ")} - +${restantes}`
+    : visiveis.join(" - ");
 }
 
 function getStatusPlanoLabel(status: string | null | undefined) {
@@ -1251,9 +1377,14 @@ async function carregarRelatorios(
         status,
         contatos (
           id,
+          empresa_id,
           nome,
           telefone,
-          empresa
+          empresa,
+          origem,
+          rastreamento_origem_id,
+          rastreamento_campanha_id,
+          created_at
         )
       `,
       { count: "exact" }
@@ -1288,7 +1419,7 @@ async function carregarRelatorios(
 
   let contatosQuery = supabaseAdmin
     .from("contatos")
-    .select("id, empresa_id, origem, rastreamento_origem_id, created_at", {
+    .select("id, empresa_id, campanha, created_at", {
       count: "exact",
     })
     .gte("created_at", filtros.inicioIso)
@@ -1450,9 +1581,14 @@ async function carregarRelatorios(
           status,
           contatos (
             id,
+            empresa_id,
             nome,
             telefone,
-            empresa
+            empresa,
+            origem,
+            rastreamento_origem_id,
+            rastreamento_campanha_id,
+            created_at
           )
         `
       )
@@ -1510,9 +1646,18 @@ async function carregarRelatorios(
     empresas,
     ordenacao: ordenacao.planos,
   });
-  const contatosDiretoNaoIdentificado = contatos.filter(
-    contatoEhDiretoNaoIdentificado
-  ).length;
+  const contatosNovos = contatosPorEmpresa.reduce(
+    (total, empresa) => total + empresa.total,
+    0
+  );
+  const contatosCampanhaNaoInformada = contatosPorEmpresa.reduce(
+    (total, empresa) => total + empresa.campanhaNaoInformada,
+    0
+  );
+  const contatosOutrasCampanhas = Math.max(
+    0,
+    contatosNovos - contatosCampanhaNaoInformada
+  );
   const usuariosOnline = usuariosSessao.filter((usuario) => usuario.online).length;
   const usuariosTempoOnlineMs = usuariosSessao.reduce(
     (total, usuario) => total + usuario.tempoOnlineMs,
@@ -1532,7 +1677,10 @@ async function carregarRelatorios(
       conversas: conversasResult.count ?? conversas.length,
       mensagens: mensagensResult.count ?? mensagens.length,
       disparos: disparosResult.count ?? disparos.length,
-      contatosDiretoNaoIdentificado,
+      contatosNovos,
+      contatosCampanhaNaoInformada,
+      contatosDiretoNaoIdentificado: contatosCampanhaNaoInformada,
+      contatosOutrasCampanhas,
       usuarios: usuariosResult.count ?? usuarios.length,
       usuariosOnline,
       usuariosOffline: Math.max(0, usuarios.length - usuariosOnline),
@@ -1778,48 +1926,70 @@ function montarContatosPorEmpresa({
     {
       empresaId: string;
       total: number;
-      diretoNaoIdentificado: number;
-      outrasOrigens: number;
+      campanhas: Map<string, number>;
     }
   >();
 
   for (const contato of contatos) {
     const empresaId = contato.empresa_id || "sem_empresa";
+    const campanha = getCampanhaLabel(contato.campanha);
     const atual =
       mapa.get(empresaId) ??
       {
         empresaId,
         total: 0,
-        diretoNaoIdentificado: 0,
-        outrasOrigens: 0,
+        campanhas: new Map<string, number>(),
       };
 
     atual.total += 1;
-
-    if (contatoEhDiretoNaoIdentificado(contato)) {
-      atual.diretoNaoIdentificado += 1;
-    } else {
-      atual.outrasOrigens += 1;
-    }
-
+    atual.campanhas.set(campanha, (atual.campanhas.get(campanha) ?? 0) + 1);
     mapa.set(empresaId, atual);
   }
 
   return Array.from(mapa.values())
-    .map((item) => ({
-      ...item,
-      nome: getNomeEmpresaPorId(empresasPorId, item.empresaId),
-      percentualDireto:
-        item.total > 0 ? Math.round((item.diretoNaoIdentificado / item.total) * 100) : 0,
-    }))
+    .map((item) => {
+      const campanhas = Array.from(item.campanhas.entries())
+        .map(([nome, total]) => ({
+          nome,
+          total,
+          percentual: item.total > 0 ? Math.round((total / item.total) * 100) : 0,
+        }))
+        .sort((a, b) => b.total - a.total || compararTexto(a.nome, b.nome));
+      const campanhaPrincipal = campanhas[0]?.nome ?? CAMPANHA_NA_LABEL;
+      const campanhaPrincipalTotal = campanhas[0]?.total ?? 0;
+      const campanhaNaoInformada =
+        campanhas.find((campanha) => campanha.nome === CAMPANHA_NA_LABEL)?.total ?? 0;
+      const percentualNaoInformada =
+        item.total > 0 ? Math.round((campanhaNaoInformada / item.total) * 100) : 0;
+
+      return {
+        empresaId: item.empresaId,
+        nome: getNomeEmpresaPorId(empresasPorId, item.empresaId),
+        total: item.total,
+        campanhas,
+        campanhaPrincipal,
+        campanhaPrincipalTotal,
+        campanhaNaoInformada,
+        percentualNaoInformada,
+        diretoNaoIdentificado: campanhaNaoInformada,
+        outrasOrigens: Math.max(0, item.total - campanhaNaoInformada),
+        percentualDireto: percentualNaoInformada,
+      };
+    })
     .sort((a, b) => {
       if (ordenacao === "empresa") return compararTexto(a.nome, b.nome);
-      if (ordenacao === "total") return b.total - a.total;
-      if (ordenacao === "percentual") return b.percentualDireto - a.percentualDireto;
-      if (ordenacao === "outras") return b.outrasOrigens - a.outrasOrigens;
-      return b.diretoNaoIdentificado - a.diretoNaoIdentificado;
-    })
-    .slice(0, 15);
+      if (ordenacao === "campanha") {
+        return (
+          b.campanhaPrincipalTotal - a.campanhaPrincipalTotal ||
+          compararTexto(a.campanhaPrincipal, b.campanhaPrincipal)
+        );
+      }
+      if (ordenacao === "na") return b.campanhaNaoInformada - a.campanhaNaoInformada;
+      if (ordenacao === "percentual") {
+        return b.percentualNaoInformada - a.percentualNaoInformada;
+      }
+      return b.total - a.total;
+    });
 }
 
 function montarUsuariosSessao({
@@ -2040,9 +2210,11 @@ function DashboardCards({
       <DashboardReportCard
         icon={ContactRound}
         eyebrow="Novos contatos"
-        title="Origem direto / nao identificado"
-        value={formatarNumero(dados.totais.contatosDiretoNaoIdentificado)}
-        detail="contatos novos"
+        title="Por campanha"
+        value={formatarNumero(dados.totais.contatosNovos)}
+        detail={`${formatarNumero(
+          dados.totais.contatosCampanhaNaoInformada
+        )} ${CAMPANHA_NA_LABEL}`}
         href={hrefDetalhe(params, "contatos")}
         tone="rose"
       >
@@ -2052,8 +2224,10 @@ function DashboardCards({
           items={dados.contatosPorEmpresa.map((empresa) => ({
             id: empresa.empresaId,
             label: empresa.nome,
-            value: empresa.diretoNaoIdentificado,
-            detail: `${empresa.percentualDireto}% direto`,
+            value: empresa.total,
+            segments: empresa.campanhas,
+            detail: formatarCampanhasResumo(empresa.campanhas),
+            detailTitle: formatarCampanhasResumo(empresa.campanhas, 20, false),
           }))}
         />
       </DashboardReportCard>
@@ -2557,8 +2731,8 @@ function RelatorioDetalheModal({
     return (
       <ModalShell
         params={params}
-        title="Novos contatos por origem"
-        subtitle={`Origem direto / nao identificado no periodo ${filtros.periodoLabel}.`}
+        title="Novos contatos por campanha"
+        subtitle={`Total de novos contatos por campanha no periodo ${filtros.periodoLabel}. Campanha N/A representa Direto / Nao identificado.`}
       >
         <ReportFilters
           params={params}
@@ -2600,16 +2774,6 @@ function RelatorioDetalheModal({
                       <SortHeader
                         params={params}
                         tabela="contatos"
-                        campo="direto"
-                        atual={ordenacao.contatos}
-                      >
-                        Direto
-                      </SortHeader>
-                    </th>
-                    <th>
-                      <SortHeader
-                        params={params}
-                        tabela="contatos"
                         campo="total"
                         atual={ordenacao.contatos}
                       >
@@ -2620,22 +2784,33 @@ function RelatorioDetalheModal({
                       <SortHeader
                         params={params}
                         tabela="contatos"
-                        campo="percentual"
+                        campo="campanha"
                         atual={ordenacao.contatos}
                       >
-                        %
+                        Campanha principal
                       </SortHeader>
                     </th>
                     <th>
                       <SortHeader
                         params={params}
                         tabela="contatos"
-                        campo="outras"
+                        campo="na"
                         atual={ordenacao.contatos}
                       >
-                        Outras
+                        Campanha N/A
                       </SortHeader>
                     </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="contatos"
+                        campo="percentual"
+                        atual={ordenacao.contatos}
+                      >
+                        % N/A
+                      </SortHeader>
+                    </th>
+                    <th>Campanhas</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2644,10 +2819,23 @@ function RelatorioDetalheModal({
                       <td>
                         <strong>{empresa.nome}</strong>
                       </td>
-                      <td>{formatarNumero(empresa.diretoNaoIdentificado)}</td>
                       <td>{formatarNumero(empresa.total)}</td>
-                      <td>{empresa.percentualDireto}%</td>
-                      <td>{formatarNumero(empresa.outrasOrigens)}</td>
+                      <td>
+                        <span className={styles.primaryText}>
+                          <CampanhaNome nome={empresa.campanhaPrincipal} />
+                        </span>
+                        <span className={styles.secondaryText}>
+                          {formatarNumero(empresa.campanhaPrincipalTotal)}
+                        </span>
+                      </td>
+                      <td>{formatarNumero(empresa.campanhaNaoInformada)}</td>
+                      <td>{empresa.percentualNaoInformada}%</td>
+                      <td>
+                        <CampaignBreakdown
+                          campanhas={empresa.campanhas}
+                          total={empresa.total}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -3001,7 +3189,7 @@ export default async function RelatoriosInternosPage({
   );
   const maxContatosDiretos = Math.max(
     1,
-    ...dados.contatosPorEmpresa.map((item) => item.diretoNaoIdentificado)
+    ...dados.contatosPorEmpresa.map((item) => item.total)
   );
 
   return (
@@ -3067,8 +3255,10 @@ export default async function RelatoriosInternosPage({
           <KpiCard
             icon={ContactRound}
             label="Novos contatos"
-            value={formatarNumero(dados.totais.contatosDiretoNaoIdentificado)}
-            detail="direto ou não identificado"
+            value={formatarNumero(dados.totais.contatosNovos)}
+            detail={`${formatarNumero(
+              dados.totais.contatosCampanhaNaoInformada
+            )} ${CAMPANHA_NA_LABEL}`}
             tone="rose"
           />
           <KpiCard
@@ -3444,10 +3634,10 @@ export default async function RelatoriosInternosPage({
                         <SortHeader
                           params={params}
                           tabela="contatos"
-                          campo="direto"
+                          campo="na"
                           atual={ordenacao.contatos}
                         >
-                          Direto
+                          Campanha N/A
                         </SortHeader>
                       </th>
                       <th>

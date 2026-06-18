@@ -462,6 +462,58 @@
   background: linear-gradient(90deg, var(--crm-danger-strong), var(--crm-warning-strong));
 }
 
+.segmentedTrack {
+  display: flex;
+}
+
+.segmentedTrack span {
+  background: var(--segment-color, var(--crm-primary-strong));
+  border-radius: 0;
+  flex: 0 0 var(--bar-width);
+  min-width: 0;
+  width: var(--bar-width);
+}
+
+.segmentedTrack span:first-child {
+  border-bottom-left-radius: inherit;
+  border-top-left-radius: inherit;
+}
+
+.segmentedTrack span:last-child {
+  border-bottom-right-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
+.campaignBreakdown {
+  display: grid;
+  gap: 7px;
+  min-width: 180px;
+}
+
+.campaignLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+}
+
+.campaignLegend span {
+  align-items: center;
+  color: var(--crm-text-muted);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 5px;
+  line-height: 1.2;
+}
+
+.campaignLegend i {
+  background: var(--segment-color, var(--crm-primary-strong));
+  border-radius: 999px;
+  display: inline-block;
+  height: 7px;
+  width: 7px;
+}
+
 .splitMeterWrap {
   display: grid;
   gap: 10px;

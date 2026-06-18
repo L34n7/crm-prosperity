@@ -282,7 +282,8 @@
   padding: 0 5px;
 
   border-radius: 999px;
-  background: var(--crm-warning-strong);
+  border: 1px solid  #ff782aa6;
+  background: #ffc531;
   color: #111111;
 
   display: inline-flex;

@@ -227,7 +227,25 @@ async function atualizarLogDisparoPeloWebhook(statusItem: any) {
     statusItem?.mensagemExternaId || ""
   ).trim();
 
-  const statusMeta = String(statusItem?.status || "").toLowerCase();
+  const statusRecebido = String(
+    statusItem?.status ||
+    statusItem?.rawStatus?.status ||
+    ""
+  ).toLowerCase();
+
+  const statusNormalizado =
+    statusRecebido === "failed" || statusRecebido === "falha"
+      ? "falha"
+      : statusRecebido === "delivered" || statusRecebido === "entregue"
+        ? "entregue"
+        : statusRecebido === "read" || statusRecebido === "lida"
+          ? "lida"
+          : statusRecebido === "sent" || statusRecebido === "enviada"
+            ? "enviada"
+            : statusRecebido === "accepted" ||
+                statusRecebido === "processando"
+              ? "processando"
+              : statusRecebido;
 
   if (!mensagemExternaId) {
     return {
@@ -244,14 +262,16 @@ async function atualizarLogDisparoPeloWebhook(statusItem: any) {
    * Somente "delivered", "read" e "failed" alteram o resultado final.
    */
   if (
-    statusMeta !== "failed" &&
-    statusMeta !== "delivered" &&
-    statusMeta !== "read"
+    statusNormalizado !== "falha" &&
+    statusNormalizado !== "entregue" &&
+    statusNormalizado !== "lida"
   ) {
     return {
       found: false,
       updated: false,
       reason: "status_sem_atualizacao_definitiva",
+      statusRecebido,
+      statusNormalizado,
     };
   }
 
@@ -288,12 +308,12 @@ async function atualizarLogDisparoPeloWebhook(statusItem: any) {
   let erroDisparo: string | null = null;
   let erroMeta: ReturnType<typeof extrairErroStatusMeta> | null = null;
 
-  if (statusMeta === "failed") {
+  if (statusNormalizado === "falha") {
     novoStatus = "falha";
     erroMeta = extrairErroStatusMeta(statusItem);
     erroDisparo = erroMeta.mensagemTraduzida;
   } else {
-    // delivered ou read confirmam que a mensagem chegou.
+    // entregue ou lida confirmam que a mensagem chegou.
     novoStatus = "sucesso";
     erroDisparo = null;
   }
@@ -301,11 +321,12 @@ async function atualizarLogDisparoPeloWebhook(statusItem: any) {
   const metadataAtualizada = {
     ...metadataAnterior,
     aguardando_webhook: false,
-    ultimo_status_meta: statusMeta,
+    ultimo_status_meta: statusNormalizado,
+    status_original_recebido: statusRecebido,
     status_meta_recebido_em: agora,
 
     erro_meta:
-      statusMeta === "failed"
+      statusNormalizado === "falha"
         ? {
             codigo: erroMeta?.codigo ?? null,
             detalhe: erroMeta?.detalhe ?? null,
