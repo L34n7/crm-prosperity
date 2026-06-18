@@ -2989,12 +2989,21 @@ export async function executarNo(params: {
       });
     }
 
+    const dataEncerramento = new Date().toISOString();
+
+    const { data: execucaoAtual } = await supabaseAdmin
+      .from("automacao_execucoes")
+      .select("conversa_protocolo_id")
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
     await supabaseAdmin
       .from("automacao_execucoes")
       .update({
         status: "finalizado",
-        finished_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        finished_at: dataEncerramento,
+        updated_at: dataEncerramento,
       })
       .eq("id", execucaoId)
       .eq("empresa_id", empresaId);
@@ -3004,12 +3013,33 @@ export async function executarNo(params: {
       .update({
         status: "encerrado_aut",
         bot_ativo: false,
-        closed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        closed_at: dataEncerramento,
+        updated_at: dataEncerramento,
       })
       .eq("id", conversaId)
       .eq("empresa_id", empresaId)
       .eq("status", "bot");
+
+    if (execucaoAtual?.conversa_protocolo_id) {
+      const { error: protocoloEncerramentoError } = await supabaseAdmin
+        .from("conversa_protocolos")
+        .update({
+          ativo: false,
+          closed_at: dataEncerramento,
+          updated_at: dataEncerramento,
+        })
+        .eq("id", execucaoAtual.conversa_protocolo_id)
+        .eq("empresa_id", empresaId)
+        .eq("conversa_id", conversaId)
+        .eq("ativo", true);
+
+      if (protocoloEncerramentoError) {
+        console.error(
+          "[AUTOMATION_ENGINE] Erro ao encerrar protocolo do bloco encerrar:",
+          protocoloEncerramentoError
+        );
+      }
+    }
 
     await registrarLog({
       empresaId,

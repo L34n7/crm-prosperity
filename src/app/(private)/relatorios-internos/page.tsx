@@ -25,6 +25,7 @@ const MAX_DISPAROS = 30000;
 const MAX_CONTATOS = 20000;
 const MAX_USUARIOS = 1500;
 const MAX_SESSOES = 5000;
+const MAX_INTEGRACOES = 5000;
 const ONLINE_TIMEOUT_MS = 5 * 60 * 1000;
 const MODAL_PAGE_SIZE = 10;
 const DASHBOARD_LIMIT = 5;
@@ -43,7 +44,14 @@ const CAMPAIGN_SEGMENT_COLORS = [
 
 type SearchParams = Record<string, string | string[] | undefined>;
 type PeriodoAtalho = "1h" | "24h" | "3d" | "7d" | "30d";
-type SortTabela = "conversas" | "mensagens" | "disparos" | "contatos" | "usuarios" | "planos";
+type SortTabela =
+  | "conversas"
+  | "mensagens"
+  | "disparos"
+  | "contatos"
+  | "usuarios"
+  | "planos"
+  | "integracoes";
 type RelatorioDetalhe = SortTabela;
 
 type FiltrosRelatorio = {
@@ -67,6 +75,8 @@ type FiltrosPorRelatorio = {
   usuariosUsuarioId: string;
   planosEmpresaId: string;
   planosStatus: "" | "regular" | "inadimplente";
+  integracoesEmpresaId: string;
+  integracoesStatus: "" | "pendente" | "ativa" | "erro" | "desconectada";
 };
 
 type OrdenacaoRelatorios = {
@@ -76,6 +86,7 @@ type OrdenacaoRelatorios = {
   contatos: "empresa" | "total" | "campanha" | "na" | "percentual";
   usuarios: "presenca" | "nome" | "empresa" | "login" | "ultimo" | "logout";
   planos: "empresa" | "plano" | "status" | "inicio" | "renovacao" | "expira";
+  integracoes: "status" | "empresa" | "etapa" | "online" | "created" | "updated";
 };
 
 type EmpresaRow = {
@@ -180,6 +191,27 @@ type UsuarioSessaoRow = {
   status: string | null;
 };
 
+type IntegracaoWhatsappRow = {
+  id: string;
+  empresa_id: string | null;
+  nome_conexao: string | null;
+  numero: string | null;
+  status: string | null;
+  provider: string | null;
+  phone_number_id: string | null;
+  waba_id: string | null;
+  webhook_verificado: boolean | null;
+  phone_registered: boolean | null;
+  app_assigned: boolean | null;
+  payment_method_added: boolean | null;
+  onboarding_etapa: string | null;
+  onboarding_status: string | null;
+  onboarding_erro: string | null;
+  setup_completed_at: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+
 type ConversasEmpresaResumo = {
   empresaId: string;
   nome: string;
@@ -244,6 +276,25 @@ type UsuarioSessaoResumo = {
   tempoOnlineMs: number;
 };
 
+type IntegracaoMetaResumo = {
+  id: string;
+  empresaId: string;
+  empresaNome: string;
+  nomeConexao: string;
+  numero: string;
+  status: string;
+  statusLabel: string;
+  ativo: boolean;
+  etapa: string;
+  etapaLabel: string;
+  onboardingStatus: string;
+  onboardingStatusLabel: string;
+  onboardingErro: string;
+  tempoOnlineMs: number;
+  criadoEm: string;
+  atualizadoEm: string | null;
+};
+
 type RelatoriosDados = {
   empresasOpcoes: EmpresaRow[];
   usuariosOpcoes: UsuarioOpcao[];
@@ -253,6 +304,7 @@ type RelatoriosDados = {
   disparosPorEmpresa: DisparosEmpresaResumo[];
   contatosPorEmpresa: ContatosEmpresaResumo[];
   usuariosSessao: UsuarioSessaoResumo[];
+  integracoesMeta: IntegracaoMetaResumo[];
   totais: {
     conversas: number;
     mensagens: number;
@@ -266,6 +318,9 @@ type RelatoriosDados = {
     usuariosOffline: number;
     usuariosTempoOnlineMs: number;
     empresas: number;
+    integracoesMeta: number;
+    integracoesMetaAtivas: number;
+    integracoesMetaPendentes: number;
   };
 };
 
@@ -290,6 +345,7 @@ const ordenacaoPadrao: OrdenacaoRelatorios = {
   contatos: "total",
   usuarios: "presenca",
   planos: "empresa",
+  integracoes: "status",
 };
 
 const relatoriosDetalhe: RelatorioDetalhe[] = [
@@ -299,6 +355,7 @@ const relatoriosDetalhe: RelatorioDetalhe[] = [
   "contatos",
   "usuarios",
   "planos",
+  "integracoes",
 ];
 
 const filtrosPorRelatorioPadrao: FiltrosPorRelatorio = {
@@ -313,6 +370,8 @@ const filtrosPorRelatorioPadrao: FiltrosPorRelatorio = {
   usuariosUsuarioId: "",
   planosEmpresaId: "",
   planosStatus: "",
+  integracoesEmpresaId: "",
+  integracoesStatus: "",
 };
 
 function getParametro(params: SearchParams, chave: string) {
@@ -418,6 +477,7 @@ function resolverFiltros(params: SearchParams): FiltrosRelatorio {
 
 function resolverFiltrosPorRelatorio(params: SearchParams): FiltrosPorRelatorio {
   const planosStatus = getParametro(params, "planos_status");
+  const integracoesStatus = getParametro(params, "int_status");
 
   return {
     conversasEmpresaId: getParametro(params, "conv_empresa"),
@@ -433,6 +493,14 @@ function resolverFiltrosPorRelatorio(params: SearchParams): FiltrosPorRelatorio 
     planosStatus:
       planosStatus === "regular" || planosStatus === "inadimplente"
         ? planosStatus
+        : "",
+    integracoesEmpresaId: getParametro(params, "int_empresa"),
+    integracoesStatus:
+      integracoesStatus === "pendente" ||
+      integracoesStatus === "ativa" ||
+      integracoesStatus === "erro" ||
+      integracoesStatus === "desconectada"
+        ? integracoesStatus
         : "",
   };
 }
@@ -457,6 +525,9 @@ function resolverOrdenacao(params: SearchParams): OrdenacaoRelatorios {
     planos:
       (getParametro(params, "sort_planos") as OrdenacaoRelatorios["planos"]) ||
       ordenacaoPadrao.planos,
+    integracoes:
+      (getParametro(params, "sort_integracoes") as OrdenacaoRelatorios["integracoes"]) ||
+      ordenacaoPadrao.integracoes,
   };
 }
 
@@ -547,6 +618,7 @@ function hrefFecharDetalhe(params: SearchParams) {
     pag_contatos: "",
     pag_usuarios: "",
     pag_planos: "",
+    pag_integracoes: "",
   });
 }
 
@@ -689,6 +761,25 @@ function PlanoStatusSelect({ value }: { value: FiltrosPorRelatorio["planosStatus
         <option value="">Todos</option>
         <option value="regular">Renovado / regular</option>
         <option value="inadimplente">Inadimplente</option>
+      </select>
+    </label>
+  );
+}
+
+function IntegracaoStatusSelect({
+  value,
+}: {
+  value: FiltrosPorRelatorio["integracoesStatus"];
+}) {
+  return (
+    <label className={styles.field}>
+      <span>Status</span>
+      <select name="int_status" defaultValue={value}>
+        <option value="">Todos</option>
+        <option value="pendente">Pendente</option>
+        <option value="ativa">Ativa</option>
+        <option value="erro">Erro</option>
+        <option value="desconectada">Desconectada</option>
       </select>
     </label>
   );
@@ -1212,6 +1303,45 @@ function getStatusPlanoLabel(status: string | null | undefined) {
   return status || "Nao definido";
 }
 
+function formatarStatusMeta(valor: string | null | undefined) {
+  if (!valor) return "Nao informado";
+
+  const mapa: Record<string, string> = {
+    pendente: "Pendente",
+    ativa: "Ativa",
+    erro: "Erro",
+    desconectada: "Desconectada",
+    inicio: "Inicio",
+    em_andamento: "Em andamento",
+    meta_conectado: "Meta conectada",
+    waba_criada: "WABA criada",
+    numero_registrado: "Numero registrado",
+    pagamento_configurado: "Pagamento configurado",
+    webhook_configurado: "Webhook configurado",
+    concluido: "Concluido",
+  };
+
+  return (
+    mapa[valor] ||
+    valor
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (letra) => letra.toUpperCase())
+  );
+}
+
+function integracaoMetaEstaAtiva(integracao: IntegracaoWhatsappRow) {
+  return (
+    integracao.status === "ativa" ||
+    (integracao.onboarding_etapa === "concluido" &&
+      integracao.onboarding_status === "concluido")
+  );
+}
+
+function getIntegracaoStatusRank(integracao: IntegracaoMetaResumo) {
+  if (!integracao.ativo) return 0;
+  return 1;
+}
+
 function empresaEstaInadimplente(empresa: EmpresaRow) {
   if (
     empresa.assinatura_status === "bloqueada" ||
@@ -1324,6 +1454,84 @@ async function carregarSessoesRecentes(usuarioIds: string[]) {
   }
 }
 
+async function carregarSessoesPeriodo(
+  usuarioIds: string[],
+  filtros: FiltrosRelatorio
+) {
+  if (usuarioIds.length === 0) return [] as UsuarioSessaoRow[];
+
+  const supabaseAdmin = getSupabaseAdmin();
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("usuario_sessoes")
+      .select(
+        "id, usuario_id, empresa_id, client_session_id, login_at, last_seen_at, logout_at, status"
+      )
+      .in("usuario_id", usuarioIds)
+      .lte("login_at", filtros.fimIso)
+      .or(
+        `logout_at.gte.${filtros.inicioIso},last_seen_at.gte.${filtros.inicioIso},logout_at.is.null`
+      )
+      .order("login_at", { ascending: true })
+      .limit(MAX_SESSOES);
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []) as UsuarioSessaoRow[];
+  } catch (error) {
+    console.error(
+      "[RELATORIOS_INTERNOS] Falha ao buscar sessoes do periodo:",
+      error
+    );
+    return [] as UsuarioSessaoRow[];
+  }
+}
+
+function montarTempoOnlinePorEmpresa({
+  usuarios,
+  sessoesPeriodo,
+  filtros,
+  referenciaAgora,
+}: {
+  usuarios: UsuarioRow[];
+  sessoesPeriodo: UsuarioSessaoRow[];
+  filtros: FiltrosRelatorio;
+  referenciaAgora: number;
+}) {
+  const inicioPeriodo = getTimestamp(filtros.inicioIso);
+  const fimPeriodo = Math.min(getTimestamp(filtros.fimIso) || referenciaAgora, referenciaAgora);
+  const empresaPorUsuario = new Map(
+    usuarios.map((usuario) => [usuario.id, usuario.empresa_id])
+  );
+  const mapa = new Map<string, number>();
+
+  for (const sessao of sessoesPeriodo) {
+    const inicioSessao = getTimestamp(sessao.login_at);
+    const ultimoSinal = Math.min(
+      getTimestamp(sessao.last_seen_at) || inicioSessao,
+      referenciaAgora
+    );
+    const logout = Math.min(getTimestamp(sessao.logout_at) || 0, referenciaAgora);
+    const abertaOnline =
+      !logout && ultimoSinal > 0 && referenciaAgora - ultimoSinal <= ONLINE_TIMEOUT_MS;
+    const fimSessao = logout || (abertaOnline ? referenciaAgora : ultimoSinal);
+    const inicio = Math.max(inicioSessao, inicioPeriodo);
+    const fim = Math.min(fimSessao, fimPeriodo);
+    const duracao = Math.max(0, fim - inicio);
+
+    if (duracao <= 0) continue;
+
+    const empresaId =
+      sessao.empresa_id || empresaPorUsuario.get(sessao.usuario_id) || "sem_empresa";
+    mapa.set(empresaId, (mapa.get(empresaId) ?? 0) + duracao);
+  }
+
+  return mapa;
+}
+
 async function carregarRelatorios(
   filtros: FiltrosRelatorio,
   filtrosRelatorio: FiltrosPorRelatorio,
@@ -1427,6 +1635,35 @@ async function carregarRelatorios(
     .order("created_at", { ascending: false })
     .limit(MAX_CONTATOS);
 
+  let integracoesQuery = supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select(
+      `
+        id,
+        empresa_id,
+        nome_conexao,
+        numero,
+        status,
+        provider,
+        phone_number_id,
+        waba_id,
+        webhook_verificado,
+        phone_registered,
+        app_assigned,
+        payment_method_added,
+        onboarding_etapa,
+        onboarding_status,
+        onboarding_erro,
+        setup_completed_at,
+        created_at,
+        updated_at
+      `,
+      { count: "exact" }
+    )
+    .eq("provider", "meta_official")
+    .order("created_at", { ascending: false })
+    .limit(MAX_INTEGRACOES);
+
   let usuariosQuery = supabaseAdmin
     .from("usuarios")
     .select(
@@ -1489,6 +1726,20 @@ async function carregarRelatorios(
     );
   }
 
+  if (filtrosRelatorio.integracoesEmpresaId) {
+    integracoesQuery = integracoesQuery.eq(
+      "empresa_id",
+      filtrosRelatorio.integracoesEmpresaId
+    );
+  }
+
+  if (filtrosRelatorio.integracoesStatus) {
+    integracoesQuery = integracoesQuery.eq(
+      "status",
+      filtrosRelatorio.integracoesStatus
+    );
+  }
+
   if (filtrosRelatorio.usuariosEmpresaId) {
     usuariosQuery = usuariosQuery.eq(
       "empresa_id",
@@ -1508,6 +1759,7 @@ async function carregarRelatorios(
     mensagensResult,
     disparosResult,
     contatosResult,
+    integracoesResult,
     usuariosResult,
   ] = await Promise.all([
     empresasOpcoesQuery,
@@ -1517,6 +1769,7 @@ async function carregarRelatorios(
     mensagensQuery,
     disparosQuery,
     contatosQuery,
+    integracoesQuery,
     usuariosQuery,
   ]);
 
@@ -1527,6 +1780,7 @@ async function carregarRelatorios(
   if (mensagensResult.error) throw new Error(mensagensResult.error.message);
   if (disparosResult.error) throw new Error(disparosResult.error.message);
   if (contatosResult.error) throw new Error(contatosResult.error.message);
+  if (integracoesResult.error) throw new Error(integracoesResult.error.message);
   if (usuariosResult.error) throw new Error(usuariosResult.error.message);
 
   const empresasOpcoes = (empresasOpcoesResult.data ?? []) as EmpresaRow[];
@@ -1550,6 +1804,7 @@ async function carregarRelatorios(
   const mensagens = (mensagensResult.data ?? []) as MensagemRow[];
   const disparos = (disparosResult.data ?? []) as DisparoRow[];
   const contatos = (contatosResult.data ?? []) as ContatoRow[];
+  const integracoes = (integracoesResult.data ?? []) as IntegracaoWhatsappRow[];
   const usuarios = (usuariosResult.data ?? []) as UsuarioRow[];
   const conversasPorId = new Map(conversas.map((conversa) => [conversa.id, conversa]));
 
@@ -1601,19 +1856,28 @@ async function carregarRelatorios(
     }
   }
 
-  const sessoesRecentes = await carregarSessoesRecentes(
-    usuarios.map((usuario) => usuario.id)
+  const usuarioIds = usuarios.map((usuario) => usuario.id);
+  const referenciaAgora = Math.min(
+    Date.now(),
+    getTimestamp(filtros.fimIso) || Date.now()
   );
+  const [sessoesRecentes, sessoesPeriodo] = await Promise.all([
+    carregarSessoesRecentes(usuarioIds),
+    carregarSessoesPeriodo(usuarioIds, filtros),
+  ]);
+  const tempoOnlinePorEmpresa = montarTempoOnlinePorEmpresa({
+    usuarios,
+    sessoesPeriodo,
+    filtros,
+    referenciaAgora,
+  });
 
   const usuariosSessao = montarUsuariosSessao({
     usuarios,
     empresasPorId,
     sessoesRecentes,
     ordenacao: ordenacao.usuarios,
-    referenciaAgora: Math.min(
-      Date.now(),
-      getTimestamp(filtros.fimIso) || Date.now()
-    ),
+    referenciaAgora,
   });
 
   const conversasPorEmpresa = montarConversasPorEmpresa({
@@ -1642,6 +1906,12 @@ async function carregarRelatorios(
     empresasPorId,
     ordenacao: ordenacao.contatos,
   });
+  const integracoesMeta = montarIntegracoesMeta({
+    integracoes,
+    empresasPorId,
+    tempoOnlinePorEmpresa,
+    ordenacao: ordenacao.integracoes,
+  });
   const empresasOrdenadas = ordenarEmpresasPlano({
     empresas,
     ordenacao: ordenacao.planos,
@@ -1663,6 +1933,9 @@ async function carregarRelatorios(
     (total, usuario) => total + usuario.tempoOnlineMs,
     0
   );
+  const integracoesMetaAtivas = integracoesMeta.filter(
+    (integracao) => integracao.ativo
+  ).length;
 
   return {
     empresasOpcoes,
@@ -1673,6 +1946,7 @@ async function carregarRelatorios(
     disparosPorEmpresa,
     contatosPorEmpresa,
     usuariosSessao,
+    integracoesMeta,
     totais: {
       conversas: conversasResult.count ?? conversas.length,
       mensagens: mensagensResult.count ?? mensagens.length,
@@ -1686,6 +1960,12 @@ async function carregarRelatorios(
       usuariosOffline: Math.max(0, usuarios.length - usuariosOnline),
       usuariosTempoOnlineMs,
       empresas: empresasOrdenadas.length,
+      integracoesMeta: integracoesResult.count ?? integracoes.length,
+      integracoesMetaAtivas,
+      integracoesMetaPendentes: Math.max(
+        0,
+        (integracoesResult.count ?? integracoes.length) - integracoesMetaAtivas
+      ),
     },
   };
 }
@@ -1992,6 +2272,61 @@ function montarContatosPorEmpresa({
     });
 }
 
+function montarIntegracoesMeta({
+  integracoes,
+  empresasPorId,
+  tempoOnlinePorEmpresa,
+  ordenacao,
+}: {
+  integracoes: IntegracaoWhatsappRow[];
+  empresasPorId: Map<string, EmpresaRow>;
+  tempoOnlinePorEmpresa: Map<string, number>;
+  ordenacao: OrdenacaoRelatorios["integracoes"];
+}) {
+  return integracoes
+    .map((integracao) => {
+      const empresaId = integracao.empresa_id || "sem_empresa";
+      const status = integracao.status || "pendente";
+      const etapa = integracao.onboarding_etapa || "inicio";
+      const onboardingStatus = integracao.onboarding_status || status;
+      const ativo = integracaoMetaEstaAtiva(integracao);
+
+      return {
+        id: integracao.id,
+        empresaId,
+        empresaNome: getNomeEmpresaPorId(empresasPorId, empresaId),
+        nomeConexao: integracao.nome_conexao?.trim() || "Sem nome",
+        numero: integracao.numero?.trim() || "-",
+        status,
+        statusLabel: formatarStatusMeta(status),
+        ativo,
+        etapa,
+        etapaLabel: formatarStatusMeta(etapa),
+        onboardingStatus,
+        onboardingStatusLabel: formatarStatusMeta(onboardingStatus),
+        onboardingErro: integracao.onboarding_erro?.trim() || "",
+        tempoOnlineMs: tempoOnlinePorEmpresa.get(empresaId) ?? 0,
+        criadoEm: integracao.created_at,
+        atualizadoEm: integracao.updated_at,
+      };
+    })
+    .sort((a, b) => {
+      if (ordenacao === "empresa") return compararTexto(a.empresaNome, b.empresaNome);
+      if (ordenacao === "etapa") return compararTexto(a.etapaLabel, b.etapaLabel);
+      if (ordenacao === "online") return b.tempoOnlineMs - a.tempoOnlineMs;
+      if (ordenacao === "created") return getTimestamp(b.criadoEm) - getTimestamp(a.criadoEm);
+      if (ordenacao === "updated") {
+        return getTimestamp(b.atualizadoEm) - getTimestamp(a.atualizadoEm);
+      }
+
+      return (
+        getIntegracaoStatusRank(a) - getIntegracaoStatusRank(b) ||
+        compararTexto(a.statusLabel, b.statusLabel) ||
+        compararTexto(a.empresaNome, b.empresaNome)
+      );
+    });
+}
+
 function montarUsuariosSessao({
   usuarios,
   empresasPorId,
@@ -2185,29 +2520,6 @@ function DashboardCards({
       </DashboardReportCard>
 
       <DashboardReportCard
-        icon={Send}
-        eyebrow="Disparos"
-        title="Total por empresa"
-        value={formatarNumero(dados.totais.disparos)}
-        detail="disparos registrados"
-        href={hrefDetalhe(params, "disparos")}
-        tone="amber"
-      >
-        <MiniBarChart
-          emptyText="Nenhum disparo encontrado."
-          tone="amber"
-          items={dados.disparosPorEmpresa.map((empresa) => ({
-            id: empresa.empresaId,
-            label: empresa.nome,
-            value: empresa.total,
-            detail: `${formatarNumero(empresa.sucesso)} sucesso - ${formatarNumero(
-              empresa.falha
-            )} falha`,
-          }))}
-        />
-      </DashboardReportCard>
-
-      <DashboardReportCard
         icon={ContactRound}
         eyebrow="Novos contatos"
         title="Por campanha"
@@ -2228,6 +2540,29 @@ function DashboardCards({
             segments: empresa.campanhas,
             detail: formatarCampanhasResumo(empresa.campanhas),
             detailTitle: formatarCampanhasResumo(empresa.campanhas, 20, false),
+          }))}
+        />
+      </DashboardReportCard>
+
+      <DashboardReportCard
+        icon={Send}
+        eyebrow="Disparos"
+        title="Total por empresa"
+        value={formatarNumero(dados.totais.disparos)}
+        detail="disparos registrados"
+        href={hrefDetalhe(params, "disparos")}
+        tone="amber"
+      >
+        <MiniBarChart
+          emptyText="Nenhum disparo encontrado."
+          tone="amber"
+          items={dados.disparosPorEmpresa.map((empresa) => ({
+            id: empresa.empresaId,
+            label: empresa.nome,
+            value: empresa.total,
+            detail: `${formatarNumero(empresa.sucesso)} sucesso - ${formatarNumero(
+              empresa.falha
+            )} falha`,
           }))}
         />
       </DashboardReportCard>
@@ -2302,6 +2637,45 @@ function DashboardCards({
             detail: `${getSituacaoPlanoLabel(empresa)} - vence ${formatarData(
               empresa.assinatura_vencimento_em
             )}`,
+          }))}
+        />
+      </DashboardReportCard>
+
+      <DashboardReportCard
+        icon={MessageSquare}
+        eyebrow="Integrações Meta"
+        title="Onboarding WhatsApp"
+        value={formatarNumero(dados.totais.integracoesMetaAtivas)}
+        detail={`${formatarNumero(dados.totais.integracoesMetaPendentes)} pendentes`}
+        href={hrefDetalhe(params, "integracoes")}
+        tone="green"
+      >
+        <SplitMeter
+          esquerda={{
+            label: "pendentes",
+            value: dados.totais.integracoesMetaPendentes,
+            tone: "amber",
+          }}
+          direita={{
+            label: "ativas",
+            value: dados.totais.integracoesMetaAtivas,
+            tone: "green",
+          }}
+        />
+        <MiniBarChart
+          emptyText="Nenhuma integracao Meta encontrada."
+          tone="green"
+          items={dados.integracoesMeta.slice(0, DASHBOARD_LIMIT).map((integracao) => ({
+            id: integracao.id,
+            label: integracao.empresaNome,
+            value:
+              integracao.tempoOnlineMs > 0
+                ? Math.max(1, Math.round(integracao.tempoOnlineMs / 60000))
+                : 0,
+            valueLabel: integracao.statusLabel,
+            detail: `${integracao.etapaLabel} - ${formatarDuracao(
+              integracao.tempoOnlineMs
+            )} online`,
           }))}
         />
       </DashboardReportCard>
@@ -3011,153 +3385,327 @@ function RelatorioDetalheModal({
     );
   }
 
-  const paginacao = paginar(dados.empresas, resolverPagina(params, "planos"));
+  if (detalhe === "planos") {
+    const paginacao = paginar(dados.empresas, resolverPagina(params, "planos"));
 
-  return (
-    <ModalShell
-      params={params}
-      title="Planos das empresas"
-      subtitle="Empresas, plano, renovacao, inicio, expiracao e situacao financeira."
-    >
-      <ReportFilters
+    return (
+      <ModalShell
         params={params}
-        exclude={[
-          "inicio",
-          "fim",
-          "atalho",
-          "planos_empresa",
-          "planos_status",
-          "pag_planos",
-        ]}
-        clearUpdates={{ planos_empresa: "", planos_status: "", pag_planos: "1" }}
+        title="Planos das empresas"
+        subtitle="Empresas, plano, renovacao, inicio, expiracao e situacao financeira."
       >
-        <div className={styles.reportFilterDates}>
-          <PeriodoFilterFields params={params} filtros={filtros} />
-        </div>
+        <ReportFilters
+          params={params}
+          exclude={[
+            "inicio",
+            "fim",
+            "atalho",
+            "planos_empresa",
+            "planos_status",
+            "pag_planos",
+          ]}
+          clearUpdates={{ planos_empresa: "", planos_status: "", pag_planos: "1" }}
+        >
+          <div className={styles.reportFilterDates}>
+            <PeriodoFilterFields params={params} filtros={filtros} />
+          </div>
 
-        <div className={styles.reportFilterSelectors}>
-          <EmpresaSelect
-            name="planos_empresa"
-            value={filtrosRelatorio.planosEmpresaId}
-            empresas={dados.empresasOpcoes}
-          />
+          <div className={styles.reportFilterSelectors}>
+            <EmpresaSelect
+              name="planos_empresa"
+              value={filtrosRelatorio.planosEmpresaId}
+              empresas={dados.empresasOpcoes}
+            />
 
-          <PlanoStatusSelect value={filtrosRelatorio.planosStatus} />
-        </div>
-      </ReportFilters>
+            <PlanoStatusSelect value={filtrosRelatorio.planosStatus} />
+          </div>
+        </ReportFilters>
 
-      {paginacao.totalItens === 0 ? (
-        <EmptyState>Nenhuma empresa encontrada.</EmptyState>
-      ) : (
-        <>
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>
-                    <SortHeader
-                      params={params}
-                      tabela="planos"
-                      campo="empresa"
-                      atual={ordenacao.planos}
-                    >
-                      Empresa
-                    </SortHeader>
-                  </th>
-                  <th>
-                    <SortHeader
-                      params={params}
-                      tabela="planos"
-                      campo="plano"
-                      atual={ordenacao.planos}
-                    >
-                      Plano
-                    </SortHeader>
-                  </th>
-                  <th>
-                    <SortHeader
-                      params={params}
-                      tabela="planos"
-                      campo="status"
-                      atual={ordenacao.planos}
-                    >
-                      Status
-                    </SortHeader>
-                  </th>
-                  <th>
-                    <SortHeader
-                      params={params}
-                      tabela="planos"
-                      campo="renovacao"
-                      atual={ordenacao.planos}
-                    >
-                      Renovacao
-                    </SortHeader>
-                  </th>
-                  <th>
-                    <SortHeader
-                      params={params}
-                      tabela="planos"
-                      campo="inicio"
-                      atual={ordenacao.planos}
-                    >
-                      Inicio
-                    </SortHeader>
-                  </th>
-                  <th>
-                    <SortHeader
-                      params={params}
-                      tabela="planos"
-                      campo="expira"
-                      atual={ordenacao.planos}
-                    >
-                      Expira em
-                    </SortHeader>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginacao.itens.map((empresa) => {
-                  const plano = getPlano(empresa);
+        {paginacao.totalItens === 0 ? (
+          <EmptyState>Nenhuma empresa encontrada.</EmptyState>
+        ) : (
+          <>
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="planos"
+                        campo="empresa"
+                        atual={ordenacao.planos}
+                      >
+                        Empresa
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="planos"
+                        campo="plano"
+                        atual={ordenacao.planos}
+                      >
+                        Plano
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="planos"
+                        campo="status"
+                        atual={ordenacao.planos}
+                      >
+                        Status
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="planos"
+                        campo="renovacao"
+                        atual={ordenacao.planos}
+                      >
+                        Renovacao
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="planos"
+                        campo="inicio"
+                        atual={ordenacao.planos}
+                      >
+                        Inicio
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="planos"
+                        campo="expira"
+                        atual={ordenacao.planos}
+                      >
+                        Expira em
+                      </SortHeader>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginacao.itens.map((empresa) => {
+                    const plano = getPlano(empresa);
 
-                  return (
-                    <tr key={empresa.id}>
+                    return (
+                      <tr key={empresa.id}>
+                        <td>
+                          <strong>{getNomeEmpresa(empresa)}</strong>
+                          <span className={styles.secondaryText}>{empresa.id}</span>
+                        </td>
+                        <td>{plano?.nome || "Sem plano"}</td>
+                        <td>
+                          <span className={styles.statusWithDot}>
+                            <span
+                              className={`${styles.statusDot} ${getSituacaoPlanoDotClass(
+                                empresa
+                              )}`}
+                            />
+                            {getSituacaoPlanoLabel(empresa)}
+                          </span>
+                          <span className={styles.secondaryText}>
+                            {getStatusPlanoLabel(empresa.assinatura_status)}
+                          </span>
+                        </td>
+                        <td>{formatarData(empresa.assinatura_renovada_em)}</td>
+                        <td>
+                          {formatarData(
+                            empresa.assinatura_inicio_em || empresa.created_at
+                          )}
+                        </td>
+                        <td>{formatarData(empresa.assinatura_vencimento_em)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Pagination params={params} tabela="planos" paginacao={paginacao} />
+          </>
+        )}
+      </ModalShell>
+    );
+  }
+
+  if (detalhe === "integracoes") {
+    const paginacao = paginar(
+      dados.integracoesMeta,
+      resolverPagina(params, "integracoes")
+    );
+
+    return (
+      <ModalShell
+        params={params}
+        title="Integrações Meta por empresa"
+        subtitle={`Onboarding do WhatsApp Meta e tempo online por empresa no periodo ${filtros.periodoLabel}.`}
+      >
+        <ReportFilters
+          params={params}
+          exclude={[
+            "inicio",
+            "fim",
+            "atalho",
+            "int_empresa",
+            "int_status",
+            "pag_integracoes",
+          ]}
+          clearUpdates={{ int_empresa: "", int_status: "", pag_integracoes: "1" }}
+        >
+          <div className={styles.reportFilterDates}>
+            <PeriodoFilterFields params={params} filtros={filtros} />
+          </div>
+
+          <div className={styles.reportFilterSelectors}>
+            <EmpresaSelect
+              name="int_empresa"
+              value={filtrosRelatorio.integracoesEmpresaId}
+              empresas={dados.empresasOpcoes}
+            />
+
+            <IntegracaoStatusSelect value={filtrosRelatorio.integracoesStatus} />
+          </div>
+        </ReportFilters>
+
+        {paginacao.totalItens === 0 ? (
+          <EmptyState>Nenhuma integracao Meta encontrada.</EmptyState>
+        ) : (
+          <>
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="integracoes"
+                        campo="status"
+                        atual={ordenacao.integracoes}
+                      >
+                        Status
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="integracoes"
+                        campo="empresa"
+                        atual={ordenacao.integracoes}
+                      >
+                        Empresa
+                      </SortHeader>
+                    </th>
+                    <th>Integração</th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="integracoes"
+                        campo="etapa"
+                        atual={ordenacao.integracoes}
+                      >
+                        Etapa onboarding
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="integracoes"
+                        campo="created"
+                        atual={ordenacao.integracoes}
+                      >
+                        Criada em
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="integracoes"
+                        campo="updated"
+                        atual={ordenacao.integracoes}
+                      >
+                        Atualizada em
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="integracoes"
+                        campo="online"
+                        atual={ordenacao.integracoes}
+                      >
+                        Tempo online
+                      </SortHeader>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginacao.itens.map((integracao) => (
+                    <tr key={integracao.id}>
                       <td>
-                        <strong>{getNomeEmpresa(empresa)}</strong>
-                        <span className={styles.secondaryText}>{empresa.id}</span>
-                      </td>
-                      <td>{plano?.nome || "Sem plano"}</td>
-                      <td>
-                        <span className={styles.statusWithDot}>
-                          <span
-                            className={`${styles.statusDot} ${getSituacaoPlanoDotClass(
-                              empresa
-                            )}`}
-                          />
-                          {getSituacaoPlanoLabel(empresa)}
+                        <span
+                          className={`${styles.statusBadge} ${
+                            integracao.ativo
+                              ? styles.statusOnline
+                              : styles.statusWarning
+                          }`}
+                        >
+                          {integracao.statusLabel}
                         </span>
                         <span className={styles.secondaryText}>
-                          {getStatusPlanoLabel(empresa.assinatura_status)}
+                          {integracao.onboardingStatusLabel}
                         </span>
                       </td>
-                      <td>{formatarData(empresa.assinatura_renovada_em)}</td>
                       <td>
-                        {formatarData(
-                          empresa.assinatura_inicio_em || empresa.created_at
-                        )}
+                        <strong>{integracao.empresaNome}</strong>
+                        <span className={styles.secondaryText}>
+                          {integracao.empresaId}
+                        </span>
                       </td>
-                      <td>{formatarData(empresa.assinatura_vencimento_em)}</td>
+                      <td>
+                        <span className={styles.primaryText}>
+                          {integracao.nomeConexao}
+                        </span>
+                        <span className={styles.secondaryText}>
+                          {integracao.numero}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={styles.primaryText}>
+                          {integracao.etapaLabel}
+                        </span>
+                        {integracao.onboardingErro ? (
+                          <span className={styles.secondaryText}>
+                            {integracao.onboardingErro}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>{formatarDataHora(integracao.criadoEm)}</td>
+                      <td>{formatarDataHora(integracao.atualizadoEm)}</td>
+                      <td>{formatarDuracao(integracao.tempoOnlineMs)}</td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <Pagination params={params} tabela="planos" paginacao={paginacao} />
-        </>
-      )}
-    </ModalShell>
-  );
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              params={params}
+              tabela="integracoes"
+              paginacao={paginacao}
+            />
+          </>
+        )}
+      </ModalShell>
+    );
+  }
+
+  return null;
 }
 
 export default async function RelatoriosInternosPage({
@@ -3275,6 +3823,15 @@ export default async function RelatoriosInternosPage({
             label="Empresas"
             value={formatarNumero(dados.totais.empresas)}
             detail="com plano monitorado"
+            tone="green"
+          />
+          <KpiCard
+            icon={MessageSquare}
+            label="Integrações Meta"
+            value={formatarNumero(dados.totais.integracoesMetaAtivas)}
+            detail={`${formatarNumero(
+              dados.totais.integracoesMetaPendentes
+            )} pendentes`}
             tone="green"
           />
         </section>

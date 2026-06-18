@@ -50,7 +50,7 @@ function formatarData(valor?: string | null) {
   } catch {
     return "-";
   }
-}
+} 
 
 function statusLabel(status: string) {
   if (status === "pendente") return "Pendente";
@@ -61,7 +61,7 @@ function statusLabel(status: string) {
 }
 
 function statusClass(status: string) {
-  if (status === "pendente") return `${styles.badge} ${styles.badgeBlue}`;
+  if (status === "pendente") return `${styles.badge} ${styles.badgeYellow}`;
   if (status === "executado") return `${styles.badge} ${styles.badgeGreen}`;
   if (status === "cancelado") return `${styles.badge} ${styles.badgeCancel}`;
   if (status === "erro") return `${styles.badge} ${styles.badgeRed}`;
@@ -71,7 +71,7 @@ function statusClass(status: string) {
 function envioStatusClass(status?: string | null) {
   if (status === "falha") return `${styles.badge} ${styles.badgeRed}`;
   if (status === "sucesso") return `${styles.badge} ${styles.badgeGreen}`;
-  if (status === "processando") return `${styles.badge} ${styles.badgeBlue}`;
+  if (status === "processando") return `${styles.badge} ${styles.badgeYellow}`;
   return `${styles.badge} ${styles.badgeYellow}`;
 }
 

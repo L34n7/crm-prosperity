@@ -679,7 +679,7 @@
   height: 36px;
   border-radius: 999px;
   overflow: hidden;
-  background: var(--crm-surface-muted);
+  background: linear-gradient(80deg, #7dd2b0 0%, #a2ffda 100%);
   border: 1px solid var(--crm-primary-border);
   display: flex;
   align-items: center;

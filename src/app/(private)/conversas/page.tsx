@@ -1691,7 +1691,19 @@ function normalizarJanela24hConversa(
   };
 }
 
+function montarUrlMidiaMensagem(msg: Mensagem) {
+  const mediaId = String(msg.metadata_json?.media_id || "").trim();
 
+  if (mediaId) {
+    return `/api/whatsapp/media/${encodeURIComponent(mediaId)}`;
+  }
+
+  return (
+    msg.metadata_json?.midia_url ||
+    msg.metadata_json?.url ||
+    null
+  );
+}
 
 function ConversasPageContent() {
   const router = useRouter();
@@ -2017,19 +2029,19 @@ function ConversasPageContent() {
         msg.metadata_json?.legenda ||
         null;
       const filename = msg.metadata_json?.filename || null;
-      const urlMidia =
-        msg.metadata_json?.midia_url ||
-        msg.metadata_json?.url ||
-        (mediaId ? `/api/whatsapp/media/${mediaId}` : null);
+      const urlMidia = montarUrlMidiaMensagem(msg);
 
       const isImage = msg.tipo_mensagem === "imagem";
       const isVideo = msg.tipo_mensagem === "video";
+      const isAudio = msg.tipo_mensagem === "audio";
       const isDocumento = msg.tipo_mensagem === "documento";
       const isAudioDocumento =
         isDocumento && mimeType.toLowerCase().startsWith("audio/");
       const isPdf = isDocumento && mimeType.toLowerCase().includes("pdf");
 
-      if (urlMidia && (isImage || isVideo || isDocumento)) {
+      const isMidia = isImage || isVideo || isAudio;
+
+      if (urlMidia && (isMidia || isDocumento)) {
         itens.push({
           id: msg.id,
           tipo: isDocumento ? "documento" : "midia",
@@ -2041,6 +2053,8 @@ function ConversasPageContent() {
               ? "Imagem"
               : isVideo
               ? "Vídeo"
+              : isAudio
+              ? "Áudio"
               : isAudioDocumento
               ? "Áudio"
               : isPdf
@@ -2053,7 +2067,7 @@ function ConversasPageContent() {
           dateLabel: formatarDataSeparador(msg.created_at),
           isImage,
           isVideo,
-          isAudio: isAudioDocumento,
+          isAudio: isAudio || isAudioDocumento,
           isPdf,
         });
       }
@@ -2374,14 +2388,7 @@ function ConversasPageContent() {
 }
 
   function renderizarConteudoMensagem(msg: Mensagem) {
-    const mediaId = msg.metadata_json?.media_id || null;
-
-    const url =
-      mediaId
-        ? `/api/whatsapp/media/${mediaId}`
-        : msg.metadata_json?.midia_url ||
-          msg.metadata_json?.url ||
-          null;
+    const url = montarUrlMidiaMensagem(msg);
 
     const caption =
       msg.metadata_json?.caption ||
@@ -3884,43 +3891,49 @@ function ConversasPageContent() {
 
       if (!res.ok) {
         setErro(data.error || "Erro ao enviar mensagem");
+        setEnviando(false);
         return;
       }
 
       conteudoRef.current = "";
       setConteudo("");
+
       if (editorRef.current) {
         editorRef.current.innerHTML = "";
       }
 
       setMensagemSucesso(data.message || "Mensagem enviada com sucesso.");
 
-      const listaAtualizada = await atualizarConversasCarregadas();
-      const conversaAtualizada = listaAtualizada.find(
-        (c: Conversa) => c.id === conversaSelecionada.id
-      );
+      setEnviando(false);
 
-      const novoFimJanela =
-        atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
-        fimJanelaHistorico;
+      atualizarConversasCarregadas()
+        .then(async (listaAtualizada) => {
+          const conversaAtualizada = listaAtualizada.find(
+            (c: Conversa) => c.id === conversaSelecionada.id
+          );
 
-      forcarScrollParaFinalRef.current = false;
-      acompanharCrescimentoChatRef.current = true;
-      impedirAutoScrollRef.current = false;
+          const novoFimJanela =
+            atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
+            fimJanelaHistorico;
 
-      await carregarMensagens(
-        conversaSelecionada.id,
-        true,
-        protocoloSelecionadoId,
-        mensagemMaisAntigaCarregadaRef.current || inicioJanelaHistorico,
-        novoFimJanela,
-        {
-          modoMergeNovas: true,
-        }
-      );
+          forcarScrollParaFinalRef.current = false;
+          acompanharCrescimentoChatRef.current = true;
+          impedirAutoScrollRef.current = false;
+
+          await carregarMensagens(
+            conversaSelecionada.id,
+            true,
+            protocoloSelecionadoId,
+            mensagemMaisAntigaCarregadaRef.current || inicioJanelaHistorico,
+            novoFimJanela,
+            {
+              modoMergeNovas: true,
+            }
+          );
+        })
+        .catch(() => {});
     } catch {
       setErro("Erro ao enviar mensagem");
-    } finally {
       setEnviando(false);
     }
   }
@@ -8156,8 +8169,10 @@ const templateFooterTexto = useMemo(() => {
 
                                       if (arquivoEnvio) {
                                         legendaArquivoRef.current = texto;
+                                        setLegendaArquivo(texto);
                                       } else {
                                         conteudoRef.current = texto;
+                                        setConteudo(texto);
                                       }
                                     }}
                                     onKeyDown={(e) => {
@@ -8170,6 +8185,8 @@ const templateFooterTexto = useMemo(() => {
                                           enviarMidia();
                                           return;
                                         }
+
+                                        if (!conteudoRef.current.trim()) return;
 
                                         enviarMensagem();
                                       }
@@ -8220,7 +8237,7 @@ const templateFooterTexto = useMemo(() => {
                                       enviando ||
                                       !podeEnviarMensagem ||
                                       gravandoAudio ||
-                                      (!arquivoEnvio && !conteudoRef.current.trim())
+                                      (!arquivoEnvio && !conteudo.trim())
                                     }
                                     className={styles.sendButton}
                                   >
@@ -9588,28 +9605,47 @@ const templateFooterTexto = useMemo(() => {
                                         );
                                       }
 
+                                    if (item.isAudio) {
                                       return (
-                                        <button
-                                          key={item.id}
-                                          type="button"
-                                          className={styles.mediaThumbCardCompact}
-                                          onClick={() =>
-                                            setArquivoPreview({
-                                              url: item.url,
-                                              nome: item.nome,
-                                              mimeType: item.mimeType,
-                                            })
-                                          }
-                                        >
-                                          <div className={styles.mediaThumbPlaceholderCompact}>🎥</div>
-                                          <div className={styles.mediaThumbOverlay}>
-                                            <span className={styles.mediaThumbOverlayType}>Vídeo</span>
-                                            <span className={styles.mediaThumbOverlayTime}>
-                                              {formatarHora(item.createdAt)}
+                                        <div key={item.id} className={styles.mediaAudioCard}>
+                                          <div className={styles.mediaAudioHeader}>
+                                            <strong className={styles.mediaDocTitle}>{item.nome}</strong>
+                                            <span className={styles.mediaDocMeta}>
+                                              Áudio • {formatarHora(item.createdAt)}
                                             </span>
                                           </div>
-                                        </button>
+
+                                          <AudioMessagePlayer
+                                            src={item.url}
+                                            mimeType={item.mimeType}
+                                            fileName={item.nome}
+                                          />
+                                        </div>
                                       );
+                                    }
+
+                                    return (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        className={styles.mediaThumbCardCompact}
+                                        onClick={() =>
+                                          setArquivoPreview({
+                                            url: item.url,
+                                            nome: item.nome,
+                                            mimeType: item.mimeType,
+                                          })
+                                        }
+                                      >
+                                        <div className={styles.mediaThumbPlaceholderCompact}>🎥</div>
+                                        <div className={styles.mediaThumbOverlay}>
+                                          <span className={styles.mediaThumbOverlayType}>Vídeo</span>
+                                          <span className={styles.mediaThumbOverlayTime}>
+                                            {formatarHora(item.createdAt)}
+                                          </span>
+                                        </div>
+                                      </button>
+                                    );
                                     })}
                                   </div>
                                 ) : abaMidiaDocsLinks === "documentos" ? (

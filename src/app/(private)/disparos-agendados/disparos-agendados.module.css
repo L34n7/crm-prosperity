@@ -430,9 +430,9 @@
 }
 
 .badgeCancel {
-  background: var(--crm-danger-bg);
-  color: var(--crm-danger-text);
-  border-color: var(--crm-danger-border);
+  background: #ffdada;
+  color: #b76262;
+  border-color: #ffffff;
 }
 
 .badgeRed {

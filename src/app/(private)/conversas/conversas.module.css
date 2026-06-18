@@ -5115,6 +5115,94 @@
   }
 }
 
+/* =========================================================
+   AJUSTE — ÁUDIOS NO PAINEL MÍDIAS, LINKS E DOCUMENTOS
+   ========================================================= */
+
+.mediaBrowserThumbGrid .mediaAudioCard {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .mediaAudioHeader {
+  min-width: 0;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .mediaDocTitle {
+  min-width: 0;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .mediaDocMeta {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioPlayerIncoming,
+.mediaBrowserThumbGrid .mediaAudioCard .audioPlayerOutgoing {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioPlayerTopRow {
+  min-width: 0;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioPlayerTopLeft {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioPlayerPillIncoming,
+.mediaBrowserThumbGrid .mediaAudioCard .audioPlayerPillOutgoing {
+  max-width: 150px;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioDownloadLink {
+  display: none;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioPlayButton {
+  width: 36px;
+  height: 36px;
+  font-size: 13px;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioWave {
+  min-width: 0;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioSpeedButton {
+  min-width: 38px;
+  height: 28px;
+  padding: 0 8px;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioPlayerBottomRow {
+  gap: 8px;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioPlayerActions {
+  gap: 6px;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioActionButton {
+  font-size: 11px;
+}
+
+.mediaBrowserThumbGrid .mediaAudioCard .audioTimeInfo {
+  font-size: 11px;
+  gap: 4px;
+}
+
 
 @media (max-width: 980px) {
   .disparoCardResumo {
