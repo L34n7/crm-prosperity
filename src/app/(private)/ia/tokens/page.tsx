@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import Header from "@/components/Header";
+import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
 import styles from "./tokens.module.css";
 
 type SaldoTokensIa = {
@@ -140,7 +141,10 @@ export default function ExtratoTokensIaPage() {
       throw new Error(json.error || "Erro ao carregar saldo.");
     }
 
-    setSaldo(json.saldo || null);
+    const saldoAtualizado = json.saldo || null;
+
+    setSaldo(saldoAtualizado);
+    solicitarAtualizacaoSaldoTokensIa({ saldo: saldoAtualizado });
   }
 
   async function carregarUsos() {

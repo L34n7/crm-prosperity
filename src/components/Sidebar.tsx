@@ -64,6 +64,8 @@ type WhatsappSidebarPerfil = {
 const PERMISSAO_VISUALIZAR_PLANO_SIDEBAR = "assinaturas.plano.visualizar";
 const AJUDA_WHATSAPP_URL = "https://wa.me/5531975117638";
 const THEME_STORAGE_KEY = "crm-theme";
+const POLL_DISPAROS_PENDENTES_MS = 3 * 60_000;
+const POLL_CONVERSAS_NAO_LIDAS_MS = 60_000;
 const mobilePrimaryHrefs = [
   "/conversas",
   "/agendas",
@@ -214,10 +216,10 @@ export default function Sidebar({
     }
 
     async function carregarDisparosPendentes() {
+      if (document.visibilityState !== "visible") return;
+
       try {
-        const res = await fetch("/api/disparos-agendados/pendentes", {
-          cache: "no-store",
-        });
+        const res = await fetch("/api/disparos-agendados/pendentes");
 
         const json = await res.json();
 
@@ -231,17 +233,31 @@ export default function Sidebar({
 
     carregarDisparosPendentes();
 
-    const intervalo = window.setInterval(carregarDisparosPendentes, 60_000);
+    const intervalo = window.setInterval(
+      carregarDisparosPendentes,
+      POLL_DISPAROS_PENDENTES_MS
+    );
 
-    return () => window.clearInterval(intervalo);
+    function atualizarAoVoltarParaAba() {
+      if (document.visibilityState === "visible") {
+        void carregarDisparosPendentes();
+      }
+    }
+
+    document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
+
+    return () => {
+      window.clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", atualizarAoVoltarParaAba);
+    };
   }, [assinaturaBloqueada]);
 
   useEffect(() => {
     async function carregarConversasNaoLidas() {
+      if (document.visibilityState !== "visible") return;
+
       try {
-        const res = await fetch("/api/conversas/nao-lidas", {
-          cache: "no-store",
-        });
+        const res = await fetch("/api/conversas/nao-lidas");
 
         const json = await res.json();
 
@@ -258,17 +274,29 @@ export default function Sidebar({
 
     carregarConversasNaoLidas();
 
-    const intervalo = window.setInterval(carregarConversasNaoLidas, 30_000);
+    const intervalo = window.setInterval(
+      carregarConversasNaoLidas,
+      POLL_CONVERSAS_NAO_LIDAS_MS
+    );
 
-    return () => window.clearInterval(intervalo);
+    function atualizarAoVoltarParaAba() {
+      if (document.visibilityState === "visible") {
+        void carregarConversasNaoLidas();
+      }
+    }
+
+    document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
+
+    return () => {
+      window.clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", atualizarAoVoltarParaAba);
+    };
   }, []);
 
   useEffect(() => {
     async function carregarPerfilWhatsapp() {
       try {
-        const res = await fetch("/api/whatsapp/perfil", {
-          cache: "no-store",
-        });
+        const res = await fetch("/api/whatsapp/perfil");
 
         const json = await res.json();
 

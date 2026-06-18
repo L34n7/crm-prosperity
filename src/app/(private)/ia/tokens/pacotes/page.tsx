@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import Header from "@/components/Header";
+import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
 import styles from "./pacotes.module.css";
 
 type PacoteTokens = {
@@ -81,6 +83,10 @@ function contratarEssencial() {
 }
 
 export default function PacotesTokensPage() {
+  useEffect(() => {
+    solicitarAtualizacaoSaldoTokensIa();
+  }, []);
+
   return (
     <>
       <Header

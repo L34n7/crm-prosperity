@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
 
 const supabaseAdmin = getSupabaseAdmin();
+const POLLING_HEADERS = {
+  "Cache-Control": "private, max-age=20, stale-while-revalidate=40",
+};
 
 export async function GET() {
   try {
-    const resultado = await getUsuarioContexto();
+    const resultado = await getUsuarioBasico();
 
     if (!resultado.ok) {
       return NextResponse.json(
@@ -40,11 +43,14 @@ export async function GET() {
 
     const naoLidas = (data || []).filter((n) => !n.lida).length;
 
-    return NextResponse.json({
-      ok: true,
-      notificacoes: data || [],
-      nao_lidas: naoLidas,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        notificacoes: data || [],
+        nao_lidas: naoLidas,
+      },
+      { headers: POLLING_HEADERS }
+    );
   } catch (error) {
     console.error("Erro ao buscar notificações:", error);
 
@@ -57,7 +63,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const resultado = await getUsuarioContexto();
+    const resultado = await getUsuarioBasico();
 
     if (!resultado.ok) {
       return NextResponse.json(
@@ -77,22 +83,32 @@ export async function PATCH(request: Request) {
 
     const body = await request.json();
     const id = String(body.id || "");
+    const ids = Array.isArray(body.ids)
+      ? body.ids
+          .map((item: unknown) => String(item || "").trim())
+          .filter(Boolean)
+          .slice(0, 100)
+      : [];
 
-    if (!id) {
+    if (!id && ids.length === 0) {
       return NextResponse.json(
         { ok: false, error: "ID obrigatório." },
         { status: 400 }
       );
     }
 
-    const { error } = await supabaseAdmin
+    let updateQuery = supabaseAdmin
       .from("notificacoes")
       .update({
         lida: true,
         read_at: new Date().toISOString(),
       })
-      .eq("id", id)
       .eq("empresa_id", usuario.empresa_id);
+
+    updateQuery =
+      ids.length > 0 ? updateQuery.in("id", ids) : updateQuery.eq("id", id);
+
+    const { error } = await updateQuery;
 
     if (error) {
       return NextResponse.json(

@@ -15,6 +15,150 @@ import {
 
 const supabaseAdmin = getSupabaseAdmin();
 
+async function reabrirUltimoProtocoloEncerrado(
+  empresaId: string,
+  conversaId: string,
+  dataReabertura: string
+) {
+  const { data: protocoloAtivo, error: protocoloAtivoError } =
+    await supabaseAdmin
+      .from("conversa_protocolos")
+      .select("id, protocolo, tipo, ativo, started_at, closed_at")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .eq("ativo", true)
+      .limit(1)
+      .maybeSingle();
+
+  if (protocoloAtivoError) {
+    throw new Error(
+      `Erro ao verificar protocolo ativo: ${protocoloAtivoError.message}`
+    );
+  }
+
+  // Evita alterar ou duplicar caso já exista protocolo ativo.
+  if (protocoloAtivo) {
+    return protocoloAtivo;
+  }
+
+  const { data: ultimoProtocolo, error: ultimoProtocoloError } =
+    await supabaseAdmin
+      .from("conversa_protocolos")
+      .select("id, protocolo, tipo, ativo, started_at, closed_at")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .eq("ativo", false)
+      .order("closed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+  if (ultimoProtocoloError) {
+    throw new Error(
+      `Erro ao localizar último protocolo encerrado: ${ultimoProtocoloError.message}`
+    );
+  }
+
+  if (!ultimoProtocolo) {
+    throw new Error(
+      "Nenhum protocolo encerrado foi encontrado para reabrir."
+    );
+  }
+
+  const { data: protocoloReaberto, error: reabrirError } =
+    await supabaseAdmin
+      .from("conversa_protocolos")
+      .update({
+        ativo: true,
+        closed_at: null,
+        updated_at: dataReabertura,
+      })
+      .eq("id", ultimoProtocolo.id)
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .select("id, protocolo, tipo, ativo, started_at, closed_at")
+      .single();
+
+  if (reabrirError) {
+    throw new Error(
+      `Erro ao reabrir protocolo anterior: ${reabrirError.message}`
+    );
+  }
+
+  return protocoloReaberto;
+}
+
+function formatarDataProtocolo(data: Date) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+
+  return `${ano}${mes}${dia}`;
+}
+
+function gerarNovoNumeroProtocolo() {
+  const agora = new Date();
+
+  const ano = agora.getFullYear();
+  const mes = String(agora.getMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getDate()).padStart(2, "0");
+
+  const dataBase = `${ano}${mes}${dia}`;
+  const identificadorUnico = crypto.randomUUID();
+
+  return `ATD-${dataBase}-${identificadorUnico}`;
+}
+
+async function criarNovoProtocoloAtendimento(
+  empresaId: string,
+  conversaId: string,
+  iniciadoEm: string
+) {
+  const MAX_TENTATIVAS = 3;
+
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    const protocolo = gerarNovoNumeroProtocolo();
+
+    const { data, error } = await supabaseAdmin
+      .from("conversa_protocolos")
+      .insert({
+        empresa_id: empresaId,
+        conversa_id: conversaId,
+        protocolo,
+        tipo: "reabertura",
+        ativo: true,
+        started_at: iniciadoEm,
+        closed_at: null,
+        created_at: iniciadoEm,
+        updated_at: iniciadoEm,
+      })
+      .select(
+        "id, protocolo, tipo, ativo, started_at, closed_at"
+      )
+      .single();
+
+    if (!error) {
+      return data;
+    }
+
+    const protocoloDuplicado = error.code === "23505";
+
+    if (!protocoloDuplicado) {
+      throw new Error(
+        `Erro ao criar novo protocolo: ${error.message}`
+      );
+    }
+
+    console.warn(
+      `[PROTOCOLO] Número duplicado detectado. Tentativa ${tentativa} de ${MAX_TENTATIVAS}.`
+    );
+  }
+
+  throw new Error(
+    "Não foi possível gerar um protocolo único após várias tentativas."
+  );
+}
+
 type ConversaRow = {
   id: string;
   empresa_id: string;
@@ -35,6 +179,11 @@ export async function POST(
     const { id } = await context.params;
     const auditMeta = getRequestAuditMetadata(request);
 
+    const body = await request.json().catch(() => ({}));
+
+    const modoProtocolo =
+      body?.modo_protocolo === "novo" ? "novo" : "reabrir";
+      
     const resultado = await getUsuarioContexto();
 
     if (!resultado.ok) {
@@ -210,7 +359,9 @@ export async function POST(
         politica_aplicada: politica,
       });
     }
-
+    
+    const agora = new Date().toISOString();
+    
     const { data: conversaAtualizada, error: updateError } = await supabaseAdmin
       .from("conversas")
       .update({
@@ -219,7 +370,7 @@ export async function POST(
         bot_ativo: false,
         closed_at: null,
         origem_atendimento: "manual",
-        updated_at: new Date().toISOString(),
+        updated_at: agora,
       })
       .eq("id", id)
       .select(`
@@ -262,9 +413,71 @@ export async function POST(
       );
     }
 
-    const agora = new Date().toISOString();
+    let protocoloAtual:
+      | {
+          id: string;
+          protocolo: string;
+          tipo: string;
+          ativo: boolean;
+          started_at: string | null;
+          closed_at: string | null;
+        }
+      | null = null;
 
-    const { data: execucoesAtivas } = await supabaseAdmin
+    if (conversaEncerradaReabrivel) {
+      try {
+        if (modoProtocolo === "novo") {
+          protocoloAtual = await criarNovoProtocoloAtendimento(
+            usuario.empresa_id,
+            conversa.id,
+            agora
+          );
+        } else {
+          protocoloAtual = await reabrirUltimoProtocoloEncerrado(
+            usuario.empresa_id,
+            conversa.id,
+            agora
+          );
+        }
+      } catch (protocoloError) {
+        console.error(
+          "[ASSUMIR] Erro ao preparar protocolo:",
+          protocoloError
+        );
+
+        const { error: rollbackError } = await supabaseAdmin
+          .from("conversas")
+          .update({
+            responsavel_id: conversa.responsavel_id,
+            status: conversa.status,
+            bot_ativo: conversa.bot_ativo ?? false,
+            closed_at: conversa.closed_at,
+            updated_at: agora,
+          })
+          .eq("id", conversa.id)
+          .eq("empresa_id", usuario.empresa_id);
+
+        if (rollbackError) {
+          console.error(
+            "[ASSUMIR] Erro ao desfazer reabertura da conversa:",
+            rollbackError
+          );
+        }
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              protocoloError instanceof Error
+                ? protocoloError.message
+                : "Não foi possível preparar o protocolo do atendimento.",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+      const { data: execucoesAtivas } = await supabaseAdmin
       .from("automacao_execucoes")
       .select("id, metadata_json")
       .eq("empresa_id", usuario.empresa_id)
@@ -311,10 +524,14 @@ export async function POST(
       entidade: "conversa",
       entidade_id: id,
       acao: conversaEncerradaReabrivel
-        ? "conversa_reaberta_assumida"
+        ? modoProtocolo === "novo"
+          ? "conversa_reaberta_novo_protocolo"
+          : "conversa_reaberta_assumida"
         : "conversa_assumida",
       descricao: conversaEncerradaReabrivel
-        ? "Conversa reaberta e assumida"
+        ? modoProtocolo === "novo"
+          ? "Conversa reaberta com novo protocolo de atendimento"
+          : "Conversa reaberta com o protocolo anterior"
         : "Conversa assumida",
       usuario_id: usuario.id,
       usuario_nome: usuario.nome,
@@ -331,6 +548,22 @@ export async function POST(
         closed_at: null,
         bot_ativo: false,
         execucoes_canceladas: execucaoIds.length,
+
+        protocolo_id: protocoloAtual?.id || null,
+        protocolo: protocoloAtual?.protocolo || null,
+        protocolo_tipo: protocoloAtual?.tipo || null,
+
+        modo_protocolo: conversaEncerradaReabrivel
+          ? modoProtocolo
+          : null,
+
+        protocolo_reaberto:
+          conversaEncerradaReabrivel &&
+          modoProtocolo === "reabrir",
+
+        protocolo_novo:
+          conversaEncerradaReabrivel &&
+          modoProtocolo === "novo",
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
@@ -339,9 +572,13 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       message: conversaEncerradaReabrivel
-        ? "Conversa reaberta e assumida com sucesso"
-        : "Conversa assumida com sucesso",
+        ? modoProtocolo === "novo"
+          ? "Conversa reaberta com um novo protocolo de atendimento."
+          : "Conversa reaberta com o protocolo anterior."
+        : "Conversa assumida com sucesso.",
       conversa: conversaAtualizada,
+      protocolo: protocoloAtual,
+      modo_protocolo: modoProtocolo,
       politica_aplicada: politica,
     });
   } catch (error) {

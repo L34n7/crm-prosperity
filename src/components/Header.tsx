@@ -6,6 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/LogoutButton";
 import { useHeaderUser } from "@/components/header-user-context";
+import {
+  IA_TOKENS_REFRESH_EVENT,
+  type IaTokensRefreshEventDetail,
+} from "@/lib/ia/tokens-client-events";
 import styles from "./Header.module.css";
 import { createPortal } from "react-dom";
 
@@ -72,6 +76,8 @@ type TemaVisual = "light" | "dark";
 
 const AJUDA_WHATSAPP_URL = "https://wa.me/5531975117638";
 const THEME_STORAGE_KEY = "crm-theme";
+const POLL_NOTIFICACOES_MS = 60_000;
+const POLL_TOKENS_IA_MS = 15 * 60_000;
 
 const PLANOS_RENOVACAO: PlanoRenovacao[] = [
   {
@@ -210,7 +216,7 @@ export default function Header({
     
   async function carregarNotificacoes() {
     try {
-      const res = await fetch("/api/notificacoes", { cache: "no-store" });
+      const res = await fetch("/api/notificacoes");
       const json = await res.json();
 
       if (!res.ok || !json.ok) return;
@@ -222,11 +228,13 @@ export default function Header({
     }
   }
 
-  async function carregarSaldoTokensIa() {
+  async function carregarSaldoTokensIa(forcarAtualizacao = false) {
     if (!podeExibirSaldoTokensIa || assinaturaEmAberto) return;
 
     try {
-      const res = await fetch("/api/ia/tokens", { cache: "no-store" });
+      const res = await fetch("/api/ia/tokens", {
+        cache: forcarAtualizacao ? "no-store" : "default",
+      });
       const json = await res.json();
 
       if (!res.ok || !json.ok) return;
@@ -367,15 +375,13 @@ export default function Header({
     if (notificacoesNaoLidas.length === 0) return;
 
     try {
-      await Promise.all(
-        notificacoesNaoLidas.map((notificacao) =>
-          fetch("/api/notificacoes", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: notificacao.id }),
-          })
-        )
-      );
+      await fetch("/api/notificacoes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: notificacoesNaoLidas.map((notificacao) => notificacao.id),
+        }),
+      });
 
       setNotificacoes((atuais) =>
         atuais.map((notificacao) => ({
@@ -429,14 +435,64 @@ export default function Header({
 
   useEffect(() => {
     carregarNotificacoes();
-    carregarSaldoTokensIa();
 
     const interval = window.setInterval(() => {
-      carregarNotificacoes();
-      carregarSaldoTokensIa();
-    }, 30000);
+      if (document.visibilityState === "visible") {
+        void carregarNotificacoes();
+      }
+    }, POLL_NOTIFICACOES_MS);
 
-    return () => window.clearInterval(interval);
+    function atualizarAoVoltarParaAba() {
+      if (document.visibilityState === "visible") {
+        void carregarNotificacoes();
+      }
+    }
+
+    document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", atualizarAoVoltarParaAba);
+    };
+  }, []);
+
+  useEffect(() => {
+    carregarSaldoTokensIa(true);
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void carregarSaldoTokensIa();
+      }
+    }, POLL_TOKENS_IA_MS);
+
+    function atualizarAoVoltarParaAba() {
+      if (document.visibilityState === "visible") {
+        void carregarSaldoTokensIa(true);
+      }
+    }
+
+    function atualizarPorEventoTokens(event: Event) {
+      const customEvent = event as CustomEvent<IaTokensRefreshEventDetail>;
+
+      if (customEvent.detail?.saldo) {
+        setSaldoTokensIa(customEvent.detail.saldo as SaldoTokensIa);
+        return;
+      }
+
+      void carregarSaldoTokensIa(true);
+    }
+
+    document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
+    window.addEventListener(IA_TOKENS_REFRESH_EVENT, atualizarPorEventoTokens);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", atualizarAoVoltarParaAba);
+      window.removeEventListener(
+        IA_TOKENS_REFRESH_EVENT,
+        atualizarPorEventoTokens
+      );
+    };
   }, []);
 
   useEffect(() => {

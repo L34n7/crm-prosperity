@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
+  type AssinaturaEmpresa,
   buscarAssinaturaEmpresa,
   filtrarPermissoesPorAssinatura,
 } from "@/lib/assinaturas/status";
@@ -29,21 +30,35 @@ type UsuarioPermissaoRow = {
   efeito: "permitir" | "bloquear";
 };
 
+type ListarPermissoesOptions = {
+  empresaId?: string | null;
+  assinatura?: AssinaturaEmpresa | null;
+};
+
 /**
  * Lista todas as permissoes finais do usuario:
  * permissoes herdadas dos perfis + excecoes individuais.
  */
-export async function listarPermissoesDoUsuario(usuarioId: string) {
-  const { data: usuarioBase, error: usuarioError } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, empresa_id")
-    .eq("id", usuarioId)
-    .maybeSingle();
+export async function listarPermissoesDoUsuario(
+  usuarioId: string,
+  options: ListarPermissoesOptions = {}
+) {
+  let empresaId = options.empresaId;
 
-  if (usuarioError) {
-    throw new Error(
-      `Erro ao buscar usuario para permissoes: ${usuarioError.message}`
-    );
+  if (empresaId === undefined) {
+    const { data: usuarioBase, error: usuarioError } = await supabaseAdmin
+      .from("usuarios")
+      .select("id, empresa_id")
+      .eq("id", usuarioId)
+      .maybeSingle();
+
+    if (usuarioError) {
+      throw new Error(
+        `Erro ao buscar usuario para permissoes: ${usuarioError.message}`
+      );
+    }
+
+    empresaId = usuarioBase?.empresa_id ?? null;
   }
 
   const { data: vinculos, error: vinculosError } = await supabaseAdmin
@@ -110,8 +125,8 @@ export async function listarPermissoesDoUsuario(usuarioId: string) {
     .select("permissao_codigo, efeito")
     .eq("usuario_id", usuarioId);
 
-  if (usuarioBase?.empresa_id) {
-    overrideQuery = overrideQuery.eq("empresa_id", usuarioBase.empresa_id);
+  if (empresaId) {
+    overrideQuery = overrideQuery.eq("empresa_id", empresaId);
   }
 
   const { data: usuarioPermissoes, error: usuarioPermissoesError } =
@@ -137,11 +152,13 @@ export async function listarPermissoesDoUsuario(usuarioId: string) {
 
   const permissoesFinais = Array.from(permissoes);
 
-  if (!usuarioBase?.empresa_id) {
+  if (!empresaId) {
     return permissoesFinais;
   }
 
-  const assinatura = await buscarAssinaturaEmpresa(usuarioBase.empresa_id);
+  const assinatura = Object.prototype.hasOwnProperty.call(options, "assinatura")
+    ? options.assinatura ?? null
+    : await buscarAssinaturaEmpresa(empresaId);
 
   return filtrarPermissoesPorAssinatura({
     permissoes: permissoesFinais,

@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
-import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+const POLLING_HEADERS = {
+  "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+};
 
 export async function GET() {
   try {
-    const resultado = await getUsuarioContexto();
+    const resultado = await getUsuarioBasico();
 
     if (!resultado.ok) {
       return NextResponse.json(
@@ -38,10 +42,13 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      quantidade: count || 0,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        quantidade: count || 0,
+      },
+      { headers: POLLING_HEADERS }
+    );
   } catch (error: any) {
     return NextResponse.json(
       {

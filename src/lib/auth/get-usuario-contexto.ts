@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  listarIdsSetoresDoUsuario,
   listarSetoresDoUsuario,
 } from "@/lib/usuarios/setores";
 import {
@@ -68,7 +67,78 @@ export type ResultadoUsuarioContexto =
       status: 401 | 403 | 404 | 500;
     };
 
-export async function getUsuarioContexto(): Promise<ResultadoUsuarioContexto> {
+export type GetUsuarioContextoOptions = {
+  sincronizarAssinatura?: boolean;
+};
+
+export type ResultadoUsuarioBasico =
+  | {
+      ok: true;
+      usuario: UsuarioBase;
+    }
+  | {
+      ok: false;
+      error: string;
+      status: 401 | 403 | 404 | 500;
+    };
+
+export async function getUsuarioBasico(): Promise<ResultadoUsuarioBasico> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      ok: false,
+      error: "NÃ£o autenticado",
+      status: 401,
+    };
+  }
+
+  const { data: usuarioBase, error: usuarioError } = await supabase
+    .from("usuarios")
+    .select(
+      "id, auth_user_id, nome, email, avatar_url, assinatura_whatsapp, empresa_id, status"
+    )
+    .eq("auth_user_id", user.id)
+    .maybeSingle<UsuarioBase>();
+
+  if (usuarioError) {
+    return {
+      ok: false,
+      error: "Erro ao buscar usuÃ¡rio do sistema",
+      status: 500,
+    };
+  }
+
+  if (!usuarioBase) {
+    return {
+      ok: false,
+      error: "UsuÃ¡rio nÃ£o encontrado na tabela usuarios",
+      status: 404,
+    };
+  }
+
+  if (usuarioBase.status !== "ativo") {
+    return {
+      ok: false,
+      error: "UsuÃ¡rio inativo ou bloqueado",
+      status: 403,
+    };
+  }
+
+  return {
+    ok: true,
+    usuario: usuarioBase,
+  };
+}
+
+export async function getUsuarioContexto(
+  options: GetUsuarioContextoOptions = {}
+): Promise<ResultadoUsuarioContexto> {
   try {
     const supabase = await createClient();
 
@@ -117,13 +187,21 @@ export async function getUsuarioContexto(): Promise<ResultadoUsuarioContexto> {
       };
     }
 
-    const [permissoes, perfisRaw, vinculosSetores, setoresIds] =
+    const [perfisRaw, vinculosSetores, assinatura] =
       await Promise.all([
-        listarPermissoesDoUsuario(usuarioBase.id),
         listarPerfisDoUsuario(usuarioBase.id),
         listarSetoresDoUsuario(usuarioBase.id),
-        listarIdsSetoresDoUsuario(usuarioBase.id),
+        usuarioBase.empresa_id
+          ? buscarAssinaturaEmpresa(usuarioBase.empresa_id, {
+              sincronizar: options.sincronizarAssinatura,
+            })
+          : null,
       ]);
+
+    const permissoes = await listarPermissoesDoUsuario(usuarioBase.id, {
+      empresaId: usuarioBase.empresa_id,
+      assinatura,
+    });
 
     const perfis_dinamicos = (perfisRaw ?? [])
       .map((item) => {
@@ -147,12 +225,9 @@ export async function getUsuarioContexto(): Promise<ResultadoUsuarioContexto> {
     const isAdmin = perfis_dinamicos.some(
       (perfil) => perfil.nome === "Administrador"
     );
-    const assinatura = usuarioBase.empresa_id
-      ? await buscarAssinaturaEmpresa(usuarioBase.empresa_id)
-      : null;
-
     const setorPrincipal =
       vinculosSetores.find((item) => item.is_principal)?.setor_id ?? null;
+    const setoresIds = vinculosSetores.map((item) => item.setor_id);
 
     return {
       ok: true,

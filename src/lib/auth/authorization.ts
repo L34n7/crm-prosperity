@@ -4,7 +4,16 @@ import { can } from "@/lib/permissoes/can";
 type UsuarioAuth = Pick<
   UsuarioContexto,
   "id" | "perfis_dinamicos" | "perfil_dinamico_principal"
->;
+> &
+  Partial<Pick<UsuarioContexto, "permissoes">>;
+
+async function temPermissao(usuario: UsuarioAuth, permissaoCodigo: string) {
+  if (Array.isArray(usuario.permissoes)) {
+    return usuario.permissoes.includes(permissaoCodigo);
+  }
+
+  return await can(usuario.id, permissaoCodigo);
+}
 
 export function isAdministrador(
   usuario: Pick<UsuarioContexto, "perfis_dinamicos" | "perfil_dinamico_principal">
@@ -19,47 +28,47 @@ export function isAdministrador(
 }
 
 export async function podeVisualizarUsuarios(usuario: UsuarioAuth) {
-  return await can(usuario.id, "usuarios.visualizar");
+  return await temPermissao(usuario, "usuarios.visualizar");
 }
 
 export async function podeCriarUsuarios(usuario: UsuarioAuth) {
-  return await can(usuario.id, "usuarios.criar");
+  return await temPermissao(usuario, "usuarios.criar");
 }
 
 export async function podeEditarUsuarios(usuario: UsuarioAuth) {
-  return await can(usuario.id, "usuarios.editar");
+  return await temPermissao(usuario, "usuarios.editar");
 }
 
 export async function podeRemoverUsuarios(usuario: UsuarioAuth) {
-  return await can(usuario.id, "usuarios.remover");
+  return await temPermissao(usuario, "usuarios.remover");
 }
 
 export async function podeVisualizarConversas(usuario: UsuarioAuth) {
-  return await can(usuario.id, "conversas.visualizar");
+  return await temPermissao(usuario, "conversas.visualizar");
 }
 
 export async function podeAssumirConversas(usuario: UsuarioAuth) {
-  return await can(usuario.id, "conversas.assumir");
+  return await temPermissao(usuario, "conversas.assumir");
 }
 
 export async function podeTransferirConversas(usuario: UsuarioAuth) {
-  return await can(usuario.id, "conversas.transferir");
+  return await temPermissao(usuario, "conversas.transferir");
 }
 
 export async function podeAtribuirConversas(usuario: UsuarioAuth) {
-  return await can(usuario.id, "conversas.atribuir");
+  return await temPermissao(usuario, "conversas.atribuir");
 }
 
 export async function podeEncerrarConversas(usuario: UsuarioAuth) {
-  return await can(usuario.id, "conversas.encerrar");
+  return await temPermissao(usuario, "conversas.encerrar");
 }
 
 export async function podeVisualizarMensagens(usuario: UsuarioAuth) {
-  return await can(usuario.id, "mensagens.visualizar");
+  return await temPermissao(usuario, "mensagens.visualizar");
 }
 
 export async function podeEnviarMensagens(usuario: UsuarioAuth) {
-  return await can(usuario.id, "mensagens.enviar");
+  return await temPermissao(usuario, "mensagens.enviar");
 }
 
 export async function podeOperarComoSupervisor(usuario: UsuarioAuth) {

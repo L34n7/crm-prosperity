@@ -6,15 +6,20 @@ import {
   getClientSessionId,
 } from "@/lib/auth/browser-session";
 
-const HEARTBEAT_INTERVAL_MS = 60_000;
+const HEARTBEAT_INTERVAL_MS = 5 * 60_000;
 
 export default function SessionActivityTracker() {
   useEffect(() => {
     getClientSessionId();
     void enviarEventoSessao("login");
 
-    const interval = window.setInterval(() => {
+    function enviarHeartbeatSeVisivel() {
+      if (document.visibilityState !== "visible") return;
       void enviarEventoSessao("heartbeat");
+    }
+
+    const interval = window.setInterval(() => {
+      enviarHeartbeatSeVisivel();
     }, HEARTBEAT_INTERVAL_MS);
 
     function handleVisibilityChange() {

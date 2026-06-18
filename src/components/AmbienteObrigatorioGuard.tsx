@@ -14,6 +14,9 @@ type ApiResponse = {
   error?: string;
 };
 
+const AMBIENTE_CONFIGURADO_STORAGE_KEY = "crm_ambiente_configurado";
+const AMBIENTE_PENDENTE_POLL_MS = 2 * 60_000;
+
 export default function AmbienteObrigatorioGuard() {
   const router = useRouter();
   const pathname = usePathname();
@@ -31,17 +34,16 @@ export default function AmbienteObrigatorioGuard() {
   }, [ambienteConfiguradoLocal, integracao]);
 
   const verificarAmbiente = useCallback(
-    async (modoManual = false) => {
+    async (modoManual = false, silencioso = false) => {
       try {
         if (modoManual) {
           setRecarregando(true);
-        } else {
+        } else if (!silencioso) {
           setCarregando(true);
         }
 
         const response = await fetch("/api/integracoes-whatsapp", {
           method: "GET",
-          cache: "no-store",
         });
 
         const data = (await response.json()) as ApiResponse;
@@ -51,7 +53,13 @@ export default function AmbienteObrigatorioGuard() {
           return;
         }
 
-        setIntegracao(data.integracao || null);
+        const proximaIntegracao = data.integracao || null;
+        setIntegracao(proximaIntegracao);
+
+        if (isAmbienteConfigurado(proximaIntegracao)) {
+          window.sessionStorage.setItem(AMBIENTE_CONFIGURADO_STORAGE_KEY, "true");
+          setAmbienteConfiguradoLocal(true);
+        }
       } catch (error) {
         console.warn("[AMBIENTE GUARD] Erro ao verificar ambiente:", error);
       } finally {
@@ -63,10 +71,13 @@ export default function AmbienteObrigatorioGuard() {
   );
 
   useEffect(() => {
-    const valorSalvo = window.sessionStorage.getItem("crm_ambiente_configurado");
+    const valorSalvo = window.sessionStorage.getItem(
+      AMBIENTE_CONFIGURADO_STORAGE_KEY
+    );
 
     if (valorSalvo === "true") {
       setAmbienteConfiguradoLocal(true);
+      setCarregando(false);
     }
 
     function marcarComoConfigurado() {
@@ -81,16 +92,28 @@ export default function AmbienteObrigatorioGuard() {
   }, []);
 
   useEffect(() => {
+    const ambienteJaConfirmado =
+      ambienteConfiguradoLocal ||
+      window.sessionStorage.getItem(AMBIENTE_CONFIGURADO_STORAGE_KEY) === "true";
+
+    if (ambienteJaConfirmado) {
+      setAmbienteConfiguradoLocal(true);
+      setCarregando(false);
+      return;
+    }
+
     verificarAmbiente(false);
 
     const intervalo = window.setInterval(() => {
-      verificarAmbiente(false);
-    }, 30000);
+      if (document.visibilityState === "visible") {
+        verificarAmbiente(false, true);
+      }
+    }, AMBIENTE_PENDENTE_POLL_MS);
 
     return () => {
       window.clearInterval(intervalo);
     };
-  }, [verificarAmbiente]);
+  }, [ambienteConfiguradoLocal, verificarAmbiente]);
 
   useEffect(() => {
     if (carregando) return;

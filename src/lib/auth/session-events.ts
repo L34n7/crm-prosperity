@@ -15,6 +15,7 @@ type RegistrarEventoSessaoParams = {
 };
 
 const supabaseAdmin = getSupabaseAdmin();
+const HEARTBEAT_WRITE_THROTTLE_MS = 4 * 60 * 1000;
 
 function normalizarClientSessionId(valor: string | null | undefined) {
   return String(valor || "").trim().slice(0, 120);
@@ -62,7 +63,7 @@ export async function registrarEventoSessaoUsuario({
 
     const { data: sessaoAberta, error: sessaoError } = await supabaseAdmin
       .from("usuario_sessoes")
-      .select("id")
+      .select("id, last_seen_at, status")
       .eq("usuario_id", usuario.id)
       .eq("client_session_id", clientSessionIdNormalizado)
       .is("logout_at", null)
@@ -75,6 +76,21 @@ export async function registrarEventoSessaoUsuario({
     }
 
     if (sessaoAberta?.id) {
+      if (
+        evento === "heartbeat" &&
+        sessaoAberta.status === "online" &&
+        sessaoAberta.last_seen_at
+      ) {
+        const lastSeenTime = new Date(sessaoAberta.last_seen_at).getTime();
+
+        if (
+          Number.isFinite(lastSeenTime) &&
+          Date.now() - lastSeenTime < HEARTBEAT_WRITE_THROTTLE_MS
+        ) {
+          return;
+        }
+      }
+
       await supabaseAdmin
         .from("usuario_sessoes")
         .update({

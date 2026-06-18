@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
 import styles from "./conversas.module.css";
 import { can } from "@/lib/permissoes/frontend";
 import EmojiPicker from "emoji-picker-react";
@@ -1517,6 +1518,10 @@ function TranscricaoAudioBox({
       setTexto(transcricao);
       setAberta(true);
       onTranscricaoSalva(mensagemId, transcricao);
+
+      if (!data.jaExistia) {
+        solicitarAtualizacaoSaldoTokensIa();
+      }
     } catch {
       setErro("Erro ao transcrever áudio.");
     } finally {
@@ -1704,6 +1709,8 @@ function ConversasPageContent() {
     useState<Janela24hConversa | null>(null);
 
   const LIMITE_CONVERSAS = 20;
+  const POLL_CONVERSAS_MS = 30_000;
+  const POLL_MENSAGENS_MS = 30_000;
   const [temMaisConversas, setTemMaisConversas] = useState(true);
   const [carregandoMaisConversas, setCarregandoMaisConversas] = useState(false);
 
@@ -1769,6 +1776,11 @@ function ConversasPageContent() {
   const [erro, setErro] = useState("");
   const [mensagemSucesso, setMensagemSucesso] = useState("");
   const [assumindo, setAssumindo] = useState(false);
+  const [abrindoNovoProtocolo, setAbrindoNovoProtocolo] =
+    useState(false);
+  const [modalNovoProtocoloAberto, setModalNovoProtocoloAberto] =
+    useState(false);
+    
   const [infoExpandida, setInfoExpandida] = useState(false);
 
   const [painelDireitoAberto, setPainelDireitoAberto] = useState(false);
@@ -4140,6 +4152,12 @@ function ConversasPageContent() {
         `/api/conversas/${conversaSelecionada.id}/assumir`,
         {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            modo_protocolo: "reabrir",
+          }),
         }
       );
 
@@ -4181,10 +4199,94 @@ function ConversasPageContent() {
         inicioJanelaHistorico,
         fimJanelaHistorico
       );
+
+      await carregarProtocolosDaConversa();
     } catch {
       setErro("Erro ao reabrir e assumir conversa.");
     } finally {
       setAssumindo(false);
+    }
+  }
+
+  function abrirModalNovoProtocolo() {
+    setModalNovoProtocoloAberto(true);
+  }
+
+  function fecharModalNovoProtocolo() {
+    if (abrindoNovoProtocolo) return;
+    setModalNovoProtocoloAberto(false);
+  }
+
+  async function confirmarAbrirNovoProtocolo() {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setAbrindoNovoProtocolo(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const conversaId = conversaSelecionada.id;
+
+      const res = await fetch(
+        `/api/conversas/${conversaId}/assumir`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            modo_protocolo: "novo",
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(
+          data.error ||
+            "Erro ao abrir novo protocolo de atendimento."
+        );
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message ||
+          "Novo protocolo de atendimento aberto com sucesso."
+      );
+
+      setModalNovoProtocoloAberto(false);
+
+      setProtocoloSelecionadoId(null);
+      setProtocoloSelecionadoNumero(null);
+
+      const listaAtualizada =
+        await atualizarConversasCarregadas();
+
+      const conversaAtualizada = listaAtualizada.find(
+        (conversa: Conversa) =>
+          conversa.id === conversaId
+      );
+
+      if (conversaAtualizada) {
+        setConversaSelecionada(conversaAtualizada);
+      }
+
+      await carregarMensagens(
+        conversaId,
+        true,
+        null,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+
+      await carregarProtocolosDaConversa();
+    } catch {
+      setErro(
+        "Erro ao abrir novo protocolo de atendimento."
+      );
+    } finally {
+      setAbrindoNovoProtocolo(false);
     }
   }
 
@@ -5242,6 +5344,9 @@ async function baixarConversaPDF() {
       conversaSelecionada.last_message_at
     );
 
+    setProtocoloSelecionadoId(null);
+    setProtocoloSelecionadoNumero(null);
+
     await carregarMensagens(
       conversaSelecionada.id,
       false,
@@ -6034,7 +6139,7 @@ const templateFooterTexto = useMemo(() => {
       } finally {
         atualizandoConversasAutomaticamenteRef.current = false;
       }
-    }, 15000);
+    }, POLL_CONVERSAS_MS);
 
     return () => {
       window.clearInterval(interval);
@@ -6189,7 +6294,7 @@ const templateFooterTexto = useMemo(() => {
           }
         );
       }
-    }, 15000);
+    }, POLL_MENSAGENS_MS);
 
       return () => {
         window.clearInterval(interval);
@@ -6896,15 +7001,31 @@ const templateFooterTexto = useMemo(() => {
                     </div>
 
                     <div className={styles.chatHeaderActions}>
-                      {podeReabrirConversa ? (
-                        <button
-                          className={styles.primaryButton}
-                          onClick={reabrirConversa}
-                          disabled={assumindo}
-                        >
-                          {assumindo ? "Reabrindo..." : "Reabrir e assumir"}
-                        </button>
-                      ) : conversaEncerrada ? null : (
+                        {podeReabrirConversa ? (
+                          <div className={styles.reopenActions}>
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={abrirModalNovoProtocolo}
+                              disabled={assumindo || abrindoNovoProtocolo}
+                            >
+                              {abrindoNovoProtocolo
+                                ? "Abrindo..."
+                                : "Abrir novo protocolo"}
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.primaryButton}
+                              onClick={reabrirConversa}
+                              disabled={assumindo || abrindoNovoProtocolo}
+                            >
+                              {assumindo
+                                ? "Reabrindo..."
+                                : "Reabrir protocolo"}
+                            </button>
+                          </div>
+                        ) : conversaEncerrada ? null : (
                         <>
 
                           {conversaTemNotas && (
@@ -10570,6 +10691,124 @@ const templateFooterTexto = useMemo(() => {
                 border: "none",
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {modalNovoProtocoloAberto && (
+        <div
+          className={styles.novoProtocoloModalOverlay}
+          onMouseDown={fecharModalNovoProtocolo}
+        >
+          <div
+            className={styles.novoProtocoloModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="novo-protocolo-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className={styles.novoProtocoloModalHeader}>
+              <div className={styles.novoProtocoloModalIcon}>
+                <span>＋</span>
+              </div>
+
+              <div className={styles.novoProtocoloModalHeading}>
+                <span className={styles.novoProtocoloModalEyebrow}>
+                  Novo atendimento
+                </span>
+
+                <h3
+                  id="novo-protocolo-modal-title"
+                  className={styles.novoProtocoloModalTitle}
+                >
+                  Abrir novo protocolo?
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                className={styles.novoProtocoloModalClose}
+                onClick={fecharModalNovoProtocolo}
+                disabled={abrindoNovoProtocolo}
+                aria-label="Fechar modal"
+                title="Fechar"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.novoProtocoloModalBody}>
+              <p className={styles.novoProtocoloModalText}>
+                Um novo ciclo de atendimento será iniciado para este contato.
+              </p>
+
+              <div className={styles.novoProtocoloModalInfo}>
+                <div className={styles.novoProtocoloModalInfoIcon}>
+                  i
+                </div>
+
+                <div>
+                  <strong>O protocolo anterior será preservado</strong>
+
+                  <p>
+                    Ele continuará encerrado e disponível no histórico da
+                    conversa. Um novo número de protocolo será criado para este
+                    atendimento.
+                  </p>
+                </div>
+              </div>
+
+              <div className={styles.novoProtocoloModalContact}>
+                <div className={styles.novoProtocoloModalAvatar}>
+                  {getIniciais(conversaSelecionada?.contatos?.nome)}
+                </div>
+
+                <div className={styles.novoProtocoloModalContactInfo}>
+                  <span>Contato</span>
+
+                  <strong>
+                    {conversaSelecionada?.contatos?.nome || "Sem nome"}
+                  </strong>
+
+                  <small>
+                    {conversaSelecionada?.contatos?.telefone ||
+                      "Telefone não informado"}
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.novoProtocoloModalFooter}>
+              <button
+                type="button"
+                className={styles.novoProtocoloModalCancel}
+                onClick={fecharModalNovoProtocolo}
+                disabled={abrindoNovoProtocolo}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className={styles.novoProtocoloModalConfirm}
+                onClick={confirmarAbrirNovoProtocolo}
+                disabled={abrindoNovoProtocolo}
+              >
+                {abrindoNovoProtocolo ? (
+                  <>
+                    <span className={styles.novoProtocoloModalSpinner} />
+                    Abrindo protocolo...
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.novoProtocoloModalConfirmIcon}>
+                      ＋
+                    </span>
+                    Abrir novo protocolo
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

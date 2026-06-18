@@ -3,8 +3,12 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
 import { can } from "@/lib/permissoes/frontend";
 
+const POLLING_HEADERS = {
+  "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
+};
+
 export async function GET() {
-  const resultado = await getUsuarioContexto();
+  const resultado = await getUsuarioContexto({ sincronizarAssinatura: false });
 
   if (!resultado.ok) {
     return NextResponse.json(
@@ -36,10 +40,13 @@ export async function GET() {
   try {
     const saldo = await buscarSaldoTokensIa(usuario.empresa_id);
 
-    return NextResponse.json({
-      ok: true,
-      saldo,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        saldo,
+      },
+      { headers: POLLING_HEADERS }
+    );
   } catch (error: unknown) {
     return NextResponse.json(
       {
