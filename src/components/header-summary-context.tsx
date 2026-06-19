@@ -12,6 +12,7 @@ import {
   IA_TOKENS_REFRESH_EVENT,
   type IaTokensRefreshEventDetail,
 } from "@/lib/ia/tokens-client-events";
+import { createClient } from "@/lib/supabase/client";
 
 export type HeaderSummaryNotificacao = {
   id: string;
@@ -86,9 +87,13 @@ export function HeaderSummaryProvider({
   children: React.ReactNode;
 }) {
   const carregandoRef = useRef(false);
+  const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
+    null
+  );
   const [notificacoes, setNotificacoes] = useState<HeaderSummaryNotificacao[]>(
     []
   );
+  const notificacoesRef = useRef<HeaderSummaryNotificacao[]>([]);
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [conversasNaoLidas, setConversasNaoLidas] = useState(0);
   const [disparosPendentes, setDisparosPendentes] = useState(0);
@@ -145,6 +150,69 @@ export function HeaderSummaryProvider({
     }
   }, []);
 
+  useEffect(() => {
+    notificacoesRef.current = notificacoes;
+  }, [notificacoes]);
+
+  function getSupabaseRealtime() {
+    if (!supabaseRealtimeRef.current) {
+      supabaseRealtimeRef.current = createClient();
+    }
+
+    return supabaseRealtimeRef.current;
+  }
+
+  function normalizarNotificacaoRealtime(
+    valor: unknown
+  ): HeaderSummaryNotificacao | null {
+    if (!valor || typeof valor !== "object") return null;
+
+    const row = valor as Partial<HeaderSummaryNotificacao>;
+
+    if (!row.id || !row.titulo || !row.created_at) return null;
+
+    return {
+      id: String(row.id),
+      titulo: String(row.titulo),
+      mensagem: String(row.mensagem || ""),
+      lida: row.lida === true,
+      conversa_id: row.conversa_id ? String(row.conversa_id) : null,
+      created_at: String(row.created_at),
+      metadata_json:
+        row.metadata_json && typeof row.metadata_json === "object"
+          ? row.metadata_json
+          : undefined,
+    };
+  }
+
+  function aplicarNotificacaoRealtime(payload: {
+    eventType?: string;
+    new?: unknown;
+    old?: unknown;
+  }) {
+    if (document.visibilityState !== "visible") return;
+
+    const notificacao = normalizarNotificacaoRealtime(payload.new);
+    if (!notificacao) return;
+
+    const mapa = new Map<string, HeaderSummaryNotificacao>();
+
+    [notificacao, ...notificacoesRef.current].forEach((item) => {
+      mapa.set(item.id, item);
+    });
+
+    const lista = Array.from(mapa.values())
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+      .slice(0, 20);
+
+    notificacoesRef.current = lista;
+    setNotificacoes(lista);
+    setNotificacoesNaoLidas(lista.filter((item) => !item.lida).length);
+  }
+
   function marcarNotificacaoLidaLocal(id: string) {
     setNotificacoes((atuais) =>
       atuais.map((notificacao) =>
@@ -199,6 +267,26 @@ export function HeaderSummaryProvider({
       );
     };
   }, [refreshResumo]);
+
+  useEffect(() => {
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
+      .channel("crm-header-notificacoes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notificacoes",
+        },
+        aplicarNotificacaoRealtime
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
   return (
     <HeaderSummaryContext.Provider

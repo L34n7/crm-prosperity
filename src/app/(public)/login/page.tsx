@@ -163,7 +163,7 @@ export default function LoginPage() {
 
             <div className={styles.featureItem}>
               <span className={styles.featureDot} />
-              <span>Automações, fluxos e disparos programados</span>
+              <span>Agenda, automações, fluxos e disparos programados</span>
             </div>
 
             <div className={styles.featureItem}>
@@ -173,7 +173,7 @@ export default function LoginPage() {
           </div>
 
           <div className={styles.integrationFooter}>
-            <span className={styles.integrationLabel}>Integrações com</span>
+            <span className={styles.integrationLabel}>Integração Oficial com</span>
 
             <div className={styles.integrationBrands}>
               <div className={styles.integrationBrand}>

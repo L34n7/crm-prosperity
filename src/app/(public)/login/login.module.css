@@ -151,7 +151,7 @@
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
-  color: #cbd5e1;
+  color: #cbd5e1f2;
   white-space: normal;
   flex-shrink: 0;
   margin-top: -10px;
@@ -181,6 +181,7 @@
   max-width: 110px;
   object-fit: contain;
   display: block;
+  opacity: 0.9;
 }
 
 .integrationDivider {
@@ -191,7 +192,7 @@
 }
 
 .description {
-  margin: 26px 0 0;
+  margin: 15px 0px 5px;
   font-size: 16px;
   line-height: 1.7;
   color: #e2e8f0;

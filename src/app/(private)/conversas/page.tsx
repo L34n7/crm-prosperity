@@ -14,6 +14,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
+import { createClient } from "@/lib/supabase/client";
 import styles from "./conversas.module.css";
 import { can } from "@/lib/permissoes/frontend";
 import EmojiPicker from "emoji-picker-react";
@@ -1721,14 +1722,21 @@ function ConversasPageContent() {
     useState<Janela24hConversa | null>(null);
 
   const LIMITE_CONVERSAS = 20;
-  const POLL_CONVERSAS_MS = 30_000;
-  const POLL_MENSAGENS_MS = 30_000;
+  const POLL_CONVERSAS_MS = 5 * 60_000;
+  const POLL_MENSAGENS_MS = 5 * 60_000;
+  const REALTIME_MENSAGENS_DEBOUNCE_MS = 800;
+  const REALTIME_CONVERSAS_DEBOUNCE_MS = 8_000;
   const [temMaisConversas, setTemMaisConversas] = useState(true);
   const [carregandoMaisConversas, setCarregandoMaisConversas] = useState(false);
 
   const carregandoMaisConversasRef = useRef(false);
   const conversasRef = useRef<Conversa[]>([]);
   const atualizandoConversasAutomaticamenteRef = useRef(false);
+  const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
+    null
+  );
+  const realtimeConversasTimerRef = useRef<number | null>(null);
+  const realtimeMensagensTimerRef = useRef<number | null>(null);
   const [conversaSelecionada, setConversaSelecionada] =
     useState<Conversa | null>(null);
   const conversaSelecionadaIdRef = useRef<string | null>(null);
@@ -1781,6 +1789,7 @@ function ConversasPageContent() {
   const [enviando, setEnviando] = useState(false);
   const [inicioJanelaHistorico, setInicioJanelaHistorico] = useState<string | null>(null);
   const [fimJanelaHistorico, setFimJanelaHistorico] = useState<string | null>(null);
+  const inicioJanelaHistoricoRef = useRef<string | null>(null);
 
   const [temMaisHistorico, setTemMaisHistorico] = useState(false);
   const [carregandoMaisHistorico, setCarregandoMaisHistorico] = useState(false);
@@ -1809,6 +1818,9 @@ function ConversasPageContent() {
   const [novoResponsavelId, setNovoResponsavelId] = useState("");
   const [salvandoAcao, setSalvandoAcao] = useState(false);
   const [abaVisivel, setAbaVisivel] = useState(true);
+  const abaVisivelRef = useRef(true);
+  const enviandoRef = useRef(false);
+  const editandoCampoRef = useRef<string | null>(null);
 
   const mensagensRef = useRef<HTMLDivElement | null>(null);
   const mensagemMaisAntigaCarregadaRef = useRef<string | null>(null);
@@ -1951,6 +1963,22 @@ function ConversasPageContent() {
   useEffect(() => {
     protocoloSelecionadoIdRef.current = protocoloSelecionadoId;
   }, [protocoloSelecionadoId]);
+
+  useEffect(() => {
+    abaVisivelRef.current = abaVisivel;
+  }, [abaVisivel]);
+
+  useEffect(() => {
+    enviandoRef.current = enviando;
+  }, [enviando]);
+
+  useEffect(() => {
+    editandoCampoRef.current = editandoCampo;
+  }, [editandoCampo]);
+
+  useEffect(() => {
+    inicioJanelaHistoricoRef.current = inicioJanelaHistorico;
+  }, [inicioJanelaHistorico]);
 
   const [templateDisparoId, setTemplateDisparoId] = useState("");
   const [templateDisparoNome, setTemplateDisparoNome] = useState("");
@@ -3534,6 +3562,77 @@ function ConversasPageContent() {
     );
 
     return await carregarConversas(true, false, quantidadeAtual);
+  }
+
+  function getSupabaseRealtime() {
+    if (!supabaseRealtimeRef.current) {
+      supabaseRealtimeRef.current = createClient();
+    }
+
+    return supabaseRealtimeRef.current;
+  }
+
+  function agendarAtualizacaoConversasRealtime() {
+    if (!abaVisivelRef.current) return;
+
+    if (realtimeConversasTimerRef.current) {
+      window.clearTimeout(realtimeConversasTimerRef.current);
+    }
+
+    realtimeConversasTimerRef.current = window.setTimeout(async () => {
+      realtimeConversasTimerRef.current = null;
+
+      if (!abaVisivelRef.current) return;
+      if (carregandoMaisConversasRef.current) return;
+      if (atualizandoConversasAutomaticamenteRef.current) return;
+
+      try {
+        atualizandoConversasAutomaticamenteRef.current = true;
+        await atualizarConversasCarregadas();
+      } finally {
+        atualizandoConversasAutomaticamenteRef.current = false;
+      }
+    }, REALTIME_CONVERSAS_DEBOUNCE_MS);
+  }
+
+  function agendarAtualizacaoMensagensRealtime(conversaId: string) {
+    if (!abaVisivelRef.current) return;
+    if (!conversaEstaSelecionada(conversaId)) return;
+    if (enviandoRef.current) return;
+    if (editandoCampoRef.current) return;
+
+    if (realtimeMensagensTimerRef.current) {
+      window.clearTimeout(realtimeMensagensTimerRef.current);
+    }
+
+    realtimeMensagensTimerRef.current = window.setTimeout(async () => {
+      realtimeMensagensTimerRef.current = null;
+
+      if (!abaVisivelRef.current) return;
+      if (!conversaEstaSelecionada(conversaId)) return;
+      if (enviandoRef.current) return;
+      if (editandoCampoRef.current) return;
+
+      const estavaNoFinal = verificarSeUsuarioEstaNoFinal();
+
+      acompanharCrescimentoChatRef.current = estavaNoFinal;
+      impedirAutoScrollRef.current = !estavaNoFinal;
+      forcarScrollParaFinalRef.current = false;
+
+      await carregarMensagens(
+        conversaId,
+        true,
+        protocoloSelecionadoIdRef.current,
+        mensagemMaisAntigaCarregadaRef.current ||
+          inicioJanelaHistoricoRef.current,
+        null,
+        {
+          modoMergeNovas: true,
+        }
+      );
+
+      agendarAtualizacaoConversasRealtime();
+    }, REALTIME_MENSAGENS_DEBOUNCE_MS);
   }
 
   async function atualizarConversasManual() {
@@ -6138,6 +6237,98 @@ const templateFooterTexto = useMemo(() => {
     chipRapido,
     listaFiltroId,
   ]);
+
+  useEffect(() => {
+    if (!usuarioLogado?.empresa_id) return;
+
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
+      .channel(`crm-conversas:${usuarioLogado.empresa_id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversas",
+          filter: `empresa_id=eq.${usuarioLogado.empresa_id}`,
+        },
+        () => {
+          agendarAtualizacaoConversasRealtime();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [usuarioLogado?.empresa_id]);
+
+  useEffect(() => {
+    if (!conversaSelecionada?.id) return;
+
+    const conversaId = conversaSelecionada.id;
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
+      .channel(`crm-mensagens:${conversaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "mensagens",
+          filter: `conversa_id=eq.${conversaId}`,
+        },
+        () => {
+          agendarAtualizacaoMensagensRealtime(conversaId);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "mensagens",
+          filter: `conversa_id=eq.${conversaId}`,
+        },
+        () => {
+          agendarAtualizacaoMensagensRealtime(conversaId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (realtimeMensagensTimerRef.current) {
+        window.clearTimeout(realtimeMensagensTimerRef.current);
+        realtimeMensagensTimerRef.current = null;
+      }
+
+      void supabase.removeChannel(channel);
+    };
+  }, [conversaSelecionada?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (realtimeConversasTimerRef.current) {
+        window.clearTimeout(realtimeConversasTimerRef.current);
+      }
+
+      if (realtimeMensagensTimerRef.current) {
+        window.clearTimeout(realtimeMensagensTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!abaVisivel) return;
+
+    if (conversasRef.current.length > 0) {
+      agendarAtualizacaoConversasRealtime();
+    }
+
+    if (conversaSelecionada?.id) {
+      agendarAtualizacaoMensagensRealtime(conversaSelecionada.id);
+    }
+  }, [abaVisivel, conversaSelecionada?.id]);
 
   useEffect(() => {
     if (!abaVisivel) return;
