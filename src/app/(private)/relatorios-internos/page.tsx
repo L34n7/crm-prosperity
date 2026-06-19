@@ -30,7 +30,8 @@ const ONLINE_TIMEOUT_MS = 5 * 60 * 1000;
 const MODAL_PAGE_SIZE = 10;
 const DASHBOARD_LIMIT = 5;
 const CAMPANHA_LABEL_MAX_LENGTH = 10;
-const CAMPANHA_NA_LABEL = "Campanha N/A";
+const CAMPANHA_NA_LABEL = "N/A";
+const JANELA_ORIGEM_DISPARO_MS = 10 * 60 * 1000;
 const CAMPAIGN_SEGMENT_COLORS = [
   "#16a34a",
   "#2563eb",
@@ -44,6 +45,7 @@ const CAMPAIGN_SEGMENT_COLORS = [
 
 type SearchParams = Record<string, string | string[] | undefined>;
 type PeriodoAtalho = "1h" | "24h" | "3d" | "7d" | "30d";
+type ConversaOrigemFiltro = "contato" | "disparo" | "todas";
 type SortTabela =
   | "conversas"
   | "mensagens"
@@ -66,6 +68,7 @@ type FiltrosRelatorio = {
 type FiltrosPorRelatorio = {
   conversasEmpresaId: string;
   conversasUsuarioId: string;
+  conversasOrigem: ConversaOrigemFiltro;
   mensagensEmpresaId: string;
   mensagensUsuarioId: string;
   disparosEmpresaId: string;
@@ -133,6 +136,7 @@ type ConversaRow = {
   responsavel_id: string | null;
   created_at: string;
   status: string | null;
+  origem_atendimento?: string | null;
   contatos?: ContatoRelacao | ContatoRelacao[] | null;
 };
 
@@ -146,6 +150,12 @@ type MensagemRow = {
   created_at: string;
 };
 
+type MensagemOrigemConversaRow = {
+  conversa_id: string | null;
+  created_at: string;
+  metadata_json: Record<string, unknown> | null;
+};
+
 type DisparoRow = {
   id: string;
   empresa_id: string | null;
@@ -153,6 +163,12 @@ type DisparoRow = {
   template_nome: string | null;
   usuario_id: string | null;
   created_at: string;
+};
+
+type DisparoOrigemConversaRow = {
+  conversa_id: string | null;
+  created_at: string;
+  metadata_json: Record<string, unknown> | null;
 };
 
 type ContatoRow = {
@@ -361,6 +377,7 @@ const relatoriosDetalhe: RelatorioDetalhe[] = [
 const filtrosPorRelatorioPadrao: FiltrosPorRelatorio = {
   conversasEmpresaId: "",
   conversasUsuarioId: "",
+  conversasOrigem: "contato",
   mensagensEmpresaId: "",
   mensagensUsuarioId: "",
   disparosEmpresaId: "",
@@ -478,10 +495,15 @@ function resolverFiltros(params: SearchParams): FiltrosRelatorio {
 function resolverFiltrosPorRelatorio(params: SearchParams): FiltrosPorRelatorio {
   const planosStatus = getParametro(params, "planos_status");
   const integracoesStatus = getParametro(params, "int_status");
+  const conversasOrigem = getParametro(params, "conv_origem");
 
   return {
     conversasEmpresaId: getParametro(params, "conv_empresa"),
     conversasUsuarioId: getParametro(params, "conv_usuario"),
+    conversasOrigem:
+      conversasOrigem === "todas" || conversasOrigem === "disparo"
+        ? conversasOrigem
+        : "contato",
     mensagensEmpresaId: getParametro(params, "msg_empresa"),
     mensagensUsuarioId: getParametro(params, "msg_usuario"),
     disparosEmpresaId: getParametro(params, "disp_empresa"),
@@ -748,6 +770,19 @@ function UsuarioSelect({
             {getUsuarioLabel(usuario, empresasPorId)}
           </option>
         ))}
+      </select>
+    </label>
+  );
+}
+
+function ConversaOrigemSelect({ value }: { value: ConversaOrigemFiltro }) {
+  return (
+    <label className={styles.field}>
+      <span>Origem</span>
+      <select name="conv_origem" defaultValue={value}>
+        <option value="contato">Contato</option>
+        <option value="disparo">Disparo</option>
+        <option value="todas">Todas</option>
       </select>
     </label>
   );
@@ -1257,6 +1292,12 @@ function getContatoLabel(conversa: ConversaRow | null | undefined) {
   );
 }
 
+function getConversaOrigemLabel(origem: ConversaOrigemFiltro) {
+  if (origem === "disparo") return "iniciadas por disparo";
+  if (origem === "todas") return "todas as origens";
+  return "iniciadas pelo contato";
+}
+
 function getCampanhaLabel(valor: string | null | undefined) {
   return valor?.trim() || CAMPANHA_NA_LABEL;
 }
@@ -1395,6 +1436,91 @@ function getTimestamp(valor: string | null | undefined) {
   if (!valor) return 0;
   const data = new Date(valor).getTime();
   return Number.isNaN(data) ? 0 : data;
+}
+
+function metadataEhDisparo(metadata: Record<string, unknown> | null | undefined) {
+  const tipo = String(metadata?.tipo || "");
+  return (
+    tipo === "disparo_template" ||
+    tipo === "disparo_template_individual" ||
+    tipo === "disparo_template_agendado"
+  );
+}
+
+function eventoPertoDaCriacaoDaConversa(
+  conversa: ConversaRow | undefined,
+  eventoCriadoEm: string | null | undefined
+) {
+  if (!conversa) return false;
+
+  const conversaCriadaEm = getTimestamp(conversa.created_at);
+  const eventoEm = getTimestamp(eventoCriadoEm);
+
+  if (!conversaCriadaEm || !eventoEm) return false;
+
+  return (
+    eventoEm >= conversaCriadaEm - 60 * 1000 &&
+    eventoEm <= conversaCriadaEm + JANELA_ORIGEM_DISPARO_MS
+  );
+}
+
+function montarConversasIniciadasPorDisparo({
+  conversas,
+  disparosOrigem,
+  mensagensOrigem,
+}: {
+  conversas: ConversaRow[];
+  disparosOrigem: DisparoOrigemConversaRow[];
+  mensagensOrigem: MensagemOrigemConversaRow[];
+}) {
+  const conversasPorId = new Map(conversas.map((conversa) => [conversa.id, conversa]));
+  const ids = new Set<string>();
+
+  for (const disparo of disparosOrigem) {
+    if (!disparo.conversa_id) continue;
+    if (
+      eventoPertoDaCriacaoDaConversa(
+        conversasPorId.get(disparo.conversa_id),
+        disparo.created_at
+      )
+    ) {
+      ids.add(disparo.conversa_id);
+    }
+  }
+
+  for (const mensagem of mensagensOrigem) {
+    if (!mensagem.conversa_id || !metadataEhDisparo(mensagem.metadata_json)) {
+      continue;
+    }
+
+    if (
+      eventoPertoDaCriacaoDaConversa(
+        conversasPorId.get(mensagem.conversa_id),
+        mensagem.created_at
+      )
+    ) {
+      ids.add(mensagem.conversa_id);
+    }
+  }
+
+  return ids;
+}
+
+function filtrarConversasPorOrigem({
+  conversas,
+  conversasIniciadasPorDisparo,
+  origem,
+}: {
+  conversas: ConversaRow[];
+  conversasIniciadasPorDisparo: Set<string>;
+  origem: ConversaOrigemFiltro;
+}) {
+  if (origem === "todas") return conversas;
+
+  return conversas.filter((conversa) => {
+    const porDisparo = conversasIniciadasPorDisparo.has(conversa.id);
+    return origem === "disparo" ? porDisparo : !porDisparo;
+  });
 }
 
 function limitarIsoAoAgora(valor: string | null | undefined, agora: number) {
@@ -1583,6 +1709,7 @@ async function carregarRelatorios(
         responsavel_id,
         created_at,
         status,
+        origem_atendimento,
         contatos (
           id,
           empresa_id,
@@ -1602,6 +1729,15 @@ async function carregarRelatorios(
     .order("created_at", { ascending: true })
     .limit(MAX_CONVERSAS);
 
+  const disparosOrigemConversasQuery = supabaseAdmin
+    .from("whatsapp_disparos_logs")
+    .select("conversa_id, created_at, metadata_json")
+    .not("conversa_id", "is", null)
+    .gte("created_at", filtros.inicioIso)
+    .lte("created_at", filtros.fimIso)
+    .order("created_at", { ascending: true })
+    .limit(MAX_DISPAROS);
+
   let mensagensQuery = supabaseAdmin
     .from("mensagens")
     .select(
@@ -1610,6 +1746,15 @@ async function carregarRelatorios(
         count: "exact",
       }
     )
+    .gte("created_at", filtros.inicioIso)
+    .lte("created_at", filtros.fimIso)
+    .order("created_at", { ascending: true })
+    .limit(MAX_MENSAGENS);
+
+  const mensagensOrigemConversasQuery = supabaseAdmin
+    .from("mensagens")
+    .select("conversa_id, created_at, metadata_json")
+    .not("conversa_id", "is", null)
     .gte("created_at", filtros.inicioIso)
     .lte("created_at", filtros.fimIso)
     .order("created_at", { ascending: true })
@@ -1756,7 +1901,9 @@ async function carregarRelatorios(
     usuariosOpcoesResult,
     empresasResult,
     conversasResult,
+    disparosOrigemConversasResult,
     mensagensResult,
+    mensagensOrigemConversasResult,
     disparosResult,
     contatosResult,
     integracoesResult,
@@ -1766,7 +1913,9 @@ async function carregarRelatorios(
     usuariosOpcoesQuery,
     empresasQuery,
     conversasQuery,
+    disparosOrigemConversasQuery,
     mensagensQuery,
+    mensagensOrigemConversasQuery,
     disparosQuery,
     contatosQuery,
     integracoesQuery,
@@ -1777,7 +1926,13 @@ async function carregarRelatorios(
   if (usuariosOpcoesResult.error) throw new Error(usuariosOpcoesResult.error.message);
   if (empresasResult.error) throw new Error(empresasResult.error.message);
   if (conversasResult.error) throw new Error(conversasResult.error.message);
+  if (disparosOrigemConversasResult.error) {
+    throw new Error(disparosOrigemConversasResult.error.message);
+  }
   if (mensagensResult.error) throw new Error(mensagensResult.error.message);
+  if (mensagensOrigemConversasResult.error) {
+    throw new Error(mensagensOrigemConversasResult.error.message);
+  }
   if (disparosResult.error) throw new Error(disparosResult.error.message);
   if (contatosResult.error) throw new Error(contatosResult.error.message);
   if (integracoesResult.error) throw new Error(integracoesResult.error.message);
@@ -1801,11 +1956,25 @@ async function carregarRelatorios(
   );
 
   const conversas = (conversasResult.data ?? []) as ConversaRow[];
+  const disparosOrigemConversas = (disparosOrigemConversasResult.data ??
+    []) as DisparoOrigemConversaRow[];
   const mensagens = (mensagensResult.data ?? []) as MensagemRow[];
+  const mensagensOrigemConversas = (mensagensOrigemConversasResult.data ??
+    []) as MensagemOrigemConversaRow[];
   const disparos = (disparosResult.data ?? []) as DisparoRow[];
   const contatos = (contatosResult.data ?? []) as ContatoRow[];
   const integracoes = (integracoesResult.data ?? []) as IntegracaoWhatsappRow[];
   const usuarios = (usuariosResult.data ?? []) as UsuarioRow[];
+  const conversasIniciadasPorDisparo = montarConversasIniciadasPorDisparo({
+    conversas,
+    disparosOrigem: disparosOrigemConversas,
+    mensagensOrigem: mensagensOrigemConversas,
+  });
+  const conversasRelatorio = filtrarConversasPorOrigem({
+    conversas,
+    conversasIniciadasPorDisparo,
+    origem: filtrosRelatorio.conversasOrigem,
+  });
   const conversasPorId = new Map(conversas.map((conversa) => [conversa.id, conversa]));
 
   const mensagensTop = montarMensagensPorConversa({
@@ -1834,6 +2003,7 @@ async function carregarRelatorios(
           responsavel_id,
           created_at,
           status,
+          origem_atendimento,
           contatos (
             id,
             empresa_id,
@@ -1881,7 +2051,7 @@ async function carregarRelatorios(
   });
 
   const conversasPorEmpresa = montarConversasPorEmpresa({
-    conversas,
+    conversas: conversasRelatorio,
     empresasPorId,
     ordenacao: ordenacao.conversas,
   });
@@ -1948,7 +2118,7 @@ async function carregarRelatorios(
     usuariosSessao,
     integracoesMeta,
     totais: {
-      conversas: conversasResult.count ?? conversas.length,
+      conversas: conversasRelatorio.length,
       mensagens: mensagensResult.count ?? mensagens.length,
       disparos: disparosResult.count ?? disparos.length,
       contatosNovos,
@@ -2483,7 +2653,9 @@ function DashboardCards({
         eyebrow="Conversas"
         title="Total por periodo e empresa"
         value={formatarNumero(dados.totais.conversas)}
-        detail={`no periodo ${filtros.periodoLabel}`}
+        detail={`${getConversaOrigemLabel(
+          filtrosPorRelatorioPadrao.conversasOrigem
+        )} - ${filtros.periodoLabel}`}
         href={hrefDetalhe(params, "conversas")}
         tone="blue"
       >
@@ -2712,7 +2884,9 @@ function RelatorioDetalheModal({
       <ModalShell
         params={params}
         title="Conversas por empresa"
-        subtitle={`Total consolidado no periodo ${filtros.periodoLabel}.`}
+        subtitle={`Total consolidado no periodo ${filtros.periodoLabel}, ${getConversaOrigemLabel(
+          filtrosRelatorio.conversasOrigem
+        )}.`}
       >
         <ReportFilters
           params={params}
@@ -2722,9 +2896,15 @@ function RelatorioDetalheModal({
             "atalho",
             "conv_empresa",
             "conv_usuario",
+            "conv_origem",
             "pag_conversas",
           ]}
-          clearUpdates={{ conv_empresa: "", conv_usuario: "", pag_conversas: "1" }}
+          clearUpdates={{
+            conv_empresa: "",
+            conv_usuario: "",
+            conv_origem: "contato",
+            pag_conversas: "1",
+          }}
         >
           <div className={styles.reportFilterDates}>
             <PeriodoFilterFields params={params} filtros={filtros} />
@@ -2743,6 +2923,8 @@ function RelatorioDetalheModal({
               usuarios={dados.usuariosOpcoes}
               empresasPorId={empresasOpcoesPorId}
             />
+
+            <ConversaOrigemSelect value={filtrosRelatorio.conversasOrigem} />
           </div>
         </ReportFilters>
 
@@ -3783,7 +3965,9 @@ export default async function RelatoriosInternosPage({
             icon={MessageSquare}
             label="Conversas"
             value={formatarNumero(dados.totais.conversas)}
-            detail={`total no período ${filtros.periodoLabel}`}
+            detail={`${getConversaOrigemLabel(
+              filtrosPorRelatorioPadrao.conversasOrigem
+            )} no periodo`}
             tone="blue"
           />
           <KpiCard

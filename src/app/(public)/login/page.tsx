@@ -9,39 +9,11 @@ import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { enviarEventoSessao, getClientSessionId } from "@/lib/auth/browser-session";
 
-type IntegracaoWhatsappAmbiente = {
-  status?: string | null;
-  webhook_verificado?: boolean | null;
-  onboarding_etapa?: string | null;
-  onboarding_status?: string | null;
-  setup_completed_at?: string | null;
-  phone_registered?: boolean | null;
-  app_assigned?: boolean | null;
-  waba_id?: string | null;
-  phone_number_id?: string | null;
-};
-
-function isAmbienteConfigurado(
-  integracao: IntegracaoWhatsappAmbiente | null | undefined
-) {
-  if (!integracao) return false;
-
-  return (
-    integracao.status === "ativa" &&
-    integracao.webhook_verificado === true &&
-    integracao.onboarding_etapa === "concluido" &&
-    integracao.onboarding_status === "concluido" &&
-    integracao.phone_registered === true &&
-    integracao.app_assigned === true &&
-    !!integracao.waba_id &&
-    !!integracao.phone_number_id &&
-    !!integracao.setup_completed_at
-  );
-}
+const AMBIENTE_CONFIGURADO_STORAGE_KEY = "crm_ambiente_configurado";
 
 async function obterRotaAposLogin() {
   try {
-    const response = await fetch("/api/integracoes-whatsapp", {
+    const response = await fetch("/api/integracoes-whatsapp/status", {
       method: "GET",
       cache: "no-store",
     });
@@ -52,7 +24,13 @@ async function obterRotaAposLogin() {
       return "/";
     }
 
-    const ambienteConfigurado = isAmbienteConfigurado(data.integracao);
+    const ambienteConfigurado = data.configurado === true;
+
+    if (ambienteConfigurado) {
+      window.sessionStorage.setItem(AMBIENTE_CONFIGURADO_STORAGE_KEY, "true");
+    } else {
+      window.sessionStorage.removeItem(AMBIENTE_CONFIGURADO_STORAGE_KEY);
+    }
 
     if (!ambienteConfigurado) {
       return "/configurar-ambiente";
@@ -126,7 +104,7 @@ export default function LoginPage() {
 
     window.sessionStorage.removeItem("crm_ambiente_redirect_apos_login");
     window.sessionStorage.removeItem("crm_ambiente_redirect_inicial");
-    window.sessionStorage.removeItem("crm_ambiente_configurado");
+    window.sessionStorage.removeItem(AMBIENTE_CONFIGURADO_STORAGE_KEY);
     try {
       getClientSessionId();
       await enviarEventoSessao("login");

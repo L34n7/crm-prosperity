@@ -6,10 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/LogoutButton";
 import { useHeaderUser } from "@/components/header-user-context";
-import {
-  IA_TOKENS_REFRESH_EVENT,
-  type IaTokensRefreshEventDetail,
-} from "@/lib/ia/tokens-client-events";
+import { useHeaderSummary } from "@/components/header-summary-context";
 import styles from "./Header.module.css";
 import { createPortal } from "react-dom";
 
@@ -76,8 +73,6 @@ type TemaVisual = "light" | "dark";
 
 const AJUDA_WHATSAPP_URL = "https://wa.me/5531975117638";
 const THEME_STORAGE_KEY = "crm-theme";
-const POLL_NOTIFICACOES_MS = 60_000;
-const POLL_TOKENS_IA_MS = 15 * 60_000;
 
 const PLANOS_RENOVACAO: PlanoRenovacao[] = [
   {
@@ -151,11 +146,6 @@ export default function Header({
   const [notificacoesOpen, setNotificacoesOpen] = useState(false);
   const [modalNotificacoesOpen, setModalNotificacoesOpen] = useState(false);
   const [paginaNotificacoes, setPaginaNotificacoes] = useState(1);
-  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
-  const [naoLidas, setNaoLidas] = useState(0);
-  const [saldoTokensIa, setSaldoTokensIa] = useState<SaldoTokensIa | null>(
-    null
-  );
   const [alertaTokensOpen, setAlertaTokensOpen] = useState(false);
   const [modalPlanosOpen, setModalPlanosOpen] = useState(false);
   const [planoCheckoutLoading, setPlanoCheckoutLoading] =
@@ -167,6 +157,13 @@ export default function Header({
   const notificacoesRef = useRef<HTMLDivElement | null>(null);
 
   const headerUser = useHeaderUser();
+  const {
+    notificacoes,
+    notificacoesNaoLidas: naoLidas,
+    saldoTokensIa,
+    marcarNotificacaoLidaLocal,
+    marcarTodasNotificacoesLidasLocal,
+  } = useHeaderSummary();
   const podeExibirSaldoTokensIa = headerUser.permissoes.includes(
     "ia.tokens.exibir_header"
   );
@@ -213,38 +210,6 @@ export default function Header({
   function alternarTemaVisual() {
     aplicarTemaVisual(temaVisual === "dark" ? "light" : "dark");
   }
-    
-  async function carregarNotificacoes() {
-    try {
-      const res = await fetch("/api/notificacoes");
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) return;
-
-      setNotificacoes(json.notificacoes || []);
-      setNaoLidas(json.nao_lidas || 0);
-    } catch {
-      // silencioso para não quebrar header
-    }
-  }
-
-  async function carregarSaldoTokensIa(forcarAtualizacao = false) {
-    if (!podeExibirSaldoTokensIa || assinaturaEmAberto) return;
-
-    try {
-      const res = await fetch("/api/ia/tokens", {
-        cache: forcarAtualizacao ? "no-store" : "default",
-      });
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) return;
-
-      setSaldoTokensIa(json.saldo || null);
-    } catch {
-      // silencioso para nao quebrar header
-    }
-  }
-
   function formatarTokens(valor: number | null) {
     if (valor === null) return "Ilimitado";
 
@@ -383,14 +348,7 @@ export default function Header({
         }),
       });
 
-      setNotificacoes((atuais) =>
-        atuais.map((notificacao) => ({
-          ...notificacao,
-          lida: true,
-        }))
-      );
-
-      setNaoLidas(0);
+      marcarTodasNotificacoesLidasLocal();
     } catch {
       // silencioso para não quebrar o header
     }
@@ -405,17 +363,11 @@ export default function Header({
           body: JSON.stringify({ id: notificacao.id }),
         });
 
-        setNotificacoes((atuais) =>
-          atuais.map((item) =>
-            item.id === notificacao.id ? { ...item, lida: true } : item
-          )
-        );
+        marcarNotificacaoLidaLocal(notificacao.id);
       }
 
       setNotificacoesOpen(false);
       setModalNotificacoesOpen(false);
-      setNaoLidas((atual) => Math.max(0, atual - (notificacao.lida ? 0 : 1)));
-
       if (notificacao.conversa_id) {
         router.push(`/conversas?id=${notificacao.conversa_id}`);
       }
@@ -431,68 +383,6 @@ export default function Header({
 
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    carregarNotificacoes();
-
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void carregarNotificacoes();
-      }
-    }, POLL_NOTIFICACOES_MS);
-
-    function atualizarAoVoltarParaAba() {
-      if (document.visibilityState === "visible") {
-        void carregarNotificacoes();
-      }
-    }
-
-    document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
-
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", atualizarAoVoltarParaAba);
-    };
-  }, []);
-
-  useEffect(() => {
-    carregarSaldoTokensIa(true);
-
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void carregarSaldoTokensIa();
-      }
-    }, POLL_TOKENS_IA_MS);
-
-    function atualizarAoVoltarParaAba() {
-      if (document.visibilityState === "visible") {
-        void carregarSaldoTokensIa(true);
-      }
-    }
-
-    function atualizarPorEventoTokens(event: Event) {
-      const customEvent = event as CustomEvent<IaTokensRefreshEventDetail>;
-
-      if (customEvent.detail?.saldo) {
-        setSaldoTokensIa(customEvent.detail.saldo as SaldoTokensIa);
-        return;
-      }
-
-      void carregarSaldoTokensIa(true);
-    }
-
-    document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
-    window.addEventListener(IA_TOKENS_REFRESH_EVENT, atualizarPorEventoTokens);
-
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", atualizarAoVoltarParaAba);
-      window.removeEventListener(
-        IA_TOKENS_REFRESH_EVENT,
-        atualizarPorEventoTokens
-      );
-    };
   }, []);
 
   useEffect(() => {

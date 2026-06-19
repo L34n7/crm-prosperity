@@ -4,34 +4,39 @@ import { useEffect } from "react";
 import {
   enviarEventoSessao,
   getClientSessionId,
+  registrarAtividadeSessao,
 } from "@/lib/auth/browser-session";
 
-const HEARTBEAT_INTERVAL_MS = 5 * 60_000;
+const ACTIVITY_EVENTS: Array<keyof DocumentEventMap> = [
+  "click",
+  "keydown",
+  "submit",
+];
 
 export default function SessionActivityTracker() {
   useEffect(() => {
     getClientSessionId();
     void enviarEventoSessao("login");
 
-    function enviarHeartbeatSeVisivel() {
-      if (document.visibilityState !== "visible") return;
-      void enviarEventoSessao("heartbeat");
+    function registrarAtividade() {
+      void registrarAtividadeSessao();
     }
-
-    const interval = window.setInterval(() => {
-      enviarHeartbeatSeVisivel();
-    }, HEARTBEAT_INTERVAL_MS);
 
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
-        void enviarEventoSessao("heartbeat");
+        void registrarAtividadeSessao();
       }
     }
 
+    ACTIVITY_EVENTS.forEach((evento) => {
+      document.addEventListener(evento, registrarAtividade, true);
+    });
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.clearInterval(interval);
+      ACTIVITY_EVENTS.forEach((evento) => {
+        document.removeEventListener(evento, registrarAtividade, true);
+      });
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);

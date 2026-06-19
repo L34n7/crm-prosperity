@@ -36,6 +36,7 @@ import {
   X,
 } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
+import { useHeaderSummary } from "@/components/header-summary-context";
 import { useHeaderUser } from "@/components/header-user-context";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
@@ -64,8 +65,6 @@ type WhatsappSidebarPerfil = {
 const PERMISSAO_VISUALIZAR_PLANO_SIDEBAR = "assinaturas.plano.visualizar";
 const AJUDA_WHATSAPP_URL = "https://wa.me/5531975117638";
 const THEME_STORAGE_KEY = "crm-theme";
-const POLL_DISPAROS_PENDENTES_MS = 3 * 60_000;
-const POLL_CONVERSAS_NAO_LIDAS_MS = 60_000;
 const mobilePrimaryHrefs = [
   "/conversas",
   "/agendas",
@@ -162,11 +161,10 @@ export default function Sidebar({
     Boolean(
       searchParams.get("id") ||
       searchParams.get("conversaId")
-    );
+  );
   const headerUser = useHeaderUser();
+  const { conversasNaoLidas, disparosPendentes } = useHeaderSummary();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
-  const [disparosPendentes, setDisparosPendentes] = useState(0);
-  const [conversasNaoLidas, setConversasNaoLidas] = useState(0);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>(() => {
     if (typeof document === "undefined") return "light";
@@ -209,89 +207,6 @@ export default function Sidebar({
   const mobileMoreActive =
     mobileMoreItems.some((item) => isActivePath(pathname, item.href)) ||
     isActivePath(pathname, "/perfil");
-
-  useEffect(() => {
-    if (assinaturaBloqueada) {
-      return;
-    }
-
-    async function carregarDisparosPendentes() {
-      if (document.visibilityState !== "visible") return;
-
-      try {
-        const res = await fetch("/api/disparos-agendados/pendentes");
-
-        const json = await res.json();
-
-        if (res.ok && json.ok) {
-          setDisparosPendentes(Number(json.quantidade || 0));
-        }
-      } catch {
-        setDisparosPendentes(0);
-      }
-    }
-
-    carregarDisparosPendentes();
-
-    const intervalo = window.setInterval(
-      carregarDisparosPendentes,
-      POLL_DISPAROS_PENDENTES_MS
-    );
-
-    function atualizarAoVoltarParaAba() {
-      if (document.visibilityState === "visible") {
-        void carregarDisparosPendentes();
-      }
-    }
-
-    document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
-
-    return () => {
-      window.clearInterval(intervalo);
-      document.removeEventListener("visibilitychange", atualizarAoVoltarParaAba);
-    };
-  }, [assinaturaBloqueada]);
-
-  useEffect(() => {
-    async function carregarConversasNaoLidas() {
-      if (document.visibilityState !== "visible") return;
-
-      try {
-        const res = await fetch("/api/conversas/nao-lidas");
-
-        const json = await res.json();
-
-        if (res.ok && json.ok) {
-          setConversasNaoLidas(Number(json.quantidade || 0));
-          return;
-        }
-
-        setConversasNaoLidas(0);
-      } catch {
-        setConversasNaoLidas(0);
-      }
-    }
-
-    carregarConversasNaoLidas();
-
-    const intervalo = window.setInterval(
-      carregarConversasNaoLidas,
-      POLL_CONVERSAS_NAO_LIDAS_MS
-    );
-
-    function atualizarAoVoltarParaAba() {
-      if (document.visibilityState === "visible") {
-        void carregarConversasNaoLidas();
-      }
-    }
-
-    document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
-
-    return () => {
-      window.clearInterval(intervalo);
-      document.removeEventListener("visibilitychange", atualizarAoVoltarParaAba);
-    };
-  }, []);
 
   useEffect(() => {
     async function carregarPerfilWhatsapp() {

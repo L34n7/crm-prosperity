@@ -1,6 +1,7 @@
 import Sidebar from "@/components/Sidebar";
 import AssinaturaStatusGuard from "@/components/AssinaturaStatusGuard";
 import { HeaderUserProvider } from "@/components/header-user-context";
+import { HeaderSummaryProvider } from "@/components/header-summary-context";
 import SessionActivityTracker from "@/components/SessionActivityTracker";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import styles from "./CrmShell.module.css";
@@ -28,20 +29,22 @@ export default function CrmShell({
     <HeaderUserProvider
       value={{ profileName, avatarUrl, permissoes, assinatura, isAdmin }}
     >
-      <div className={styles.shell}>
-        <SessionActivityTracker />
+      <HeaderSummaryProvider>
+        <div className={styles.shell}>
+          <SessionActivityTracker />
 
-        <Sidebar
-          initialCollapsed={initialCollapsed}
-          permissoes={permissoes}
-          assinatura={assinatura}
-          isAdmin={isAdmin}
-        />
+          <Sidebar
+            initialCollapsed={initialCollapsed}
+            permissoes={permissoes}
+            assinatura={assinatura}
+            isAdmin={isAdmin}
+          />
 
-        <div className={styles.contentArea}>{children}</div>
+          <div className={styles.contentArea}>{children}</div>
 
-        <AssinaturaStatusGuard assinatura={assinatura} isAdmin={isAdmin} />
-      </div>
+          <AssinaturaStatusGuard assinatura={assinatura} isAdmin={isAdmin} />
+        </div>
+      </HeaderSummaryProvider>
     </HeaderUserProvider>
   );
 }

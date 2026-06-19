@@ -10,12 +10,30 @@ import styles from "./AmbienteObrigatorioGuard.module.css";
 
 type ApiResponse = {
   ok: boolean;
+  configurado?: boolean;
   integracao?: IntegracaoWhatsappAmbiente | null;
   error?: string;
 };
 
 const AMBIENTE_CONFIGURADO_STORAGE_KEY = "crm_ambiente_configurado";
-const AMBIENTE_PENDENTE_POLL_MS = 2 * 60_000;
+
+function ambienteConfiguradoEmCache() {
+  return (
+    typeof window !== "undefined" &&
+    window.sessionStorage.getItem(AMBIENTE_CONFIGURADO_STORAGE_KEY) === "true"
+  );
+}
+
+function salvarAmbienteConfiguradoEmCache(configurado: boolean) {
+  if (typeof window === "undefined") return;
+
+  if (configurado) {
+    window.sessionStorage.setItem(AMBIENTE_CONFIGURADO_STORAGE_KEY, "true");
+    return;
+  }
+
+  window.sessionStorage.removeItem(AMBIENTE_CONFIGURADO_STORAGE_KEY);
+}
 
 export default function AmbienteObrigatorioGuard() {
   const router = useRouter();
@@ -42,8 +60,9 @@ export default function AmbienteObrigatorioGuard() {
           setCarregando(true);
         }
 
-        const response = await fetch("/api/integracoes-whatsapp", {
+        const response = await fetch("/api/integracoes-whatsapp/status", {
           method: "GET",
+          cache: modoManual ? "no-store" : "default",
         });
 
         const data = (await response.json()) as ApiResponse;
@@ -56,10 +75,11 @@ export default function AmbienteObrigatorioGuard() {
         const proximaIntegracao = data.integracao || null;
         setIntegracao(proximaIntegracao);
 
-        if (isAmbienteConfigurado(proximaIntegracao)) {
-          window.sessionStorage.setItem(AMBIENTE_CONFIGURADO_STORAGE_KEY, "true");
-          setAmbienteConfiguradoLocal(true);
-        }
+        const proximoConfigurado =
+          data.configurado === true || isAmbienteConfigurado(proximaIntegracao);
+
+        salvarAmbienteConfiguradoEmCache(proximoConfigurado);
+        setAmbienteConfiguradoLocal(proximoConfigurado);
       } catch (error) {
         console.warn("[AMBIENTE GUARD] Erro ao verificar ambiente:", error);
       } finally {
@@ -71,16 +91,13 @@ export default function AmbienteObrigatorioGuard() {
   );
 
   useEffect(() => {
-    const valorSalvo = window.sessionStorage.getItem(
-      AMBIENTE_CONFIGURADO_STORAGE_KEY
-    );
-
-    if (valorSalvo === "true") {
+    if (ambienteConfiguradoEmCache()) {
       setAmbienteConfiguradoLocal(true);
       setCarregando(false);
     }
 
     function marcarComoConfigurado() {
+      salvarAmbienteConfiguradoEmCache(true);
       setAmbienteConfiguradoLocal(true);
     }
 
@@ -92,9 +109,13 @@ export default function AmbienteObrigatorioGuard() {
   }, []);
 
   useEffect(() => {
+    if (estaNaPaginaConfiguracao) {
+      setCarregando(false);
+      return;
+    }
+
     const ambienteJaConfirmado =
-      ambienteConfiguradoLocal ||
-      window.sessionStorage.getItem(AMBIENTE_CONFIGURADO_STORAGE_KEY) === "true";
+      ambienteConfiguradoLocal || ambienteConfiguradoEmCache();
 
     if (ambienteJaConfirmado) {
       setAmbienteConfiguradoLocal(true);
@@ -103,17 +124,7 @@ export default function AmbienteObrigatorioGuard() {
     }
 
     verificarAmbiente(false);
-
-    const intervalo = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        verificarAmbiente(false, true);
-      }
-    }, AMBIENTE_PENDENTE_POLL_MS);
-
-    return () => {
-      window.clearInterval(intervalo);
-    };
-  }, [ambienteConfiguradoLocal, verificarAmbiente]);
+  }, [ambienteConfiguradoLocal, estaNaPaginaConfiguracao, verificarAmbiente]);
 
   useEffect(() => {
     if (carregando) return;

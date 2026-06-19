@@ -4,6 +4,7 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { isAdministrador } from "@/lib/auth/authorization";
 import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
+import { isAmbienteConfigurado } from "@/lib/whatsapp/ambiente-configurado";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -657,6 +658,7 @@ export async function POST(req: NextRequest) {
         empresa_id,
         status,
         phone_number_id,
+        waba_id,
         token_ref,
         numero,
         nome_conexao,
@@ -664,7 +666,10 @@ export async function POST(req: NextRequest) {
         payment_method_added,
         phone_registered,
         app_assigned,
-        webhook_verificado
+        webhook_verificado,
+        onboarding_etapa,
+        onboarding_status,
+        setup_completed_at
       `)
       .eq("id", integracaoWhatsappId)
       .single();
@@ -686,6 +691,18 @@ export async function POST(req: NextRequest) {
           error: "Você não pode usar esta integração.",
         },
         { status: 403 }
+      );
+    }
+
+    if (!isAmbienteConfigurado(integracao)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Ambiente do WhatsApp ainda nao esta configurado. Conclua a configuracao antes de realizar disparos.",
+          motivo: "whatsapp_ambiente_incompleto",
+        },
+        { status: 400 }
       );
     }
 
