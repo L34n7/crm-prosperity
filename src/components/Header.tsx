@@ -520,7 +520,7 @@ export default function Header({
 
   function abrirCotacaoPlano() {
     const whatsappComercial =
-      process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "55975117638";
+      process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
     const mensagem = encodeURIComponent(
       "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity."
     );

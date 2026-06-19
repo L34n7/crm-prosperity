@@ -27,7 +27,7 @@ export default function PlanoPage() {
   const [planosExpandidos, setPlanosExpandidos] = useState<string[]>([]);
   const [loadingCheckout, setLoadingCheckout] = useState(false);
   const whatsappComercial =
-    process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "55975117638";
+    process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
 
   useEffect(() => {
     function resetarLoadingCheckout() {

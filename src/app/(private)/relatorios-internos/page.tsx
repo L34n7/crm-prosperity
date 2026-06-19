@@ -23,6 +23,7 @@ const MAX_CONVERSAS = 20000;
 const MAX_MENSAGENS = 40000;
 const MAX_DISPAROS = 30000;
 const MAX_CONTATOS = 20000;
+const MAX_TOKEN_USOS = 40000;
 const MAX_USUARIOS = 1500;
 const MAX_SESSOES = 5000;
 const MAX_INTEGRACOES = 5000;
@@ -31,6 +32,8 @@ const MODAL_PAGE_SIZE = 10;
 const DASHBOARD_LIMIT = 5;
 const CAMPANHA_LABEL_MAX_LENGTH = 10;
 const CAMPANHA_NA_LABEL = "N/A";
+const ORIGEM_MANUAL_LABEL = "Manual";
+const ORIGEM_NA_LABEL = "N/A";
 const JANELA_ORIGEM_DISPARO_MS = 10 * 60 * 1000;
 const CAMPAIGN_SEGMENT_COLORS = [
   "#16a34a",
@@ -51,6 +54,8 @@ type SortTabela =
   | "mensagens"
   | "disparos"
   | "contatos"
+  | "origens"
+  | "tokens"
   | "usuarios"
   | "planos"
   | "integracoes";
@@ -74,6 +79,8 @@ type FiltrosPorRelatorio = {
   disparosEmpresaId: string;
   disparosUsuarioId: string;
   contatosEmpresaId: string;
+  origensEmpresaId: string;
+  tokensEmpresaId: string;
   usuariosEmpresaId: string;
   usuariosUsuarioId: string;
   planosEmpresaId: string;
@@ -87,6 +94,8 @@ type OrdenacaoRelatorios = {
   mensagens: "empresa" | "contato" | "total" | "recebidas" | "enviadas" | "ultima";
   disparos: "empresa" | "total" | "sucesso" | "falha" | "processando";
   contatos: "empresa" | "total" | "campanha" | "na" | "percentual";
+  origens: "empresa" | "total" | "origem" | "manual" | "na" | "percentual";
+  tokens: "empresa" | "registros" | "input" | "output" | "total" | "ultima";
   usuarios: "presenca" | "nome" | "empresa" | "login" | "ultimo" | "logout";
   planos: "empresa" | "plano" | "status" | "inicio" | "renovacao" | "expira";
   integracoes: "status" | "empresa" | "etapa" | "online" | "created" | "updated";
@@ -178,6 +187,24 @@ type ContatoRow = {
   created_at: string;
 };
 
+type ContatoOrigemRow = {
+  id: string;
+  empresa_id: string | null;
+  origem: string | null;
+  created_at: string;
+};
+
+type TokenUsoRow = {
+  id: string;
+  empresa_id: string | null;
+  origem: string | null;
+  modelo: string | null;
+  tokens_input: number | null;
+  tokens_output: number | null;
+  tokens_total: number | null;
+  created_at: string;
+};
+
 type UsuarioRow = {
   id: string;
   auth_user_id: string | null;
@@ -259,11 +286,15 @@ type DisparosEmpresaResumo = {
   percentual: number;
 };
 
-type CampanhaContatoResumo = {
+type SegmentoContatoResumo = {
   nome: string;
   total: number;
   percentual: number;
 };
+
+type CampanhaContatoResumo = SegmentoContatoResumo;
+
+type OrigemContatoResumo = SegmentoContatoResumo;
 
 type ContatosEmpresaResumo = {
   empresaId: string;
@@ -277,6 +308,29 @@ type ContatosEmpresaResumo = {
   diretoNaoIdentificado: number;
   outrasOrigens: number;
   percentualDireto: number;
+};
+
+type ContatosOrigemEmpresaResumo = {
+  empresaId: string;
+  nome: string;
+  total: number;
+  origens: OrigemContatoResumo[];
+  origemPrincipal: string;
+  origemPrincipalTotal: number;
+  origemManual: number;
+  percentualManual: number;
+  origemNa: number;
+  percentualNa: number;
+};
+
+type TokensEmpresaResumo = {
+  empresaId: string;
+  nome: string;
+  registros: number;
+  tokensInput: number;
+  tokensOutput: number;
+  tokensTotal: number;
+  ultimoUsoEm: string | null;
 };
 
 type UsuarioSessaoResumo = {
@@ -319,6 +373,8 @@ type RelatoriosDados = {
   mensagensPorConversa: MensagensConversaResumo[];
   disparosPorEmpresa: DisparosEmpresaResumo[];
   contatosPorEmpresa: ContatosEmpresaResumo[];
+  contatosOrigemPorEmpresa: ContatosOrigemEmpresaResumo[];
+  tokensPorEmpresa: TokensEmpresaResumo[];
   usuariosSessao: UsuarioSessaoResumo[];
   integracoesMeta: IntegracaoMetaResumo[];
   totais: {
@@ -329,6 +385,13 @@ type RelatoriosDados = {
     contatosCampanhaNaoInformada: number;
     contatosDiretoNaoIdentificado: number;
     contatosOutrasCampanhas: number;
+    contatosOrigemTotal: number;
+    contatosOrigemManual: number;
+    contatosOrigemNa: number;
+    tokensRegistros: number;
+    tokensInput: number;
+    tokensOutput: number;
+    tokensTotal: number;
     usuarios: number;
     usuariosOnline: number;
     usuariosOffline: number;
@@ -359,6 +422,8 @@ const ordenacaoPadrao: OrdenacaoRelatorios = {
   mensagens: "total",
   disparos: "total",
   contatos: "total",
+  origens: "total",
+  tokens: "total",
   usuarios: "presenca",
   planos: "empresa",
   integracoes: "status",
@@ -369,6 +434,8 @@ const relatoriosDetalhe: RelatorioDetalhe[] = [
   "mensagens",
   "disparos",
   "contatos",
+  "origens",
+  "tokens",
   "usuarios",
   "planos",
   "integracoes",
@@ -383,6 +450,8 @@ const filtrosPorRelatorioPadrao: FiltrosPorRelatorio = {
   disparosEmpresaId: "",
   disparosUsuarioId: "",
   contatosEmpresaId: "",
+  origensEmpresaId: "",
+  tokensEmpresaId: "",
   usuariosEmpresaId: "",
   usuariosUsuarioId: "",
   planosEmpresaId: "",
@@ -509,6 +578,8 @@ function resolverFiltrosPorRelatorio(params: SearchParams): FiltrosPorRelatorio 
     disparosEmpresaId: getParametro(params, "disp_empresa"),
     disparosUsuarioId: getParametro(params, "disp_usuario"),
     contatosEmpresaId: getParametro(params, "cont_empresa"),
+    origensEmpresaId: getParametro(params, "origens_empresa"),
+    tokensEmpresaId: getParametro(params, "tokens_empresa"),
     usuariosEmpresaId: getParametro(params, "usuarios_empresa"),
     usuariosUsuarioId: getParametro(params, "usuarios_usuario"),
     planosEmpresaId: getParametro(params, "planos_empresa"),
@@ -541,6 +612,12 @@ function resolverOrdenacao(params: SearchParams): OrdenacaoRelatorios {
     contatos:
       (getParametro(params, "sort_contatos") as OrdenacaoRelatorios["contatos"]) ||
       ordenacaoPadrao.contatos,
+    origens:
+      (getParametro(params, "sort_origens") as OrdenacaoRelatorios["origens"]) ||
+      ordenacaoPadrao.origens,
+    tokens:
+      (getParametro(params, "sort_tokens") as OrdenacaoRelatorios["tokens"]) ||
+      ordenacaoPadrao.tokens,
     usuarios:
       (getParametro(params, "sort_usuarios") as OrdenacaoRelatorios["usuarios"]) ||
       ordenacaoPadrao.usuarios,
@@ -638,6 +715,8 @@ function hrefFecharDetalhe(params: SearchParams) {
     pag_mensagens: "",
     pag_disparos: "",
     pag_contatos: "",
+    pag_origens: "",
+    pag_tokens: "",
     pag_usuarios: "",
     pag_planos: "",
     pag_integracoes: "",
@@ -1002,6 +1081,40 @@ function CampaignBreakdown({
   );
 }
 
+function OrigemBreakdown({
+  origens,
+  total,
+  limite = 4,
+}: {
+  origens: OrigemContatoResumo[];
+  total: number;
+  limite?: number;
+}) {
+  const visiveis = origens.slice(0, limite);
+  const restantes = Math.max(0, origens.length - visiveis.length);
+
+  return (
+    <div className={styles.campaignBreakdown}>
+      <CampaignSegmentTrack campanhas={origens} total={total} />
+      <div className={styles.campaignLegend}>
+        {visiveis.map((origem, index) => (
+          <span key={origem.nome} title={`${origem.nome}: ${formatarNumero(origem.total)}`}>
+            <i
+              style={
+                {
+                  "--segment-color": getCampaignSegmentColor(index),
+                } as CSSProperties
+              }
+            />
+            <OrigemNome nome={origem.nome} />: {formatarNumero(origem.total)}
+          </span>
+        ))}
+        {restantes > 0 ? <span>+{restantes} origens</span> : null}
+      </div>
+    </div>
+  );
+}
+
 function MiniBarChart({
   items,
   emptyText,
@@ -1302,6 +1415,27 @@ function getCampanhaLabel(valor: string | null | undefined) {
   return valor?.trim() || CAMPANHA_NA_LABEL;
 }
 
+function normalizarTextoComparacao(valor: string) {
+  return valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getOrigemContatoLabel(valor: string | null | undefined) {
+  const texto = valor?.trim();
+
+  if (!texto) return ORIGEM_MANUAL_LABEL;
+
+  const normalizado = normalizarTextoComparacao(texto);
+  const ehDiretoNaoIdentificado =
+    normalizado === "direto / nao identificado" ||
+    (normalizado.includes("direto") && normalizado.includes("nao identificado"));
+
+  return ehDiretoNaoIdentificado ? ORIGEM_NA_LABEL : texto;
+}
+
 function getTextoCurto(valor: string, limite = CAMPANHA_LABEL_MAX_LENGTH) {
   const caracteres = Array.from(valor);
 
@@ -1310,6 +1444,10 @@ function getTextoCurto(valor: string, limite = CAMPANHA_LABEL_MAX_LENGTH) {
 }
 
 function CampanhaNome({ nome }: { nome: string }) {
+  return <span title={nome}>{getTextoCurto(nome)}</span>;
+}
+
+function OrigemNome({ nome }: { nome: string }) {
   return <span title={nome}>{getTextoCurto(nome)}</span>;
 }
 
@@ -1331,6 +1469,24 @@ function formatarCampanhasResumo(
       return `${nome}: ${formatarNumero(campanha.total)}`;
     });
   const restantes = campanhas.length - visiveis.length;
+
+  return restantes > 0
+    ? `${visiveis.join(" - ")} - +${restantes}`
+    : visiveis.join(" - ");
+}
+
+function formatarOrigensResumo(
+  origens: OrigemContatoResumo[],
+  limite = 3,
+  truncado = true
+) {
+  if (origens.length === 0) return "Sem origens";
+
+  const visiveis = origens.slice(0, limite).map((origem) => {
+    const nome = truncado ? getTextoCurto(origem.nome) : origem.nome;
+    return `${nome}: ${formatarNumero(origem.total)}`;
+  });
+  const restantes = origens.length - visiveis.length;
 
   return restantes > 0
     ? `${visiveis.join(" - ")} - +${restantes}`
@@ -1780,6 +1936,29 @@ async function carregarRelatorios(
     .order("created_at", { ascending: false })
     .limit(MAX_CONTATOS);
 
+  let contatosOrigemQuery = supabaseAdmin
+    .from("contatos")
+    .select("id, empresa_id, origem, created_at", {
+      count: "exact",
+    })
+    .gte("created_at", filtros.inicioIso)
+    .lte("created_at", filtros.fimIso)
+    .order("created_at", { ascending: false })
+    .limit(MAX_CONTATOS);
+
+  let tokensQuery = supabaseAdmin
+    .from("ia_token_usos")
+    .select(
+      "id, empresa_id, origem, modelo, tokens_input, tokens_output, tokens_total, created_at",
+      {
+        count: "exact",
+      }
+    )
+    .gte("created_at", filtros.inicioIso)
+    .lte("created_at", filtros.fimIso)
+    .order("created_at", { ascending: false })
+    .limit(MAX_TOKEN_USOS);
+
   let integracoesQuery = supabaseAdmin
     .from("integracoes_whatsapp")
     .select(
@@ -1871,6 +2050,17 @@ async function carregarRelatorios(
     );
   }
 
+  if (filtrosRelatorio.origensEmpresaId) {
+    contatosOrigemQuery = contatosOrigemQuery.eq(
+      "empresa_id",
+      filtrosRelatorio.origensEmpresaId
+    );
+  }
+
+  if (filtrosRelatorio.tokensEmpresaId) {
+    tokensQuery = tokensQuery.eq("empresa_id", filtrosRelatorio.tokensEmpresaId);
+  }
+
   if (filtrosRelatorio.integracoesEmpresaId) {
     integracoesQuery = integracoesQuery.eq(
       "empresa_id",
@@ -1906,6 +2096,8 @@ async function carregarRelatorios(
     mensagensOrigemConversasResult,
     disparosResult,
     contatosResult,
+    contatosOrigemResult,
+    tokensResult,
     integracoesResult,
     usuariosResult,
   ] = await Promise.all([
@@ -1918,6 +2110,8 @@ async function carregarRelatorios(
     mensagensOrigemConversasQuery,
     disparosQuery,
     contatosQuery,
+    contatosOrigemQuery,
+    tokensQuery,
     integracoesQuery,
     usuariosQuery,
   ]);
@@ -1935,6 +2129,10 @@ async function carregarRelatorios(
   }
   if (disparosResult.error) throw new Error(disparosResult.error.message);
   if (contatosResult.error) throw new Error(contatosResult.error.message);
+  if (contatosOrigemResult.error) {
+    throw new Error(contatosOrigemResult.error.message);
+  }
+  if (tokensResult.error) throw new Error(tokensResult.error.message);
   if (integracoesResult.error) throw new Error(integracoesResult.error.message);
   if (usuariosResult.error) throw new Error(usuariosResult.error.message);
 
@@ -1963,6 +2161,8 @@ async function carregarRelatorios(
     []) as MensagemOrigemConversaRow[];
   const disparos = (disparosResult.data ?? []) as DisparoRow[];
   const contatos = (contatosResult.data ?? []) as ContatoRow[];
+  const contatosOrigem = (contatosOrigemResult.data ?? []) as ContatoOrigemRow[];
+  const usosTokens = (tokensResult.data ?? []) as TokenUsoRow[];
   const integracoes = (integracoesResult.data ?? []) as IntegracaoWhatsappRow[];
   const usuarios = (usuariosResult.data ?? []) as UsuarioRow[];
   const conversasIniciadasPorDisparo = montarConversasIniciadasPorDisparo({
@@ -2076,6 +2276,16 @@ async function carregarRelatorios(
     empresasPorId,
     ordenacao: ordenacao.contatos,
   });
+  const contatosOrigemPorEmpresa = montarContatosOrigemPorEmpresa({
+    contatos: contatosOrigem,
+    empresasPorId,
+    ordenacao: ordenacao.origens,
+  });
+  const tokensPorEmpresa = montarTokensPorEmpresa({
+    usos: usosTokens,
+    empresasPorId,
+    ordenacao: ordenacao.tokens,
+  });
   const integracoesMeta = montarIntegracoesMeta({
     integracoes,
     empresasPorId,
@@ -2098,6 +2308,30 @@ async function carregarRelatorios(
     0,
     contatosNovos - contatosCampanhaNaoInformada
   );
+  const contatosOrigemTotal = contatosOrigemPorEmpresa.reduce(
+    (total, empresa) => total + empresa.total,
+    0
+  );
+  const contatosOrigemManual = contatosOrigemPorEmpresa.reduce(
+    (total, empresa) => total + empresa.origemManual,
+    0
+  );
+  const contatosOrigemNa = contatosOrigemPorEmpresa.reduce(
+    (total, empresa) => total + empresa.origemNa,
+    0
+  );
+  const tokensInput = tokensPorEmpresa.reduce(
+    (total, empresa) => total + empresa.tokensInput,
+    0
+  );
+  const tokensOutput = tokensPorEmpresa.reduce(
+    (total, empresa) => total + empresa.tokensOutput,
+    0
+  );
+  const tokensTotal = tokensPorEmpresa.reduce(
+    (total, empresa) => total + empresa.tokensTotal,
+    0
+  );
   const usuariosOnline = usuariosSessao.filter((usuario) => usuario.online).length;
   const usuariosTempoOnlineMs = usuariosSessao.reduce(
     (total, usuario) => total + usuario.tempoOnlineMs,
@@ -2115,6 +2349,8 @@ async function carregarRelatorios(
     mensagensPorConversa,
     disparosPorEmpresa,
     contatosPorEmpresa,
+    contatosOrigemPorEmpresa,
+    tokensPorEmpresa,
     usuariosSessao,
     integracoesMeta,
     totais: {
@@ -2125,6 +2361,13 @@ async function carregarRelatorios(
       contatosCampanhaNaoInformada,
       contatosDiretoNaoIdentificado: contatosCampanhaNaoInformada,
       contatosOutrasCampanhas,
+      contatosOrigemTotal,
+      contatosOrigemManual,
+      contatosOrigemNa,
+      tokensRegistros: tokensResult.count ?? usosTokens.length,
+      tokensInput,
+      tokensOutput,
+      tokensTotal,
       usuarios: usuariosResult.count ?? usuarios.length,
       usuariosOnline,
       usuariosOffline: Math.max(0, usuarios.length - usuariosOnline),
@@ -2442,6 +2685,151 @@ function montarContatosPorEmpresa({
     });
 }
 
+function montarContatosOrigemPorEmpresa({
+  contatos,
+  empresasPorId,
+  ordenacao,
+}: {
+  contatos: ContatoOrigemRow[];
+  empresasPorId: Map<string, EmpresaRow>;
+  ordenacao: OrdenacaoRelatorios["origens"];
+}) {
+  const mapa = new Map<
+    string,
+    {
+      empresaId: string;
+      total: number;
+      origens: Map<string, number>;
+    }
+  >();
+
+  for (const contato of contatos) {
+    const empresaId = contato.empresa_id || "sem_empresa";
+    const origem = getOrigemContatoLabel(contato.origem);
+    const atual =
+      mapa.get(empresaId) ??
+      {
+        empresaId,
+        total: 0,
+        origens: new Map<string, number>(),
+      };
+
+    atual.total += 1;
+    atual.origens.set(origem, (atual.origens.get(origem) ?? 0) + 1);
+    mapa.set(empresaId, atual);
+  }
+
+  return Array.from(mapa.values())
+    .map((item) => {
+      const origens = Array.from(item.origens.entries())
+        .map(([nome, total]) => ({
+          nome,
+          total,
+          percentual: item.total > 0 ? Math.round((total / item.total) * 100) : 0,
+        }))
+        .sort((a, b) => b.total - a.total || compararTexto(a.nome, b.nome));
+      const origemPrincipal = origens[0]?.nome ?? ORIGEM_MANUAL_LABEL;
+      const origemPrincipalTotal = origens[0]?.total ?? 0;
+      const origemManual =
+        origens.find((origem) => origem.nome === ORIGEM_MANUAL_LABEL)?.total ?? 0;
+      const origemNa =
+        origens.find((origem) => origem.nome === ORIGEM_NA_LABEL)?.total ?? 0;
+
+      return {
+        empresaId: item.empresaId,
+        nome: getNomeEmpresaPorId(empresasPorId, item.empresaId),
+        total: item.total,
+        origens,
+        origemPrincipal,
+        origemPrincipalTotal,
+        origemManual,
+        percentualManual:
+          item.total > 0 ? Math.round((origemManual / item.total) * 100) : 0,
+        origemNa,
+        percentualNa: item.total > 0 ? Math.round((origemNa / item.total) * 100) : 0,
+      };
+    })
+    .sort((a, b) => {
+      if (ordenacao === "empresa") return compararTexto(a.nome, b.nome);
+      if (ordenacao === "origem") {
+        return (
+          b.origemPrincipalTotal - a.origemPrincipalTotal ||
+          compararTexto(a.origemPrincipal, b.origemPrincipal)
+        );
+      }
+      if (ordenacao === "manual") return b.origemManual - a.origemManual;
+      if (ordenacao === "na") return b.origemNa - a.origemNa;
+      if (ordenacao === "percentual") return b.percentualNa - a.percentualNa;
+      return b.total - a.total;
+    });
+}
+
+function montarTokensPorEmpresa({
+  usos,
+  empresasPorId,
+  ordenacao,
+}: {
+  usos: TokenUsoRow[];
+  empresasPorId: Map<string, EmpresaRow>;
+  ordenacao: OrdenacaoRelatorios["tokens"];
+}) {
+  const mapa = new Map<
+    string,
+    {
+      empresaId: string;
+      registros: number;
+      tokensInput: number;
+      tokensOutput: number;
+      tokensTotal: number;
+      ultimoUsoEm: string | null;
+    }
+  >();
+
+  for (const uso of usos) {
+    const empresaId = uso.empresa_id || "sem_empresa";
+    const atual =
+      mapa.get(empresaId) ??
+      {
+        empresaId,
+        registros: 0,
+        tokensInput: 0,
+        tokensOutput: 0,
+        tokensTotal: 0,
+        ultimoUsoEm: null,
+      };
+
+    atual.registros += 1;
+    atual.tokensInput += Number(uso.tokens_input || 0);
+    atual.tokensOutput += Number(uso.tokens_output || 0);
+    atual.tokensTotal += Number(uso.tokens_total || 0);
+
+    if (
+      !atual.ultimoUsoEm ||
+      getTimestamp(uso.created_at) > getTimestamp(atual.ultimoUsoEm)
+    ) {
+      atual.ultimoUsoEm = uso.created_at;
+    }
+
+    mapa.set(empresaId, atual);
+  }
+
+  return Array.from(mapa.values())
+    .map((item) => ({
+      ...item,
+      nome: getNomeEmpresaPorId(empresasPorId, item.empresaId),
+    }))
+    .sort((a, b) => {
+      if (ordenacao === "empresa") return compararTexto(a.nome, b.nome);
+      if (ordenacao === "registros") return b.registros - a.registros;
+      if (ordenacao === "input") return b.tokensInput - a.tokensInput;
+      if (ordenacao === "output") return b.tokensOutput - a.tokensOutput;
+      if (ordenacao === "ultima") {
+        return getTimestamp(b.ultimoUsoEm) - getTimestamp(a.ultimoUsoEm);
+      }
+      return b.tokensTotal - a.tokensTotal;
+    });
+}
+
 function montarIntegracoesMeta({
   integracoes,
   empresasPorId,
@@ -2712,6 +3100,54 @@ function DashboardCards({
             segments: empresa.campanhas,
             detail: formatarCampanhasResumo(empresa.campanhas),
             detailTitle: formatarCampanhasResumo(empresa.campanhas, 20, false),
+          }))}
+        />
+      </DashboardReportCard>
+
+      <DashboardReportCard
+        icon={ContactRound}
+        eyebrow="Novos contatos"
+        title="Por origem"
+        value={formatarNumero(dados.totais.contatosOrigemTotal)}
+        detail={`${formatarNumero(
+          dados.totais.contatosOrigemManual
+        )} Manual / ${formatarNumero(dados.totais.contatosOrigemNa)} ${ORIGEM_NA_LABEL}`}
+        href={hrefDetalhe(params, "origens")}
+        tone="green"
+      >
+        <MiniBarChart
+          emptyText="Nenhum contato novo encontrado."
+          tone="green"
+          items={dados.contatosOrigemPorEmpresa.map((empresa) => ({
+            id: empresa.empresaId,
+            label: empresa.nome,
+            value: empresa.total,
+            segments: empresa.origens,
+            detail: formatarOrigensResumo(empresa.origens),
+            detailTitle: formatarOrigensResumo(empresa.origens, 20, false),
+          }))}
+        />
+      </DashboardReportCard>
+
+      <DashboardReportCard
+        icon={BarChart3}
+        eyebrow="Tokens IA"
+        title="Consumo por empresa"
+        value={formatarNumero(dados.totais.tokensTotal)}
+        detail={`${formatarNumero(dados.totais.tokensInput)} entrada / ${formatarNumero(
+          dados.totais.tokensOutput
+        )} saida`}
+        href={hrefDetalhe(params, "tokens")}
+        tone="blue"
+      >
+        <MiniBarChart
+          emptyText="Nenhum consumo de tokens encontrado."
+          tone="blue"
+          items={dados.tokensPorEmpresa.map((empresa) => ({
+            id: empresa.empresaId,
+            label: empresa.nome,
+            value: empresa.tokensTotal,
+            detail: `${formatarNumero(empresa.registros)} registros`,
           }))}
         />
       </DashboardReportCard>
@@ -3404,6 +3840,289 @@ function RelatorioDetalheModal({
     );
   }
 
+  if (detalhe === "origens") {
+    const paginacao = paginar(
+      dados.contatosOrigemPorEmpresa,
+      resolverPagina(params, "origens")
+    );
+
+    return (
+      <ModalShell
+        params={params}
+        title="Novos contatos por origem"
+        subtitle={`Quantidade de contatos por origem no periodo ${filtros.periodoLabel}. Origem vazia vira Manual e Direto / Nao identificado vira N/A.`}
+      >
+        <ReportFilters
+          params={params}
+          exclude={["inicio", "fim", "atalho", "origens_empresa", "pag_origens"]}
+          clearUpdates={{ origens_empresa: "", pag_origens: "1" }}
+        >
+          <div className={styles.reportFilterDates}>
+            <PeriodoFilterFields params={params} filtros={filtros} />
+          </div>
+
+          <div className={styles.reportFilterSelectors}>
+            <EmpresaSelect
+              name="origens_empresa"
+              value={filtrosRelatorio.origensEmpresaId}
+              empresas={dados.empresasOpcoes}
+            />
+          </div>
+        </ReportFilters>
+
+        {paginacao.totalItens === 0 ? (
+          <EmptyState>Nenhum contato novo encontrado.</EmptyState>
+        ) : (
+          <>
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="origens"
+                        campo="empresa"
+                        atual={ordenacao.origens}
+                      >
+                        Empresa
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="origens"
+                        campo="total"
+                        atual={ordenacao.origens}
+                      >
+                        Total
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="origens"
+                        campo="origem"
+                        atual={ordenacao.origens}
+                      >
+                        Origem principal
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="origens"
+                        campo="manual"
+                        atual={ordenacao.origens}
+                      >
+                        Manual
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="origens"
+                        campo="na"
+                        atual={ordenacao.origens}
+                      >
+                        N/A
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="origens"
+                        campo="percentual"
+                        atual={ordenacao.origens}
+                      >
+                        % N/A
+                      </SortHeader>
+                    </th>
+                    <th>Origens</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginacao.itens.map((empresa) => (
+                    <tr key={empresa.empresaId}>
+                      <td>
+                        <strong>{empresa.nome}</strong>
+                      </td>
+                      <td>{formatarNumero(empresa.total)}</td>
+                      <td>
+                        <span className={styles.primaryText}>
+                          <OrigemNome nome={empresa.origemPrincipal} />
+                        </span>
+                        <span className={styles.secondaryText}>
+                          {formatarNumero(empresa.origemPrincipalTotal)}
+                        </span>
+                      </td>
+                      <td>
+                        {formatarNumero(empresa.origemManual)}
+                        <span className={styles.secondaryText}>
+                          {empresa.percentualManual}%
+                        </span>
+                      </td>
+                      <td>
+                        {formatarNumero(empresa.origemNa)}
+                        <span className={styles.secondaryText}>
+                          {empresa.percentualNa}%
+                        </span>
+                      </td>
+                      <td>{empresa.percentualNa}%</td>
+                      <td>
+                        <OrigemBreakdown
+                          origens={empresa.origens}
+                          total={empresa.total}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination params={params} tabela="origens" paginacao={paginacao} />
+          </>
+        )}
+      </ModalShell>
+    );
+  }
+
+  if (detalhe === "tokens") {
+    const paginacao = paginar(
+      dados.tokensPorEmpresa,
+      resolverPagina(params, "tokens")
+    );
+
+    return (
+      <ModalShell
+        params={params}
+        title="Consumo de tokens por empresa"
+        subtitle={`Tokens de IA consumidos no periodo ${filtros.periodoLabel}.`}
+      >
+        <ReportFilters
+          params={params}
+          exclude={["inicio", "fim", "atalho", "tokens_empresa", "pag_tokens"]}
+          clearUpdates={{ tokens_empresa: "", pag_tokens: "1" }}
+        >
+          <div className={styles.reportFilterDates}>
+            <PeriodoFilterFields params={params} filtros={filtros} />
+          </div>
+
+          <div className={styles.reportFilterSelectors}>
+            <EmpresaSelect
+              name="tokens_empresa"
+              value={filtrosRelatorio.tokensEmpresaId}
+              empresas={dados.empresasOpcoes}
+            />
+          </div>
+        </ReportFilters>
+
+        {paginacao.totalItens === 0 ? (
+          <EmptyState>Nenhum consumo de tokens encontrado.</EmptyState>
+        ) : (
+          <>
+            <div className={styles.modalSummaryStrip}>
+              <span>Total de tokens</span>
+              <strong>{formatarNumero(dados.totais.tokensTotal)}</strong>
+              <span>
+                Entrada {formatarNumero(dados.totais.tokensInput)} / Saida{" "}
+                {formatarNumero(dados.totais.tokensOutput)}
+              </span>
+            </div>
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="tokens"
+                        campo="empresa"
+                        atual={ordenacao.tokens}
+                      >
+                        Empresa
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="tokens"
+                        campo="registros"
+                        atual={ordenacao.tokens}
+                      >
+                        Registros
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="tokens"
+                        campo="input"
+                        atual={ordenacao.tokens}
+                      >
+                        Entrada
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="tokens"
+                        campo="output"
+                        atual={ordenacao.tokens}
+                      >
+                        Saida
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="tokens"
+                        campo="total"
+                        atual={ordenacao.tokens}
+                      >
+                        Total
+                      </SortHeader>
+                    </th>
+                    <th>
+                      <SortHeader
+                        params={params}
+                        tabela="tokens"
+                        campo="ultima"
+                        atual={ordenacao.tokens}
+                      >
+                        Ultimo uso
+                      </SortHeader>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginacao.itens.map((empresa) => (
+                    <tr key={empresa.empresaId}>
+                      <td>
+                        <strong>{empresa.nome}</strong>
+                        <span className={styles.secondaryText}>
+                          {empresa.empresaId}
+                        </span>
+                      </td>
+                      <td>{formatarNumero(empresa.registros)}</td>
+                      <td>{formatarNumero(empresa.tokensInput)}</td>
+                      <td>{formatarNumero(empresa.tokensOutput)}</td>
+                      <td>
+                        <strong>{formatarNumero(empresa.tokensTotal)}</strong>
+                      </td>
+                      <td>{formatarDataHora(empresa.ultimoUsoEm)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination params={params} tabela="tokens" paginacao={paginacao} />
+          </>
+        )}
+      </ModalShell>
+    );
+  }
+
   if (detalhe === "usuarios") {
     const paginacao = paginar(
       dados.usuariosSessao,
@@ -3992,6 +4711,22 @@ export default async function RelatoriosInternosPage({
               dados.totais.contatosCampanhaNaoInformada
             )} ${CAMPANHA_NA_LABEL}`}
             tone="rose"
+          />
+          <KpiCard
+            icon={ContactRound}
+            label="Origens"
+            value={formatarNumero(dados.totais.contatosOrigemTotal)}
+            detail={`${formatarNumero(
+              dados.totais.contatosOrigemManual
+            )} Manual / ${formatarNumero(dados.totais.contatosOrigemNa)} N/A`}
+            tone="green"
+          />
+          <KpiCard
+            icon={BarChart3}
+            label="Tokens IA"
+            value={formatarNumero(dados.totais.tokensTotal)}
+            detail={`${formatarNumero(dados.totais.tokensRegistros)} registros`}
+            tone="blue"
           />
           <KpiCard
             icon={UserCheck}
