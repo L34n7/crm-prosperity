@@ -1222,9 +1222,105 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     return { ok: false, error: "Erro ao buscar execução." };
   }
 
-  const execucaoExistente = execucoesExistentes?.[0] || null;
+  const execucoesValidas: NonNullable<typeof execucoesExistentes> = [];
+  const execucoesInvalidas: Array<{
+    execucao: NonNullable<typeof execucoesExistentes>[number];
+    motivo: string | null;
+  }> = [];
 
-  const execucoesDuplicadas = (execucoesExistentes || []).slice(1);
+  for (const execucao of execucoesExistentes || []) {
+    const validacaoExecucao = await validarExecucaoAutomacaoAtiva({
+      empresaId,
+      conversaId,
+      execucaoId: execucao.id,
+    });
+
+    if (validacaoExecucao.ok) {
+      execucoesValidas.push(execucao);
+    } else {
+      execucoesInvalidas.push({
+        execucao,
+        motivo: validacaoExecucao.motivo,
+      });
+    }
+  }
+
+  if (execucoesInvalidas.length > 0) {
+    const agora = new Date().toISOString();
+    const execucaoIdsInvalidas = execucoesInvalidas.map(
+      ({ execucao }) => execucao.id
+    );
+
+    const resultadosCancelamento = await Promise.all(
+      execucoesInvalidas.map(({ execucao, motivo }) =>
+        supabaseAdmin
+          .from("automacao_execucoes")
+          .update({
+            status: "cancelado",
+            finished_at: agora,
+            updated_at: agora,
+            metadata_json: {
+              ...(execucao.metadata_json || {}),
+              motivo_cancelamento: "execucao_invalida_ao_processar_mensagem",
+              motivo_validacao: motivo,
+              cancelado_em: agora,
+            },
+          })
+          .eq("empresa_id", empresaId)
+          .eq("id", execucao.id)
+          .in("status", ["rodando", "aguardando"])
+      )
+    );
+
+    const erroCancelamento = resultadosCancelamento.find(
+      (resultado) => resultado.error
+    )?.error;
+
+    if (erroCancelamento) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao cancelar execucao invalida:",
+        erroCancelamento
+      );
+
+      return {
+        ok: false,
+        error: "Erro ao cancelar execucao invalida.",
+      };
+    }
+
+    const { error: agendamentosInvalidosError } = await supabaseAdmin
+      .from("automacao_agendamentos")
+      .update({
+        status: "cancelado",
+      })
+      .eq("empresa_id", empresaId)
+      .in("execucao_id", execucaoIdsInvalidas)
+      .eq("status", "pendente");
+
+    if (agendamentosInvalidosError) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao cancelar agendamentos de execucao invalida:",
+        agendamentosInvalidosError
+      );
+
+      return {
+        ok: false,
+        error: "Erro ao cancelar agendamentos de execucao invalida.",
+      };
+    }
+
+    console.warn("[AUTOMATION_ENGINE] Execucoes invalidas canceladas", {
+      conversaId,
+      execucoes: execucoesInvalidas.map(({ execucao, motivo }) => ({
+        id: execucao.id,
+        motivo,
+      })),
+    });
+  }
+
+  const execucaoExistente = execucoesValidas[0] || null;
+
+  const execucoesDuplicadas = execucoesValidas.slice(1);
 
   if (execucoesDuplicadas.length > 0) {
     const agora = new Date().toISOString();

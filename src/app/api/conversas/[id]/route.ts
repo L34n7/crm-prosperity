@@ -146,6 +146,87 @@ async function criarNovoProtocolo(
   }
 }
 
+async function cancelarAutomacoesAtivasDaConversa(params: {
+  empresaId: string;
+  conversaId: string;
+  usuarioId: string;
+  canceladoEm: string;
+}) {
+  const { empresaId, conversaId, usuarioId, canceladoEm } = params;
+
+  const { data: execucoesAtivas, error: execucoesError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("id, metadata_json")
+    .eq("empresa_id", empresaId)
+    .eq("conversa_id", conversaId)
+    .in("status", ["rodando", "aguardando"]);
+
+  if (execucoesError) {
+    throw new Error(
+      `Erro ao buscar automacoes ativas da conversa: ${execucoesError.message}`
+    );
+  }
+
+  const execucoes = execucoesAtivas || [];
+  const execucaoIds = execucoes.map((execucao) => execucao.id);
+
+  if (execucaoIds.length === 0) {
+    return {
+      execucoesCanceladas: 0,
+    };
+  }
+
+  const resultadosCancelamento = await Promise.all(
+    execucoes.map((execucao) =>
+      supabaseAdmin
+        .from("automacao_execucoes")
+        .update({
+          status: "cancelado",
+          finished_at: canceladoEm,
+          updated_at: canceladoEm,
+          metadata_json: {
+            ...(execucao.metadata_json || {}),
+            motivo_cancelamento: "usuario_parou_automacao",
+            cancelado_em: canceladoEm,
+            usuario_responsavel_id: usuarioId,
+          },
+        })
+        .eq("empresa_id", empresaId)
+        .eq("id", execucao.id)
+        .in("status", ["rodando", "aguardando"])
+    )
+  );
+
+  const erroCancelamento = resultadosCancelamento.find(
+    (resultado) => resultado.error
+  )?.error;
+
+  if (erroCancelamento) {
+    throw new Error(
+      `Erro ao cancelar automacao ativa: ${erroCancelamento.message}`
+    );
+  }
+
+  const { error: agendamentosError } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .update({
+      status: "cancelado",
+    })
+    .eq("empresa_id", empresaId)
+    .in("execucao_id", execucaoIds)
+    .eq("status", "pendente");
+
+  if (agendamentosError) {
+    throw new Error(
+      `Erro ao cancelar agendamentos da automacao: ${agendamentosError.message}`
+    );
+  }
+
+  return {
+    execucoesCanceladas: execucaoIds.length,
+  };
+}
+
 async function existeProtocoloAtivo(conversaId: string) {
   const { data, error } = await supabaseAdmin
     .from("conversa_protocolos")
@@ -644,6 +725,19 @@ export async function PUT(
     updateData.closed_at = null;
   }
 
+  let automacoesCanceladas = 0;
+
+  if (parandoAutomacaoEEncerrando) {
+    const resultadoCancelamento = await cancelarAutomacoesAtivasDaConversa({
+      empresaId: empresa_id,
+      conversaId: id,
+      usuarioId: usuario.id,
+      canceladoEm: dataFechamento || new Date().toISOString(),
+    });
+
+    automacoesCanceladas = resultadoCancelamento.execucoesCanceladas;
+  }
+
   const { data, error } = await supabaseAdmin
     .from("conversas")
     .update(updateData)
@@ -761,6 +855,7 @@ export async function PUT(
       prioridade: data.prioridade,
       assunto: data.assunto,
       closed_at: data.closed_at ?? null,
+      automacoes_canceladas: automacoesCanceladas,
     },
     ip: auditMeta.ip,
     user_agent: auditMeta.user_agent,
