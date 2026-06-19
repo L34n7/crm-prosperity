@@ -1823,6 +1823,7 @@ function ConversasPageContent() {
   const editandoCampoRef = useRef<string | null>(null);
 
   const mensagensRef = useRef<HTMLDivElement | null>(null);
+  const [mostrarBotaoIrFinal, setMostrarBotaoIrFinal] = useState(false);
   const mensagemMaisAntigaCarregadaRef = useRef<string | null>(null);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [menuContatoAberto, setMenuContatoAberto] = useState(false);
@@ -5703,22 +5704,33 @@ async function baixarConversaPDF() {
     setAcaoAberta("encerrar");
   }
 
-  function rolarParaFinal() {
+  function rolarParaFinal(suave = false) {
     const el = mensagensRef.current;
     if (!el) return;
 
+    const executarScroll = () => {
+      const container = mensagensRef.current;
+      if (!container) return;
+
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: suave ? "smooth" : "auto",
+      });
+
+      setMostrarBotaoIrFinal(false);
+    };
+
     requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
+      executarScroll();
+
+      window.setTimeout(executarScroll, 80);
+      window.setTimeout(executarScroll, 250);
+      window.setTimeout(executarScroll, 600);
     });
   }
 
   function acompanharCrescimentoChat() {
-    const el = mensagensRef.current;
-    if (!el) return;
-
-    requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
+    rolarParaFinal(false);
   }
 
   function calcularJanelaInicialPorUltimaMensagem(ultimaMensagemAt?: string | null) {
@@ -5750,6 +5762,17 @@ async function baixarConversaPDF() {
 
     const margem = 80;
     return el.scrollTop + el.clientHeight >= el.scrollHeight - margem;
+  }
+
+  function handleScrollMensagens() {
+    const el = mensagensRef.current;
+    if (!el) return;
+
+    const margem = 140;
+    const estaNoFinal =
+      el.scrollTop + el.clientHeight >= el.scrollHeight - margem;
+
+    setMostrarBotaoIrFinal(!estaNoFinal);
   }
 
   function scrollParaMensagem(mensagemId: string) {
@@ -6522,7 +6545,7 @@ const templateFooterTexto = useMemo(() => {
     if (forcarScrollParaFinalRef.current) {
       forcarScrollParaFinalRef.current = false;
       acompanharCrescimentoChatRef.current = false;
-      rolarParaFinal();
+      rolarParaFinal(false);
       return;
     }
 
@@ -7601,7 +7624,11 @@ const templateFooterTexto = useMemo(() => {
                   <div className={styles.mainBody}>
                     <div className={styles.chatCenter}>
                       <div className={styles.timelineWrapper}>
-                        <div ref={mensagensRef} className={styles.timelineArea}>
+                        <div
+                          ref={mensagensRef}
+                          className={styles.timelineArea}
+                          onScroll={handleScrollMensagens}
+                        >
                           {!loadingMensagens && temMaisHistorico && (
                             <div className={styles.timelineHistoryMore}>
                               <button
@@ -7739,6 +7766,16 @@ const templateFooterTexto = useMemo(() => {
                                 );
                               })}
                             </div>
+                          )}
+                          {mostrarBotaoIrFinal && (
+                            <button
+                              type="button"
+                              className={styles.scrollToBottomButton}
+                              onClick={() => rolarParaFinal(true)}
+                              title="Ir para a última mensagem"
+                            >
+                              ↓
+                            </button>
                           )}
                         </div>
 

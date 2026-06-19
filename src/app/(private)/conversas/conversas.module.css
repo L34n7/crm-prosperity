@@ -994,6 +994,7 @@
 }
 
 .timelineWrapper {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -5203,6 +5204,41 @@
   gap: 4px;
 }
 
+.scrollToBottomButton {
+  position: absolute;
+  left: 50%;
+  bottom: 135px;
+  z-index: 20;
+
+  width: 42px;
+  height: 42px;
+
+  border: none;
+  border-radius: 999px;
+
+  background: #06273c90;
+  color: #ffffff;
+
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  transform: translateX(-50%);
+
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+.scrollToBottomButton:hover {
+  transform: translateX(-50%) translateY(-2px);
+  background: #06273ca4;
+}
+
 
 @media (max-width: 980px) {
   .disparoCardResumo {
@@ -5560,6 +5596,10 @@ a.buttonMessageOption:hover {
   /* -------------------------------------------------------
      MODAIS E PAINÉIS AUXILIARES
      ------------------------------------------------------- */
+     
+  .emojiPickerWrap {
+    display: none;
+  }
 
   .contactModalCard {
     max-width: 100%;
@@ -6049,6 +6089,10 @@ a.buttonMessageOption:hover {
      CABEÇALHO DO CHAT
      ------------------------------------------------------- */
 
+  .emojiPickerWrap {
+    display: none;
+  }
+
   .chatHeader {
     position: relative;
     padding-right: 64px;
@@ -6249,6 +6293,7 @@ a.buttonMessageOption:hover {
     font-size: 11px;
   }
 }
+
 
 
 /* =========================================================

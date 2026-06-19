@@ -210,7 +210,7 @@ export default function ComecarPage() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Telefone</label>
+              <label className={styles.label}>Telefone Pessoal</label>
               <input
                 placeholder="(00) 00000-0000"
                 type="tel"

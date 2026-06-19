@@ -654,7 +654,7 @@ export async function validarExecucaoAutomacaoAtiva(params: {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, status, bot_ativo, responsavel_id, origem_atendimento")
+    .select("id, status, bot_ativo, responsavel_id")
     .eq("id", conversaId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -666,11 +666,12 @@ export async function validarExecucaoAutomacaoAtiva(params: {
     };
   }
 
-  if (
-    conversa.bot_ativo !== true ||
-    conversa.origem_atendimento === "manual" ||
-    !!conversa.responsavel_id
-  ) {
+  const conversaSobControleDoBot =
+    conversa.status === "bot" &&
+    conversa.bot_ativo === true &&
+    !conversa.responsavel_id;
+
+  if (!conversaSobControleDoBot) {
     return {
       ok: false,
       motivo: "conversa_assumida_ou_bot_desativado",
@@ -1765,6 +1766,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     .update({
       status: "bot",
       bot_ativo: true,
+      origem_atendimento: "bot",
       responsavel_id: null,
       closed_at: null,
       updated_at: agora,
