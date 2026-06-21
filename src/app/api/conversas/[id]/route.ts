@@ -448,13 +448,12 @@ export async function PUT(
     "encerrado_aut",
   ];
 
-  const mudouSetor = setor_id !== conversaAtual.setor_id;
-  const mudouResponsavel = responsavel_id !== conversaAtual.responsavel_id;
-
   const conversaAtualEstaEncerrada = STATUS_ENCERRADOS.includes(conversaAtual.status);
   const novoStatusEhEncerrado =
     STATUS_ENCERRADOS.includes(status) || parandoAutomacaoEEncerrando;
   const responsavel_id = novoStatusEhEncerrado ? null : responsavelIdEntrada;
+  const mudouSetor = setor_id !== conversaAtual.setor_id;
+  const mudouResponsavel = responsavel_id !== conversaAtual.responsavel_id;
 
   const estaEncerrando =
     novoStatusEhEncerrado && !conversaAtualEstaEncerrada;
