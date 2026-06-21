@@ -71,7 +71,15 @@ type CheckoutPlanoResponse = {
 
 type TemaVisual = "light" | "dark";
 
-const AJUDA_WHATSAPP_URL = "https://wa.me/5531975117638";
+const AJUDA_WHATSAPP_NUMERO =
+  process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
+
+const AJUDA_WHATSAPP_MENSAGEM = encodeURIComponent(
+  "Olá! Preciso de ajuda com o CRM Prosperity. Pode me auxiliar?"
+);
+
+const AJUDA_WHATSAPP_URL = `https://api.whatsapp.com/send?phone=${AJUDA_WHATSAPP_NUMERO}&text=${AJUDA_WHATSAPP_MENSAGEM}`;
+
 const THEME_STORAGE_KEY = "crm-theme";
 
 const PLANOS_RENOVACAO: PlanoRenovacao[] = [
@@ -79,7 +87,7 @@ const PLANOS_RENOVACAO: PlanoRenovacao[] = [
     tipo: "checkout",
     slug: "basico",
     nome: "Básico",
-    badge: "Entrada inteligente",
+    badge: "Comum",
     descricao:
       "Para começar com atendimento automatizado, organização profissional e IA integrada.",
     precoOriginal: "R$ 197/mês",
@@ -521,12 +529,15 @@ export default function Header({
   function abrirCotacaoPlano() {
     const whatsappComercial =
       process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
+
     const mensagem = encodeURIComponent(
       "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity."
     );
 
+    const url = `https://api.whatsapp.com/send?phone=${whatsappComercial}&text=${mensagem}`;
+
     setModalPlanosOpen(false);
-    window.location.assign(`https://wa.me/${whatsappComercial}?text=${mensagem}`);
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function contratarPlanoAssinatura(plano: PlanoRenovacao) {

@@ -276,7 +276,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: var(--crm-surface);
+  background: #fafeff;
   border: 1px solid var(--crm-border);
   border-radius: 8px;
   box-shadow: var(--crm-shadow-lg);
@@ -338,7 +338,7 @@
 .planCurrentSummary {
   padding: 14px 18px;
   border-bottom: 1px solid var(--crm-border);
-  background: var(--crm-surface);
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -473,7 +473,7 @@ export default function ContatosPage() {
   function baixarModeloCsv() {
     const conteudo =
       "nome,telefone,email,origem,campanha,status_lead,observacoes\n" +
-      "Leandro Nunes,31975233266,teste@teste.com.br,whatsapp,Campanha Abril,novo,Cliente interessado\n" +
+      "João Silva,31999999999,teste@teste.com.br,whatsapp,Campanha Abril,novo,Cliente interessado\n" +
       "Maria Silva,31999999999,maria@email.com,instagram,Campanha Meta,qualificado,Quer orçamento";
 
     const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8;" });

@@ -1,9 +1,9 @@
 .button {
-  border: 1px solid var(--crm-border-strong);
-  background: var(--crm-surface);
-  color: var(--crm-text-strong);
-  border-radius: 14px;
-  padding: 11px 18px;
+  border: 1px solid transparent;
+  background: var(--crm-surface-soft);
+  color: #080808;
+  border-radius: 10px;
+  padding: 8px 75px;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -11,6 +11,5 @@
 }
 
 .button:hover {
-  background: var(--crm-surface-soft);
-  border-color: var(--crm-border-strong);
+  background: #e6efec92;
 }

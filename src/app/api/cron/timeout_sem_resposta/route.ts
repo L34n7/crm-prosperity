@@ -7,6 +7,7 @@ import {
   enviarMensagemAutomacao,
   registrarEventoRastreamentoFluxo,
   validarExecucaoAutomacaoAtiva,
+  processarFilaProcessamentoAutoPendentes,
 } from "@/lib/automacoes/process-automation-engine";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -724,9 +725,27 @@ export async function GET(request: Request) {
       }
     }
 
+    let filaProcessamentoAuto:
+      | Awaited<ReturnType<typeof processarFilaProcessamentoAutoPendentes>>
+      | { erro: string }
+      | null = null;
+
+    try {
+      filaProcessamentoAuto = await processarFilaProcessamentoAutoPendentes(50);
+    } catch (filaError) {
+      console.error("[CRON TIMEOUT] Erro na fila_processamento_auto:", filaError);
+      filaProcessamentoAuto = {
+        erro:
+          filaError instanceof Error
+            ? filaError.message
+            : String(filaError),
+      };
+    }
+
     return NextResponse.json({
       ok: true,
       processados: agendamentos?.length || 0,
+      fila_processamento_auto: filaProcessamentoAuto,
     });
   } catch (error: any) {
     console.error("[CRON TIMEOUT] Erro geral:", error);

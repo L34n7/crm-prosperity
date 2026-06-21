@@ -87,7 +87,9 @@ export default function PlanoPage() {
       "Olá! Quero fazer uma cotação do plano Profissional do CRM Prosperity."
     );
 
-    window.location.assign(`https://wa.me/${whatsappComercial}?text=${mensagem}`);
+    const url = `https://wa.me/${whatsappComercial}?text=${mensagem}`;
+
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   function togglePlanoExpandido(nomePlano: string) {

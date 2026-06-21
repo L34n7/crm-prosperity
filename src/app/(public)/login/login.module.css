@@ -93,7 +93,6 @@
   border-left: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-
 .eyebrow {
   margin: 0;
   font-size: 13px;
@@ -364,30 +363,54 @@
 }
 
 @media (max-width: 980px) {
+  .backgroundGlowBottom {
+    bottom: -80px;
+  }
+
+  .page {
+    align-items: flex-start;
+    padding: 28px 18px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
   .wrapper {
     grid-template-columns: 1fr;
     max-width: 640px;
+    gap: 20px;
   }
 
   .brandPanel {
-    padding: 32px;
+    padding: 30px;
+    border-radius: 28px;
   }
 
-  .title {
-    font-size: 34px;
+  .brandHeader {
+    gap: 18px;
   }
-  
+
   .brandBadge {
-    width: 116px;
-    height: 116px;
+    width: 120px;
+    height: 120px;
+    margin-left: -12px;
+    margin-right: -8px;
   }
 
   .brandIdentity {
     padding-left: 18px;
   }
 
+  .title {
+    font-size: 34px;
+  }
+
+  .description {
+    max-width: 100%;
+  }
+
   .card {
-    padding: 28px;
+    padding: 30px;
+    border-radius: 28px;
   }
 
   .cardTitle {
@@ -395,61 +418,96 @@
   }
 }
 
+
 @media (max-width: 640px) {
-  .page {
-    padding: 20px 14px;
+  .backgroundGlowBottom {
+    bottom: -80px;
   }
 
-  .brandPanel,
-  .card {
-    border-radius: 24px;
-    padding: 26px;
+  .page {
+    min-height: 100dvh;
+    padding: 16px 12px;
+    align-items: flex-start;
+  }
+
+  .wrapper {
+    gap: 14px;
+  }
+
+  .brandPanel {
+    padding: 22px 20px;
+    border-radius: 22px;
   }
 
   .brandHeader {
+    gap: 12px;
     align-items: center;
-    gap: 18px;
   }
 
   .brandBadge {
-    width: 88px;
-    height: 88px;
-    margin-left: -5px;
-    margin-right: -10px;
+    width: 102px;
+    height: 102px;
+    margin-left: -8px;
+    margin-right: -6px;
+    border-radius: 16px;
   }
 
   .brandIdentity {
-    padding-left: 14px;
+    padding-left: 12px;
+    border-left: 1px solid rgba(255, 255, 255, 0.14);
   }
 
   .eyebrow {
     font-size: 10px;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.08em;
   }
 
   .title {
-    margin-top: 7px;
-    font-size: 25px;
+    margin-top: 6px;
+    font-size: 28px;
+    line-height: 1.12;
   }
 
   .description {
-    margin-top: 24px;
-    font-size: 15px;
+    margin: 18px 0 0;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .featureList {
+    margin-top: 20px;
+    gap: 12px;
+  }
+
+  .featureItem {
+    font-size: 13.5px;
+    line-height: 1.45;
+    gap: 10px;
+  }
+
+  .featureDot {
+    width: 8px;
+    height: 8px;
+    margin-top: 6px;
   }
 
   .integrationFooter {
-    align-items: flex-start;
+    margin-top: 22px;
+    padding-top: 16px;
     flex-direction: column;
-    gap: 14px;
+    align-items: flex-start;
+    gap: 12px;
   }
 
   .integrationLabel {
-    font-size: 12.5px;
-    margin: 5px 0px 10px 0px;
+    margin: 0;
+    font-size: 12px;
   }
 
   .integrationBrands {
     width: 100%;
+    flex: initial;
+    margin-right: 0;
     justify-content: flex-start;
     gap: 34px;
     display: flex;
@@ -461,23 +519,398 @@
   .integrationLogo {
     height: 28px;
     max-width: 105px;
-    margin: 0px 0px 10px 0px;
+    margin: 5px 0px 0px 0px;
   }
+
 
   .integrationDivider {
-    height: 28px;
+    height: 24px;
   }
 
-  .title {
-    font-size: 28px;
+  .card {
+    padding: 22px 20px;
+    border-radius: 22px;
   }
 
-  .description {
-    font-size: 15px;
+  .cardHeader {
+    margin-bottom: 20px;
+  }
+
+  .cardEyebrow {
+    font-size: 11px;
   }
 
   .cardTitle {
+    margin-top: 8px;
+    font-size: 23px;
+    line-height: 1.15;
+  }
+
+  .cardSubtitle {
+    margin-top: 10px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .form {
+    gap: 15px;
+  }
+
+  .input {
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 14px;
+    padding: 0 14px;
+  }
+
+  .passwordInput {
+    padding-right: 50px;
+  }
+
+  .submitButton {
+    min-height: 48px;
+    border-radius: 14px;
+  }
+
+  .messageBox {
+    margin-top: 14px;
+    padding: 12px 14px;
+    font-size: 13px;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 420px) {
+  .backgroundGlowBottom {
+    bottom: -80px;
+  }
+
+  .page {
+    padding: 12px 10px;
+  }
+
+  .brandPanel,
+  .card {
+    border-radius: 20px;
+    padding: 20px 16px;
+  }
+
+  .brandHeader {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .brandBadge {
+    width: 98px;
+    height: 98px;  
+    margin-left: -0px;
+    margin-right: -10px;
+    margin-top: -5px;
+  }
+
+  .brandIdentity {
+    padding-left: 20px;
+  }
+
+  .eyebrow {
+    margin: 0;
+    font-size: 11px;
+  }
+
+  .title {
+    font-size: 27px;
+  }
+
+  .description {
+    margin-top: 16px;
+    font-size: 13.5px;
+  }
+
+  .featureList {
+    gap: 10px;
+  }
+
+  .featureItem {
+    font-size: 13px;
+  }
+
+  .integrationBrands {
+    gap: 18px;
+  }
+
+  .integrationLogo {
+    height: 22px;
+    max-width: 88px;
+  }
+
+  .cardTitle {
+    font-size: 21px;
+  }
+
+  .cardSubtitle {
+    font-size: 13.5px;
+  }
+}
+
+
+@media (max-width: 390px) {
+  .backgroundGlowBottom {
+    bottom: -80px;
+  }
+
+  .brandHeader {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .brandBadge {
+    width: 98px;
+    height: 98px;  
+    margin-left: -5px;
+    margin-right: -10px;
+    margin-top: -5px;
+  }
+
+  .brandIdentity {
+    padding-left: 20px;
+  }
+
+  .title {
+    font-size: 25px;
+  }
+
+  .eyebrow {
+    font-size: 10.5px;
+  }
+
+  .description,
+  .featureList,
+  .integrationFooter {
+    display: none;
+  }
+
+  .integrationBrands {
+    gap: 14px;
+  }
+
+  .integrationLogo {
+    width: auto;
+    height: 25px;
+    max-width: 110px;
+  }
+  
+  .integrationDivider {
+    height: 20px;
+  }
+
+  .card {
+    padding: 18px 14px;
+  }
+
+  .input,
+  .submitButton {
+    min-height: 46px;
+  }
+}
+
+
+@media (max-width: 375px) {
+  .backgroundGlowBottom {
+    bottom: -80px;
+  }
+
+  .brandHeader {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .brandBadge {
+    width: 88px;
+    height: 88px;  
+    margin-left: -5px;
+    margin-right: -10px;
+    margin-top: -5px;
+  }
+
+  .brandIdentity {
+    padding-left: 20px;
+  }
+
+  .title {
     font-size: 24px;
   }
 
+  .eyebrow {
+    font-size: 10.5px;
+  }
+
+  .description,
+  .featureList,
+  .integrationFooter {
+    display: none;
+  }
+
+  .integrationBrands {
+    gap: 14px;
+  }
+
+  .integrationLogo {
+    height: 20px;
+    max-width: 78px;
+  }
+
+  .integrationDivider {
+    height: 20px;
+  }
+
+  .card {
+    padding: 18px 14px;
+  }
+
+  .input,
+  .submitButton {
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 360px) {
+  .backgroundGlowBottom {
+    bottom: -80px;
+  }
+
+  .brandHeader {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .brandBadge {
+    width: 78px;
+    height: 78px;  
+    margin-left: -5px;
+    margin-right: -10px;
+    margin-top: -5px;
+  }
+
+  .brandIdentity {
+    padding-left: 20px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .eyebrow {
+    font-size: 8.5px;
+  }
+
+  .description,
+  .featureList,
+  .integrationFooter {
+    display: none;
+  }
+
+  .integrationBrands {
+    gap: 14px;
+  }
+
+  .integrationLogo {
+    height: 20px;
+    max-width: 78px;
+  }
+
+  .integrationDivider {
+    height: 20px;
+  }
+
+  .card {
+    padding: 18px 14px;
+  }
+
+  .input,
+  .submitButton {
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 320px) {
+  .backgroundGlowBottom {
+    bottom: -80px;
+  }
+
+  .brandPanel {
+    padding: 5px 14px;
+    border-radius: 20px;
+    justify-content: center;
+  }
+
+  .brandHeader {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .brandBadge {
+    width: 68px;
+    height: 68px;  
+    margin-left: -5px;
+    margin-right: -10px;
+    margin-top: -5px;
+  }
+
+  .brandIdentity {
+    padding-left: 20px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .eyebrow {
+    font-size: 8.5px;
+  }
+
+  .description,
+  .featureList,
+  .integrationFooter {
+    display: none;
+  }
+
+  .cardSubtitle {
+    font-size: 13px;
+  }
+
+  .integrationBrands {
+    gap: 14px;
+  }
+
+  .integrationLogo {
+    width: auto;
+    height: 21px;
+    max-width: 110px;
+  }
+
+  .integrationDivider {
+    height: 20px;
+  }
+
+  .card {
+    padding: 18px 14px;
+  }
+
+  .input,
+  .submitButton {
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 430px) {
+  .description,
+  .featureList,
+  .integrationFooter {
+    display: none;
+  }
 }

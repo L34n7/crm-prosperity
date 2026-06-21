@@ -30,9 +30,32 @@ import {
 } from "@/lib/agendas/agenda-service";
 import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
 import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
+import { Client as QstashClient } from "@upstash/qstash";
 
 const supabaseAdmin = getSupabaseAdmin();
-const LIMITE_DELAY_DIRETO_SEGUNDOS = 3 * 60;
+
+function normalizarInteiroAmbiente(
+  valor: string | undefined,
+  fallback: number,
+  minimo: number,
+  maximo: number
+) {
+  const numero = Number(valor);
+
+  if (!Number.isFinite(numero)) {
+    return fallback;
+  }
+
+  return Math.min(maximo, Math.max(minimo, Math.floor(numero)));
+}
+
+const LIMITE_DELAY_DIRETO_SEGUNDOS = normalizarInteiroAmbiente(
+  process.env.AUTOMACAO_DELAY_DIRETO_MAX_SEGUNDOS,
+  3,
+  0,
+  180
+);
+const LIMITE_DELAY_POS_MIDIA_DIRETO_MS = LIMITE_DELAY_DIRETO_SEGUNDOS * 1000;
 
 function perf(label: string, inicio: number, extra?: Record<string, any>) {
   console.log(`[PERF] ${label}`, {
@@ -522,7 +545,26 @@ function aguardar(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function delayAposMidia(tipo: "image" | "video" | "audio") {
+type TipoMidiaAutomacao = "image" | "video" | "audio";
+type TipoFilaProcessamentoAuto = "delay_no" | "pos_midia";
+
+type FilaProcessamentoAutoJob = {
+  id: string;
+  empresa_id: string;
+  execucao_id: string;
+  fluxo_id: string;
+  conversa_id: string;
+  no_id: string;
+  tipo_job: TipoFilaProcessamentoAuto;
+  status: string;
+  executar_em: string;
+  payload_json: Record<string, unknown> | null;
+  idempotency_key: string;
+  tentativas: number | null;
+  qstash_message_id?: string | null;
+};
+
+function delayAposMidia(tipo: TipoMidiaAutomacao) {
   if (tipo === "video") return 4500;
   if (tipo === "audio") return 2500;
   if (tipo === "image") return 1800;
@@ -551,53 +593,184 @@ function delaySegundosDoNo(no: {
   return Math.max(0, delay);
 }
 
+function obterUrlWorkerFilaAutomacao() {
+  const urlConfigurada =
+    process.env.QSTASH_AUTOMACAO_WORKER_URL ||
+    process.env.AUTOMACAO_QSTASH_WORKER_URL;
 
-async function agendarDelayBloco(params: {
+  if (urlConfigurada) {
+    return urlConfigurada;
+  }
+
+  const host =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    process.env.VERCEL_URL;
+
+  if (!host) {
+    return "";
+  }
+
+  const base = host.startsWith("http") ? host : `https://${host}`;
+  return `${base.replace(/\/$/, "")}/api/worker/processar-fila-automacao`;
+}
+
+async function publicarFilaProcessamentoAutoQstash(params: {
+  jobId: string;
+  delayMs: number;
+}) {
+  const { jobId, delayMs } = params;
+  const qstashToken = process.env.QSTASH_TOKEN;
+
+  if (!qstashToken) {
+    console.warn("[FILA AUTO] QSTASH_TOKEN ausente. Cron fallback fara a retomada.", {
+      jobId,
+    });
+
+    return null;
+  }
+
+  const url = obterUrlWorkerFilaAutomacao();
+
+  if (!url) {
+    console.warn("[FILA AUTO] URL do worker QStash ausente. Cron fallback fara a retomada.", {
+      jobId,
+    });
+
+    return null;
+  }
+
+  try {
+    const delaySegundos = Math.max(1, Math.ceil(delayMs / 1000));
+    const qstashClient = new QstashClient({
+      token: qstashToken,
+    });
+    const resultado = await qstashClient.publishJSON({
+      url,
+      body: {
+        jobId,
+      },
+      delay: delaySegundos,
+      retries: 3,
+    });
+
+    const messageId =
+      resultado &&
+      typeof resultado === "object" &&
+      "messageId" in resultado
+        ? String(resultado.messageId || "").trim() || null
+        : null;
+
+    await supabaseAdmin
+      .from("fila_processamento_auto")
+      .update({
+        qstash_message_id: messageId,
+        qstash_publicado_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+
+    return messageId;
+  } catch (error) {
+    console.error("[FILA AUTO] Erro ao publicar job no QStash:", {
+      jobId,
+      erro: error,
+    });
+
+    return null;
+  }
+}
+
+async function agendarFilaProcessamentoAuto(params: {
+  tipoJob: TipoFilaProcessamentoAuto;
   empresaId: string;
   conversaId: string;
   execucaoId: string;
   fluxoId: string;
   no: AutomacaoNo;
   numeroDestino: string;
-  delaySegundos: number;
+  delayMs: number;
+  payloadExtra?: Record<string, unknown>;
 }) {
   const {
+    tipoJob,
     empresaId,
     conversaId,
     execucaoId,
     fluxoId,
     no,
     numeroDestino,
-    delaySegundos,
+    delayMs,
+    payloadExtra,
   } = params;
 
-  const executarEm = new Date(
-    Date.now() + delaySegundos * 1000
-  ).toISOString();
+  const visitaNo = await obterVisitaAtualNoExecucao({
+    empresaId,
+    execucaoId,
+    noId: no.id,
+  });
+  const executarEm = new Date(Date.now() + delayMs).toISOString();
+  const idempotencyKey = `${tipoJob}:${execucaoId}:${no.id}:${visitaNo}`;
+  const payloadJson = {
+    conversa_id: conversaId,
+    numero_destino: numeroDestino,
+    delay_ms: delayMs,
+    delay_segundos: delayMs / 1000,
+    no_titulo: no.titulo,
+    no_tipo: no.tipo_no,
+    visita_no: visitaNo,
+    ...(payloadExtra || {}),
+  };
 
-  const { error } = await supabaseAdmin
-    .from("automacao_agendamentos")
+  let job: FilaProcessamentoAutoJob | null = null;
+
+  const { data, error } = await supabaseAdmin
+    .from("fila_processamento_auto")
     .insert({
       empresa_id: empresaId,
       execucao_id: execucaoId,
       fluxo_id: fluxoId,
+      conversa_id: conversaId,
       no_id: no.id,
-      tipo_agendamento: "delay_bloco",
+      tipo_job: tipoJob,
       executar_em: executarEm,
       status: "pendente",
-      payload_json: {
-        conversa_id: conversaId,
-        numero_destino: numeroDestino,
-        delay_segundos: delaySegundos,
-        no_titulo: no.titulo,
-        no_tipo: no.tipo_no,
-      },
-    });
+      payload_json: payloadJson,
+      idempotency_key: idempotencyKey,
+    })
+    .select("*")
+    .single();
 
   if (error) {
-    throw new Error(
-      `Erro ao agendar delay do bloco: ${error.message}`
-    );
+    if (error.code !== "23505") {
+      throw new Error(
+        `Erro ao agendar fila de processamento da automacao: ${error.message}`
+      );
+    }
+
+    const { data: existente, error: existenteError } = await supabaseAdmin
+      .from("fila_processamento_auto")
+      .select("*")
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+
+    if (existenteError || !existente) {
+      throw new Error(
+        `Erro ao recuperar job existente da fila de processamento: ${
+          existenteError?.message || "registro nao encontrado"
+        }`
+      );
+    }
+
+    job = existente as FilaProcessamentoAutoJob;
+  } else {
+    job = data as FilaProcessamentoAutoJob;
+  }
+
+  if (job.status === "pendente" && !job.qstash_message_id) {
+    await publicarFilaProcessamentoAutoQstash({
+      jobId: job.id,
+      delayMs,
+    });
   }
 
   await registrarLog({
@@ -605,17 +778,25 @@ async function agendarDelayBloco(params: {
     execucaoId,
     fluxoId,
     noId: no.id,
-    tipoEvento: "delay_bloco_agendado",
-    descricao: `Delay de ${delaySegundos}s registrado para execução pelo cron.`,
+    tipoEvento:
+      tipoJob === "delay_no"
+        ? "fila_processamento_auto_delay_agendado"
+        : "fila_processamento_auto_pos_midia_agendado",
+    descricao:
+      tipoJob === "delay_no"
+        ? `Delay de ${delayMs / 1000}s registrado na fila de processamento da automacao.`
+        : `Pausa pos-midia de ${delayMs / 1000}s registrada na fila de processamento da automacao.`,
     entrada: {
-      delay_segundos: delaySegundos,
+      tipo_job: tipoJob,
+      delay_ms: delayMs,
     },
     saida: {
-      executar_em: executarEm,
+      executar_em: job.executar_em || executarEm,
+      job_id: job.id,
     },
   });
 
-  return executarEm;
+  return job;
 }
 
 export async function validarExecucaoAutomacaoAtiva(params: {
@@ -737,6 +918,432 @@ async function interromperExecucaoSeInativa(params: {
   });
 
   return true;
+}
+
+function tipoMidiaDoNo(no: AutomacaoNo): TipoMidiaAutomacao | null {
+  if (no.tipo_no === "enviar_imagem") return "image";
+  if (no.tipo_no === "enviar_video") return "video";
+  if (no.tipo_no === "enviar_audio") return "audio";
+
+  return null;
+}
+
+function descricaoMidiaEnviada(no: AutomacaoNo) {
+  if (no.tipo_no === "enviar_imagem") {
+    return "Imagem enviada pela automacao.";
+  }
+
+  if (no.tipo_no === "enviar_video") {
+    return "Video enviado pela automacao.";
+  }
+
+  return "Audio enviado pela automacao.";
+}
+
+async function concluirNoMidiaAposDelay(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  no: AutomacaoNo;
+  numeroDestino: string;
+  tipoMidia: TipoMidiaAutomacao;
+  midiaUrl: string;
+  legenda: string;
+  runtimeCache?: FluxoRuntimeCache;
+}) {
+  const {
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    no,
+    numeroDestino,
+    tipoMidia,
+    midiaUrl,
+    legenda,
+    runtimeCache,
+  } = params;
+
+  const execucaoInterrompidaDepoisDaMidia =
+    await interromperExecucaoSeInativa({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      etapa: "depois_do_delay_pos_midia",
+    });
+
+  if (execucaoInterrompidaDepoisDaMidia) {
+    return;
+  }
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId: no.id,
+    tipoEvento: "no_executado",
+    descricao: descricaoMidiaEnviada(no),
+    entrada: no.configuracao_json,
+    saida: {
+      midia_url: midiaUrl,
+      legenda,
+      tipo_midia: tipoMidia,
+    },
+  });
+
+  await seguirParaProximoNo({
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noAtualId: no.id,
+    numeroDestino,
+    runtimeCache,
+  });
+}
+
+async function atualizarStatusFilaProcessamentoAuto(params: {
+  jobId: string;
+  status: "pendente" | "executando" | "executado" | "cancelado" | "erro";
+  payload?: Record<string, unknown>;
+  erro?: string | null;
+  executedAt?: string | null;
+}) {
+  const { jobId, status, payload, erro, executedAt } = params;
+
+  await supabaseAdmin
+    .from("fila_processamento_auto")
+    .update({
+      status,
+      payload_json: payload,
+      erro: erro || null,
+      executed_at: executedAt,
+      locked_at: status === "executando" ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", jobId);
+}
+
+export async function processarFilaProcessamentoAutoPorId(jobId: string) {
+  let jobTravado: FilaProcessamentoAutoJob | null = null;
+
+  const { data: jobOriginal, error: jobOriginalError } = await supabaseAdmin
+    .from("fila_processamento_auto")
+    .select("*")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (jobOriginalError) {
+    throw new Error(
+      `Erro ao buscar job da fila de processamento: ${jobOriginalError.message}`
+    );
+  }
+
+  if (!jobOriginal) {
+    return {
+      ok: true,
+      processado: false,
+      ignorado: true,
+      motivo: "job_nao_encontrado",
+    };
+  }
+
+  const jobAtual = jobOriginal as FilaProcessamentoAutoJob;
+
+  if (jobAtual.status !== "pendente") {
+    return {
+      ok: true,
+      processado: jobAtual.status === "executado",
+      ignorado: true,
+      motivo: "job_ja_resolvido",
+      status: jobAtual.status,
+    };
+  }
+
+  if (new Date(jobAtual.executar_em).getTime() > Date.now() + 1000) {
+    return {
+      ok: true,
+      processado: false,
+      ignorado: true,
+      motivo: "job_ainda_nao_venceu",
+    };
+  }
+
+  const { data: lock, error: lockError } = await supabaseAdmin
+    .from("fila_processamento_auto")
+    .update({
+      status: "executando",
+      tentativas: (jobAtual.tentativas || 0) + 1,
+      locked_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", jobId)
+    .eq("status", "pendente")
+    .select("*")
+    .maybeSingle();
+
+  if (lockError) {
+    throw new Error(
+      `Erro ao travar job da fila de processamento: ${lockError.message}`
+    );
+  }
+
+  if (!lock) {
+    return {
+      ok: true,
+      processado: false,
+      ignorado: true,
+      motivo: "job_travado_por_outro_worker",
+    };
+  }
+
+  jobTravado = lock as FilaProcessamentoAutoJob;
+  const payload = jobTravado.payload_json || {};
+
+  try {
+    if (!payload.numero_destino) {
+      await atualizarStatusFilaProcessamentoAuto({
+        jobId,
+        status: "erro",
+        payload: {
+          ...payload,
+          motivo_erro: "numero_destino_ausente",
+        },
+        erro: "numero_destino_ausente",
+        executedAt: new Date().toISOString(),
+      });
+
+      return {
+        ok: false,
+        processado: false,
+        motivo: "numero_destino_ausente",
+      };
+    }
+
+    const { data: execucao, error: execucaoError } = await supabaseAdmin
+      .from("automacao_execucoes")
+      .select("id, status, finished_at, no_atual_id")
+      .eq("id", jobTravado.execucao_id)
+      .eq("empresa_id", jobTravado.empresa_id)
+      .maybeSingle();
+
+    if (execucaoError) {
+      throw new Error(
+        `Erro ao buscar execucao da fila de processamento: ${execucaoError.message}`
+      );
+    }
+
+    if (
+      !execucao ||
+      execucao.status !== "rodando" ||
+      execucao.finished_at ||
+      execucao.no_atual_id !== jobTravado.no_id
+    ) {
+      await atualizarStatusFilaProcessamentoAuto({
+        jobId,
+        status: "cancelado",
+        payload: {
+          ...payload,
+          motivo_cancelamento:
+            "execucao_cancelada_finalizada_ou_em_outro_bloco",
+        },
+        executedAt: new Date().toISOString(),
+      });
+
+      return {
+        ok: true,
+        processado: false,
+        cancelado: true,
+        motivo: "execucao_cancelada_finalizada_ou_em_outro_bloco",
+      };
+    }
+
+    const validacao = await validarExecucaoAutomacaoAtiva({
+      empresaId: jobTravado.empresa_id,
+      conversaId: jobTravado.conversa_id,
+      execucaoId: jobTravado.execucao_id,
+    });
+
+    if (!validacao.ok) {
+      await atualizarStatusFilaProcessamentoAuto({
+        jobId,
+        status: "cancelado",
+        payload: {
+          ...payload,
+          motivo_cancelamento: validacao.motivo,
+        },
+        executedAt: new Date().toISOString(),
+      });
+
+      return {
+        ok: true,
+        processado: false,
+        cancelado: true,
+        motivo: validacao.motivo,
+      };
+    }
+
+    const { data: no, error: noError } = await supabaseAdmin
+      .from("automacao_nos")
+      .select("*")
+      .eq("id", jobTravado.no_id)
+      .eq("empresa_id", jobTravado.empresa_id)
+      .eq("fluxo_id", jobTravado.fluxo_id)
+      .eq("ativo", true)
+      .maybeSingle();
+
+    if (noError) {
+      throw new Error(
+        `Erro ao buscar bloco da fila de processamento: ${noError.message}`
+      );
+    }
+
+    if (!no) {
+      await atualizarStatusFilaProcessamentoAuto({
+        jobId,
+        status: "erro",
+        payload: {
+          ...payload,
+          motivo_erro: "bloco_nao_encontrado",
+        },
+        erro: "bloco_nao_encontrado",
+        executedAt: new Date().toISOString(),
+      });
+
+      return {
+        ok: false,
+        processado: false,
+        motivo: "bloco_nao_encontrado",
+      };
+    }
+
+    if (jobTravado.tipo_job === "delay_no") {
+      await executarNo({
+        empresaId: jobTravado.empresa_id,
+        conversaId: jobTravado.conversa_id,
+        execucaoId: jobTravado.execucao_id,
+        fluxoId: jobTravado.fluxo_id,
+        no,
+        numeroDestino: String(payload.numero_destino),
+        retomadaDelayAgendado: true,
+      });
+    } else if (jobTravado.tipo_job === "pos_midia") {
+      const tipoMidiaPayload = String(payload.tipo_midia || "");
+      const tipoMidia =
+        tipoMidiaPayload === "image" ||
+        tipoMidiaPayload === "video" ||
+        tipoMidiaPayload === "audio"
+          ? tipoMidiaPayload
+          : tipoMidiaDoNo(no);
+
+      if (!tipoMidia) {
+        throw new Error("tipo_midia_invalido_para_retomada");
+      }
+
+      await concluirNoMidiaAposDelay({
+        empresaId: jobTravado.empresa_id,
+        conversaId: jobTravado.conversa_id,
+        execucaoId: jobTravado.execucao_id,
+        fluxoId: jobTravado.fluxo_id,
+        no,
+        numeroDestino: String(payload.numero_destino),
+        tipoMidia,
+        midiaUrl: String(payload.midia_url || no.configuracao_json?.midia_url || ""),
+        legenda: String(payload.legenda || no.configuracao_json?.mensagem || ""),
+      });
+    } else {
+      throw new Error(`tipo_job_invalido:${jobTravado.tipo_job}`);
+    }
+
+    await atualizarStatusFilaProcessamentoAuto({
+      jobId,
+      status: "executado",
+      payload: {
+        ...payload,
+        processado_em: new Date().toISOString(),
+      },
+      executedAt: new Date().toISOString(),
+    });
+
+    return {
+      ok: true,
+      processado: true,
+      jobId,
+      tipoJob: jobTravado.tipo_job,
+    };
+  } catch (error) {
+    const mensagemErro =
+      error instanceof Error ? error.message : String(error);
+    const tentativas = jobTravado?.tentativas || 1;
+    const statusFinal = tentativas >= 3 ? "erro" : "pendente";
+
+    await atualizarStatusFilaProcessamentoAuto({
+      jobId,
+      status: statusFinal,
+      payload: {
+        ...payload,
+        erro: mensagemErro,
+        ultima_tentativa_em: new Date().toISOString(),
+      },
+      erro: mensagemErro,
+      executedAt: statusFinal === "erro" ? new Date().toISOString() : null,
+    });
+
+    throw error;
+  }
+}
+
+export async function processarFilaProcessamentoAutoPendentes(limite = 50) {
+  const { data: jobs, error } = await supabaseAdmin
+    .from("fila_processamento_auto")
+    .select("id")
+    .eq("status", "pendente")
+    .lte("executar_em", new Date().toISOString())
+    .order("executar_em", { ascending: true })
+    .limit(limite);
+
+  if (error) {
+    throw new Error(
+      `Erro ao buscar fila de processamento da automacao: ${error.message}`
+    );
+  }
+
+  let processados = 0;
+  let erros = 0;
+  let ignorados = 0;
+
+  for (const job of jobs || []) {
+    try {
+      const resultado = await processarFilaProcessamentoAutoPorId(job.id);
+      const resultadoResumo = resultado as {
+        processado?: unknown;
+        ignorado?: unknown;
+        cancelado?: unknown;
+      };
+
+      if (resultadoResumo.processado) {
+        processados += 1;
+      } else if (resultadoResumo.ignorado || resultadoResumo.cancelado) {
+        ignorados += 1;
+      }
+    } catch (error) {
+      erros += 1;
+      console.error("[FILA AUTO] Erro no cron fallback:", {
+        jobId: job.id,
+        erro: error,
+      });
+    }
+  }
+
+  return {
+    encontrados: jobs?.length || 0,
+    processados,
+    ignorados,
+    erros,
+  };
 }
 
 
@@ -2111,14 +2718,15 @@ export async function executarNo(params: {
     delaySegundos > LIMITE_DELAY_DIRETO_SEGUNDOS &&
     !retomadaDelayAgendado
   ) {
-    await agendarDelayBloco({
+    await agendarFilaProcessamentoAuto({
+      tipoJob: "delay_no",
       empresaId,
       conversaId,
       execucaoId,
       fluxoId,
       no,
       numeroDestino,
-      delaySegundos,
+      delayMs: delaySegundos * 1000,
     });
 
     return;
@@ -3008,7 +3616,29 @@ export async function executarNo(params: {
       noId: no.id,
     });
 
-    await aguardar(delayAposMidia(tipoMidia));
+    const delayPosMidiaMs = delayAposMidia(tipoMidia);
+
+    if (delayPosMidiaMs > LIMITE_DELAY_POS_MIDIA_DIRETO_MS) {
+      await agendarFilaProcessamentoAuto({
+        tipoJob: "pos_midia",
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        delayMs: delayPosMidiaMs,
+        payloadExtra: {
+          tipo_midia: tipoMidia,
+          midia_url: midiaUrl,
+          legenda,
+        },
+      });
+
+      return;
+    }
+
+    await aguardar(delayPosMidiaMs);
 
     const execucaoInterrompidaDepoisDaMidia =
       await interromperExecucaoSeInativa({

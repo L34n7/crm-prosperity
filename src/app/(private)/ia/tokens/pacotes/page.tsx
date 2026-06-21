@@ -57,9 +57,11 @@ const pacotes: PacoteTokens[] = [
 ];
 
 function abrirWhatsApp(mensagem: string) {
-  window.location.assign(
-    `https://wa.me/${whatsappComercial}?text=${encodeURIComponent(mensagem)}`
-  );
+  const url = `https://api.whatsapp.com/send?phone=${whatsappComercial}&text=${encodeURIComponent(
+    mensagem
+  )}`;
+
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function comprarPacote(pacote: PacoteTokens) {
