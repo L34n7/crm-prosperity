@@ -31,7 +31,6 @@ type UsuarioPayload = {
   nome?: string;
   email?: string;
   perfil_empresa_id?: string | null;
-  nivel?: "basico" | "avancado" | null;
   setor_ids?: string[] | null;
   setor_principal_id?: string | null;
   telefone?: string | null;
@@ -503,7 +502,6 @@ export async function GET() {
       auth_user_id,
       nome,
       email,
-      nivel,
       status,
       telefone,
       avatar_url,
@@ -635,7 +633,6 @@ export async function POST(request: Request) {
   const nome = body?.nome?.trim();
   const email = body?.email?.trim()?.toLowerCase();
   const perfil_empresa_id = body?.perfil_empresa_id || null;
-  const nivel = body?.nivel || null;
   const telefone = body?.telefone?.trim() || null;
 
   if (!nome) {
@@ -674,13 +671,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (nivel && !["basico", "avancado"].includes(nivel)) {
-    return NextResponse.json(
-      { ok: false, error: "Nível inválido" },
-      { status: 400 }
-    );
-  }
-
   const { data: usuarioExistente } = await supabaseAdmin
     .from("usuarios")
     .select("id")
@@ -705,7 +695,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const { setorIds, setorPrincipalId } = normalizarSetoresEntrada(body);
+  const setoresEntrada = normalizarSetoresEntrada(body);
+  const setorIds = promovendoAdministrador ? [] : setoresEntrada.setorIds;
+  const setorPrincipalId = promovendoAdministrador
+    ? null
+    : setoresEntrada.setorPrincipalId;
 
   const validacaoSetores = await validarSetoresDaEmpresa(
     usuario.empresa_id,
@@ -823,7 +817,6 @@ export async function POST(request: Request) {
         auth_user_id: authUserId,
         nome,
         email,
-        nivel,
         status: "ativo",
         telefone,
       },
@@ -833,7 +826,6 @@ export async function POST(request: Request) {
       auth_user_id,
       nome,
       email,
-      nivel,
       status,
       telefone,
       empresa_id
@@ -876,7 +868,6 @@ export async function POST(request: Request) {
       email,
       perfil_empresa_id,
       setor_ids: setorIdsSalvos,
-      nivel,
       telefone,
     },
     ip: auditMeta.ip,

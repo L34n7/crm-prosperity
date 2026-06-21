@@ -231,7 +231,6 @@ export async function POST(request: Request) {
           nome,
           email,
           senha_hash: null,
-          nivel: "avancado",
           status: "ativo",
           telefone,
           avatar_url: null,

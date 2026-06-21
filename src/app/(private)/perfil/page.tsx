@@ -38,7 +38,6 @@ type UsuarioPerfil = {
   cidade?: string | null;
   estado?: string | null;
   telefone?: string | null;
-  nivel?: string | null;
   status: string;
 };
 

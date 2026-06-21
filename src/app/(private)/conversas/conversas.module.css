@@ -670,10 +670,10 @@
   max-width: 150px;
   min-height: 22px;
   padding: 0 8px;
-  border: 1px solid #9ce0e5ec;
+  border: 1px solid #c5e6e9ec;
   border-radius: 999px;
-  color: #50979dec;
-  background:  #eafeff;
+  color: #63a5abec;
+  background:  #f6feff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4441,8 +4441,8 @@
 }
 
 .disparoAlertCompactWarning {
-  background: linear-gradient(80deg, #fca8a8f5, #fce3e3f5);
-  border-color: rgb(251, 102, 102);
+  background: linear-gradient(80deg, #fff3c4f5, #fff8e6f5);
+  border-color: #f5b82e;
 }
 
 .disparoAlertCompactIcon {

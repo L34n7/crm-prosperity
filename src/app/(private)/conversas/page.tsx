@@ -695,6 +695,69 @@ function getStatusLabel(status?: string | null) {
   }
 }
 
+function getMensagemConversaEncerrada(status?: string | null) {
+  switch (status) {
+    case "encerrado_manual":
+      return {
+        titulo: "Conversa encerrada manualmente",
+        texto: (
+          <>
+            Este atendimento foi encerrado manualmente. Você pode{" "}
+            <strong>Reabrir o protocolo atual</strong>,{" "}
+            <strong>Abrir um novo protocolo</strong> ou enviar um{" "}
+            <strong>Disparo individual</strong> para retomar o contato.
+          </>
+        ),
+        icone: "⛔",
+        variante: "warning" as const,
+      };
+
+    case "encerrado_aut":
+      return {
+        titulo: "Conversa encerrada pela automação",
+        texto: (
+          <>
+            Este atendimento foi encerrado automaticamente pelo fluxo. Você pode{" "}
+            <strong>Reabrir o protocolo atual</strong>,{" "}
+            <strong>Abrir um novo protocolo</strong> ou enviar um{" "}
+            <strong>Disparo individual</strong> para continuar o atendimento.
+          </>
+        ),
+        icone: "🤖",
+        variante: "warning" as const,
+      };
+
+
+    case "encerrado_24h":
+      return {
+        titulo: "Janela de 24h encerrada",
+        texto: (
+          <>
+            A janela de 24 horas do WhatsApp expirou sem nova resposta do cliente.
+            Para voltar a conversar, envie um template aprovado pelo{" "}
+            <strong>Disparo individual</strong>.
+          </>
+        ),
+        icone: "🕒",
+        variante: "danger" as const,
+      };
+
+    default:
+      return {
+        titulo: "Conversa encerrada",
+        texto: (
+          <>
+            Esta conversa está encerrada. Verifique as opções disponíveis no
+            cabeçalho ou envie um <strong>Disparo individual</strong> para
+            retomar o contato.
+          </>
+        ),
+        icone: "⛔",
+        variante: "danger" as const,
+      };
+  }
+}
+
 function getRemetenteLabel(remetente: Mensagem["remetente_tipo"]) {
   switch (remetente) {
     case "contato":
@@ -6277,27 +6340,30 @@ const templateFooterTexto = useMemo(() => {
 
   const mensagemAvisoDisparo = useMemo(() => {
     if (conversaEncerrada) {
-      return {
-        titulo: "Conversa encerrada",
-        texto:
-          "Esta conversa não aceita mais mensagens livres. Para voltar a falar com este contato, envie um template aprovado.",
-        icone: "⛔",
-        variante: "danger" as const,
-      };
+      return getMensagemConversaEncerrada(conversaSelecionada?.status);
     }
 
     if (mostrarDisparoIndividual) {
       return {
         titulo: "Janela de 24h encerrada",
-        texto:
-          "A janela de atendimento expirou. Para voltar a conversar envie um disparo e aguarde a resposta do contato",
+        texto: (
+          <>
+            A janela de atendimento expirou. Para voltar a conversar, envie um
+            template aprovado pelo <strong>Disparo individual</strong> e aguarde a
+            resposta do contato.
+          </>
+        ),
         icone: "🕒",
-        variante: "warning" as const,
+        variante: "danger" as const,
       };
     }
 
     return null;
-  }, [conversaEncerrada, mostrarDisparoIndividual]);
+  }, [
+    conversaEncerrada,
+    conversaSelecionada?.status,
+    mostrarDisparoIndividual,
+  ]);
     
   const totalPaginasHistorico = useMemo(() => {
     return Math.max(

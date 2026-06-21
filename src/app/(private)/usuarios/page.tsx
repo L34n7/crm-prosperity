@@ -39,7 +39,6 @@ type Usuario = {
   nome: string;
   email: string;
   perfil?: never;
-  nivel: "basico" | "avancado" | null;
   status: "ativo" | "inativo" | "bloqueado";
   telefone: string | null;
   empresa_id: string | null;
@@ -149,7 +148,6 @@ export default function UsuariosPage() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [perfilEmpresaId, setPerfilEmpresaId] = useState("");
-  const [nivel, setNivel] = useState("basico");
   const [setorIds, setSetorIds] = useState<string[]>([]);
   const [setorPrincipalId, setSetorPrincipalId] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -169,7 +167,6 @@ export default function UsuariosPage() {
 
   const [editNome, setEditNome] = useState("");
   const [editPerfilEmpresaId, setEditPerfilEmpresaId] = useState("");
-  const [editNivel, setEditNivel] = useState("basico");
   const [editSetorIds, setEditSetorIds] = useState<string[]>([]);
   const [editSetorPrincipalId, setEditSetorPrincipalId] = useState("");
   const [editTelefone, setEditTelefone] = useState("");
@@ -293,18 +290,6 @@ export default function UsuariosPage() {
     return perfil.nome === "Administrador";
   }
 
-  function perfilCriacaoEhAtendente() {
-    const perfil = perfilSelecionadoCriacao();
-    if (!perfil) return false;
-    return perfil.nome === "Atendente";
-  }
-
-  function perfilEdicaoEhAtendente() {
-    const perfil = perfilSelecionadoEdicao();
-    if (!perfil) return false;
-    return perfil.nome === "Atendente";
-  }
-
   async function criarUsuario() {
     setMensagem("");
     setErro("");
@@ -346,7 +331,6 @@ export default function UsuariosPage() {
           nome,
           email,
           perfil_empresa_id: perfilEmpresaId,
-          nivel: perfilCriacaoEhAtendente() ? nivel : null,
           setor_ids: setorIds,
           setor_principal_id: setorPrincipalId || setorIds[0] || null,
           telefone,
@@ -371,7 +355,6 @@ export default function UsuariosPage() {
       setMensagem(data.message || "Usuário convidado com sucesso.");
       setNome("");
       setEmail("");
-      setNivel("basico");
       setSetorIds([]);
       setSetorPrincipalId("");
       setTelefone("");
@@ -403,7 +386,6 @@ export default function UsuariosPage() {
     setExpandidoId(usuario.id);
     setEditNome(usuario.nome);
     setEditPerfilEmpresaId(perfilPrincipal?.id || "");
-    setEditNivel(usuario.nivel || "basico");
     setEditSetorIds(setoresDoUsuario);
     setEditSetorPrincipalId(usuario.setor_principal_id || setoresDoUsuario[0] || "");
     setEditTelefone(usuario.telefone || "");
@@ -416,7 +398,6 @@ export default function UsuariosPage() {
     setEditandoId(null);
     setEditNome("");
     setEditPerfilEmpresaId("");
-    setEditNivel("basico");
     setEditSetorIds([]);
     setEditSetorPrincipalId("");
     setEditTelefone("");
@@ -457,7 +438,6 @@ export default function UsuariosPage() {
       body: JSON.stringify({
         nome: editNome,
         perfil_empresa_id: editPerfilEmpresaId,
-        nivel: perfilEdicaoEhAtendente() ? editNivel : null,
         setor_ids: editSetorIds,
         setor_principal_id: editSetorPrincipalId || editSetorIds[0] || null,
         telefone: editTelefone,
@@ -504,7 +484,6 @@ export default function UsuariosPage() {
       body: JSON.stringify({
         nome: usuario.nome,
         perfil_empresa_id: perfilPrincipal.id,
-        nivel: usuario.nivel,
         setor_ids: setoresDoUsuario,
         setor_principal_id: setorPrincipal,
         telefone: usuario.telefone,
@@ -661,8 +640,7 @@ export default function UsuariosPage() {
                   Convidar novo usuário
                 </h2>
                 <p className={styles.cardDescription}>
-                  Crie um usuário da sua empresa com perfil dinâmico, nível e
-                  setores.
+                  Crie um usuário da sua empresa com perfil dinâmico e setores.
                 </p>
               </div>
             </div>
@@ -709,19 +687,6 @@ export default function UsuariosPage() {
                       {perfilItem.nome}
                     </option>
                   ))}
-                </select>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Nível</label>
-                <select
-                  className={styles.select}
-                  value={nivel}
-                  onChange={(e) => setNivel(e.target.value)}
-                  disabled={!perfilCriacaoEhAtendente()}
-                >
-                  <option value="basico">Básico</option>
-                  <option value="avancado">Avançado</option>
                 </select>
               </div>
 
@@ -960,19 +925,6 @@ export default function UsuariosPage() {
                             </div>
 
                             <div className={styles.field}>
-                              <label className={styles.label}>Nível</label>
-                              <select
-                                className={styles.select}
-                                value={editNivel}
-                                onChange={(e) => setEditNivel(e.target.value)}
-                                disabled={!perfilEdicaoEhAtendente()}
-                              >
-                                <option value="basico">Básico</option>
-                                <option value="avancado">Avançado</option>
-                              </select>
-                            </div>
-
-                            <div className={styles.field}>
                               <label className={styles.label}>Telefone</label>
                               <input
                                 type="text"
@@ -1079,13 +1031,6 @@ export default function UsuariosPage() {
                                 {perfisDinamicos.length > 0
                                   ? perfisDinamicos.join(", ")
                                   : "Sem perfil"}
-                              </span>
-                            </div>
-
-                            <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>Nível</span>
-                              <span className={styles.infoValue}>
-                                {usuario.nivel ?? "—"}
                               </span>
                             </div>
 

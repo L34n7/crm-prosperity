@@ -22,7 +22,6 @@ const supabaseAdmin = getSupabaseAdmin();
 type UsuarioPayload = {
   nome?: string;
   perfil_empresa_id?: string | null;
-  nivel?: "basico" | "avancado" | null;
   setor_ids?: string[] | null;
   setor_principal_id?: string | null;
   telefone?: string | null;
@@ -203,7 +202,7 @@ export async function PUT(
 
   const { data: usuarioAlvo, error: usuarioAlvoError } = await supabaseAdmin
     .from("usuarios")
-    .select("id, empresa_id, auth_user_id, nome, email, nivel, status, telefone")
+    .select("id, empresa_id, auth_user_id, nome, email, status, telefone")
     .eq("id", id)
     .maybeSingle();
 
@@ -238,7 +237,6 @@ export async function PUT(
 
   const nome = body?.nome?.trim();
   const perfil_empresa_id = body?.perfil_empresa_id || null;
-  const nivel = body?.nivel || null;
   const telefone = body?.telefone?.trim() || null;
   const status = body?.status;
 
@@ -273,13 +271,6 @@ export async function PUT(
     );
   }
 
-  if (nivel && !["basico", "avancado"].includes(nivel)) {
-    return NextResponse.json(
-      { ok: false, error: "Nível inválido" },
-      { status: 400 }
-    );
-  }
-
   if (!["ativo", "inativo", "bloqueado"].includes(status || "")) {
     return NextResponse.json(
       { ok: false, error: "Status inválido" },
@@ -307,7 +298,11 @@ export async function PUT(
     );
   }
 
-  const { setorIds, setorPrincipalId } = normalizarSetoresEntrada(body);
+  const setoresEntrada = normalizarSetoresEntrada(body);
+  const setorIds = promovendoAdministrador ? [] : setoresEntrada.setorIds;
+  const setorPrincipalId = promovendoAdministrador
+    ? null
+    : setoresEntrada.setorPrincipalId;
 
   const validacaoSetores = await validarSetoresDaEmpresa(empresa_id, setorIds);
 
@@ -324,7 +319,6 @@ export async function PUT(
     .from("usuarios")
     .update({
       nome,
-      nivel,
       telefone,
       status,
       empresa_id,
@@ -335,7 +329,6 @@ export async function PUT(
       auth_user_id,
       nome,
       email,
-      nivel,
       status,
       telefone,
       empresa_id
@@ -380,7 +373,6 @@ export async function PUT(
     antes: {
       id: usuarioAlvo.id,
       nome: usuarioAlvo.nome,
-      nivel: usuarioAlvo.nivel,
       status: usuarioAlvo.status,
       telefone: usuarioAlvo.telefone,
       perfis: perfisAntes,
@@ -393,7 +385,6 @@ export async function PUT(
       perfis: perfisDepois,
       setor_principal_id: setorPrincipal?.setor_id ?? null,
       setores: setoresDepois,
-      nivel,
       status,
       telefone,
     },
@@ -445,7 +436,7 @@ export async function DELETE(
 
     const { data: usuarioAlvo, error: usuarioAlvoError } = await supabaseAdmin
       .from("usuarios")
-      .select("id, empresa_id, auth_user_id, nome, email, nivel, status, telefone")
+      .select("id, empresa_id, auth_user_id, nome, email, status, telefone")
       .eq("id", id)
       .maybeSingle();
 

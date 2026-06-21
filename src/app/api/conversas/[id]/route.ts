@@ -387,7 +387,7 @@ export async function PUT(
   const empresa_id = conversaAtual.empresa_id;
   const contato_id = body?.contato_id ?? conversaAtual.contato_id;
   const setor_id = "setor_id" in body ? body.setor_id : conversaAtual.setor_id;
-  const responsavel_id =
+  const responsavelIdEntrada =
     "responsavel_id" in body
       ? body.responsavel_id
       : conversaAtual.responsavel_id;
@@ -454,6 +454,7 @@ export async function PUT(
   const conversaAtualEstaEncerrada = STATUS_ENCERRADOS.includes(conversaAtual.status);
   const novoStatusEhEncerrado =
     STATUS_ENCERRADOS.includes(status) || parandoAutomacaoEEncerrando;
+  const responsavel_id = novoStatusEhEncerrado ? null : responsavelIdEntrada;
 
   const estaEncerrando =
     novoStatusEhEncerrado && !conversaAtualEstaEncerrada;
@@ -689,7 +690,9 @@ export async function PUT(
 
     if (limparResponsavel) {
       updateData.responsavel_id = null;
-      updateData.status = "fila";
+      if (!novoStatusEhEncerrado) {
+        updateData.status = "fila";
+      }
     } else {
       if (conversaAtual.responsavel_id) {
         updateData.status = "em_atendimento";
@@ -703,7 +706,9 @@ export async function PUT(
     if (responsavel_id) {
       updateData.status = "em_atendimento";
     } else {
-      updateData.status = "fila";
+      if (!novoStatusEhEncerrado) {
+        updateData.status = "fila";
+      }
     }
   }
 
