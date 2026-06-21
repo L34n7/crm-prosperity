@@ -6150,13 +6150,23 @@ a.buttonMessageOption:hover {
     left: 14px;
     right: 14px;
     bottom: calc(
-      96px + env(safe-area-inset-bottom)
+      143px + env(safe-area-inset-bottom)
     );
 
     width: auto;
     max-height: min(
       420px,
       calc(100dvh - 132px)
+    );
+  }
+
+  .cameraModal {
+    position: fixed;
+    left: 14px;
+    right: 14px;
+
+    bottom: calc(
+      143px + env(safe-area-inset-bottom)
     );
   }
 
@@ -6816,6 +6826,76 @@ a.buttonMessageOption:hover {
   .composerArea {
     padding-top: 6px;
   }
+
+  .macroPopover {
+    position: fixed;
+
+    left: 14px;
+    right: 14px;
+    bottom: calc(
+      123px + env(safe-area-inset-bottom)
+    );
+
+    width: auto;
+    max-height: min(
+      420px,
+      calc(100dvh - 132px)
+    );
+  }
+
+}
+
+
+@media (max-width: 375px)  {
+  .sidebarHeader {
+    padding-top: 9px;
+    padding-bottom: 8px;
+  }
+
+  .sidebarTopRow {
+    margin-bottom: 8px;
+  }
+
+  .quickFilters {
+    margin-top: 8px;
+    padding-top: 4px;
+  }
+
+  .conversationItem {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .conversationAvatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .pageContent.mobileDetailActive .timelineArea {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .composerArea {
+    padding-top: 6px;
+  }
+
+  .macroPopover {
+    position: fixed;
+
+    left: 14px;
+    right: 14px;
+    bottom: calc(
+      123px + env(safe-area-inset-bottom)
+    );
+
+    width: auto;
+    max-height: min(
+      420px,
+      calc(100dvh - 132px)
+    );
+  }
+
 }
 
 

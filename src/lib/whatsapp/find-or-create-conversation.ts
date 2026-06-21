@@ -128,28 +128,17 @@ async function reabrirConversaEncerrada(
   const supabaseAdmin = getSupabaseAdmin();
   const now = new Date().toISOString();
 
-  const reabrirEmAtendimentoHumano =
-    conversa.status === "encerrado_manual" &&
-    !!conversa.responsavel_id &&
-    conversa.bot_ativo !== true;
-
-  const statusInicial = reabrirEmAtendimentoHumano
-    ? "em_atendimento"
-    : "fila";
+  const statusInicial = "fila";
 
   const { data: conversaReaberta, error: updateError } = await supabaseAdmin
     .from("conversas")
     .update({
       integracao_whatsapp_id: integracaoWhatsappId,
       setor_id: null,
-      responsavel_id: reabrirEmAtendimentoHumano
-        ? conversa.responsavel_id
-        : null,
+      responsavel_id: null,
       status: statusInicial,
       canal: "whatsapp",
-      origem_atendimento: reabrirEmAtendimentoHumano
-        ? "manual"
-        : "reativacao",
+      origem_atendimento: "reativacao",
       prioridade: "media",
       assunto: "Atendimento iniciado via WhatsApp",
       started_at: now,

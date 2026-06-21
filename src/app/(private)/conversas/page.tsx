@@ -4094,6 +4094,56 @@ function ConversasPageContent() {
     }
   }
 
+  async function ativarBotComUltimaMensagem() {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setSalvandoAcao(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const conversaId = conversaSelecionada.id;
+
+      const res = await fetch(`/api/conversas/${conversaId}/reset-bot`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao ativar bot nesta conversa.");
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message ||
+          "Bot ativado e automacao iniciada com a ultima mensagem recebida."
+      );
+      setAcaoAberta(null);
+
+      const listaAtualizada = await atualizarConversasCarregadas();
+      const conversaAtualizada = listaAtualizada.find(
+        (conversa: Conversa) => conversa.id === conversaId
+      );
+
+      if (conversaAtualizada) {
+        selecionarConversa(conversaAtualizada);
+      }
+
+      await carregarMensagens(
+        conversaId,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+    } catch {
+      setErro("Erro ao ativar bot nesta conversa.");
+    } finally {
+      setSalvandoAcao(false);
+    }
+  }
+
   async function confirmarTransferencia() {
     if (!conversaSelecionada?.id) return;
 
@@ -6118,6 +6168,13 @@ async function baixarConversaPDF() {
     return getUltimaMensagemRecebidaDoContato(mensagens);
   }, [mensagens]);
 
+  const podeAtivarBotComUltimaMensagem =
+    !!conversaSelecionada &&
+    !conversaEncerrada &&
+    !conversaComBotAtivo &&
+    !!ultimaMensagemRecebidaDoContato &&
+    (ehAdministrador || conversaEhMinha || conversaEhDeUmDosMeusSetores);
+
   const referenciaJanela24hComposer = useMemo(() => {
     if (janela24hConversa?.ultimaMensagemRecebidaEm) {
       return {
@@ -7460,6 +7517,20 @@ const templateFooterTexto = useMemo(() => {
 
                                 <div className={styles.headerDropdownDivider} />
 
+                                {podeAtivarBotComUltimaMensagem && (
+                                  <button
+                                    type="button"
+                                    className={styles.headerDropdownItem}
+                                    onClick={async () => {
+                                      setMenuContatoAberto(false);
+                                      await ativarBotComUltimaMensagem();
+                                    }}
+                                    disabled={salvandoAcao || assumindo}
+                                  >
+                                    {salvandoAcao ? "Ativando..." : "Ativar bot"}
+                                  </button>
+                                )}
+
                                 {podeAtribuir && (
                                   <button
                                     type="button"
@@ -8271,7 +8342,7 @@ const templateFooterTexto = useMemo(() => {
                                           }}
                                         >
                                           <span className={styles.attachmentMenuIcon}>📎</span>
-                                          <span>Document</span>
+                                          <span>Documentos</span>
                                         </button>
 
                                         <button
@@ -8295,7 +8366,7 @@ const templateFooterTexto = useMemo(() => {
                                           }}
                                         >
                                           <span className={styles.attachmentMenuIcon}>🎵</span>
-                                          <span>Audio</span>
+                                          <span>Áudio</span>
                                         </button>
                                       </div>
                                     )}
