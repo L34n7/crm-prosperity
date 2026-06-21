@@ -14,6 +14,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
+import { solicitarAtualizacaoConversasNaoLidasHeader } from "@/lib/header-summary/events";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./conversas.module.css";
 import { can } from "@/lib/permissoes/frontend";
@@ -1875,6 +1876,7 @@ function ConversasPageContent() {
   const conversaLidaRef = useRef<string | null>(null);
 
   const [editandoCampo, setEditandoCampo] = useState<string | null>(null);
+  const [nomeContatoEditando, setNomeContatoEditando] = useState("");
 
   const [etiquetasEmpresa, setEtiquetasEmpresa] = useState<EtiquetaEmpresa[]>([]);
   const [carregandoEtiquetas, setCarregandoEtiquetas] = useState(false);
@@ -2216,11 +2218,14 @@ function ConversasPageContent() {
   const [listaEditandoNome, setListaEditandoNome] = useState("");
   const [listaConfirmandoExclusaoId, setListaConfirmandoExclusaoId] = useState<string | null>(null);
 
+  const LIMITE_CARACTERES_NOTA = 600;
+
   const [notaInterna, setNotaInterna] = useState("");
   const [notasConversa, setNotasConversa] = useState<NotaConversa[]>([]);
   const [salvandoNota, setSalvandoNota] = useState(false);
   const [notaEditandoId, setNotaEditandoId] = useState<string | null>(null);
   const [notaEditandoTexto, setNotaEditandoTexto] = useState("");
+  const [notaConfirmandoExclusaoId, setNotaConfirmandoExclusaoId] = useState<string | null>(null);
 
   const [macrosChat, setMacrosChat] = useState<MacroChat[]>([]);
   const [carregandoMacros, setCarregandoMacros] = useState(false);
@@ -3823,9 +3828,13 @@ function ConversasPageContent() {
 
   async function marcarConversaComoLida(conversaId: string) {
     try {
-      await fetch(`/api/conversas/${conversaId}/marcar-lida`, {
+      const res = await fetch(`/api/conversas/${conversaId}/marcar-lida`, {
         method: "POST",
       });
+
+      if (res.ok) {
+        solicitarAtualizacaoConversasNaoLidasHeader();
+      }
     } catch {}
   }
 
@@ -4966,8 +4975,16 @@ async function baixarConversaPDF() {
 
   async function salvarNovaNota() {
     if (!conversaSelecionada?.id) return;
-    if (!notaInterna.trim()) {
+
+    const conteudoNota = notaInterna.trim();
+
+    if (!conteudoNota) {
       setErro("Digite uma nota.");
+      return;
+    }
+
+    if (conteudoNota.length > LIMITE_CARACTERES_NOTA) {
+      setErro(`A nota pode ter no máximo ${LIMITE_CARACTERES_NOTA} caracteres.`);
       return;
     }
 
@@ -4982,7 +4999,7 @@ async function baixarConversaPDF() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          conteudo: notaInterna.trim(),
+          conteudo: conteudoNota,
         }),
       });
 
@@ -4993,8 +5010,8 @@ async function baixarConversaPDF() {
         return;
       }
 
+      setMensagemSucesso(data.message || "Nota salva com sucesso");
       setNotaInterna("");
-      setMensagemSucesso(data.message || "Nota criada com sucesso");
       await carregarNotasDaConversa();
     } catch {
       setErro("Erro ao salvar nota");
@@ -5003,15 +5020,22 @@ async function baixarConversaPDF() {
     }
   }
 
-  async function atualizarNota() {
-    if (!conversaSelecionada?.id || !notaEditandoId) return;
-    if (!notaEditandoTexto.trim()) {
+  async function atualizarNota(notaId: string) {
+    if (!conversaSelecionada?.id) return;
+
+    const conteudoNota = notaEditandoTexto.trim();
+
+    if (!conteudoNota) {
       setErro("Digite o conteúdo da nota.");
       return;
     }
 
+    if (conteudoNota.length > LIMITE_CARACTERES_NOTA) {
+      setErro(`A nota pode ter no máximo ${LIMITE_CARACTERES_NOTA} caracteres.`);
+      return;
+    }
+
     try {
-      setSalvandoNota(true);
       setErro("");
       setMensagemSucesso("");
 
@@ -5021,8 +5045,8 @@ async function baixarConversaPDF() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          nota_id: notaEditandoId,
-          conteudo: notaEditandoTexto.trim(),
+          nota_id: notaId,
+          conteudo: conteudoNota,
         }),
       });
 
@@ -5039,16 +5063,11 @@ async function baixarConversaPDF() {
       await carregarNotasDaConversa();
     } catch {
       setErro("Erro ao atualizar nota");
-    } finally {
-      setSalvandoNota(false);
     }
   }
 
   async function excluirNota(notaId: string) {
     if (!conversaSelecionada?.id) return;
-
-    const confirmou = window.confirm("Deseja excluir esta nota?");
-    if (!confirmou) return;
 
     try {
       setErro("");
@@ -5072,6 +5091,7 @@ async function baixarConversaPDF() {
       }
 
       setMensagemSucesso(data.message || "Nota excluída com sucesso");
+      setNotaConfirmandoExclusaoId(null);
       await carregarNotasDaConversa();
     } catch {
       setErro("Erro ao excluir nota");
@@ -5168,7 +5188,7 @@ async function baixarConversaPDF() {
   }
 
   async function salvarContatoCampo(
-    campo: "email" | "empresa" | "observacoes",
+    campo: "nome" | "email" | "empresa" | "observacoes",
     valor: string
   ) {
     if (!conversaSelecionada?.contatos?.id) return;
@@ -5196,6 +5216,18 @@ async function baixarConversaPDF() {
 
       setMensagemSucesso(data.message || "Contato atualizado com sucesso.");
       setEditandoCampo(null);
+
+      setConversaSelecionada((atual) => {
+        if (!atual?.contatos) return atual;
+
+        return {
+          ...atual,
+          contatos: {
+            ...atual.contatos,
+            [campo]: valor,
+          },
+        };
+      });
 
       await atualizarConversasCarregadas();
     } catch {
@@ -8710,9 +8742,57 @@ const templateFooterTexto = useMemo(() => {
                               {getIniciais(conversaSelecionada.contatos?.nome)}
                             </div>
 
-                            <h4 className={styles.whatsContactName}>
-                              {conversaSelecionada.contatos?.nome || "Sem nome"}
-                            </h4>
+                            {editandoCampo === "nome" ? (
+                              <div className={styles.whatsContactNameEditBlock}>
+                                <input
+                                  className={styles.whatsContactNameInput}
+                                  value={nomeContatoEditando}
+                                  onChange={(e) => setNomeContatoEditando(e.target.value)}
+                                  autoFocus
+                                  placeholder="Nome do contato"
+                                />
+
+                                <div className={styles.whatsContactNameEditActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.inlineCancelButton}
+                                    onClick={() => {
+                                      setNomeContatoEditando(conversaSelecionada.contatos?.nome || "");
+                                      setEditandoCampo(null);
+                                    }}
+                                  >
+                                    Cancelar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.inlineSaveButton}
+                                    onClick={() => salvarContatoCampo("nome", nomeContatoEditando)}
+                                  >
+                                    Salvar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className={styles.whatsContactNameRow}>
+                                <h4 className={styles.whatsContactName}>
+                                  {conversaSelecionada.contatos?.nome || "Sem nome"}
+                                </h4>
+
+                                <button
+                                  type="button"
+                                  className={styles.whatsContactNameEditButton}
+                                  onClick={() => {
+                                    setNomeContatoEditando(conversaSelecionada.contatos?.nome || "");
+                                    setEditandoCampo("nome");
+                                  }}
+                                  title="Editar nome"
+                                  aria-label="Editar nome do contato"
+                                >
+                                  <Pencil size={14} strokeWidth={2} />
+                                </button>
+                              </div>
+                            )}
 
                             <p className={styles.whatsContactPhone}>
                               {conversaSelecionada.contatos?.telefone || "Sem telefone"}
@@ -9205,14 +9285,23 @@ const templateFooterTexto = useMemo(() => {
                       {abaPainelDireito === "notas" && (
                         <div className={styles.panelSectionStack}>
                           <div className={styles.noteComposer}>
-                            <label className={styles.actionLabel}>Nova nota interna</label>
+                            <div className={styles.noteComposerHeader}>
+                              <label className={styles.actionLabel}>Nova nota interna</label>
+
+                              <span className={styles.noteCharCounter}>
+                                {notaInterna.length}/{LIMITE_CARACTERES_NOTA}
+                              </span>
+                            </div>
+
                             <textarea
                               className={styles.noteInput}
                               rows={4}
                               value={notaInterna}
                               onChange={(e) => setNotaInterna(e.target.value)}
                               placeholder="Digite uma observação interna sobre esta conversa"
+                              maxLength={LIMITE_CARACTERES_NOTA}
                             />
+
                             <button
                               className={styles.primaryButton}
                               type="button"
@@ -9221,6 +9310,7 @@ const templateFooterTexto = useMemo(() => {
                             >
                               {salvandoNota ? "Salvando..." : "Salvar nota"}
                             </button>
+                            
                           </div>
 
                           {notasConversa.length === 0 ? (
@@ -9237,8 +9327,11 @@ const templateFooterTexto = useMemo(() => {
                                       rows={4}
                                       value={notaEditandoTexto}
                                       onChange={(e) => setNotaEditandoTexto(e.target.value)}
+                                      maxLength={LIMITE_CARACTERES_NOTA}
                                     />
 
+
+                                    
                                     <div className={styles.actionButtons}>
                                       <button
                                         type="button"
@@ -9255,10 +9348,15 @@ const templateFooterTexto = useMemo(() => {
                                         type="button"
                                         className={styles.primaryButton}
                                         disabled={salvandoNota || !notaEditandoTexto.trim()}
-                                        onClick={atualizarNota}
+                                        onClick={() => atualizarNota(nota.id)}
                                       >
                                         Salvar
                                       </button>
+
+                                      <div className={styles.noteCharCounterEdit}>
+                                        {notaEditandoTexto.length}/{LIMITE_CARACTERES_NOTA}
+                                      </div>
+
                                     </div>
                                   </>
                                 ) : (
@@ -9286,14 +9384,34 @@ const templateFooterTexto = useMemo(() => {
                                           ✎
                                         </button>
 
-                                        <button
-                                          type="button"
-                                          className={`${styles.listaIconButton} ${styles.listaIconButtonDanger}`}
-                                          title="Excluir nota"
-                                          onClick={() => excluirNota(nota.id)}
-                                        >
-                                          ×
-                                        </button>
+                                        {notaConfirmandoExclusaoId === nota.id ? (
+                                          <div className={styles.noteDeleteConfirmActions}>
+                                            <button
+                                              type="button"
+                                              className={styles.noteDeleteCancelButton}
+                                              onClick={() => setNotaConfirmandoExclusaoId(null)}
+                                            >
+                                              Cancelar
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              className={styles.noteDeleteConfirmButton}
+                                              onClick={() => excluirNota(nota.id)}
+                                            >
+                                              Excluir
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className={`${styles.listaIconButton} ${styles.listaIconButtonDanger}`}
+                                            title="Excluir nota"
+                                            onClick={() => setNotaConfirmandoExclusaoId(nota.id)}
+                                          >
+                                            ×
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
 

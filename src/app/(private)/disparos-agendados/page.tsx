@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
 import styles from "./disparos-agendados.module.css";
 
 type StatusDisparo = "todos" | "pendente" | "executado" | "cancelado" | "erro";
@@ -452,6 +453,7 @@ function DisparosAgendadosPageContent() {
       setDisparoParaCancelar(null);
       setDisparoSelecionado(null);
       router.push("/disparos-agendados");
+      solicitarAtualizacaoDisparosPendentesHeader();
 
       await carregarDisparos();
     } catch (error: any) {
@@ -654,6 +656,7 @@ function DisparosAgendadosPageContent() {
       }
 
       setSucesso("Disparo agendado com sucesso.");
+      solicitarAtualizacaoDisparosPendentesHeader();
 
       setModalNovoDisparo(false);
 

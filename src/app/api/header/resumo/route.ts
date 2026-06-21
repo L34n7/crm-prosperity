@@ -192,6 +192,10 @@ export async function GET() {
   return NextResponse.json(
     {
       ok: true,
+      contexto: {
+        usuario_id: usuario.id,
+        empresa_id: usuario.empresa_id,
+      },
       notificacoes,
       conversas_nao_lidas: conversasNaoLidas,
       disparos_pendentes: disparosPendentes,

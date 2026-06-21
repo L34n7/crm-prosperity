@@ -12,6 +12,10 @@ import {
   IA_TOKENS_REFRESH_EVENT,
   type IaTokensRefreshEventDetail,
 } from "@/lib/ia/tokens-client-events";
+import {
+  HEADER_CONVERSAS_NAO_LIDAS_REFRESH_EVENT,
+  HEADER_DISPAROS_PENDENTES_REFRESH_EVENT,
+} from "@/lib/header-summary/events";
 import { createClient } from "@/lib/supabase/client";
 
 export type HeaderSummaryNotificacao = {
@@ -44,6 +48,11 @@ type HeaderSummaryContextValue = {
   marcarTodasNotificacoesLidasLocal: () => void;
 };
 
+type HeaderSummaryContextoRealtime = {
+  usuario_id: string;
+  empresa_id: string;
+};
+
 const HeaderSummaryContext = createContext<HeaderSummaryContextValue>({
   notificacoes: [],
   notificacoesNaoLidas: 0,
@@ -55,7 +64,9 @@ const HeaderSummaryContext = createContext<HeaderSummaryContextValue>({
   marcarTodasNotificacoesLidasLocal: () => {},
 });
 
-const POLL_HEADER_RESUMO_MS = 60_000;
+const POLL_HEADER_RESUMO_MS = 5 * 60_000;
+const REALTIME_CONTADOR_DEBOUNCE_MS = 2_500;
+const EVENTO_LOCAL_DEBOUNCE_MS = 300;
 
 function blocoOk<T>(
   bloco: unknown
@@ -81,12 +92,60 @@ function blocoSemPermissao(bloco: unknown) {
   );
 }
 
+function normalizarNotificacaoRealtime(
+  valor: unknown
+): HeaderSummaryNotificacao | null {
+  if (!valor || typeof valor !== "object") return null;
+
+  const row = valor as Partial<HeaderSummaryNotificacao>;
+
+  if (!row.id || !row.titulo || !row.created_at) return null;
+
+  return {
+    id: String(row.id),
+    titulo: String(row.titulo),
+    mensagem: String(row.mensagem || ""),
+    lida: row.lida === true,
+    conversa_id: row.conversa_id ? String(row.conversa_id) : null,
+    created_at: String(row.created_at),
+    metadata_json:
+      row.metadata_json && typeof row.metadata_json === "object"
+        ? row.metadata_json
+        : undefined,
+  };
+}
+
+function eventoMensagemContaComoNaoLida(valor: unknown) {
+  if (!valor || typeof valor !== "object") return false;
+
+  const row = valor as {
+    origem?: unknown;
+    remetente_tipo?: unknown;
+  };
+
+  return row.origem === "recebida" || row.remetente_tipo === "contato";
+}
+
+function eventoAgendamentoContaComoDisparo(valor: unknown) {
+  if (!valor || typeof valor !== "object") return false;
+
+  const row = valor as {
+    tipo_agendamento?: unknown;
+  };
+
+  return row.tipo_agendamento === "disparo_template";
+}
+
 export function HeaderSummaryProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const carregandoRef = useRef(false);
+  const carregandoConversasNaoLidasRef = useRef(false);
+  const carregandoDisparosPendentesRef = useRef(false);
+  const conversasNaoLidasTimerRef = useRef<number | null>(null);
+  const disparosPendentesTimerRef = useRef<number | null>(null);
   const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
     null
   );
@@ -99,6 +158,8 @@ export function HeaderSummaryProvider({
   const [disparosPendentes, setDisparosPendentes] = useState(0);
   const [saldoTokensIa, setSaldoTokensIa] =
     useState<HeaderSummarySaldoTokensIa | null>(null);
+  const [contextoRealtime, setContextoRealtime] =
+    useState<HeaderSummaryContextoRealtime | null>(null);
 
   const refreshResumo = useCallback(async (forcarAtualizacao = false) => {
     if (carregandoRef.current) return;
@@ -113,6 +174,18 @@ export function HeaderSummaryProvider({
       const json = await res.json();
 
       if (!res.ok || !json.ok) return;
+
+      if (
+        json.contexto &&
+        typeof json.contexto === "object" &&
+        typeof json.contexto.usuario_id === "string" &&
+        typeof json.contexto.empresa_id === "string"
+      ) {
+        setContextoRealtime({
+          usuario_id: json.contexto.usuario_id,
+          empresa_id: json.contexto.empresa_id,
+        });
+      }
 
       if (
         blocoOk<{
@@ -150,6 +223,87 @@ export function HeaderSummaryProvider({
     }
   }, []);
 
+  const atualizarConversasNaoLidas = useCallback(async () => {
+    if (carregandoConversasNaoLidasRef.current) return;
+    if (document.visibilityState !== "visible") return;
+
+    try {
+      carregandoConversasNaoLidasRef.current = true;
+
+      const res = await fetch("/api/conversas/nao-lidas", {
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (res.status === 403) {
+        setConversasNaoLidas(0);
+        return;
+      }
+
+      if (!res.ok || !json.ok) return;
+
+      setConversasNaoLidas(Number(json.quantidade || 0));
+    } catch {
+      // Mantem o ultimo contador valido em falhas pontuais.
+    } finally {
+      carregandoConversasNaoLidasRef.current = false;
+    }
+  }, []);
+
+  const atualizarDisparosPendentes = useCallback(async () => {
+    if (carregandoDisparosPendentesRef.current) return;
+    if (document.visibilityState !== "visible") return;
+
+    try {
+      carregandoDisparosPendentesRef.current = true;
+
+      const res = await fetch("/api/disparos-agendados/pendentes", {
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) return;
+
+      setDisparosPendentes(Number(json.quantidade || 0));
+    } catch {
+      // Mantem o ultimo contador valido em falhas pontuais.
+    } finally {
+      carregandoDisparosPendentesRef.current = false;
+    }
+  }, []);
+
+  const agendarAtualizacaoConversasNaoLidas = useCallback(
+    (delay = REALTIME_CONTADOR_DEBOUNCE_MS) => {
+      if (document.visibilityState !== "visible") return;
+
+      if (conversasNaoLidasTimerRef.current) {
+        window.clearTimeout(conversasNaoLidasTimerRef.current);
+      }
+
+      conversasNaoLidasTimerRef.current = window.setTimeout(() => {
+        conversasNaoLidasTimerRef.current = null;
+        void atualizarConversasNaoLidas();
+      }, delay);
+    },
+    [atualizarConversasNaoLidas]
+  );
+
+  const agendarAtualizacaoDisparosPendentes = useCallback(
+    (delay = REALTIME_CONTADOR_DEBOUNCE_MS) => {
+      if (document.visibilityState !== "visible") return;
+
+      if (disparosPendentesTimerRef.current) {
+        window.clearTimeout(disparosPendentesTimerRef.current);
+      }
+
+      disparosPendentesTimerRef.current = window.setTimeout(() => {
+        disparosPendentesTimerRef.current = null;
+        void atualizarDisparosPendentes();
+      }, delay);
+    },
+    [atualizarDisparosPendentes]
+  );
+
   useEffect(() => {
     notificacoesRef.current = notificacoes;
   }, [notificacoes]);
@@ -162,34 +316,11 @@ export function HeaderSummaryProvider({
     return supabaseRealtimeRef.current;
   }
 
-  function normalizarNotificacaoRealtime(
-    valor: unknown
-  ): HeaderSummaryNotificacao | null {
-    if (!valor || typeof valor !== "object") return null;
-
-    const row = valor as Partial<HeaderSummaryNotificacao>;
-
-    if (!row.id || !row.titulo || !row.created_at) return null;
-
-    return {
-      id: String(row.id),
-      titulo: String(row.titulo),
-      mensagem: String(row.mensagem || ""),
-      lida: row.lida === true,
-      conversa_id: row.conversa_id ? String(row.conversa_id) : null,
-      created_at: String(row.created_at),
-      metadata_json:
-        row.metadata_json && typeof row.metadata_json === "object"
-          ? row.metadata_json
-          : undefined,
-    };
-  }
-
-  function aplicarNotificacaoRealtime(payload: {
+  const aplicarNotificacaoRealtime = useCallback((payload: {
     eventType?: string;
     new?: unknown;
     old?: unknown;
-  }) {
+  }) => {
     if (document.visibilityState !== "visible") return;
 
     const notificacao = normalizarNotificacaoRealtime(payload.new);
@@ -211,7 +342,7 @@ export function HeaderSummaryProvider({
     notificacoesRef.current = lista;
     setNotificacoes(lista);
     setNotificacoesNaoLidas(lista.filter((item) => !item.lida).length);
-  }
+  }, []);
 
   function marcarNotificacaoLidaLocal(id: string) {
     setNotificacoes((atuais) =>
@@ -255,8 +386,24 @@ export function HeaderSummaryProvider({
       void refreshResumo(true);
     }
 
+    function atualizarConversasPorEventoLocal() {
+      agendarAtualizacaoConversasNaoLidas(EVENTO_LOCAL_DEBOUNCE_MS);
+    }
+
+    function atualizarDisparosPorEventoLocal() {
+      agendarAtualizacaoDisparosPendentes(EVENTO_LOCAL_DEBOUNCE_MS);
+    }
+
     document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
     window.addEventListener(IA_TOKENS_REFRESH_EVENT, atualizarPorEventoTokens);
+    window.addEventListener(
+      HEADER_CONVERSAS_NAO_LIDAS_REFRESH_EVENT,
+      atualizarConversasPorEventoLocal
+    );
+    window.addEventListener(
+      HEADER_DISPAROS_PENDENTES_REFRESH_EVENT,
+      atualizarDisparosPorEventoLocal
+    );
 
     return () => {
       window.clearInterval(interval);
@@ -265,19 +412,35 @@ export function HeaderSummaryProvider({
         IA_TOKENS_REFRESH_EVENT,
         atualizarPorEventoTokens
       );
+      window.removeEventListener(
+        HEADER_CONVERSAS_NAO_LIDAS_REFRESH_EVENT,
+        atualizarConversasPorEventoLocal
+      );
+      window.removeEventListener(
+        HEADER_DISPAROS_PENDENTES_REFRESH_EVENT,
+        atualizarDisparosPorEventoLocal
+      );
     };
-  }, [refreshResumo]);
+  }, [
+    refreshResumo,
+    agendarAtualizacaoConversasNaoLidas,
+    agendarAtualizacaoDisparosPendentes,
+  ]);
 
   useEffect(() => {
+    const empresaId = contextoRealtime?.empresa_id;
+    if (!empresaId) return;
+
     const supabase = getSupabaseRealtime();
     const channel = supabase
-      .channel("crm-header-notificacoes")
+      .channel(`crm-header-notificacoes:${empresaId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "notificacoes",
+          filter: `empresa_id=eq.${empresaId}`,
         },
         aplicarNotificacaoRealtime
       )
@@ -285,6 +448,112 @@ export function HeaderSummaryProvider({
 
     return () => {
       void supabase.removeChannel(channel);
+    };
+  }, [contextoRealtime?.empresa_id, aplicarNotificacaoRealtime]);
+
+  useEffect(() => {
+    const empresaId = contextoRealtime?.empresa_id;
+    const usuarioId = contextoRealtime?.usuario_id;
+    if (!empresaId || !usuarioId) return;
+
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
+      .channel(`crm-header-conversas-nao-lidas:${empresaId}:${usuarioId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "mensagens",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        (payload) => {
+          if (eventoMensagemContaComoNaoLida(payload.new)) {
+            agendarAtualizacaoConversasNaoLidas();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversas",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        () => {
+          agendarAtualizacaoConversasNaoLidas();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversa_leituras",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        (payload) => {
+          const row = (payload.new || payload.old) as {
+            usuario_id?: unknown;
+          } | null;
+
+          if (row?.usuario_id === usuarioId) {
+            agendarAtualizacaoConversasNaoLidas();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    contextoRealtime?.empresa_id,
+    contextoRealtime?.usuario_id,
+    agendarAtualizacaoConversasNaoLidas,
+  ]);
+
+  useEffect(() => {
+    const empresaId = contextoRealtime?.empresa_id;
+    if (!empresaId) return;
+
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
+      .channel(`crm-header-disparos-pendentes:${empresaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "automacao_agendamentos",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        (payload) => {
+          if (
+            eventoAgendamentoContaComoDisparo(payload.new) ||
+            eventoAgendamentoContaComoDisparo(payload.old)
+          ) {
+            agendarAtualizacaoDisparosPendentes();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [contextoRealtime?.empresa_id, agendarAtualizacaoDisparosPendentes]);
+
+  useEffect(() => {
+    return () => {
+      if (conversasNaoLidasTimerRef.current) {
+        window.clearTimeout(conversasNaoLidasTimerRef.current);
+      }
+
+      if (disparosPendentesTimerRef.current) {
+        window.clearTimeout(disparosPendentesTimerRef.current);
+      }
     };
   }, []);
 

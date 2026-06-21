@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 
 const supabaseAdmin = getSupabaseAdmin();
+const LIMITE_CARACTERES_NOTA = 600;
 
 type ConversaBase = {
   id: string;
@@ -117,11 +118,21 @@ export async function POST(
   }
 
   const body = await request.json();
-  const conteudo = body?.conteudo?.trim();
+  const conteudo = String(body?.conteudo || "").trim();
 
   if (!conteudo) {
     return NextResponse.json(
       { ok: false, error: "Conteúdo da nota é obrigatório" },
+      { status: 400 }
+    );
+  }
+
+  if (conteudo.length > LIMITE_CARACTERES_NOTA) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `A nota pode ter no máximo ${LIMITE_CARACTERES_NOTA} caracteres.`,
+      },
       { status: 400 }
     );
   }
@@ -210,7 +221,7 @@ export async function PUT(
 
   const body = await request.json();
   const notaId = body?.nota_id;
-  const conteudo = body?.conteudo?.trim();
+  const conteudo = String(body?.conteudo || "").trim();
 
   if (!notaId) {
     return NextResponse.json(
@@ -222,6 +233,16 @@ export async function PUT(
   if (!conteudo) {
     return NextResponse.json(
       { ok: false, error: "Conteúdo da nota é obrigatório" },
+      { status: 400 }
+    );
+  }
+
+  if (conteudo.length > LIMITE_CARACTERES_NOTA) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `A nota pode ter no máximo ${LIMITE_CARACTERES_NOTA} caracteres.`,
+      },
       { status: 400 }
     );
   }
