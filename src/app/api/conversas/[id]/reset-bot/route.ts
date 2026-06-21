@@ -193,13 +193,9 @@ export async function POST(
       status: "aberta",
       origem_atendimento: "entrada_cliente",
       bot_ativo: false,
-      fluxo_etapa: null,
-      menu_aguardando_resposta: false,
-      ultima_opcao_escolhida: null,
-      tentativas_invalidas: 0,
-      ultima_interacao_bot_em: null,
       closed_at: null,
       last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
     .eq("id", id)
     .select("*")

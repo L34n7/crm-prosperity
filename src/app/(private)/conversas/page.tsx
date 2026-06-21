@@ -7520,7 +7520,7 @@ const templateFooterTexto = useMemo(() => {
                                 {podeAtivarBotComUltimaMensagem && (
                                   <button
                                     type="button"
-                                    className={styles.headerDropdownItem}
+                                    className={styles.AtivarBot}
                                     onClick={async () => {
                                       setMenuContatoAberto(false);
                                       await ativarBotComUltimaMensagem();

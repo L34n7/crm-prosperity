@@ -761,7 +761,8 @@
   flex-direction: column;
 }
 
-.headerDropdownItem {
+.headerDropdownItem,
+.AtivarBot {
   width: 100%;
   border: none;
   background: transparent;
@@ -772,6 +773,14 @@
   padding: 12px 14px;
   border-radius: 10px;
   cursor: pointer;
+}
+
+.AtivarBot {
+  color: #0b8a4a;
+}
+
+.AtivarBot:hover {
+  background: #e7fff3;
 }
 
 .headerDropdownItem:hover {
