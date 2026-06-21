@@ -198,7 +198,6 @@ export async function POST(
       ultima_opcao_escolhida: null,
       tentativas_invalidas: 0,
       ultima_interacao_bot_em: null,
-      automacao_id: null,
       closed_at: null,
       last_message_at: new Date().toISOString(),
     })
