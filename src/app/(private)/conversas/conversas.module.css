@@ -1,7 +1,7 @@
 .pageContent {
   display: flex;
   flex-direction: column;
-  padding: 10px 24px 5px 24px;
+  padding: 5px 24px 5px 24px;
   height: calc(100vh - 60px);
   min-height: 0;
 }

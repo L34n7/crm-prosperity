@@ -1865,6 +1865,7 @@ function ConversasPageContent() {
     useState(false);
   const [modalNovoProtocoloAberto, setModalNovoProtocoloAberto] =
     useState(false);
+  const [modalAtivarBotAberto, setModalAtivarBotAberto] = useState(false);
     
   const [infoExpandida, setInfoExpandida] = useState(false);
 
@@ -4174,10 +4175,12 @@ function ConversasPageContent() {
       const data = await res.json();
 
       if (!res.ok) {
+        setModalAtivarBotAberto(false);
         setErro(data.error || "Erro ao ativar bot nesta conversa.");
         return;
       }
 
+      setModalAtivarBotAberto(false);
       setMensagemSucesso(
         data.message ||
           "Bot ativado e automacao iniciada com a ultima mensagem recebida."
@@ -4201,6 +4204,7 @@ function ConversasPageContent() {
         fimJanelaHistorico
       );
     } catch {
+      setModalAtivarBotAberto(false);
       setErro("Erro ao ativar bot nesta conversa.");
     } finally {
       setSalvandoAcao(false);
@@ -4450,6 +4454,20 @@ function ConversasPageContent() {
   function fecharModalNovoProtocolo() {
     if (abrindoNovoProtocolo) return;
     setModalNovoProtocoloAberto(false);
+  }
+
+  function abrirModalAtivarBot() {
+    setMenuContatoAberto(false);
+    setModalAtivarBotAberto(true);
+  }
+
+  function fecharModalAtivarBot() {
+    if (salvandoAcao) return;
+    setModalAtivarBotAberto(false);
+  }
+
+  async function confirmarAtivarBotComUltimaMensagem() {
+    await ativarBotComUltimaMensagem();
   }
 
   async function confirmarAbrirNovoProtocolo() {
@@ -6231,6 +6249,20 @@ async function baixarConversaPDF() {
     return getUltimaMensagemRecebidaDoContato(mensagens);
   }, [mensagens]);
 
+  const ultimaMensagemAtivarBotPreview = useMemo(() => {
+    if (!ultimaMensagemRecebidaDoContato) {
+      return "Nenhuma mensagem recebida encontrada.";
+    }
+
+    const texto = String(ultimaMensagemRecebidaDoContato.conteudo || "").trim();
+
+    if (!texto) {
+      return "Mensagem recebida sem texto.";
+    }
+
+    return texto.length > 140 ? `${texto.slice(0, 137)}...` : texto;
+  }, [ultimaMensagemRecebidaDoContato]);
+
   const podeAtivarBotComUltimaMensagem =
     !!conversaSelecionada &&
     !conversaEncerrada &&
@@ -7587,10 +7619,7 @@ const templateFooterTexto = useMemo(() => {
                                   <button
                                     type="button"
                                     className={styles.AtivarBot}
-                                    onClick={async () => {
-                                      setMenuContatoAberto(false);
-                                      await ativarBotComUltimaMensagem();
-                                    }}
+                                    onClick={abrirModalAtivarBot}
                                     disabled={salvandoAcao || assumindo}
                                   >
                                     {salvandoAcao ? "Ativando..." : "Ativar bot"}
@@ -7950,7 +7979,7 @@ const templateFooterTexto = useMemo(() => {
 
                         <div className={styles.composerArea}>
                           {!podeEnviarMensagem &&
-                            conversaSelecionada.status !== "encerrada" &&
+                            !conversaEncerrada &&
                             !conversaComBotAtivo &&
                             janela24hAberta && (
                               <div className={styles.timelineInfoSmall}>
@@ -11210,6 +11239,123 @@ const templateFooterTexto = useMemo(() => {
                 border: "none",
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {modalAtivarBotAberto && (
+        <div
+          className={styles.novoProtocoloModalOverlay}
+          onMouseDown={fecharModalAtivarBot}
+        >
+          <div
+            className={styles.novoProtocoloModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ativar-bot-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className={styles.novoProtocoloModalHeader}>
+              <div className={styles.novoProtocoloModalIcon}>
+                <span>AI</span>
+              </div>
+
+              <div className={styles.novoProtocoloModalHeading}>
+                <span className={styles.novoProtocoloModalEyebrow}>
+                  Automação
+                </span>
+
+                <h3
+                  id="ativar-bot-modal-title"
+                  className={styles.novoProtocoloModalTitle}
+                >
+                  Ativar bot nesta conversa?
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                className={styles.novoProtocoloModalClose}
+                onClick={fecharModalAtivarBot}
+                disabled={salvandoAcao}
+                aria-label="Fechar modal"
+                title="Fechar"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className={styles.novoProtocoloModalBody}>
+              <p className={styles.novoProtocoloModalText}>
+                O bot vai assumir este atendimento usando a última mensagem
+                recebida do contato.
+              </p>
+
+              <div className={styles.novoProtocoloModalInfo}>
+                <div className={styles.novoProtocoloModalInfoIcon}>
+                  i
+                </div>
+
+                <div>
+                  <strong>O fluxo começará do início</strong>
+
+                  <p>
+                    Essa mensagem será analisada como uma nova entrada. A
+                    automação vai iniciar pelo primeiro passo do fluxo e seguir
+                    conforme o conteúdo recebido.
+                  </p>
+                </div>
+              </div>
+
+              <div className={styles.novoProtocoloModalContact}>
+                <div className={styles.novoProtocoloModalAvatar}>
+                  {getIniciais(conversaSelecionada?.contatos?.nome)}
+                </div>
+
+                <div className={styles.novoProtocoloModalContactInfo}>
+                  <span>Mensagem considerada</span>
+
+                  <strong>{ultimaMensagemAtivarBotPreview}</strong>
+
+                  <small>
+                    O protocolo atual será mantido e a conversa não será
+                    encerrada.
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.novoProtocoloModalFooter}>
+              <button
+                type="button"
+                className={styles.novoProtocoloModalCancel}
+                onClick={fecharModalAtivarBot}
+                disabled={salvandoAcao}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className={styles.novoProtocoloModalConfirm}
+                onClick={confirmarAtivarBotComUltimaMensagem}
+                disabled={salvandoAcao}
+              >
+                {salvandoAcao ? (
+                  <>
+                    <span className={styles.novoProtocoloModalSpinner} />
+                    Ativando bot...
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.novoProtocoloModalConfirmIcon}>
+                      AI
+                    </span>
+                    Ativar bot
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

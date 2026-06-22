@@ -235,6 +235,7 @@
   width: 36px;
   min-width: 10px;
   height: 12px;
+  margin-left: 4px;
   border-radius: 10px;
   display: flex;
   flex-direction: column;

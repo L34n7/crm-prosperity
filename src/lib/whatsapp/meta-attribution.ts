@@ -32,6 +32,11 @@ type RastreamentoMeta = {
   campanhaNome: string;
 };
 
+type AtribuicaoMetaExistente = {
+  id: string;
+  payload_json?: unknown;
+};
+
 const ORIGEM_META_NOME = "Meta Ads / Click-to-WhatsApp";
 const CAMPANHA_META_DESCRICAO =
   "Campanha criada automaticamente a partir de anuncio Click-to-WhatsApp da Meta.";
@@ -61,6 +66,68 @@ function textoLimpo(valor: string | null | undefined, limite = 180) {
 
 function hashCurto(valor: string) {
   return createHash("sha1").update(valor).digest("hex").slice(0, 8).toUpperCase();
+}
+
+function ehViolacaoUnique(error: { code?: string | null } | null | undefined) {
+  return error?.code === "23505";
+}
+
+function ehRpcAtribuicaoMetaIndisponivel(
+  error: { code?: string | null } | null | undefined
+) {
+  return error?.code === "PGRST202" || error?.code === "42883";
+}
+
+async function buscarAtribuicaoMetaPorCampo(params: {
+  supabase: ReturnType<typeof getSupabaseAdmin>;
+  empresaId: string;
+  campo: "ctwa_clid" | "mensagem_externa_id";
+  valor: string;
+}) {
+  const { data, error } = await params.supabase
+    .from("contato_atribuicoes_meta")
+    .select("id, payload_json")
+    .eq("empresa_id", params.empresaId)
+    .eq(params.campo, params.valor)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw new Error(
+      `Erro ao buscar atribuicao Meta por ${params.campo}: ${error.message}`
+    );
+  }
+
+  return (data?.[0] || null) as AtribuicaoMetaExistente | null;
+}
+
+async function buscarAtribuicaoMetaExistente(params: {
+  supabase: ReturnType<typeof getSupabaseAdmin>;
+  empresaId: string;
+  ctwaClid?: string | null;
+  mensagemExternaId?: string | null;
+}) {
+  if (params.ctwaClid) {
+    const existentePorCtwa = await buscarAtribuicaoMetaPorCampo({
+      supabase: params.supabase,
+      empresaId: params.empresaId,
+      campo: "ctwa_clid",
+      valor: params.ctwaClid,
+    });
+
+    if (existentePorCtwa) return existentePorCtwa;
+  }
+
+  if (params.mensagemExternaId) {
+    return buscarAtribuicaoMetaPorCampo({
+      supabase: params.supabase,
+      empresaId: params.empresaId,
+      campo: "mensagem_externa_id",
+      valor: params.mensagemExternaId,
+    });
+  }
+
+  return null;
 }
 
 function gerarCodigoCampanhaMeta(referral: WhatsAppReferral) {
@@ -414,7 +481,6 @@ export async function salvarAtribuicaoMetaAnuncio(
   }
 
   const supabase = getSupabaseAdmin();
-  let existente: any = null;
   let rastreamento: RastreamentoMeta | null = null;
   const metadataMeta = montarMetadataMeta(referral, params);
 
@@ -437,54 +503,20 @@ export async function salvarAtribuicaoMetaAnuncio(
     });
   }
 
-  if (ctwaClid) {
-    const { data, error } = await supabase
-      .from("contato_atribuicoes_meta")
-      .select("id, payload_json")
-      .eq("empresa_id", params.empresaId)
-      .eq("ctwa_clid", ctwaClid)
-      .maybeSingle();
-
-    if (error) {
-      throw new Error(`Erro ao buscar atribuicao Meta por ctwa_clid: ${error.message}`);
-    }
-
-    existente = data || null;
-  }
-
-  if (!existente && mensagemExternaId) {
-    const { data, error } = await supabase
-      .from("contato_atribuicoes_meta")
-      .select("id, payload_json")
-      .eq("empresa_id", params.empresaId)
-      .eq("mensagem_externa_id", mensagemExternaId)
-      .maybeSingle();
-
-    if (error) {
-      throw new Error(
-        `Erro ao buscar atribuicao Meta por mensagem_externa_id: ${error.message}`
-      );
-    }
-
-    existente = data || null;
-  }
-
-  const payloadAtual = objetoJson(existente?.payload_json);
   const payloadJson = {
-    ...payloadAtual,
     [params.payloadTipo]: params.payloadJson || null,
   };
 
   const dados = semUndefined({
     empresa_id: params.empresaId,
-    contato_id: params.contatoId,
-    conversa_id: params.conversaId,
-    mensagem_id: params.mensagemId,
-    integracao_whatsapp_id: params.integracaoWhatsappId,
-    mensagem_externa_id: mensagemExternaId,
+    contato_id: params.contatoId ?? undefined,
+    conversa_id: params.conversaId ?? undefined,
+    mensagem_id: params.mensagemId ?? undefined,
+    integracao_whatsapp_id: params.integracaoWhatsappId ?? undefined,
+    mensagem_externa_id: mensagemExternaId ?? undefined,
     rastreamento_origem_id: rastreamento?.origemId,
     rastreamento_campanha_id: rastreamento?.campanhaId,
-    ctwa_clid: ctwaClid,
+    ctwa_clid: ctwaClid ?? undefined,
     source_id: referral?.source_id ?? undefined,
     source_url: referral?.source_url ?? undefined,
     source_type: referral?.source_type ?? undefined,
@@ -503,10 +535,39 @@ export async function salvarAtribuicaoMetaAnuncio(
     updated_at: new Date().toISOString(),
   });
 
+  const { data: atribuicaoId, error: erroRpc } = await supabase.rpc(
+    "salvar_contato_atribuicao_meta",
+    { p_dados: dados }
+  );
+
+  if (!erroRpc) {
+    return atribuicaoId ? { id: atribuicaoId } : null;
+  }
+
+  if (!ehRpcAtribuicaoMetaIndisponivel(erroRpc)) {
+    throw new Error(`Erro ao salvar atribuicao Meta: ${erroRpc.message}`);
+  }
+
+  const existente = await buscarAtribuicaoMetaExistente({
+    supabase,
+    empresaId: params.empresaId,
+    ctwaClid,
+    mensagemExternaId,
+  });
+
+  const payloadAtual = objetoJson(existente?.payload_json);
+  const dadosFallback = {
+    ...dados,
+    payload_json: {
+      ...payloadAtual,
+      ...payloadJson,
+    },
+  };
+
   if (existente?.id) {
     const { data, error } = await supabase
       .from("contato_atribuicoes_meta")
-      .update(dados)
+      .update(dadosFallback)
       .eq("id", existente.id)
       .select("id")
       .single();
@@ -520,11 +581,45 @@ export async function salvarAtribuicaoMetaAnuncio(
 
   const { data, error } = await supabase
     .from("contato_atribuicoes_meta")
-    .insert(dados)
+    .insert(dadosFallback)
     .select("id")
     .single();
 
   if (error) {
+    if (ehViolacaoUnique(error)) {
+      const registroConflitante = await buscarAtribuicaoMetaExistente({
+        supabase,
+        empresaId: params.empresaId,
+        ctwaClid,
+        mensagemExternaId,
+      });
+
+      if (registroConflitante?.id) {
+        const payloadConflitante = objetoJson(registroConflitante.payload_json);
+        const { data: dataAtualizada, error: erroAtualizacao } = await supabase
+          .from("contato_atribuicoes_meta")
+          .update({
+            ...dadosFallback,
+            payload_json: {
+              ...payloadConflitante,
+              ...payloadJson,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", registroConflitante.id)
+          .select("id")
+          .single();
+
+        if (erroAtualizacao) {
+          throw new Error(
+            `Erro ao atualizar atribuicao Meta apos conflito: ${erroAtualizacao.message}`
+          );
+        }
+
+        return dataAtualizada;
+      }
+    }
+
     throw new Error(`Erro ao criar atribuicao Meta: ${error.message}`);
   }
 

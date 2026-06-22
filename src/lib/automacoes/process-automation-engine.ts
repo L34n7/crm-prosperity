@@ -723,30 +723,39 @@ async function agendarFilaProcessamentoAuto(params: {
 
   let job: FilaProcessamentoAutoJob | null = null;
 
+  const payloadInsert = {
+    empresa_id: empresaId,
+    execucao_id: execucaoId,
+    fluxo_id: fluxoId,
+    conversa_id: conversaId,
+    no_id: no.id,
+    tipo_job: tipoJob,
+    executar_em: executarEm,
+    status: "pendente",
+    payload_json: payloadJson,
+    idempotency_key: idempotencyKey,
+  };
+
   const { data, error } = await supabaseAdmin
     .from("fila_processamento_auto")
-    .insert({
-      empresa_id: empresaId,
-      execucao_id: execucaoId,
-      fluxo_id: fluxoId,
-      conversa_id: conversaId,
-      no_id: no.id,
-      tipo_job: tipoJob,
-      executar_em: executarEm,
-      status: "pendente",
-      payload_json: payloadJson,
-      idempotency_key: idempotencyKey,
+    .upsert(payloadInsert, {
+      onConflict: "idempotency_key",
+      ignoreDuplicates: true,
     })
     .select("*")
-    .single();
+    .maybeSingle();
 
   if (error) {
-    if (error.code !== "23505") {
-      throw new Error(
-        `Erro ao agendar fila de processamento da automacao: ${error.message}`
-      );
-    }
+    throw new Error(
+      `Erro ao agendar fila de processamento da automacao: ${error.message}`
+    );
+  }
 
+  const jobFoiCriado = !!data;
+
+  if (data) {
+    job = data as FilaProcessamentoAutoJob;
+  } else {
     const { data: existente, error: existenteError } = await supabaseAdmin
       .from("fila_processamento_auto")
       .select("*")
@@ -762,11 +771,9 @@ async function agendarFilaProcessamentoAuto(params: {
     }
 
     job = existente as FilaProcessamentoAutoJob;
-  } else {
-    job = data as FilaProcessamentoAutoJob;
   }
 
-  if (job.status === "pendente" && !job.qstash_message_id) {
+  if (jobFoiCriado && job.status === "pendente" && !job.qstash_message_id) {
     await publicarFilaProcessamentoAutoQstash({
       jobId: job.id,
       delayMs,
