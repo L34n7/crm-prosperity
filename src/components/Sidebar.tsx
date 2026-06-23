@@ -587,6 +587,14 @@ export default function Sidebar({
             </div>
 
             <div className={styles.mobileProfileActions}>
+              <Link
+                href="/perfil"
+                className={styles.mobileProfileAction}
+                onClick={() => setMobileMoreOpen(false)}
+              >
+                <UserCircle size={18} strokeWidth={2.2} />
+                <span>Perfil</span>
+              </Link>
               <a
                 href={AJUDA_WHATSAPP_URL}
                 target="_blank"

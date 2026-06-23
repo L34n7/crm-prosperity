@@ -1,9 +1,16 @@
 .pageContent {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 5px 304px 24px 304px;
+
+  padding: 5px 24px 24px;
   min-height: calc(100vh - 170px);
+
+  box-sizing: border-box;
 }
 
 .layout {
@@ -27,7 +34,7 @@
 .cardHeader {
   padding: 22px;
   border-bottom: 1px solid var(--crm-border);
-  background: #fafeff;
+  background: var(--header);
 }
 
 .eyebrow {
@@ -73,7 +80,7 @@
 
 .searchFilters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px 220px;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 220px) minmax(180px, 220px);
   gap: 16px;
 }
 
@@ -1090,7 +1097,7 @@
 
 .whatsappPreviewArea {
   border-radius: 20px;
-  padding: 28px 16px 16px;
+  padding: 16px 16px 16px;
   background:
     radial-gradient(circle at 20% 20%, rgba(15, 23, 42, 0.04) 0 2px, transparent 2px),
     #efe7dd;
@@ -1171,15 +1178,15 @@
 
 .setupPreviewGrid {
   display: grid;
-  grid-template-columns: minmax(320px, 1.90fr) minmax(420px, 1.1fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
   gap: 20px;
   align-items: start;
 }
 
 .setupColumn {
-  gap: 20px;
   display: grid;
-  grid-template-columns: minmax(320px, 1.90fr) minmax(420px, 1.1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
 }
 
 .templateInfoBox {
@@ -1227,14 +1234,6 @@
   font-size: 15px;
 }
 
-.whatsappPreviewArea {
-  border-radius: px;
-  padding: 18px 38px 18px;
-  background:
-    radial-gradient(circle at 20% 20%, rgba(15, 23, 42, 0.04) 0 2px, transparent 2px),
-    #efe7dd;
-  background-size: 18px 18px;
-}
 
 .whatsappBubble {
   width: min(100%, 340px);

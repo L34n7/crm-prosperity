@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
+import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendAppointmentReminderEmail } from "@/lib/email/send-appointment-reminder-email";
 import {
   chaveEhVariavelFixaContato,
   montarMapaVariaveisFixasContato,
   normalizarChaveVariavelFluxo,
 } from "@/lib/automacoes/variaveis-fixas-contato";
+import {
+  statusWhatsappMetaBloqueado,
+  WHATSAPP_META_BLOCK_DESCRIPTION,
+} from "@/lib/whatsapp/meta-block";
+import {
+  atualizarReservaLimiteMeta,
+  reservarLimiteMeta,
+} from "@/lib/whatsapp/meta-limites";
 
 type TemplateButton = {
   type?: string;
@@ -695,7 +704,7 @@ async function executarDisparoAgendado(agendamento: any) {
   const { data: integracao, error: integracaoError } = await supabaseAdmin
     .from("integracoes_whatsapp")
     .select(
-      "id, empresa_id, status, phone_number_id, token_ref, config_json"
+      "id, empresa_id, status, phone_number_id, phone_number_status, onboarding_erro, token_ref, meta_messaging_limit, meta_messaging_limit_tier, meta_account_mode, config_json"
     )
     .eq("id", integracaoWhatsappId)
     .eq("empresa_id", empresaId)
@@ -703,6 +712,15 @@ async function executarDisparoAgendado(agendamento: any) {
 
   if (integracaoError || !integracao) {
     throw new Error("Integração WhatsApp não encontrada.");
+  }
+
+  if (
+    statusWhatsappMetaBloqueado(integracao.status) ||
+    statusWhatsappMetaBloqueado(integracao.phone_number_status)
+  ) {
+    throw new Error(
+      integracao.onboarding_erro || WHATSAPP_META_BLOCK_DESCRIPTION
+    );
   }
 
   const { token, phoneNumberId } =
@@ -753,6 +771,39 @@ async function executarDisparoAgendado(agendamento: any) {
   });
 
   const components = montarComponentesTemplate(payloadTemplate, variaveis);
+  let reservaIdsLimiteMeta: string[] = [];
+
+  const janela24h = await canSendFreeformWhatsAppMessage({
+    conversaId: conversa.id,
+  });
+
+  if (!janela24h.podeEnviarMensagemLivre) {
+    const reservaLimite = await reservarLimiteMeta({
+      empresaId,
+      integracao,
+      telefones: [numeroDestino],
+      origem: "disparo_template_agendado",
+      templateId: template.id,
+      templateNome: template.nome,
+      usuarioId: null,
+      metadataJson: {
+        agendamento_id: agendamento.id,
+        execucao_id: execucaoId,
+        conversa_id: conversa.id,
+        contato_id: contato?.id || null,
+        rota: "/api/cron/disparos_agendados",
+        motivo_reserva: "fora_janela_24h",
+      },
+    });
+
+    if (!reservaLimite.ok) {
+      throw new Error(
+        `${reservaLimite.error} Limite atual: ${reservaLimite.limite}. Usados/reservados: ${reservaLimite.usados}. Restantes: ${reservaLimite.restantes}.`
+      );
+    }
+
+    reservaIdsLimiteMeta = reservaLimite.reservaIds;
+  }
 
   const bodyMeta: Record<string, any> = {
     messaging_product: "whatsapp",
@@ -798,6 +849,19 @@ async function executarDisparoAgendado(agendamento: any) {
       metaData?.error?.message ||
       "Erro ao enviar template pela Meta.";
 
+    await atualizarReservaLimiteMeta({
+      reservaIds: reservaIdsLimiteMeta,
+      telefone: numeroDestino,
+      status: "falha",
+      contatoId: contato?.id || null,
+      conversaId: conversa.id,
+      metadataJson: {
+        erro: erroMeta,
+        status_http: response.status,
+        meta_response: metaData,
+      },
+    });
+
     await supabaseAdmin.from("mensagens").insert({
       empresa_id: empresaId,
       conversa_id: conversa.id,
@@ -828,6 +892,21 @@ async function executarDisparoAgendado(agendamento: any) {
 
     throw new Error(erroMeta);
   }
+
+  await atualizarReservaLimiteMeta({
+    reservaIds: reservaIdsLimiteMeta,
+    telefone: numeroDestino,
+    status: "processando",
+    messageId,
+    contatoId: contato?.id || null,
+    conversaId: conversa.id,
+    metadataJson: {
+      message_id: messageId,
+      status_meta_inicial:
+        metaData?.messages?.[0]?.message_status || "accepted",
+      meta_response: metaData,
+    },
+  });
 
   await supabaseAdmin.from("mensagens").insert({
     empresa_id: empresaId,

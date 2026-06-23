@@ -6,6 +6,12 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { normalizarConfiguracaoFluxo } from "@/lib/automacoes/normalizar-configuracao-fluxo";
+import {
+  statusWhatsappMetaBloqueado,
+  WHATSAPP_META_BLOCK_DESCRIPTION,
+  WHATSAPP_META_BLOCK_HELP_URL,
+  WHATSAPP_META_MANAGER_URL,
+} from "@/lib/whatsapp/meta-block";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -23,6 +29,56 @@ function respostaAssinaturaBloqueada() {
     },
     { status: 403 }
   );
+}
+
+function respostaWhatsappMetaBloqueado(detalhe?: string | null) {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "WHATSAPP_META_BLOQUEADO",
+      motivo: "whatsapp_meta_bloqueado",
+      error:
+        "A conta WhatsApp Business esta banida ou bloqueada pela Meta. Nao e possivel ativar fluxos WhatsApp enquanto o bloqueio estiver ativo.",
+      detalhe: detalhe || WHATSAPP_META_BLOCK_DESCRIPTION,
+      meta_manager_url: WHATSAPP_META_MANAGER_URL,
+      help_whatsapp_url: WHATSAPP_META_BLOCK_HELP_URL,
+    },
+    { status: 423 }
+  );
+}
+
+async function buscarBloqueioWhatsappMeta(empresaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select("status, phone_number_status, onboarding_erro, config_json")
+    .eq("empresa_id", empresaId)
+    .eq("provider", "meta_official");
+
+  if (error) {
+    throw new Error(
+      `Erro ao verificar bloqueio do WhatsApp Meta: ${error.message}`
+    );
+  }
+
+  return (data || []).find((integracao: any) => {
+    const config =
+      integracao.config_json &&
+      typeof integracao.config_json === "object" &&
+      !Array.isArray(integracao.config_json)
+        ? integracao.config_json
+        : {};
+    const diagnostico = config.whatsapp_meta_diagnostic;
+    const motivoDiagnostico =
+      diagnostico && typeof diagnostico === "object"
+        ? String(diagnostico.motivo || "")
+        : "";
+
+    return (
+      statusWhatsappMetaBloqueado(integracao.status) ||
+      statusWhatsappMetaBloqueado(integracao.phone_number_status) ||
+      motivoDiagnostico === "business_account_locked"
+    );
+  });
 }
 
 function textoNormalizado(valor: unknown) {
@@ -238,6 +294,14 @@ export async function POST(req: NextRequest) {
       return respostaAssinaturaBloqueada();
     }
 
+    if (canal.toLowerCase() === "whatsapp" && status === "ativo") {
+      const bloqueioMeta = await buscarBloqueioWhatsappMeta(usuario.empresa_id);
+
+      if (bloqueioMeta) {
+        return respostaWhatsappMetaBloqueado(bloqueioMeta.onboarding_erro);
+      }
+    }
+
     if (fluxoPadrao) {
       const { data: fluxoPadraoExistente } = await supabaseAdmin
         .from("automacao_fluxos")
@@ -446,6 +510,20 @@ export async function PATCH(req: NextRequest) {
       .eq("id", id)
       .eq("empresa_id", usuario.empresa_id)
       .maybeSingle();
+
+    if (atualizacao.status === "ativo") {
+      const canalFinal = String(
+        atualizacao.canal || fluxoAntes?.canal || "whatsapp"
+      ).trim();
+
+      if (canalFinal.toLowerCase() === "whatsapp") {
+        const bloqueioMeta = await buscarBloqueioWhatsappMeta(usuario.empresa_id);
+
+        if (bloqueioMeta) {
+          return respostaWhatsappMetaBloqueado(bloqueioMeta.onboarding_erro);
+        }
+      }
+    }
 
     const { data, error } = await supabaseAdmin
       .from("automacao_fluxos")

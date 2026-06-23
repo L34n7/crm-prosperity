@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { createClient } from "@/lib/supabase/server";
+import {
+  diagnosticarErroMetaWhatsapp,
+  type MetaErrorBody,
+  type WhatsAppMetaErrorDiagnostic,
+} from "@/lib/whatsapp/meta-error-diagnostics";
+import { aplicarBloqueioOperacionalWhatsappMeta } from "@/lib/whatsapp/meta-block";
+import {
+  obterResumoLimiteMeta,
+  resolverLimitePorTier,
+} from "@/lib/whatsapp/meta-limites";
 
 const GRAPH_VERSION = "v23.0";
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
@@ -20,6 +30,14 @@ type IntegracaoWhatsapp = {
   meta_business_id: string | null;
   verified_name: string | null;
   phone_number_display_name: string | null;
+  phone_number_status: string | null;
+  quality_rating: string | null;
+  meta_messaging_limit_tier: string | null;
+  meta_messaging_limit: number | null;
+  meta_account_mode: string | null;
+  meta_saude_ultima_verificacao_em: string | null;
+  onboarding_status: string | null;
+  onboarding_erro: string | null;
   config_json: ConfigJson;
   token_ref: string | null;
 
@@ -74,7 +92,7 @@ async function buscarIntegracao(
   let query = supabase
     .from("integracoes_whatsapp")
     .select(
-      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, config_json, token_ref"
+      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, phone_number_status, quality_rating, meta_messaging_limit_tier, meta_messaging_limit, meta_account_mode, meta_saude_ultima_verificacao_em, onboarding_status, onboarding_erro, config_json, token_ref"
     )
     .eq("empresa_id", empresaId)
     .eq("provider", "meta_official")
@@ -93,24 +111,15 @@ async function buscarIntegracao(
   return (data || []) as IntegracaoWhatsapp[];
 }
 
-type MetaErrorBody = {
-  error?: {
-    message?: string;
-    code?: number;
-    error_subcode?: number;
-    type?: string;
-    fbtrace_id?: string;
-    error_data?: {
-      details?: string;
-    };
-  };
-};
-
 type PhoneInfoMeta = {
   verified_name?: string;
   display_phone_number?: string;
+  status?: string;
   name_status?: string;
   new_name_status?: string;
+  quality_rating?: string;
+  messaging_limit_tier?: string;
+  account_mode?: string;
 };
 
 class MetaApiError extends Error {
@@ -157,6 +166,268 @@ function extrairMensagemMeta(body: MetaErrorBody, fallback: string) {
   }
 
   return message || details || fallback;
+}
+
+function objetoConfig(configJson: ConfigJson) {
+  return configJson && typeof configJson === "object" && !Array.isArray(configJson)
+    ? configJson
+    : {};
+}
+
+function montarIntegracaoResposta(
+  integracao: IntegracaoWhatsapp,
+  overrides: Partial<IntegracaoWhatsapp> & {
+    display_phone_number?: string | null;
+    name_status?: string | null;
+    new_name_status?: string | null;
+  } = {}
+) {
+  return {
+    id: integracao.id,
+    nome_conexao: integracao.nome_conexao,
+    numero: overrides.numero ?? integracao.numero,
+    status: overrides.status ?? integracao.status,
+    phone_number_id: integracao.phone_number_id,
+    verified_name: overrides.verified_name ?? integracao.verified_name,
+    phone_number_display_name:
+      overrides.phone_number_display_name ??
+      integracao.phone_number_display_name,
+    display_phone_number:
+      overrides.display_phone_number ?? integracao.numero,
+    name_status:
+      overrides.name_status ??
+      overrides.phone_number_status ??
+      integracao.phone_number_status ??
+      null,
+    new_name_status: overrides.new_name_status ?? null,
+    phone_number_status:
+      overrides.phone_number_status ?? integracao.phone_number_status ?? null,
+    quality_rating: overrides.quality_rating ?? integracao.quality_rating ?? null,
+    meta_messaging_limit_tier:
+      overrides.meta_messaging_limit_tier ??
+      integracao.meta_messaging_limit_tier ??
+      null,
+    meta_messaging_limit:
+      overrides.meta_messaging_limit ?? integracao.meta_messaging_limit ?? null,
+    meta_account_mode:
+      overrides.meta_account_mode ?? integracao.meta_account_mode ?? null,
+    meta_saude_ultima_verificacao_em:
+      overrides.meta_saude_ultima_verificacao_em ??
+      integracao.meta_saude_ultima_verificacao_em ??
+      null,
+    onboarding_erro:
+      overrides.onboarding_erro ?? integracao.onboarding_erro ?? null,
+  };
+}
+
+async function marcarIntegracaoComDiagnosticoMeta(params: {
+  integracao: IntegracaoWhatsapp;
+  empresaId: string;
+  diagnostico: WhatsAppMetaErrorDiagnostic;
+  metaResponse: unknown;
+}) {
+  const { integracao, empresaId, diagnostico, metaResponse } = params;
+  const supabase = await createClient();
+  const agora = new Date().toISOString();
+  const configAtual = objetoConfig(integracao.config_json);
+
+  const payload: Record<string, unknown> = {
+    onboarding_status: "erro",
+    onboarding_erro: diagnostico.descricao,
+    ultimo_sync_at: agora,
+    updated_at: agora,
+    config_json: {
+      ...configAtual,
+      whatsapp_meta_diagnostic: diagnostico,
+      whatsapp_last_meta_error: metaResponse,
+      whatsapp_last_meta_error_at: agora,
+    },
+  };
+
+  if (diagnostico.statusIntegracao) {
+    payload.status = diagnostico.statusIntegracao;
+  }
+
+  if (diagnostico.statusNumeroMeta) {
+    payload.phone_number_status = diagnostico.statusNumeroMeta;
+  }
+
+  const { error } = await supabase
+    .from("integracoes_whatsapp")
+    .update(payload)
+    .eq("id", integracao.id)
+    .eq("empresa_id", empresaId);
+
+  if (error) {
+    console.warn("[WHATSAPP PERFIL DIAGNOSTICO UPDATE ERROR]", error);
+  }
+
+  if (diagnostico.motivo === "business_account_locked") {
+    await aplicarBloqueioOperacionalWhatsappMeta({
+      empresaId,
+      integracaoId: integracao.id,
+      motivo: diagnostico.descricao,
+    });
+  }
+}
+
+async function marcarIntegracaoRecuperadaSeNecessario(params: {
+  integracao: IntegracaoWhatsapp;
+  empresaId: string;
+  phoneJson: PhoneInfoMeta | null;
+}) {
+  const { integracao, empresaId, phoneJson } = params;
+  const configAtual = objetoConfig(integracao.config_json);
+  const diagnosticoAnterior = configAtual.whatsapp_meta_diagnostic;
+
+  const eraBloqueioMeta =
+    diagnosticoAnterior &&
+    typeof diagnosticoAnterior === "object" &&
+    "motivo" in diagnosticoAnterior &&
+    diagnosticoAnterior.motivo === "business_account_locked";
+
+  const phoneNumberStatus =
+    phoneJson?.status || phoneJson?.name_status || null;
+  const statusNormalizado = String(phoneNumberStatus || "").toLowerCase();
+
+  if (
+    integracao.status !== "bloqueado" ||
+    !eraBloqueioMeta ||
+    !phoneJson ||
+    ["banned", "banido", "blocked", "bloqueado", "restricted"].includes(
+      statusNormalizado
+    )
+  ) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const agora = new Date().toISOString();
+
+  const payload = {
+    status: "ativa",
+    onboarding_status: "concluido",
+    onboarding_erro: null,
+    phone_number_status: phoneNumberStatus,
+    ultimo_sync_at: agora,
+    updated_at: agora,
+    config_json: {
+      ...configAtual,
+      whatsapp_meta_diagnostic: null,
+      whatsapp_meta_recovered_at: agora,
+    },
+  };
+
+  const { error } = await supabase
+    .from("integracoes_whatsapp")
+    .update(payload)
+    .eq("id", integracao.id)
+    .eq("empresa_id", empresaId);
+
+  if (error) {
+    console.warn("[WHATSAPP PERFIL RECOVERY UPDATE ERROR]", error);
+    return null;
+  }
+
+  return {
+    status: "ativa",
+    onboarding_status: "concluido",
+    onboarding_erro: null,
+    phone_number_status: phoneNumberStatus,
+  };
+}
+
+async function salvarSaudeMetaIntegracao(params: {
+  integracao: IntegracaoWhatsapp;
+  empresaId: string;
+  phoneJson: PhoneInfoMeta | null;
+}) {
+  const { integracao, empresaId, phoneJson } = params;
+
+  if (!phoneJson) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const agora = new Date().toISOString();
+  const configAtual = objetoConfig(integracao.config_json);
+  const phoneNumberStatus =
+    phoneJson.status ||
+    phoneJson.name_status ||
+    integracao.phone_number_status ||
+    null;
+  const messagingLimitTier =
+    phoneJson.messaging_limit_tier ||
+    integracao.meta_messaging_limit_tier ||
+    null;
+  const messagingLimit =
+    resolverLimitePorTier(messagingLimitTier) ||
+    integracao.meta_messaging_limit ||
+    null;
+  const accountMode =
+    phoneJson.account_mode || integracao.meta_account_mode || null;
+
+  const overrides: Partial<IntegracaoWhatsapp> = {
+    phone_number_status: phoneNumberStatus,
+    quality_rating: phoneJson.quality_rating || integracao.quality_rating,
+    meta_messaging_limit_tier: messagingLimitTier,
+    meta_messaging_limit: messagingLimit,
+    meta_account_mode: accountMode,
+    meta_saude_ultima_verificacao_em: agora,
+  };
+
+  const payload = {
+    phone_number_status: phoneNumberStatus,
+    quality_rating: overrides.quality_rating,
+    meta_messaging_limit_tier: messagingLimitTier,
+    meta_messaging_limit: messagingLimit,
+    meta_account_mode: accountMode,
+    meta_saude_ultima_verificacao_em: agora,
+    ultimo_sync_at: agora,
+    updated_at: agora,
+    config_json: {
+      ...configAtual,
+      whatsapp_meta_health: {
+        phone_number_status: phoneNumberStatus,
+        quality_rating: overrides.quality_rating,
+        messaging_limit_tier: messagingLimitTier,
+        messaging_limit: messagingLimit,
+        account_mode: accountMode,
+        checked_at: agora,
+        raw: phoneJson,
+      },
+    },
+  };
+
+  const { error } = await supabase
+    .from("integracoes_whatsapp")
+    .update(payload)
+    .eq("id", integracao.id)
+    .eq("empresa_id", empresaId);
+
+  if (error) {
+    console.warn("[WHATSAPP PERFIL SAUDE UPDATE ERROR]", error);
+  }
+
+  const { error: historicoError } = await supabase
+    .from("whatsapp_meta_saude_historico")
+    .insert({
+      empresa_id: empresaId,
+      integracao_whatsapp_id: integracao.id,
+      phone_number_id: integracao.phone_number_id,
+      phone_number_status: phoneNumberStatus,
+      quality_rating: overrides.quality_rating,
+      messaging_limit_tier: messagingLimitTier,
+      messaging_limit: messagingLimit,
+      account_mode: accountMode,
+      raw_json: phoneJson,
+    });
+
+  if (historicoError) {
+    console.warn("[WHATSAPP PERFIL SAUDE HISTORICO ERROR]", historicoError);
+  }
+
+  return overrides;
 }
 
 function isFotoPerfilValida(file: File) {
@@ -263,8 +534,47 @@ export async function GET(req: NextRequest) {
     const metaJson = await metaRes.json();
 
     if (!metaRes.ok) {
+      const diagnostico = diagnosticarErroMetaWhatsapp(
+        metaJson,
+        "Erro ao buscar perfil no Meta."
+      );
+
+      if (diagnostico.bloqueiaOperacao) {
+        await marcarIntegracaoComDiagnosticoMeta({
+          integracao: integracaoSelecionada,
+          empresaId,
+          diagnostico,
+          metaResponse: metaJson,
+        });
+
+        const overridesBloqueio = {
+          status: diagnostico.statusIntegracao || integracaoSelecionada.status,
+          phone_number_status:
+            diagnostico.statusNumeroMeta ||
+            integracaoSelecionada.phone_number_status,
+          onboarding_erro: diagnostico.descricao,
+        };
+
+        return NextResponse.json({
+          ok: true,
+          blocked: true,
+          diagnostico,
+          meta: metaJson,
+          integracoes: integracoesComToken.map((item) =>
+            item.id === integracaoSelecionada.id
+              ? montarIntegracaoResposta(item, overridesBloqueio)
+              : montarIntegracaoResposta(item)
+          ),
+          integracao: montarIntegracaoResposta(
+            integracaoSelecionada,
+            overridesBloqueio
+          ),
+          perfil: null,
+        });
+      }
+
       return jsonErro(
-        metaJson?.error?.message || "Erro ao buscar perfil no Meta.",
+        extrairMensagemMeta(metaJson, "Erro ao buscar perfil no Meta."),
         metaRes.status,
         metaJson
       );
@@ -275,7 +585,7 @@ export async function GET(req: NextRequest) {
     let phoneJson: PhoneInfoMeta | null = null;
 
     const phoneRes = await fetch(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${integracaoSelecionada.phone_number_id}?fields=verified_name,display_phone_number,name_status,new_name_status`,
+      `https://graph.facebook.com/${GRAPH_VERSION}/${integracaoSelecionada.phone_number_id}?fields=verified_name,display_phone_number,status,name_status,new_name_status,quality_rating,messaging_limit_tier,account_mode`,
       {
         method: "GET",
         headers: {
@@ -292,40 +602,67 @@ export async function GET(req: NextRequest) {
       phoneJson = null;
     }
 
+    const saudeOverrides = await salvarSaudeMetaIntegracao({
+      integracao: integracaoSelecionada,
+      empresaId,
+      phoneJson,
+    });
+
+    const recuperacaoOverrides = await marcarIntegracaoRecuperadaSeNecessario({
+      integracao: integracaoSelecionada,
+      empresaId,
+      phoneJson,
+    });
+
+    const overridesResposta = {
+      ...(saudeOverrides || {}),
+      ...(recuperacaoOverrides || {}),
+      verified_name:
+        phoneJson?.verified_name ||
+        integracaoSelecionada.verified_name ||
+        null,
+      phone_number_display_name:
+        phoneJson?.verified_name ||
+        integracaoSelecionada.phone_number_display_name ||
+        null,
+      display_phone_number:
+        phoneJson?.display_phone_number || integracaoSelecionada.numero,
+      name_status: phoneJson?.name_status || null,
+      new_name_status: phoneJson?.new_name_status || null,
+      phone_number_status:
+        phoneJson?.status ||
+        phoneJson?.name_status ||
+        recuperacaoOverrides?.phone_number_status ||
+        saudeOverrides?.phone_number_status ||
+        integracaoSelecionada.phone_number_status,
+      quality_rating:
+        phoneJson?.quality_rating ||
+        saudeOverrides?.quality_rating ||
+        integracaoSelecionada.quality_rating,
+    };
+
+    const integracaoResumoLimite = {
+      ...integracaoSelecionada,
+      ...overridesResposta,
+    };
+    const limiteMeta = await obterResumoLimiteMeta({
+      empresaId,
+      integracao: integracaoResumoLimite,
+    });
+
     return NextResponse.json({
       ok: true,
-        integracoes: integracoesComToken.map((item) => ({
-          id: item.id,
-          nome_conexao: item.nome_conexao,
-          numero: item.numero,
-          status: item.status,
-          phone_number_id: item.phone_number_id,
-          verified_name: item.verified_name,
-          phone_number_display_name: item.phone_number_display_name,
-        })),
-      integracao: {
-        id: integracaoSelecionada.id,
-        nome_conexao: integracaoSelecionada.nome_conexao,
-        numero: integracaoSelecionada.numero,
-        status: integracaoSelecionada.status,
-        phone_number_id: integracaoSelecionada.phone_number_id,
-
-        verified_name:
-          phoneJson?.verified_name ||
-          integracaoSelecionada.verified_name ||
-          null,
-
-        phone_number_display_name:
-          phoneJson?.verified_name ||
-          integracaoSelecionada.phone_number_display_name ||
-          null,
-
-        display_phone_number:
-          phoneJson?.display_phone_number || integracaoSelecionada.numero,
-
-        name_status: phoneJson?.name_status || null,
-        new_name_status: phoneJson?.new_name_status || null,
-      },
+      diagnostico: null,
+      integracoes: integracoesComToken.map((item) =>
+        item.id === integracaoSelecionada.id
+          ? montarIntegracaoResposta(item, overridesResposta)
+          : montarIntegracaoResposta(item)
+      ),
+      integracao: montarIntegracaoResposta(
+        integracaoSelecionada,
+        overridesResposta
+      ),
+      limite_meta: limiteMeta,
       perfil,
     });
   } catch (error: unknown) {
@@ -566,6 +903,30 @@ export async function PATCH(req: NextRequest) {
             meta: metaJson,
           },
           { status: 202 }
+        );
+      }
+
+      const diagnostico = diagnosticarErroMetaWhatsapp(
+        metaJson,
+        "Erro ao atualizar perfil no Meta."
+      );
+
+      if (diagnostico.bloqueiaOperacao) {
+        await marcarIntegracaoComDiagnosticoMeta({
+          integracao,
+          empresaId,
+          diagnostico,
+          metaResponse: metaJson,
+        });
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error: diagnostico.descricao,
+            diagnostico,
+            meta: metaJson,
+          },
+          { status: metaRes.status }
         );
       }
 

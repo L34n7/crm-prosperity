@@ -36,7 +36,7 @@
 .sidebarHeader {
   padding: 16px;
   border-bottom: 1px solid var(--crm-border-soft);
-  background: #fafeff;
+  background: var(--header);
 }
 
 .sidebarTopRow {
@@ -239,11 +239,11 @@
 }
 
 .quickChip:hover {
-  background: var(--crm-surface-soft);
+  background: var(--headerDropdownHover);
 }
 
 .quickChipActive {
-  background: #ecf9f4;
+  background: var(--headerNotificItem);
   color: var(--crm-text-strong);
   border-color: var(--crm-border-strong);
 }
@@ -372,11 +372,11 @@
 }
 
 .conversationItem:hover {
-  background:  linear-gradient(135deg, #ffffff 10%, #ecf9f4 100%);
+  background:  var(--crm-bottom-Hover);
 }
 
 .conversationItemActive {
-  background: linear-gradient(135deg, #fcfffe 10%, #cff8e1 100%);
+  background: var(--crm-bottom-Active);
 }
 
 .conversationAvatar,
@@ -743,7 +743,7 @@
 }
 
 .moreButton:hover {
-  background: var(--crm-surface-muted);
+  background: #e2f5e8;
 }
 
 .headerDropdownMenu {
@@ -775,16 +775,16 @@
   cursor: pointer;
 }
 
+.headerDropdownItem:hover {
+  background: #f5fbf7;
+}
+
 .AtivarBot {
   color: #0b8a4a;
 }
 
 .AtivarBot:hover {
   background: #e7fff3;
-}
-
-.headerDropdownItem:hover {
-  background: var(--crm-surface-soft);
 }
 
 .dropdownItemContent {
@@ -1018,10 +1018,8 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 18px;
-  background: #efeae2;
-  background-image:
-    radial-gradient(circle at 25px 25px, rgba(255, 255, 255, 0.3) 2px, transparent 0),
-    radial-gradient(circle at 75px 75px, rgba(255, 255, 255, 0.15) 2px, transparent 0);
+  background: var(--timelineArea);
+  background-image: var(--background-image);
   background-size: 100px 100px;
   scroll-behavior: smooth;
 }
@@ -1085,13 +1083,13 @@
 }
 
 .messageBubbleIncoming {
-  background: var(--crm-surface);
+  background: var(--messageBubbleIncoming);
   color: var(--crm-text-strong);
   border-top-left-radius: 4px;
 }
 
 .messageBubbleOutgoing {
-  background: #b0f3cb;
+  background: var(--messageBubbleOutgoing);
   color: var(--crm-text-strong);
   border-top-right-radius: 4px;
 }
@@ -1121,7 +1119,8 @@
   align-items: center;
   padding: 2px 7px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--automaticBadge);
+  color: var(--automaticBadgeTexto);
   font-size: 10px;
   font-weight: 700;
 }
@@ -1324,7 +1323,7 @@
 }
 
 .backButton:hover {
-  background: var(--crm-surface-muted);
+  background:  #e9f5ed;
 }
 
 .rightPanelTitle {
@@ -2008,7 +2007,7 @@
 }
 
 .favoriteMessageCard:hover {
-  background: var(--crm-surface-muted);
+  background:  #eef6f1;
 }
 
 .favoriteMessageHeader {
@@ -2171,7 +2170,7 @@
 
 .whatsContactNameEditButton:hover {
   opacity: 1;
-  background: var(--crm-surface-muted);
+  background: #eef6f1;
   color: var(--crm-text-strong);
 }
 
@@ -2244,7 +2243,7 @@
 }
 
 .whatsContactActionButton:hover {
-  background: var(--crm-surface-muted);
+  background: #eef6f1;
 }
 
 .whatsContactSection {
@@ -2370,7 +2369,7 @@
 }
 
 .whatsListActionButton:hover {
-  background: var(--crm-surface-muted);
+  background:  #eef6f1;
 }
 .listaCardWrap {
   display: flex;

@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
      * 3. Busca números da WABA.
      */
     const phonesResult = await fetchGraph(
-      `${waba.id}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status`,
+      `${waba.id}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status,status,account_mode,messaging_limit_tier`,
       accessToken
     );
 
@@ -290,7 +290,11 @@ export async function POST(request: NextRequest) {
           verified_name: phone.verified_name || null,
           quality_rating: phone.quality_rating || null,
           code_verification_status: phone.code_verification_status || null,
-          phone_number_status: phone.name_status || null,
+          phone_number_status: phone.status || phone.name_status || null,
+          meta_messaging_limit_tier: phone.messaging_limit_tier || null,
+          meta_account_mode: phone.account_mode || null,
+          meta_saude_ultima_verificacao_em: agora,
+          meta_saude_raw_json: phone,
           onboarding_etapa: "waba_criada",
           onboarding_status: "em_andamento",
           onboarding_erro: null,
@@ -300,6 +304,15 @@ export async function POST(request: NextRequest) {
             meta_wabas_response: wabasResult.data,
             meta_phone_numbers_response: phonesResult.data,
             meta_dados_checked_at: agora,
+            whatsapp_meta_health: {
+              phone_number_status: phone.status || phone.name_status || null,
+              quality_rating: phone.quality_rating || null,
+              messaging_limit_tier: phone.messaging_limit_tier || null,
+              messaging_limit: null,
+              account_mode: phone.account_mode || null,
+              checked_at: agora,
+              raw: phone,
+            },
           },
           ultimo_sync_at: agora,
           updated_at: agora,

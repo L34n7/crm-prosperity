@@ -454,6 +454,14 @@ function obterFeedbackErroDisparo(item: ResultadoDisparo) {
     "Falha ao enviar mensagem.";
 
   switch (codigo) {
+    case 131031:
+      return {
+        titulo: "Conta WhatsApp Business bloqueada pela Meta",
+        descricao:
+          "A Meta bloqueou ou desativou a conta WhatsApp Business vinculada a este numero. Enquanto o status estiver banido/bloqueado, o CRM nao consegue enviar mensagens por essa integracao. Acesse o Gerenciador do WhatsApp na Meta e solicite uma analise se acreditar que foi um engano.",
+        detalhe: mensagemTecnica,
+      };
+
     case 131042:
       return {
         titulo: "Falha por pendência financeira na Meta",
@@ -1224,7 +1232,10 @@ export default function DisparosWhatsAppPage() {
       const json = await res.json();
 
       if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao realizar disparo.");
+        const detalhe = json.detalhe ? `\n\n${json.detalhe}` : "";
+        throw new Error(
+          `${json.error || "Erro ao realizar disparo."}${detalhe}`
+        );
       }
 
       const listaResultado = Array.isArray(json.resultados) ? json.resultados : [];

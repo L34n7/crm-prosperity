@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { createClient } from "@/lib/supabase/server";
+import {
+  diagnosticarErroMetaWhatsapp,
+  type WhatsAppMetaErrorDiagnostic,
+} from "@/lib/whatsapp/meta-error-diagnostics";
+import { aplicarBloqueioOperacionalWhatsappMeta } from "@/lib/whatsapp/meta-block";
 
 const GRAPH_VERSION = "v23.0";
 
@@ -11,6 +16,7 @@ type IntegracaoWhatsapp = {
   numero: string;
   status: string;
   phone_number_id: string | null;
+  phone_number_status?: string | null;
   token_ref: string | null;
   config_json: any;
 };
@@ -35,6 +41,62 @@ function extrairToken(integracao: IntegracaoWhatsapp) {
 
 function jsonErro(error: string, status = 400, extra?: any) {
   return NextResponse.json({ ok: false, error, extra }, { status });
+}
+
+function objetoConfig(configJson: any) {
+  return configJson && typeof configJson === "object" && !Array.isArray(configJson)
+    ? configJson
+    : {};
+}
+
+async function marcarIntegracaoComDiagnosticoMeta(params: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  integracao: IntegracaoWhatsapp;
+  empresaId: string;
+  diagnostico: WhatsAppMetaErrorDiagnostic;
+  metaResponse: unknown;
+}) {
+  const { supabase, integracao, empresaId, diagnostico, metaResponse } = params;
+  const agora = new Date().toISOString();
+
+  const payload: Record<string, unknown> = {
+    onboarding_status: "erro",
+    onboarding_erro: diagnostico.descricao,
+    ultimo_sync_at: agora,
+    updated_at: agora,
+    config_json: {
+      ...objetoConfig(integracao.config_json),
+      whatsapp_meta_diagnostic: diagnostico,
+      whatsapp_last_meta_error: metaResponse,
+      whatsapp_last_meta_error_at: agora,
+    },
+  };
+
+  if (diagnostico.statusIntegracao) {
+    payload.status = diagnostico.statusIntegracao;
+  }
+
+  if (diagnostico.statusNumeroMeta) {
+    payload.phone_number_status = diagnostico.statusNumeroMeta;
+  }
+
+  const { error } = await supabase
+    .from("integracoes_whatsapp")
+    .update(payload)
+    .eq("id", integracao.id)
+    .eq("empresa_id", empresaId);
+
+  if (error) {
+    console.warn("[WHATSAPP ALTERAR NOME DIAGNOSTICO UPDATE ERROR]", error);
+  }
+
+  if (diagnostico.motivo === "business_account_locked") {
+    await aplicarBloqueioOperacionalWhatsappMeta({
+      empresaId,
+      integracaoId: integracao.id,
+      motivo: diagnostico.descricao,
+    });
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -69,7 +131,7 @@ export async function POST(req: NextRequest) {
     const { data: integracao, error } = await supabase
       .from("integracoes_whatsapp")
       .select(
-        "id, empresa_id, nome_conexao, numero, status, phone_number_id, token_ref, config_json"
+        "id, empresa_id, nome_conexao, numero, status, phone_number_id, phone_number_status, token_ref, config_json"
       )
       .eq("id", integracaoId)
       .eq("empresa_id", empresaId)
@@ -113,6 +175,31 @@ export async function POST(req: NextRequest) {
     const metaJson = await metaRes.json();
 
     if (!metaRes.ok) {
+      const diagnostico = diagnosticarErroMetaWhatsapp(
+        metaJson,
+        "Erro ao solicitar alteracao do nome de exibicao."
+      );
+
+      if (diagnostico.bloqueiaOperacao) {
+        await marcarIntegracaoComDiagnosticoMeta({
+          supabase,
+          integracao,
+          empresaId,
+          diagnostico,
+          metaResponse: metaJson,
+        });
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error: diagnostico.descricao,
+            diagnostico,
+            meta: metaJson,
+          },
+          { status: metaRes.status }
+        );
+      }
+
       return jsonErro(
         metaJson?.error?.message ||
           "Erro ao solicitar alteração do nome de exibição.",

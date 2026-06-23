@@ -49,10 +49,10 @@
   height: 34px;
   padding: 0 10px;
   margin-right: 0;
-  border: 1px solid #bbe7ea;
+  border: 1px solid var(--tokensBadgeBorder);
   border-radius: 10px;
-  background: linear-gradient(135deg, #e1f4f4 0%, #def2f2 100%);
-  color: #09dbdb;
+  background: var(--tokensBadge);
+  color: var(--tokensBadgeColor);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -60,13 +60,13 @@
   line-height: 1;
   white-space: nowrap;
   text-decoration: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 var(--tokensBadgebox-shadow);
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .tokensBadge:hover {
-  background: linear-gradient(135deg, #ddf2f3 0%, #cbe4f1 100%);
-  border-color: #96d6e7;
+  background: var(--tokensBadgeHover);
+  border-color: var(--tokensBadgeBorderhover);
 }
 
 .tokensBadgeStatic:hover {
@@ -86,8 +86,9 @@
 
 .tokensBadgeWarning {
   background: var(--crm-warning-bg);
-  border-color: var(--crm-warning-border);
+  border: 1px solid var(--tokensBadgeBorderWarning);
   color: var(--crm-warning-text);
+  box-shadow: inset 0 1px 0 var(--tokensBadgebox-shadowWarning);
 }
 
 .tokensBadgeWarning:hover {
@@ -110,8 +111,9 @@
 
 .tokensBadgeDanger {
   background: var(--crm-danger-bg);
-  border-color: var(--crm-danger-border);
+  border: 1px solid var(--tokensBadgeBorderDamager);
   color: var(--crm-danger-text);
+  box-shadow: inset 0 1px 0 var(--tokensBadgebox-shadowDamager);
 }
 
 .tokensBadgeDanger:hover {
@@ -276,7 +278,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #fafeff;
+  background: var(--header);
   border: 1px solid var(--crm-border);
   border-radius: 8px;
   box-shadow: var(--crm-shadow-lg);
@@ -338,7 +340,7 @@
 .planCurrentSummary {
   padding: 14px 18px;
   border-bottom: 1px solid var(--crm-border);
-  background: #ffffff;
+  background: #e80f0f;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -671,7 +673,7 @@
 }
 
 .profileButton:hover {
-  background: #d1dcd9;
+  background: var(--headerBackgroundHover);
 }
 
 .avatar {
@@ -679,7 +681,7 @@
   height: 36px;
   border-radius: 999px;
   overflow: hidden;
-  background: linear-gradient(80deg, #7dd2b0 0%, #a2ffda 100%);
+  background: var(--headerAvatar);
   border: 1px solid var(--crm-primary-border);
   display: flex;
   align-items: center;
@@ -697,7 +699,7 @@
 .avatarFallback {
   font-size: 14px;
   font-weight: 700;
-  color: var(--crm-text);
+  color: var(--crm-overlay);
 }
 
 .profileName {
@@ -739,7 +741,7 @@
 }
 
 .dropdownItem:hover {
-  background: #e6efec;
+  background: var(--headerDropdownHover);
 }
 
 .themeMenuButton {
@@ -782,7 +784,7 @@
 
 .dropdownDivider {
   height: 1px;
-  background: #e6efec;
+  background: var(--crm-primary-border);
   margin: 8px 0;
 }
 
@@ -812,7 +814,7 @@
 }
 
 .notificationButton:hover {
-  background: #d1dcd9;
+  background:  var(  --headerBackgroundHover);
 }
 
 .notificationBadge {
@@ -904,11 +906,11 @@
 }
 
 .notificationItem:hover {
-  background: #e9f1ee;
+  background: var(--headerNotificItemHover);
 }
 
 .notificationItemUnread {
-  background: #d1f7ec;
+  background: var(--headerNotificItem);
 }
 
 .notificationItemTop {

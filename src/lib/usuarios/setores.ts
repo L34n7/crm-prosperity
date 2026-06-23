@@ -1,6 +1,12 @@
+import {
+  getOrSetTtlCache,
+  getTtlCacheKey,
+  invalidateTtlCache,
+} from "@/lib/cache/ttl-cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
+const USUARIO_SETORES_CACHE_TTL_MS = 30_000;
 
 export type VinculoUsuarioSetor = {
   id: string;
@@ -10,19 +16,29 @@ export type VinculoUsuarioSetor = {
   created_at: string;
 };
 
+function invalidarCacheSetoresUsuario(usuarioId: string) {
+  invalidateTtlCache(getTtlCacheKey("usuario-setores", [usuarioId]));
+}
+
 export async function listarSetoresDoUsuario(usuarioId: string) {
-  const { data, error } = await supabaseAdmin
-    .from("usuarios_setores")
-    .select("id, usuario_id, setor_id, is_principal, created_at")
-    .eq("usuario_id", usuarioId)
-    .order("is_principal", { ascending: false })
-    .order("created_at", { ascending: true });
+  return await getOrSetTtlCache(
+    getTtlCacheKey("usuario-setores", [usuarioId]),
+    USUARIO_SETORES_CACHE_TTL_MS,
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from("usuarios_setores")
+        .select("id, usuario_id, setor_id, is_principal, created_at")
+        .eq("usuario_id", usuarioId)
+        .order("is_principal", { ascending: false })
+        .order("created_at", { ascending: true });
 
-  if (error) {
-    throw new Error(`Erro ao listar setores do usuário: ${error.message}`);
-  }
+      if (error) {
+        throw new Error(`Erro ao listar setores do usuario: ${error.message}`);
+      }
 
-  return (data ?? []) as VinculoUsuarioSetor[];
+      return (data ?? []) as VinculoUsuarioSetor[];
+    }
+  );
 }
 
 export async function listarIdsSetoresDoUsuario(usuarioId: string) {
@@ -36,34 +52,13 @@ export async function usuarioPertenceAoSetor(
 ) {
   if (!setorId) return false;
 
-  const { data, error } = await supabaseAdmin
-    .from("usuarios_setores")
-    .select("id")
-    .eq("usuario_id", usuarioId)
-    .eq("setor_id", setorId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Erro ao validar setor do usuário: ${error.message}`);
-  }
-
-  return !!data;
+  const vinculos = await listarSetoresDoUsuario(usuarioId);
+  return vinculos.some((item) => item.setor_id === setorId);
 }
 
 export async function buscarSetorPrincipalDoUsuario(usuarioId: string) {
-  const { data, error } = await supabaseAdmin
-    .from("usuarios_setores")
-    .select("id, usuario_id, setor_id, is_principal, created_at")
-    .eq("usuario_id", usuarioId)
-    .eq("is_principal", true)
-    .order("created_at", { ascending: true })
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Erro ao buscar setor principal do usuário: ${error.message}`);
-  }
-
-  return (data as VinculoUsuarioSetor | null) ?? null;
+  const vinculos = await listarSetoresDoUsuario(usuarioId);
+  return vinculos.find((item) => item.is_principal) ?? null;
 }
 
 export async function definirSetoresDoUsuario(
@@ -87,9 +82,10 @@ export async function definirSetoresDoUsuario(
       .eq("usuario_id", usuarioId);
 
     if (deleteError) {
-      throw new Error(`Erro ao limpar setores do usuário: ${deleteError.message}`);
+      throw new Error(`Erro ao limpar setores do usuario: ${deleteError.message}`);
     }
 
+    invalidarCacheSetoresUsuario(usuarioId);
     return [];
   }
 
@@ -104,7 +100,7 @@ export async function definirSetoresDoUsuario(
     .eq("usuario_id", usuarioId);
 
   if (deleteError) {
-    throw new Error(`Erro ao resetar setores do usuário: ${deleteError.message}`);
+    throw new Error(`Erro ao resetar setores do usuario: ${deleteError.message}`);
   }
 
   const payload = setorIdsUnicos.map((setorId) => ({
@@ -121,8 +117,9 @@ export async function definirSetoresDoUsuario(
     .order("created_at", { ascending: true });
 
   if (error) {
-    throw new Error(`Erro ao definir setores do usuário: ${error.message}`);
+    throw new Error(`Erro ao definir setores do usuario: ${error.message}`);
   }
 
+  invalidarCacheSetoresUsuario(usuarioId);
   return (data ?? []) as VinculoUsuarioSetor[];
 }

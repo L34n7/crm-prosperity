@@ -16,6 +16,23 @@ type Integracao = {
   display_phone_number?: string | null;
   name_status?: string | null;
   new_name_status?: string | null;
+  phone_number_status?: string | null;
+  quality_rating?: string | null;
+  meta_messaging_limit_tier?: string | null;
+  meta_messaging_limit?: number | null;
+  meta_account_mode?: string | null;
+  meta_saude_ultima_verificacao_em?: string | null;
+  onboarding_erro?: string | null;
+};
+
+type LimiteMeta = {
+  limite: number;
+  usados: number;
+  restantes: number;
+  percentual: number;
+  tier: string | null;
+  origem: string;
+  alerta: "normal" | "amarelo" | "vermelho";
 };
 
 type PerfilWhatsapp = {
@@ -26,6 +43,19 @@ type PerfilWhatsapp = {
   profile_picture_url?: string;
   websites?: string[];
   vertical?: string;
+};
+
+type DiagnosticoWhatsApp = {
+  motivo: string;
+  codigoMeta: number | null;
+  titulo: string;
+  descricao: string;
+  detalheTecnico: string | null;
+  acaoCliente: string | null;
+  acaoInterna: string | null;
+  metaManagerUrl: string | null;
+  helpWhatsappUrl: string | null;
+  bloqueiaOperacao: boolean;
 };
 
 const categorias = [
@@ -46,6 +76,36 @@ const categorias = [
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function normalizarStatus(valor?: string | null) {
+  return String(valor || "").trim().toLowerCase();
+}
+
+function formatarStatusConexao(status?: string | null) {
+  switch (normalizarStatus(status)) {
+    case "ativa":
+      return "Ativa";
+    case "bloqueado":
+      return "Bloqueada";
+    case "banido":
+    case "banned":
+      return "Banida";
+    case "inativo":
+      return "Inativa";
+    default:
+      return status || "Sem status";
+  }
+}
+
+function formatarNumero(valor?: number | null) {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) return "0";
+  return new Intl.NumberFormat("pt-BR").format(valor);
+}
+
+function formatarPercentual(valor?: number | null) {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) return "0%";
+  return `${Math.round(valor * 100)}%`;
 }
 
 export default function WhatsappPerfilPage() {
@@ -75,6 +135,9 @@ export default function WhatsappPerfilPage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
+  const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
+  const [diagnosticoWhatsapp, setDiagnosticoWhatsapp] =
+    useState<DiagnosticoWhatsApp | null>(null);
 
   const [modalNomeAberto, setModalNomeAberto] = useState(false);
   const [novoNomeExibicao, setNovoNomeExibicao] = useState("");
@@ -88,6 +151,15 @@ export default function WhatsappPerfilPage() {
     integracaoSelecionada?.phone_number_display_name ||
     integracaoSelecionada?.verified_name ||
     "Empresa";
+
+  const integracaoBloqueada =
+    Boolean(diagnosticoWhatsapp?.bloqueiaOperacao) ||
+    ["bloqueado", "banido", "blocked", "banned"].includes(
+      normalizarStatus(integracaoSelecionada?.status)
+    ) ||
+    ["banned", "blocked"].includes(
+      normalizarStatus(integracaoSelecionada?.phone_number_status)
+    );
 
   async function carregarPerfil(
     id?: string,
@@ -113,8 +185,11 @@ export default function WhatsappPerfilPage() {
       const json = await res.json();
 
       if (!res.ok || !json.ok) {
+        setDiagnosticoWhatsapp(json.diagnostico || null);
         throw new Error(json.error || "Erro ao carregar perfil.");
       }
+
+      setDiagnosticoWhatsapp(json.diagnostico || null);
 
       const listaIntegracoes = json.integracoes || [];
       const integracaoAtualizada = json.integracao || null;
@@ -131,10 +206,19 @@ export default function WhatsappPerfilPage() {
           display_phone_number: integracaoAtualizada.display_phone_number,
           name_status: integracaoAtualizada.name_status,
           new_name_status: integracaoAtualizada.new_name_status,
+          phone_number_status: integracaoAtualizada.phone_number_status,
+          quality_rating: integracaoAtualizada.quality_rating,
+          meta_messaging_limit_tier: integracaoAtualizada.meta_messaging_limit_tier,
+          meta_messaging_limit: integracaoAtualizada.meta_messaging_limit,
+          meta_account_mode: integracaoAtualizada.meta_account_mode,
+          meta_saude_ultima_verificacao_em:
+            integracaoAtualizada.meta_saude_ultima_verificacao_em,
+          onboarding_erro: integracaoAtualizada.onboarding_erro,
         };
       });
 
       setIntegracoes(listaComNomeAtualizado);
+      setLimiteMeta(json.limite_meta || null);
 
       const novaIntegracaoId = integracaoAtualizada?.id || "";
 
@@ -188,6 +272,7 @@ export default function WhatsappPerfilPage() {
       const json = await res.json();
 
       if (!res.ok || !json.ok) {
+        setDiagnosticoWhatsapp(json.diagnostico || null);
         throw new Error(json.error || "Erro ao salvar perfil.");
       }
 
@@ -220,6 +305,7 @@ export default function WhatsappPerfilPage() {
       const json = await res.json();
 
       if (!res.ok || !json.ok) {
+        setDiagnosticoWhatsapp(json.diagnostico || null);
         throw new Error(json.error || "Erro ao solicitar alteração do nome.");
       }
 
@@ -417,7 +503,7 @@ export default function WhatsappPerfilPage() {
                       <span>{item.numero}</span>
                     </div>
 
-                    <small>{item.status}</small>
+                    <small>{formatarStatusConexao(item.status)}</small>
                   </button>
                 ))
               )}
@@ -529,6 +615,62 @@ export default function WhatsappPerfilPage() {
                 {erro && <div className={styles.errorAlert}>{erro}</div>}
               </div>
             )}
+
+            {diagnosticoWhatsapp && (
+              <div className={styles.diagnosticAlert}>
+                <div className={styles.diagnosticHeader}>
+                  <span>Meta</span>
+                  <strong>{diagnosticoWhatsapp.titulo}</strong>
+                </div>
+
+                <p>{diagnosticoWhatsapp.descricao}</p>
+
+                {diagnosticoWhatsapp.acaoCliente && (
+                  <p>
+                    <strong>O que fazer agora:</strong>{" "}
+                    {diagnosticoWhatsapp.acaoCliente}
+                  </p>
+                )}
+
+                {diagnosticoWhatsapp.acaoInterna && (
+                  <p>
+                    <strong>No CRM:</strong> {diagnosticoWhatsapp.acaoInterna}
+                  </p>
+                )}
+
+                <div className={styles.diagnosticActions}>
+                  {diagnosticoWhatsapp.metaManagerUrl && (
+                    <a
+                      href={diagnosticoWhatsapp.metaManagerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Acessar Gerenciador do WhatsApp
+                    </a>
+                  )}
+
+                  {diagnosticoWhatsapp.helpWhatsappUrl && (
+                    <a
+                      href={diagnosticoWhatsapp.helpWhatsappUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Pedir ajuda pelo WhatsApp
+                    </a>
+                  )}
+                </div>
+
+                <div className={styles.diagnosticMeta}>
+                  <span>
+                    Codigo Meta: {diagnosticoWhatsapp.codigoMeta || "n/a"}
+                  </span>
+                  {diagnosticoWhatsapp.detalheTecnico && (
+                    <span>{diagnosticoWhatsapp.detalheTecnico}</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             <FeedbackToast
               success={sucesso}
               onSuccessDismiss={() => setSucesso("")}
@@ -564,6 +706,7 @@ export default function WhatsappPerfilPage() {
                 <input
                 type="file"
                 accept="image/png,image/jpeg"
+                disabled={integracaoBloqueada}
                 onChange={(e) => handleSelecionarFoto(e.target.files?.[0] || null)}
                 />
 
@@ -579,6 +722,52 @@ export default function WhatsappPerfilPage() {
                 </div>
             </label>
             </div>
+
+
+            {limiteMeta && (
+              <div
+                className={`${styles.limitCard} ${
+                  limiteMeta.alerta === "vermelho"
+                    ? styles.limitCardDanger
+                    : limiteMeta.alerta === "amarelo"
+                    ? styles.limitCardWarning
+                    : ""
+                }`}
+              >
+                <div className={styles.limitHeader}>
+                  <div>
+                    <span>Saude Meta</span>
+                    <strong>Limite de conversas iniciadas em 24h</strong>
+                  </div>
+                  <strong>{formatarPercentual(limiteMeta.percentual)}</strong>
+                </div>
+
+                <div className={styles.limitGrid}>
+                  <div>
+                    <span>Limite atual</span>
+                    <strong>{formatarNumero(limiteMeta.limite)}</strong>
+                  </div>
+                  <div>
+                    <span>Usadas/reservadas</span>
+                    <strong>{formatarNumero(limiteMeta.usados)}</strong>
+                  </div>
+                  <div>
+                    <span>Restantes</span>
+                    <strong>{formatarNumero(limiteMeta.restantes)}</strong>
+                  </div>
+                </div>
+
+                <div className={styles.limitMeta}>
+                  <span>Tier: {limiteMeta.tier || "Nao informado"}</span>
+                  <span>
+                    Qualidade: {integracaoSelecionada?.quality_rating || "Nao informada"}
+                  </span>
+                  <span>
+                    Modo: {integracaoSelecionada?.meta_account_mode || "Nao informado"}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className={styles.formGrid}>
             <label className={styles.fieldLabelFull}>
@@ -598,7 +787,7 @@ export default function WhatsappPerfilPage() {
                     setNovoNomeExibicao(nomePerfil === "Empresa" ? "" : nomePerfil);
                     setModalNomeAberto(true);
                   }}
-                  disabled={!integracaoId}
+                  disabled={!integracaoId || integracaoBloqueada}
                 >
                   Alterar nome
                 </button>
@@ -612,6 +801,7 @@ export default function WhatsappPerfilPage() {
                 value={about}
                 onChange={(e) => setAbout(e.target.value)}
                 maxLength={139}
+                disabled={integracaoBloqueada}
                 placeholder="Ex: Atendimento oficial da empresa"
               />
             </label>
@@ -622,6 +812,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={vertical}
                 onChange={(e) => setVertical(e.target.value)}
+                disabled={integracaoBloqueada}
                 >
                 {categorias.map((item) => (
                     <option key={item.value} value={item.value}>
@@ -638,6 +829,7 @@ export default function WhatsappPerfilPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 maxLength={256}
+                disabled={integracaoBloqueada}
                 placeholder="Descreva sua empresa."
                 />
             </label>
@@ -648,6 +840,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
+                disabled={integracaoBloqueada}
                 placeholder="Insira o edenreço comercial"
                 />
             </label>
@@ -658,6 +851,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={integracaoBloqueada}
                 placeholder="Insira o email comercial"
                 />
             </label>
@@ -668,6 +862,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={website1}
                 onChange={(e) => setWebsite1(e.target.value)}
+                disabled={integracaoBloqueada}
                 placeholder="https://seudominio.com"
                 />
             </label>
@@ -678,6 +873,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={website2}
                 onChange={(e) => setWebsite2(e.target.value)}
+                disabled={integracaoBloqueada}
                 placeholder="https://instagram.com/suaempresa"
                 />
             </label>
@@ -692,7 +888,7 @@ export default function WhatsappPerfilPage() {
             <button
                 type="submit"
                 className={styles.saveButton}
-                disabled={salvando || carregando || !integracaoId}
+                disabled={salvando || carregando || !integracaoId || integracaoBloqueada}
             >
                 {salvando ? "Salvando..." : "Salvar alterações"}
             </button>
@@ -843,7 +1039,11 @@ export default function WhatsappPerfilPage() {
               type="button"
               className={styles.primaryButton}
               onClick={solicitarAlteracaoNome}
-              disabled={salvandoNome || novoNomeExibicao.trim().length < 3}
+              disabled={
+                salvandoNome ||
+                integracaoBloqueada ||
+                novoNomeExibicao.trim().length < 3
+              }
             >
               {salvandoNome ? "Enviando..." : "Solicitar alteração"}
             </button>

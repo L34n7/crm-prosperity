@@ -3,6 +3,12 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
 import { isAmbienteConfigurado } from "@/lib/whatsapp/ambiente-configurado";
+import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
+import {
+  atualizarReservaLimiteMeta,
+  montarRespostaLimiteMetaExcedido,
+  reservarLimiteMeta,
+} from "@/lib/whatsapp/meta-limites";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -423,9 +429,14 @@ export async function POST(request: Request) {
         id,
         empresa_id,
         status,
+        phone_number_status,
+        onboarding_erro,
         phone_number_id,
         waba_id,
         token_ref,
+        meta_messaging_limit,
+        meta_messaging_limit_tier,
+        meta_account_mode,
         config_json,
         payment_method_added,
         phone_registered,
@@ -449,6 +460,29 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, error: "Você não pode usar esta integração" },
         { status: 403 }
+      );
+    }
+
+    const statusIntegracao = String(integracao.status || "").toLowerCase();
+    const statusNumeroMeta = String(
+      integracao.phone_number_status || ""
+    ).toLowerCase();
+
+    if (
+      ["bloqueado", "banido", "blocked", "banned"].includes(statusIntegracao) ||
+      ["banned", "blocked"].includes(statusNumeroMeta)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "A conta WhatsApp Business vinculada a esta integracao esta bloqueada ou banida pela Meta.",
+          detalhe:
+            integracao.onboarding_erro ||
+            "Acesse o Gerenciador do WhatsApp na Meta e solicite uma analise se acreditar que foi um engano.",
+          motivo: "whatsapp_meta_bloqueado",
+        },
+        { status: 423 }
       );
     }
 
@@ -577,6 +611,72 @@ export async function POST(request: Request) {
       );
     }
 
+    let reservaIdsLimiteMeta: string[] = [];
+    const janela24h = await canSendFreeformWhatsAppMessage({
+      conversaId,
+    });
+
+    if (!janela24h.podeEnviarMensagemLivre) {
+      const reservaLimite = await reservarLimiteMeta({
+        empresaId: usuario.empresa_id,
+        integracao,
+        telefones: [telefone],
+        origem: "disparo_template_individual",
+        templateId: template.id,
+        templateNome: template.nome,
+        usuarioId: usuario.id,
+        metadataJson: {
+          conversa_id: conversa.id,
+          contato_id: contato?.id || null,
+          rota: "/api/whatsapp/disparo-individual",
+          motivo_reserva: "fora_janela_24h",
+        },
+      });
+
+      if (!reservaLimite.ok) {
+        await registrarLogDisparoIndividual({
+          empresaId: usuario.empresa_id,
+          integracaoWhatsappId,
+          templateId: template.id,
+          conversaId: conversa.id,
+          conversaProtocoloId: null,
+          contatoId: contato?.id || null,
+          usuarioId: usuario.id,
+          numero: telefone,
+          nomeContato,
+          templateNome: template.nome,
+          templateIdioma: template.idioma || payloadTemplate?.language || "pt_BR",
+          mensagem:
+            montarConteudoTextoTemplate(payloadTemplate, bodyParams) ||
+            `Template enviado: ${template.nome}`,
+          status: "falha",
+          erro: reservaLimite.error,
+          statusHttp: 429,
+          messageId: null,
+          variaveis: bodyParams,
+          metaResponse: null,
+          metadataJson: {
+            motivo: "whatsapp_meta_limite_excedido",
+            limite: reservaLimite.limite,
+            usados: reservaLimite.usados,
+            restantes: reservaLimite.restantes,
+          },
+        });
+
+        return NextResponse.json(
+          montarRespostaLimiteMetaExcedido({
+            limite: reservaLimite.limite,
+            usados: reservaLimite.usados,
+            restantes: reservaLimite.restantes,
+            telefonesBloqueados: reservaLimite.telefonesBloqueados,
+          }),
+          { status: 429 }
+        );
+      }
+
+      reservaIdsLimiteMeta = reservaLimite.reservaIds;
+    }
+
     const bodyMeta: Record<string, unknown> = {
       messaging_product: "whatsapp",
       to: telefone,
@@ -623,6 +723,19 @@ export async function POST(request: Request) {
         detalheMeta ||
         mensagemMeta ||
         "Erro ao enviar template para a Meta";
+
+      await atualizarReservaLimiteMeta({
+        reservaIds: reservaIdsLimiteMeta,
+        telefone,
+        status: "falha",
+        contatoId: contato?.id || null,
+        conversaId: conversa.id,
+        metadataJson: {
+          erro: erroFinal,
+          status_http: metaRes.status,
+          meta_response: metaData,
+        },
+      });
 
       await registrarLogDisparoIndividual({
         empresaId: usuario.empresa_id,
@@ -688,6 +801,21 @@ export async function POST(request: Request) {
       metaData?.messages?.[0]?.id ||
       metaData?.messages?.[0]?.message_id ||
       null;
+
+    await atualizarReservaLimiteMeta({
+      reservaIds: reservaIdsLimiteMeta,
+      telefone,
+      status: "processando",
+      messageId: mensagemExternaId,
+      contatoId: contato?.id || null,
+      conversaId: conversa.id,
+      metadataJson: {
+        message_id: mensagemExternaId,
+        status_meta_inicial:
+          metaData?.messages?.[0]?.message_status || "accepted",
+        meta_response: metaData,
+      },
+    });
 
     await encerrarProtocolosAtivosDaConversa(conversa.id);
 

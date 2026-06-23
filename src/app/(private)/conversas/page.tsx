@@ -1803,6 +1803,15 @@ function ConversasPageContent() {
   const realtimeMensagensTimerRef = useRef<number | null>(null);
   const [conversaSelecionada, setConversaSelecionada] =
     useState<Conversa | null>(null);
+  const [mensagensFavoritasPainel, setMensagensFavoritasPainel] = useState<
+    Mensagem[]
+  >([]);
+  const [
+    mensagensFavoritasPainelConversaId,
+    setMensagensFavoritasPainelConversaId,
+  ] = useState<string | null>(null);
+  const [carregandoMensagensFavoritas, setCarregandoMensagensFavoritas] =
+    useState(false);
   const conversaSelecionadaIdRef = useRef<string | null>(null);
   const conversaUrlPendenteRef = useRef<string | null>(null);
 
@@ -1899,9 +1908,16 @@ function ConversasPageContent() {
   const conteudoRef = useRef("");
   const legendaArquivoRef = useRef("");
 
-  const mensagensFavoritas = useMemo(() => {
+  const mensagensFavoritasCarregadas = useMemo(() => {
     return mensagens.filter((msg) => msg.favorita);
   }, [mensagens]);
+
+  const painelFavoritasCarregado =
+    mensagensFavoritasPainelConversaId === conversaSelecionada?.id;
+
+  const mensagensFavoritas = painelFavoritasCarregado
+    ? mensagensFavoritasPainel
+    : mensagensFavoritasCarregadas;
 
   function abrirConversa(conversa: Conversa) {
     setMensagemSucesso("");
@@ -2018,6 +2034,9 @@ function ConversasPageContent() {
       setCarregandoMaisHistorico(false);
       setCarregandoProtocolos(false);
       setCarregandoEventosRastreamento(false);
+      setMensagensFavoritasPainel([]);
+      setMensagensFavoritasPainelConversaId(null);
+      setCarregandoMensagensFavoritas(false);
     }
 
     setConversaSelecionada(conversa);
@@ -2046,6 +2065,19 @@ function ConversasPageContent() {
   useEffect(() => {
     inicioJanelaHistoricoRef.current = inicioJanelaHistorico;
   }, [inicioJanelaHistorico]);
+
+  useEffect(() => {
+    if (!painelDireitoAberto) return;
+    if (abaPainelDireito !== "contato") return;
+    if (!conversaSelecionada?.id) return;
+
+    void carregarMensagensFavoritasPainel(conversaSelecionada.id);
+  }, [
+    painelDireitoAberto,
+    abaPainelDireito,
+    conversaSelecionada?.id,
+    mensagensFavoritasPainelConversaId,
+  ]);
 
   const [templateDisparoId, setTemplateDisparoId] = useState("");
   const [templateDisparoNome, setTemplateDisparoNome] = useState("");
@@ -2266,9 +2298,9 @@ function ConversasPageContent() {
   const ultimaMensagemIdAnteriorRef = useRef<string | null>(null);
   const usuarioEstavaNoFinalRef = useRef(true);
 
-  const quantidadeMensagensFavoritas = useMemo(() => {
-    return mensagens.filter((msg) => msg.favorita).length;
-  }, [mensagens]);
+  const quantidadeMensagensFavoritas = painelFavoritasCarregado
+    ? mensagensFavoritasPainel.length
+    : mensagensFavoritasCarregadas.length;
 
   const [listasConversa, setListasConversa] = useState<ListaConversa[]>([]);
   const [novaListaNome, setNovaListaNome] = useState("");
@@ -3744,6 +3776,7 @@ function ConversasPageContent() {
     fimJanela?: string | null,
     opcoes?: {
       antesDe?: string | null;
+      mensagemAlvoId?: string | null;
       modoAppendHistorico?: boolean;
       modoMergeNovas?: boolean;
     }
@@ -3777,6 +3810,13 @@ function ConversasPageContent() {
       if (opcoes?.antesDe) {
         url += `&antes_de=${encodeURIComponent(opcoes.antesDe)}`;
         url += `&limite=30`;
+      }
+
+      if (opcoes?.mensagemAlvoId) {
+        url += `&mensagem_alvo_id=${encodeURIComponent(
+          opcoes.mensagemAlvoId
+        )}`;
+        url += `&limite=100`;
       }
 
       const res = await fetch(url, {
@@ -3888,6 +3928,81 @@ function ConversasPageContent() {
         setLoadingMensagens(false);
       }
     }
+  }
+
+  async function carregarMensagensFavoritasPainel(
+    conversaId: string,
+    forcar = false
+  ) {
+    if (!conversaId) return;
+    if (!forcar && mensagensFavoritasPainelConversaId === conversaId) return;
+
+    try {
+      setCarregandoMensagensFavoritas(true);
+
+      const url = `/api/mensagens?conversa_id=${encodeURIComponent(
+        conversaId
+      )}&favoritas=true`;
+
+      const res = await fetch(url, {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!conversaEstaSelecionada(conversaId)) {
+        return;
+      }
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar mensagens favoritas");
+        return;
+      }
+
+      const favoritas: Mensagem[] = Array.isArray(data.mensagens)
+        ? data.mensagens.filter(
+            (msg: Mensagem) => msg.conversa_id === conversaId
+          )
+        : [];
+
+      setMensagensFavoritasPainel(favoritas);
+      setMensagensFavoritasPainelConversaId(conversaId);
+    } catch {
+      if (conversaEstaSelecionada(conversaId)) {
+        setErro("Erro ao carregar mensagens favoritas");
+      }
+    } finally {
+      if (conversaEstaSelecionada(conversaId)) {
+        setCarregandoMensagensFavoritas(false);
+      }
+    }
+  }
+
+  async function abrirMensagemFavoritaNoChat(mensagem: Mensagem) {
+    const conversaId = conversaSelecionada?.id;
+
+    if (!conversaId) return;
+
+    setErro("");
+
+    const mensagemJaCarregada = mensagens.some((msg) => msg.id === mensagem.id);
+
+    if (!mensagemJaCarregada) {
+      definirProtocoloSelecionado(null);
+      setInicioJanelaHistorico(null);
+      setFimJanelaHistorico(null);
+      setTemMaisHistorico(false);
+
+      await carregarMensagens(conversaId, false, null, null, null, {
+        mensagemAlvoId: mensagem.id,
+      });
+    }
+
+    if (!conversaEstaSelecionada(conversaId)) return;
+
+    window.setTimeout(() => {
+      scrollParaMensagem(mensagem.id);
+    }, mensagemJaCarregada ? 80 : 250);
   }
 
   async function marcarConversaComoLida(conversaId: string) {
@@ -4645,15 +4760,21 @@ function ConversasPageContent() {
       }
 
       if (conversaSelecionada?.id) {
+        const conversaId = conversaSelecionada.id;
+
         impedirAutoScrollRef.current = true;
 
         await carregarMensagens(
-          conversaSelecionada.id,
+          conversaId,
           true,
           protocoloSelecionadoId,
           inicioJanelaHistorico,
           fimJanelaHistorico
         );
+
+        if (mensagensFavoritasPainelConversaId === conversaId) {
+          await carregarMensagensFavoritasPainel(conversaId, true);
+        }
       }
     } catch {
       setErro("Erro ao atualizar favorito da mensagem");
@@ -5954,7 +6075,7 @@ async function baixarConversaPDF() {
 
     window.setTimeout(() => {
       elemento.classList.remove(styles.messageHighlight);
-    }, 1800);
+    }, 4000);
   }
 
   function getTipoArquivoSelecionado(file: File | null) {
@@ -6584,6 +6705,9 @@ const templateFooterTexto = useMemo(() => {
     if (!conversaSelecionada?.id) {
       setMensagens([]);
       setJanela24hConversa(null);
+      setMensagensFavoritasPainel([]);
+      setMensagensFavoritasPainelConversaId(null);
+      setCarregandoMensagensFavoritas(false);
       return;
     }
 
@@ -7600,6 +7724,12 @@ const templateFooterTexto = useMemo(() => {
                                   onClick={() => {
                                     setPainelDireitoAberto(true);
                                     setAbaPainelDireito("mensagens_favoritas");
+                                    if (conversaSelecionada?.id) {
+                                      void carregarMensagensFavoritasPainel(
+                                        conversaSelecionada.id,
+                                        true
+                                      );
+                                    }
                                     setMenuContatoAberto(false);
                                   }}
                                 >
@@ -9102,6 +9232,12 @@ const templateFooterTexto = useMemo(() => {
                               onClick={() => {
                                 setAbaPainelDireito("mensagens_favoritas");
                                 setPainelDireitoAberto(true);
+                                if (conversaSelecionada?.id) {
+                                  void carregarMensagensFavoritasPainel(
+                                    conversaSelecionada.id,
+                                    true
+                                  );
+                                }
                               }}
                             >
                               <span className={styles.whatsListActionLeft}>
@@ -10005,7 +10141,11 @@ const templateFooterTexto = useMemo(() => {
 
                       {abaPainelDireito === "mensagens_favoritas" && (
                         <div className={styles.panelSectionStack}>
-                          {mensagensFavoritas.length === 0 ? (
+                          {carregandoMensagensFavoritas ? (
+                            <div className={styles.infoBoxMuted}>
+                              Carregando mensagens favoritas...
+                            </div>
+                          ) : mensagensFavoritas.length === 0 ? (
                             <div className={styles.infoBoxMuted}>
                               Nenhuma mensagem favorita nesta conversa.
                             </div>
@@ -10015,11 +10155,7 @@ const templateFooterTexto = useMemo(() => {
                                 key={msg.id}
                                 className={styles.favoriteMessageCard}
                                 onClick={() => {
-                                  setAbaPainelDireito("mensagens_favoritas");
-
-                                  setTimeout(() => {
-                                    scrollParaMensagem(msg.id);
-                                  }, 250);
+                                  void abrirMensagemFavoritaNoChat(msg);
                                 }}
                               >
                                 <div className={styles.favoriteMessageHeader}>
@@ -11348,9 +11484,6 @@ const templateFooterTexto = useMemo(() => {
                   </>
                 ) : (
                   <>
-                    <span className={styles.novoProtocoloModalConfirmIcon}>
-                      AI
-                    </span>
                     Ativar bot
                   </>
                 )}

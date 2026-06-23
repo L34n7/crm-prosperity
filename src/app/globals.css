@@ -27,6 +27,8 @@
   --crm-sidebar-bottom-bg: #ffffff;
   --crm-sidebar-avatar-ring: #dff5efd6;
   --crm-surface: #ffffff;
+  --crm-surface-input: #ffffff;
+  --crm-border-input: #c9d0df81;
   --crm-surface-raised: #bf2525;
   --crm-surface-soft: #fcfdfd;
   --crm-surface-backgroundtest: #fcfdfd;
@@ -34,6 +36,7 @@
   --crm-surface-subtle: #ffffff;
   --crm-text-strong: #102230;
   --crm-text: #314653;
+  --crm-text-bg: #102230;
   --crm-text-muted: #637985;
   --crm-text-soft: #8aa0a8;
   --crm-text-inverse: #ffffff;
@@ -44,13 +47,13 @@
   --crm-border-strong: #dbe1e0;
   --crm-hover: rgba(18, 52, 72, 0.023);
   --crm-hover-strong: rgba(18, 52, 72, 0.12);
-  --crm-primary: #1c7b83;
+  --crm-primary: #37716c;
   --crm-primary-hover: #155e70;
   --crm-primary-strong: #123448;
   --crm-primary-strong-hover: #0d2638;
   --crm-primary-soft: #e4f6f1;
   --crm-primary-soft-hover: #c9eee5;
-  --crm-primary-border: #c6d8d1;
+  --crm-primary-border: #cbe3da;
   --crm-primary-text: #2e8b92;
   --crm-accent: #12a584;
   --crm-accent-soft: rgba(18, 165, 132, 0.14);
@@ -74,7 +77,31 @@
   --crm-shadow-sm: 0 14px 34px rgba(18, 65, 78, 0.11);
   --crm-shadow-md: 0 20px 52px rgba(18, 65, 78, 0.15);
   --crm-shadow-lg: 0 30px 92px rgba(18, 65, 78, 0.24);
-  --crm-focus-ring: 0 0 0 4px rgba(208, 208, 208, 0.18);
+  --crm-focus-ring: 0 0 0 4px rgba(182, 210, 221, 0.279);
+  --tokensBadge: linear-gradient(135deg, #e1f4f4 0%, #def2f2 100%);
+  --tokensBadgeBorder: #b0eaee;
+  --tokensBadgeBorderhover: #a7dfe3;
+  --tokensBadgeColor: #09dbdb;
+  --tokensBadgebox-shadow: #f3feff;
+  --tokensBadgebox-shadowDamager: #fffcfc;
+  --tokensBadgebox-shadowWarning: #fff7ed;
+  --tokensBadgeHover: linear-gradient(135deg, #ddf2f3 0%, #cbe4f1 100%);
+  --headerBackgroundHover: #d1dcd9;
+  --headerNotificItem: #d1f7ec;
+  --headerNotificItemHover: #e9f1ee;
+  --headerDropdownHover: #e6efec;
+  --headerAvatar: linear-gradient(80deg, #3ec992 0%, #a2ffda 100%);
+  --crm-bottom-Hover: linear-gradient(135deg, #ffffff 0%, #e4f6f1 100%);
+  --crm-bottom-Active: linear-gradient(135deg, #fcfffe 10%, #cff8e1 100%);
+  --header: #fafeff;
+  --timelineArea: #efeae2;
+  --background-image:
+    radial-gradient(circle at 25px 25px, rgba(255, 255, 255, 0.3) 2px, transparent 0),
+    radial-gradient(circle at 75px 75px, rgba(255, 255, 255, 0.15) 2px, transparent 0);
+  --messageBubbleIncoming: #ffffff;
+  --messageBubbleOutgoing: #b0f3cb;
+  --automaticBadge: #ffffffcb;
+  --automaticBadgeTexto: #997513;
 }
 
 html[data-theme="dark"] {
@@ -82,7 +109,7 @@ html[data-theme="dark"] {
   --crm-bg: #080d14;
   --crm-bg-soft: #0d141f;
   --crm-shell-bg:
-    linear-gradient(180deg, #080d14 0%, #0c1320 100%);
+    linear-gradient(180deg, #080d14 0%, #061623 100%);
   --crm-header-bg:
     linear-gradient(135deg, rgba(13, 20, 31, 0.96) 0%, rgba(15, 23, 42, 0.96) 68%, rgba(17, 32, 45, 0.96) 100%);
   --crm-sidebar-bg:
@@ -101,29 +128,32 @@ html[data-theme="dark"] {
     linear-gradient(180deg, rgba(8, 17, 28, 0) 0%, rgba(8, 17, 28, 0.88) 38%, rgba(8, 17, 28, 0.98) 100%);
   --crm-sidebar-avatar-ring: rgba(226, 232, 240, 0.4);
   --crm-surface: #111827;
+  --crm-surface-input: #08151c;
+  --crm-border-input: #25303cfe;
   --crm-surface-raised: #162131;
   --crm-surface-soft: #0f172a;
   --crm-surface-muted: #1e293b;
   --crm-surface-subtle: #141f2e;
   --crm-text-strong: #f8fafc;
   --crm-text: #d9e2ee;
+  --crm-text-bg: #214b43;
   --crm-text-muted: #a6b4c6;
   --crm-text-soft: #7c8da3;
   --crm-text-inverse: #ffffff;
   --crm-on-strong-muted: #cbd5e1;
   --crm-on-strong-soft: #e2e8f0;
-  --crm-border: rgba(148, 163, 184, 0.2);
+  --crm-border: #1d3040;
   --crm-border-soft: rgba(148, 163, 184, 0.12);
   --crm-border-strong: rgba(203, 213, 225, 0.34);
   --crm-hover: rgba(226, 232, 240, 0.08);
   --crm-hover-strong: rgba(226, 232, 240, 0.13);
-  --crm-primary: #38bdf8;
+  --crm-primary: #13b9ae;
   --crm-primary-hover: #0ea5e9;
   --crm-primary-strong: #0e7490;
   --crm-primary-strong-hover: #0891b2;
   --crm-primary-soft: rgba(56, 189, 248, 0.13);
   --crm-primary-soft-hover: rgba(56, 189, 248, 0.2);
-  --crm-primary-border: rgba(125, 211, 252, 0.34);
+  --crm-primary-border: #7dd4fc2c;
   --crm-primary-text: #7dd3fc;
   --crm-accent: #34d399;
   --crm-accent-soft: rgba(52, 211, 153, 0.12);
@@ -133,21 +163,47 @@ html[data-theme="dark"] {
   --crm-success-text: #86efac;
   --crm-success-strong: #34d399;
   --crm-warning-bg: rgba(245, 158, 11, 0.13);
-  --crm-warning-bg-strong: rgba(245, 158, 11, 0.2);
+  --crm-warning-bg-strong: rgba(187, 122, 10, 0.2);
   --crm-warning-border: rgba(251, 191, 36, 0.38);
-  --crm-warning-text: #fcd34d;
+  --crm-warning-text: #debe56;
   --crm-warning-strong: #f59e0b;
-  --crm-danger-bg: rgba(239, 68, 68, 0.13);
+  --crm-danger-bg: rgba(239, 68, 68, 0.235);
   --crm-danger-bg-strong: rgba(239, 68, 68, 0.21);
   --crm-danger-border: rgba(248, 113, 113, 0.34);
   --crm-danger-text: #fca5a5;
   --crm-danger-strong: #f87171;
   --crm-overlay: rgba(2, 6, 23, 0.68);
   --crm-shadow-xs: 0 4px 14px rgba(0, 0, 0, 0.18);
-  --crm-shadow-sm: 0 12px 28px rgba(0, 0, 0, 0.26);
+  --crm-shadow-sm: 0 12px 28px #1b3f4241;
   --crm-shadow-md: 0 18px 48px rgba(0, 0, 0, 0.34);
   --crm-shadow-lg: 0 28px 90px rgba(0, 0, 0, 0.46);
-  --crm-focus-ring: 0 0 0 4px rgba(56, 189, 248, 0.18);
+  --crm-focus-ring: 0 0 0 4px rgba(64, 199, 190, 0.18);
+  --tokensBadge: linear-gradient(135deg, #062727 0%, #005656 100%);
+  --tokensBadgeBorder: #1b3f42;
+  --tokensBadgeColor: #09dbdb;
+  --tokensBadgebox-shadow: #045151;
+  --tokensBadgebox-shadowDamager: #6d4a4a;
+  --tokensBadgeBorderDamager: #511e1e;
+  --tokensBadgebox-shadowWarning: #835e33;
+  --tokensBadgeBorderWarning: #3d351f;
+  --tokensBadgeHover: linear-gradient(135deg, #0a3131 0%, #078383 100%);
+  --tokensBadgeBorderhover: #2a5a5d;
+  --headerBackgroundHover: #05262a;
+  --headerNotificItem: #084444;
+  --headerNotificItemHover: #05232a;
+  --headerDropdownHover: #062a31;
+  --headerAvatar: linear-gradient(80deg, #2b815e 0%, #22ed9c 100%);
+  --crm-bottom-Hover: linear-gradient(135deg, #23696f00 0%, #1b3f42 100%);
+  --crm-bottom-Active: linear-gradient(135deg, #23696f17 0%, #1c595f 100%);
+  --header: #162532;
+  --timelineArea: #141414;
+  --background-image:
+    radial-gradient(circle at 25px 25px, #172532 2px, transparent 0),
+    radial-gradient(circle at 75px 75px, #2e2e2e 2px, transparent 0);
+  --messageBubbleIncoming: #1a3b3d;
+  --messageBubbleOutgoing: #237845;
+  --automaticBadge: #816318;
+  --automaticBadgeTexto: #fff6df;
 }
 
 html,

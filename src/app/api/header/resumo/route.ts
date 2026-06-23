@@ -4,6 +4,7 @@ import {
   podeAtribuirConversas,
   podeVisualizarConversas,
 } from "@/lib/auth/authorization";
+import { contarConversasNaoLidas } from "@/lib/conversas/nao-lidas";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -74,23 +75,10 @@ async function buscarResumoConversasNaoLidas(params: {
   usuarioPodeAtribuir: boolean;
 }) {
   try {
-    const { data, error } = await supabaseAdmin.rpc(
-      "contar_conversas_nao_lidas",
-      {
-        p_empresa_id: params.empresaId,
-        p_usuario_id: params.usuarioId,
-        p_is_admin: params.isAdmin,
-        p_setores_ids: params.setoresIds,
-        p_usuario_pode_atribuir: params.usuarioPodeAtribuir,
-      }
-    );
-
-    if (error) {
-      return blocoErro(error.message);
-    }
+    const quantidade = await contarConversasNaoLidas(params);
 
     return blocoOk({
-      quantidade: Number(data || 0),
+      quantidade,
     });
   } catch (error) {
     return blocoErro(

@@ -217,6 +217,153 @@
   border: 1px solid var(--crm-danger-border);
 }
 
+.diagnosticAlert {
+  margin: 12px 28px 0;
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  border-radius: 16px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.diagnosticHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.diagnosticHeader span {
+  color: var(--crm-danger-text);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.diagnosticHeader strong {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.diagnosticAlert p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.diagnosticActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.diagnosticActions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 8px;
+  background: var(--crm-surface);
+  color: var(--crm-danger-text);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.diagnosticActions a:hover {
+  background: var(--crm-surface-soft);
+}
+
+.diagnosticMeta {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--crm-danger-border);
+  padding-top: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.limitCard {
+  margin: 12px 28px 0;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.limitCardWarning {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+}
+
+.limitCardDanger {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+
+.limitHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.limitHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.limitHeader span,
+.limitMeta span,
+.limitGrid span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.limitHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.limitGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.limitGrid div {
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.limitGrid strong {
+  color: var(--crm-text-strong);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.limitMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  border-top: 1px solid var(--crm-border);
+  padding-top: 10px;
+}
+
 .saveArea {
   display: flex;
   justify-content: flex-end;
@@ -684,6 +831,22 @@
 
   .formArea {
     padding: 16px 18px 22px;
+  }
+
+  .diagnosticAlert {
+    margin: 10px 18px 0;
+  }
+
+  .limitCard {
+    margin: 10px 18px 0;
+  }
+
+  .limitHeader {
+    flex-direction: column;
+  }
+
+  .limitGrid {
+    grid-template-columns: 1fr;
   }
 
   .formGrid {

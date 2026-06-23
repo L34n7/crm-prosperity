@@ -35,7 +35,7 @@
 .modalHeader {
   padding: 18px;
   border-bottom: 1px solid var(--crm-border);
-  background: #fafeff;
+  background: var(--header);
 }
 
 .editorHeader,

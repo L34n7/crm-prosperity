@@ -18,6 +18,12 @@ import {
   aplicarAssinaturaWhatsapp,
   normalizarAssinaturaWhatsapp,
 } from "@/lib/whatsapp/message-signature";
+import {
+  statusWhatsappMetaBloqueado,
+  WHATSAPP_META_BLOCK_DESCRIPTION,
+  WHATSAPP_META_BLOCK_HELP_URL,
+  WHATSAPP_META_MANAGER_URL,
+} from "@/lib/whatsapp/meta-block";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -34,6 +40,261 @@ type ConversaAcesso = {
 type ProtocoloAtivo = {
   id: string;
 };
+
+type MensagemRow = {
+  id: string;
+  conversa_id: string;
+  empresa_id?: string | null;
+  created_at?: string | null;
+  [key: string]: unknown;
+};
+
+type MensagemFavoritaRow = {
+  mensagem_id: string | null;
+};
+
+type MensagemFavoritaComMensagemRow = {
+  mensagem_id: string | null;
+  mensagens?: MensagemRow | MensagemRow[] | null;
+};
+
+const FAVORITAS_CHUNK_SIZE = 100;
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+
+  return chunks;
+}
+
+async function buscarIdsMensagensFavoritas(
+  mensagemIds: string[],
+  empresaId: string
+) {
+  const idsUnicos = Array.from(new Set(mensagemIds.filter(Boolean)));
+  const favoritasSet = new Set<string>();
+
+  if (idsUnicos.length === 0) {
+    return favoritasSet;
+  }
+
+  for (const idsLote of chunkArray(idsUnicos, FAVORITAS_CHUNK_SIZE)) {
+    const { data, error } = await supabaseAdmin
+      .from("mensagens_favoritas")
+      .select("mensagem_id")
+      .eq("empresa_id", empresaId)
+      .in("mensagem_id", idsLote);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    for (const item of (data ?? []) as MensagemFavoritaRow[]) {
+      if (item.mensagem_id) {
+        favoritasSet.add(item.mensagem_id);
+      }
+    }
+  }
+
+  return favoritasSet;
+}
+
+async function anexarFavoritasNasMensagens(
+  mensagens: MensagemRow[],
+  empresaId: string
+) {
+  const favoritasSet = await buscarIdsMensagensFavoritas(
+    mensagens.map((msg) => msg.id),
+    empresaId
+  );
+
+  return mensagens.map((msg) => ({
+    ...msg,
+    favorita: favoritasSet.has(msg.id),
+  }));
+}
+
+async function listarMensagensFavoritasDaConversa(
+  conversaId: string,
+  empresaId: string
+) {
+  const { data: favoritasComMensagem, error: joinError } = await supabaseAdmin
+    .from("mensagens_favoritas")
+    .select(
+      `
+      mensagem_id,
+      mensagens!inner (*)
+    `
+    )
+    .eq("empresa_id", empresaId)
+    .eq("mensagens.empresa_id", empresaId)
+    .eq("mensagens.conversa_id", conversaId);
+
+  if (!joinError) {
+    return ((favoritasComMensagem ?? []) as MensagemFavoritaComMensagemRow[])
+      .map((item) =>
+        Array.isArray(item.mensagens) ? item.mensagens[0] : item.mensagens
+      )
+      .filter(Boolean)
+      .map((msg) => ({
+        ...(msg as MensagemRow),
+        favorita: true,
+      }))
+      .sort(
+        (a, b) =>
+          new Date(a.created_at || "").getTime() -
+          new Date(b.created_at || "").getTime()
+      );
+  }
+
+  console.warn(
+    "[GET /api/mensagens] Fallback ao listar mensagens favoritas:",
+    joinError.message
+  );
+
+  const { data: favoritas, error: favoritasError } = await supabaseAdmin
+    .from("mensagens_favoritas")
+    .select("mensagem_id")
+    .eq("empresa_id", empresaId);
+
+  if (favoritasError) {
+    throw new Error(favoritasError.message);
+  }
+
+  const mensagemIds = Array.from(
+    new Set(
+      ((favoritas ?? []) as MensagemFavoritaRow[])
+        .map((item) => item.mensagem_id)
+        .filter(Boolean) as string[]
+    )
+  );
+
+  if (mensagemIds.length === 0) {
+    return [];
+  }
+
+  const mensagensFavoritas: MensagemRow[] = [];
+
+  for (const idsLote of chunkArray(mensagemIds, FAVORITAS_CHUNK_SIZE)) {
+    const { data, error } = await supabaseAdmin
+      .from("mensagens")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .in("id", idsLote);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    mensagensFavoritas.push(...((data ?? []) as MensagemRow[]));
+  }
+
+  return mensagensFavoritas
+    .map((msg) => ({
+      ...msg,
+      favorita: true,
+    }))
+    .sort(
+      (a, b) =>
+        new Date(a.created_at || "").getTime() -
+        new Date(b.created_at || "").getTime()
+    );
+}
+
+async function carregarMensagensAteMensagemAlvo({
+  conversaId,
+  conversaProtocoloId,
+  empresaId,
+  mensagemAlvoId,
+  limite,
+}: {
+  conversaId: string;
+  conversaProtocoloId: string | null;
+  empresaId: string;
+  mensagemAlvoId: string;
+  limite: number;
+}) {
+  let queryAlvo = supabaseAdmin
+    .from("mensagens")
+    .select("id, conversa_id, conversa_protocolo_id, created_at")
+    .eq("empresa_id", empresaId)
+    .eq("conversa_id", conversaId)
+    .eq("id", mensagemAlvoId);
+
+  if (conversaProtocoloId) {
+    queryAlvo = queryAlvo.eq("conversa_protocolo_id", conversaProtocoloId);
+  }
+
+  const { data: mensagemAlvo, error: mensagemAlvoError } = await queryAlvo
+    .maybeSingle<MensagemRow>();
+
+  if (mensagemAlvoError) {
+    throw new Error(mensagemAlvoError.message);
+  }
+
+  if (!mensagemAlvo?.created_at) {
+    return {
+      mensagens: [],
+      temMaisHistorico: false,
+    };
+  }
+
+  let queryMensagens = supabaseAdmin
+    .from("mensagens")
+    .select("*")
+    .eq("empresa_id", empresaId)
+    .eq("conversa_id", conversaId)
+    .gte("created_at", mensagemAlvo.created_at);
+
+  if (conversaProtocoloId) {
+    queryMensagens = queryMensagens.eq(
+      "conversa_protocolo_id",
+      conversaProtocoloId
+    );
+  }
+
+  const { data, error } = await queryMensagens
+    .order("created_at", { ascending: true })
+    .limit(limite);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  let queryMaisAntigas = supabaseAdmin
+    .from("mensagens")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_id", empresaId)
+    .eq("conversa_id", conversaId)
+    .lt("created_at", mensagemAlvo.created_at);
+
+  if (conversaProtocoloId) {
+    queryMaisAntigas = queryMaisAntigas.eq(
+      "conversa_protocolo_id",
+      conversaProtocoloId
+    );
+  }
+
+  const { count, error: maisAntigasError } = await queryMaisAntigas;
+
+  if (maisAntigasError) {
+    throw new Error(maisAntigasError.message);
+  }
+
+  const mensagensComFavorita = await anexarFavoritasNasMensagens(
+    (data ?? []) as MensagemRow[],
+    empresaId
+  );
+
+  return {
+    mensagens: mensagensComFavorita,
+    temMaisHistorico: (count || 0) > 0,
+  };
+}
 
 async function usuarioPodeAcessarConversa(
   usuario: UsuarioContexto,
@@ -90,7 +351,9 @@ export async function GET(request: Request) {
     const inicio = searchParams.get("inicio");
     const fim = searchParams.get("fim");
     const antesDe = searchParams.get("antes_de");
+    const mensagemAlvoId = searchParams.get("mensagem_alvo_id");
     const exportar = searchParams.get("exportar") === "true";
+    const somenteFavoritas = searchParams.get("favoritas") === "true";
     const limiteParam = Number(searchParams.get("limite") || 30);
     const limite = Number.isFinite(limiteParam)
       ? Math.min(Math.max(limiteParam, 1), 100)
@@ -143,7 +406,38 @@ export async function GET(request: Request) {
       );
     }
 
+    if (somenteFavoritas) {
+      const mensagensFavoritas = await listarMensagensFavoritasDaConversa(
+        conversaId,
+        conversa.empresa_id
+      );
+
+      return NextResponse.json({
+        ok: true,
+        mensagens: mensagensFavoritas,
+        modo: "favoritas",
+      });
+    }
+
     const janela24h = await canSendFreeformWhatsAppMessage({ conversaId });
+
+    if (mensagemAlvoId) {
+      const resultadoAlvo = await carregarMensagensAteMensagemAlvo({
+        conversaId,
+        conversaProtocoloId,
+        empresaId: conversa.empresa_id,
+        mensagemAlvoId,
+        limite,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        mensagens: resultadoAlvo.mensagens,
+        temMaisHistorico: resultadoAlvo.temMaisHistorico,
+        janela_24h: janela24h,
+        modo: "mensagem_alvo",
+      });
+    }
 
     if (exportar) {
       const todasMensagens: unknown[] = [];
@@ -263,9 +557,14 @@ export async function GET(request: Request) {
         );
       }
 
+      const mensagensComFavorita = await anexarFavoritasNasMensagens(
+        mensagens as MensagemRow[],
+        conversa.empresa_id
+      );
+
       return NextResponse.json({
         ok: true,
-        mensagens,
+        mensagens: mensagensComFavorita,
         temMaisHistorico: (count || 0) > 0,
         janela_24h: janela24h,
         modo: "antes_de",
@@ -321,31 +620,10 @@ export async function GET(request: Request) {
       temMaisHistorico = (count || 0) > 0;
     }
 
-    const { data: favoritas, error: favoritasError } = await supabaseAdmin
-      .from("mensagens_favoritas")
-      .select("mensagem_id")
-      .in(
-        "mensagem_id",
-        mensagens.length > 0
-          ? mensagens.map((m) => m.id)
-          : ["00000000-0000-0000-0000-000000000000"]
-      );
-
-    if (favoritasError) {
-      return NextResponse.json(
-        { ok: false, error: favoritasError.message },
-        { status: 500 }
-      );
-    }
-
-    const favoritasSet = new Set(
-      (favoritas ?? []).map((item) => item.mensagem_id)
+    const mensagensComFavorita = await anexarFavoritasNasMensagens(
+      mensagens as MensagemRow[],
+      conversa.empresa_id
     );
-
-    const mensagensComFavorita = mensagens.map((msg) => ({
-      ...msg,
-      favorita: favoritasSet.has(msg.id),
-    }));
 
     return NextResponse.json({
       ok: true,
@@ -550,7 +828,7 @@ export async function POST(request: Request) {
 
   const { data: integracao, error: integracaoError } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("id, status, phone_number_id")
+    .select("id, status, phone_number_id, phone_number_status, onboarding_erro")
     .eq("id", conversa.integracao_whatsapp_id)
     .maybeSingle();
 
@@ -569,6 +847,24 @@ export async function POST(request: Request) {
   }
 
   console.log("[POST /api/mensagens] integração carregada:", integracao);
+
+  if (
+    statusWhatsappMetaBloqueado(integracao.status) ||
+    statusWhatsappMetaBloqueado(integracao.phone_number_status)
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        motivo: "whatsapp_meta_bloqueado",
+        error:
+          "A conta WhatsApp Business vinculada a esta conversa esta banida ou bloqueada pela Meta.",
+        detalhe: integracao.onboarding_erro || WHATSAPP_META_BLOCK_DESCRIPTION,
+        meta_manager_url: WHATSAPP_META_MANAGER_URL,
+        help_whatsapp_url: WHATSAPP_META_BLOCK_HELP_URL,
+      },
+      { status: 423 }
+    );
+  }
 
   if (integracao.status !== "ativa") {
     return NextResponse.json(

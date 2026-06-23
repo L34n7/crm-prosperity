@@ -75,7 +75,7 @@
   border-radius: 999px;
   overflow: hidden;
   border: 1px solid var(--crm-border);
-  background: var(--crm-surface-muted);
+  background: var(--headAvatar);
 }
 
 .avatar img {
@@ -269,7 +269,7 @@
   padding: 10px 12px;
   border: 1px solid var(--crm-border);
   border-radius: 10px;
-  background: var(--crm-text-strong);
+  background: var(--crm-text-bg);
   color: var(--crm-text-inverse);
   font-size: 12px;
   font-weight: 500;
@@ -292,7 +292,7 @@
   height: 10px;
   border-right: 1px solid var(--crm-border);
   border-bottom: 1px solid var(--crm-border);
-  background: var(--crm-text-strong);
+  background: var(--crm-text-bg);
   transform: translate(-50%, -5px) rotate(45deg);
 }
 
@@ -309,8 +309,8 @@
   min-height: 48px;
   padding: 0 14px;
   border-radius: 14px;
-  border: 1px solid var(--crm-border-strong);
-  background: var(--crm-surface);
+  border: 1px solid var(--crm-border-input);
+  background: var(--crm-surface-input);
   color: var(--crm-text-strong);
   font-size: 14px;
   outline: none;

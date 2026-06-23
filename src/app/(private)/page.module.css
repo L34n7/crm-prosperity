@@ -60,9 +60,9 @@
   justify-content: center;
   padding: 13px 18px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #ffffff 0%, #e7f7f2 100%);
+  background: var(--crm-surface);
   color: var(--crm-text-strong);
-  border: 1px solid rgba(255, 255, 255, 0.68);
+  border: 1px solid var(--crm-border-strong);
   font-size: 14px;
   font-weight: 700;
   text-decoration: none;
@@ -70,7 +70,7 @@
 }
 
 .primaryButton:hover {
-  background: linear-gradient(135deg, #ffffff 0%, #d4f1e9 100%);
+  background: var(--crm-primary-soft-hover);
 }
 
 .secondaryButton {
@@ -218,7 +218,7 @@
 }
 
 .moduleItem:hover {
-  background: linear-gradient(135deg, #ffffff 0%, var(--crm-primary-soft) 100%);
+  background: var(--crm-bottom-Hover);
   border-color: var(--crm-primary-border);
   transform: translateY(-2px);
   box-shadow: var(--crm-shadow-sm);

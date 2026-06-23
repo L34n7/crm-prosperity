@@ -8,6 +8,7 @@ import {
 } from "@/lib/auditoria/logs";
 import { empresaManteraAdminGerenciador } from "@/lib/permissoes/garantir-admin-gerenciador";
 import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
+import { invalidarCachePermissoesPerfis } from "@/lib/permissoes/can";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -308,6 +309,8 @@ export async function PUT(
         );
       }
     }
+
+    invalidarCachePermissoesPerfis();
 
     const auditMeta = getRequestAuditMetadata(request);
     await registrarLogAuditoriaSeguro({

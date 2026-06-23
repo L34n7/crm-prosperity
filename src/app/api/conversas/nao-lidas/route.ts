@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
   podeAtribuirConversas,
   podeVisualizarConversas,
 } from "@/lib/auth/authorization";
+import { contarConversasNaoLidas } from "@/lib/conversas/nao-lidas";
 
-const supabaseAdmin = getSupabaseAdmin();
 const POLLING_HEADERS = {
   "Cache-Control": "private, max-age=20, stale-while-revalidate=40",
 };
@@ -40,25 +39,18 @@ export async function GET() {
   try {
     const usuarioPodeAtribuir = await podeAtribuirConversas(usuario);
 
-    const { data, error } = await supabaseAdmin.rpc(
-      "contar_conversas_nao_lidas",
-      {
-        p_empresa_id: usuario.empresa_id,
-        p_usuario_id: usuario.id,
-        p_is_admin: usuario.is_admin,
-        p_setores_ids: usuario.setores_ids ?? [],
-        p_usuario_pode_atribuir: usuarioPodeAtribuir,
-      }
-    );
-
-    if (error) {
-      throw new Error(error.message);
-    }
+    const quantidade = await contarConversasNaoLidas({
+      empresaId: usuario.empresa_id,
+      usuarioId: usuario.id,
+      isAdmin: usuario.is_admin,
+      setoresIds: usuario.setores_ids ?? [],
+      usuarioPodeAtribuir,
+    });
 
     return NextResponse.json(
       {
         ok: true,
-        quantidade: Number(data || 0),
+        quantidade,
       },
       { headers: POLLING_HEADERS }
     );

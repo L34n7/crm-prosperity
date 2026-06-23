@@ -30,7 +30,7 @@
 .cardHeader {
   padding: 22px;
   border-bottom: 1px solid var(--crm-border);
-  background: #fafeff;
+  background: var(--header);
 }
 
 .eyebrow {

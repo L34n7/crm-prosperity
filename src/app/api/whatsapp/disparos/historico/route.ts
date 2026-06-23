@@ -11,6 +11,9 @@ function traduzirErroMetaWhatsApp(
   const code = Number(codigo || 0);
 
   switch (code) {
+    case 131031:
+      return "A conta WhatsApp Business foi bloqueada ou desativada pela Meta. Enquanto o numero estiver banido/bloqueado, nao e possivel enviar mensagens por essa integracao. Acesse o Gerenciador do WhatsApp na Meta e solicite uma analise se acreditar que foi um engano.";
+
     case 131042:
       return "A conta WhatsApp Business possui pendências financeiras na Meta. Acesse o Gerenciador de Negócios da Meta, entre em Cobrança/Pagamentos, selecione a conta WhatsApp Business e regularize o pagamento pendente. Após a confirmação do pagamento, tente enviar o disparo novamente.";
 

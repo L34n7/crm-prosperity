@@ -71,25 +71,28 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
   const incomingStatuses = extractMessageStatuses(body);
   const bodyHash = calcularBodyHash(body);
   const receivedAt = new Date().toISOString();
+  const payloadInsert = {
+    body_hash: bodyHash,
+    body_json: body,
+    status: "pendente",
+    metadata_json: {
+      incoming_messages: incomingMessages.length,
+      incoming_statuses: incomingStatuses.length,
+      received_at: receivedAt,
+    },
+    updated_at: receivedAt,
+  };
 
   const { data, error } = await supabaseAdmin
     .from("whatsapp_webhook_eventos")
-    .insert({
-      body_hash: bodyHash,
-      body_json: body,
-      status: "pendente",
-      metadata_json: {
-        incoming_messages: incomingMessages.length,
-        incoming_statuses: incomingStatuses.length,
-        received_at: receivedAt,
-      },
-      updated_at: receivedAt,
+    .upsert(payloadInsert, {
+      onConflict: "body_hash",
+      ignoreDuplicates: true,
     })
     .select("*")
-    .single();
+    .maybeSingle();
 
   if (!error && data) {
-
     perf("FILA / webhook salvo no banco", inicioEnfileirar, {
       eventId: data.id,
       incomingMessages: incomingMessages.length,
@@ -105,31 +108,31 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
     };
   }
 
-  if (error?.code === "23505") {
-    const { data: eventoExistente, error: selectError } = await supabaseAdmin
-      .from("whatsapp_webhook_eventos")
-      .select("*")
-      .eq("body_hash", bodyHash)
-      .maybeSingle();
-
-    if (selectError || !eventoExistente) {
-      throw new Error(
-        `Erro ao buscar webhook duplicado: ${
-          selectError?.message || "evento nao encontrado"
-        }`
-      );
-    }
-
-    return {
-      evento: eventoExistente,
-      duplicado: true,
-      bodyHash,
-      incomingMessages: incomingMessages.length,
-      incomingStatuses: incomingStatuses.length,
-    };
+  if (error) {
+    throw new Error(`Erro ao enfileirar webhook: ${error.message}`);
   }
 
-  throw new Error(`Erro ao enfileirar webhook: ${error?.message}`);
+  const { data: eventoExistente, error: selectError } = await supabaseAdmin
+    .from("whatsapp_webhook_eventos")
+    .select("*")
+    .eq("body_hash", bodyHash)
+    .maybeSingle();
+
+  if (selectError || !eventoExistente) {
+    throw new Error(
+      `Erro ao buscar webhook duplicado: ${
+        selectError?.message || "evento nao encontrado"
+      }`
+    );
+  }
+
+  return {
+    evento: eventoExistente,
+    duplicado: true,
+    bodyHash,
+    incomingMessages: incomingMessages.length,
+    incomingStatuses: incomingStatuses.length,
+  };
 }
 
 async function liberarLocksExpirados(timeoutLockMinutos: number) {

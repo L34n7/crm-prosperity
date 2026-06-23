@@ -67,7 +67,7 @@
 .editorHeader {
   padding: 18px;
   border-bottom: 1px solid var(--crm-border);
-  background: #fafeff;
+  background: var(--header);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -630,7 +630,7 @@
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
-  background: #fafeff;
+  background: var(--header);
 }
 
 .modalTitle {

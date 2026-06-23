@@ -6,6 +6,11 @@ import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-conta
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import { isAmbienteConfigurado } from "@/lib/whatsapp/ambiente-configurado";
 import {
+  atualizarReservaLimiteMeta,
+  montarRespostaLimiteMetaExcedido,
+  reservarLimiteMeta,
+} from "@/lib/whatsapp/meta-limites";
+import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
@@ -657,11 +662,16 @@ export async function POST(req: NextRequest) {
         id,
         empresa_id,
         status,
+        phone_number_status,
+        onboarding_erro,
         phone_number_id,
         waba_id,
         token_ref,
         numero,
         nome_conexao,
+        meta_messaging_limit,
+        meta_messaging_limit_tier,
+        meta_account_mode,
         config_json,
         payment_method_added,
         phone_registered,
@@ -691,6 +701,29 @@ export async function POST(req: NextRequest) {
           error: "Você não pode usar esta integração.",
         },
         { status: 403 }
+      );
+    }
+
+    const statusIntegracao = String(integracao.status || "").toLowerCase();
+    const statusNumeroMeta = String(
+      integracao.phone_number_status || ""
+    ).toLowerCase();
+
+    if (
+      ["bloqueado", "banido", "blocked", "banned"].includes(statusIntegracao) ||
+      ["banned", "blocked"].includes(statusNumeroMeta)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "A conta WhatsApp Business vinculada a esta integracao esta bloqueada ou banida pela Meta.",
+          detalhe:
+            integracao.onboarding_erro ||
+            "Acesse o Gerenciador do WhatsApp na Meta e solicite uma analise se acreditar que foi um engano.",
+          motivo: "whatsapp_meta_bloqueado",
+        },
+        { status: 423 }
       );
     }
 
@@ -812,6 +845,31 @@ export async function POST(req: NextRequest) {
     }
 
     const payloadTemplate = (template.payload || null) as TemplatePayload | null;
+    const reservaLimite = await reservarLimiteMeta({
+      empresaId,
+      integracao,
+      telefones: destinatarios.map((item) => item.numero),
+      origem: "disparo_template",
+      templateId: template.id,
+      templateNome: template.nome,
+      usuarioId: usuario.id,
+      metadataJson: {
+        total_destinatarios: destinatarios.length,
+        rota: "/api/whatsapp/disparos",
+      },
+    });
+
+    if (!reservaLimite.ok) {
+      return NextResponse.json(
+        montarRespostaLimiteMetaExcedido({
+          limite: reservaLimite.limite,
+          usados: reservaLimite.usados,
+          restantes: reservaLimite.restantes,
+          telefonesBloqueados: reservaLimite.telefonesBloqueados,
+        }),
+        { status: 429 }
+      );
+    }
 
     const resultados = await Promise.all(
       destinatarios.map(async (item) => {
@@ -918,6 +976,19 @@ export async function POST(req: NextRequest) {
               data?.error?.message ||
               "Erro ao enviar mensagem.";
 
+            await atualizarReservaLimiteMeta({
+              reservaIds: reservaLimite.reservaIds,
+              telefone: numero,
+              status: "falha",
+              contatoId: recursos.contato.id,
+              conversaId: recursos.conversa.id,
+              metadataJson: {
+                erro: erroMeta,
+                status_http: response.status,
+                meta_response: data,
+              },
+            });
+
             await registrarMensagemDeDisparo({
               empresaId,
               conversaId: recursos.conversa.id,
@@ -979,6 +1050,21 @@ export async function POST(req: NextRequest) {
           }
 
           const messageId = data?.messages?.[0]?.id || null;
+
+          await atualizarReservaLimiteMeta({
+            reservaIds: reservaLimite.reservaIds,
+            telefone: numero,
+            status: "processando",
+            messageId,
+            contatoId: recursos.contato.id,
+            conversaId: recursos.conversa.id,
+            metadataJson: {
+              message_id: messageId,
+              status_meta_inicial:
+                data?.messages?.[0]?.message_status || "accepted",
+              meta_response: data,
+            },
+          });
 
           await registrarMensagemDeDisparo({
             empresaId,
@@ -1053,6 +1139,16 @@ export async function POST(req: NextRequest) {
           const mensagemTemplateErro =
             montarConteudoTextoTemplate(payloadTemplate, variaveis) ||
             `Template enviado: ${template.nome}`;
+
+          await atualizarReservaLimiteMeta({
+            reservaIds: reservaLimite.reservaIds,
+            telefone: numero,
+            status: "falha",
+            metadataJson: {
+              erro: error?.message || "Erro inesperado no envio.",
+              origem: "catch",
+            },
+          });
 
           await registrarLogDisparo({
             empresaId,

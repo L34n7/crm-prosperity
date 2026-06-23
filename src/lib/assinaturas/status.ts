@@ -1,6 +1,13 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  getOrSetTtlCache,
+  getTtlCacheKey,
+  invalidateTtlCache,
+} from "@/lib/cache/ttl-cache";
 
 const supabaseAdmin = getSupabaseAdmin();
+const ASSINATURA_CACHE_TTL_MS = 30_000;
+const ASSINATURA_SYNC_CACHE_TTL_MS = 30_000;
 
 export type AssinaturaStatus = "ativa" | "vencida" | "bloqueada";
 
@@ -94,6 +101,8 @@ export async function sincronizarAssinaturaEmpresa(empresaId: string) {
     throw new Error(error.message);
   }
 
+  invalidateTtlCache(getTtlCacheKey("assinatura-empresa", [empresaId]));
+
   return data as AssinaturaStatus;
 }
 
@@ -136,55 +145,65 @@ export async function buscarAssinaturaEmpresa(
   if (!empresaId) return null;
 
   if (options.sincronizar !== false) {
-    await sincronizarAssinaturaEmpresa(empresaId);
+    await getOrSetTtlCache(
+      getTtlCacheKey("assinatura-empresa-sync", [empresaId]),
+      ASSINATURA_SYNC_CACHE_TTL_MS,
+      () => sincronizarAssinaturaEmpresa(empresaId)
+    );
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("empresas")
-    .select(
-      `
-      id,
-      plano_id,
-      assinatura_status,
-      assinatura_inicio_em,
-      assinatura_vencimento_em,
-      assinatura_bloqueio_em,
-      assinatura_renovada_em,
-      assinatura_gateway,
-      assinatura_referencia,
-      planos (
-        id,
-        nome,
-        slug
-      )
-    `
-    )
-    .eq("id", empresaId)
-    .maybeSingle();
+  return await getOrSetTtlCache(
+    getTtlCacheKey("assinatura-empresa", [empresaId]),
+    ASSINATURA_CACHE_TTL_MS,
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from("empresas")
+        .select(
+          `
+          id,
+          plano_id,
+          assinatura_status,
+          assinatura_inicio_em,
+          assinatura_vencimento_em,
+          assinatura_bloqueio_em,
+          assinatura_renovada_em,
+          assinatura_gateway,
+          assinatura_referencia,
+          planos (
+            id,
+            nome,
+            slug
+          )
+        `
+        )
+        .eq("id", empresaId)
+        .maybeSingle();
 
-  if (error) {
-    throw new Error(`Erro ao buscar assinatura da empresa: ${error.message}`);
-  }
+      if (error) {
+        throw new Error(`Erro ao buscar assinatura da empresa: ${error.message}`);
+      }
 
-  if (!data) return null;
+      if (!data) return null;
 
-  const empresa = data as EmpresaAssinaturaRow;
-  const plano = normalizarPlano(empresa.planos);
-  const planoSlug = plano?.slug ?? null;
+      const empresa = data as EmpresaAssinaturaRow;
+      const plano = normalizarPlano(empresa.planos);
+      const planoSlug = plano?.slug ?? null;
 
-  return {
-    status: empresa.assinatura_status ?? "ativa",
-    inicio_em: empresa.assinatura_inicio_em,
-    vencimento_em: empresa.assinatura_vencimento_em,
-    bloqueio_em: empresa.assinatura_bloqueio_em,
-    renovada_em: empresa.assinatura_renovada_em,
-    gateway: empresa.assinatura_gateway,
-    referencia: empresa.assinatura_referencia,
-    plano_id: empresa.plano_id,
-    plano_slug: planoSlug,
-    plano_nome: plano?.nome ?? null,
-    checkout_url: obterCheckoutUrlPorPlanoSlug(planoSlug),
-  } satisfies AssinaturaEmpresa;
+      return {
+        status: empresa.assinatura_status ?? "ativa",
+        inicio_em: empresa.assinatura_inicio_em,
+        vencimento_em: empresa.assinatura_vencimento_em,
+        bloqueio_em: empresa.assinatura_bloqueio_em,
+        renovada_em: empresa.assinatura_renovada_em,
+        gateway: empresa.assinatura_gateway,
+        referencia: empresa.assinatura_referencia,
+        plano_id: empresa.plano_id,
+        plano_slug: planoSlug,
+        plano_nome: plano?.nome ?? null,
+        checkout_url: obterCheckoutUrlPorPlanoSlug(planoSlug),
+      } satisfies AssinaturaEmpresa;
+    }
+  );
 }
 
 export function calcularJanelaAssinatura(pagoEm: string | Date | null | undefined) {

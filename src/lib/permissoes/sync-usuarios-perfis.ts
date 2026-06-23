@@ -1,3 +1,4 @@
+import { invalidarCachePermissoesUsuario } from "@/lib/permissoes/can";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -15,7 +16,7 @@ export async function buscarPerfilDinamicoPorId(params: {
     .maybeSingle();
 
   if (error) {
-    throw new Error(`Erro ao buscar perfil dinâmico por id: ${error.message}`);
+    throw new Error(`Erro ao buscar perfil dinamico por id: ${error.message}`);
   }
 
   return data ?? null;
@@ -28,30 +29,28 @@ async function limparPerfisDoUsuario(usuarioId: string) {
     .eq("usuario_id", usuarioId);
 
   if (error) {
-    throw new Error(
-      `Erro ao limpar perfis dinâmicos do usuário: ${error.message}`
-    );
+    throw new Error(`Erro ao limpar perfis dinamicos do usuario: ${error.message}`);
   }
+
+  invalidarCachePermissoesUsuario(usuarioId);
 }
 
 async function vincularPerfilAoUsuario(params: {
   usuarioId: string;
   perfilEmpresaId: string;
 }) {
-  const { error } = await supabaseAdmin
-    .from("usuarios_perfis")
-    .insert([
-      {
-        usuario_id: params.usuarioId,
-        perfil_empresa_id: params.perfilEmpresaId,
-      },
-    ]);
+  const { error } = await supabaseAdmin.from("usuarios_perfis").insert([
+    {
+      usuario_id: params.usuarioId,
+      perfil_empresa_id: params.perfilEmpresaId,
+    },
+  ]);
 
   if (error) {
-    throw new Error(
-      `Erro ao vincular perfil dinâmico ao usuário: ${error.message}`
-    );
+    throw new Error(`Erro ao vincular perfil dinamico ao usuario: ${error.message}`);
   }
+
+  invalidarCachePermissoesUsuario(params.usuarioId);
 }
 
 export async function resolverPerfilDinamicoPorId(params: {
@@ -64,7 +63,7 @@ export async function resolverPerfilDinamicoPorId(params: {
   });
 
   if (!perfilDinamico) {
-    throw new Error("Perfil dinâmico não encontrado para esta empresa.");
+    throw new Error("Perfil dinamico nao encontrado para esta empresa.");
   }
 
   return {
@@ -83,7 +82,7 @@ export async function definirPerfilDinamicoPorIdDoUsuario(params: {
   });
 
   if (!perfilDinamico) {
-    throw new Error("Perfil dinâmico não encontrado para esta empresa.");
+    throw new Error("Perfil dinamico nao encontrado para esta empresa.");
   }
 
   await limparPerfisDoUsuario(params.usuarioId);

@@ -52,6 +52,12 @@ export async function GET() {
         app_assigned,
         waba_id,
         phone_number_id,
+        phone_number_status,
+        quality_rating,
+        meta_messaging_limit,
+        meta_messaging_limit_tier,
+        meta_account_mode,
+        meta_saude_ultima_verificacao_em,
         updated_at
       `
     )

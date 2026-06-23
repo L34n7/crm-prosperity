@@ -1,5 +1,6 @@
 import Sidebar from "@/components/Sidebar";
 import AssinaturaStatusGuard from "@/components/AssinaturaStatusGuard";
+import WhatsAppMetaBlockNotice from "@/components/WhatsAppMetaBlockNotice";
 import { HeaderUserProvider } from "@/components/header-user-context";
 import { HeaderSummaryProvider } from "@/components/header-summary-context";
 import SessionActivityTracker from "@/components/SessionActivityTracker";
@@ -40,7 +41,10 @@ export default function CrmShell({
             isAdmin={isAdmin}
           />
 
-          <div className={styles.contentArea}>{children}</div>
+          <div className={styles.contentArea}>
+            <WhatsAppMetaBlockNotice />
+            {children}
+          </div>
 
           <AssinaturaStatusGuard assinatura={assinatura} isAdmin={isAdmin} />
         </div>
