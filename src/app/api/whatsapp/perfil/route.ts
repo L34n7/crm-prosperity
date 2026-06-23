@@ -176,6 +176,13 @@ function objetoConfig(configJson: ConfigJson) {
     : {};
 }
 
+function normalizarStatusIntegracaoWhatsapp(valor?: string | null) {
+  const status = String(valor || "").trim().toLowerCase();
+  return ["pendente", "ativa", "erro", "desconectada"].includes(status)
+    ? status
+    : null;
+}
+
 function montarIntegracaoResposta(
   integracao: IntegracaoWhatsapp,
   overrides: Partial<IntegracaoWhatsapp> & {
@@ -246,8 +253,12 @@ async function marcarIntegracaoComDiagnosticoMeta(params: {
     },
   };
 
-  if (diagnostico.statusIntegracao) {
-    payload.status = diagnostico.statusIntegracao;
+  const statusIntegracao = normalizarStatusIntegracaoWhatsapp(
+    diagnostico.statusIntegracao
+  );
+
+  if (statusIntegracao) {
+    payload.status = statusIntegracao;
   }
 
   if (diagnostico.statusNumeroMeta) {
@@ -293,7 +304,7 @@ async function marcarIntegracaoRecuperadaSeNecessario(params: {
   const statusNormalizado = String(phoneNumberStatus || "").toLowerCase();
 
   if (
-    integracao.status !== "bloqueado" ||
+    !["bloqueado", "erro"].includes(integracao.status) ||
     !eraBloqueioMeta ||
     !phoneJson ||
     ["banned", "banido", "blocked", "bloqueado", "restricted"].includes(

@@ -33,7 +33,7 @@ export type WhatsAppMetaErrorDiagnostic = {
   metaManagerUrl: string | null;
   helpWhatsappUrl: string | null;
   bloqueiaOperacao: boolean;
-  statusIntegracao?: "bloqueado";
+  statusIntegracao?: "erro";
   statusNumeroMeta?: "BANNED";
 };
 
@@ -97,7 +97,7 @@ export function diagnosticarErroMetaWhatsapp(
       metaManagerUrl: WHATSAPP_META_MANAGER_URL,
       helpWhatsappUrl: WHATSAPP_META_BLOCK_HELP_URL,
       bloqueiaOperacao: true,
-      statusIntegracao: "bloqueado",
+      statusIntegracao: "erro",
       statusNumeroMeta: "BANNED",
     };
   }

@@ -49,6 +49,13 @@ function objetoConfig(configJson: any) {
     : {};
 }
 
+function normalizarStatusIntegracaoWhatsapp(valor?: string | null) {
+  const status = String(valor || "").trim().toLowerCase();
+  return ["pendente", "ativa", "erro", "desconectada"].includes(status)
+    ? status
+    : null;
+}
+
 async function marcarIntegracaoComDiagnosticoMeta(params: {
   supabase: Awaited<ReturnType<typeof createClient>>;
   integracao: IntegracaoWhatsapp;
@@ -72,8 +79,12 @@ async function marcarIntegracaoComDiagnosticoMeta(params: {
     },
   };
 
-  if (diagnostico.statusIntegracao) {
-    payload.status = diagnostico.statusIntegracao;
+  const statusIntegracao = normalizarStatusIntegracaoWhatsapp(
+    diagnostico.statusIntegracao
+  );
+
+  if (statusIntegracao) {
+    payload.status = statusIntegracao;
   }
 
   if (diagnostico.statusNumeroMeta) {
