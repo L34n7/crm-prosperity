@@ -12,6 +12,20 @@ type IntegracaoWhatsApp = {
   numero: string | null;
   status: string | null;
   waba_id: string | null;
+  phone_number_status?: string | null;
+  quality_rating?: string | null;
+  meta_account_mode?: string | null;
+  meta_saude_ultima_verificacao_em?: string | null;
+};
+
+type LimiteMeta = {
+  limite: number;
+  usados: number;
+  restantes: number;
+  percentual: number;
+  tier: string | null;
+  origem: string;
+  alerta: "normal" | "amarelo" | "vermelho";
 };
 
 type TemplateButton = {
@@ -541,6 +555,63 @@ function formatarTelefone(numero: string | null | undefined) {
   return limpo;
 }
 
+function formatarNumeroMeta(valor?: number | null) {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) return "0";
+  return new Intl.NumberFormat("pt-BR").format(valor);
+}
+
+function formatarPercentualMeta(valor?: number | null) {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) return "0%";
+  return `${Math.round(valor * 100)}%`;
+}
+
+function formatarLimiteTierMeta(tier?: string | null) {
+  const valor = String(tier || "").trim().toUpperCase();
+
+  if (!valor) return "Limite padrao do sistema";
+  if (valor.includes("UNLIMITED")) return "Alcance sem limite informado";
+  if (valor.includes("100K")) return "Ate 100 mil contatos unicos em 24h";
+  if (valor.includes("10K")) return "Ate 10 mil contatos unicos em 24h";
+  if (valor.includes("1K")) return "Ate 1 mil contatos unicos em 24h";
+  if (valor.includes("250")) return "Ate 250 contatos unicos em 24h";
+  if (valor.includes("50")) return "Ate 50 contatos unicos em 24h";
+
+  return "Limite informado pela Meta";
+}
+
+function formatarQualidadeMeta(quality?: string | null) {
+  const valor = String(quality || "").trim().toUpperCase();
+
+  switch (valor) {
+    case "GREEN":
+    case "HIGH":
+      return "Saudavel";
+    case "YELLOW":
+    case "MEDIUM":
+      return "Atencao";
+    case "RED":
+    case "LOW":
+      return "Risco alto";
+    default:
+      return "Nao informada";
+  }
+}
+
+function formatarModoMeta(mode?: string | null) {
+  const valor = String(mode || "").trim().toUpperCase();
+
+  switch (valor) {
+    case "LIVE":
+      return "Em producao";
+    case "SANDBOX":
+    case "TEST":
+    case "TESTING":
+      return "Ambiente de teste";
+    default:
+      return "Nao informado";
+  }
+}
+
 function contatoTemTelefoneValido(contato: ContatoOpcao) {
   const telefone = limparNumero(contato.telefone);
   return telefone.length >= 10;
@@ -593,8 +664,12 @@ export default function DisparosWhatsAppPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [loadingContatos, setLoadingContatos] = useState(false);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [loadingSaudeMeta, setLoadingSaudeMeta] = useState(false);
   const [disparando, setDisparando] = useState(false);
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
+  const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
+  const [saudeMetaIntegracao, setSaudeMetaIntegracao] =
+    useState<Partial<IntegracaoWhatsApp> | null>(null);
 
   const [integracaoId, setIntegracaoId] = useState("");
   const [templateId, setTemplateId] = useState("");
@@ -801,6 +876,33 @@ export default function DisparosWhatsAppPage() {
     }
   }
 
+  async function carregarSaudeMeta(integracaoWhatsappId: string) {
+    try {
+      setLoadingSaudeMeta(true);
+
+      const params = new URLSearchParams({
+        integracao_id: integracaoWhatsappId,
+      });
+      const res = await fetch(`/api/whatsapp/limite-meta?${params}`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar saude Meta.");
+      }
+
+      setLimiteMeta(json.limite_meta || null);
+      setSaudeMetaIntegracao(json.integracao || null);
+    } catch (error: any) {
+      setLimiteMeta(null);
+      setSaudeMetaIntegracao(null);
+      console.warn("[DISPAROS WHATSAPP] Erro ao carregar saude Meta:", error);
+    } finally {
+      setLoadingSaudeMeta(false);
+    }
+  }
+
   useEffect(() => {
     carregarUsuarioLogado();
     carregarIntegracoes();
@@ -824,8 +926,11 @@ export default function DisparosWhatsAppPage() {
 
     if (integracaoId) {
       carregarTemplates(integracaoId);
+      carregarSaudeMeta(integracaoId);
     } else {
       setTemplates([]);
+      setLimiteMeta(null);
+      setSaudeMetaIntegracao(null);
     }
   }, [integracaoId]);
 
@@ -844,6 +949,22 @@ export default function DisparosWhatsAppPage() {
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
   }, [integracoes, integracaoId]);
+
+  const telefonesSelecionadosUnicos = useMemo(() => {
+    return Array.from(
+      new Set(
+        contatosSelecionados
+          .map((contato) => limparNumero(contato.telefone))
+          .filter((telefone) => telefone.length >= 10)
+      )
+    );
+  }, [contatosSelecionados]);
+
+  const saldoEstimadoAposSelecao = limiteMeta
+    ? limiteMeta.restantes - telefonesSelecionadosUnicos.length
+    : null;
+  const selecaoExcedeLimite =
+    typeof saldoEstimadoAposSelecao === "number" && saldoEstimadoAposSelecao < 0;
 
   const templateSelecionado = useMemo(() => {
     return templates.find((item) => item.id === templateId) || null;
@@ -1260,6 +1381,10 @@ export default function DisparosWhatsAppPage() {
     } catch (error: any) {
       setErro(error?.message || "Erro ao realizar disparo.");
     } finally {
+      if (integracaoId) {
+        carregarSaudeMeta(integracaoId);
+      }
+
       setDisparando(false);
     }
   }
@@ -1862,10 +1987,92 @@ export default function DisparosWhatsAppPage() {
                 ) : null}
                 {erro ? <div className={styles.errorAlert}>{erro}</div> : null}
 
+                {(loadingSaudeMeta || limiteMeta) && (
+                  <div
+                    className={`${styles.metaHealthCard} ${
+                      selecaoExcedeLimite || limiteMeta?.alerta === "vermelho"
+                        ? styles.metaHealthDanger
+                        : limiteMeta?.alerta === "amarelo"
+                        ? styles.metaHealthWarning
+                        : ""
+                    }`}
+                  >
+                    <div className={styles.metaHealthHeader}>
+                      <div>
+                        <span>Controle preventivo da Meta</span>
+                        <strong>Capacidade segura para este disparo</strong>
+                        <p>
+                          O CRM acompanha o limite de contatos unicos iniciados
+                          pela empresa nas ultimas 24 horas e bloqueia envios
+                          que poderiam ultrapassar esse teto.
+                        </p>
+                      </div>
+                      <strong>
+                        {loadingSaudeMeta
+                          ? "Atualizando"
+                          : `${formatarPercentualMeta(limiteMeta?.percentual)} usado`}
+                      </strong>
+                    </div>
+
+                    <div className={styles.metaHealthGrid}>
+                      <div>
+                        <span>Capacidade da conta</span>
+                        <strong>{formatarNumeroMeta(limiteMeta?.limite)}</strong>
+                      </div>
+                      <div>
+                        <span>Ja comprometidos</span>
+                        <strong>{formatarNumeroMeta(limiteMeta?.usados)}</strong>
+                      </div>
+                      <div>
+                        <span>Ainda disponiveis</span>
+                        <strong>{formatarNumeroMeta(limiteMeta?.restantes)}</strong>
+                      </div>
+                      <div>
+                        <span>Neste disparo</span>
+                        <strong>
+                          {formatarNumeroMeta(telefonesSelecionadosUnicos.length)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className={styles.metaHealthMeta}>
+                      <span>
+                        Alcance: {formatarLimiteTierMeta(limiteMeta?.tier)}
+                      </span>
+                      <span>
+                        Reputacao do numero:{" "}
+                        {formatarQualidadeMeta(
+                          saudeMetaIntegracao?.quality_rating ||
+                            integracaoSelecionada?.quality_rating
+                        )}
+                      </span>
+                      <span>
+                        Ambiente:{" "}
+                        {formatarModoMeta(
+                          saudeMetaIntegracao?.meta_account_mode ||
+                            integracaoSelecionada?.meta_account_mode
+                        )}
+                      </span>
+                      <span>
+                        Disponiveis apos este envio:{" "}
+                        {typeof saldoEstimadoAposSelecao === "number"
+                          ? formatarNumeroMeta(Math.max(saldoEstimadoAposSelecao, 0))
+                          : "0"}
+                      </span>
+                    </div>
+
+                    {selecaoExcedeLimite && (
+                      <p className={styles.metaHealthAlert}>
+                        A selecao atual ultrapassa o limite disponivel. O CRM
+                        vai bloquear o envio antes de chamar a Meta.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className={styles.submitBar}>
                   {/* ESQUERDA */}
                   <div className={styles.submitLeft}>
-                    <span>Contatos: {contatosSelecionados.length}</span>
                     <span>Template: {templateSelecionado?.nome}</span>
                     <span>Variáveis: {totalVariaveis}</span>
                   </div>
@@ -1905,9 +2112,14 @@ export default function DisparosWhatsAppPage() {
                       type="button"
                       className={styles.primaryButton}
                       onClick={() => setModalConfirmacaoAberto(true)}
-                      disabled={!templateSelecionado || contatosSelecionados.length === 0 || disparando}
+                      disabled={
+                        !templateSelecionado ||
+                        contatosSelecionados.length === 0 ||
+                        disparando ||
+                        selecaoExcedeLimite
+                      }
                     >
-                      Enviar mensagens
+                      Enviar disparos
                     </button>
                   </div>
                 </div>

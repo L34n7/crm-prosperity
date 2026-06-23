@@ -673,6 +673,146 @@
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
 }
 
+.metaHealthCard {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #12a5843d;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(18, 165, 132, 0.10), transparent 38%),
+    linear-gradient(180deg, var(--crm-surface) 0%, var(--crm-surface-soft) 100%);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.metaHealthCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--crm-accent),
+    var(--crm-primary-text),
+    var(--crm-success-strong)
+  );
+}
+
+.metaHealthWarning {
+  border-color: var(--crm-warning-border);
+  background:
+    linear-gradient(135deg, rgba(200, 121, 19, 0.12), transparent 38%),
+    linear-gradient(180deg, var(--crm-warning-bg) 0%, var(--crm-surface) 100%);
+}
+
+.metaHealthDanger {
+  border-color: var(--crm-danger-border);
+  background:
+    linear-gradient(135deg, rgba(215, 53, 72, 0.12), transparent 38%),
+    linear-gradient(180deg, var(--crm-danger-bg) 0%, var(--crm-surface) 100%);
+}
+
+.metaHealthHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.metaHealthHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.metaHealthHeader span,
+.metaHealthGrid span,
+.metaHealthMeta span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.metaHealthHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.metaHealthHeader > strong {
+  min-width: 118px;
+  border: 1px solid rgba(18, 165, 132, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 8px 12px;
+  color: var(--crm-primary-text);
+  font-size: 13px;
+  text-align: center;
+}
+
+.metaHealthHeader p {
+  max-width: 780px;
+  margin: 2px 0 0;
+  color: var(--crm-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.metaHealthGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metaHealthGrid div {
+  border: 1px solid rgba(18, 65, 78, 0.10);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.76);
+  padding: 13px;
+  display: grid;
+  gap: 4px;
+}
+
+.metaHealthGrid strong {
+  color: var(--crm-text-strong);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.metaHealthMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid rgba(18, 65, 78, 0.10);
+  padding-top: 12px;
+}
+
+.metaHealthMeta span {
+  border: 1px solid rgba(18, 65, 78, 0.10);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 7px 10px;
+  color: var(--crm-text);
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.metaHealthAlert {
+  margin: 0;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 14px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 700;
+}
+
 .messageCollapseCard {
   border: 1px solid var(--crm-border);
   background: rgba(255, 255, 255, 0.72);
@@ -1602,8 +1742,12 @@
   }
 
   .submitBar {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .metaHealthGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .submitInfo,
@@ -1717,6 +1861,19 @@
 
   .submitCenter span {
     white-space: normal;
+  }
+
+  .metaHealthCard {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .metaHealthHeader {
+    flex-direction: column;
+  }
+
+  .metaHealthGrid {
+    grid-template-columns: 1fr;
   }
 
   .submitCenter span:not(:last-child)::after {

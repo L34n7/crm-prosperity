@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   diagnosticarErroMetaWhatsapp,
   type MetaErrorBody,
@@ -15,6 +16,7 @@ import {
 const GRAPH_VERSION = "v23.0";
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
 const PROFILE_PHOTO_TYPES = new Set(["image/jpeg", "image/png"]);
+const supabaseAdmin = getSupabaseAdmin();
 
 type ConfigJson = Record<string, unknown> | null;
 
@@ -409,7 +411,7 @@ async function salvarSaudeMetaIntegracao(params: {
     console.warn("[WHATSAPP PERFIL SAUDE UPDATE ERROR]", error);
   }
 
-  const { error: historicoError } = await supabase
+  const { error: historicoError } = await supabaseAdmin
     .from("whatsapp_meta_saude_historico")
     .insert({
       empresa_id: empresaId,

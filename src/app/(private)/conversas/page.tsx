@@ -197,6 +197,25 @@ type Janela24hApiPayload = Partial<Janela24hConversa> & {
   motivo_bloqueio?: string | null;
 };
 
+type LimiteMetaResumo = {
+  limite: number;
+  usados: number;
+  restantes: number;
+  percentual: number;
+  tier?: string | null;
+  origem?: string | null;
+  alerta?: "normal" | "amarelo" | "vermelho" | string;
+};
+
+type TelefoneMetaLimite = {
+  telefone_normalizado: string;
+  ja_contabilizado: boolean;
+  impacto: number;
+  restantes_apos_envio: number;
+  excede_limite: boolean;
+  janela_expira_em?: string | null;
+};
+
 type SetorOpcao = {
   id: string;
   nome: string;
@@ -498,6 +517,17 @@ function formatarCampanhaRastreamentoContato(
   return origem
     ? `${campanha.nome} (${origem})${status}`
     : `${campanha.nome}${status}`;
+}
+
+function normalizarTelefoneMetaUi(valor?: string | null) {
+  return String(valor || "").replace(/\D/g, "");
+}
+
+function formatarNumeroLimiteMetaUi(valor?: number | null) {
+  const numero = Number(valor ?? 0);
+  return new Intl.NumberFormat("pt-BR").format(
+    Number.isFinite(numero) ? numero : 0
+  );
 }
 
 function normalizarChaveVariavelMacro(valor: unknown) {
@@ -2084,6 +2114,20 @@ function ConversasPageContent() {
   const [templateDisparoBody1, setTemplateDisparoBody1] = useState("");
   const [enviandoDisparoIndividual, setEnviandoDisparoIndividual] = useState(false);
   const [disparoIndividualAberto, setDisparoIndividualAberto] = useState(false);
+  const [limiteMetaDisparoIndividual, setLimiteMetaDisparoIndividual] =
+    useState<LimiteMetaResumo | null>(null);
+  const [
+    telefoneMetaDisparoIndividual,
+    setTelefoneMetaDisparoIndividual,
+  ] = useState<TelefoneMetaLimite | null>(null);
+  const [
+    loadingLimiteMetaDisparoIndividual,
+    setLoadingLimiteMetaDisparoIndividual,
+  ] = useState(false);
+  const [
+    chaveLimiteMetaDisparoIndividual,
+    setChaveLimiteMetaDisparoIndividual,
+  ] = useState("");
 
   const [previewCustoDisparoIndividual, setPreviewCustoDisparoIndividual] = useState<{
     categoria: string;
@@ -5851,6 +5895,53 @@ async function baixarConversaPDF() {
     }
   }
 
+  async function carregarLimiteMetaDisparoIndividual() {
+    const integracaoId = conversaSelecionada?.integracao_whatsapp_id;
+    const telefone = conversaSelecionada?.contatos?.telefone || "";
+    const telefoneNormalizado = normalizarTelefoneMetaUi(telefone);
+    const chaveConsulta = integracaoId
+      ? `${integracaoId}:${telefoneNormalizado}`
+      : "";
+
+    if (!integracaoId || telefoneNormalizado.length < 10) {
+      setLimiteMetaDisparoIndividual(null);
+      setTelefoneMetaDisparoIndividual(null);
+      setChaveLimiteMetaDisparoIndividual("");
+      return;
+    }
+
+    try {
+      setLoadingLimiteMetaDisparoIndividual(true);
+      setChaveLimiteMetaDisparoIndividual("");
+
+      const params = new URLSearchParams({
+        integracao_id: integracaoId,
+        telefone,
+      });
+
+      const res = await fetch(`/api/whatsapp/limite-meta?${params}`, {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || "Erro ao consultar limite da Meta.");
+      }
+
+      setLimiteMetaDisparoIndividual(json.limite_meta || null);
+      setTelefoneMetaDisparoIndividual(json.telefone_meta_limite || null);
+      setChaveLimiteMetaDisparoIndividual(chaveConsulta);
+    } catch (error) {
+      console.warn("[DISPARO INDIVIDUAL] Erro ao consultar limite Meta:", error);
+      setLimiteMetaDisparoIndividual(null);
+      setTelefoneMetaDisparoIndividual(null);
+      setChaveLimiteMetaDisparoIndividual(chaveConsulta);
+    } finally {
+      setLoadingLimiteMetaDisparoIndividual(false);
+    }
+  }
+
 
     function montarMensagemErroDisparoIndividual(data: any) {
       const error = String(data?.error || "").trim();
@@ -5906,6 +5997,13 @@ async function baixarConversaPDF() {
 
     if (!templateDisparoNome.trim()) {
       setErro("Informe o nome do template.");
+      return;
+    }
+
+    if (bloqueioLimiteDisparoIndividual) {
+      setErro(
+        "Este disparo ultrapassaria o limite de novas conversas permitido pela Meta nas ultimas 24 horas. Aguarde liberar saldo ou revise o limite no Gerenciador do WhatsApp."
+      );
       return;
     }
 
@@ -6124,6 +6222,28 @@ async function baixarConversaPDF() {
 
     if (numeros.length === 0) return 0;
     return Math.max(...numeros);
+  }
+
+  function extrairQuickRepliesTemplate(payload?: {
+    components?: Array<{
+      type: string;
+      buttons?: Array<{ type?: string; text?: string }>;
+    }>;
+  } | null) {
+    const buttons = payload?.components?.find(
+      (item) => String(item.type || "").toUpperCase() === "BUTTONS"
+    );
+
+    return (
+      buttons?.buttons
+        ?.filter(
+          (button) =>
+            String(button?.type || "").toUpperCase() === "QUICK_REPLY" &&
+            button?.text
+        )
+        .map((button) => button.text || "")
+        .filter(Boolean) || []
+    );
   }
 
   const conversaSetorId =
@@ -6487,6 +6607,51 @@ const templateFooterTexto = useMemo(() => {
     !!conversaSelecionada &&
     !conversaComBotAtivo &&
     (!janela24hAberta || !!conversaEncerrada);
+
+  const telefoneDisparoIndividualNormalizado = useMemo(
+    () => normalizarTelefoneMetaUi(conversaSelecionada?.contatos?.telefone),
+    [conversaSelecionada?.contatos?.telefone]
+  );
+
+  const chaveLimiteMetaDisparoIndividualAtual = useMemo(() => {
+    if (
+      !conversaSelecionada?.integracao_whatsapp_id ||
+      telefoneDisparoIndividualNormalizado.length < 10
+    ) {
+      return "";
+    }
+
+    return `${conversaSelecionada.integracao_whatsapp_id}:${telefoneDisparoIndividualNormalizado}`;
+  }, [
+    conversaSelecionada?.integracao_whatsapp_id,
+    telefoneDisparoIndividualNormalizado,
+  ]);
+
+  const disparoIndividualConsomeLimiteMeta =
+    disparoIndividualAberto &&
+    !janela24hAberta &&
+    telefoneDisparoIndividualNormalizado.length >= 10;
+
+  const limiteMetaDisparoIndividualCarregado =
+    !disparoIndividualConsomeLimiteMeta ||
+    chaveLimiteMetaDisparoIndividual === chaveLimiteMetaDisparoIndividualAtual;
+
+  const disparoIndividualExcedeLimiteMeta =
+    disparoIndividualConsomeLimiteMeta &&
+    limiteMetaDisparoIndividualCarregado &&
+    Boolean(telefoneMetaDisparoIndividual?.excede_limite);
+
+  const saldoAposDisparoIndividualMeta =
+    telefoneMetaDisparoIndividual?.restantes_apos_envio ??
+    (limiteMetaDisparoIndividual
+      ? Math.max(limiteMetaDisparoIndividual.restantes - 1, 0)
+      : null);
+
+  const bloqueioLimiteDisparoIndividual =
+    disparoIndividualConsomeLimiteMeta &&
+    (!limiteMetaDisparoIndividualCarregado ||
+      loadingLimiteMetaDisparoIndividual ||
+      disparoIndividualExcedeLimiteMeta);
     
   const composerPronto =
     !!conversaSelecionada && !loadingMensagens;
@@ -7038,6 +7203,28 @@ const templateFooterTexto = useMemo(() => {
     disparoIndividualAberto,
     templateSelecionado?.id,
     templateSelecionado?.categoria,
+    conversaSelecionada?.contatos?.telefone,
+  ]);
+
+  useEffect(() => {
+    if (
+      !disparoIndividualAberto ||
+      janela24hAberta ||
+      !conversaSelecionada?.integracao_whatsapp_id ||
+      !conversaSelecionada?.contatos?.telefone
+    ) {
+      setLimiteMetaDisparoIndividual(null);
+      setTelefoneMetaDisparoIndividual(null);
+      setLoadingLimiteMetaDisparoIndividual(false);
+      setChaveLimiteMetaDisparoIndividual("");
+      return;
+    }
+
+    void carregarLimiteMetaDisparoIndividual();
+  }, [
+    disparoIndividualAberto,
+    janela24hAberta,
+    conversaSelecionada?.integracao_whatsapp_id,
     conversaSelecionada?.contatos?.telefone,
   ]);
 
@@ -8429,12 +8616,74 @@ const templateFooterTexto = useMemo(() => {
                                         disabled={
                                           enviandoDisparoIndividual ||
                                           !templateDisparoId.trim() ||
-                                          !conversaSelecionada?.contatos?.telefone
+                                          !conversaSelecionada?.contatos?.telefone ||
+                                          bloqueioLimiteDisparoIndividual
                                         }
                                       >
-                                        {enviandoDisparoIndividual ? "Enviando..." : "Enviar"}
+                                        {enviandoDisparoIndividual
+                                          ? "Enviando..."
+                                          : disparoIndividualConsomeLimiteMeta &&
+                                            (!limiteMetaDisparoIndividualCarregado ||
+                                              loadingLimiteMetaDisparoIndividual)
+                                          ? "Validando..."
+                                          : "Enviar"}
                                       </button>
                                     </div>
+
+                                    {disparoIndividualConsomeLimiteMeta && (
+                                      <div
+                                        className={`${styles.disparoLimiteMetaAviso} ${
+                                          disparoIndividualExcedeLimiteMeta
+                                            ? styles.disparoLimiteMetaAvisoBloqueado
+                                            : ""
+                                        }`}
+                                      >
+                                        <div>
+                                          <strong>Limite Meta 24h</strong>
+                                          <span>
+                                            {!limiteMetaDisparoIndividualCarregado ||
+                                            loadingLimiteMetaDisparoIndividual
+                                              ? "Validando capacidade do contato."
+                                              : disparoIndividualExcedeLimiteMeta
+                                              ? "Bloqueado: limite de novas conversas atingido."
+                                              : telefoneMetaDisparoIndividual?.ja_contabilizado
+                                              ? "Contato ja contabilizado neste periodo."
+                                              : "Consome 1 vaga neste envio."}
+                                          </span>
+                                        </div>
+
+                                        {limiteMetaDisparoIndividual && (
+                                          <div className={styles.disparoLimiteMetaNumeros}>
+                                            <span>
+                                              Capacidade:{" "}
+                                              <strong>
+                                                {formatarNumeroLimiteMetaUi(
+                                                  limiteMetaDisparoIndividual.limite
+                                                )}
+                                              </strong>
+                                            </span>
+                                            <span>
+                                              Disponiveis:{" "}
+                                              <strong>
+                                                {formatarNumeroLimiteMetaUi(
+                                                  limiteMetaDisparoIndividual.restantes
+                                                )}
+                                              </strong>
+                                            </span>
+                                            {saldoAposDisparoIndividualMeta !== null && (
+                                              <span>
+                                                Apos envio:{" "}
+                                                <strong>
+                                                  {formatarNumeroLimiteMetaUi(
+                                                    saldoAposDisparoIndividualMeta
+                                                  )}
+                                                </strong>
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
 
                                     {templateSelecionado && (
                                       <div className={styles.disparoCustoBox}>
@@ -8484,55 +8733,106 @@ const templateFooterTexto = useMemo(() => {
                                   <div className={styles.disparoTemplatePreviewCard}>
                                     <div className={styles.disparoTemplatePreviewHeader}>
                                       <div>
+                                        <span className={styles.disparoTemplatePreviewEyebrow}>
+                                          Previa do WhatsApp
+                                        </span>
                                         <h4 className={styles.disparoTemplatePreviewName}>
-                                          {templateSelecionado?.nome || "Template não selecionado"}
+                                          {templateSelecionado?.nome || "Template nao selecionado"}
                                         </h4>
 
-                                        <p className={styles.disparoTemplatePreviewMeta}>
-                                          Categoria:{" "}
-                                          <strong>
-                                            {templateSelecionado?.categoria || "Não especificado"}
-                                          </strong>
-                                          {" • "}
-                                          Idioma:{" "}
-                                          <strong>
-                                            {templateSelecionado?.idioma ||
-                                              templateSelecionado?.payload?.language ||
-                                              "—"}
-                                          </strong>
-                                        </p>
+                                        {templateSelecionado && (
+                                          <p className={styles.disparoTemplatePreviewMeta}>
+                                            A mensagem abaixo segue o formato exibido no WhatsApp.
+                                          </p>
+                                        )}
                                       </div>
 
-                                      <span className={styles.disparoTemplateStatusBadge}>
-                                        Aprovado
-                                      </span>
+                                      {templateSelecionado && (
+                                        <span className={styles.disparoTemplateStatusBadge}>
+                                          Aprovado
+                                        </span>
+                                      )}
                                     </div>
 
-                                    <div className={styles.disparoTemplateSection}>
-                                      <span className={styles.disparoTemplateSectionLabel}>CABEÇALHO</span>
-                                      <div className={styles.disparoTemplateSectionBox}>
-                                        {templateHeaderTexto || "Sem cabeçalho"}
+                                    {templateSelecionado ? (
+                                      <>
+                                        <div className={styles.disparoWhatsappPreviewArea}>
+                                          <div className={styles.disparoWhatsappBubble}>
+                                            {templateHeaderTexto ? (
+                                              <strong className={styles.disparoWhatsappPreviewTitle}>
+                                                {templateHeaderTexto}
+                                              </strong>
+                                            ) : null}
+
+                                            <p className={styles.disparoWhatsappPreviewText}>
+                                              {templateBodyTexto || "Sem corpo"}
+                                            </p>
+
+                                            <div className={styles.disparoWhatsappPreviewMeta}>
+                                              <span className={styles.disparoWhatsappPreviewFooter}>
+                                                {templateFooterTexto || "Sem rodape"}
+                                              </span>
+
+                                              <span className={styles.disparoWhatsappPreviewTime}>
+                                                {new Date().toLocaleTimeString("pt-BR", {
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                                })}
+                                              </span>
+                                            </div>
+
+                                            {extrairQuickRepliesTemplate(templateSelecionado.payload).map(
+                                              (texto, index) => (
+                                                <div
+                                                  key={`${texto}-${index}`}
+                                                  className={styles.disparoWhatsappPreviewButton}
+                                                >
+                                                  Resposta: {texto}
+                                                </div>
+                                              )
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div className={styles.disparoTemplateInfoCompact}>
+                                          <span>
+                                            Categoria:{" "}
+                                            <strong>
+                                              {templateSelecionado.categoria || "Nao informada"}
+                                            </strong>
+                                          </span>
+                                          <span>
+                                            Idioma:{" "}
+                                            <strong>
+                                              {templateSelecionado.idioma ||
+                                                templateSelecionado.payload?.language ||
+                                                "-"}
+                                            </strong>
+                                          </span>
+                                          <span>
+                                            Cabecalho:{" "}
+                                            <strong>
+                                              {templateHeaderTexto ? "Sim" : "Sem cabecalho"}
+                                            </strong>
+                                          </span>
+                                          <span>
+                                            Variaveis:{" "}
+                                            <strong>{quantidadeParametrosBody}</strong>
+                                          </span>
+                                        </div>
+
+                                        <div className={styles.disparoTemplateHintBox}>
+                                          Este template usa{" "}
+                                          <strong>{quantidadeParametrosBody}</strong>{" "}
+                                          variavel(is). O sistema envia os valores preenchidos nos
+                                          parametros acima.
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className={styles.disparoTemplateEmptyState}>
+                                        Selecione um template aprovado para visualizar a mensagem.
                                       </div>
-                                    </div>
-
-                                    <div className={styles.disparoTemplateSection}>
-                                      <span className={styles.disparoTemplateSectionLabel}>CORPO</span>
-                                      <div className={styles.disparoTemplateSectionBox}>
-                                        {templateBodyTexto || "Sem corpo"}
-                                      </div>
-                                    </div>
-
-                                    <div className={styles.disparoTemplateSection}>
-                                      <span className={styles.disparoTemplateSectionLabel}>RODAPÉ</span>
-                                      <div className={styles.disparoTemplateSectionBox}>
-                                        {templateFooterTexto || "Sem rodapé"}
-                                      </div>
-                                    </div>
-
-                                    <div className={styles.disparoTemplateHintBox}>
-                                        Este template usa <strong>{quantidadeParametrosBody}</strong> variável(is).
-                                        No modelo atual, quando existem variáveis, o sistema envia os valores preenchidos nos parâmetros acima.
-                                    </div>
+                                    )}
                                   </div>
                                 </div>
                               )}
