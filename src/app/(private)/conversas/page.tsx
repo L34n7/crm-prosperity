@@ -163,7 +163,8 @@ type Mensagem = {
     midia_url?: string | null;
     tipo_midia?: string | null;
     legenda?: string | null;
-    erro?: string | null;
+    erro?: unknown;
+    meta_response?: unknown;
     whatsapp_status?: {
       error_message?: string | null;
       ultimo_status?: string | null;
@@ -822,11 +823,46 @@ function getStatusEnvioLabel(status: Mensagem["status_envio"]) {
   }
 }
 
+function isRecord(valor: unknown): valor is Record<string, unknown> {
+  return !!valor && typeof valor === "object" && !Array.isArray(valor);
+}
+
+function getStringFromRecord(
+  valor: Record<string, unknown>,
+  chave: string
+) {
+  const campo = valor[chave];
+  return typeof campo === "string" ? campo.trim() : "";
+}
+
+function extrairTextoErroMeta(valor: unknown): string {
+  if (typeof valor === "string") return valor.trim();
+  if (!isRecord(valor)) return "";
+
+  const payloadErro = isRecord(valor.error) ? valor.error : valor;
+  const errorData = isRecord(payloadErro.error_data)
+    ? payloadErro.error_data
+    : null;
+
+  return (
+    (errorData ? getStringFromRecord(errorData, "details") : "") ||
+    getStringFromRecord(payloadErro, "message") ||
+    getStringFromRecord(payloadErro, "title") ||
+    getStringFromRecord(payloadErro, "detail") ||
+    getStringFromRecord(payloadErro, "error")
+  );
+}
+
+function erroMensagemUtil(texto: string) {
+  const valor = texto.trim();
+  return valor && valor !== "Media upload error" ? valor : "";
+}
+
 function getMensagemErroEnvio(msg: Mensagem) {
   if (msg.status_envio !== "falha") return "";
 
-  const erroRaw =
-    msg.metadata_json?.whatsapp_status?.raw_status?.errors?.[0];
+  const errosRaw = msg.metadata_json?.whatsapp_status?.raw_status?.errors;
+  const erroRaw = Array.isArray(errosRaw) ? errosRaw[0] : null;
 
   const codigo = erroRaw?.code ? String(erroRaw.code) : "";
   const titulo = erroRaw?.title || erroRaw?.message || "";
@@ -850,13 +886,24 @@ function getMensagemErroEnvio(msg: Mensagem) {
     return "A mídia foi enviada pelo CRM para a Meta, mas o WhatsApp retornou falha no processamento e não entregou ao contato.";
   }
 
-  const erroDireto = msg.metadata_json?.erro;
-  if (erroDireto?.trim() && erroDireto !== "Media upload error") {
+  const erroDireto = erroMensagemUtil(
+    extrairTextoErroMeta(msg.metadata_json?.erro)
+  );
+  if (erroDireto) {
     return erroDireto;
   }
 
-  const erroStatus = msg.metadata_json?.whatsapp_status?.error_message;
-  if (erroStatus?.trim() && erroStatus !== "Media upload error") {
+  const erroMetaResponse = erroMensagemUtil(
+    extrairTextoErroMeta(msg.metadata_json?.meta_response)
+  );
+  if (erroMetaResponse) {
+    return erroMetaResponse;
+  }
+
+  const erroStatus = erroMensagemUtil(
+    msg.metadata_json?.whatsapp_status?.error_message || ""
+  );
+  if (erroStatus) {
     return erroStatus;
   }
 
