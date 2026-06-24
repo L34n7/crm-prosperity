@@ -39,7 +39,10 @@ import LogoutButton from "@/components/LogoutButton";
 import { useHeaderSummary } from "@/components/header-summary-context";
 import { useHeaderUser } from "@/components/header-user-context";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
-import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
+import {
+  PERMISSAO_INTERNA_EMPRESAS,
+  PERMISSAO_RELATORIOS_INTERNOS,
+} from "@/lib/permissoes/internas";
 import styles from "./Sidebar.module.css";
 
 type MenuItem = {
@@ -130,7 +133,7 @@ const menuItems: MenuItem[] = [
     label: "Relatórios Internos",
     href: "/relatorios-internos",
     icon: BarChart3,
-    permissao: PERMISSAO_INTERNA_EMPRESAS,
+    permissao: PERMISSAO_RELATORIOS_INTERNOS,
   },
   { label: "Perfil WhatsApp", href: "/configuracoes/whatsapp/perfil", icon: Settings2 },
 ];

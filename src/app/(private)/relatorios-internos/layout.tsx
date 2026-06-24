@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
-import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
+import { PERMISSAO_RELATORIOS_INTERNOS } from "@/lib/permissoes/internas";
 
 export default async function RelatoriosInternosLayout({
   children,
@@ -14,7 +14,7 @@ export default async function RelatoriosInternosLayout({
     redirect("/login");
   }
 
-  if (!can(resultado.usuario.permissoes, PERMISSAO_INTERNA_EMPRESAS)) {
+  if (!can(resultado.usuario.permissoes, PERMISSAO_RELATORIOS_INTERNOS)) {
     redirect("/");
   }
 
