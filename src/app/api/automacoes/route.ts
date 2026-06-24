@@ -38,7 +38,7 @@ function respostaWhatsappMetaBloqueado(detalhe?: string | null) {
       code: "WHATSAPP_META_BLOQUEADO",
       motivo: "whatsapp_meta_bloqueado",
       error:
-        "A conta WhatsApp Business esta banida ou bloqueada pela Meta. Nao e possivel ativar fluxos WhatsApp enquanto o bloqueio estiver ativo.",
+        "A conta WhatsApp Business esta desativada ou bloqueada pela Meta. Não é possível ativar fluxos WhatsApp enquanto o bloqueio estiver ativo.",
       detalhe: detalhe || WHATSAPP_META_BLOCK_DESCRIPTION,
       meta_manager_url: WHATSAPP_META_MANAGER_URL,
       help_whatsapp_url: WHATSAPP_META_BLOCK_HELP_URL,

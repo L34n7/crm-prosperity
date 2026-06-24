@@ -88,12 +88,12 @@ export function diagnosticarErroMetaWhatsapp(
       codigoMeta,
       titulo: "Conta WhatsApp Business bloqueada pela Meta",
       descricao:
-        "A Meta bloqueou ou desativou a conta WhatsApp Business vinculada a este numero. Enquanto o status estiver banido/bloqueado, o CRM nao consegue buscar o perfil, alterar dados nem enviar mensagens por esse numero.",
+        "A Meta bloqueou ou desativou a conta WhatsApp Business vinculada a este número. Enquanto o status estiver banido/bloqueado, o CRM não consegue buscar o perfil, alterar dados nem enviar mensagens por esse número.",
       detalheTecnico: detalhe,
       acaoCliente:
-        "Acesse o Gerenciador do WhatsApp/Business Support Home da Meta, abra o alerta da conta desativada e solicite uma analise se acreditar que foi um engano.",
+        "Acesse o Gerenciador do WhatsApp/Business Support Home da Meta, abra o alerta da conta desativada e solicite uma análise se acreditar que foi um engano.",
       acaoInterna:
-        "Pause novos disparos, revise opt-in/lista de contatos e conteudo enviado, e aguarde a decisao da Meta ou conecte outro numero aprovado.",
+        "Pause novos disparos, revise opt-in/lista de contatos e conteudo enviado, e aguarde a decisão da Meta ou conecte outro número aprovado.",
       metaManagerUrl: WHATSAPP_META_MANAGER_URL,
       helpWhatsappUrl: WHATSAPP_META_BLOCK_HELP_URL,
       bloqueiaOperacao: true,

@@ -7,20 +7,20 @@ const HELP_WHATSAPP_NUMBER =
   process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
 
 export const WHATSAPP_META_BLOCK_HELP_MESSAGE =
-  "Ola! Preciso de ajuda com minha conta WhatsApp Business banida pela Meta.";
+  "Olá! Preciso de ajuda com minha conta WhatsApp Business desativada pela Meta.";
 
 export const WHATSAPP_META_BLOCK_HELP_URL = `https://api.whatsapp.com/send?phone=${HELP_WHATSAPP_NUMBER}&text=${encodeURIComponent(
   WHATSAPP_META_BLOCK_HELP_MESSAGE
 )}`;
 
 export const WHATSAPP_META_BLOCK_TITLE =
-  "Conta WhatsApp Business banida pela Meta";
+  "Conta WhatsApp Business desativada pela Meta";
 
 export const WHATSAPP_META_BLOCK_DESCRIPTION =
-  "A Meta desativou a conta WhatsApp Business vinculada a este numero. Enquanto a conta estiver banida, o CRM nao consegue enviar, receber, responder mensagens, executar bots ou automacoes pelo WhatsApp.";
+  "A Meta desativou a conta WhatsApp Business vinculada a este número. Enquanto a conta estiver desativada, o CRM não consegue enviar, receber, responder mensagens, executar bots ou automações pelo WhatsApp.";
 
 export const WHATSAPP_META_BLOCK_CUSTOMER_ACTION =
-  "Acesse o Gerenciador do WhatsApp da Meta para ver os detalhes e solicitar analise, se acreditar que a desativacao foi um engano.";
+  "Acesse o Gerenciador do WhatsApp da Meta para ver os detalhes e solicitar anaáise, se acreditar que a desativação foi um engano.";
 
 type BloquearWhatsappMetaParams = {
   empresaId: string;
@@ -53,7 +53,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
   const agora = new Date().toISOString();
   const motivoFinal =
     motivo ||
-    "Conta WhatsApp Business banida/desativada pela Meta. Recursos de WhatsApp interrompidos pelo CRM.";
+    "Conta WhatsApp Business bloqueada/desativada pela Meta. Recursos de WhatsApp interrompidos pelo CRM.";
 
   const { data: conversasAtivas, error: conversasError } = await supabaseAdmin
     .from("conversas")

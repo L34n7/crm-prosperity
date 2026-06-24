@@ -476,10 +476,10 @@ export async function POST(request: Request) {
         {
           ok: false,
           error:
-            "A conta WhatsApp Business vinculada a esta integracao esta bloqueada ou banida pela Meta.",
+            "A conta WhatsApp Business vinculada a está integração está bloqueada ou desativada pela Meta.",
           detalhe:
             integracao.onboarding_erro ||
-            "Acesse o Gerenciador do WhatsApp na Meta e solicite uma analise se acreditar que foi um engano.",
+            "Acesse o Gerenciador do WhatsApp na Meta e solicite uma análise se acreditar que foi um engano.",
           motivo: "whatsapp_meta_bloqueado",
         },
         { status: 423 }
@@ -491,7 +491,7 @@ export async function POST(request: Request) {
         {
           ok: false,
           error:
-            "Ambiente do WhatsApp ainda nao esta configurado. Conclua a configuracao antes de realizar disparos.",
+            "Ambiente do WhatsApp ainda não está configurado. Conclua a configuração antes de realizar disparos.",
           motivo: "whatsapp_ambiente_incompleto",
         },
         { status: 400 }

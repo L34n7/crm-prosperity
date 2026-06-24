@@ -18,14 +18,14 @@
   display: block;
   margin-bottom: 4px;
   color: var(--crm-danger-text);
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   line-height: 1.25;
 }
 
 .banner p {
   margin: 0;
   color: var(--crm-text);
-  font-size: 0.86rem;
+  font-size: 0.80rem;
   line-height: 1.45;
 }
 
@@ -42,7 +42,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
+  min-height: 34px;
   border-radius: 8px;
   border: 1px solid var(--crm-danger-border);
   padding: 0 14px;
@@ -61,6 +61,11 @@
   color: var(--crm-text-inverse);
 }
 
+.actions a:first-child:hover,
+.modalActions a:first-child:hover {
+    background: var(--crm-danger-text);
+
+}
 .actions a:hover,
 .modalActions a:hover {
   border-color: var(--crm-danger-strong);

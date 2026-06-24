@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { isAdministrador } from "@/lib/auth/authorization";
+import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import { isAmbienteConfigurado } from "@/lib/whatsapp/ambiente-configurado";
@@ -44,6 +45,82 @@ const supabaseAdmin = getSupabaseAdmin();
 
 function limparNumero(valor: string) {
   return String(valor || "").replace(/\D/g, "");
+}
+
+function normalizarNumeroComparacao(valor?: string | null) {
+  const limpo = limparNumero(String(valor || ""));
+
+  if (!limpo) return "";
+
+  const normalizado = normalizarTelefoneBrasilParaWhatsApp(limpo);
+  return limparNumero(normalizado || limpo);
+}
+
+async function obterTelefonesQueConsomemLimiteMeta(params: {
+  empresaId: string;
+  categoria?: string | null;
+  telefones: string[];
+}) {
+  const telefonesSelecionados = Array.from(
+    new Set(
+      params.telefones
+        .map((telefone) => normalizarNumeroComparacao(telefone))
+        .filter((telefone) => telefone.length >= 10)
+    )
+  );
+
+  if (telefonesSelecionados.length === 0) {
+    return [];
+  }
+
+  if (String(params.categoria || "").trim().toLowerCase() !== "utility") {
+    return telefonesSelecionados;
+  }
+
+  const { data: conversasData, error } = await supabaseAdmin
+    .from("conversas")
+    .select(
+      `
+        id,
+        last_inbound_message_at,
+        contatos:contato_id (
+          id,
+          telefone
+        )
+      `
+    )
+    .eq("empresa_id", params.empresaId);
+
+  if (error) {
+    throw new Error(`Erro ao validar conversas abertas: ${error.message}`);
+  }
+
+  const telefonesDentroDaJanela24h = new Set<string>();
+
+  for (const conversa of conversasData || []) {
+    const telefoneContato = (conversa as any)?.contatos?.telefone || "";
+    const telefoneNormalizado = normalizarNumeroComparacao(telefoneContato);
+    const lastInboundMessageAt =
+      (conversa as any)?.last_inbound_message_at || null;
+
+    if (!telefoneNormalizado) continue;
+    if (!telefonesSelecionados.includes(telefoneNormalizado)) continue;
+    if (!lastInboundMessageAt) continue;
+
+    const dataUltimaMensagemContato = new Date(lastInboundMessageAt).getTime();
+
+    if (Number.isNaN(dataUltimaMensagemContato)) continue;
+
+    const diffMs = Date.now() - dataUltimaMensagemContato;
+
+    if (diffMs <= 24 * 60 * 60 * 1000) {
+      telefonesDentroDaJanela24h.add(telefoneNormalizado);
+    }
+  }
+
+  return telefonesSelecionados.filter(
+    (telefone) => !telefonesDentroDaJanela24h.has(telefone)
+  );
 }
 
 function usuarioTemPermissao(usuario: any, permissao: string) {
@@ -717,10 +794,10 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           error:
-            "A conta WhatsApp Business vinculada a esta integracao esta bloqueada ou banida pela Meta.",
+            "A conta WhatsApp Business vinculada a está integração esta bloqueada ou desativada pela Meta.",
           detalhe:
             integracao.onboarding_erro ||
-            "Acesse o Gerenciador do WhatsApp na Meta e solicite uma analise se acreditar que foi um engano.",
+            "Acesse o Gerenciador do WhatsApp na Meta e solicite uma análise se acreditar que foi um engano.",
           motivo: "whatsapp_meta_bloqueado",
         },
         { status: 423 }
@@ -732,7 +809,7 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           error:
-            "Ambiente do WhatsApp ainda nao esta configurado. Conclua a configuracao antes de realizar disparos.",
+            "Ambiente do WhatsApp ainda não está configurado. Conclua a configuração antes de realizar disparos.",
           motivo: "whatsapp_ambiente_incompleto",
         },
         { status: 400 }
@@ -747,6 +824,7 @@ export async function POST(req: NextRequest) {
         integracao_whatsapp_id,
         nome,
         idioma,
+        categoria,
         status,
         payload
       `)
@@ -845,16 +923,23 @@ export async function POST(req: NextRequest) {
     }
 
     const payloadTemplate = (template.payload || null) as TemplatePayload | null;
+    const telefonesQueConsomemLimite =
+      await obterTelefonesQueConsomemLimiteMeta({
+        empresaId,
+        categoria: (template as any).categoria || null,
+        telefones: destinatarios.map((item) => item.numero),
+      });
     const reservaLimite = await reservarLimiteMeta({
       empresaId,
       integracao,
-      telefones: destinatarios.map((item) => item.numero),
+      telefones: telefonesQueConsomemLimite,
       origem: "disparo_template",
       templateId: template.id,
       templateNome: template.nome,
       usuarioId: usuario.id,
       metadataJson: {
         total_destinatarios: destinatarios.length,
+        total_consumem_limite_meta: telefonesQueConsomemLimite.length,
         rota: "/api/whatsapp/disparos",
       },
     });

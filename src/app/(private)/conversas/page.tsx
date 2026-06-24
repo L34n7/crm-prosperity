@@ -2175,6 +2175,39 @@ function ConversasPageContent() {
     chaveLimiteMetaDisparoIndividual,
     setChaveLimiteMetaDisparoIndividual,
   ] = useState("");
+  const [
+    previewDisparoIndividualAberto,
+    setPreviewDisparoIndividualAberto,
+  ] = useState(true);
+  const [
+    detalhesCustoDisparoIndividualAberto,
+    setDetalhesCustoDisparoIndividualAberto,
+  ] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const media = window.matchMedia(
+      "(max-width: 1200px), (max-height: 820px)"
+    );
+
+    const aplicarModoCompacto = (compacto: boolean) => {
+      setPreviewDisparoIndividualAberto(!compacto);
+      setDetalhesCustoDisparoIndividualAberto(false);
+    };
+
+    aplicarModoCompacto(media.matches);
+
+    const listener = (event: MediaQueryListEvent) => {
+      aplicarModoCompacto(event.matches);
+    };
+
+    media.addEventListener("change", listener);
+
+    return () => {
+      media.removeEventListener("change", listener);
+    };
+  }, []);
 
   const [previewCustoDisparoIndividual, setPreviewCustoDisparoIndividual] = useState<{
     categoria: string;
@@ -8568,6 +8601,13 @@ const templateFooterTexto = useMemo(() => {
 
                                         if (!proximo) {
                                           setPreviewCustoDisparoIndividual(null);
+                                          setDetalhesCustoDisparoIndividualAberto(false);
+                                        } else if (typeof window !== "undefined") {
+                                          const compacto = window.matchMedia(
+                                            "(max-width: 1200px), (max-height: 820px)"
+                                          ).matches;
+                                          setPreviewDisparoIndividualAberto(!compacto);
+                                          setDetalhesCustoDisparoIndividualAberto(false);
                                         }
 
                                         return proximo;
@@ -8733,46 +8773,64 @@ const templateFooterTexto = useMemo(() => {
                                     )}
 
                                     {templateSelecionado && (
-                                      <div className={styles.disparoCustoBox}>
-                                        <div className={styles.disparoCustoHeader}>
-                                          <span className={styles.disparoCustoEyebrow}>Estimativa de cobrança</span>
+                                      <div className={styles.disparoCustoCompacto}>
+                                        <div className={styles.disparoCustoResumoLinha}>
+                                          <div className={styles.disparoCustoResumoTexto}>
+                                            <span>Estimativa</span>
+                                            <strong>
+                                              {loadingPreviewCustoDisparoIndividual
+                                                ? "Calculando..."
+                                                : `R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMin ?? 0).toFixed(2)} ~ R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMax ?? 0).toFixed(2)}`}
+                                            </strong>
+                                          </div>
 
-                                          <span className={styles.disparoCustoCategoria}>
-                                            {String(previewCustoDisparoIndividual?.categoria || templateSelecionado?.categoria || "-").toUpperCase()}
+                                          <div className={styles.disparoCustoResumoAcoes}>
+                                            <span className={styles.disparoCustoCategoria}>
+                                              {String(previewCustoDisparoIndividual?.categoria || templateSelecionado?.categoria || "-").toUpperCase()}
+                                            </span>
+
+                                            <button
+                                              type="button"
+                                              className={styles.disparoMiniToggleButton}
+                                              onClick={() =>
+                                                setDetalhesCustoDisparoIndividualAberto(
+                                                  (atual) => !atual
+                                                )
+                                              }
+                                              aria-expanded={
+                                                detalhesCustoDisparoIndividualAberto
+                                              }
+                                            >
+                                              {detalhesCustoDisparoIndividualAberto
+                                                ? "Ocultar"
+                                                : "Detalhes"}
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        <div className={styles.disparoCustoMetaLinha}>
+                                          <span>
+                                            <strong>Cobrados:</strong>{" "}
+                                            {previewCustoDisparoIndividual?.totalCobrados ?? 0}
+                                          </span>
+
+                                          <span>
+                                            <strong>Isentos:</strong>{" "}
+                                            {previewCustoDisparoIndividual?.totalIsentos ?? 0}
+                                          </span>
+
+                                          <span>
+                                            <strong>USD:</strong>{" "}
+                                            {`US$ ${(previewCustoDisparoIndividual?.valorTotalUsd ?? 0).toFixed(4)}`}
                                           </span>
                                         </div>
 
-                                        <div className={styles.disparoCustoMain}>
-                                          <div className={styles.disparoCustoValorPrincipal}>
-                                            {loadingPreviewCustoDisparoIndividual ? (
-                                              "Calculando..."
-                                            ) : (
-                                              `R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMin ?? 0).toFixed(2)} ~ R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMax ?? 0).toFixed(2)}`
-                                            )}
+                                        {detalhesCustoDisparoIndividualAberto && (
+                                          <div className={styles.disparoCustoAviso}>
+                                            A cobranca pode ser processada pela Meta usando o metodo de pagamento vinculado a conta empresarial.
+                                            O valor final pode variar conforme cambio, impostos, IOF, tarifas e regras de cobranca.
                                           </div>
-
-                                          <div className={styles.disparoCustoMetaLinha}>
-                                            <span>
-                                              <strong>USD:</strong>{" "}
-                                              {`US$ ${(previewCustoDisparoIndividual?.valorTotalUsd ?? 0).toFixed(4)}`}
-                                            </span>
-
-                                            <span>
-                                              <strong>Cobrados:</strong>{" "}
-                                              {previewCustoDisparoIndividual?.totalCobrados ?? 0}
-                                            </span>
-
-                                            <span>
-                                              <strong>Isentos:</strong>{" "}
-                                              {previewCustoDisparoIndividual?.totalIsentos ?? 0}
-                                            </span>
-                                          </div>
-                                        </div>
-
-                                        <div className={styles.disparoCustoAviso}>
-                                          A cobrança pode ser processada pela Meta usando o método de pagamento vinculado à conta empresarial.
-                                          O valor final pode variar conforme câmbio, impostos, IOF, tarifas e regras de cobrança.
-                                        </div>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -8794,14 +8852,35 @@ const templateFooterTexto = useMemo(() => {
                                         )}
                                       </div>
 
-                                      {templateSelecionado && (
-                                        <span className={styles.disparoTemplateStatusBadge}>
-                                          Aprovado
-                                        </span>
-                                      )}
+                                      <div className={styles.disparoPreviewActions}>
+                                        {templateSelecionado && (
+                                          <span className={styles.disparoTemplateStatusBadge}>
+                                            Aprovado
+                                          </span>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          className={styles.disparoMiniToggleButton}
+                                          onClick={() =>
+                                            setPreviewDisparoIndividualAberto(
+                                              (atual) => !atual
+                                            )
+                                          }
+                                          aria-expanded={previewDisparoIndividualAberto}
+                                        >
+                                          {previewDisparoIndividualAberto
+                                            ? "Ocultar"
+                                            : "Ver previa"}
+                                        </button>
+                                      </div>
                                     </div>
 
-                                    {templateSelecionado ? (
+                                    {templateSelecionado && !previewDisparoIndividualAberto ? (
+                                      <div className={styles.disparoTemplatePreviewCollapsed}>
+                                        Previa recolhida. Abra para conferir o texto final no formato do WhatsApp.
+                                      </div>
+                                    ) : templateSelecionado ? (
                                       <>
                                         <div className={styles.disparoWhatsappPreviewArea}>
                                           <div className={styles.disparoWhatsappBubble}>

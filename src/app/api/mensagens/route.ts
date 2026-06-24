@@ -857,7 +857,7 @@ export async function POST(request: Request) {
         ok: false,
         motivo: "whatsapp_meta_bloqueado",
         error:
-          "A conta WhatsApp Business vinculada a esta conversa esta banida ou bloqueada pela Meta.",
+          "A conta WhatsApp Business vinculada a está conversa está desativada ou bloqueada pela Meta.",
         detalhe: integracao.onboarding_erro || WHATSAPP_META_BLOCK_DESCRIPTION,
         meta_manager_url: WHATSAPP_META_MANAGER_URL,
         help_whatsapp_url: WHATSAPP_META_BLOCK_HELP_URL,

@@ -46,6 +46,17 @@ function integracaoEstaBloqueada(integracao: IntegracaoWhatsappBloqueio) {
   );
 }
 
+function respostaSemBloqueio(extra: Record<string, unknown> = {}) {
+  return NextResponse.json(
+    {
+      ok: true,
+      bloqueado: false,
+      ...extra,
+    },
+    { headers: { "Cache-Control": "private, no-store" } }
+  );
+}
+
 async function garantirBloqueioOperacional(
   integracao: IntegracaoWhatsappBloqueio
 ) {
@@ -78,6 +89,10 @@ export async function GET() {
   const resultado = await getUsuarioBasico();
 
   if (!resultado.ok) {
+    if (resultado.status === 401 || resultado.status === 403) {
+      return respostaSemBloqueio({ autenticado: false });
+    }
+
     return NextResponse.json(
       { ok: false, error: resultado.error },
       { status: resultado.status }
@@ -87,10 +102,10 @@ export async function GET() {
   const { usuario } = resultado;
 
   if (!usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Usuario sem empresa vinculada." },
-      { status: 400 }
-    );
+    return respostaSemBloqueio({
+      autenticado: true,
+      empresa_vinculada: false,
+    });
   }
 
   const { data, error } = await supabaseAdmin
@@ -124,13 +139,7 @@ export async function GET() {
   );
 
   if (!integracaoBloqueada) {
-    return NextResponse.json(
-      {
-        ok: true,
-        bloqueado: false,
-      },
-      { headers: { "Cache-Control": "private, no-store" } }
-    );
+    return respostaSemBloqueio({ autenticado: true });
   }
 
   await garantirBloqueioOperacional(integracaoBloqueada);

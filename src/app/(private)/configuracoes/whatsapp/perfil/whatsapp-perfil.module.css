@@ -265,8 +265,8 @@
   min-height: 34px;
   border: 1px solid var(--crm-danger-border);
   border-radius: 8px;
-  background: var(--crm-surface);
-  color: var(--crm-danger-text);
+  background: var(--crm-danger-strong);
+  color: var(--crm-text-inverse);
   padding: 0 12px;
   font-size: 12px;
   font-weight: 900;
@@ -274,7 +274,7 @@
 }
 
 .diagnosticActions a:hover {
-  background: var(--crm-surface-soft);
+  background: var(--crm-danger-text);
 }
 
 .diagnosticMeta {

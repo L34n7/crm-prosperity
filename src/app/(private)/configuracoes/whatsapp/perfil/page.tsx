@@ -655,7 +655,7 @@ export default function WhatsappPerfilPage() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Pedir ajuda pelo WhatsApp
+                      Pedir ajuda
                     </a>
                   )}
                 </div>

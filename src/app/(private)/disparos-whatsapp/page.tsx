@@ -472,7 +472,7 @@ function obterFeedbackErroDisparo(item: ResultadoDisparo) {
       return {
         titulo: "Conta WhatsApp Business bloqueada pela Meta",
         descricao:
-          "A Meta bloqueou ou desativou a conta WhatsApp Business vinculada a este numero. Enquanto o status estiver banido/bloqueado, o CRM nao consegue enviar mensagens por essa integracao. Acesse o Gerenciador do WhatsApp na Meta e solicite uma analise se acreditar que foi um engano.",
+          "A Meta bloqueou ou desativou a conta WhatsApp Business vinculada a este número. Enquanto o status estiver desativado/bloqueado, o CRM não consegue enviar mensagens por essa integração. Acesse o Gerenciador do WhatsApp na Meta e solicite uma análise se acreditar que foi um engano.",
         detalhe: mensagemTecnica,
       };
 
@@ -480,7 +480,7 @@ function obterFeedbackErroDisparo(item: ResultadoDisparo) {
       return {
         titulo: "Falha por pendência financeira na Meta",
         descricao:
-          "A conta WhatsApp Business possui pendências financeiras na Meta. Para regularizar, acesse o Gerenciador de Negócios da Meta, vá em Cobrança/Pagamentos, selecione a conta WhatsApp Business e quite o valor pendente. Depois da confirmação do pagamento, tente enviar o disparo novamente.",        detalhe: mensagemTecnica,
+          "A conta WhatsApp Business possui pendências financeiras ou não configurou um metodo de pagamento na Meta. Para regularizar, acesse o Gerenciador de Negócios da Meta, vá em Cobrança/Pagamentos, selecione a conta WhatsApp Business e quite o valor pendente. Depois da confirmação do pagamento, tente enviar o disparo novamente.",        detalhe: mensagemTecnica,
       };
 
     case 131026:
@@ -713,6 +713,8 @@ export default function DisparosWhatsAppPage() {
     totalSelecionados: number;
     totalIsentos: number;
     totalCobrados: number;
+    totalTelefonesIsentosUnicos: number;
+    totalTelefonesCobradosUnicos: number;
     valorUnitarioUsd: number;
     valorTotalUsd: number;
     cotacaoUsdBrl: number;
@@ -960,8 +962,14 @@ export default function DisparosWhatsAppPage() {
     );
   }, [contatosSelecionados]);
 
+  const totalTelefonesQueConsomemLimite = previewCusto
+    ? Number(previewCusto.totalTelefonesCobradosUnicos || 0)
+    : telefonesSelecionadosUnicos.length;
+  const totalTelefonesIsentosLimite = previewCusto
+    ? Number(previewCusto.totalTelefonesIsentosUnicos || 0)
+    : 0;
   const saldoEstimadoAposSelecao = limiteMeta
-    ? limiteMeta.restantes - telefonesSelecionadosUnicos.length
+    ? limiteMeta.restantes - totalTelefonesQueConsomemLimite
     : null;
   const selecaoExcedeLimite =
     typeof saldoEstimadoAposSelecao === "number" && saldoEstimadoAposSelecao < 0;
@@ -1445,6 +1453,12 @@ export default function DisparosWhatsAppPage() {
         totalSelecionados: Number(json.totalSelecionados || 0),
         totalIsentos: Number(json.totalIsentos || 0),
         totalCobrados,
+        totalTelefonesIsentosUnicos: Number(
+          json.totalTelefonesIsentosUnicos ?? 0
+        ),
+        totalTelefonesCobradosUnicos: Number(
+          json.totalTelefonesCobradosUnicos ?? totalCobrados ?? 0
+        ),
         valorUnitarioUsd: Number(json.valorUnitarioUsd || 0),
         valorTotalUsd,
         cotacaoUsdBrl: Number(json.cotacaoUsdBrl || 0),
@@ -2028,9 +2042,9 @@ export default function DisparosWhatsAppPage() {
                         <strong>{formatarNumeroMeta(limiteMeta?.restantes)}</strong>
                       </div>
                       <div>
-                        <span>Neste disparo</span>
+                        <span>Consomem limite</span>
                         <strong>
-                          {formatarNumeroMeta(telefonesSelecionadosUnicos.length)}
+                          {formatarNumeroMeta(totalTelefonesQueConsomemLimite)}
                         </strong>
                       </div>
                     </div>
@@ -2053,6 +2067,16 @@ export default function DisparosWhatsAppPage() {
                             integracaoSelecionada?.meta_account_mode
                         )}
                       </span>
+                      <span>
+                        Selecionados:{" "}
+                        {formatarNumeroMeta(telefonesSelecionadosUnicos.length)}
+                      </span>
+                      {totalTelefonesIsentosLimite > 0 && (
+                        <span>
+                          Isentos por conversa aberta:{" "}
+                          {formatarNumeroMeta(totalTelefonesIsentosLimite)}
+                        </span>
+                      )}
                       <span>
                         Disponiveis apos este envio:{" "}
                         {typeof saldoEstimadoAposSelecao === "number"

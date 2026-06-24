@@ -5,6 +5,7 @@ import styles from "./WhatsAppMetaBlockNotice.module.css";
 
 type BloqueioMetaResponse = {
   ok: boolean;
+  autenticado?: boolean;
   bloqueado?: boolean;
   modal_intervalo_ms?: number;
   titulo?: string;
@@ -23,7 +24,6 @@ type BloqueioMetaResponse = {
 };
 
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
-const POLL_INTERVAL_MS = 60 * 1000;
 
 function getStorageKey(integracaoId?: string | null) {
   return `crm-whatsapp-meta-block-modal:${integracaoId || "global"}`;
@@ -61,11 +61,27 @@ export default function WhatsAppMetaBlockNotice() {
     try {
       const response = await fetch("/api/whatsapp/bloqueio-meta", {
         cache: "no-store",
+        credentials: "same-origin",
+        headers: {
+          Accept: "application/json",
+        },
       });
 
-      const json = (await response.json()) as BloqueioMetaResponse;
+      if (response.status === 401 || response.status === 403) {
+        setData(null);
+        setModalAberto(false);
+        return;
+      }
 
-      if (!response.ok || !json.ok) {
+      let json: BloqueioMetaResponse | null = null;
+
+      try {
+        json = (await response.json()) as BloqueioMetaResponse;
+      } catch {
+        json = null;
+      }
+
+      if (!response.ok || !json?.ok || json.autenticado === false) {
         setData(null);
         setModalAberto(false);
         return;
@@ -80,9 +96,6 @@ export default function WhatsAppMetaBlockNotice() {
 
   useEffect(() => {
     carregarStatus();
-
-    const intervalId = window.setInterval(carregarStatus, POLL_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
   }, [carregarStatus]);
 
   useEffect(() => {
@@ -92,7 +105,7 @@ export default function WhatsAppMetaBlockNotice() {
 
     const intervalId = window.setInterval(
       abrirModalSeNecessario,
-      Math.min(POLL_INTERVAL_MS, intervaloMs)
+      intervaloMs
     );
 
     return () => window.clearInterval(intervalId);
@@ -102,7 +115,7 @@ export default function WhatsAppMetaBlockNotice() {
     return null;
   }
 
-  const titulo = data.titulo || "Conta WhatsApp Business banida pela Meta";
+  const titulo = data.titulo || "Conta WhatsApp Business desativada pela Meta";
   const descricao =
     data.descricao ||
     "A conta WhatsApp Business vinculada ao CRM foi desativada pela Meta.";
@@ -126,12 +139,12 @@ export default function WhatsAppMetaBlockNotice() {
 
         <div className={styles.actions}>
           <a href={metaUrl} target="_blank" rel="noreferrer">
-            Acessar Meta
+            Acessar o Meta
           </a>
 
           {helpUrl && (
             <a href={helpUrl} target="_blank" rel="noreferrer">
-              Abrir WhatsApp
+              Pedir ajuda
             </a>
           )}
         </div>
@@ -174,14 +187,14 @@ export default function WhatsAppMetaBlockNotice() {
 
               {helpUrl && (
                 <a href={helpUrl} target="_blank" rel="noreferrer">
-                  Pedir ajuda pelo WhatsApp
+                  Pedir ajuda
                 </a>
               )}
             </div>
 
             <p className={styles.hint}>
               Este aviso voltara a aparecer a cada 10 minutos enquanto a conta
-              estiver banida.
+              estiver desativada.
             </p>
           </section>
         </div>

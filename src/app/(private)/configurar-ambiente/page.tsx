@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./configurar-ambiente.module.css";
 import { t } from "@/i18n";
 import FeedbackToast from "@/components/FeedbackToast";
+import Link from "next/link";
+import LogoutButton from "@/components/LogoutButton";
+import { Moon, Sun } from "lucide-react";
 
 declare global {
   interface Window {
@@ -59,6 +62,8 @@ type PerfilOnboarding = {
   nomeEmpresa: string;
 };
 
+type TemaVisual = "light" | "dark";
+
 type Etapa = {
   numero: number;
   titulo: string;
@@ -71,6 +76,17 @@ type Etapa = {
     | "pagamento_configurado"
     | "concluido";
 };
+
+const AJUDA_WHATSAPP_NUMERO =
+  process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
+
+const AJUDA_WHATSAPP_MENSAGEM = encodeURIComponent(
+  "Olá! Preciso de ajuda com a configuração do ambiente oficial do WhatsApp no CRM Prosperity."
+);
+
+const AJUDA_WHATSAPP_URL = `https://api.whatsapp.com/send?phone=${AJUDA_WHATSAPP_NUMERO}&text=${AJUDA_WHATSAPP_MENSAGEM}`;
+
+const THEME_STORAGE_KEY = "crm-theme";
 
 const ETAPAS: Etapa[] = [
   {
@@ -174,6 +190,9 @@ export default function ConfigurarAmbientePage() {
       nomeEmpresa: "sua empresa",
     });
 
+  const [menuContaAberto, setMenuContaAberto] = useState(false);
+  const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
+  const onboardingMenuRef = useRef<HTMLDivElement | null>(null);
 
   function mostrarSucessoToast(mensagem: string) {
     setToastErro("");
@@ -183,6 +202,17 @@ export default function ConfigurarAmbientePage() {
   function mostrarErroToast(mensagem: string) {
     setToastSucesso("");
     setToastErro(mensagem);
+  }
+
+  function aplicarTemaVisual(tema: TemaVisual) {
+    document.documentElement.dataset.theme = tema;
+    document.documentElement.style.colorScheme = tema;
+    window.localStorage.setItem(THEME_STORAGE_KEY, tema);
+    setTemaVisual(tema);
+  }
+
+  function alternarTemaVisual() {
+    aplicarTemaVisual(temaVisual === "dark" ? "light" : "dark");
   }
 
   async function sincronizarDadosMeta(integracaoId: string) {
@@ -839,6 +869,31 @@ async function carregarPerfilOnboarding() {
     };
   }, [toastSucesso, toastErro]);
 
+  useEffect(() => {
+    const temaAtual =
+      document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+
+    setTemaVisual(temaAtual);
+  }, []);
+
+  useEffect(() => {
+    function fecharMenuAoClicarFora(event: MouseEvent) {
+      const target = event.target as Node;
+
+      if (
+        onboardingMenuRef.current &&
+        !onboardingMenuRef.current.contains(target)
+      ) {
+        setMenuContaAberto(false);
+      }
+    }
+
+    document.addEventListener("mousedown", fecharMenuAoClicarFora);
+
+    return () => {
+      document.removeEventListener("mousedown", fecharMenuAoClicarFora);
+    };
+  }, []);
 
   const indiceEtapaAtual = useMemo(
     () => obterIndiceEtapaAtual(integracao),
@@ -882,16 +937,92 @@ async function carregarPerfilOnboarding() {
     ? "Verificar ambiente"
     : "Atualizar status";
 
+  const nomeConta = perfilOnboarding.nomeUsuario || "Usuário";
+  const letraConta = nomeConta.trim().charAt(0).toUpperCase() || "U";
 
-  return (
-    <main className={styles.page}>
-      <FeedbackToast
-        success={toastSucesso}
-        error={toastErro}
-        onSuccessDismiss={() => setToastSucesso("")}
-        onErrorDismiss={() => setToastErro("")}
-      />
-      <div className={styles.container}>
+  const temaEscuroAtivo = temaVisual === "dark";
+  const temaBotaoLabel = temaEscuroAtivo ? "Tema claro" : "Tema escuro";
+  const temaBotaoStatus = temaEscuroAtivo ? "Escuro" : "Claro";
+
+return (
+  <main className={styles.page}>
+    <FeedbackToast
+      success={toastSucesso}
+      error={toastErro}
+      onSuccessDismiss={() => setToastSucesso("")}
+      onErrorDismiss={() => setToastErro("")}
+    />
+
+    <div className={styles.onboardingTopActions} ref={onboardingMenuRef}>
+      <div className={styles.onboardingAccountMenu}>
+        <button
+          type="button"
+          className={styles.onboardingAvatarButton}
+          onClick={() => setMenuContaAberto((aberto) => !aberto)}
+          aria-expanded={menuContaAberto}
+          aria-label="Abrir menu da conta"
+        >
+          <span className={styles.onboardingAvatar}>{letraConta}</span>
+          <span className={styles.onboardingAccountName}>{nomeConta}</span>
+          <span className={styles.onboardingChevron}>
+            {menuContaAberto ? "▴" : "▾"}
+          </span>
+        </button>
+
+        {menuContaAberto && (
+          <div className={styles.onboardingDropdown}>
+            <Link
+              href="/perfil"
+              className={styles.onboardingDropdownItem}
+              onClick={() => setMenuContaAberto(false)}
+            >
+              Meu perfil
+            </Link>
+
+            <a
+              href={AJUDA_WHATSAPP_URL}
+              className={styles.onboardingDropdownItem}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuContaAberto(false)}
+            >
+              Ajuda
+            </a>
+
+            <button
+              type="button"
+              className={`${styles.onboardingDropdownItem} ${styles.onboardingThemeButton}`}
+              onClick={alternarTemaVisual}
+              aria-pressed={temaEscuroAtivo}
+            >
+              <span className={styles.onboardingThemeMain}>
+                <span className={styles.onboardingThemeIcon}>
+                  {temaEscuroAtivo ? (
+                    <Sun size={16} strokeWidth={2.2} />
+                  ) : (
+                    <Moon size={16} strokeWidth={2.2} />
+                  )}
+                </span>
+
+                <span>{temaBotaoLabel}</span>
+              </span>
+
+              <span className={styles.onboardingThemeBadge}>
+                {temaBotaoStatus}
+              </span>
+            </button>
+
+            <div className={styles.onboardingDropdownDivider} />
+
+            <div className={styles.onboardingLogout}>
+              <LogoutButton />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <div className={styles.container}>
 
         {loading ? (
           <section className={styles.loadingCard}>

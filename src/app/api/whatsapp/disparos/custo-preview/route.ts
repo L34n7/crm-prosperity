@@ -140,6 +140,10 @@ export async function POST(request: Request) {
         totalSelecionados: 0,
         totalIsentos: 0,
         totalCobrados: 0,
+        totalTelefonesIsentosUnicos: 0,
+        totalTelefonesCobradosUnicos: 0,
+        telefonesIsentos: [],
+        telefonesCobrados: [],
         valorUnitarioUsd: WHATSAPP_TEMPLATE_PRICING[categoria].usd,
         valorTotalUsd: 0,
         cotacaoUsdBrl: cotacao,
@@ -228,6 +232,19 @@ export async function POST(request: Request) {
         ? totalSelecionados
         : Math.max(0, totalSelecionados - totalIsentos);
 
+    const telefonesIsentos =
+      categoria === "utility"
+        ? telefonesSelecionados.filter((telefone) =>
+            telefonesDentroDaJanela24h.has(telefone)
+          )
+        : [];
+    const telefonesCobrados =
+      categoria === "marketing"
+        ? telefonesSelecionados
+        : telefonesSelecionados.filter(
+            (telefone) => !telefonesDentroDaJanela24h.has(telefone)
+          );
+
     const valorUnitarioUsd = WHATSAPP_TEMPLATE_PRICING[categoria].usd;
     const valorTotalUsd = Number((totalCobrados * valorUnitarioUsd).toFixed(4));
 
@@ -253,6 +270,10 @@ export async function POST(request: Request) {
       totalSelecionados,
       totalIsentos,
       totalCobrados,
+      totalTelefonesIsentosUnicos: telefonesIsentos.length,
+      totalTelefonesCobradosUnicos: telefonesCobrados.length,
+      telefonesIsentos,
+      telefonesCobrados,
       valorUnitarioUsd,
       valorTotalUsd,
       cotacaoUsdBrl: cotacao,
