@@ -56,6 +56,18 @@ const LIMITE_DELAY_DIRETO_SEGUNDOS = normalizarInteiroAmbiente(
   180
 );
 const LIMITE_DELAY_POS_MIDIA_DIRETO_MS = LIMITE_DELAY_DIRETO_SEGUNDOS * 1000;
+const RETRY_ENVIO_AUTOMACAO_DELAY_MS = normalizarInteiroAmbiente(
+  process.env.AUTOMACAO_RETRY_ENVIO_DELAY_MS,
+  20000,
+  1000,
+  300000
+);
+const RETRY_ENVIO_AUTOMACAO_MAX_TENTATIVAS = normalizarInteiroAmbiente(
+  process.env.AUTOMACAO_RETRY_ENVIO_MAX_TENTATIVAS,
+  3,
+  1,
+  10
+);
 
 function perf(label: string, inicio: number, extra?: Record<string, any>) {
   console.log(`[PERF] ${label}`, {
@@ -546,7 +558,17 @@ function aguardar(ms: number) {
 }
 
 type TipoMidiaAutomacao = "image" | "video" | "audio";
-type TipoFilaProcessamentoAuto = "delay_no" | "pos_midia";
+type TipoFilaProcessamentoAuto = "delay_no" | "pos_midia" | "retry_envio_mensagem";
+
+type ResultadoEnvioAutomacao = {
+  ok?: boolean;
+  status?: number | null;
+  status_envio?: string | null;
+  messageId?: string | null;
+  metaResponse?: unknown;
+  erro?: unknown;
+  mensagemId?: string | null;
+};
 
 type FilaProcessamentoAutoJob = {
   id: string;
@@ -563,6 +585,143 @@ type FilaProcessamentoAutoJob = {
   tentativas: number | null;
   qstash_message_id?: string | null;
 };
+
+function isRecord(valor: unknown): valor is Record<string, unknown> {
+  return !!valor && typeof valor === "object" && !Array.isArray(valor);
+}
+
+function parseJsonSeguro(valor: unknown) {
+  if (typeof valor !== "string") {
+    return valor;
+  }
+
+  const texto = valor.trim();
+
+  if (!texto) {
+    return valor;
+  }
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    return valor;
+  }
+}
+
+function stringDoRecord(
+  record: Record<string, unknown>,
+  chave: string
+): string {
+  const valor = record[chave];
+  return typeof valor === "string" ? valor.trim() : "";
+}
+
+function numeroDoRecord(
+  record: Record<string, unknown>,
+  chave: string
+): number | null {
+  const valor = record[chave];
+  const numero = typeof valor === "number" ? valor : Number(valor);
+
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function normalizarErroMeta(valor: unknown) {
+  const normalizado = parseJsonSeguro(valor);
+
+  if (isRecord(normalizado) && isRecord(normalizado.error)) {
+    return normalizado.error;
+  }
+
+  return normalizado;
+}
+
+function textoErroMeta(valor: unknown): string {
+  const erro = normalizarErroMeta(valor);
+
+  if (typeof erro === "string") {
+    return erro.trim();
+  }
+
+  if (!isRecord(erro)) {
+    return "";
+  }
+
+  const errorData = isRecord(erro.error_data) ? erro.error_data : null;
+
+  return (
+    stringDoRecord(erro, "message") ||
+    stringDoRecord(erro, "error_user_msg") ||
+    stringDoRecord(erro, "error_user_title") ||
+    (errorData ? stringDoRecord(errorData, "details") : "")
+  );
+}
+
+function descreverErroEnvioAutomacao(resultado: ResultadoEnvioAutomacao) {
+  return (
+    textoErroMeta(resultado.metaResponse) ||
+    textoErroMeta(resultado.erro) ||
+    (typeof resultado.erro === "string" ? resultado.erro.trim() : "") ||
+    "Falha ao enviar mensagem da automacao."
+  );
+}
+
+function erroMetaEhTransitorio(valor: unknown) {
+  const erro = normalizarErroMeta(valor);
+
+  if (!isRecord(erro)) {
+    const texto = typeof erro === "string" ? erro.toLowerCase() : "";
+    return (
+      texto.includes("temporarily unavailable") ||
+      texto.includes("service unavailable") ||
+      texto.includes("try again") ||
+      texto.includes("retry") ||
+      texto.includes("timeout") ||
+      texto.includes("rate limit")
+    );
+  }
+
+  const errorData = isRecord(erro.error_data) ? erro.error_data : {};
+  const codigo = numeroDoRecord(erro, "code");
+  const codigosTransitorios = new Set([1, 2, 4, 17, 613, 80007]);
+  const texto = [
+    stringDoRecord(erro, "message"),
+    stringDoRecord(erro, "error_user_msg"),
+    stringDoRecord(erro, "error_user_title"),
+    stringDoRecord(errorData, "details"),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    erro.is_transient === true ||
+    (codigo !== null && codigosTransitorios.has(codigo)) ||
+    texto.includes("temporarily unavailable") ||
+    texto.includes("service unavailable") ||
+    texto.includes("try again") ||
+    texto.includes("retry") ||
+    texto.includes("timeout") ||
+    texto.includes("rate limit") ||
+    texto.includes("too many calls")
+  );
+}
+
+function falhaEnvioAutomacaoEhTransitoria(
+  resultado: ResultadoEnvioAutomacao
+) {
+  if (resultado.ok !== false) {
+    return false;
+  }
+
+  const status = Number(resultado.status);
+  const statusTransitorios = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+  return (
+    (Number.isFinite(status) && statusTransitorios.has(status)) ||
+    erroMetaEhTransitorio(resultado.metaResponse) ||
+    erroMetaEhTransitorio(resultado.erro)
+  );
+}
 
 function delayAposMidia(tipo: TipoMidiaAutomacao) {
   if (tipo === "video") return 4500;
@@ -690,6 +849,7 @@ async function agendarFilaProcessamentoAuto(params: {
   numeroDestino: string;
   delayMs: number;
   payloadExtra?: Record<string, unknown>;
+  idempotencySuffix?: string;
 }) {
   const {
     tipoJob,
@@ -701,6 +861,7 @@ async function agendarFilaProcessamentoAuto(params: {
     numeroDestino,
     delayMs,
     payloadExtra,
+    idempotencySuffix,
   } = params;
 
   const visitaNo = await obterVisitaAtualNoExecucao({
@@ -709,7 +870,15 @@ async function agendarFilaProcessamentoAuto(params: {
     noId: no.id,
   });
   const executarEm = new Date(Date.now() + delayMs).toISOString();
-  const idempotencyKey = `${tipoJob}:${execucaoId}:${no.id}:${visitaNo}`;
+  const idempotencyKey = [
+    tipoJob,
+    execucaoId,
+    no.id,
+    visitaNo,
+    idempotencySuffix,
+  ]
+    .filter(Boolean)
+    .join(":");
   const payloadJson = {
     conversa_id: conversaId,
     numero_destino: numeroDestino,
@@ -780,19 +949,29 @@ async function agendarFilaProcessamentoAuto(params: {
     });
   }
 
+  const logFila =
+    tipoJob === "delay_no"
+      ? {
+          tipoEvento: "fila_processamento_auto_delay_agendado",
+          descricao: `Delay de ${delayMs / 1000}s registrado na fila de processamento da automacao.`,
+        }
+      : tipoJob === "pos_midia"
+      ? {
+          tipoEvento: "fila_processamento_auto_pos_midia_agendado",
+          descricao: `Pausa pos-midia de ${delayMs / 1000}s registrada na fila de processamento da automacao.`,
+        }
+      : {
+          tipoEvento: "fila_processamento_auto_retry_envio_agendado",
+          descricao: `Retry de envio em ${delayMs / 1000}s registrado na fila de processamento da automacao.`,
+        };
+
   await registrarLog({
     empresaId,
     execucaoId,
     fluxoId,
     noId: no.id,
-    tipoEvento:
-      tipoJob === "delay_no"
-        ? "fila_processamento_auto_delay_agendado"
-        : "fila_processamento_auto_pos_midia_agendado",
-    descricao:
-      tipoJob === "delay_no"
-        ? `Delay de ${delayMs / 1000}s registrado na fila de processamento da automacao.`
-        : `Pausa pos-midia de ${delayMs / 1000}s registrada na fila de processamento da automacao.`,
+    tipoEvento: logFila.tipoEvento,
+    descricao: logFila.descricao,
     entrada: {
       tipo_job: tipoJob,
       delay_ms: delayMs,
@@ -1261,6 +1440,17 @@ export async function processarFilaProcessamentoAutoPorId(jobId: string) {
         midiaUrl: String(payload.midia_url || no.configuracao_json?.midia_url || ""),
         legenda: String(payload.legenda || no.configuracao_json?.mensagem || ""),
       });
+    } else if (jobTravado.tipo_job === "retry_envio_mensagem") {
+      await executarNo({
+        empresaId: jobTravado.empresa_id,
+        conversaId: jobTravado.conversa_id,
+        execucaoId: jobTravado.execucao_id,
+        fluxoId: jobTravado.fluxo_id,
+        no,
+        mensagemTexto: String(payload.mensagem_texto || ""),
+        numeroDestino: String(payload.numero_destino),
+        retomadaDelayAgendado: true,
+      });
     } else {
       throw new Error(`tipo_job_invalido:${jobTravado.tipo_job}`);
     }
@@ -1591,6 +1781,207 @@ async function carregarFluxoRuntimeCache(params: {
     nosPorId,
     conexoesPorOrigem,
   };
+}
+
+async function interromperNoPorFalhaEnvioAutomacao(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  no: AutomacaoNo;
+  numeroDestino: string;
+  resultado: ResultadoEnvioAutomacao;
+  tipoEnvio: string;
+  mensagemTexto?: string;
+}) {
+  const {
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    no,
+    numeroDestino,
+    resultado,
+    tipoEnvio,
+    mensagemTexto,
+  } = params;
+
+  const statusEnvio = String(resultado.status_envio || "").trim();
+
+  if (resultado.ok !== false && statusEnvio !== "falha") {
+    return false;
+  }
+
+  if (statusEnvio === "cancelado") {
+    return true;
+  }
+
+  const agora = new Date().toISOString();
+  const erroTexto = descreverErroEnvioAutomacao(resultado);
+  const falhaTransitoria = falhaEnvioAutomacaoEhTransitoria(resultado);
+
+  const { data: execucao, error: execucaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("id, status, finished_at, metadata_json")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (execucaoError) {
+    throw new Error(
+      `Erro ao buscar execucao para retry de envio: ${execucaoError.message}`
+    );
+  }
+
+  if (!execucao || execucao.finished_at) {
+    return true;
+  }
+
+  const metadataAtual: Record<string, unknown> = isRecord(execucao.metadata_json)
+    ? execucao.metadata_json
+    : {};
+  const retryAtual: Record<string, unknown> = isRecord(
+    metadataAtual.retry_envio_mensagem
+  )
+    ? metadataAtual.retry_envio_mensagem
+    : {};
+  const retryDoNo: Record<string, unknown> = isRecord(retryAtual[no.id])
+    ? (retryAtual[no.id] as Record<string, unknown>)
+    : {};
+  const tentativasAnteriores = numeroDoRecord(retryDoNo, "tentativas") || 0;
+  const proximaTentativa = tentativasAnteriores + 1;
+
+  if (falhaTransitoria && proximaTentativa <= RETRY_ENVIO_AUTOMACAO_MAX_TENTATIVAS) {
+    const proximoRetryEm = new Date(
+      Date.now() + RETRY_ENVIO_AUTOMACAO_DELAY_MS
+    ).toISOString();
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "rodando",
+        no_atual_id: no.id,
+        metadata_json: {
+          ...metadataAtual,
+          retry_envio_mensagem: {
+            ...retryAtual,
+            [no.id]: {
+              tentativas: proximaTentativa,
+              max_tentativas: RETRY_ENVIO_AUTOMACAO_MAX_TENTATIVAS,
+              delay_ms: RETRY_ENVIO_AUTOMACAO_DELAY_MS,
+              ultimo_tipo_envio: tipoEnvio,
+              ultimo_erro: erroTexto,
+              ultima_mensagem_id: resultado.mensagemId || null,
+              ultimo_status_http: resultado.status || null,
+              ultimo_status_envio: statusEnvio || null,
+              proximo_retry_em: proximoRetryEm,
+              atualizado_em: agora,
+            },
+          },
+        },
+        updated_at: agora,
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
+
+    await agendarFilaProcessamentoAuto({
+      tipoJob: "retry_envio_mensagem",
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      no,
+      numeroDestino,
+      delayMs: RETRY_ENVIO_AUTOMACAO_DELAY_MS,
+      idempotencySuffix: `${tipoEnvio}:tentativa_${proximaTentativa}`,
+      payloadExtra: {
+        tipo_envio: tipoEnvio,
+        retry_tentativa: proximaTentativa,
+        retry_max_tentativas: RETRY_ENVIO_AUTOMACAO_MAX_TENTATIVAS,
+        erro: erroTexto,
+        mensagem_id: resultado.mensagemId || null,
+        mensagem_texto: mensagemTexto || "",
+      },
+    });
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "retry_envio_mensagem_agendado",
+      descricao:
+        "Falha transitoria no envio; fluxo pausado no bloco atual e retry agendado.",
+      entrada: {
+        tipo_envio: tipoEnvio,
+        tentativa: proximaTentativa,
+        delay_ms: RETRY_ENVIO_AUTOMACAO_DELAY_MS,
+      },
+      saida: {
+        erro: erroTexto,
+        proximo_retry_em: proximoRetryEm,
+      },
+    });
+
+    return true;
+  }
+
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      status: "erro",
+      finished_at: agora,
+      no_atual_id: no.id,
+      metadata_json: {
+        ...metadataAtual,
+        retry_envio_mensagem: {
+          ...retryAtual,
+          [no.id]: {
+            ...retryDoNo,
+            tentativas: tentativasAnteriores,
+            max_tentativas: RETRY_ENVIO_AUTOMACAO_MAX_TENTATIVAS,
+            ultimo_tipo_envio: tipoEnvio,
+            ultimo_erro: erroTexto,
+            ultima_mensagem_id: resultado.mensagemId || null,
+            ultimo_status_http: resultado.status || null,
+            ultimo_status_envio: statusEnvio || null,
+            encerrado_em: agora,
+            motivo: falhaTransitoria
+              ? "retry_envio_mensagem_esgotado"
+              : "falha_envio_mensagem_permanente",
+          },
+        },
+      },
+      updated_at: agora,
+    })
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId);
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId: no.id,
+    tipoEvento: falhaTransitoria
+      ? "retry_envio_mensagem_esgotado"
+      : "falha_envio_mensagem_automacao",
+    descricao: falhaTransitoria
+      ? "Falha transitoria persistiu apos o limite de retries; execucao marcada como erro."
+      : "Falha permanente no envio; execucao marcada como erro para nao avancar o fluxo sem entrega.",
+    entrada: {
+      tipo_envio: tipoEnvio,
+      tentativas: tentativasAnteriores,
+      max_tentativas: RETRY_ENVIO_AUTOMACAO_MAX_TENTATIVAS,
+    },
+    saida: {
+      erro: erroTexto,
+      mensagem_id: resultado.mensagemId || null,
+      status_http: resultado.status || null,
+      status_envio: statusEnvio || null,
+    },
+  });
+
+  return true;
 }
 
 async function buscarConfiguracaoEncerramentoInatividade(params: {
@@ -3092,7 +3483,7 @@ export async function executarNo(params: {
     const mensagem = no.configuracao_json?.mensagem;
 
     if (mensagem) {
-      await enviarMensagemAutomacao({
+      const envio = await enviarMensagemAutomacao({
         empresaId,
         conversaId,
         numeroDestino,
@@ -3100,6 +3491,22 @@ export async function executarNo(params: {
         execucaoId,
         noId: no.id,
       });
+
+      if (
+        await interromperNoPorFalhaEnvioAutomacao({
+          empresaId,
+          conversaId,
+          execucaoId,
+          fluxoId,
+          no,
+          numeroDestino,
+          resultado: envio,
+          tipoEnvio: "texto",
+          mensagemTexto,
+        })
+      ) {
+        return;
+      }
     }
 
     await registrarLog({
@@ -3180,7 +3587,7 @@ export async function executarNo(params: {
       mensagem = `${mensagem}\n\n${textoOpcoes}`;
     }
 
-    await enviarMensagemAutomacao({
+    const envio = await enviarMensagemAutomacao({
       empresaId,
       conversaId,
       numeroDestino,
@@ -3188,6 +3595,22 @@ export async function executarNo(params: {
       execucaoId,
       noId: no.id,
     });
+
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envio,
+        tipoEnvio: "pergunta_opcoes",
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
 
     await supabaseAdmin
       .from("automacao_execucoes")
@@ -3251,7 +3674,7 @@ export async function executarNo(params: {
       return;
     }
 
-    await enviarBotoesAutomacao({
+    const envio = await enviarBotoesAutomacao({
       empresaId,
       conversaId,
       numeroDestino,
@@ -3260,6 +3683,22 @@ export async function executarNo(params: {
       execucaoId,
       noId: no.id,
     });
+
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envio,
+        tipoEnvio: "botoes",
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
 
     await registrarLog({
       empresaId,
@@ -3379,6 +3818,22 @@ export async function executarNo(params: {
       return;
     }
 
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envio,
+        tipoEnvio: "botao_redirect",
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
+
     await registrarLog({
       empresaId,
       execucaoId,
@@ -3416,7 +3871,7 @@ export async function executarNo(params: {
       String(no.configuracao_json?.mensagem || "").trim() ||
       "De 1 a 5, como você avalia este atendimento?";
 
-    await enviarMensagemAutomacao({
+    const envio = await enviarMensagemAutomacao({
       empresaId,
       conversaId,
       numeroDestino,
@@ -3424,6 +3879,22 @@ export async function executarNo(params: {
       execucaoId,
       noId: no.id,
     });
+
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envio,
+        tipoEnvio: "avaliacao",
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
 
     await supabaseAdmin
       .from("automacao_execucoes")
@@ -3463,7 +3934,7 @@ export async function executarNo(params: {
       String(no.configuracao_json?.mensagem || "").trim() ||
       "Envie o arquivo para análise.";
 
-    await enviarMensagemAutomacao({
+    const envio = await enviarMensagemAutomacao({
       empresaId,
       conversaId,
       numeroDestino,
@@ -3471,6 +3942,22 @@ export async function executarNo(params: {
       execucaoId,
       noId: no.id,
     });
+
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envio,
+        tipoEnvio: "interpretar_arquivo_ia",
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
 
     await supabaseAdmin
       .from("automacao_execucoes")
@@ -3510,7 +3997,7 @@ export async function executarNo(params: {
       String(no.configuracao_json?.mensagem || "").trim() ||
       "Por favor, envie sua resposta.";
 
-    await enviarMensagemAutomacao({
+    const envio = await enviarMensagemAutomacao({
       empresaId,
       conversaId,
       numeroDestino,
@@ -3518,6 +4005,22 @@ export async function executarNo(params: {
       execucaoId,
       noId: no.id,
     });
+
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envio,
+        tipoEnvio: "capturar_resposta",
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
 
     await supabaseAdmin
       .from("automacao_execucoes")
@@ -3602,7 +4105,7 @@ export async function executarNo(params: {
         : "audio";
 
     if (tipoMidia === "audio" && legenda) {
-      await enviarMensagemAutomacao({
+      const envioLegenda = await enviarMensagemAutomacao({
         empresaId,
         conversaId,
         numeroDestino,
@@ -3610,9 +4113,25 @@ export async function executarNo(params: {
         execucaoId,
         noId: no.id,
       });
+
+      if (
+        await interromperNoPorFalhaEnvioAutomacao({
+          empresaId,
+          conversaId,
+          execucaoId,
+          fluxoId,
+          no,
+          numeroDestino,
+          resultado: envioLegenda,
+          tipoEnvio: "audio_legenda",
+          mensagemTexto,
+        })
+      ) {
+        return;
+      }
     }
 
-    await enviarMidiaAutomacao({
+    const envioMidia = await enviarMidiaAutomacao({
       empresaId,
       conversaId,
       numeroDestino,
@@ -3622,6 +4141,22 @@ export async function executarNo(params: {
       execucaoId,
       noId: no.id,
     });
+
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envioMidia,
+        tipoEnvio: tipoMidia,
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
 
     const delayPosMidiaMs = delayAposMidia(tipoMidia);
 
@@ -3714,7 +4249,7 @@ export async function executarNo(params: {
         : null;
 
     if (mensagem) {
-      await enviarMensagemAutomacao({
+      const envio = await enviarMensagemAutomacao({
         empresaId,
         conversaId,
         numeroDestino,
@@ -3722,6 +4257,22 @@ export async function executarNo(params: {
         execucaoId,
         noId: no.id,
       });
+
+      if (
+        await interromperNoPorFalhaEnvioAutomacao({
+          empresaId,
+          conversaId,
+          execucaoId,
+          fluxoId,
+          no,
+          numeroDestino,
+          resultado: envio,
+          tipoEnvio: "encerrar",
+          mensagemTexto,
+        })
+      ) {
+        return;
+      }
     }
 
     const dataEncerramento = new Date().toISOString();
@@ -3827,7 +4378,7 @@ export async function executarNo(params: {
       conversaId,
     });
 
-    await enviarMensagemAutomacao({
+    const envio = await enviarMensagemAutomacao({
       empresaId,
       conversaId,
       numeroDestino,
@@ -3835,6 +4386,22 @@ export async function executarNo(params: {
       execucaoId,
       noId: no.id,
     });
+
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envio,
+        tipoEnvio: "transferir_setor",
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
 
     // 🔥 PARAR automação
     await supabaseAdmin
@@ -8385,6 +8952,7 @@ export async function enviarMensagemAutomacao(params: {
 
     return {
       ok: false,
+      status: null,
       status_envio: "cancelado",
       messageId: null,
       erro: validacaoExecucao.motivo,
@@ -8472,6 +9040,7 @@ export async function enviarMensagemAutomacao(params: {
 
     return {
       ok: false,
+      status: null,
       status_envio: "falha",
       messageId: null,
       metaResponse: null,
@@ -8540,6 +9109,7 @@ export async function enviarMensagemAutomacao(params: {
 
   return {
     ok: envio.ok,
+    status: envio.status,
     status_envio: envio.ok ? "enviada" : "falha",
     messageId: envio.messageId,
     metaResponse: envio.raw,
@@ -8596,6 +9166,7 @@ async function enviarBotoesAutomacao({
 
     return {
       ok: false,
+      status: null,
       status_envio: "cancelado",
       messageId: null,
       erro: validacaoExecucao.motivo,
@@ -8684,7 +9255,7 @@ async function enviarBotoesAutomacao({
     conversaId,
   });
 
-  const { error: insertMensagemError } = await supabaseAdmin
+  const { data: mensagemSalva, error: insertMensagemError } = await supabaseAdmin
     .from("mensagens")
     .insert({
       empresa_id: empresaId,
@@ -8704,22 +9275,30 @@ async function enviarBotoesAutomacao({
         meta_response: json,
         erro: response.ok ? null : json,
       },
-    });
+    })
+    .select("*")
+    .single();
 
   if (insertMensagemError) {
+    const insertMensagemErrorTexto = (
+      `Erro ao salvar mensagem de botao da automacao: ${insertMensagemError.message}`
+    );
     console.error(
       "[AUTOMATION_ENGINE] Erro ao salvar mensagem de botão:",
       insertMensagemError
     );
+    throw new Error(insertMensagemErrorTexto);
   }
 
-  if (!response.ok) {
-    throw new Error(
-      json?.error?.message || "Erro ao enviar botões pelo WhatsApp."
-    );
-  }
-
-  return json;
+  return {
+    ok: response.ok,
+    status: response.status,
+    status_envio: response.ok ? "enviada" : "falha",
+    messageId: mensagemExternaId,
+    metaResponse: json,
+    erro: response.ok ? null : json,
+    mensagemId: mensagemSalva?.id,
+  };
 }
 
 async function enviarBotaoRedirectAutomacao({
@@ -8786,6 +9365,7 @@ async function enviarBotaoRedirectAutomacao({
 
     return {
       ok: false,
+      status: null,
       status_envio: "cancelado",
       messageId: null,
       erro: validacaoExecucao.motivo,
@@ -8860,6 +9440,7 @@ async function enviarBotaoRedirectAutomacao({
 
     return {
       ok: false,
+      status: null,
       status_envio: "falha",
       messageId: null,
       metaResponse: null,
@@ -8925,6 +9506,7 @@ async function enviarBotaoRedirectAutomacao({
 
   return {
     ok: envio.ok,
+    status: envio.status,
     status_envio: envio.ok ? "enviada" : "falha",
     messageId: envio.messageId,
     metaResponse: envio.raw,
@@ -8979,6 +9561,7 @@ async function enviarMidiaAutomacao(params: {
 
     return {
       ok: false,
+      status: null,
       status_envio: "cancelado",
       messageId: null,
       erro: validacaoExecucao.motivo,
@@ -9051,6 +9634,7 @@ async function enviarMidiaAutomacao(params: {
 
     return {
       ok: false,
+      status: null,
       status_envio: "falha",
       messageId: null,
       metaResponse: null,
@@ -9128,6 +9712,7 @@ async function enviarMidiaAutomacao(params: {
 
   return {
     ok: response.ok,
+    status: response.status,
     status_envio: response.ok ? "enviada" : "falha",
     messageId,
     metaResponse: raw,
