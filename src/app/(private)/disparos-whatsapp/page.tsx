@@ -108,6 +108,27 @@ type ResultadoDisparo = {
   erro_tecnico?: string | null;
   metadata_json?: any;
   origem_historico?: string | null;
+  campanha_id?: string | null;
+  status_campanha?: string | null;
+  total_itens?: number | null;
+  total_enviados?: number | null;
+  total_falhas?: number | null;
+  total_cancelados?: number | null;
+  pausa_motivo?: string | null;
+};
+
+type CampanhaDisparoAndamento = {
+  id: string;
+  status: string | null;
+  total?: number;
+  enviados?: number;
+  falhas?: number;
+};
+
+type DisparoAndamentoPayload = {
+  ok?: boolean;
+  bloquear_disparos?: boolean;
+  campanha?: CampanhaDisparoAndamento | null;
 };
 
 type ContatoOpcao = {
@@ -122,6 +143,9 @@ type ContatoOpcao = {
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+const EVENTO_DISPARO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
+const EVENTO_DISPARO_REFRESH = "crm:whatsapp-disparo-refresh";
 
 type VariavelPersonalizada = {
   id: string;
@@ -627,6 +651,106 @@ function formatarDataHora(data?: string | null) {
   }
 }
 
+function emitirRefreshDisparoEmMassa() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(EVENTO_DISPARO_REFRESH));
+}
+
+function valorNumericoHistorico(...valores: unknown[]) {
+  for (const valor of valores) {
+    const numero = Number(valor);
+
+    if (Number.isFinite(numero)) {
+      return Math.max(0, Math.trunc(numero));
+    }
+  }
+
+  return 0;
+}
+
+function historicoEhCampanhaPausada(item: ResultadoDisparo) {
+  const metadata = normalizarMetadataJson(item.metadata_json);
+
+  return (
+    item.origem_historico === "campanha_pausada" ||
+    metadata?.tipo === "campanha_disparo_pausada"
+  );
+}
+
+function obterTotaisCampanhaPausada(item: ResultadoDisparo) {
+  const metadata = normalizarMetadataJson(item.metadata_json) || {};
+
+  const totalItens = valorNumericoHistorico(
+    item.total_itens,
+    metadata.total_itens
+  );
+  const totalEnviados = valorNumericoHistorico(
+    item.total_enviados,
+    metadata.total_enviados
+  );
+  const totalFalhas = valorNumericoHistorico(
+    item.total_falhas,
+    metadata.total_falhas
+  );
+  const totalCanceladosDireto = valorNumericoHistorico(
+    item.total_cancelados,
+    metadata.total_cancelados
+  );
+  const totalCanceladosCalculado = Math.max(
+    totalItens - totalEnviados - totalFalhas,
+    0
+  );
+
+  return {
+    totalItens,
+    totalEnviados,
+    totalFalhas,
+    totalCancelados: Math.max(totalCanceladosDireto, totalCanceladosCalculado),
+  };
+}
+
+function obterTituloCampanhaPausada(item: ResultadoDisparo) {
+  const totais = obterTotaisCampanhaPausada(item);
+  const data = formatarDataHora(item.created_at) || "data não informada";
+  const unidade = totais.totalItens === 1 ? "contato" : "contatos";
+
+  return `Disparo em massa dia: ${data}, ${totais.totalItens} ${unidade}`;
+}
+
+function obterMotivoCampanhaPausada(item: ResultadoDisparo) {
+  const metadata = normalizarMetadataJson(item.metadata_json) || {};
+  const motivoMetadata =
+    typeof metadata.pausa_motivo === "string" ? metadata.pausa_motivo : "";
+
+  return (
+    item.pausa_motivo ||
+    item.erro_amigavel ||
+    item.erro ||
+    motivoMetadata ||
+    "O disparo em massa foi cancelado automaticamente para proteger a conta WhatsApp e a estabilidade do sistema."
+  );
+}
+
+function obterStatusCampanhaPausada(item: ResultadoDisparo) {
+  const metadata = normalizarMetadataJson(item.metadata_json) || {};
+  const status = String(item.status_campanha || metadata.status_campanha || "");
+
+  switch (status) {
+    case "pausada_por_conta_bloqueada":
+      return "Cancelado por bloqueio da Meta";
+    case "pausada_por_lista_invalida":
+      return "Cancelado por lista inválida";
+    case "pausada_por_erro_meta":
+      return "Cancelado por erro da Meta";
+    case "pausada_por_falhas":
+      return "Cancelado por muitas falhas";
+    case "cancelada":
+      return "Disparo em massa cancelado";
+    default:
+      return item.status_label || "Disparo em massa cancelado";
+  }
+}
+
 function normalizarStatusDisparo(item: ResultadoDisparo) {
   return String(item.status_disparo || "").toLowerCase().trim();
 }
@@ -640,6 +764,8 @@ function disparoTeveSucesso(item: ResultadoDisparo) {
 }
 
 function disparoTeveFalha(item: ResultadoDisparo) {
+  if (historicoEhCampanhaPausada(item)) return true;
+
   const status = normalizarStatusDisparo(item);
 
   if (status === "processando") return false;
@@ -666,6 +792,8 @@ export default function DisparosWhatsAppPage() {
   const [loadingHistorico, setLoadingHistorico] = useState(false);
   const [loadingSaudeMeta, setLoadingSaudeMeta] = useState(false);
   const [disparando, setDisparando] = useState(false);
+  const [disparoEmMassaProcessando, setDisparoEmMassaProcessando] =
+    useState(false);
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
   const [saudeMetaIntegracao, setSaudeMetaIntegracao] =
@@ -878,6 +1006,25 @@ export default function DisparosWhatsAppPage() {
     }
   }
 
+  async function carregarBloqueioDisparoEmMassa() {
+    try {
+      const res = await fetch("/api/whatsapp/disparos/andamento", {
+        cache: "no-store",
+      });
+
+      const json = (await res.json()) as DisparoAndamentoPayload;
+
+      if (!res.ok || json.ok === false) {
+        setDisparoEmMassaProcessando(false);
+        return;
+      }
+
+      setDisparoEmMassaProcessando(json.bloquear_disparos === true);
+    } catch {
+      setDisparoEmMassaProcessando(false);
+    }
+  }
+
   async function carregarSaudeMeta(integracaoWhatsappId: string) {
     try {
       setLoadingSaudeMeta(true);
@@ -910,7 +1057,21 @@ export default function DisparosWhatsAppPage() {
     carregarIntegracoes();
     carregarContatos("", "", "");
     carregarHistorico();
+    carregarBloqueioDisparoEmMassa();
     carregarVariaveisPersonalizadas();
+  }, []);
+
+  useEffect(() => {
+    const handleAndamento = (event: Event) => {
+      const detalhe = (event as CustomEvent<DisparoAndamentoPayload>).detail;
+      setDisparoEmMassaProcessando(detalhe?.bloquear_disparos === true);
+    };
+
+    window.addEventListener(EVENTO_DISPARO_ANDAMENTO, handleAndamento);
+
+    return () => {
+      window.removeEventListener(EVENTO_DISPARO_ANDAMENTO, handleAndamento);
+    };
   }, []);
 
   useEffect(() => {
@@ -1295,6 +1456,13 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
+    if (disparoEmMassaProcessando) {
+      setErro(
+        "Ja existe um disparo em massa em processamento. Aguarde a finalizacao antes de iniciar outro."
+      );
+      return;
+    }
+
     if (!integracaoId) {
       setErro("Selecione a integração WhatsApp.");
       return;
@@ -1361,10 +1529,38 @@ export default function DisparosWhatsAppPage() {
       const json = await res.json();
 
       if (!res.ok || !json.ok) {
+        if (json.bloquear_disparos) {
+          setDisparoEmMassaProcessando(true);
+          emitirRefreshDisparoEmMassa();
+        }
+
         const detalhe = json.detalhe ? `\n\n${json.detalhe}` : "";
         throw new Error(
           `${json.error || "Erro ao realizar disparo."}${detalhe}`
         );
+      }
+
+      if (json.queued) {
+        setDisparoEmMassaProcessando(true);
+        emitirRefreshDisparoEmMassa();
+
+        setMensagem(
+          `Campanha criada e enfileirada. Os ${Number(
+            json.total || contatosSelecionados.length
+          )} disparos serao processados gradualmente em segundo plano.`
+        );
+
+        await carregarHistorico();
+
+        setTimeout(() => {
+          carregarHistorico();
+        }, 5000);
+
+        setTimeout(() => {
+          carregarHistorico();
+        }, 12000);
+
+        return;
       }
 
       const listaResultado = Array.isArray(json.resultados) ? json.resultados : [];
@@ -2016,8 +2212,8 @@ export default function DisparosWhatsAppPage() {
                         <span>Controle preventivo da Meta</span>
                         <strong>Capacidade segura para este disparo</strong>
                         <p>
-                          O CRM acompanha o limite de contatos unicos iniciados
-                          pela empresa nas ultimas 24 horas e bloqueia envios
+                          O CRM acompanha o limite de contatos únicos iniciados
+                          pela empresa nas últimas 24 horas e bloqueia envios
                           que poderiam ultrapassar esse teto.
                         </p>
                       </div>
@@ -2054,7 +2250,7 @@ export default function DisparosWhatsAppPage() {
                         Alcance: {formatarLimiteTierMeta(limiteMeta?.tier)}
                       </span>
                       <span>
-                        Reputacao do numero:{" "}
+                        Reputação do número:{" "}
                         {formatarQualidadeMeta(
                           saudeMetaIntegracao?.quality_rating ||
                             integracaoSelecionada?.quality_rating
@@ -2078,7 +2274,7 @@ export default function DisparosWhatsAppPage() {
                         </span>
                       )}
                       <span>
-                        Disponiveis apos este envio:{" "}
+                        Disponíveis após este envio:{" "}
                         {typeof saldoEstimadoAposSelecao === "number"
                           ? formatarNumeroMeta(Math.max(saldoEstimadoAposSelecao, 0))
                           : "0"}
@@ -2140,10 +2336,13 @@ export default function DisparosWhatsAppPage() {
                         !templateSelecionado ||
                         contatosSelecionados.length === 0 ||
                         disparando ||
+                        disparoEmMassaProcessando ||
                         selecaoExcedeLimite
                       }
                     >
-                      Enviar disparos
+                      {disparoEmMassaProcessando
+                        ? "Disparo em processamento"
+                        : "Enviar disparos"}
                     </button>
                   </div>
                 </div>
@@ -2224,7 +2423,81 @@ export default function DisparosWhatsAppPage() {
               </div>
             ) : (
               <div className={styles.resultsList}>
-                {resultadoHistoricoPaginado.map((item, index) => (
+                {resultadoHistoricoPaginado.map((item, index) => {
+                  if (historicoEhCampanhaPausada(item)) {
+                    const totais = obterTotaisCampanhaPausada(item);
+                    const motivo = obterMotivoCampanhaPausada(item);
+
+                    return (
+                      <div
+                        key={item.id || item.campanha_id || `campanha-${index}`}
+                        className={`${styles.resultItem} ${styles.resultError} ${styles.resultMassCancelled}`}
+                      >
+                        <div className={styles.resultCompactHeader}>
+                          <div className={styles.resultCompactMain}>
+                            <strong className={styles.resultCompactName}>
+                              {obterTituloCampanhaPausada(item)}
+                            </strong>
+
+                            <p className={styles.resultCompactMeta}>
+                              Template: {item.template_nome || "-"}
+                              {" • "}
+                              Disparo interrompido pelo sistema de segurança
+                            </p>
+                          </div>
+
+                          <span
+                            className={`${styles.resultStatus} ${styles.massCancelledStatus}`}
+                          >
+                            {obterStatusCampanhaPausada(item)}
+                          </span>
+                        </div>
+
+                        <div className={styles.massCancelledMetrics}>
+                          <div className={styles.massCancelledMetric}>
+                            <strong>{totais.totalItens}</strong>
+                            <span>Total</span>
+                          </div>
+
+                          <div className={styles.massCancelledMetric}>
+                            <strong>{totais.totalEnviados}</strong>
+                            <span>Enviados</span>
+                          </div>
+
+                          <div className={styles.massCancelledMetric}>
+                            <strong>{totais.totalCancelados}</strong>
+                            <span>Cancelados</span>
+                          </div>
+
+                          <div className={styles.massCancelledMetric}>
+                            <strong>{totais.totalFalhas}</strong>
+                            <span>Falhas</span>
+                          </div>
+                        </div>
+
+                        <div className={styles.resultErrorFeedback}>
+                          <strong className={styles.resultErrorTitle}>
+                            Disparo em massa cancelado
+                          </strong>
+
+                          <p className={styles.resultErrorDescription}>
+                            {String(motivo)}
+                          </p>
+
+                          <p className={styles.resultErrorDetail}>
+                            Foram enviados {totais.totalEnviados} disparos.{" "}
+                            {totais.totalCancelados} disparos foram cancelados
+                            antes do envio.
+                            {totais.totalFalhas > 0
+                              ? ` ${totais.totalFalhas} disparos falharam durante o processamento.`
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
                   <div
                     key={item.id || `${item.numero}-${index}`}
                     className={`${styles.resultItem} ${
@@ -2330,7 +2603,8 @@ export default function DisparosWhatsAppPage() {
                       );
                     })()}
                   </div>
-                ))}
+                  );
+                })}
                 
                 {resultadoFiltrado.length > ITENS_HISTORICO_POR_PAGINA ? (
                   <div className={styles.paginationBar}>
@@ -2676,7 +2950,7 @@ export default function DisparosWhatsAppPage() {
                   <li>O valor final pode variar conforme cotação do USD, IOF, impostos, tarifas bancárias e regras de cobrança aplicáveis.</li>
                   <li>Conversas isentas não entram no total cobrado.</li>
                   <li>Templates de marketing podem gerar cobrança mesmo quando existe uma conversa ativa.</li>
-                  <li>Após a confirmação, o disparo será iniciado imediatamente.</li>
+                  <li>Após a confirmação, o disparo será enfileirado e processado gradualmente.</li>
                 </ul>
               </div>
 
@@ -2705,9 +2979,13 @@ export default function DisparosWhatsAppPage() {
                 type="button"
                 className={styles.primaryButton}
                 onClick={confirmarEDisparar}
-                disabled={!confirmacaoCobranca || disparando}
+                disabled={
+                  !confirmacaoCobranca || disparando || disparoEmMassaProcessando
+                }
               >
-                Confirmar e enviar
+                {disparoEmMassaProcessando
+                  ? "Disparo em processamento"
+                  : "Confirmar e enviar"}
               </button>
             </div>
           </div>

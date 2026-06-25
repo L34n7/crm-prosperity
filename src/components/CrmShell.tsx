@@ -1,6 +1,7 @@
 import Sidebar from "@/components/Sidebar";
 import AssinaturaStatusGuard from "@/components/AssinaturaStatusGuard";
 import WhatsAppMetaBlockNotice from "@/components/WhatsAppMetaBlockNotice";
+import WhatsAppDisparoProgressCard from "@/components/WhatsAppDisparoProgressCard";
 import { HeaderUserProvider } from "@/components/header-user-context";
 import { HeaderSummaryProvider } from "@/components/header-summary-context";
 import SessionActivityTracker from "@/components/SessionActivityTracker";
@@ -47,6 +48,7 @@ export default function CrmShell({
           </div>
 
           <AssinaturaStatusGuard assinatura={assinatura} isAdmin={isAdmin} />
+          <WhatsAppDisparoProgressCard />
         </div>
       </HeaderSummaryProvider>
     </HeaderUserProvider>

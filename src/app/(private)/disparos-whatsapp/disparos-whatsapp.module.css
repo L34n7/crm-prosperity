@@ -352,6 +352,11 @@
   background: var(--crm-danger-bg);
 }
 
+.resultMassCancelled {
+  border-color: var(--crm-danger-border);
+  box-shadow: inset 4px 0 0 var(--crm-danger-text);
+}
+
 .resultProcessing {
   border-color: rgba(234, 179, 8, 0.35);
   background: rgba(234, 179, 8, 0.06);
@@ -378,6 +383,45 @@
   padding: 6px 10px;
   background: rgba(255, 255, 255, 0.7);
   white-space: nowrap;
+}
+
+.massCancelledStatus {
+  border: 1px solid var(--crm-danger-border);
+  color: var(--crm-danger-text);
+  background: rgba(255, 255, 255, 0.72);
+  text-align: right;
+  white-space: normal;
+}
+
+.massCancelledMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.massCancelledMetric {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--crm-danger-border);
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.massCancelledMetric strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.massCancelledMetric span {
+  display: block;
+  margin-top: 4px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .resultText {
@@ -1841,6 +1885,10 @@
 
   .summaryCard {
     padding: 12px 14px;
+  }
+
+  .massCancelledMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .submitBar {

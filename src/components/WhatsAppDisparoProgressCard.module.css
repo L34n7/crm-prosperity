@@ -1,0 +1,145 @@
+.card {
+  position: fixed;
+  left: 304px;
+  bottom: 18px;
+  z-index: 980;
+  width: min(320px, calc(100vw - 328px));
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--crm-surface) 94%, transparent);
+  box-shadow: var(--crm-shadow-lg);
+  padding: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.cardActive {
+  border-color: var(--crm-primary-border);
+}
+
+.cardSuccess {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+}
+
+.cardWarning {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+
+.header {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.header strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.header small {
+  display: block;
+  margin-top: 2px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.spinner,
+.statusDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+}
+
+.spinner {
+  border: 2px solid var(--crm-primary-border);
+  border-top-color: var(--crm-primary-strong);
+  animation: spin 0.8s linear infinite;
+}
+
+.statusDot {
+  background: var(--crm-success-strong);
+}
+
+.cardWarning .statusDot {
+  background: var(--crm-danger-strong);
+}
+
+.metrics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.metrics span {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.metrics strong {
+  margin-left: 4px;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.progressTrack {
+  height: 5px;
+  margin-top: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--crm-surface-muted);
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--crm-primary-strong);
+  transition: width 0.25s ease;
+}
+
+.cardSuccess .progressTrack span {
+  background: var(--crm-success-strong);
+}
+
+.cardWarning .progressTrack span {
+  background: var(--crm-danger-strong);
+}
+
+.message {
+  margin: 8px 0 0;
+  color: var(--crm-text);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1024px) {
+  .card {
+    left: 104px;
+    width: min(320px, calc(100vw - 128px));
+  }
+}
+
+@media (max-width: 768px) {
+  .card {
+    left: 12px;
+    right: 12px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+}

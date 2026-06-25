@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
-function perf(label: string, inicio: number, extra?: Record<string, any>) {
+function perf(label: string, inicio: number, extra?: Record<string, unknown>) {
   console.log(`[PERF] ${label}`, {
     tempo_ms: Date.now() - inicio,
     ...(extra || {}),
@@ -104,14 +104,19 @@ export async function POST(req: NextRequest) {
       const limiteQstash = Number(
         process.env.WHATSAPP_QSTASH_THRESHOLD_MESSAGES_PER_SECOND || 10
       );
+      const limiteQstashStatuses = Number(
+        process.env.WHATSAPP_QSTASH_THRESHOLD_STATUSES_PER_SECOND || 5
+      );
 
       const volumeSegundo = await contarMensagensWebhookNoMesmoSegundo(
         eventoFila.evento.created_at
       );
 
       const deveUsarQstash =
-        incomingMessages.length > 0 &&
-        volumeSegundo.totalMensagens > limiteQstash;
+        (incomingStatuses.length > 0 &&
+          (volumeSegundo.totalStatuses || 0) > limiteQstashStatuses) ||
+        (incomingMessages.length > 0 &&
+          volumeSegundo.totalMensagens > limiteQstash);
 
       if (deveUsarQstash) {
         const qstashWorkerUrl = process.env.QSTASH_WORKER_URL;
@@ -135,7 +140,9 @@ export async function POST(req: NextRequest) {
             console.log("[QSTASH] Evento publicado por pico de mensagens", {
               eventoId: eventoFila.evento.id,
               totalMensagensNoSegundo: volumeSegundo.totalMensagens,
+              totalStatusesNoSegundo: volumeSegundo.totalStatuses,
               limiteQstash,
+              limiteQstashStatuses,
             });
           } catch (error) {
             console.error("[QSTASH] Erro ao publicar evento. Processando direto:", error);
@@ -153,7 +160,9 @@ export async function POST(req: NextRequest) {
             console.log("[WEBHOOK WHATSAPP] Evento processado direto na Vercel", {
               eventoId: eventoFila.evento.id,
               totalMensagensNoSegundo: volumeSegundo.totalMensagens,
+              totalStatusesNoSegundo: volumeSegundo.totalStatuses,
               limiteQstash,
+              limiteQstashStatuses,
             });
           } catch (error) {
             console.error("[WEBHOOK WHATSAPP] Erro ao processar direto:", error);

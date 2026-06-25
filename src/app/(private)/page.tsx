@@ -40,11 +40,11 @@ const modulos = [
     descricao: "Gerencie filas, responsáveis, transferências e atendimento.",
     href: "/conversas",
   },
-  /*{
+  {
     titulo: "Disparos",
     descricao: "Crie e acompanhe disparos de mensagens para seus contatos.",
     href: "/disparos-whatsapp",
-  },*/
+  },
   {
     titulo: "Contatos",
     descricao: "Visualize e organize os contatos da operação.",

@@ -4,6 +4,90 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
 
+const STATUS_CAMPANHAS_INTERROMPIDAS = [
+  "pausada_por_falhas",
+  "pausada_por_lista_invalida",
+  "pausada_por_erro_meta",
+  "pausada_por_conta_bloqueada",
+  "cancelada",
+  "erro",
+];
+
+type CampanhaDisparoHistorico = {
+  id: string;
+  integracao_whatsapp_id?: string | null;
+  status?: string | null;
+  template_nome?: string | null;
+  template_idioma?: string | null;
+  total_itens?: number | null;
+  total_pendentes?: number | null;
+  total_processando?: number | null;
+  total_enviados?: number | null;
+  total_falhas?: number | null;
+  total_cancelados?: number | null;
+  pausa_motivo?: string | null;
+  erro?: string | null;
+  metadata_json?: unknown;
+  created_at?: string | null;
+  updated_at?: string | null;
+  paused_at?: string | null;
+  finished_at?: string | null;
+};
+
+function numeroInteiro(valor: unknown) {
+  const numero = Number(valor || 0);
+  return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : 0;
+}
+
+function normalizarMetadata(valor: unknown): Record<string, unknown> {
+  if (!valor) return {};
+
+  if (typeof valor === "string") {
+    try {
+      const parsed = JSON.parse(valor);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  return typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as Record<string, unknown>)
+    : {};
+}
+
+function traduzirPausaCampanhaDisparo(
+  status?: string | null,
+  motivo?: string | null,
+  erro?: string | null
+) {
+  const detalhe = motivo || erro;
+
+  if (detalhe) return detalhe;
+
+  switch (status) {
+    case "pausada_por_conta_bloqueada":
+      return "O disparo em massa foi cancelado porque a Meta sinalizou bloqueio ou desativacao da conta WhatsApp Business.";
+
+    case "pausada_por_lista_invalida":
+      return "O disparo em massa foi cancelado porque a lista apresentou muitos numeros invalidos ou indisponiveis.";
+
+    case "pausada_por_erro_meta":
+      return "O disparo em massa foi cancelado porque a Meta retornou erros que exigem pausa operacional.";
+
+    case "pausada_por_falhas":
+      return "O disparo em massa foi cancelado automaticamente porque muitas mensagens falharam no lote processado.";
+
+    case "cancelada":
+      return "O disparo em massa foi cancelado antes de concluir todos os envios.";
+
+    default:
+      return "O disparo em massa foi interrompido para proteger a conta WhatsApp e a estabilidade do sistema.";
+  }
+}
+
 function traduzirErroMetaWhatsApp(
   codigo?: number | string | null,
   erroTecnico?: string | null
@@ -122,6 +206,43 @@ export async function GET(req: NextRequest) {
       mensagensAgendadasError
     );
   }
+
+    const { data: campanhasInterrompidas, error: campanhasInterrompidasError } =
+      await supabaseAdmin
+        .from("whatsapp_disparo_campanhas")
+        .select(
+          `
+          id,
+          integracao_whatsapp_id,
+          status,
+          template_nome,
+          template_idioma,
+          total_itens,
+          total_pendentes,
+          total_processando,
+          total_enviados,
+          total_falhas,
+          total_cancelados,
+          pausa_motivo,
+          erro,
+          metadata_json,
+          created_at,
+          updated_at,
+          paused_at,
+          finished_at
+        `
+        )
+        .eq("empresa_id", usuario.empresa_id)
+        .in("status", STATUS_CAMPANHAS_INTERROMPIDAS)
+        .order("updated_at", { ascending: false })
+        .limit(limit);
+
+    if (campanhasInterrompidasError) {
+      console.error(
+        "[HISTORICO DISPAROS] Erro ao buscar campanhas interrompidas:",
+        campanhasInterrompidasError
+      );
+    }
 
     const messageIds = Array.from(
       new Set(
@@ -340,6 +461,79 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const resultadosCampanhasInterrompidas = (
+      (campanhasInterrompidas || []) as CampanhaDisparoHistorico[]
+    ).map((campanha) => {
+      const totalItens = numeroInteiro(campanha.total_itens);
+      const totalPendentes = numeroInteiro(campanha.total_pendentes);
+      const totalProcessando = numeroInteiro(campanha.total_processando);
+      const totalEnviados = numeroInteiro(campanha.total_enviados);
+      const totalFalhas = numeroInteiro(campanha.total_falhas);
+      const totalCanceladosBanco = numeroInteiro(campanha.total_cancelados);
+      const totalCancelados = Math.max(
+        totalCanceladosBanco + totalPendentes + totalProcessando,
+        0
+      );
+
+      const dataReferencia =
+        campanha.paused_at ||
+        campanha.finished_at ||
+        campanha.updated_at ||
+        campanha.created_at ||
+        new Date().toISOString();
+
+      const motivo = traduzirPausaCampanhaDisparo(
+        campanha.status,
+        campanha.pausa_motivo,
+        campanha.erro
+      );
+
+      const metadataCampanha = normalizarMetadata(campanha.metadata_json);
+
+      return {
+        id: `campanha-${campanha.id}`,
+        campanha_id: campanha.id,
+        created_at: dataReferencia,
+        conversa_id: null,
+        conversa_protocolo_id: null,
+        contato_id: null,
+        integracao_whatsapp_id: campanha.integracao_whatsapp_id || null,
+        numero: `${totalItens} contatos`,
+        nome_contato: "Disparo em massa",
+        template_nome: campanha.template_nome || "-",
+        template_idioma: campanha.template_idioma || null,
+        mensagem_template: motivo,
+        status_disparo: "falha",
+        status_label: "Disparo em massa cancelado",
+        status_http: null,
+        message_id: null,
+        erro: campanha.erro || campanha.pausa_motivo || null,
+        erro_amigavel: motivo,
+        erro_codigo_meta: null,
+        metadata_json: {
+          ...metadataCampanha,
+          tipo: "campanha_disparo_pausada",
+          campanha_id: campanha.id,
+          status_campanha: campanha.status || null,
+          total_itens: totalItens,
+          total_enviados: totalEnviados,
+          total_falhas: totalFalhas,
+          total_cancelados: totalCancelados,
+          total_pendentes: totalPendentes,
+          total_processando: totalProcessando,
+          pausa_motivo: campanha.pausa_motivo || null,
+        },
+        origem_historico: "campanha_pausada",
+        ok: false,
+        status_campanha: campanha.status || null,
+        total_itens: totalItens,
+        total_enviados: totalEnviados,
+        total_falhas: totalFalhas,
+        total_cancelados: totalCancelados,
+        pausa_motivo: campanha.pausa_motivo || null,
+      };
+    });
+
     const messageIdsLogs = new Set(
       resultados
         .map((item: any) => item.message_id)
@@ -350,7 +544,11 @@ export async function GET(req: NextRequest) {
       (item: any) => !item.message_id || !messageIdsLogs.has(item.message_id)
     );
 
-    const todosResultados = [...resultados, ...resultadosAgendadosSemDuplicar]
+    const todosResultados = [
+      ...resultados,
+      ...resultadosAgendadosSemDuplicar,
+      ...resultadosCampanhasInterrompidas,
+    ]
       .sort(
         (a: any, b: any) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()

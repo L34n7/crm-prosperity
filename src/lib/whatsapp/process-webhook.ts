@@ -15,6 +15,7 @@ import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { atribuirCampanhaPorMensagemWhatsApp } from "@/lib/rastreamento/atribuir-campanha-whatsapp";
 import { salvarAtribuicaoMetaAnuncio } from "@/lib/whatsapp/meta-attribution";
+import { atualizarItemDisparoPeloWebhook } from "@/lib/whatsapp/disparo-fila";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -350,6 +351,21 @@ async function atualizarLogDisparoPeloWebhook(statusItem: any) {
   if (erroAtualizacao) {
     throw new Error(
       `Erro ao atualizar log do disparo: ${erroAtualizacao.message}`
+    );
+  }
+
+  try {
+    await atualizarItemDisparoPeloWebhook({
+      messageId: mensagemExternaId,
+      statusNormalizado,
+      erro: erroDisparo,
+      erroCodigoMeta: erroMeta?.codigo ?? null,
+      rawStatus: statusItem?.rawStatus || null,
+    });
+  } catch (itemDisparoError) {
+    console.error(
+      "[WEBHOOK WHATSAPP] Erro ao atualizar item da campanha pelo webhook:",
+      itemDisparoError
     );
   }
 

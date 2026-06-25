@@ -9,7 +9,7 @@ import { processWhatsAppWebhookBody } from "@/lib/whatsapp/process-webhook";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-function perf(label: string, inicio: number, extra?: Record<string, any>) {
+function perf(label: string, inicio: number, extra?: Record<string, unknown>) {
   console.log(`[PERF] ${label}`, {
     tempo_ms: Date.now() - inicio,
     ...(extra || {}),
@@ -20,6 +20,15 @@ type ProcessarFilaParams = {
   limite?: number;
   maxTentativas?: number;
   timeoutLockMinutos?: number;
+};
+
+type WebhookEventoMinimo = {
+  id: string;
+  tentativas?: number | null;
+};
+
+type WebhookEventoMetadata = {
+  metadata_json?: Record<string, unknown> | null;
 };
 
 function normalizarInteiro(
@@ -157,7 +166,10 @@ async function liberarLocksExpirados(timeoutLockMinutos: number) {
   }
 }
 
-async function reivindicarEvento(evento: any, maxTentativas: number) {
+async function reivindicarEvento(
+  evento: WebhookEventoMinimo,
+  maxTentativas: number
+) {
   const agora = new Date().toISOString();
 
   const { data, error } = await supabaseAdmin
@@ -453,12 +465,16 @@ export async function contarMensagensWebhookNoMesmoSegundo(createdAt?: string | 
     };
   }
 
-  const totalMensagens = (data || []).reduce((total, item: any) => {
+  const totalMensagens = ((data || []) as WebhookEventoMetadata[]).reduce((total, item) => {
     return total + Number(item.metadata_json?.incoming_messages || 0);
+  }, 0);
+  const totalStatuses = ((data || []) as WebhookEventoMetadata[]).reduce((total, item) => {
+    return total + Number(item.metadata_json?.incoming_statuses || 0);
   }, 0);
 
   return {
     totalMensagens,
+    totalStatuses,
     inicioSegundo,
     fimSegundo,
   };
