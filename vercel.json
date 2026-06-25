@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/whatsapp_disparos_fila?limit=15",
+      "schedule": "* * * * *"
+    }
+  ]
+}

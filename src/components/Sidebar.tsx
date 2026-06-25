@@ -175,6 +175,12 @@ export default function Sidebar({
   });
   const [whatsappPerfil, setWhatsappPerfil] =
     useState<WhatsappSidebarPerfil | null>(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.sidebarCollapsed = collapsed
+      ? "true"
+      : "false";
+  }, [collapsed]);
     
   const assinaturaBloqueada = assinatura?.status === "bloqueada";
   const disparosPendentesVisiveis = assinaturaBloqueada ? 0 : disparosPendentes;

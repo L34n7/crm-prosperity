@@ -180,7 +180,7 @@ function labelCampanhaQstash(campanhaId: string) {
 }
 
 function dedupItemQstash(itemId: string, tentativaPublicacao = 0) {
-  return `whatsapp-disparo-item:${itemId}:${tentativaPublicacao}`;
+  return `whatsapp-disparo-item-${itemId}-${tentativaPublicacao}`;
 }
 
 async function atualizarPublicacaoItemQstash(params: {
