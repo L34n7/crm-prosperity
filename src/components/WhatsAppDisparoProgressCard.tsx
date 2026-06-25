@@ -54,10 +54,12 @@ type CampanhaRealtimeRow = {
 
 const EVENTO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
 const EVENTO_REFRESH = "crm:whatsapp-disparo-refresh";
+const TEST_MODE_STORAGE_KEY = "crm-whatsapp-disparo-card-test";
 const POLLING_FALLBACK_MS = 2 * 60_000;
 const TERMINAL_DISMISS_MS = 8000;
 
 const STATUS_ATIVOS = new Set(["pendente", "enviando"]);
+const TEST_MODE_ENABLED = process.env.NODE_ENV !== "production";
 
 function isStatusAtivo(status?: string | null) {
   return STATUS_ATIVOS.has(String(status || ""));
@@ -69,6 +71,10 @@ function isStatusSucesso(status?: string | null) {
 
 function getDismissKey(campanhaId: string) {
   return `crm-whatsapp-disparo-terminal:${campanhaId}`;
+}
+
+function isCampanhaTeste(campanhaId?: string | null) {
+  return String(campanhaId || "").startsWith("teste-card-");
 }
 
 function inteiro(valor: unknown) {
@@ -130,6 +136,66 @@ function normalizarCampanhaRealtime(row: unknown): CampanhaProgresso | null {
     processando,
     processados: Math.min(total, enviados + falhas + cancelados),
     motivo: motivoCampanha(campanha),
+  };
+}
+
+function criarCampanhaTeste(modo: string): CampanhaProgresso | null {
+  if (!TEST_MODE_ENABLED) return null;
+
+  const valor = modo.trim().toLowerCase();
+
+  if (!valor) return null;
+
+  if (valor === "success" || valor === "sucesso") {
+    return {
+      id: "teste-card-sucesso",
+      status: "concluida",
+      template_nome: "teste_visual",
+      total: 500,
+      enviados: 492,
+      falhas: 8,
+      cancelados: 0,
+      pendentes: 0,
+      processando: 0,
+      processados: 500,
+      motivo: null,
+    };
+  }
+
+  if (
+    valor === "paused" ||
+    valor === "pausado" ||
+    valor === "breaker" ||
+    valor === "erro"
+  ) {
+    return {
+      id: "teste-card-pausado",
+      status: "pausada_por_falhas",
+      template_nome: "teste_visual",
+      total: 500,
+      enviados: 137,
+      falhas: 12,
+      cancelados: 351,
+      pendentes: 351,
+      processando: 0,
+      processados: 149,
+      motivo:
+        "Campanha pausada automaticamente porque muitas mensagens falharam no ultimo lote.",
+    };
+  }
+
+  return {
+    id: "teste-card-ativo",
+    status: "enviando",
+    template_nome: "teste_visual",
+    total: 500,
+    enviados: 184,
+    falhas: 3,
+    cancelados: 0,
+    pendentes: 313,
+    processando: 1,
+    processados: 187,
+    motivo: null,
   };
 }
 
@@ -219,6 +285,17 @@ export default function WhatsAppDisparoProgressCard() {
   );
 
   const carregarStatus = useCallback(async () => {
+    if (TEST_MODE_ENABLED) {
+      const campanhaTeste = criarCampanhaTeste(
+        window.localStorage.getItem(TEST_MODE_STORAGE_KEY) || ""
+      );
+
+      if (campanhaTeste) {
+        aplicarCampanha(campanhaTeste, isStatusAtivo(campanhaTeste.status));
+        return;
+      }
+    }
+
     try {
       const response = await fetch("/api/whatsapp/disparos/andamento", {
         cache: "no-store",
@@ -335,7 +412,7 @@ export default function WhatsAppDisparoProgressCard() {
       terminalTimerRef.current = null;
     }
 
-    if (!campanhaId || statusAtivo) return;
+    if (!campanhaId || statusAtivo || isCampanhaTeste(campanhaId)) return;
 
     terminalTimerRef.current = window.setTimeout(() => {
       window.sessionStorage.setItem(getDismissKey(campanhaId), "1");

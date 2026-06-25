@@ -1,7 +1,7 @@
 .card {
   position: fixed;
-  left: 304px;
-  bottom: 18px;
+  left: 98px;
+  bottom: 10px;
   z-index: 980;
   width: min(320px, calc(100vw - 328px));
   border: 1px solid var(--crm-border);
