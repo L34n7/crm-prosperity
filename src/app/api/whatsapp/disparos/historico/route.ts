@@ -15,6 +15,7 @@ const STATUS_CAMPANHAS_INTERROMPIDAS = [
 
 type CampanhaDisparoHistorico = {
   id: string;
+  nome?: string | null;
   integracao_whatsapp_id?: string | null;
   status?: string | null;
   template_nome?: string | null;
@@ -115,6 +116,34 @@ function traduzirErroMetaWhatsApp(
   }
 }
 
+async function buscarCampanhasFiltroHistorico(empresaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_disparo_campanhas")
+    .select(
+      `
+        id,
+        nome,
+        template_nome,
+        total_itens,
+        created_at,
+        status
+      `
+    )
+    .eq("empresa_id", empresaId)
+    .order("created_at", { ascending: false })
+    .limit(150);
+
+  if (error) {
+    console.error(
+      "[HISTORICO DISPAROS] Erro ao buscar campanhas para filtro:",
+      error
+    );
+    return [];
+  }
+
+  return data || [];
+}
+
 export async function GET(req: NextRequest) {
   try {
     const resultadoContexto = await getUsuarioContexto();
@@ -137,15 +166,20 @@ export async function GET(req: NextRequest) {
 
     const searchParams = req.nextUrl.searchParams;
     const limitParam = Number(searchParams.get("limit") || "50");
+    const campanhaFiltroId =
+      searchParams.get("campanha_id")?.trim() ||
+      searchParams.get("campanha_disparo_id")?.trim() ||
+      "";
 
     const limit = Number.isFinite(limitParam)
       ? Math.min(Math.max(limitParam, 1), 200)
       : 50;
 
-    const { data, error } = await supabaseAdmin
+    let queryLogs = supabaseAdmin
       .from("whatsapp_disparos_logs")
       .select(`
         id,
+        campanha_disparo_id,
         conversa_id,
         conversa_protocolo_id,
         contato_id,
@@ -163,8 +197,13 @@ export async function GET(req: NextRequest) {
         created_at
       `)
       .eq("empresa_id", usuario.empresa_id)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+      .order("created_at", { ascending: false });
+
+    if (campanhaFiltroId) {
+      queryLogs = queryLogs.eq("campanha_disparo_id", campanhaFiltroId);
+    }
+
+    const { data, error } = await queryLogs.limit(limit);
 
     if (error) {
       return NextResponse.json(
@@ -177,9 +216,11 @@ export async function GET(req: NextRequest) {
     }
 
     const { data: mensagensAgendadas, error: mensagensAgendadasError } =
-    await supabaseAdmin
-      .from("mensagens")
-      .select(`
+      campanhaFiltroId
+        ? { data: [], error: null }
+        : await supabaseAdmin
+            .from("mensagens")
+            .select(`
         id,
         empresa_id,
         conversa_id,
@@ -193,12 +234,12 @@ export async function GET(req: NextRequest) {
         automacao_execucao_id,
         automacao_no_id
       `)
-      .eq("empresa_id", usuario.empresa_id)
-      .eq("tipo_mensagem", "template")
-      .eq("origem", "automatica")
-      .eq("metadata_json->>tipo", "disparo_template_agendado")
-      .order("created_at", { ascending: false })
-      .limit(limit);
+            .eq("empresa_id", usuario.empresa_id)
+            .eq("tipo_mensagem", "template")
+            .eq("origem", "automatica")
+            .eq("metadata_json->>tipo", "disparo_template_agendado")
+            .order("created_at", { ascending: false })
+            .limit(limit);
 
   if (mensagensAgendadasError) {
     console.error(
@@ -207,12 +248,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
-    const { data: campanhasInterrompidas, error: campanhasInterrompidasError } =
-      await supabaseAdmin
+    let queryCampanhasInterrompidas = supabaseAdmin
         .from("whatsapp_disparo_campanhas")
         .select(
           `
           id,
+          nome,
           integracao_whatsapp_id,
           status,
           template_nome,
@@ -234,8 +275,15 @@ export async function GET(req: NextRequest) {
         )
         .eq("empresa_id", usuario.empresa_id)
         .in("status", STATUS_CAMPANHAS_INTERROMPIDAS)
-        .order("updated_at", { ascending: false })
-        .limit(limit);
+        .order("updated_at", { ascending: false });
+
+    if (campanhaFiltroId) {
+      queryCampanhasInterrompidas =
+        queryCampanhasInterrompidas.eq("id", campanhaFiltroId);
+    }
+
+    const { data: campanhasInterrompidas, error: campanhasInterrompidasError } =
+      await queryCampanhasInterrompidas.limit(limit);
 
     if (campanhasInterrompidasError) {
       console.error(
@@ -272,6 +320,41 @@ export async function GET(req: NextRequest) {
             mensagem,
           ])
         );
+      }
+    }
+
+    const campanhasIdsLogs = Array.from(
+      new Set(
+        (data || [])
+          .map((item: any) => item.campanha_disparo_id)
+          .filter((campanhaId: any): campanhaId is string =>
+            Boolean(campanhaId)
+          )
+      )
+    );
+    const campanhasPorId = new Map<string, CampanhaDisparoHistorico>();
+
+    if (campanhasIdsLogs.length > 0) {
+      const { data: campanhasData, error: campanhasError } =
+        await supabaseAdmin
+          .from("whatsapp_disparo_campanhas")
+          .select(
+            `
+              id,
+              nome,
+              template_nome,
+              template_idioma,
+              total_itens,
+              created_at
+            `
+          )
+          .eq("empresa_id", usuario.empresa_id)
+          .in("id", campanhasIdsLogs);
+
+      if (!campanhasError && campanhasData) {
+        for (const campanha of campanhasData as CampanhaDisparoHistorico[]) {
+          campanhasPorId.set(campanha.id, campanha);
+        }
       }
     }
 
@@ -367,8 +450,13 @@ export async function GET(req: NextRequest) {
           ? "agendado"
           : "manual";
 
+      const campanhaId = item.campanha_disparo_id || null;
+      const campanhaLog = campanhaId ? campanhasPorId.get(campanhaId) : null;
+
       return {
         id: item.id,
+        campanha_id: campanhaId,
+        campanha_nome: campanhaLog?.nome || null,
         created_at: item.created_at,
         conversa_id: item.conversa_id || null,
         conversa_protocolo_id: item.conversa_protocolo_id || null,
@@ -436,6 +524,8 @@ export async function GET(req: NextRequest) {
 
       return {
         id: mensagem.id,
+        campanha_id: null,
+        campanha_nome: null,
         created_at: mensagem.created_at,
         conversa_id: mensagem.conversa_id || null,
         conversa_protocolo_id: mensagem.conversa_protocolo_id || null,
@@ -502,6 +592,7 @@ export async function GET(req: NextRequest) {
       return {
         id: `campanha-${campanha.id}`,
         campanha_id: campanha.id,
+        campanha_nome: campanha.nome || null,
         created_at: dataReferencia,
         conversa_id: null,
         conversa_protocolo_id: null,
@@ -523,6 +614,7 @@ export async function GET(req: NextRequest) {
           ...metadataCampanha,
           tipo: "campanha_disparo_pausada",
           campanha_id: campanha.id,
+          campanha_nome: campanha.nome || null,
           status_campanha: campanha.status || null,
           total_itens: totalItens,
           total_enviados: totalEnviados,
@@ -568,6 +660,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       total: todosResultados.length,
       resultados: todosResultados,
+      campanhas: await buscarCampanhasFiltroHistorico(usuario.empresa_id),
     });
 
   } catch (error: any) {

@@ -17,6 +17,7 @@ const STATUS_TERMINAIS_RECENTES = [
 
 type CampanhaDisparo = {
   id: string;
+  nome: string | null;
   integracao_whatsapp_id: string | null;
   usuario_id: string | null;
   status: string | null;
@@ -75,6 +76,7 @@ function mapearCampanha(campanha: CampanhaDisparo) {
 
   return {
     id: campanha.id,
+    nome: campanha.nome,
     integracao_whatsapp_id: campanha.integracao_whatsapp_id,
     usuario_id: campanha.usuario_id,
     status: campanha.status,
@@ -121,6 +123,7 @@ export async function GET(request: NextRequest) {
 
     const campos = `
       id,
+      nome,
       integracao_whatsapp_id,
       usuario_id,
       status,

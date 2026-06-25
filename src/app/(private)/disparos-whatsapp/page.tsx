@@ -110,6 +110,7 @@ type ResultadoDisparo = {
   metadata_json?: any;
   origem_historico?: string | null;
   campanha_id?: string | null;
+  campanha_nome?: string | null;
   status_campanha?: string | null;
   total_itens?: number | null;
   total_enviados?: number | null;
@@ -120,6 +121,7 @@ type ResultadoDisparo = {
 
 type CampanhaDisparoAndamento = {
   id: string;
+  nome?: string | null;
   integracao_whatsapp_id?: string | null;
   usuario_id?: string | null;
   status: string | null;
@@ -148,6 +150,7 @@ type DisparoAndamentoPayload = {
 
 type CampanhaDisparoRealtimeRow = {
   id?: unknown;
+  nome?: unknown;
   empresa_id?: unknown;
   integracao_whatsapp_id?: unknown;
   usuario_id?: unknown;
@@ -179,6 +182,36 @@ type ContatoOpcao = {
   status_lead: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+type CampanhaHistoricoFiltro = {
+  id: string;
+  nome?: string | null;
+  template_nome?: string | null;
+  total_itens?: number | null;
+  created_at?: string | null;
+  status?: string | null;
+};
+
+type CampanhaConflitoContato = {
+  campanha_id: string;
+  campanha_nome: string;
+  template_nome?: string | null;
+  enviado_em?: string | null;
+};
+
+type GrupoConflitoDisparo = {
+  campanha_id: string;
+  campanha_nome: string;
+  template_nome?: string | null;
+  total_contatos: number;
+  contatos_ids: string[];
+  ultimo_envio_em?: string | null;
+};
+
+type DecisaoConflitoDisparo = {
+  acao: "incluir" | "remover";
+  contatoIds: string[];
 };
 
 const EVENTO_DISPARO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
@@ -633,13 +666,13 @@ function formatarPercentualMeta(valor?: number | null) {
 function formatarLimiteTierMeta(tier?: string | null) {
   const valor = String(tier || "").trim().toUpperCase();
 
-  if (!valor) return "Limite padrao do sistema";
+  if (!valor) return "Limite padrão do sistema";
   if (valor.includes("UNLIMITED")) return "Alcance sem limite informado";
-  if (valor.includes("100K")) return "Ate 100 mil contatos unicos em 24h";
-  if (valor.includes("10K")) return "Ate 10 mil contatos unicos em 24h";
-  if (valor.includes("1K")) return "Ate 1 mil contatos unicos em 24h";
-  if (valor.includes("250")) return "Ate 250 contatos unicos em 24h";
-  if (valor.includes("50")) return "Ate 50 contatos unicos em 24h";
+  if (valor.includes("100K")) return "Até 100 mil contatos únicos em 24h";
+  if (valor.includes("10K")) return "Até 10 mil contatos únicos em 24h";
+  if (valor.includes("1K")) return "Até 1 mil contatos únicos em 24h";
+  if (valor.includes("250")) return "Até 250 contatos únicos em 24h";
+  if (valor.includes("50")) return "Até 50 contatos únicos em 24h";
 
   return "Limite informado pela Meta";
 }
@@ -650,15 +683,15 @@ function formatarQualidadeMeta(quality?: string | null) {
   switch (valor) {
     case "GREEN":
     case "HIGH":
-      return "Saudavel";
+      return "Saúdavel";
     case "YELLOW":
     case "MEDIUM":
-      return "Atencao";
+      return "Atenção";
     case "RED":
     case "LOW":
       return "Risco alto";
     default:
-      return "Nao informada";
+      return "Não informada";
   }
 }
 
@@ -667,7 +700,7 @@ function formatarModoMeta(mode?: string | null) {
 
   switch (valor) {
     case "LIVE":
-      return "Em producao";
+      return "Em produção";
     case "SANDBOX":
     case "TEST":
     case "TESTING":
@@ -690,6 +723,51 @@ function formatarDataHora(data?: string | null) {
   } catch {
     return "";
   }
+}
+
+function formatarDataHoraCurta(data?: string | null) {
+  if (!data) return "";
+
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+      .format(new Date(data))
+      .replace(",", "");
+  } catch {
+    return "";
+  }
+}
+
+function nomeCampanhaHistorico(campanha?: CampanhaHistoricoFiltro | null) {
+  if (!campanha) return "Disparo em massa";
+  if (campanha.nome) return campanha.nome;
+
+  const total = Number(campanha.total_itens || 0);
+  const unidade = total === 1 ? "contato" : "contatos";
+  const data = formatarDataHoraCurta(campanha.created_at) || "data nao informada";
+
+  return `Disparo em massa - ${data} - ${total} ${unidade}`;
+}
+
+function truncarNomeBadge(valor: string, limite = 34) {
+  const texto = String(valor || "").trim();
+
+  if (texto.length <= limite) return texto;
+
+  return `${texto.slice(0, Math.max(0, limite - 3)).trim()}...`;
+}
+
+function normalizarTextoBusca(valor?: string | null) {
+  return String(valor || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function emitirRefreshDisparoEmMassa() {
@@ -756,6 +834,7 @@ function normalizarCampanhaRealtime(
 
   return {
     id,
+    nome: textoCampanha(campanha.nome),
     integracao_whatsapp_id: textoCampanha(campanha.integracao_whatsapp_id),
     usuario_id: textoCampanha(campanha.usuario_id),
     status: textoCampanha(campanha.status),
@@ -936,6 +1015,8 @@ function obterTotaisCampanhaPausada(item: ResultadoDisparo) {
 }
 
 function obterTituloCampanhaPausada(item: ResultadoDisparo) {
+  if (item.campanha_nome) return item.campanha_nome;
+
   const totais = obterTotaisCampanhaPausada(item);
   const data = formatarDataHora(item.created_at) || "data não informada";
   const unidade = totais.totalItens === 1 ? "contato" : "contatos";
@@ -1038,16 +1119,23 @@ export default function DisparosWhatsAppPage() {
   const [templateVariavel1, setTemplateVariavel1] = useState("nome_contato");
   const [templateVariavel2, setTemplateVariavel2] = useState("campanha");
   const [templateVariavel3, setTemplateVariavel3] = useState("telefone");
+  const [nomeCampanhaDisparo, setNomeCampanhaDisparo] = useState("");
   const [buscaContato, setBuscaContato] = useState("");
   const [origemFiltro, setOrigemFiltro] = useState("");
   const [origensDisponiveis, setOrigensDisponiveis] = useState<string[]>([]);
 
   const [campanhaFiltro, setCampanhaFiltro] = useState("");
   const [campanhasDisponiveis, setCampanhasDisponiveis] = useState<string[]>([]);
+  const [disparoAnteriorFiltroContatos, setDisparoAnteriorFiltroContatos] =
+    useState("");
 
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
+  const [erroConflitos, setErroConflitos] = useState("");
   const [resultado, setResultado] = useState<ResultadoDisparo[]>([]);
+  const [campanhasHistorico, setCampanhasHistorico] = useState<
+    CampanhaHistoricoFiltro[]
+  >([]);
   const [mensagensExpandidas, setMensagensExpandidas] = useState<string[]>([]);
   const [paginaHistorico, setPaginaHistorico] = useState(1);
 
@@ -1069,6 +1157,17 @@ export default function DisparosWhatsAppPage() {
   const [filtroHistorico, setFiltroHistorico] = useState<
     "todos" | "sucesso" | "falha" | "processando"
   >("todos");
+  const [filtroHistoricoCampanha, setFiltroHistoricoCampanha] = useState("");
+  const [loadingConflitos, setLoadingConflitos] = useState(false);
+  const [gruposConflitoDisparo, setGruposConflitoDisparo] = useState<
+    GrupoConflitoDisparo[]
+  >([]);
+  const [conflitosPorContato, setConflitosPorContato] = useState<
+    Record<string, CampanhaConflitoContato[]>
+  >({});
+  const [decisoesConflitoDisparo, setDecisoesConflitoDisparo] = useState<
+    Record<string, DecisaoConflitoDisparo>
+  >({});
 
   const [previewCusto, setPreviewCusto] = useState<{
     categoria: string;
@@ -1275,11 +1374,17 @@ export default function DisparosWhatsAppPage() {
     }
   }
 
-  async function carregarHistorico() {
+  async function carregarHistorico(campanhaId = filtroHistoricoCampanha) {
     try {
       setLoadingHistorico(true);
 
-      const res = await fetch("/api/whatsapp/disparos/historico?limit=50", {
+      const params = new URLSearchParams({ limit: "80" });
+
+      if (campanhaId) {
+        params.set("campanha_id", campanhaId);
+      }
+
+      const res = await fetch(`/api/whatsapp/disparos/historico?${params}`, {
         cache: "no-store",
       });
 
@@ -1290,10 +1395,89 @@ export default function DisparosWhatsAppPage() {
       }
 
       setResultado(Array.isArray(json.resultados) ? json.resultados : []);
+      setCampanhasHistorico(
+        Array.isArray(json.campanhas) ? json.campanhas : []
+      );
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar histórico de disparos.");
     } finally {
       setLoadingHistorico(false);
+    }
+  }
+
+  async function carregarConflitosDisparo(contatosLista: ContatoOpcao[]) {
+    const contatosValidos = contatosLista.filter(contatoTemTelefoneValido);
+
+    if (contatosValidos.length === 0) {
+      setGruposConflitoDisparo([]);
+      setConflitosPorContato({});
+      setDecisoesConflitoDisparo({});
+      setErroConflitos("");
+      return;
+    }
+
+    try {
+      setLoadingConflitos(true);
+      setErroConflitos("");
+
+      const res = await fetch("/api/whatsapp/disparos/conflitos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          janela_dias: 7,
+          contatos: contatosValidos.map((contato) => ({
+            id: contato.id,
+            telefone: contato.telefone,
+          })),
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao verificar contatos repetidos.");
+      }
+
+      const grupos = Array.isArray(json.grupos)
+        ? (json.grupos as GrupoConflitoDisparo[])
+        : [];
+      const contatosConflito =
+        json.contatos && typeof json.contatos === "object"
+          ? (json.contatos as Record<string, CampanhaConflitoContato[]>)
+          : {};
+      const contatosSelecionadosIds = new Set(contatosLista.map((item) => item.id));
+      const campanhasAtuais = new Set(grupos.map((grupo) => grupo.campanha_id));
+
+      setGruposConflitoDisparo(grupos);
+      setConflitosPorContato(contatosConflito);
+      setDecisoesConflitoDisparo((prev) => {
+        const proximo: Record<string, DecisaoConflitoDisparo> = {};
+
+        for (const [campanhaId, decisao] of Object.entries(prev)) {
+          if (!campanhasAtuais.has(campanhaId)) continue;
+
+          const contatoIds = decisao.contatoIds.filter((contatoId) =>
+            contatosSelecionadosIds.has(contatoId)
+          );
+
+          if (contatoIds.length === 0) continue;
+
+          proximo[campanhaId] = {
+            ...decisao,
+            contatoIds,
+          };
+        }
+
+        return proximo;
+      });
+    } catch (error: any) {
+      setErroConflitos(
+        error?.message || "Erro ao verificar contatos repetidos."
+      );
+    } finally {
+      setLoadingConflitos(false);
     }
   }
 
@@ -1400,6 +1584,18 @@ export default function DisparosWhatsAppPage() {
 
     return () => clearTimeout(timer);
   }, [buscaContato, origemFiltro, campanhaFiltro]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      carregarConflitosDisparo(contatosSelecionados);
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [contatosSelecionados]);
+
+  useEffect(() => {
+    carregarHistorico(filtroHistoricoCampanha);
+  }, [filtroHistoricoCampanha]);
 
   useEffect(() => {
     setTemplateId("");
@@ -1589,9 +1785,110 @@ export default function DisparosWhatsAppPage() {
     return contatos.filter((item) => !idsSelecionados.has(item.id));
   }, [contatos, contatosSelecionados]);
 
+  const contatoPassaFiltroDisparoAnterior = useCallback(
+    (contato: ContatoOpcao) => {
+      if (!disparoAnteriorFiltroContatos) return true;
+
+      return (conflitosPorContato[contato.id] || []).some(
+        (campanha) => campanha.campanha_id === disparoAnteriorFiltroContatos
+      );
+    },
+    [conflitosPorContato, disparoAnteriorFiltroContatos]
+  );
+
+  const contatoPassaFiltrosSelecionados = useCallback(
+    (contato: ContatoOpcao) => {
+      const busca = normalizarTextoBusca(buscaContato);
+
+      if (busca) {
+        const textoContato = normalizarTextoBusca(
+          [
+            contato.nome,
+            contato.telefone,
+            contato.email,
+            contato.origem,
+            contato.campanha,
+            contato.status_lead,
+            ...(conflitosPorContato[contato.id] || []).map(
+              (campanha) => campanha.campanha_nome
+            ),
+          ]
+            .filter(Boolean)
+            .join(" ")
+        );
+
+        if (!textoContato.includes(busca)) return false;
+      }
+
+      if (origemFiltro && contato.origem !== origemFiltro) return false;
+      if (campanhaFiltro && contato.campanha !== campanhaFiltro) return false;
+
+      return contatoPassaFiltroDisparoAnterior(contato);
+    },
+    [
+      buscaContato,
+      campanhaFiltro,
+      conflitosPorContato,
+      contatoPassaFiltroDisparoAnterior,
+      origemFiltro,
+    ]
+  );
+
+  const contatosDisponiveisFiltrados = useMemo(() => {
+    return contatosDisponiveis.filter(contatoPassaFiltroDisparoAnterior);
+  }, [contatosDisponiveis, contatoPassaFiltroDisparoAnterior]);
+
   const contatosDisponiveisValidos = useMemo(() => {
-    return contatosDisponiveis.filter(contatoTemTelefoneValido);
-  }, [contatosDisponiveis]);
+    return contatosDisponiveisFiltrados.filter(contatoTemTelefoneValido);
+  }, [contatosDisponiveisFiltrados]);
+
+  const contatosSelecionadosFiltrados = useMemo(() => {
+    return contatosSelecionados.filter(contatoPassaFiltrosSelecionados);
+  }, [contatosSelecionados, contatoPassaFiltrosSelecionados]);
+
+  const gruposConflitoAtivos = useMemo(() => {
+    const idsSelecionados = new Set(contatosSelecionados.map((item) => item.id));
+
+    return gruposConflitoDisparo
+      .map((grupo) => ({
+        ...grupo,
+        contatos_ids: grupo.contatos_ids.filter((contatoId) =>
+          idsSelecionados.has(contatoId)
+        ),
+      }))
+      .filter((grupo) => grupo.contatos_ids.length > 0);
+  }, [contatosSelecionados, gruposConflitoDisparo]);
+
+  const gruposConflitoPendentes = useMemo(() => {
+    return gruposConflitoAtivos.filter((grupo) => {
+      const decisao = decisoesConflitoDisparo[grupo.campanha_id];
+      const decididos = new Set(decisao?.contatoIds || []);
+
+      return grupo.contatos_ids.some((contatoId) => !decididos.has(contatoId));
+    });
+  }, [decisoesConflitoDisparo, gruposConflitoAtivos]);
+
+  const temConflitosPendentes = gruposConflitoPendentes.length > 0;
+
+  const campanhasConflitoFiltro = useMemo(() => {
+    return gruposConflitoAtivos.map((grupo) => ({
+      id: grupo.campanha_id,
+      nome: grupo.campanha_nome,
+      total: grupo.contatos_ids.length,
+    }));
+  }, [gruposConflitoAtivos]);
+
+  const totalContatosComConflitoSelecionados = useMemo(() => {
+    const ids = new Set<string>();
+
+    for (const grupo of gruposConflitoAtivos) {
+      for (const contatoId of grupo.contatos_ids) {
+        ids.add(contatoId);
+      }
+    }
+
+    return ids.size;
+  }, [gruposConflitoAtivos]);
 
   const totalSucesso = useMemo(() => {
     return resultado.filter(disparoTeveSucesso).length;
@@ -1673,6 +1970,7 @@ export default function DisparosWhatsAppPage() {
     }
 
     setErro("");
+    invalidarDecisoesConflitoParaContatos([contato.id]);
     setContatosSelecionados((prev) => {
       if (prev.some((item) => item.id === contato.id)) return prev;
       return [...prev, contato];
@@ -1692,6 +1990,7 @@ export default function DisparosWhatsAppPage() {
     }
 
     setErro("");
+    invalidarDecisoesConflitoParaContatos(novos.map((item) => item.id));
     setContatosSelecionados((prev) => [...prev, ...novos]);
   }
 
@@ -1703,6 +2002,90 @@ export default function DisparosWhatsAppPage() {
     setContatosSelecionados([]);
     setMensagem("");
     setErro("");
+    setErroConflitos("");
+    setGruposConflitoDisparo([]);
+    setConflitosPorContato({});
+    setDecisoesConflitoDisparo({});
+  }
+
+  function invalidarDecisoesConflitoParaContatos(contatoIds: string[]) {
+    const ids = new Set(contatoIds.filter(Boolean));
+
+    if (ids.size === 0) return;
+
+    setDecisoesConflitoDisparo((prev) => {
+      const proximo: Record<string, DecisaoConflitoDisparo> = {};
+
+      for (const [campanhaId, decisao] of Object.entries(prev)) {
+        const contatoIdsRestantes = decisao.contatoIds.filter(
+          (contatoId) => !ids.has(contatoId)
+        );
+
+        if (contatoIdsRestantes.length === 0) continue;
+
+        proximo[campanhaId] = {
+          ...decisao,
+          contatoIds: contatoIdsRestantes,
+        };
+      }
+
+      return proximo;
+    });
+  }
+
+  function marcarGrupoConflitoComoIncluido(grupo: GrupoConflitoDisparo) {
+    const contatoIds = grupo.contatos_ids.filter((contatoId) =>
+      contatosSelecionados.some((contato) => contato.id === contatoId)
+    );
+
+    if (contatoIds.length === 0) return;
+
+    setDecisoesConflitoDisparo((prev) => ({
+      ...prev,
+      [grupo.campanha_id]: {
+        acao: "incluir",
+        contatoIds,
+      },
+    }));
+  }
+
+  function removerGrupoConflitoDoEnvio(grupo: GrupoConflitoDisparo) {
+    const contatoIdsGrupo = grupo.contatos_ids.filter((contatoId) =>
+      contatosSelecionados.some((contato) => contato.id === contatoId)
+    );
+    const contatoIdsParaRemover = new Set<string>();
+
+    for (const contatoId of contatoIdsGrupo) {
+      const outrosGrupos = gruposConflitoAtivos.filter(
+        (outroGrupo) =>
+          outroGrupo.campanha_id !== grupo.campanha_id &&
+          outroGrupo.contatos_ids.includes(contatoId)
+      );
+      const manterPorOutroGrupo = outrosGrupos.some((outroGrupo) => {
+        const decisao = decisoesConflitoDisparo[outroGrupo.campanha_id];
+        const contatoJaDecidido = decisao?.contatoIds?.includes(contatoId);
+
+        return decisao?.acao === "incluir" || !contatoJaDecidido;
+      });
+
+      if (!manterPorOutroGrupo) {
+        contatoIdsParaRemover.add(contatoId);
+      }
+    }
+
+    setDecisoesConflitoDisparo((prev) => ({
+      ...prev,
+      [grupo.campanha_id]: {
+        acao: "remover",
+        contatoIds: contatoIdsGrupo,
+      },
+    }));
+
+    if (contatoIdsParaRemover.size > 0) {
+      setContatosSelecionados((prev) =>
+        prev.filter((contato) => !contatoIdsParaRemover.has(contato.id))
+      );
+    }
   }
 
   function formatarMoedaBRL(valor?: number | null) {
@@ -1927,6 +2310,13 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
+    if (temConflitosPendentes) {
+      setErro(
+        "Resolva os contatos repetidos dos ultimos 7 dias antes de enviar o disparo."
+      );
+      return;
+    }
+
     if (totalVariaveis > 3) {
       setErro("Este template usa mais de 3 variáveis. Use um template com até 3 variáveis para esta tela.");
       return;
@@ -1949,6 +2339,7 @@ export default function DisparosWhatsAppPage() {
         : {};
 
       const destinatarios = contatosSelecionados.map((contato) => ({
+        contato_id: contato.id,
         numero: limparNumero(contato.telefone),
         variaveis:
           totalVariaveis > 0
@@ -1971,6 +2362,7 @@ export default function DisparosWhatsAppPage() {
         body: JSON.stringify({
           integracao_whatsapp_id: integracaoId,
           template_id: templateId,
+          nome_campanha: nomeCampanhaDisparo,
           destinatarios,
         }),
       });
@@ -2009,7 +2401,7 @@ export default function DisparosWhatsAppPage() {
         setMensagem(
           `Campanha criada e enfileirada. Os ${Number(
             json.total || contatosSelecionados.length
-          )} disparos serao processados gradualmente em segundo plano.`
+          )} disparos serão processados gradualmente em segundo plano.`
         );
 
         await carregarHistorico();
@@ -2188,6 +2580,37 @@ export default function DisparosWhatsAppPage() {
     await handleSubmit(fakeEvent);
   }
 
+  function renderBadgesDisparoAntigo(contato: ContatoOpcao) {
+    const campanhas = conflitosPorContato[contato.id] || [];
+
+    if (campanhas.length === 0) return null;
+
+    const campanhasVisiveis = campanhas.slice(0, 3);
+    const totalOculto = Math.max(0, campanhas.length - campanhasVisiveis.length);
+
+    return (
+      <div className={styles.massHistoryBadges}>
+        {campanhasVisiveis.map((campanha) => (
+          <span
+            key={`${contato.id}-${campanha.campanha_id}`}
+            className={styles.massHistoryBadge}
+            title={`${campanha.campanha_nome}${
+              campanha.enviado_em
+                ? ` - ${formatarDataHora(campanha.enviado_em)}`
+                : ""
+            }`}
+          >
+            {truncarNomeBadge(campanha.campanha_nome)}
+          </span>
+        ))}
+
+        {totalOculto > 0 ? (
+          <span className={styles.massHistoryBadgeMore}>+{totalOculto}</span>
+        ) : null}
+      </div>
+    );
+  }
+
 
   useEffect(() => {
     const categoria = String(templateSelecionado?.categoria || "").toLowerCase();
@@ -2202,7 +2625,7 @@ export default function DisparosWhatsAppPage() {
 
   useEffect(() => {
     setPaginaHistorico(1);
-  }, [resultado.length, filtroHistorico]);
+  }, [resultado.length, filtroHistorico, filtroHistoricoCampanha]);
 
   return (
     <>
@@ -2245,8 +2668,6 @@ export default function DisparosWhatsAppPage() {
                 </div> 
               ) : (
               <form onSubmit={handleSubmit} className={styles.form}>
-                <div className={styles.setupPreviewGrid}>
-                  <div className={styles.field}>
                     <div className={styles.setupColumn}>
                       <div className={styles.field}>
                         <label className={styles.label}>Integração WhatsApp</label>
@@ -2287,7 +2708,41 @@ export default function DisparosWhatsAppPage() {
                           ))}
                         </select>
                       </div>
+
+                      <div className={`${styles.field} ${styles.campaignNameField}`}>
+                        <div className={styles.labelWithHelp}>
+                          <label className={styles.label}>Nome do Disparo em massa</label>
+
+                          <span className={styles.optional}>Opcional</span>
+
+                          <span className={styles.infoTooltipWrapper}>
+                            <button
+                              type="button"
+                              className={styles.infoTooltipButton}
+                              aria-label="Ajuda sobre o nome do disparo em massa"
+                            >
+                              i
+                            </button>
+
+                            <span className={styles.infoTooltipText}>
+                              Se deixar vazio, o CRM cria um nome padrão com data, hora e quantidade.
+                              Mesmo com nome personalizado, esses dados serão adicionados no final.
+                            </span>
+                          </span>
+                        </div>
+
+                        <input
+                          value={nomeCampanhaDisparo}
+                          onChange={(e) => setNomeCampanhaDisparo(e.target.value)}
+                          className={styles.input}
+                          maxLength={90}
+                          placeholder="Ex: ALERTA ATUALIZACAO"
+                        />
+                      </div>
                     </div>
+                <div className={styles.setupPreviewGrid}>
+                  <div className={styles.field}>
+
                     
                     {templateSelecionado ? (
                       <div className={styles.templateInfoBox}>
@@ -2478,6 +2933,25 @@ export default function DisparosWhatsAppPage() {
                         )}
                       </select>
                     </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label}>Disparo anterior</label>
+                      <select
+                        value={disparoAnteriorFiltroContatos}
+                        onChange={(e) =>
+                          setDisparoAnteriorFiltroContatos(e.target.value)
+                        }
+                        className={styles.input}
+                        disabled={campanhasConflitoFiltro.length === 0}
+                      >
+                        <option value="">Todos</option>
+                        {campanhasConflitoFiltro.map((campanha) => (
+                          <option key={campanha.id} value={campanha.id}>
+                            {truncarNomeBadge(campanha.nome, 50)} ({campanha.total})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className={styles.inlineActions}>
@@ -2497,16 +2971,25 @@ export default function DisparosWhatsAppPage() {
                         setBuscaContato("");
                         setOrigemFiltro("");
                         setCampanhaFiltro("");
-                        limparSelecao();
+                        setDisparoAnteriorFiltroContatos("");
                       }}
                       disabled={
-                        contatosSelecionados.length === 0 &&
                         !buscaContato &&
                         !origemFiltro &&
-                        !campanhaFiltro
+                        !campanhaFiltro &&
+                        !disparoAnteriorFiltroContatos
                       }
                     >
                       Limpar filtros
+                    </button>
+
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={limparSelecao}
+                      disabled={contatosSelecionados.length === 0}
+                    >
+                      Limpar selecao
                     </button>
                   </div>
                 </div>
@@ -2516,19 +2999,23 @@ export default function DisparosWhatsAppPage() {
                     <div className={styles.contactsHeader}>
                       <h3 className={styles.contactsTitle}>Contatos salvos</h3>
                       <span className={styles.contactsCount}>
-                        {loadingContatos ? "..." : totalContatosDisponiveis}
+                        {loadingContatos
+                          ? "..."
+                          : disparoAnteriorFiltroContatos
+                          ? `${contatosDisponiveisFiltrados.length}/${totalContatosDisponiveis}`
+                          : totalContatosDisponiveis}
                       </span>
                     </div>
 
                     <div className={styles.contactsList}>
                       {loadingContatos ? (
                         <div className={styles.emptyMiniState}>Carregando contatos...</div>
-                      ) : contatosDisponiveis.length === 0 ? (
+                      ) : contatosDisponiveisFiltrados.length === 0 ? (
                         <div className={styles.emptyMiniState}>
                           Nenhum contato salvo disponível.
                         </div>
                       ) : (
-                        contatosDisponiveis.map((contato) => {
+                        contatosDisponiveisFiltrados.map((contato) => {
                           const telefoneValido = contatoTemTelefoneValido(contato);
 
                           return (
@@ -2571,6 +3058,7 @@ export default function DisparosWhatsAppPage() {
                                     </span>
                                   ) : null}
                                 </div>
+                                {renderBadgesDisparoAntigo(contato)}
                               </div>
 
                               <button
@@ -2592,7 +3080,10 @@ export default function DisparosWhatsAppPage() {
                     <div className={styles.contactsHeader}>
                       <h3 className={styles.contactsTitle}>Selecionados para disparo</h3>
                       <span className={styles.contactsCount}>
-                        {contatosSelecionados.length}
+                        {contatosSelecionadosFiltrados.length ===
+                        contatosSelecionados.length
+                          ? contatosSelecionados.length
+                          : `${contatosSelecionadosFiltrados.length}/${contatosSelecionados.length}`}
                       </span>
                     </div>
 
@@ -2601,8 +3092,12 @@ export default function DisparosWhatsAppPage() {
                         <div className={styles.emptyMiniState}>
                           Nenhum contato selecionado.
                         </div>
+                      ) : contatosSelecionadosFiltrados.length === 0 ? (
+                        <div className={styles.emptyMiniState}>
+                          Nenhum contato selecionado encontrado para estes filtros.
+                        </div>
                       ) : (
-                        contatosSelecionados.map((contato) => (
+                        contatosSelecionadosFiltrados.map((contato) => (
                           <div key={contato.id} className={styles.contactCardSelected}>
                             <div className={styles.contactMain}>
                               <strong className={styles.contactName}>
@@ -2637,6 +3132,7 @@ export default function DisparosWhatsAppPage() {
                                   </span>
                                 ) : null}
                               </div>
+                              {renderBadgesDisparoAntigo(contato)}
                             </div>
 
                             <button
@@ -2652,6 +3148,104 @@ export default function DisparosWhatsAppPage() {
                     </div>
                   </div>
                 </div>
+
+                {(loadingConflitos ||
+                  erroConflitos ||
+                  gruposConflitoAtivos.length > 0) && (
+                  <div
+                    className={`${styles.conflictCard} ${
+                      temConflitosPendentes
+                        ? styles.conflictCardPending
+                        : styles.conflictCardResolved
+                    }`}
+                  >
+                    <div className={styles.conflictHeader}>
+                      <div>
+                        <span className={styles.conflictEyebrow}>
+                          Repetidos recentes
+                        </span>
+                        <strong>
+                          {loadingConflitos
+                            ? "Verificando contatos dos ultimos 7 dias..."
+                            : temConflitosPendentes
+                            ? `${totalContatosComConflitoSelecionados} contato(s) precisam de decisao`
+                            : "Contatos repetidos resolvidos"}
+                        </strong>
+                      </div>
+
+                      {temConflitosPendentes ? (
+                        <span className={styles.conflictStatus}>
+                          Envio bloqueado
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {erroConflitos ? (
+                      <p className={styles.conflictError}>{erroConflitos}</p>
+                    ) : null}
+
+                    {!loadingConflitos && gruposConflitoAtivos.length > 0 ? (
+                      <div className={styles.conflictGroups}>
+                        {gruposConflitoAtivos.map((grupo) => {
+                          const decisao =
+                            decisoesConflitoDisparo[grupo.campanha_id];
+                          const decisaoTexto =
+                            decisao?.acao === "incluir"
+                              ? "Incluido mesmo assim"
+                              : decisao?.acao === "remover"
+                              ? "Removido do envio"
+                              : "Pendente";
+
+                          return (
+                            <div
+                              key={grupo.campanha_id}
+                              className={styles.conflictGroup}
+                            >
+                              <div className={styles.conflictGroupMain}>
+                                <strong>{grupo.campanha_nome}</strong>
+                                <span>
+                                  {grupo.contatos_ids.length} contato(s) ja
+                                  receberam este disparo
+                                  {grupo.ultimo_envio_em
+                                    ? ` em ${formatarDataHora(
+                                        grupo.ultimo_envio_em
+                                      )}`
+                                    : ""}
+                                </span>
+                              </div>
+
+                              <span className={styles.conflictDecision}>
+                                {decisaoTexto}
+                              </span>
+
+                              <div className={styles.conflictActions}>
+                                <button
+                                  type="button"
+                                  className={styles.secondaryButton}
+                                  onClick={() =>
+                                    removerGrupoConflitoDoEnvio(grupo)
+                                  }
+                                >
+                                  Remover do envio
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={styles.secondaryButton}
+                                  onClick={() =>
+                                    marcarGrupoConflitoComoIncluido(grupo)
+                                  }
+                                >
+                                  Incluir mesmo assim
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
                 {mensagem ? (
                   <FeedbackToast
@@ -2694,17 +3288,25 @@ export default function DisparosWhatsAppPage() {
                         <strong>{formatarNumeroMeta(limiteMeta?.limite)}</strong>
                       </div>
                       <div>
-                        <span>Ja comprometidos</span>
-                        <strong>{formatarNumeroMeta(limiteMeta?.usados)}</strong>
+                        <span>Ainda disponíveis</span>
+                        <strong>{formatarNumeroMeta(limiteMeta?.restantes)}</strong>
                       </div>
                       <div>
-                        <span>Ainda disponiveis</span>
-                        <strong>{formatarNumeroMeta(limiteMeta?.restantes)}</strong>
+                        <span>Ja comprometidos</span>
+                        <strong>{formatarNumeroMeta(limiteMeta?.usados)}</strong>
                       </div>
                       <div>
                         <span>Consomem limite</span>
                         <strong>
                           {formatarNumeroMeta(totalTelefonesQueConsomemLimite)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Disponíveis após envio</span>
+                        <strong>
+                        {typeof saldoEstimadoAposSelecao === "number"
+                          ? formatarNumeroMeta(Math.max(saldoEstimadoAposSelecao, 0))
+                          : "0"}
                         </strong>
                       </div>
                     </div>
@@ -2737,12 +3339,6 @@ export default function DisparosWhatsAppPage() {
                           {formatarNumeroMeta(totalTelefonesIsentosLimite)}
                         </span>
                       )}
-                      <span>
-                        Disponíveis após este envio:{" "}
-                        {typeof saldoEstimadoAposSelecao === "number"
-                          ? formatarNumeroMeta(Math.max(saldoEstimadoAposSelecao, 0))
-                          : "0"}
-                      </span>
                     </div>
 
                     {selecaoExcedeLimite && (
@@ -2801,10 +3397,14 @@ export default function DisparosWhatsAppPage() {
                         contatosSelecionados.length === 0 ||
                         disparando ||
                         disparoBloqueado ||
-                        selecaoExcedeLimite
+                        selecaoExcedeLimite ||
+                        loadingConflitos ||
+                        temConflitosPendentes
                       }
                     >
-                      {disparoBloqueado
+                      {temConflitosPendentes
+                        ? "Resolver repetidos"
+                        : disparoBloqueado
                         ? textoDisparoBloqueado
                         : "Enviar disparos"}
                     </button>
@@ -2838,9 +3438,11 @@ export default function DisparosWhatsAppPage() {
                 <div className={styles.massProgressTitleGroup}>
                   <p className={styles.eyebrow}>Disparo em massa</p>
                   <h2 className={styles.massProgressTitle}>
-                    {rotuloStatusCampanha(campanhaPagina)}
+                    {campanhaPagina.nome || rotuloStatusCampanha(campanhaPagina)}
                   </h2>
                   <p className={styles.massProgressSubtitle}>
+                    {rotuloStatusCampanha(campanhaPagina)}
+                    {" - "}
                     Template: {campanhaPagina.template_nome || "-"}
                     {" - "}
                     Integracao:{" "}
@@ -2889,16 +3491,32 @@ export default function DisparosWhatsAppPage() {
             </section>
           ) : null}
 
-          <section className={styles.resultsCard}>
-            <div className={styles.cardHeader}>
-              <div>
-                <p className={styles.eyebrow}>Histórico</p>
-                <h2 className={styles.cardTitle}>Resultados dos disparos</h2>
-                <p className={styles.cardSubtitle}>
-                  Os disparos salvos ficam sempre visíveis aqui.
-                </p>
-              </div> 
-            </div>
+      <section className={styles.resultsCard}>
+        <div className={`${styles.cardHeader} ${styles.resultsHeader}`}>
+          <div className={styles.resultsHeaderText}>
+            <p className={styles.eyebrow}>Histórico</p>
+            <h2 className={styles.cardTitle}>Resultados dos disparos</h2>
+            <p className={styles.cardSubtitle}>
+              Os disparos salvos ficam sempre visíveis aqui.
+            </p>
+          </div>
+
+          <div className={styles.resultsHeaderFilter}>
+            <label className={styles.label}>Disparo em massa</label>
+            <select
+              value={filtroHistoricoCampanha}
+              onChange={(e) => setFiltroHistoricoCampanha(e.target.value)}
+              className={styles.input}
+            >
+              <option value="">Todos os disparos em massa</option>
+              {campanhasHistorico.map((campanha) => (
+                <option key={campanha.id} value={campanha.id}>
+                  {nomeCampanhaHistorico(campanha)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
           <div className={styles.resultsSummary}>
             <button
@@ -3057,6 +3675,18 @@ export default function DisparosWhatsAppPage() {
                         Template: {item.template_nome}
                         {" • "}
                         {formatarDataHora(item.created_at)}
+
+                        {item.campanha_nome ? (
+                          <>
+                            {" â€¢ "}
+                            <span
+                              className={styles.badgeMassHistory}
+                              title={item.campanha_nome}
+                            >
+                              {truncarNomeBadge(item.campanha_nome, 42)}
+                            </span>
+                          </>
+                        ) : null}
 
                         {item.origem_historico === "agendado" ? (
                           <>
@@ -3424,6 +4054,13 @@ export default function DisparosWhatsAppPage() {
 
                 <div className={styles.modalGridResumo}>
                   <div className={styles.modalInfoItem}>
+                    <span className={styles.modalInfoLabel}>Disparo em massa</span>
+                    <strong className={styles.modalInfoValue}>
+                      {nomeCampanhaDisparo.trim() || "Nome automatico"}
+                    </strong>
+                  </div>
+
+                  <div className={styles.modalInfoItem}>
                     <span className={styles.modalInfoLabel}>Template</span>
                     <strong className={styles.modalInfoValue}>
                       {templateSelecionado?.nome || "-"}
@@ -3519,10 +4156,16 @@ export default function DisparosWhatsAppPage() {
                 className={styles.primaryButton}
                 onClick={confirmarEDisparar}
                 disabled={
-                  !confirmacaoCobranca || disparando || disparoBloqueado
+                  !confirmacaoCobranca ||
+                  disparando ||
+                  disparoBloqueado ||
+                  loadingConflitos ||
+                  temConflitosPendentes
                 }
               >
-                {disparoBloqueado
+                {temConflitosPendentes
+                  ? "Resolver repetidos"
+                  : disparoBloqueado
                   ? textoDisparoBloqueado
                   : "Confirmar e enviar"}
               </button>

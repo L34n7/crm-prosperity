@@ -24,6 +24,7 @@ import type { TemplatePayloadDisparo } from "@/lib/whatsapp/send-template-dispar
 
 type DestinatarioEntrada = {
   numero: string;
+  contato_id?: string | null;
   variaveis?: string[];
 };
 
@@ -62,6 +63,7 @@ const STATUS_CAMPANHAS_ATIVAS = ["pendente", "enviando"];
 
 type CampanhaAtivaIntegracao = {
   id: string;
+  nome: string | null;
   integracao_whatsapp_id: string | null;
   usuario_id: string | null;
   status: string | null;
@@ -94,6 +96,35 @@ function normalizarNumeroComparacao(valor?: string | null) {
   return limparNumero(normalizado || limpo);
 }
 
+function formatarDataHoraCampanha(data: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+    .format(data)
+    .replace(",", "");
+}
+
+function montarNomeCampanhaDisparo(params: {
+  nomeInformado?: string | null;
+  total: number;
+  data: Date;
+}) {
+  const nomeBase = String(params.nomeInformado || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const base = nomeBase || "Disparo em massa";
+  const total = Math.max(0, Math.trunc(Number(params.total || 0)));
+  const unidade = total === 1 ? "contato" : "contatos";
+  const sufixo = `${formatarDataHoraCampanha(params.data)} - ${total} ${unidade}`;
+
+  return `${base} - ${sufixo}`.slice(0, 180);
+}
+
 function usuarioTemPermissao(usuario: UsuarioPermissoes, permissao: string) {
   const permissoes = Array.isArray(usuario?.permissoes)
     ? usuario.permissoes
@@ -122,6 +153,7 @@ async function buscarCampanhaAtivaDaIntegracao(params: {
     .select(
       `
         id,
+        nome,
         integracao_whatsapp_id,
         usuario_id,
         status,
@@ -321,6 +353,7 @@ async function inserirItensCampanha(params: {
       integracao_whatsapp_id: params.integracaoWhatsappId,
       template_id: params.templateId,
       usuario_id: params.usuarioId,
+      contato_id: destinatario.contato_id || null,
       numero,
       telefone_normalizado: telefoneNormalizado,
       nome_contato: variaveis[0] || null,
@@ -390,6 +423,7 @@ export async function GET(req: NextRequest) {
       .select(
         `
           id,
+          nome,
           integracao_whatsapp_id,
           template_id,
           template_nome,
@@ -451,6 +485,9 @@ export async function POST(req: NextRequest) {
 
     const integracaoWhatsappId = String(body?.integracao_whatsapp_id || "").trim();
     const templateId = String(body?.template_id || "").trim();
+    const nomeCampanhaInformado = String(body?.nome_campanha || "")
+      .replace(/\s+/g, " ")
+      .trim();
     const destinatarios = Array.isArray(body?.destinatarios)
       ? (body.destinatarios as DestinatarioEntrada[])
       : [];
@@ -721,10 +758,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const campanhaCriadaEm = new Date();
+    const nomeCampanha = montarNomeCampanhaDisparo({
+      nomeInformado: nomeCampanhaInformado,
+      total: destinatarios.length,
+      data: campanhaCriadaEm,
+    });
+
     const { data: campanha, error: campanhaError } = await supabaseAdmin
       .from("whatsapp_disparo_campanhas")
       .insert({
         empresa_id: empresaId,
+        nome: nomeCampanha,
         integracao_whatsapp_id: integracaoWhatsappId,
         template_id: template.id,
         usuario_id: usuario.id,
@@ -751,9 +796,10 @@ export async function POST(req: NextRequest) {
           total_consumem_limite_meta: telefonesQueConsomemLimite.length,
           limite_meta_origem: reservaLimite.limiteInfo?.origem || null,
           limite_meta_tier: reservaLimite.limiteInfo?.tier || null,
+          nome_campanha_informado: nomeCampanhaInformado || null,
         },
       })
-      .select("id, status, created_at")
+      .select("id, nome, status, created_at")
       .single();
 
     if (campanhaError || !campanha) {
@@ -858,6 +904,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         queued: true,
         campanha_id: campanha.id,
+        campanha_nome: campanha.nome,
         status: campanha.status,
         total: destinatarios.length,
         total_pendentes: destinatarios.length,
@@ -871,7 +918,7 @@ export async function POST(req: NextRequest) {
           obterFlowControlKeyDisparo(integracaoWhatsappId),
         qstash_erro: publicacaoQstash?.erro || null,
         message:
-          "Campanha criada. Os disparos serao processados gradualmente em segundo plano.",
+          "Campanha criada. Os disparos serão processados gradualmente em segundo plano.",
         resultados: [],
       },
       { status: 202 }
