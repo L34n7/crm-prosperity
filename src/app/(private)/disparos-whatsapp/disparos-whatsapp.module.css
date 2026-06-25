@@ -237,6 +237,157 @@
   word-break: break-word;
 }
 
+.massProgressCard {
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
+  border-radius: 20px;
+  box-shadow: var(--crm-shadow-xs);
+  padding: 16px 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.massProgressActive {
+  border-color: var(--crm-primary-border);
+}
+
+.massProgressSuccess {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+}
+
+.massProgressWarning {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+
+.massProgressHeader {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.massProgressSpinner,
+.massProgressDot {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+}
+
+.massProgressSpinner {
+  border: 2px solid var(--crm-primary-border);
+  border-top-color: var(--crm-primary-strong);
+  animation: massProgressSpin 0.8s linear infinite;
+}
+
+.massProgressDot {
+  background: var(--crm-success-strong);
+}
+
+.massProgressWarning .massProgressDot {
+  background: var(--crm-danger-strong);
+}
+
+.massProgressTitleGroup {
+  min-width: 0;
+}
+
+.massProgressTitle {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.massProgressSubtitle {
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.massProgressStatus {
+  min-width: 78px;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.massProgressMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.massProgressMetrics div {
+  min-width: 0;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--crm-surface) 84%, transparent);
+  padding: 10px;
+}
+
+.massProgressMetrics strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.massProgressMetrics span {
+  display: block;
+  margin-top: 4px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.massProgressTrack {
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--crm-surface-muted);
+}
+
+.massProgressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--crm-primary-strong);
+  transition: width 0.25s ease;
+}
+
+.massProgressSuccess .massProgressTrack span {
+  background: var(--crm-success-strong);
+}
+
+.massProgressWarning .massProgressTrack span {
+  background: var(--crm-danger-strong);
+}
+
+.massProgressMessage {
+  margin: 0;
+  color: var(--crm-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+@keyframes massProgressSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
@@ -1790,6 +1941,10 @@
     align-items: stretch;
   }
 
+  .massProgressMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .metaHealthGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1834,6 +1989,10 @@
   .searchFilters {
     grid-template-columns: 1fr;
   }
+
+  .massProgressMetrics {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1857,6 +2016,11 @@
   .inlineBlock,
   .resultsList {
     padding: 16px;
+  }
+
+  .massProgressCard {
+    border-radius: 18px;
+    padding: 14px;
   }
 
   .cardHeaderContent,
@@ -1885,6 +2049,15 @@
 
   .summaryCard {
     padding: 12px 14px;
+  }
+
+  .massProgressHeader {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .massProgressStatus {
+    grid-column: 2;
+    width: fit-content;
   }
 
   .massCancelledMetrics {

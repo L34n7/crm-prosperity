@@ -60,8 +60,10 @@ type ConversaComContato = {
 const supabaseAdmin = getSupabaseAdmin();
 const STATUS_CAMPANHAS_ATIVAS = ["pendente", "enviando"];
 
-type CampanhaAtivaUsuario = {
+type CampanhaAtivaIntegracao = {
   id: string;
+  integracao_whatsapp_id: string | null;
+  usuario_id: string | null;
   status: string | null;
   template_nome: string | null;
   total_itens: number | null;
@@ -70,6 +72,13 @@ type CampanhaAtivaUsuario = {
   total_cancelados: number | null;
   created_at: string | null;
   updated_at: string | null;
+};
+
+type SupabaseErrorLike = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
 };
 
 function limparNumero(valor: string) {
@@ -104,15 +113,17 @@ function podeRealizarDisparos(usuario: UsuarioPermissoes) {
   );
 }
 
-async function buscarCampanhaAtivaDoUsuario(params: {
+async function buscarCampanhaAtivaDaIntegracao(params: {
   empresaId: string;
-  usuarioId: string;
+  integracaoWhatsappId: string;
 }) {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_disparo_campanhas")
     .select(
       `
         id,
+        integracao_whatsapp_id,
+        usuario_id,
         status,
         template_nome,
         total_itens,
@@ -124,7 +135,7 @@ async function buscarCampanhaAtivaDoUsuario(params: {
       `
     )
     .eq("empresa_id", params.empresaId)
-    .eq("usuario_id", params.usuarioId)
+    .eq("integracao_whatsapp_id", params.integracaoWhatsappId)
     .in("status", STATUS_CAMPANHAS_ATIVAS)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -134,7 +145,61 @@ async function buscarCampanhaAtivaDoUsuario(params: {
     throw new Error(`Erro ao verificar disparo em andamento: ${error.message}`);
   }
 
-  return (data || null) as CampanhaAtivaUsuario | null;
+  return (data || null) as CampanhaAtivaIntegracao | null;
+}
+
+function erroCampanhaAtivaPorIntegracao(error: unknown) {
+  const erro = (error || null) as SupabaseErrorLike | null;
+  const texto = `${erro?.message || ""} ${erro?.details || ""} ${
+    erro?.hint || ""
+  }`;
+
+  return (
+    erro?.code === "23505" &&
+    texto.includes("whatsapp_disparo_campanhas_integracao_ativa_uidx")
+  );
+}
+
+function respostaCampanhaAtivaPorIntegracao(
+  campanha: CampanhaAtivaIntegracao | null
+) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error:
+        "Ja existe um disparo em massa em processamento nesta integracao WhatsApp. Aguarde a finalizacao antes de iniciar outro.",
+      motivo: "disparo_em_massa_em_processamento_integracao",
+      bloquear_disparos: true,
+      bloqueio_escopo: "integracao",
+      campanha,
+    },
+    { status: 409 }
+  );
+}
+
+async function cancelarReservasLimiteMetaPorIds(
+  reservaIds: string[],
+  motivo: string
+) {
+  const ids = Array.from(new Set(reservaIds.filter(Boolean)));
+
+  if (ids.length === 0) return;
+
+  const { error } = await supabaseAdmin
+    .from("whatsapp_meta_conversas_iniciadas")
+    .update({
+      status: "cancelado",
+      updated_at: new Date().toISOString(),
+    })
+    .in("id", ids)
+    .eq("status", "reservado");
+
+  if (error) {
+    console.warn(
+      `[DISPAROS WHATSAPP] Erro ao cancelar reservas Meta apos ${motivo}:`,
+      error
+    );
+  }
 }
 
 function obterContatoDaConversa(conversa: ConversaComContato) {
@@ -430,23 +495,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const campanhaAtivaUsuario = await buscarCampanhaAtivaDoUsuario({
+    const campanhaAtivaIntegracao = await buscarCampanhaAtivaDaIntegracao({
       empresaId,
-      usuarioId: usuario.id,
+      integracaoWhatsappId,
     });
 
-    if (campanhaAtivaUsuario) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Ja existe um disparo em massa em processamento para o seu usuario. Aguarde a finalizacao antes de iniciar outro.",
-          motivo: "disparo_em_massa_em_processamento",
-          bloquear_disparos: true,
-          campanha: campanhaAtivaUsuario,
-        },
-        { status: 409 }
-      );
+    if (campanhaAtivaIntegracao) {
+      return respostaCampanhaAtivaPorIntegracao(campanhaAtivaIntegracao);
     }
 
     const { data: integracao, error: integracaoError } = await supabaseAdmin
@@ -702,6 +757,25 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (campanhaError || !campanha) {
+      const campanhaAtivaPorIntegracao =
+        erroCampanhaAtivaPorIntegracao(campanhaError);
+
+      await cancelarReservasLimiteMetaPorIds(
+        reservaLimite.reservaIds,
+        campanhaAtivaPorIntegracao
+          ? "trava por integracao"
+          : "erro ao criar campanha"
+      );
+
+      if (campanhaAtivaPorIntegracao) {
+        const campanhaAtiva = await buscarCampanhaAtivaDaIntegracao({
+          empresaId,
+          integracaoWhatsappId,
+        }).catch(() => null);
+
+        return respostaCampanhaAtivaPorIntegracao(campanhaAtiva);
+      }
+
       return NextResponse.json(
         {
           ok: false,
@@ -737,6 +811,11 @@ export async function POST(req: NextRequest) {
         itens: itensCriados,
       });
     } catch (errorItens) {
+      await cancelarReservasLimiteMetaPorIds(
+        reservaLimite.reservaIds,
+        "erro ao criar itens da campanha"
+      );
+
       await supabaseAdmin
         .from("whatsapp_disparo_campanhas")
         .update({

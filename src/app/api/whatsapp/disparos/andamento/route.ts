@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -17,6 +17,8 @@ const STATUS_TERMINAIS_RECENTES = [
 
 type CampanhaDisparo = {
   id: string;
+  integracao_whatsapp_id: string | null;
+  usuario_id: string | null;
   status: string | null;
   template_nome: string | null;
   total_itens: number | null;
@@ -73,6 +75,8 @@ function mapearCampanha(campanha: CampanhaDisparo) {
 
   return {
     id: campanha.id,
+    integracao_whatsapp_id: campanha.integracao_whatsapp_id,
+    usuario_id: campanha.usuario_id,
     status: campanha.status,
     template_nome: campanha.template_nome,
     total,
@@ -91,7 +95,7 @@ function mapearCampanha(campanha: CampanhaDisparo) {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const resultadoContexto = await getUsuarioContexto();
 
@@ -103,6 +107,10 @@ export async function GET() {
     }
 
     const { usuario } = resultadoContexto;
+    const integracaoId =
+      request.nextUrl.searchParams.get("integracao_id")?.trim() || "";
+    const escopoEmpresa =
+      request.nextUrl.searchParams.get("escopo")?.trim() === "empresa";
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
@@ -113,6 +121,8 @@ export async function GET() {
 
     const campos = `
       id,
+      integracao_whatsapp_id,
+      usuario_id,
       status,
       template_nome,
       total_itens,
@@ -130,13 +140,23 @@ export async function GET() {
       finished_at
     `;
 
+    let queryCampanhaAtiva = supabaseAdmin
+      .from("whatsapp_disparo_campanhas")
+      .select(campos)
+      .eq("empresa_id", usuario.empresa_id)
+      .in("status", STATUS_ATIVOS);
+
+    if (integracaoId) {
+      queryCampanhaAtiva = queryCampanhaAtiva.eq(
+        "integracao_whatsapp_id",
+        integracaoId
+      );
+    } else if (!escopoEmpresa) {
+      queryCampanhaAtiva = queryCampanhaAtiva.eq("usuario_id", usuario.id);
+    }
+
     const { data: campanhaAtiva, error: campanhaAtivaError } =
-      await supabaseAdmin
-        .from("whatsapp_disparo_campanhas")
-        .select(campos)
-        .eq("empresa_id", usuario.empresa_id)
-        .eq("usuario_id", usuario.id)
-        .in("status", STATUS_ATIVOS)
+      await queryCampanhaAtiva
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -156,21 +176,37 @@ export async function GET() {
         ok: true,
         usuario_id: usuario.id,
         empresa_id: usuario.empresa_id,
+        integracao_id: integracaoId || null,
         bloquear_disparos: true,
+        bloqueio_escopo: integracaoId
+          ? "integracao"
+          : escopoEmpresa
+          ? "empresa"
+          : "usuario",
         campanha: mapearCampanha(campanhaAtiva as CampanhaDisparo),
       });
     }
 
     const atualizadoDepoisDe = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
+    let queryCampanhaRecente = supabaseAdmin
+      .from("whatsapp_disparo_campanhas")
+      .select(campos)
+      .eq("empresa_id", usuario.empresa_id)
+      .in("status", STATUS_TERMINAIS_RECENTES)
+      .gte("updated_at", atualizadoDepoisDe);
+
+    if (integracaoId) {
+      queryCampanhaRecente = queryCampanhaRecente.eq(
+        "integracao_whatsapp_id",
+        integracaoId
+      );
+    } else if (!escopoEmpresa) {
+      queryCampanhaRecente = queryCampanhaRecente.eq("usuario_id", usuario.id);
+    }
+
     const { data: campanhaRecente, error: campanhaRecenteError } =
-      await supabaseAdmin
-        .from("whatsapp_disparo_campanhas")
-        .select(campos)
-        .eq("empresa_id", usuario.empresa_id)
-        .eq("usuario_id", usuario.id)
-        .in("status", STATUS_TERMINAIS_RECENTES)
-        .gte("updated_at", atualizadoDepoisDe)
+      await queryCampanhaRecente
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -189,7 +225,13 @@ export async function GET() {
       ok: true,
       usuario_id: usuario.id,
       empresa_id: usuario.empresa_id,
+      integracao_id: integracaoId || null,
       bloquear_disparos: false,
+      bloqueio_escopo: integracaoId
+        ? "integracao"
+        : escopoEmpresa
+        ? "empresa"
+        : "usuario",
       campanha: campanhaRecente
         ? mapearCampanha(campanhaRecente as CampanhaDisparo)
         : null,

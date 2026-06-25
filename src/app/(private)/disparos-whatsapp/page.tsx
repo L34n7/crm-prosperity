@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./disparos-whatsapp.module.css";
 import { can } from "@/lib/permissoes/frontend";
+import { createClient } from "@/lib/supabase/client";
 
 type IntegracaoWhatsApp = {
   id: string;
@@ -119,16 +120,52 @@ type ResultadoDisparo = {
 
 type CampanhaDisparoAndamento = {
   id: string;
+  integracao_whatsapp_id?: string | null;
+  usuario_id?: string | null;
   status: string | null;
+  template_nome?: string | null;
   total?: number;
   enviados?: number;
   falhas?: number;
+  cancelados?: number;
+  pendentes?: number;
+  processando?: number;
+  processados?: number;
+  motivo?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  started_at?: string | null;
+  paused_at?: string | null;
+  finished_at?: string | null;
 };
 
 type DisparoAndamentoPayload = {
   ok?: boolean;
   bloquear_disparos?: boolean;
+  bloqueio_escopo?: "usuario" | "integracao" | "empresa";
   campanha?: CampanhaDisparoAndamento | null;
+};
+
+type CampanhaDisparoRealtimeRow = {
+  id?: unknown;
+  empresa_id?: unknown;
+  integracao_whatsapp_id?: unknown;
+  usuario_id?: unknown;
+  status?: unknown;
+  template_nome?: unknown;
+  total_itens?: unknown;
+  total_pendentes?: unknown;
+  total_processando?: unknown;
+  total_enviados?: unknown;
+  total_falhas?: unknown;
+  total_cancelados?: unknown;
+  pausa_motivo?: unknown;
+  erro?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+  started_at?: unknown;
+  paused_at?: unknown;
+  finished_at?: unknown;
 };
 
 type ContatoOpcao = {
@@ -146,6 +183,10 @@ type ContatoOpcao = {
 
 const EVENTO_DISPARO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
 const EVENTO_DISPARO_REFRESH = "crm:whatsapp-disparo-refresh";
+const STATUS_CAMPANHAS_ATIVAS = new Set(["pendente", "enviando"]);
+const TEMPO_CARD_CAMPANHA_TERMINAL_MS = 8000;
+const TESTE_CARD_PAGINA_DISPARO_KEY =
+  "crm-whatsapp-disparo-page-card-test";
 
 type VariavelPersonalizada = {
   id: string;
@@ -656,6 +697,191 @@ function emitirRefreshDisparoEmMassa() {
   window.dispatchEvent(new Event(EVENTO_DISPARO_REFRESH));
 }
 
+function textoCampanha(valor: unknown) {
+  return typeof valor === "string" && valor.trim() ? valor : null;
+}
+
+function inteiroCampanha(valor: unknown) {
+  const numero = Number(valor || 0);
+  return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : 0;
+}
+
+function campanhaEstaAtiva(campanha?: CampanhaDisparoAndamento | null) {
+  return STATUS_CAMPANHAS_ATIVAS.has(String(campanha?.status || ""));
+}
+
+function campanhaFoiConcluida(campanha?: CampanhaDisparoAndamento | null) {
+  return String(campanha?.status || "") === "concluida";
+}
+
+function motivoCampanhaRealtime(row: CampanhaDisparoRealtimeRow) {
+  const motivo = textoCampanha(row.pausa_motivo) || textoCampanha(row.erro);
+
+  if (motivo) return motivo;
+
+  switch (textoCampanha(row.status)) {
+    case "pausada_por_conta_bloqueada":
+      return "A Meta bloqueou ou desativou a conta WhatsApp Business durante o disparo.";
+    case "pausada_por_lista_invalida":
+      return "A lista apresentou muitos numeros invalidos ou indisponiveis.";
+    case "pausada_por_erro_meta":
+      return "A Meta retornou erros que exigem pausa operacional.";
+    case "pausada_por_falhas":
+      return "Muitas mensagens falharam no lote processado.";
+    case "cancelada":
+      return "O disparo foi cancelado antes de concluir todos os envios.";
+    case "erro":
+      return "O disparo foi interrompido por erro operacional.";
+    default:
+      return null;
+  }
+}
+
+function normalizarCampanhaRealtime(
+  row: unknown
+): CampanhaDisparoAndamento | null {
+  if (!row || typeof row !== "object") return null;
+
+  const campanha = row as CampanhaDisparoRealtimeRow;
+  const id = textoCampanha(campanha.id);
+
+  if (!id) return null;
+
+  const total = inteiroCampanha(campanha.total_itens);
+  const enviados = inteiroCampanha(campanha.total_enviados);
+  const falhas = inteiroCampanha(campanha.total_falhas);
+  const cancelados = inteiroCampanha(campanha.total_cancelados);
+  const pendentes = inteiroCampanha(campanha.total_pendentes);
+  const processando = inteiroCampanha(campanha.total_processando);
+
+  return {
+    id,
+    integracao_whatsapp_id: textoCampanha(campanha.integracao_whatsapp_id),
+    usuario_id: textoCampanha(campanha.usuario_id),
+    status: textoCampanha(campanha.status),
+    template_nome: textoCampanha(campanha.template_nome),
+    total,
+    enviados,
+    falhas,
+    cancelados,
+    pendentes,
+    processando,
+    processados: Math.min(total, enviados + falhas + cancelados),
+    motivo: motivoCampanhaRealtime(campanha),
+    created_at: textoCampanha(campanha.created_at),
+    updated_at: textoCampanha(campanha.updated_at),
+    started_at: textoCampanha(campanha.started_at),
+    paused_at: textoCampanha(campanha.paused_at),
+    finished_at: textoCampanha(campanha.finished_at),
+  };
+}
+
+function progressoCampanha(campanha: CampanhaDisparoAndamento) {
+  const total = inteiroCampanha(campanha.total);
+
+  if (!total) return 0;
+
+  const processados = Math.min(
+    total,
+    Math.max(
+      inteiroCampanha(campanha.processados),
+      inteiroCampanha(campanha.enviados) + inteiroCampanha(campanha.falhas)
+    )
+  );
+
+  return Math.max(4, Math.min(100, Math.round((processados / total) * 100)));
+}
+
+function rotuloStatusCampanha(campanha: CampanhaDisparoAndamento) {
+  if (campanhaEstaAtiva(campanha)) return "Processando";
+  if (campanhaFoiConcluida(campanha)) return "Concluido";
+  return "Interrompido";
+}
+
+function descricaoCampanhaTerminal(campanha: CampanhaDisparoAndamento) {
+  if (campanhaFoiConcluida(campanha)) {
+    return "Disparo em massa finalizado com sucesso.";
+  }
+
+  return (
+    campanha.motivo ||
+    "Disparo em massa interrompido pelo sistema de seguranca."
+  );
+}
+
+function criarCampanhaPaginaTeste(
+  modo: string,
+  integracaoWhatsappId?: string | null
+): CampanhaDisparoAndamento | null {
+  const valor = modo.trim().toLowerCase();
+
+  if (!valor || valor === "off" || valor === "false") return null;
+
+  if (valor === "success" || valor === "sucesso" || valor === "concluida") {
+    return {
+      id: "teste-pagina-disparo-sucesso",
+      integracao_whatsapp_id: integracaoWhatsappId || null,
+      status: "concluida",
+      template_nome: "teste_visual",
+      total: 250,
+      enviados: 244,
+      falhas: 6,
+      cancelados: 0,
+      pendentes: 0,
+      processando: 0,
+      processados: 250,
+      motivo: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+    };
+  }
+
+  if (
+    valor === "paused" ||
+    valor === "pausado" ||
+    valor === "breaker" ||
+    valor === "erro"
+  ) {
+    return {
+      id: "teste-pagina-disparo-pausado",
+      integracao_whatsapp_id: integracaoWhatsappId || null,
+      status: "pausada_por_falhas",
+      template_nome: "teste_visual",
+      total: 250,
+      enviados: 87,
+      falhas: 14,
+      cancelados: 149,
+      pendentes: 149,
+      processando: 0,
+      processados: 101,
+      motivo:
+        "Campanha pausada automaticamente porque muitas mensagens falharam no ultimo lote.",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      paused_at: new Date().toISOString(),
+    };
+  }
+
+  return {
+    id: "teste-pagina-disparo-ativo",
+    integracao_whatsapp_id: integracaoWhatsappId || null,
+    status: "enviando",
+    template_nome: "teste_visual",
+    total: 250,
+    enviados: 72,
+    falhas: 2,
+    cancelados: 0,
+    pendentes: 175,
+    processando: 1,
+    processados: 74,
+    motivo: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    started_at: new Date().toISOString(),
+  };
+}
+
 function valorNumericoHistorico(...valores: unknown[]) {
   for (const valor of valores) {
     const numero = Number(valor);
@@ -778,6 +1004,10 @@ function disparoTeveFalha(item: ResultadoDisparo) {
 const ITENS_HISTORICO_POR_PAGINA = 7;
 
 export default function DisparosWhatsAppPage() {
+  const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
+    null
+  );
+  const timerCardCampanhaRef = useRef<number | null>(null);
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
 
   const [integracoes, setIntegracoes] = useState<IntegracaoWhatsApp[]>([]);
@@ -794,6 +1024,10 @@ export default function DisparosWhatsAppPage() {
   const [disparando, setDisparando] = useState(false);
   const [disparoEmMassaProcessando, setDisparoEmMassaProcessando] =
     useState(false);
+  const [integracaoDisparoProcessando, setIntegracaoDisparoProcessando] =
+    useState(false);
+  const [campanhaPagina, setCampanhaPagina] =
+    useState<CampanhaDisparoAndamento | null>(null);
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
   const [saudeMetaIntegracao, setSaudeMetaIntegracao] =
@@ -857,6 +1091,63 @@ export default function DisparosWhatsAppPage() {
   } | null>(null);
 
   const [loadingPreviewCusto, setLoadingPreviewCusto] = useState(false);
+
+  function getSupabaseRealtime() {
+    if (!supabaseRealtimeRef.current) {
+      supabaseRealtimeRef.current = createClient();
+    }
+
+    return supabaseRealtimeRef.current;
+  }
+
+  const aplicarCampanhaPagina = useCallback(
+    (campanhaAtual: CampanhaDisparoAndamento | null) => {
+      setCampanhaPagina(campanhaAtual);
+    },
+    []
+  );
+
+  const carregarCampanhaPagina = useCallback(
+    async (integracaoWhatsappId = "") => {
+      const integracaoConsultaId = integracaoWhatsappId.trim();
+      const params = new URLSearchParams();
+      const campanhaTeste =
+        typeof window !== "undefined"
+          ? criarCampanhaPaginaTeste(
+              window.localStorage.getItem(TESTE_CARD_PAGINA_DISPARO_KEY) || "",
+              integracaoConsultaId || null
+            )
+          : null;
+
+      if (campanhaTeste) {
+        aplicarCampanhaPagina(campanhaTeste);
+        return;
+      }
+
+      if (integracaoConsultaId) {
+        params.set("integracao_id", integracaoConsultaId);
+      } else {
+        params.set("escopo", "empresa");
+      }
+
+      try {
+        const res = await fetch(
+          `/api/whatsapp/disparos/andamento?${params.toString()}`,
+          {
+            cache: "no-store",
+          }
+        );
+        const json = (await res.json()) as DisparoAndamentoPayload;
+
+        if (!res.ok || json.ok === false) return;
+
+        aplicarCampanhaPagina(json.campanha || null);
+      } catch {
+        return;
+      }
+    },
+    [aplicarCampanhaPagina]
+  );
 
   async function carregarUsuarioLogado() {
     try {
@@ -1006,22 +1297,48 @@ export default function DisparosWhatsAppPage() {
     }
   }
 
-  async function carregarBloqueioDisparoEmMassa() {
+  async function carregarBloqueioDisparoEmMassa(integracaoWhatsappId = "") {
+    const integracaoConsultaId = integracaoWhatsappId.trim();
+    const params = new URLSearchParams();
+
+    if (integracaoConsultaId) {
+      params.set("integracao_id", integracaoConsultaId);
+    }
+
+    const queryString = params.toString();
+
     try {
-      const res = await fetch("/api/whatsapp/disparos/andamento", {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/whatsapp/disparos/andamento${
+          queryString ? `?${queryString}` : ""
+        }`,
+        {
+          cache: "no-store",
+        }
+      );
 
       const json = (await res.json()) as DisparoAndamentoPayload;
 
       if (!res.ok || json.ok === false) {
-        setDisparoEmMassaProcessando(false);
+        if (integracaoConsultaId) {
+          setIntegracaoDisparoProcessando(false);
+        } else {
+          setDisparoEmMassaProcessando(false);
+        }
         return;
       }
 
-      setDisparoEmMassaProcessando(json.bloquear_disparos === true);
+      if (integracaoConsultaId) {
+        setIntegracaoDisparoProcessando(json.bloquear_disparos === true);
+      } else {
+        setDisparoEmMassaProcessando(json.bloquear_disparos === true);
+      }
     } catch {
-      setDisparoEmMassaProcessando(false);
+      if (integracaoConsultaId) {
+        setIntegracaoDisparoProcessando(false);
+      } else {
+        setDisparoEmMassaProcessando(false);
+      }
     }
   }
 
@@ -1058,13 +1375,15 @@ export default function DisparosWhatsAppPage() {
     carregarContatos("", "", "");
     carregarHistorico();
     carregarBloqueioDisparoEmMassa();
+    carregarCampanhaPagina();
     carregarVariaveisPersonalizadas();
-  }, []);
+  }, [carregarCampanhaPagina]);
 
   useEffect(() => {
     const handleAndamento = (event: Event) => {
       const detalhe = (event as CustomEvent<DisparoAndamentoPayload>).detail;
       setDisparoEmMassaProcessando(detalhe?.bloquear_disparos === true);
+      carregarCampanhaPagina(integracaoId);
     };
 
     window.addEventListener(EVENTO_DISPARO_ANDAMENTO, handleAndamento);
@@ -1072,7 +1391,7 @@ export default function DisparosWhatsAppPage() {
     return () => {
       window.removeEventListener(EVENTO_DISPARO_ANDAMENTO, handleAndamento);
     };
-  }, []);
+  }, [carregarCampanhaPagina, integracaoId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1090,12 +1409,119 @@ export default function DisparosWhatsAppPage() {
     if (integracaoId) {
       carregarTemplates(integracaoId);
       carregarSaudeMeta(integracaoId);
+      carregarBloqueioDisparoEmMassa(integracaoId);
+      carregarCampanhaPagina(integracaoId);
     } else {
       setTemplates([]);
       setLimiteMeta(null);
       setSaudeMetaIntegracao(null);
+      setIntegracaoDisparoProcessando(false);
+      carregarCampanhaPagina();
     }
-  }, [integracaoId]);
+  }, [integracaoId, carregarCampanhaPagina]);
+
+  useEffect(() => {
+    if (!integracaoId || !integracaoDisparoProcessando) return;
+
+    const timer = window.setInterval(() => {
+      carregarBloqueioDisparoEmMassa(integracaoId);
+    }, 2 * 60 * 1000);
+
+    return () => window.clearInterval(timer);
+  }, [integracaoId, integracaoDisparoProcessando]);
+
+  useEffect(() => {
+    const empresaId = usuarioLogado?.empresa_id;
+
+    if (!empresaId) return;
+
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
+      .channel(`crm-whatsapp-disparo-page:${empresaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "whatsapp_disparo_campanhas",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        (payload) => {
+          const row = payload.new || payload.old;
+
+          if (!row || typeof row !== "object") return;
+
+          const campanhaRealtime = normalizarCampanhaRealtime(row);
+
+          if (!campanhaRealtime) return;
+
+          if (
+            integracaoId &&
+            campanhaRealtime.integracao_whatsapp_id !== integracaoId
+          ) {
+            return;
+          }
+
+          aplicarCampanhaPagina(campanhaRealtime);
+
+          if (!campanhaEstaAtiva(campanhaRealtime)) {
+            void carregarHistorico();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [usuarioLogado?.empresa_id, integracaoId, aplicarCampanhaPagina]);
+
+  useEffect(() => {
+    if (timerCardCampanhaRef.current) {
+      window.clearTimeout(timerCardCampanhaRef.current);
+      timerCardCampanhaRef.current = null;
+    }
+
+    if (!campanhaPagina || campanhaEstaAtiva(campanhaPagina)) return;
+
+    timerCardCampanhaRef.current = window.setTimeout(() => {
+      setCampanhaPagina(null);
+    }, TEMPO_CARD_CAMPANHA_TERMINAL_MS);
+
+    return () => {
+      if (timerCardCampanhaRef.current) {
+        window.clearTimeout(timerCardCampanhaRef.current);
+        timerCardCampanhaRef.current = null;
+      }
+    };
+  }, [campanhaPagina, campanhaPagina?.id, campanhaPagina?.status]);
+
+  useEffect(() => {
+    if (!campanhaEstaAtiva(campanhaPagina)) return;
+
+    const timer = window.setInterval(() => {
+      carregarCampanhaPagina(integracaoId);
+    }, 2 * 60 * 1000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void carregarCampanhaPagina(integracaoId);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [
+    campanhaPagina,
+    campanhaPagina?.id,
+    campanhaPagina?.status,
+    integracaoId,
+    carregarCampanhaPagina,
+  ]);
 
   const permissoes = usuarioLogado?.permissoes || [];
   const nomesPerfisDinamicos = Array.isArray(usuarioLogado?.perfis_dinamicos)
@@ -1108,6 +1534,12 @@ export default function DisparosWhatsAppPage() {
     ehAdministrador ||
     can(permissoes, "whatsapp.disparos.enviar") ||
     can(permissoes, "mensagens.enviar");
+
+  const disparoBloqueado =
+    disparoEmMassaProcessando || integracaoDisparoProcessando;
+  const textoDisparoBloqueado = integracaoDisparoProcessando
+    ? "Integracao em processamento"
+    : "Disparo em processamento";
 
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
@@ -1216,6 +1648,21 @@ export default function DisparosWhatsAppPage() {
     paginaHistorico * ITENS_HISTORICO_POR_PAGINA,
     resultadoFiltrado.length
   );
+
+  const campanhaPaginaAtiva = campanhaEstaAtiva(campanhaPagina);
+  const campanhaPaginaConcluida = campanhaFoiConcluida(campanhaPagina);
+  const progressoCampanhaPagina = campanhaPagina
+    ? progressoCampanha(campanhaPagina)
+    : 0;
+  const integracaoCampanhaPagina = useMemo(() => {
+    if (!campanhaPagina?.integracao_whatsapp_id) return null;
+
+    return (
+      integracoes.find(
+        (item) => item.id === campanhaPagina.integracao_whatsapp_id
+      ) || null
+    );
+  }, [integracoes, campanhaPagina?.integracao_whatsapp_id]);
 
   function adicionarContato(contato: ContatoOpcao) {
     const telefone = limparNumero(contato.telefone);
@@ -1456,9 +1903,11 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
-    if (disparoEmMassaProcessando) {
+    if (disparoBloqueado) {
       setErro(
-        "Ja existe um disparo em massa em processamento. Aguarde a finalizacao antes de iniciar outro."
+        integracaoDisparoProcessando
+          ? "Ja existe um disparo em massa em processamento nesta integracao WhatsApp. Aguarde a finalizacao antes de iniciar outro."
+          : "Ja existe um disparo em massa em processamento. Aguarde a finalizacao antes de iniciar outro."
       );
       return;
     }
@@ -1530,7 +1979,18 @@ export default function DisparosWhatsAppPage() {
 
       if (!res.ok || !json.ok) {
         if (json.bloquear_disparos) {
-          setDisparoEmMassaProcessando(true);
+          if (json.bloqueio_escopo === "integracao") {
+            setIntegracaoDisparoProcessando(true);
+          } else {
+            setDisparoEmMassaProcessando(true);
+          }
+
+          if (json.campanha) {
+            aplicarCampanhaPagina(json.campanha);
+          } else {
+            carregarCampanhaPagina(integracaoId);
+          }
+
           emitirRefreshDisparoEmMassa();
         }
 
@@ -1542,6 +2002,8 @@ export default function DisparosWhatsAppPage() {
 
       if (json.queued) {
         setDisparoEmMassaProcessando(true);
+        setIntegracaoDisparoProcessando(true);
+        carregarCampanhaPagina(integracaoId);
         emitirRefreshDisparoEmMassa();
 
         setMensagem(
@@ -1587,6 +2049,8 @@ export default function DisparosWhatsAppPage() {
     } finally {
       if (integracaoId) {
         carregarSaudeMeta(integracaoId);
+        carregarBloqueioDisparoEmMassa(integracaoId);
+        carregarCampanhaPagina(integracaoId);
       }
 
       setDisparando(false);
@@ -2336,12 +2800,12 @@ export default function DisparosWhatsAppPage() {
                         !templateSelecionado ||
                         contatosSelecionados.length === 0 ||
                         disparando ||
-                        disparoEmMassaProcessando ||
+                        disparoBloqueado ||
                         selecaoExcedeLimite
                       }
                     >
-                      {disparoEmMassaProcessando
-                        ? "Disparo em processamento"
+                      {disparoBloqueado
+                        ? textoDisparoBloqueado
                         : "Enviar disparos"}
                     </button>
                   </div>
@@ -2349,6 +2813,81 @@ export default function DisparosWhatsAppPage() {
               </form>
             )}
           </section>
+
+          {campanhaPagina ? (
+            <section
+              className={`${styles.massProgressCard} ${
+                campanhaPaginaAtiva
+                  ? styles.massProgressActive
+                  : campanhaPaginaConcluida
+                  ? styles.massProgressSuccess
+                  : styles.massProgressWarning
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              <div className={styles.massProgressHeader}>
+                <span
+                  className={
+                    campanhaPaginaAtiva
+                      ? styles.massProgressSpinner
+                      : styles.massProgressDot
+                  }
+                />
+
+                <div className={styles.massProgressTitleGroup}>
+                  <p className={styles.eyebrow}>Disparo em massa</p>
+                  <h2 className={styles.massProgressTitle}>
+                    {rotuloStatusCampanha(campanhaPagina)}
+                  </h2>
+                  <p className={styles.massProgressSubtitle}>
+                    Template: {campanhaPagina.template_nome || "-"}
+                    {" - "}
+                    Integracao:{" "}
+                    {integracaoCampanhaPagina?.nome_conexao ||
+                      integracaoCampanhaPagina?.numero ||
+                      "WhatsApp"}
+                  </p>
+                </div>
+
+                <span className={styles.massProgressStatus}>
+                  {campanhaPagina.enviados || 0}/{campanhaPagina.total || 0}
+                </span>
+              </div>
+
+              <div className={styles.massProgressMetrics}>
+                <div>
+                  <strong>{campanhaPagina.total || 0}</strong>
+                  <span>Total</span>
+                </div>
+
+                <div>
+                  <strong>{campanhaPagina.enviados || 0}</strong>
+                  <span>Enviados</span>
+                </div>
+
+                <div>
+                  <strong>{campanhaPagina.falhas || 0}</strong>
+                  <span>Falhas</span>
+                </div>
+
+                <div>
+                  <strong>{campanhaPagina.cancelados || 0}</strong>
+                  <span>Cancelados</span>
+                </div>
+              </div>
+
+              <div className={styles.massProgressTrack} aria-hidden="true">
+                <span style={{ width: `${progressoCampanhaPagina}%` }} />
+              </div>
+
+              {!campanhaPaginaAtiva ? (
+                <p className={styles.massProgressMessage}>
+                  {descricaoCampanhaTerminal(campanhaPagina)}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
 
           <section className={styles.resultsCard}>
             <div className={styles.cardHeader}>
@@ -2980,11 +3519,11 @@ export default function DisparosWhatsAppPage() {
                 className={styles.primaryButton}
                 onClick={confirmarEDisparar}
                 disabled={
-                  !confirmacaoCobranca || disparando || disparoEmMassaProcessando
+                  !confirmacaoCobranca || disparando || disparoBloqueado
                 }
               >
-                {disparoEmMassaProcessando
-                  ? "Disparo em processamento"
+                {disparoBloqueado
+                  ? textoDisparoBloqueado
                   : "Confirmar e enviar"}
               </button>
             </div>
