@@ -121,7 +121,21 @@ export function obterFlowControlKeyDisparo(integracaoWhatsappId: string) {
     process.env.VERCEL_ENV ||
     "production";
 
-  return `whatsapp-disparo:${prefixo}:${integracaoWhatsappId}`;
+  return (
+    normalizarFlowControlKeyQstash(
+      `whatsapp-disparo-${prefixo}-${integracaoWhatsappId}`
+    ) || "whatsapp-disparo-production"
+  );
+}
+
+function normalizarFlowControlKeyQstash(valor: string) {
+  const normalizado = String(valor || "")
+    .trim()
+    .replace(/[^A-Za-z0-9_.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "");
+
+  return normalizado || null;
 }
 
 function obterConfigFlowControlDisparo() {
@@ -176,7 +190,7 @@ function extrairMessageIdQstash(resultado: unknown) {
 }
 
 function labelCampanhaQstash(campanhaId: string) {
-  return `whatsapp-disparo-campanha:${campanhaId}`;
+  return `whatsapp-disparo-campanha-${campanhaId}`;
 }
 
 function dedupItemQstash(itemId: string, tentativaPublicacao = 0) {
@@ -363,7 +377,7 @@ async function republicarItemDisparoQstash(params: {
   }
 
   const flowControlKey =
-    params.item.qstash_flow_control_key ||
+    normalizarFlowControlKeyQstash(params.item.qstash_flow_control_key || "") ||
     obterFlowControlKeyDisparo(params.item.integracao_whatsapp_id);
   const flowControl = obterConfigFlowControlDisparo();
   const proximaTentativa = Number(params.item.tentativas || 0) + 1;

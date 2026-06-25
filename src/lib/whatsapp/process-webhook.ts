@@ -264,6 +264,7 @@ async function atualizarLogDisparoPeloWebhook(statusItem: any) {
    */
   if (
     statusNormalizado !== "falha" &&
+    statusNormalizado !== "enviada" &&
     statusNormalizado !== "entregue" &&
     statusNormalizado !== "lida"
   ) {
@@ -314,14 +315,14 @@ async function atualizarLogDisparoPeloWebhook(statusItem: any) {
     erroMeta = extrairErroStatusMeta(statusItem);
     erroDisparo = erroMeta.mensagemTraduzida;
   } else {
-    // entregue ou lida confirmam que a mensagem chegou.
     novoStatus = "sucesso";
     erroDisparo = null;
   }
 
   const metadataAtualizada = {
     ...metadataAnterior,
-    aguardando_webhook: false,
+    aguardando_webhook: statusNormalizado === "enviada",
+    confirmacao_entrega_pendente: statusNormalizado === "enviada",
     ultimo_status_meta: statusNormalizado,
     status_original_recebido: statusRecebido,
     status_meta_recebido_em: agora,

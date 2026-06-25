@@ -340,10 +340,10 @@ export async function GET(req: NextRequest) {
         | "pendente" =
         statusMensagem === "falha"
           ? "falha"
-          : statusMensagem === "entregue" || statusMensagem === "lida"
+          : statusMensagem === "enviada" ||
+            statusMensagem === "entregue" ||
+            statusMensagem === "lida"
           ? "sucesso"
-          : statusMensagem === "enviada"
-          ? "processando"
           : item.status === "falha"
           ? "falha"
           : item.status === "sucesso"
@@ -382,7 +382,11 @@ export async function GET(req: NextRequest) {
         status_disparo: statusFinal,
         status_label:
           statusFinal === "sucesso"
-            ? "Entregue"
+            ? statusMensagem === "lida"
+              ? "Lida"
+              : statusMensagem === "entregue"
+              ? "Entregue"
+              : "Enviado"
             : statusFinal === "processando"
             ? "Aguardando confirmação"
             : statusFinal === "pendente"
@@ -422,10 +426,11 @@ export async function GET(req: NextRequest) {
         | "pendente" =
         mensagem.status_envio === "falha"
           ? "falha"
-          : mensagem.status_envio === "entregue" ||
+          : mensagem.status_envio === "enviada" ||
+            mensagem.status_envio === "entregue" ||
             mensagem.status_envio === "lida"
           ? "sucesso"
-          : mensagem.status_envio === "enviada"
+          : mensagem.status_envio === "processando"
           ? "processando"
           : "pendente";
 
@@ -444,7 +449,11 @@ export async function GET(req: NextRequest) {
         status_disparo: statusFinal,
         status_label:
           statusFinal === "sucesso"
-            ? "Entregue"
+            ? mensagem.status_envio === "lida"
+              ? "Lida"
+              : mensagem.status_envio === "entregue"
+              ? "Entregue"
+              : "Enviado"
             : statusFinal === "processando"
             ? "Aguardando confirmação"
             : statusFinal === "pendente"
