@@ -8,6 +8,10 @@ import {
   validateTemplateInput,
   type CreateTemplateInput,
 } from "@/lib/whatsapp/templates";
+import {
+  buscarTemplateWhatsappPorChave,
+  salvarTemplateWhatsappLocalIdempotente,
+} from "@/lib/whatsapp/templates-local";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 type UsuarioSistema = {
@@ -44,7 +48,7 @@ async function getUsuarioLogado() {
 
   const permissoes = await listarPermissoesDoUsuario(usuario.id);
 
-  return { supabase, usuario, permissoes };
+  return { usuario, permissoes };
 }
 
 export async function POST(req: NextRequest) {
@@ -58,7 +62,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { supabase, usuario, permissoes } = auth;
+    const { usuario, permissoes } = auth;
 
     if (!can(permissoes, "whatsapp_templates.criar")) {
       return NextResponse.json(
@@ -131,6 +135,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { template: templateExistente, error: templateExistenteError } =
+      await buscarTemplateWhatsappPorChave({
+        supabase: supabaseAdmin,
+        empresaId: usuario.empresa_id!,
+        nome: input.name,
+        idioma: input.language,
+      });
+
+    if (templateExistenteError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Erro ao validar template existente.",
+          db_error: templateExistenteError.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    if (templateExistente) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Ja existe um template com esse nome e idioma. Use outro nome ou sincronize os templates da Meta.",
+          template: templateExistente,
+        },
+        { status: 409 }
+      );
+    }
+
     // Ajuste aqui depois para buscar token por token_ref, vault, etc.
     const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
 
@@ -160,31 +195,27 @@ export async function POST(req: NextRequest) {
       metaResponse.data?.template_id ||
       null;
 
-    const { data: created, error: insertError } = await supabaseAdmin
-      .from("whatsapp_templates")
-      .insert({
-        empresa_id: usuario.empresa_id,
-        integracao_whatsapp_id: integracao.id,
-        waba_id: integracao.waba_id,
-        meta_template_id: metaTemplateId,
-        nome: input.name,
-        categoria: input.category,
-        idioma: input.language,
-        status: templateStatus,
-        payload: input,
-        resposta_meta: metaResponse.data,
-        created_by: usuario.id,
-        updated_by: usuario.id,
-      })
-      .select("*")
-      .single();
+    const resultadoSalvar = await salvarTemplateWhatsappLocalIdempotente({
+      supabase: supabaseAdmin,
+      empresaId: usuario.empresa_id!,
+      integracaoWhatsAppId: integracao.id,
+      wabaId: integracao.waba_id,
+      metaTemplateId,
+      nome: input.name,
+      categoria: input.category,
+      idioma: input.language,
+      status: templateStatus,
+      payload: input,
+      respostaMeta: metaResponse.data,
+      usuarioId: usuario.id,
+    });
 
-    if (insertError) {
+    if (resultadoSalvar.error) {
       return NextResponse.json(
         {
           ok: false,
           error: "Template enviado ao Meta, mas falhou ao salvar no banco.",
-          db_error: insertError.message,
+          db_error: resultadoSalvar.error.message,
           meta: metaResponse.data,
         },
         { status: 500 }
@@ -193,8 +224,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: metaResponse.ok,
-      data: created,
+      data: resultadoSalvar.template,
       meta: metaResponse.data,
+      local_criado: resultadoSalvar.criado,
       status_http_meta: metaResponse.status,
     });
   } catch (error) {

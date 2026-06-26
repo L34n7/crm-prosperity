@@ -385,6 +385,7 @@ async function garantirContatoConversaEProtocolo(params: {
     empresaId: params.empresaId,
     phone: params.numero,
     profileName: params.nomeContato || null,
+    salvarProfileNameWhatsapp: false,
   });
 
   const conversa = await findOrCreateWhatsAppConversation({

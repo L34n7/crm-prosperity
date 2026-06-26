@@ -16,6 +16,7 @@ type Contato = {
   id: string;
   empresa_id: string;
   nome: string | null;
+  whatsapp_profile_name: string | null;
   telefone: string;
   email: string | null;
   origem: string | null;
@@ -808,7 +809,7 @@ export default function ContatosPage() {
                   carregarContatos();
                 }
               }}
-              placeholder="Nome, telefone ou email"
+              placeholder="Nome, WhatsApp, telefone ou email"
             />
           </div>
 
@@ -1064,6 +1065,10 @@ export default function ContatosPage() {
 
                           <div className={styles.summaryMeta}>
                             <span className={styles.metaItem}>
+                              <strong>Nome WhatsApp:</strong>{" "}
+                              {contato.whatsapp_profile_name || "Sem nome WhatsApp"}
+                            </span>
+                            <span className={styles.metaItem}>
                               <strong>Email:</strong> {contato.email || "Sem email"}
                             </span>
                             <span className={styles.metaItem}>
@@ -1226,6 +1231,13 @@ export default function ContatosPage() {
                           </div>
                         ) : (
                           <div className={styles.detailsGrid}>
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Nome WhatsApp</span>
+                              <span className={styles.infoValue}>
+                                {contato.whatsapp_profile_name || "Sem nome WhatsApp"}
+                              </span>
+                            </div>
+
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>Campanha</span>
                               <span className={styles.infoValue}>

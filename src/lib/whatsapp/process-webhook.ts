@@ -737,6 +737,8 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         timestamp: message.timestamp,
         metadataJson: {
           ...(message.metadataJson || {}),
+          whatsapp_profile_name: message.profileName || null,
+          whatsapp_wa_id: message.waId || null,
           transcricao_audio: transcricaoAudio || null,
           transcricao_modelo: transcricaoAudio ? "gpt-4o-mini-transcribe" : null,
           transcricao_automatica: !!transcricaoAudio,

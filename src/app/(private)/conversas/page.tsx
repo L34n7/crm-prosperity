@@ -70,6 +70,7 @@ type Conversa = {
   contatos: {
     id?: string;
     nome: string | null;
+    whatsapp_profile_name?: string | null;
     telefone: string;
     email?: string | null;
     origem?: string | null;
@@ -378,7 +379,56 @@ type VariavelForm = {
 };
 
 const TEXTO_VARIAVEIS_FIXAS_MACRO =
-  "Variáveis fixas: {{nome_contato}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+  "Variáveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+
+const VARIAVEIS_FIXAS_SISTEMA = [
+  {
+    chave: "nome_contato",
+    exemplo: "{{nome_contato}}",
+    descricao: "Nome salvo no cadastro do contato.",
+  },
+  {
+    chave: "nome_whatsapp",
+    exemplo: "{{nome_whatsapp}}",
+    descricao:
+      "Nome do perfil do WhatsApp quando existir; se não existir, usa o nome salvo no contato.",
+  },
+  {
+    chave: "email_contato",
+    exemplo: "{{email_contato}}",
+    descricao: "E-mail salvo no cadastro do contato.",
+  },
+  {
+    chave: "numero_contato",
+    exemplo: "{{numero_contato}}",
+    descricao: "Número/telefone salvo no cadastro do contato.",
+  },
+  {
+    chave: "campanha",
+    exemplo: "{{campanha}}",
+    descricao: "Campanha vinculada ao contato.",
+  },
+  {
+    chave: "origem",
+    exemplo: "{{origem}}",
+    descricao: "Origem do contato.",
+  },
+  {
+    chave: "status_lead",
+    exemplo: "{{status_lead}}",
+    descricao: "Status atual do lead.",
+  },
+  {
+    chave: "protocolo_atual",
+    exemplo: "{{protocolo_atual}}",
+    descricao: "Protocolo ativo da conversa atual do contato.",
+  },
+  {
+    chave: "ultimo_protocolo",
+    exemplo: "{{ultimo_protocolo}}",
+    descricao: "Último protocolo encerrado/inativo do contato.",
+  },
+];
 
 const ETIQUETAS_PADRAO = [
   "#60A5FA",
@@ -2526,6 +2576,10 @@ function ConversasPageContent() {
       contato?.nome || "Contato"
     );
     registrar(
+      ["nome_whatsapp", "whatsapp_nome", "nome_perfil_whatsapp", "perfil_whatsapp_nome"],
+      contato?.whatsapp_profile_name || contato?.nome || "Contato"
+    );
+    registrar(
       ["telefone", "numero", "numero_contato", "contato_numero", "telefone_contato", "contato_telefone"],
       contato?.telefone
     );
@@ -3549,7 +3603,10 @@ function ConversasPageContent() {
     setMensagemSucesso("");
     setErro("");
 
-    if (!variavelForm.chave.trim() || !variavelForm.valor.trim()) {
+    const chave = normalizarChaveVariavelMacro(variavelForm.chave);
+    const valor = variavelForm.valor.trim();
+
+    if (!chave || !valor) {
       setErro("Informe o nome e o valor da variável.");
       return;
     }
@@ -3563,9 +3620,9 @@ function ConversasPageContent() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          chave: variavelForm.chave,
-          valor: variavelForm.valor,
-          descricao: variavelForm.descricao,
+          chave,
+          valor,
+          descricao: variavelForm.descricao.trim(),
           escopo: "global",
         }),
       });
@@ -3578,13 +3635,61 @@ function ConversasPageContent() {
       }
 
       setMensagemSucesso("Variável salva com sucesso.");
-      fecharModalVariavel();
+      setVariavelForm({
+        chave: "",
+        valor: "",
+        descricao: "",
+      });
       await carregarVariaveisGlobais();
     } catch {
       setErro("Erro ao salvar variável");
     } finally {
       setSalvandoVariavel(false);
     }
+  }
+
+  async function removerVariavelGlobal(id: string) {
+    setMensagemSucesso("");
+    setErro("");
+
+    try {
+      const res = await fetch("/api/variaveis", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.ok === false) {
+        setErro(data.error || "Erro ao remover variável");
+        return;
+      }
+
+      setMensagemSucesso("Variável removida com sucesso.");
+      await carregarVariaveisGlobais();
+    } catch {
+      setErro("Erro ao remover variável");
+    }
+  }
+
+  function aplicarVariavelNoTextoMacro(chave: string) {
+    const valor = normalizarChaveVariavelMacro(chave);
+
+    if (!valor) return;
+
+    const token = `{{${valor}}}`;
+
+    setMacroForm((atual) => {
+      const conteudo = atual.conteudo.trimEnd();
+
+      return {
+        ...atual,
+        conteudo: conteudo ? `${conteudo} ${token}` : token,
+      };
+    });
   }
 
   function acionarEnvioMacro(macro: MacroChat) {
@@ -9582,6 +9687,14 @@ const templateFooterTexto = useMemo(() => {
                                 </strong>
                               </div>
 
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>Nome WhatsApp</span>
+                                <strong className={styles.whatsInfoValue}>
+                                  {conversaSelecionada.contatos?.whatsapp_profile_name ||
+                                    "Sem nome WhatsApp"}
+                                </strong>
+                              </div>
+
                               <CampoContatoEditavel
                                 label="E-MAIL"
                                 valorInicial={conversaSelecionada.contatos?.email || ""}
@@ -10170,7 +10283,7 @@ const templateFooterTexto = useMemo(() => {
                               onClick={abrirModalVariavel}
                             >
                               <Variable size={14} />
-                              Variáveis
+                              Gerenciar
                             </button>
                           </div>
 
@@ -11172,7 +11285,7 @@ const templateFooterTexto = useMemo(() => {
                   onClick={abrirModalVariavel}
                 >
                   <Variable size={14} />
-                  Cadastrar variável
+                  Gerenciar variáveis
                 </button>
               </div>
 
@@ -11225,49 +11338,54 @@ const templateFooterTexto = useMemo(() => {
       )}
 
       {modalVariavelAberto && (
-        <div className={styles.contactModalOverlay} onClick={fecharModalVariavel}>
+        <div className={styles.modalOverlay} onClick={fecharModalVariavel}>
           <div
-            className={`${styles.contactModalCard} ${styles.variableModalCard}`}
+            className={`${styles.modalConfirmacao} ${styles.variableModalCard}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={styles.contactModalHeader}>
+            <div className={styles.modalHeader}>
               <div>
-                <h3 className={styles.contactModalTitle}>Cadastrar variável</h3>
-                <p className={styles.contactModalSubtitle}>
-                  Variáveis personalizadas ficam disponíveis em macros e automações.
+                <p className={styles.modalEyebrow}>Variáveis</p>
+                <h3 className={styles.modalTitle}>Gerenciar variáveis</h3>
+                <p className={styles.modalSubtitle}>
+                  Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para macros, disparos e fluxos.
                 </p>
               </div>
 
               <button
                 type="button"
-                className={styles.textButton}
+                className={styles.modalClose}
                 onClick={fecharModalVariavel}
               >
                 ×
               </button>
             </div>
 
-            <div className={styles.contactModalBody}>
-              <div className={styles.contactModalGrid}>
-                <div className={styles.contactModalField}>
-                  <label className={styles.actionLabel}>Nome da variável</label>
-                  <input
-                    className={styles.messageInput}
-                    value={variavelForm.chave}
-                    onChange={(e) =>
-                      setVariavelForm((atual) => ({
-                        ...atual,
-                        chave: e.target.value,
-                      }))
-                    }
-                    placeholder="ex: link_pagamento"
-                  />
+            <div className={styles.modalBody}>
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Cadastrar variável personalizada</h4>
+
+                <div className={styles.variableFormGrid}>
+                  <div className={styles.contactModalField}>
+                    <label className={styles.actionLabel}>Nome da variável</label>
+                    <input
+                      className={styles.messageInput}
+                      value={variavelForm.chave}
+                      onChange={(e) =>
+                        setVariavelForm((atual) => ({
+                          ...atual,
+                          chave: normalizarChaveVariavelMacro(e.target.value),
+                        }))
+                      }
+                      placeholder="ex: link_pagamento"
+                    />
+                  </div>
                 </div>
 
                 <div className={styles.contactModalField}>
-                  <label className={styles.actionLabel}>Valor</label>
-                  <input
-                    className={styles.messageInput}
+                  <label className={styles.actionLabel}>Mensagem da variável</label>
+                  <textarea
+                    className={styles.noteInput}
                     value={variavelForm.valor}
                     onChange={(e) =>
                       setVariavelForm((atual) => ({
@@ -11275,67 +11393,133 @@ const templateFooterTexto = useMemo(() => {
                         valor: e.target.value,
                       }))
                     }
-                    placeholder="https://..."
+                    placeholder="Digite a mensagem da variável..."
+                    rows={4}
                   />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Descrição Interna</label>
+                  <input
+                    className={styles.messageInput}
+                    value={variavelForm.descricao}
+                    onChange={(e) =>
+                      setVariavelForm((atual) => ({
+                        ...atual,
+                        descricao: e.target.value,
+                      }))
+                    }
+                    placeholder="Ajuda para identificar onde usar"
+                  />
+                </div>
+
+                <div className={styles.variablePreviewBox}>
+                  A variável será usada assim:{" "}
+                  <strong>
+                    {"{{"}
+                    {normalizarChaveVariavelMacro(variavelForm.chave) || "nome_variavel"}
+                    {"}}"}
+                  </strong>
+                </div>
+
+                <div className={styles.variableFormActions}>
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={salvarVariavelGlobal}
+                    disabled={salvandoVariavel}
+                  >
+                    {salvandoVariavel ? "Salvando..." : "Salvar variável"}
+                  </button>
                 </div>
               </div>
 
-              <div className={styles.contactModalField}>
-                <label className={styles.actionLabel}>Descrição</label>
-                <input
-                  className={styles.messageInput}
-                  value={variavelForm.descricao}
-                  onChange={(e) =>
-                    setVariavelForm((atual) => ({
-                      ...atual,
-                      descricao: e.target.value,
-                    }))
-                  }
-                  placeholder="Ajuda para identificar onde usar"
-                />
-              </div>
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Variáveis cadastradas</h4>
 
-              <div className={styles.variableListBox}>
-                <strong>Variáveis cadastradas</strong>
                 {carregandoVariaveis ? (
-                  <span>Carregando...</span>
+                  <div className={styles.emptyMiniState}>Carregando variáveis...</div>
                 ) : variaveisCustomizadasMacro.length === 0 ? (
-                  <span>Nenhuma variável personalizada cadastrada.</span>
+                  <div className={styles.emptyMiniState}>
+                    Nenhuma variável personalizada cadastrada.
+                  </div>
                 ) : (
-                  <div className={styles.variableList}>
+                  <div className={styles.variablesList}>
                     {variaveisCustomizadasMacro.map((variavel) => (
-                      <div key={variavel.id} className={styles.variableListItem}>
-                        <code>{`{{${variavel.chave}}}`}</code>
-                        <span>{variavel.descricao || variavel.valor}</span>
+                      <div key={variavel.id} className={styles.variableItem}>
+                        <div className={styles.variableMain}>
+                          <strong className={styles.variableCode}>
+                            {"{{"}
+                            {variavel.chave}
+                            {"}}"}
+                          </strong>
+
+                          <p className={styles.variablePerson}>
+                            <strong>Mensagem da variável: </strong>{variavel.valor}
+                          </p>
+
+                          {variavel.descricao ? (
+                            <p className={styles.variablePerson}>
+                            <strong>Descrição Interna: </strong>{variavel.descricao}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className={styles.variableActions}>
+                          <button
+                            type="button"
+                            className={styles.variableUseButton}
+                            onClick={() => aplicarVariavelNoTextoMacro(variavel.chave)}
+                          >
+                            Usar
+                          </button>
+
+                          <button
+                            type="button"
+                            className={styles.variableDeleteButton}
+                            onClick={() => removerVariavelGlobal(variavel.id)}
+                          >
+                            Remover
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className={styles.actionButtons}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={fecharModalVariavel}
-                  disabled={salvandoVariavel}
-                >
-                  Cancelar
-                </button>
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Variáveis fixas do sistema</h4>
 
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={salvarVariavelGlobal}
-                  disabled={
-                    salvandoVariavel ||
-                    !variavelForm.chave.trim() ||
-                    !variavelForm.valor.trim()
-                  }
-                >
-                  {salvandoVariavel ? "Salvando..." : "Salvar variável"}
-                </button>
+                <div className={styles.variablesList}>
+                  {VARIAVEIS_FIXAS_SISTEMA.map((item) => (
+                    <div key={item.chave} className={styles.variableItem}>
+                      <div className={styles.variableMain}>
+                        <strong className={styles.variableCode}>{item.exemplo}</strong>
+                        <p className={styles.variableDescription}>{item.descricao}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={styles.variableUseButton}
+                        onClick={() => aplicarVariavelNoTextoMacro(item.chave)}
+                      >
+                        Usar
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={fecharModalVariavel}
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>

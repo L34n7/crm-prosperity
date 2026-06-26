@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listarPermissoesDoUsuario } from "@/lib/permissoes/can";
 import { can } from "@/lib/permissoes/frontend";
 import { listMetaTemplates } from "@/lib/whatsapp/templates";
+import { salvarTemplateWhatsappLocalIdempotente } from "@/lib/whatsapp/templates-local";
 
 type UsuarioSistema = {
   id: string;
@@ -155,52 +156,34 @@ export async function POST(req: NextRequest) {
         components: Array.isArray(item.components) ? item.components : [],
       };
 
-      const { data: existente } = await supabaseAdmin
-        .from("whatsapp_templates")
-        .select("id")
-        .eq("empresa_id", usuario.empresa_id)
-        .eq("integracao_whatsapp_id", integracao.id)
-        .eq("meta_template_id", metaTemplateId)
-        .maybeSingle();
+      const resultadoSalvar = await salvarTemplateWhatsappLocalIdempotente({
+        supabase: supabaseAdmin,
+        empresaId: usuario.empresa_id,
+        integracaoWhatsAppId: integracao.id,
+        wabaId: integracao.waba_id,
+        metaTemplateId,
+        nome,
+        categoria,
+        idioma,
+        status,
+        payload,
+        respostaMeta: item,
+        usuarioId: usuario.id,
+      });
 
-      if (existente?.id) {
-        const { error: updateError } = await supabaseAdmin
-          .from("whatsapp_templates")
-          .update({
-            nome,
-            categoria,
-            idioma,
-            status,
-            payload,
-            resposta_meta: item,
-            updated_by: usuario.id,
-          })
-          .eq("id", existente.id);
+      if (resultadoSalvar.error) {
+        console.error("Erro ao salvar template sincronizado:", {
+          template: nome,
+          idioma,
+          error: resultadoSalvar.error.message,
+        });
+        continue;
+      }
 
-        if (!updateError) {
-          atualizados += 1;
-        }
+      if (resultadoSalvar.criado) {
+        inseridos += 1;
       } else {
-        const { error: insertError } = await supabaseAdmin
-          .from("whatsapp_templates")
-          .insert({
-            empresa_id: usuario.empresa_id,
-            integracao_whatsapp_id: integracao.id,
-            waba_id: integracao.waba_id,
-            meta_template_id: metaTemplateId,
-            nome,
-            categoria,
-            idioma,
-            status,
-            payload,
-            resposta_meta: item,
-            created_by: usuario.id,
-            updated_by: usuario.id,
-          });
-
-        if (!insertError) {
-          inseridos += 1;
-        }
+        atualizados += 1;
       }
     }
 

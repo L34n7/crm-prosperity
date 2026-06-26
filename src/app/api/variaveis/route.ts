@@ -8,6 +8,10 @@ const VARIAVEIS_FIXAS = new Set([
   "nome",
   "nome_contato",
   "contato_nome",
+  "nome_whatsapp",
+  "whatsapp_nome",
+  "nome_perfil_whatsapp",
+  "perfil_whatsapp_nome",
   "telefone",
   "numero",
   "numero_contato",
@@ -19,6 +23,8 @@ const VARIAVEIS_FIXAS = new Set([
   "status",
   "status_lead",
   "origem",
+  "protocolo_atual",
+  "ultimo_protocolo",
 ]);
 
 function normalizarChaveVariavel(valor: string) {
@@ -130,10 +136,7 @@ export async function POST(req: NextRequest) {
     const valor = String(body?.valor || "").trim();
     const descricao = String(body?.descricao || "").trim();
 
-    const escopoPermitido = ["global", "disparos", "fluxos"];
-    const escopo = escopoPermitido.includes(String(body?.escopo))
-      ? String(body?.escopo)
-      : "global";
+    const escopo = "global";
 
     if (!chave) {
       return NextResponse.json(

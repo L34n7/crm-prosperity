@@ -751,6 +751,7 @@ export async function PUT(
       contatos (
         id,
         nome,
+        whatsapp_profile_name,
         telefone,
         email,
         empresa,

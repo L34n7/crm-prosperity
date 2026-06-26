@@ -102,6 +102,17 @@ type PreviewTemplateWhatsapp = {
   botoes: string[];
 };
 
+type VariavelPersonalizada = {
+  id: string;
+  chave: string;
+  valor: string;
+  descricao: string | null;
+  escopo: "global" | "disparos" | "fluxos";
+  ativo: boolean;
+};
+
+type AlvoVariavelFluxo = "mensagem" | "agendar_disparo" | "agenda_lembrete";
+
 function contarVariaveisTextoTemplate(texto?: string | null) {
   const matches = String(texto || "").match(/\{\{\d+\}\}/g) || [];
   const numeros = matches
@@ -188,6 +199,14 @@ function atualizarLinhaVariavelTemplate(
 ) {
   const linhas = obterLinhasVariaveisTemplate(valorAtual);
   linhas[index] = normalizarEntradaVariavelTemplate(novoValor);
+  return linhas.join("\n");
+}
+
+function preencherPrimeiraLinhaVariavelTemplate(valorAtual: string, novoValor: string) {
+  const linhas = obterLinhasVariaveisTemplate(valorAtual);
+  const indiceVazio = linhas.findIndex((item) => !item.trim());
+  linhas[indiceVazio >= 0 ? indiceVazio : 0] =
+    normalizarEntradaVariavelTemplate(novoValor);
   return linhas.join("\n");
 }
 
@@ -284,11 +303,63 @@ const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
 const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
 const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; 
 const VARIAVEIS_FIXAS_CONTATO_HELP =
-    "Variáveis fixas: {{nome_contato}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+    "Variaveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+const VARIAVEIS_FIXAS_SISTEMA = [
+  {
+    chave: "nome_contato",
+    exemplo: "{{nome_contato}}",
+    descricao: "Nome salvo no cadastro do contato.",
+  },
+  {
+    chave: "nome_whatsapp",
+    exemplo: "{{nome_whatsapp}}",
+    descricao:
+      "Nome do perfil do WhatsApp quando existir; se não existir, usa o nome salvo no contato.",
+  },
+  {
+    chave: "email_contato",
+    exemplo: "{{email_contato}}",
+    descricao: "E-mail salvo no cadastro do contato.",
+  },
+  {
+    chave: "numero_contato",
+    exemplo: "{{numero_contato}}",
+    descricao: "Número/telefone salvo no cadastro do contato.",
+  },
+  {
+    chave: "campanha",
+    exemplo: "{{campanha}}",
+    descricao: "Campanha vinculada ao contato.",
+  },
+  {
+    chave: "origem",
+    exemplo: "{{origem}}",
+    descricao: "Origem do contato.",
+  },
+  {
+    chave: "status_lead",
+    exemplo: "{{status_lead}}",
+    descricao: "Status atual do lead.",
+  },
+  {
+    chave: "protocolo_atual",
+    exemplo: "{{protocolo_atual}}",
+    descricao: "Protocolo ativo da conversa atual do contato.",
+  },
+  {
+    chave: "ultimo_protocolo",
+    exemplo: "{{ultimo_protocolo}}",
+    descricao: "Último protocolo encerrado/inativo do contato.",
+  },
+];
 const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
   "nome",
   "nome_contato",
   "contato_nome",
+  "nome_whatsapp",
+  "whatsapp_nome",
+  "nome_perfil_whatsapp",
+  "perfil_whatsapp_nome",
 
   "email",
   "email_contato",
@@ -902,6 +973,17 @@ function FluxosPageContent() {
   const [erro, setErro] = useState("");
   const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
   const [sucesso, setSucesso] = useState("");
+  const [modalVariaveisAberto, setModalVariaveisAberto] = useState(false);
+  const [variaveisPersonalizadas, setVariaveisPersonalizadas] = useState<
+    VariavelPersonalizada[]
+  >([]);
+  const [loadingVariaveis, setLoadingVariaveis] = useState(false);
+  const [salvandoVariavel, setSalvandoVariavel] = useState(false);
+  const [novaVariavelChave, setNovaVariavelChave] = useState("");
+  const [novaVariavelValor, setNovaVariavelValor] = useState("");
+  const [novaVariavelDescricao, setNovaVariavelDescricao] = useState("");
+  const [alvoVariavelFluxo, setAlvoVariavelFluxo] =
+    useState<AlvoVariavelFluxo>("mensagem");
   const [tooltipAlertaFluxo, setTooltipAlertaFluxo] = useState<{
     texto: string;
     x: number;
@@ -1279,6 +1361,152 @@ function FluxosPageContent() {
     } finally {
       setCarregandoAgendasOpcoes(false);
     }
+  }
+
+  async function carregarVariaveisPersonalizadas() {
+    try {
+      setLoadingVariaveis(true);
+
+      const res = await fetch("/api/variaveis", {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar variaveis.");
+      }
+
+      setVariaveisPersonalizadas(
+        Array.isArray(json.variaveis) ? json.variaveis : []
+      );
+    } catch (error: unknown) {
+      setErro(error instanceof Error ? error.message : "Erro ao carregar variaveis.");
+    } finally {
+      setLoadingVariaveis(false);
+    }
+  }
+
+  async function abrirModalGerenciarVariaveis(
+    alvo: AlvoVariavelFluxo = "mensagem"
+  ) {
+    setAlvoVariavelFluxo(alvo);
+    setNovaVariavelChave("");
+    setNovaVariavelValor("");
+    setNovaVariavelDescricao("");
+    setModalVariaveisAberto(true);
+    await carregarVariaveisPersonalizadas();
+  }
+
+  function fecharModalGerenciarVariaveis() {
+    setModalVariaveisAberto(false);
+    setNovaVariavelChave("");
+    setNovaVariavelValor("");
+    setNovaVariavelDescricao("");
+  }
+
+  async function salvarVariavelPersonalizada() {
+    try {
+      setErro("");
+      setSucesso("");
+
+      const chave = normalizarEntradaVariavelTemplate(novaVariavelChave);
+      const valor = novaVariavelValor.trim();
+
+      if (!chave) {
+        setErro("Informe o nome da variavel.");
+        return;
+      }
+
+      if (!valor) {
+        setErro("Informe o valor da variavel.");
+        return;
+      }
+
+      setSalvandoVariavel(true);
+
+      const res = await fetch("/api/variaveis", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chave,
+          valor,
+          descricao: novaVariavelDescricao.trim(),
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao salvar variavel.");
+      }
+
+      setNovaVariavelChave("");
+      setNovaVariavelValor("");
+      setNovaVariavelDescricao("");
+
+      setSucesso("Variavel salva com sucesso.");
+      await carregarVariaveisPersonalizadas();
+    } catch (error: unknown) {
+      setErro(error instanceof Error ? error.message : "Erro ao salvar variavel.");
+    } finally {
+      setSalvandoVariavel(false);
+    }
+  }
+
+  async function removerVariavelPersonalizada(id: string) {
+    try {
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch("/api/variaveis", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao remover variavel.");
+      }
+
+      setSucesso("Variavel removida com sucesso.");
+      await carregarVariaveisPersonalizadas();
+    } catch (error: unknown) {
+      setErro(error instanceof Error ? error.message : "Erro ao remover variavel.");
+    }
+  }
+
+  function aplicarVariavelNoBloco(chave: string) {
+    const valor = normalizarEntradaVariavelTemplate(chave);
+
+    if (!valor) return;
+
+    if (alvoVariavelFluxo === "agendar_disparo") {
+      setAgendarDisparoVariaveisNode((atual) =>
+        preencherPrimeiraLinhaVariavelTemplate(atual, valor)
+      );
+      return;
+    }
+
+    if (alvoVariavelFluxo === "agenda_lembrete") {
+      setAgendaLembreteVariaveisNode((atual) =>
+        preencherPrimeiraLinhaVariavelTemplate(atual, valor)
+      );
+      return;
+    }
+
+    const token = `{{${valor}}}`;
+
+    setMensagemNode((atual) => {
+      const texto = atual.trimEnd();
+      return texto ? `${texto} ${token}` : token;
+    });
   }
 
   async function calcularPreviewCustoAgendarDisparo(categoria: string) {
@@ -5325,7 +5553,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     "agenda_cancelar_agendamento",
                     "interpretar_arquivo_ia",
                   ].includes(tipoNodeEdicao) && (
-                    <label className={styles.field}>
+                    <div className={styles.field}>
                       <span className={styles.label}>
                         {tipoNodeEdicao === "pergunta_opcoes"
                           ? "Pergunta"
@@ -5372,7 +5600,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       <p className={styles.help}>
                         {VARIAVEIS_FIXAS_CONTATO_HELP}
                       </p>
-                    </label>
+                      <button
+                        type="button"
+                        className={styles.inlineVariablesButton}
+                        onClick={() => abrirModalGerenciarVariaveis("mensagem")}
+                      >
+                        Gerenciar variáveis
+                      </button>
+                    </div>
 
                   )}
 
@@ -6090,7 +6325,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                     }
                                     placeholder={
                                       index === 0
-                                        ? "nome_contato"
+                                        ? "nome_whatsapp"
                                         : index === 1
                                         ? "numero_contato"
                                         : "email_contato"
@@ -6106,6 +6341,15 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             <span className={styles.help}>
                               {VARIAVEIS_FIXAS_CONTATO_HELP}
                             </span>
+                            <button
+                              type="button"
+                              className={styles.inlineVariablesButton}
+                              onClick={() =>
+                                abrirModalGerenciarVariaveis("agendar_disparo")
+                              }
+                            >
+                              Gerenciar variáveis
+                            </button>
                           </>
                         ) : null}
 
@@ -6703,7 +6947,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                                 }
                                                 placeholder={
                                                   index === 0
-                                                    ? "nome_contato"
+                                                    ? "nome_whatsapp"
                                                     : index === 1
                                                     ? "agenda_data"
                                                     : "agenda_hora"
@@ -6719,6 +6963,18 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                         <span className={styles.help}>
                                           Variaveis do agendamento como agenda_data e agenda_hora ficam disponiveis para o template.
                                         </span>
+                                        <span className={styles.help}>
+                                          {VARIAVEIS_FIXAS_CONTATO_HELP}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          className={styles.inlineVariablesButton}
+                                          onClick={() =>
+                                            abrirModalGerenciarVariaveis("agenda_lembrete")
+                                          }
+                                        >
+                                          Gerenciar variáveis
+                                        </button>
                                       </>
                                     ) : null}
 
@@ -7747,6 +8003,187 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             <p className={styles.help}>
               A exclusão é definitiva: remove o registro da tabela e o arquivo do Storage. Se algum bloco estiver usando essa mídia, ele ficará sem mídia selecionada e precisará ser ajustado antes de ativar/salvar o fluxo.
             </p>
+          </div>
+        </div>
+      )}
+
+      {modalVariaveisAberto && (
+        <div
+          className={styles.modalOverlay}
+          onClick={fecharModalGerenciarVariaveis}
+        >
+          <div
+            className={`${styles.modalCard} ${styles.variableManagerModal}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.eyebrow}>Variáveis</p>
+                <h3 className={styles.modalTitle}>Gerenciar variáveis</h3>
+                <p className={styles.modalSubtitle}>
+                  Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para disparos e fluxos.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.closePanelButton}
+                onClick={fecharModalGerenciarVariaveis}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Cadastrar variável personalizada</h4>
+
+                <div className={styles.variableFormGrid}>
+                  <label className={styles.field}>
+                    <span className={styles.label}>Nome da variável</span>
+                    <input
+                      value={novaVariavelChave}
+                      onChange={(e) =>
+                        setNovaVariavelChave(
+                          normalizarEntradaVariavelTemplate(e.target.value)
+                        )
+                      }
+                      className={styles.input}
+                      placeholder="ex: desconto"
+                    />
+                  </label>
+                </div>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Mensagem da variável</span>
+                  <textarea
+                    value={novaVariavelValor}
+                    onChange={(e) => setNovaVariavelValor(e.target.value)}
+                    className={styles.textarea}
+                    placeholder="Digite a mensagem da variável..."
+                    rows={4}
+                  />
+                </label>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Descrição Interna</span>
+                  <textarea
+                    value={novaVariavelDescricao}
+                    onChange={(e) => setNovaVariavelDescricao(e.target.value)}
+                    className={styles.textareadesc}
+                    placeholder="ex: essa variável é sobre desconto."
+                  />
+                </label>
+
+                <div className={styles.variablePreviewBox}>
+                  A variável será usada assim:{" "}
+                  <strong>
+                    {"{{"}
+                    {normalizarEntradaVariavelTemplate(novaVariavelChave) ||
+                      "nome_variavel"}
+                    {"}}"}
+                  </strong>
+                </div>
+
+                <div className={styles.variableFormActions}>
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={salvarVariavelPersonalizada}
+                    disabled={salvandoVariavel}
+                  >
+                    {salvandoVariavel ? "Salvando..." : "Salvar variável"}
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Variáveis cadastradas</h4>
+
+                {loadingVariaveis ? (
+                  <div className={styles.emptyMini}>Carregando variáveis...</div>
+                ) : variaveisPersonalizadas.length === 0 ? (
+                  <div className={styles.emptyMini}>
+                    Nenhuma variável personalizada cadastrada.
+                  </div>
+                ) : (
+                  <div className={styles.variablesList}>
+                    {variaveisPersonalizadas.map((item) => (
+                      <div key={item.id} className={styles.variableItem}>
+                        <div className={styles.variableMain}>
+                          <strong className={styles.variableCode}>
+                            {"{{"}
+                            {item.chave}
+                            {"}}"}
+                          </strong>
+
+                          <p className={styles.variablePerson}>
+                            <strong>Mensagem da variável: </strong>{item.valor}
+                          </p>
+
+                          {item.descricao ? (
+                            <p className={styles.variablePerson}>
+                             <strong> Descrição Interna: </strong>{item.descricao}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className={styles.variableActions}>
+                          <button
+                            type="button"
+                            className={styles.variableUseButton}
+                            onClick={() => aplicarVariavelNoBloco(item.chave)}
+                          >
+                            Usar
+                          </button>
+
+                          <button
+                            type="button"
+                            className={styles.variableDeleteButton}
+                            onClick={() => removerVariavelPersonalizada(item.id)}
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Variáveis fixas do sistema</h4>
+
+                <div className={styles.variablesList}>
+                  {VARIAVEIS_FIXAS_SISTEMA.map((item) => (
+                    <div key={item.chave} className={styles.variableItem}>
+                      <div className={styles.variableMain}>
+                        <strong className={styles.variableCode}>{item.exemplo}</strong>
+                        <p className={styles.variableDescription}>{item.descricao}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={styles.variableUseButton}
+                        onClick={() => aplicarVariavelNoBloco(item.chave)}
+                      >
+                        Usar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={fecharModalGerenciarVariaveis}
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}

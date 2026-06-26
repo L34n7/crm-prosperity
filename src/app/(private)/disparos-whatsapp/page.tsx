@@ -175,6 +175,7 @@ type ContatoOpcao = {
   id: string;
   empresa_id: string;
   nome: string | null;
+  whatsapp_profile_name?: string | null;
   telefone: string | null;
   email: string | null;
   origem: string | null;
@@ -243,6 +244,12 @@ const VARIAVEIS_FIXAS_SISTEMA = [
     chave: "nome_contato",
     exemplo: "{{nome_contato}}",
     descricao: "Nome salvo no cadastro do contato.",
+  },
+  {
+    chave: "nome_whatsapp",
+    exemplo: "{{nome_whatsapp}}",
+    descricao:
+      "Nome do perfil do WhatsApp quando existir; se não existir, usa o nome salvo no contato.",
   },
   {
     chave: "email_contato",
@@ -433,6 +440,15 @@ function resolverVariavelContato(
 
   if (chave === "nome" || chave === "nome_contato" || chave === "contato_nome") {
     return contato.nome || "Cliente";
+  }
+
+  if (
+    chave === "nome_whatsapp" ||
+    chave === "whatsapp_nome" ||
+    chave === "nome_perfil_whatsapp" ||
+    chave === "perfil_whatsapp_nome"
+  ) {
+    return contato.whatsapp_profile_name || contato.nome || "";
   }
 
   if (
@@ -1150,9 +1166,6 @@ export default function DisparosWhatsAppPage() {
   const [novaVariavelChave, setNovaVariavelChave] = useState("");
   const [novaVariavelValor, setNovaVariavelValor] = useState("");
   const [novaVariavelDescricao, setNovaVariavelDescricao] = useState("");
-  const [novaVariavelEscopo, setNovaVariavelEscopo] = useState<
-    "global" | "disparos" | "fluxos"
-  >("global");
 
   const [filtroHistorico, setFiltroHistorico] = useState<
     "todos" | "sucesso" | "falha" | "processando"
@@ -2159,7 +2172,6 @@ export default function DisparosWhatsAppPage() {
           chave,
           valor,
           descricao: novaVariavelDescricao.trim(),
-          escopo: novaVariavelEscopo,
         }),
       });
 
@@ -2172,7 +2184,6 @@ export default function DisparosWhatsAppPage() {
       setNovaVariavelChave("");
       setNovaVariavelValor("");
       setNovaVariavelDescricao("");
-      setNovaVariavelEscopo("global");
 
       setMensagem("Variável salva com sucesso.");
       await carregarVariaveisPersonalizadas();
@@ -2884,7 +2895,7 @@ export default function DisparosWhatsAppPage() {
                         value={buscaContato}
                         onChange={(e) => setBuscaContato(e.target.value)}
                         className={styles.input}
-                        placeholder="Busque por nome, telefone, e-mail, campanha..."
+                        placeholder="Busque por nome, WhatsApp, telefone, e-mail, campanha..."
                       />
                     </div>
 
@@ -3162,22 +3173,26 @@ export default function DisparosWhatsAppPage() {
                     <div className={styles.conflictHeader}>
                       <div>
                         <span className={styles.conflictEyebrow}>
-                          Repetidos recentes
+                          Contatos repetidos
                         </span>
                         <strong>
                           {loadingConflitos
                             ? "Verificando contatos dos ultimos 7 dias..."
                             : temConflitosPendentes
-                            ? `${totalContatosComConflitoSelecionados} contato(s) precisam de decisao`
+                            ? `${totalContatosComConflitoSelecionados} contato(s) precisam de decisão`
                             : "Contatos repetidos resolvidos"}
                         </strong>
                       </div>
 
-                      {temConflitosPendentes ? (
-                        <span className={styles.conflictStatus}>
-                          Envio bloqueado
-                        </span>
-                      ) : null}
+                      <span
+                        className={`${styles.conflictStatus} ${
+                          temConflitosPendentes
+                            ? styles.conflictStatusBlocked
+                            : styles.conflictStatusUnlocked
+                        }`}
+                      >
+                        {temConflitosPendentes ? "Envio bloqueado" : "Envio desbloqueado"}
+                      </span>
                     </div>
 
                     {erroConflitos ? (
@@ -3870,23 +3885,6 @@ export default function DisparosWhatsAppPage() {
                       placeholder="ex: desconto"
                     />
                   </div>
-
-                  <div className={styles.field}>
-                    <label className={styles.label}>Uso</label>
-                    <select
-                      value={novaVariavelEscopo}
-                      onChange={(e) =>
-                        setNovaVariavelEscopo(
-                          e.target.value as "global" | "disparos" | "fluxos"
-                        )
-                      }
-                      className={styles.input}
-                    >
-                      <option value="global">Disparos e fluxos</option>
-                      <option value="disparos">Somente disparos</option>
-                      <option value="fluxos">Somente fluxos</option>
-                    </select>
-                  </div>
                 </div>
 
                 <div className={styles.field}>
@@ -3953,23 +3951,15 @@ export default function DisparosWhatsAppPage() {
                             {"}}"}
                           </strong>
 
-                          <p className={styles.variableDescription}>
-                            Valor: <strong>{item.valor}</strong>
+                          <p className={styles.variablePerson}>
+                            <strong>Mensagem da variável: </strong>{item.valor}
                           </p>
 
                           {item.descricao ? (
-                            <p className={styles.variableDescription}>
-                              {item.descricao}
+                            <p className={styles.variablePerson}>
+                              <strong>Descrição Interna: </strong>{item.descricao}
                             </p>
                           ) : null}
-
-                          <span className={styles.variableScope}>
-                            {item.escopo === "global"
-                              ? "Disparos e fluxos"
-                              : item.escopo === "disparos"
-                              ? "Somente disparos"
-                              : "Somente fluxos"}
-                          </span>
                         </div>
 
                         <div className={styles.variableActions}>

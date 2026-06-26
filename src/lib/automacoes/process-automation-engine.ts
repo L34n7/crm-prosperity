@@ -18,6 +18,7 @@ import { salvarArquivoAnaliseStorage } from "@/lib/automacoes/salvar-arquivo-ana
 import { obterConfiguracaoEncerramentoInatividade } from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import {
   chaveEhVariavelFixaContato,
+  chaveEhVariavelNomeWhatsapp,
   montarMapaVariaveisFixasContato,
 } from "@/lib/automacoes/variaveis-fixas-contato";
 import {
@@ -145,6 +146,47 @@ function lerVariavelExecucao(metadata: any, nome: string) {
   return variaveis[nome] ?? metadata?.[nome] ?? null;
 }
 
+async function carregarNomePerfilWhatsappConversa(params: {
+  empresaId: string;
+  conversaId?: string | null;
+}) {
+  const { empresaId, conversaId } = params;
+
+  if (!conversaId) return "";
+
+  const { data, error } = await supabaseAdmin
+    .from("mensagens")
+    .select("metadata_json")
+    .eq("empresa_id", empresaId)
+    .eq("conversa_id", conversaId)
+    .eq("remetente_tipo", "contato")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao buscar nome de perfil do WhatsApp:",
+      error
+    );
+
+    return "";
+  }
+
+  for (const mensagem of data || []) {
+    const metadata = mensagem.metadata_json || {};
+    const nomeWhatsapp = String(
+      metadata.whatsapp_profile_name ||
+        metadata.profile_name ||
+        metadata.nome_perfil_whatsapp ||
+        ""
+    ).trim();
+
+    if (nomeWhatsapp) return nomeWhatsapp;
+  }
+
+  return "";
+}
+
 async function carregarVariaveisFixasContatoExecucao(params: {
   empresaId: string;
   execucaoId?: string | null;
@@ -172,13 +214,25 @@ async function carregarVariaveisFixasContatoExecucao(params: {
     return new Map<string, string>();
   }
 
+  const precisaNomeWhatsapp = chaves.some(chaveEhVariavelNomeWhatsapp);
+  const nomeWhatsapp = precisaNomeWhatsapp
+    ? await carregarNomePerfilWhatsappConversa({
+        empresaId,
+        conversaId: execucao?.conversa_id,
+      })
+    : "";
+
   if (!execucao?.contato_id) {
-    return montarMapaVariaveisFixasContato(null);
+    return montarMapaVariaveisFixasContato(null, {
+      nome_whatsapp: nomeWhatsapp,
+    });
   }
 
   const { data: contato, error: contatoError } = await supabaseAdmin
     .from("contatos")
-    .select("id, nome, email, telefone, campanha, origem, status_lead")
+    .select(
+      "id, nome, whatsapp_profile_name, email, telefone, campanha, origem, status_lead"
+    )
     .eq("id", execucao.contato_id)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -269,6 +323,7 @@ async function carregarVariaveisFixasContatoExecucao(params: {
   }
 
   return montarMapaVariaveisFixasContato(contato || null, {
+    nome_whatsapp: nomeWhatsapp,
     protocolo_atual: protocoloAtual,
     ultimo_protocolo: ultimoProtocolo,
   });

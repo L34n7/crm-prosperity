@@ -16,8 +16,67 @@ import {
 
 const supabaseAdmin = getSupabaseAdmin();
 
+type SupabaseErrorLike = {
+  code?: string;
+  details?: string | null;
+  message?: string | null;
+};
+
+type CompartilhamentoFluxoRow = {
+  id: string;
+  codigo: string;
+  nome_fluxo: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ResultadoCompartilhamentoFluxoRpc = {
+  compartilhamento?: CompartilhamentoFluxoRow;
+  criado?: boolean;
+};
+
 function obterMensagemErro(error: unknown, fallback = "Erro interno.") {
   return error instanceof Error ? error.message : fallback;
+}
+
+function erroDuplicidadeCodigoCompartilhamento(error: SupabaseErrorLike) {
+  const textoErro = `${error.message || ""} ${error.details || ""}`.toLowerCase();
+
+  return (
+    error.code === "23505" &&
+    (textoErro.includes("automacao_fluxo_compartilhamentos_codigo") ||
+      textoErro.includes("key (codigo)") ||
+      textoErro.includes("codigo"))
+  );
+}
+
+function erroDuplicidadeFluxoAtivo(error: SupabaseErrorLike) {
+  const textoErro = `${error.message || ""} ${error.details || ""}`.toLowerCase();
+
+  return (
+    error.code === "23505" &&
+    (textoErro.includes("automacao_fluxo_compartilhamentos_fluxo_ativo_uidx") ||
+      textoErro.includes("key (empresa_origem_id, fluxo_origem_id)"))
+  );
+}
+
+function normalizarResultadoCompartilhamentoRpc(
+  data: unknown
+): ResultadoCompartilhamentoFluxoRpc | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const resultado = data as ResultadoCompartilhamentoFluxoRpc;
+
+  if (!resultado.compartilhamento?.id || !resultado.compartilhamento.codigo) {
+    return null;
+  }
+
+  return {
+    compartilhamento: resultado.compartilhamento,
+    criado: resultado.criado === true,
+  };
 }
 
 async function obterOuCriarCompartilhamentoComCodigo(params: {
@@ -26,73 +85,40 @@ async function obterOuCriarCompartilhamentoComCodigo(params: {
   usuarioId: string;
   snapshot: SnapshotCompartilhamentoFluxo;
 }) {
-  const { data: compartilhamentoExistente, error: compartilhamentoExistenteError } =
-    await supabaseAdmin
-      .from("automacao_fluxo_compartilhamentos")
-      .select("*")
-      .eq("empresa_origem_id", params.empresaId)
-      .eq("fluxo_origem_id", params.fluxoId)
-      .eq("ativo", true)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-  if (compartilhamentoExistenteError) {
-    throw new Error(
-      `Erro ao buscar codigo de compartilhamento: ${compartilhamentoExistenteError.message}`
-    );
-  }
-
-  if (compartilhamentoExistente) {
-    const { data, error } = await supabaseAdmin
-      .from("automacao_fluxo_compartilhamentos")
-      .update({
-        nome_fluxo: params.snapshot.fluxo.nome,
-        snapshot_json: params.snapshot,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", compartilhamentoExistente.id)
-      .select("*")
-      .single();
-
-    if (error || !data) {
-      throw new Error(
-        `Erro ao atualizar compartilhamento: ${error?.message}`
-      );
-    }
-
-    return {
-      compartilhamento: data,
-      criado: false,
-    };
-  }
-
   for (let tentativa = 0; tentativa < 5; tentativa += 1) {
     const codigo = gerarCodigoCompartilhamentoFluxo();
 
-    const { data, error } = await supabaseAdmin
-      .from("automacao_fluxo_compartilhamentos")
-      .insert({
-        codigo,
-        empresa_origem_id: params.empresaId,
-        fluxo_origem_id: params.fluxoId,
-        nome_fluxo: params.snapshot.fluxo.nome,
-        snapshot_json: params.snapshot,
-        criado_por: params.usuarioId,
-      })
-      .select("*")
-      .single();
+    const { data, error } = await supabaseAdmin.rpc(
+      "obter_ou_criar_automacao_fluxo_compartilhamento",
+      {
+        p_codigo: codigo,
+        p_empresa_origem_id: params.empresaId,
+        p_fluxo_origem_id: params.fluxoId,
+        p_nome_fluxo: params.snapshot.fluxo.nome,
+        p_snapshot_json: params.snapshot,
+        p_criado_por: params.usuarioId,
+      }
+    );
 
-    if (!error && data) {
+    if (!error) {
+      const resultado = normalizarResultadoCompartilhamentoRpc(data);
+
+      if (!resultado?.compartilhamento) {
+        throw new Error("Resposta invalida ao salvar compartilhamento.");
+      }
+
       return {
-        compartilhamento: data,
-        criado: true,
+        compartilhamento: resultado.compartilhamento,
+        criado: resultado.criado,
       };
     }
 
-    if (!error?.message?.toLowerCase().includes("duplicate")) {
+    if (
+      !erroDuplicidadeCodigoCompartilhamento(error) &&
+      !erroDuplicidadeFluxoAtivo(error)
+    ) {
       throw new Error(
-        `Erro ao gerar codigo de compartilhamento: ${error?.message}`
+        `Erro ao salvar compartilhamento: ${error.message}`
       );
     }
   }

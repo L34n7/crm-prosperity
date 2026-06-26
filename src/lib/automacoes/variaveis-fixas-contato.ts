@@ -1,5 +1,6 @@
 type ContatoVariaveisFixas = {
   nome?: string | null;
+  whatsapp_profile_name?: string | null;
   email?: string | null;
   telefone?: string | null;
   campanha?: string | null;
@@ -8,6 +9,7 @@ type ContatoVariaveisFixas = {
 };
 
 type ExtrasVariaveisFixas = {
+  nome_whatsapp?: string | null;
   protocolo_atual?: string | null;
   ultimo_protocolo?: string | null;
 };
@@ -19,6 +21,7 @@ type CampoContatoVariavelFixa =
   | "campanha"
   | "origem"
   | "status_lead"
+  | "nome_whatsapp"
   | "protocolo_atual"
   | "ultimo_protocolo";
 
@@ -29,6 +32,11 @@ const VARIAVEIS_FIXAS_CONTATO_CAMPOS: Record<
   nome: "nome",
   nome_contato: "nome",
   contato_nome: "nome",
+
+  nome_whatsapp: "nome_whatsapp",
+  whatsapp_nome: "nome_whatsapp",
+  nome_perfil_whatsapp: "nome_whatsapp",
+  perfil_whatsapp_nome: "nome_whatsapp",
 
   email: "email",
   email_contato: "email",
@@ -53,6 +61,8 @@ const VARIAVEIS_FIXAS_CONTATO_CAMPOS: Record<
 
 export const VARIAVEIS_FIXAS_CONTATO = [
   "nome_contato",
+  "nome_whatsapp",
+  "nome_perfil_whatsapp",
   "email_contato",
   "numero_contato",
   "campanha",
@@ -79,6 +89,17 @@ export function chaveEhVariavelFixaContato(chave: unknown) {
   );
 }
 
+const VARIAVEIS_NOME_WHATSAPP = new Set([
+  "nome_whatsapp",
+  "whatsapp_nome",
+  "nome_perfil_whatsapp",
+  "perfil_whatsapp_nome",
+]);
+
+export function chaveEhVariavelNomeWhatsapp(chave: unknown) {
+  return VARIAVEIS_NOME_WHATSAPP.has(normalizarChaveVariavelFluxo(chave));
+}
+
 export function montarMapaVariaveisFixasContato(
   contato: ContatoVariaveisFixas | null | undefined,
   extras: ExtrasVariaveisFixas = {}
@@ -90,6 +111,9 @@ export function montarMapaVariaveisFixasContato(
     campanha: String(contato?.campanha || "").trim(),
     origem: String(contato?.origem || "").trim(),
     status_lead: String(contato?.status_lead || "").trim(),
+    nome_whatsapp: String(
+      extras.nome_whatsapp || contato?.whatsapp_profile_name || contato?.nome || ""
+    ).trim(),
     protocolo_atual: String(extras.protocolo_atual || "").trim(),
     ultimo_protocolo: String(extras.ultimo_protocolo || "").trim(),
   };

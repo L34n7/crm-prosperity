@@ -227,6 +227,7 @@ export async function POST(
         contatos (
           id,
           nome,
+          whatsapp_profile_name,
           telefone,
           email,
           empresa,

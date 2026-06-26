@@ -58,6 +58,7 @@ export async function GET(request: Request) {
     .from("contatos")
     .select(`
       nome,
+      whatsapp_profile_name,
       telefone,
       email,
       origem,
@@ -91,6 +92,7 @@ export async function GET(request: Request) {
 
   const headers = [
     "nome",
+    "whatsapp_profile_name",
     "telefone",
     "email",
     "origem",
@@ -105,6 +107,7 @@ export async function GET(request: Request) {
   const rows = (data || []).map((contato) =>
     [
       contato.nome,
+      contato.whatsapp_profile_name,
       contato.telefone,
       contato.email,
       contato.origem,

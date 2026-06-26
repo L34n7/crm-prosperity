@@ -6,6 +6,7 @@ export type WhatsAppContact = {
   id: string;
   empresa_id: string;
   nome: string | null;
+  whatsapp_profile_name?: string | null;
   telefone: string;
   email?: string | null;
   origem?: string | null;
@@ -18,17 +19,20 @@ type FindOrCreateContactParams = {
   empresaId: string;
   phone: string;
   profileName?: string | null;
+  salvarProfileNameWhatsapp?: boolean;
 };
 
 export async function findOrCreateWhatsAppContact({
   empresaId,
   phone,
   profileName,
+  salvarProfileNameWhatsapp = true,
 }: FindOrCreateContactParams): Promise<WhatsAppContact> {
   const supabaseAdmin = getSupabaseAdmin();
 
   const telefone = normalizarTelefoneBrasilParaWhatsApp(phone);
   const nome = normalizeContactName(profileName);
+  const whatsappProfileName = salvarProfileNameWhatsapp ? nome : "";
 
   if (!empresaId) {
     throw new Error("empresaId é obrigatório para localizar/criar contato");
@@ -53,6 +57,32 @@ export async function findOrCreateWhatsAppContact({
   }
 
   if (existingContact) {
+    if (
+      whatsappProfileName &&
+      String(existingContact.whatsapp_profile_name || "").trim() !==
+        whatsappProfileName
+    ) {
+      const { data: contatoAtualizado, error: updateError } = await supabaseAdmin
+        .from("contatos")
+        .update({
+          whatsapp_profile_name: whatsappProfileName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingContact.id)
+        .eq("empresa_id", empresaId)
+        .select("*")
+        .maybeSingle();
+
+      if (updateError) {
+        console.error(
+          "[WHATSAPP_CONTACT] Erro ao atualizar nome de perfil do WhatsApp:",
+          updateError
+        );
+      } else if (contatoAtualizado) {
+        return contatoAtualizado as WhatsAppContact;
+      }
+    }
+
     return existingContact as WhatsAppContact;
   }
 
@@ -61,6 +91,7 @@ export async function findOrCreateWhatsAppContact({
     .insert({
       empresa_id: empresaId,
       nome: nome || telefone,
+      whatsapp_profile_name: whatsappProfileName || null,
       telefone,
       origem: "Direto / Nao identificado",
       status_lead: "novo",
@@ -86,6 +117,32 @@ export async function findOrCreateWhatsAppContact({
             buscarAposConflitoError?.message ?? "sem retorno do banco"
           }`
         );
+      }
+
+      if (
+        whatsappProfileName &&
+        String(contatoExistenteAposConflito.whatsapp_profile_name || "").trim() !==
+          whatsappProfileName
+      ) {
+        const { data: contatoAtualizado, error: updateError } = await supabaseAdmin
+          .from("contatos")
+          .update({
+            whatsapp_profile_name: whatsappProfileName,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", contatoExistenteAposConflito.id)
+          .eq("empresa_id", empresaId)
+          .select("*")
+          .maybeSingle();
+
+        if (updateError) {
+          console.error(
+            "[WHATSAPP_CONTACT] Erro ao atualizar nome de perfil do WhatsApp apos conflito:",
+            updateError
+          );
+        }
+
+        return (contatoAtualizado || contatoExistenteAposConflito) as WhatsAppContact;
       }
 
       return contatoExistenteAposConflito as WhatsAppContact;

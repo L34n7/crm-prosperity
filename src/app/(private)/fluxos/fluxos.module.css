@@ -273,6 +273,25 @@
   line-height: 1.5;
 }
 
+.inlineVariablesButton {
+  width: fit-content;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.inlineVariablesButton:hover {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-surface-subtle);
+  transform: translateY(-1px);
+}
+
 .primaryButton,
 .primaryButtonActv,
 .secondaryButton {
@@ -1141,6 +1160,139 @@
   font-size: 15px;
   font-weight: 800;
   color: var(--crm-text-strong);
+}
+
+.modalSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.variableManagerModal {
+  max-width: 760px;
+}
+
+.variablesList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.variableItem {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.variableMain {
+  min-width: 0;
+  flex: 1;
+}
+
+.variableCode {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--crm-primary-soft);
+  border: 1px solid var(--crm-primary-border);
+  color: var(--crm-primary-text);
+  font-size: 13px;
+  font-weight: 800;
+  word-break: break-word;
+}
+
+.variablePerson {
+  margin: 8px 0 0;
+  color: var(--crm-text);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.variablePerson strong {
+  margin: 8px 0 0;
+  color: var(--crm-primary-hover);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.variableDescription {
+  margin: 8px 0 0;
+  color: var(--crm-text);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.variableActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.variableUseButton,
+.variableDeleteButton {
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.variableUseButton {
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+}
+
+.variableUseButton:hover {
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-border-strong);
+}
+
+.variableDeleteButton {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.variableDeleteButton:hover {
+  background: var(--crm-danger-bg);
+  border-color: var(--crm-danger-border);
+}
+
+.variableFormGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.variablePreviewBox {
+  border: 1px dashed var(--crm-border-strong);
+  background: var(--crm-surface);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--crm-text);
+}
+
+.variablePreviewBox strong {
+  color: var(--crm-text-strong);
+}
+
+.variableFormActions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .gatilhosBox {

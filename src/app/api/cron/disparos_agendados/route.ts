@@ -5,6 +5,7 @@ import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message"
 import { sendAppointmentReminderEmail } from "@/lib/email/send-appointment-reminder-email";
 import {
   chaveEhVariavelFixaContato,
+  chaveEhVariavelNomeWhatsapp,
   montarMapaVariaveisFixasContato,
   normalizarChaveVariavelFluxo,
 } from "@/lib/automacoes/variaveis-fixas-contato";
@@ -358,6 +359,47 @@ async function buscarOuCriarProtocoloAtivo(params: {
   return novoProtocolo;
 }
 
+async function carregarNomePerfilWhatsappConversa(params: {
+  empresaId: string;
+  conversaId?: string | null;
+}) {
+  const { empresaId, conversaId } = params;
+
+  if (!conversaId) return "";
+
+  const { data, error } = await supabaseAdmin
+    .from("mensagens")
+    .select("metadata_json")
+    .eq("empresa_id", empresaId)
+    .eq("conversa_id", conversaId)
+    .eq("remetente_tipo", "contato")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.error(
+      "[CRON DISPAROS] Erro ao buscar nome de perfil do WhatsApp:",
+      error
+    );
+
+    return "";
+  }
+
+  for (const mensagem of data || []) {
+    const metadata = mensagem.metadata_json || {};
+    const nomeWhatsapp = String(
+      metadata.whatsapp_profile_name ||
+        metadata.profile_name ||
+        metadata.nome_perfil_whatsapp ||
+        ""
+    ).trim();
+
+    if (nomeWhatsapp) return nomeWhatsapp;
+  }
+
+  return "";
+}
+
 async function resolverVariaveisAgendamento(params: {
   empresaId: string;
   execucaoId: string | null;
@@ -406,6 +448,7 @@ async function resolverVariaveisAgendamento(params: {
 
   const precisaProtocoloAtual = chaves.includes("protocolo_atual");
   const precisaUltimoProtocolo = chaves.includes("ultimo_protocolo");
+  const precisaNomeWhatsapp = chaves.some(chaveEhVariavelNomeWhatsapp);
 
   if (conversaId && precisaProtocoloAtual) {
     const { data: protocoloAtivo, error: protocoloAtivoError } =
@@ -456,7 +499,19 @@ async function resolverVariaveisAgendamento(params: {
     ).trim();
   }
 
-  const variaveisFixasContato = montarMapaVariaveisFixasContato(contato);
+  const nomeWhatsapp = precisaNomeWhatsapp
+    ? (await carregarNomePerfilWhatsappConversa({
+        empresaId,
+        conversaId,
+      })) ||
+      String(payload.nome_whatsapp || payload.whatsapp_profile_name || "").trim()
+    : "";
+
+  const variaveisFixasContato = montarMapaVariaveisFixasContato(contato, {
+    nome_whatsapp: nomeWhatsapp,
+    protocolo_atual: protocoloAtual,
+    ultimo_protocolo: ultimoProtocolo,
+  });
   const mapaPayload = new Map<string, string>();
 
   function adicionarPayload(chave: string, valor: unknown) {
@@ -475,6 +530,12 @@ async function resolverVariaveisAgendamento(params: {
   adicionarPayload("agenda_agendamento_id", payload.agenda_agendamento_id);
   adicionarPayload("agenda_id", payload.agenda_id);
   adicionarPayload("agenda_nome", payload.agenda_nome);
+  adicionarPayload("nome_whatsapp", payload.nome_whatsapp);
+  adicionarPayload("nome_whatsapp", payload.whatsapp_profile_name);
+  adicionarPayload("nome_perfil_whatsapp", payload.nome_whatsapp);
+  adicionarPayload("nome_perfil_whatsapp", payload.whatsapp_profile_name);
+  adicionarPayload("whatsapp_nome", payload.nome_whatsapp);
+  adicionarPayload("whatsapp_nome", payload.whatsapp_profile_name);
   adicionarPayload("nome_contato", payload.contato_nome);
   adicionarPayload("contato_nome", payload.contato_nome);
   adicionarPayload("nome", payload.contato_nome);
@@ -606,6 +667,7 @@ async function executarDisparoAgendado(agendamento: any) {
         contatos (
           id,
           nome,
+          whatsapp_profile_name,
           telefone,
           email,
           empresa,
@@ -627,7 +689,7 @@ async function executarDisparoAgendado(agendamento: any) {
     const { data: contato, error: contatoError } = await supabaseAdmin
       .from("contatos")
       .select(
-        "id, nome, telefone, email, empresa, origem, campanha, status_lead"
+        "id, nome, whatsapp_profile_name, telefone, email, empresa, origem, campanha, status_lead"
       )
       .eq("id", contatoIdPayload)
       .eq("empresa_id", empresaId)

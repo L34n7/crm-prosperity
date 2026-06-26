@@ -110,6 +110,7 @@ export async function GET(request: Request) {
         id,
         empresa_id,
         nome,
+        whatsapp_profile_name,
         telefone,
         email,
         origem,
@@ -167,7 +168,7 @@ export async function GET(request: Request) {
 
   if (busca) {
     query = query.or(
-      `nome.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha.ilike.%${busca}%,telefone.ilike.%${busca}%`
+      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha.ilike.%${busca}%,telefone.ilike.%${busca}%`
     );
   }
 
@@ -194,6 +195,7 @@ export async function GET(request: Request) {
           id,
           empresa_id,
           nome,
+          whatsapp_profile_name,
           telefone,
           email,
           origem,
@@ -251,7 +253,7 @@ export async function GET(request: Request) {
 
     if (busca) {
       queryLote = queryLote.or(
-        `nome.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha.ilike.%${busca}%,telefone.ilike.%${busca}%`
+        `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha.ilike.%${busca}%,telefone.ilike.%${busca}%`
       );
     }
 

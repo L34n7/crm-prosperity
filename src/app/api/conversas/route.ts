@@ -584,6 +584,7 @@ export async function GET(request: Request) {
       contatos (
         id,
         nome,
+        whatsapp_profile_name,
         telefone,
         email,
         origem,

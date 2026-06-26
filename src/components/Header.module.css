@@ -1475,3 +1475,202 @@
 }
 
 
+@media (max-width: 1268px) {
+  .header {
+    min-height: 54px;
+    padding: 0 14px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .left {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .mobileBackButton {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border: 1px solid var(--crm-border);
+    border-radius: 999px;
+    background: var(--crm-surface);
+    color: var(--crm-text-strong);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    text-decoration: none;
+    box-shadow: var(--crm-shadow-xs);
+  }
+
+  .mobileBackButton:hover {
+    background: rgba(15, 23, 42, 0.06);
+  }
+
+  .mobileBackButton:active {
+    background: rgba(15, 23, 42, 0.12);
+    transform: scale(0.96);
+  }
+
+  .title {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 17px;
+  }
+
+  .right {
+    width: auto;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    gap: 10;
+    flex-wrap: nowrap;
+  }
+
+  .subtitle {
+    display: none;
+  }
+
+  .tokensBadge {
+    height: 34px;
+    max-width: 118px;
+    padding: 0 9px;
+    border-radius: 999px;
+  }
+
+  .tokensBadge strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .notificationDropdown {
+    right: -70px;
+    width: min(340px, calc(100vw - 24px));
+  }
+
+  .notificationModalOverlay {
+    padding: 10px;
+  }
+
+  .notificationModal {
+    max-height: 88vh;
+  }
+
+  .notificationModalFooter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notificationPageButton {
+    width: 100%;
+  }
+
+  .planRenewalOverlay {
+    padding: 10px;
+    align-items: flex-start;
+  }
+
+  .planRenewalModal {
+    max-height: calc(100vh - 20px);
+  }
+
+  .planRenewalHeader {
+    padding: 16px;
+  }
+
+  .planRenewalHeader h2 {
+    font-size: 21px;
+  }
+
+  .planCurrentSummary {
+    padding: 14px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .planCurrentMeta {
+    justify-content: stretch;
+  }
+
+  .planCurrentMeta div {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .planRenewalGrid {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .planRenewalCard p {
+    min-height: auto;
+  }
+
+  .tokenAlertCard {
+    grid-template-columns: 1fr;
+  }
+
+  .tokenAlertHero {
+    padding: 24px 20px 22px;
+  }
+
+  .tokenAlertHero h2 {
+    font-size: 24px;
+  }
+
+  .tokenAlertOffers {
+    grid-template-columns: 1fr;
+  }
+
+  .tokenAlertPrimary,
+  .tokenAlertSecondary {
+    width: 100%;
+  }
+
+  .mobileTokensNotification {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+
+    width: 17px;
+    height: 17px;
+    padding: 0;
+
+    border: 2px solid var(--crm-surface);
+    border-radius: 999px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+
+    box-sizing: border-box;
+    z-index: 2;
+  }
+
+  .mobileTokensNotificationWarning {
+    background: var(--crm-warning-strong);
+    box-shadow: 0 3px 8px rgba(245, 158, 11, 0.38);
+  }
+
+  .mobileTokensNotificationDanger {
+    background: var(--crm-danger-strong);
+    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
+  }
+
+}
+
+

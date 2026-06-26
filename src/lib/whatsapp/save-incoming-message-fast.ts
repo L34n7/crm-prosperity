@@ -128,6 +128,8 @@ export async function salvarMensagensRecebidasRapido(
         conversaProtocoloId: protocoloAtivo?.id ?? null,
         metadataJson: {
           ...metadataJson,
+          whatsapp_profile_name: message.profileName || null,
+          whatsapp_wa_id: message.waId || null,
           salvo_rapido_webhook: true,
           automacao_processada: false,
           salvo_rapido_em: new Date().toISOString(),
