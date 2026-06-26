@@ -3189,14 +3189,21 @@ export default function DisparosWhatsAppPage() {
                         {gruposConflitoAtivos.map((grupo) => {
                           const decisao =
                             decisoesConflitoDisparo[grupo.campanha_id];
-                          const decisaoTexto =
-                            decisao?.acao === "incluir"
-                              ? "Incluido mesmo assim"
-                              : decisao?.acao === "remover"
-                              ? "Removido do envio"
-                              : "Pendente";
+                            const decisaoTexto =
+                              decisao?.acao === "incluir"
+                                ? "Contato mantido"
+                                : decisao?.acao === "remover"
+                                ? "Removido do envio"
+                                : "Pendente";
 
-                          return (
+                            const decisaoClasse =
+                              decisao?.acao === "incluir"
+                                ? styles.conflictDecisionIncluded
+                                : decisao?.acao === "remover"
+                                ? styles.conflictDecisionRemoved
+                                : styles.conflictDecisionPending;
+
+                            return (
                             <div
                               key={grupo.campanha_id}
                               className={styles.conflictGroup}
@@ -3214,14 +3221,14 @@ export default function DisparosWhatsAppPage() {
                                 </span>
                               </div>
 
-                              <span className={styles.conflictDecision}>
+                              <span className={`${styles.conflictDecision} ${decisaoClasse}`}>
                                 {decisaoTexto}
                               </span>
 
                               <div className={styles.conflictActions}>
                                 <button
                                   type="button"
-                                  className={styles.secondaryButton}
+                                  className={styles.removerButton}
                                   onClick={() =>
                                     removerGrupoConflitoDoEnvio(grupo)
                                   }
@@ -3231,12 +3238,12 @@ export default function DisparosWhatsAppPage() {
 
                                 <button
                                   type="button"
-                                  className={styles.secondaryButton}
+                                  className={styles.ButtonAdd}
                                   onClick={() =>
                                     marcarGrupoConflitoComoIncluido(grupo)
                                   }
                                 >
-                                  Incluir mesmo assim
+                                  Manter
                                 </button>
                               </div>
                             </div>

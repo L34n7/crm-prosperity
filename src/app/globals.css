@@ -102,6 +102,8 @@
   --messageBubbleOutgoing: #b0f3cb;
   --automaticBadge: #ffffffcb;
   --automaticBadgeTexto: #997513;
+  --conflictCardPending: #ffdded;
+  --conflictCardPendingBorder: #ff9191;
 }
 
 html[data-theme="dark"] {

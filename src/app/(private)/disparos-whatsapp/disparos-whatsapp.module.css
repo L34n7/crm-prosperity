@@ -920,8 +920,8 @@
 }
 
 .conflictCardPending {
-  border-color: var(--crm-warning-border);
-  background: linear-gradient(180deg, var(--crm-warning-bg) 0%, var(--crm-surface) 100%);
+  border-color: var(--conflictCardPendingBorder);
+  background: linear-gradient(180deg, var(--conflictCardPending) 0%, var(--crm-surface) 100%);
 }
 
 .conflictCardResolved {
@@ -958,18 +958,34 @@
   min-height: 26px;
   padding: 0 9px;
   border-radius: 999px;
-  background: var(--crm-surface);
-  border: 1px solid var(--crm-border);
-  color: var(--crm-text-strong);
   font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
 }
 
-.conflictStatus {
-  color: var(--crm-warning-text);
-  border-color: var(--crm-warning-border);
+.conflictDecisionPending {
   background: var(--crm-warning-bg);
+  border: 1px solid var(--crm-warning-border);
+  color: var(--crm-warning-text);
+}
+
+.conflictDecisionRemoved {
+  background: var(--crm-danger-bg);
+  border: 1px solid var(--crm-danger-border);
+  color: var(--crm-danger-text);
+}
+
+.conflictDecisionIncluded {
+  background: var(--crm-success-bg);
+  border: 1px solid var(--crm-success-border);
+  color: var(--crm-success-text);
+}
+
+.conflictStatus {
+  color: var(--crm-danger-text);
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  font-size: 12px;
 }
 
 .conflictError {
@@ -991,7 +1007,7 @@
   gap: 12px;
   border: 1px solid var(--crm-border);
   border-radius: 16px;
-  background: var(--crm-surface);
+  background: linear-gradient(80deg, #fefdff 0%, var(--crm-surface) 100%);
   padding: 12px;
 }
 
@@ -2053,7 +2069,8 @@
 }
 
 .variableUseButton,
-.variableDeleteButton {
+.variableDeleteButton,
+.removerButton {
   border-radius: 12px;
   padding: 9px 12px;
   font-size: 12px;
@@ -2081,6 +2098,17 @@
 }
 
 .variableDeleteButton:hover {
+  background: var(--crm-danger-bg);
+  border-color: var(--crm-danger-border);
+}
+
+.removerButton {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.removerButton:hover {
   background: var(--crm-danger-bg);
   border-color: var(--crm-danger-border);
 }
@@ -2317,7 +2345,7 @@
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .resultsHeaderFilter {
     width: 100%;
   }
