@@ -1051,6 +1051,39 @@
   gap: 12px;
 }
 
+.propertiesHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.duplicateNodeHeaderButton {
+  border: 1px solid transparent;
+  background: var(--crm-surface-soft);
+  color: var(--crm-primary-text);
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: 0.2s ease;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.duplicateNodeHeaderButton:hover {
+  background: var(--crm-primary-soft);
+  transform: translateY(-1px);
+}
+
+.duplicateNodeHeaderButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .closePanelButton {
   border: none;
   background: var(--crm-surface-soft);
@@ -1065,7 +1098,7 @@
 }
 
 .closePanelButton:hover {
-  background: var(--crm-surface-muted);
+  background: var(--crm-primary-soft);
 }
 
 .dangerButton {
@@ -1785,6 +1818,7 @@
 }
 
 
+.duplicateNodeIconButton,
 .deleteNodeIconButton,
 .deleteNodeConfirmButton {
   width: 60px;

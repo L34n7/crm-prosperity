@@ -859,6 +859,48 @@ function calcularPosicaoLivreNovoNo(nodesAtuais: Node[]) {
   };
 }
 
+function calcularPosicaoLivreDuplicacaoNo(
+  nodeOrigem: Node,
+  nodesAtuais: Node[]
+) {
+  const passoX = NODE_CARD_WIDTH + NODE_GAP_X;
+  const passoY = NODE_CARD_HEIGHT + NODE_GAP_Y;
+
+  const posicaoBase = {
+    x: Math.round(nodeOrigem.position.x + passoX),
+    y: Math.round(nodeOrigem.position.y),
+  };
+
+  const deslocamentos = [
+    { x: 0, y: 0 },
+    { x: 0, y: passoY },
+    { x: 0, y: -passoY },
+    { x: passoX, y: 0 },
+    { x: passoX, y: passoY },
+    { x: passoX, y: -passoY },
+    { x: passoX * 2, y: 0 },
+    { x: passoX * 2, y: passoY },
+    { x: passoX * 2, y: -passoY },
+  ];
+
+  for (const deslocamento of deslocamentos) {
+    const candidato = {
+      x: posicaoBase.x + deslocamento.x,
+      y: posicaoBase.y + deslocamento.y,
+    };
+
+    const colide = nodesAtuais.some((node) =>
+      posicoesSobrepostas(candidato, node.position)
+    );
+
+    if (!colide) {
+      return candidato;
+    }
+  }
+
+  return calcularPosicaoLivreNovoNo(nodesAtuais);
+}
+
 function dbNoParaReactFlow(no: AutomacaoNo): Node {
   const configuracaoJson = no.configuracao_json || {};
 
@@ -4591,6 +4633,94 @@ function removerNode(nodeId: string) {
   setSucesso("Bloco removido. Clique em Salvar fluxo para gravar no banco.");
 }
 
+async function duplicarNode(nodeId: string) {
+  if (!fluxoSelecionado) {
+    setErro("Selecione um fluxo primeiro.");
+    return;
+  }
+
+  const nodeOriginal = nodes.find((node) => node.id === nodeId);
+
+  if (!nodeOriginal) {
+    setErro("Bloco não encontrado.");
+    return;
+  }
+
+  if (nodeOriginal.data?.tipo_no === "inicio") {
+    setErro("O bloco de início não pode ser duplicado.");
+    return;
+  }
+
+  try {
+    setErro("");
+    setSucesso("");
+
+    const novoId = criarIdTemporario("node");
+    const novaPosicao = calcularPosicaoLivreDuplicacaoNo(
+      nodeOriginal,
+      nodes
+    );
+
+    const configuracaoOriginal =
+      (nodeOriginal.data?.configuracao_json as Record<string, any>) || {};
+
+    const configuracaoDuplicada =
+      typeof structuredClone === "function"
+        ? structuredClone(configuracaoOriginal)
+        : JSON.parse(JSON.stringify(configuracaoOriginal));
+
+    const novoNoDb: AutomacaoNo = {
+      id: novoId,
+      tipo_no: String(nodeOriginal.data?.tipo_no || "enviar_texto"),
+      titulo: String(nodeOriginal.data?.titulo || "Novo bloco"),
+      descricao: nodeOriginal.data?.descricao
+        ? String(nodeOriginal.data.descricao)
+        : null,
+      posicao_x: novaPosicao.x,
+      posicao_y: novaPosicao.y,
+      configuracao_json: configuracaoDuplicada,
+      delay_segundos:
+        nodeOriginal.data?.delay_segundos === null ||
+        nodeOriginal.data?.delay_segundos === undefined
+          ? null
+          : normalizarDelaySegundos(nodeOriginal.data.delay_segundos as any),
+    };
+
+    const novoNodeBase = dbNoParaReactFlow(novoNoDb);
+
+    const novoNode: Node = {
+      ...novoNodeBase,
+      selected: true,
+      data: {
+        ...novoNodeBase.data,
+        isSelecionado: true,
+      },
+    };
+
+    const nodesAtualizados = nodes.map((node) => ({
+      ...node,
+      selected: false,
+      data: {
+        ...(node.data || {}),
+        isSelecionado: false,
+      },
+    }));
+
+    const nodesParaSalvar = [...nodesAtualizados, novoNode];
+
+    setNodes(nodesParaSalvar);
+    abrirEdicaoNo(novoNode);
+
+    await salvarEstrutura({
+      nodesParaSalvar,
+      edgesParaSalvar: edges,
+      mensagemSucesso: "Bloco duplicado e fluxo salvo com sucesso.",
+    });
+  } catch (error: any) {
+    setErro(error?.message || "Erro ao duplicar bloco.");
+  }
+}
+
 function removerConexao(edgeId: string) {
   setEdges((edgesAtuais) => edgesAtuais.filter((edge) => edge.id !== edgeId));
 
@@ -5349,15 +5479,30 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
           {(nodeEditado || edgeEditada) && (
             <aside className={styles.propertiesPanel}>
                 <div className={styles.propertiesHeader}>
-                    <h3 className={styles.propertiesTitle}>Configuração</h3>
+                  <h3 className={styles.propertiesTitle}>Editar bloco</h3>
+
+                  <div className={styles.propertiesHeaderActions}>
+                    {nodeEditado && nodeEditado.data?.tipo_no !== "inicio" && (
+                      <button
+                        type="button"
+                        className={styles.duplicateNodeHeaderButton}
+                        onClick={() => duplicarNode(nodeEditado.id)}
+                        title="Duplicar bloco"
+                        disabled={salvando}
+                      >
+                        <CopyPlus size={17} />
+                      </button>
+                    )}
 
                     <button
                       type="button"
                       className={styles.closePanelButton}
                       onClick={fecharPainelEdicao}
-                      >
+                      title="Fechar"
+                    >
                       ×
                     </button>
+                  </div>
                 </div>
 
                 {!nodeEditado && !edgeEditada ? (
@@ -7564,10 +7709,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   )}
 
-                  <div className={styles.actionButtonsRow}>
-                    {nodeEditado.data?.tipo_no !== "inicio" && (
-                      <>
-                        {confirmandoExclusaoNo ? (
+                    <div className={styles.actionButtonsRow}>
+                      {nodeEditado.data?.tipo_no !== "inicio" && (
+                        <>
+                          {confirmandoExclusaoNo ? (
                           <button
                             type="button"
                             className={styles.deleteNodeConfirmButton}
