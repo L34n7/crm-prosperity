@@ -1,1038 +1,35 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
-import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendAppointmentReminderEmail } from "@/lib/email/send-appointment-reminder-email";
-import {
-  chaveEhVariavelFixaContato,
-  chaveEhVariavelNomeWhatsapp,
-  montarMapaVariaveisFixasContato,
-  normalizarChaveVariavelFluxo,
-} from "@/lib/automacoes/variaveis-fixas-contato";
-import {
-  statusWhatsappMetaBloqueado,
-  WHATSAPP_META_BLOCK_DESCRIPTION,
-} from "@/lib/whatsapp/meta-block";
-import {
-  atualizarReservaLimiteMeta,
-  reservarLimiteMeta,
-} from "@/lib/whatsapp/meta-limites";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enfileirarDisparosAgendadosVencidos } from "@/lib/whatsapp/disparo-agendado-fila";
 
-type TemplateButton = {
-  type?: string;
-  text?: string;
-  url?: string;
-  phone_number?: string;
-};
-
-type TemplateComponent = {
-  type: string;
-  text?: string;
-  format?: string;
-  buttons?: TemplateButton[];
-};
-
-type TemplatePayload = {
-  name?: string;
-  language?: string;
-  components?: TemplateComponent[];
-};
+type JsonObject = Record<string, unknown>;
 
 const supabaseAdmin = getSupabaseAdmin();
 
-function limparNumero(valor: string) {
-  return String(valor || "").replace(/\D/g, "");
+function objeto(valor: unknown): JsonObject {
+  return valor && typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as JsonObject)
+    : {};
 }
 
-function contarVariaveisNoTexto(texto?: string | null) {
-  if (!texto) return 0;
-
-  const matches = texto.match(/\{\{\d+\}\}/g) || [];
-  const numeros = matches
-    .map((item) => Number(item.replace(/[{}]/g, "")))
-    .filter((n) => !Number.isNaN(n));
-
-  if (numeros.length === 0) return 0;
-
-  return Math.max(...numeros);
-}
-
-function substituirVariaveisTexto(texto: string, variaveis: string[]) {
-  if (!texto) return "";
-
-  return texto.replace(/\{\{(\d+)\}\}/g, (_, numero) => {
-    const index = Number(numero) - 1;
-    return variaveis[index] ?? `{{${numero}}}`;
-  });
-}
-
-function montarParametrosParaTexto(texto: string | undefined, variaveis: string[]) {
-  const totalVariaveis = contarVariaveisNoTexto(texto);
-
-  if (totalVariaveis === 0) {
-    return [];
-  }
-
-  return Array.from({ length: totalVariaveis }).map((_, index) => ({
-    type: "text",
-    text: String(variaveis[index] || "").trim(),
-  }));
-}
-
-function montarComponentesTemplate(
-  payload: TemplatePayload | null,
-  variaveis: string[]
-) {
-  const componentesOriginais = payload?.components || [];
-  const componentesMontados: Array<Record<string, any>> = [];
-
-  const header = componentesOriginais.find(
-    (item) => String(item.type || "").toUpperCase() === "HEADER"
-  );
-  const body = componentesOriginais.find(
-    (item) => String(item.type || "").toUpperCase() === "BODY"
-  );
-  const buttons = componentesOriginais.find(
-    (item) => String(item.type || "").toUpperCase() === "BUTTONS"
-  );
-
-  let variavelOffset = 0;
-
-  const headerTotalVariaveis = contarVariaveisNoTexto(header?.text);
-  const headerParams = montarParametrosParaTexto(
-    header?.text,
-    variaveis.slice(variavelOffset)
-  );
-  variavelOffset += headerTotalVariaveis;
-
-  if (headerParams.length > 0) {
-    componentesMontados.push({
-      type: "header",
-      parameters: headerParams,
-    });
-  }
-
-  const bodyTotalVariaveis = contarVariaveisNoTexto(body?.text);
-  const bodyParams = montarParametrosParaTexto(
-    body?.text,
-    variaveis.slice(variavelOffset)
-  );
-  variavelOffset += bodyTotalVariaveis;
-
-  if (bodyParams.length > 0) {
-    componentesMontados.push({
-      type: "body",
-      parameters: bodyParams,
-    });
-  }
-
-  for (const [index, button] of (buttons?.buttons || []).entries()) {
-    const tipoBotao = String(button?.type || "").toUpperCase();
-    const totalVariaveisBotao = contarVariaveisNoTexto(button?.url);
-
-    if (tipoBotao !== "URL" || totalVariaveisBotao === 0) {
-      continue;
-    }
-
-    const parametrosBotao = variaveis
-      .slice(variavelOffset, variavelOffset + totalVariaveisBotao)
-      .map((valor) => ({
-        type: "text",
-        text: String(valor || "").trim(),
-      }));
-
-    variavelOffset += totalVariaveisBotao;
-
-    componentesMontados.push({
-      type: "button",
-      sub_type: "url",
-      index: String(index),
-      parameters: parametrosBotao,
-    });
-  }
-
-  return componentesMontados.length > 0 ? componentesMontados : undefined;
-}
-
-function coletarRequisitosVariaveisTemplate(payload: TemplatePayload | null) {
-  const componentes = payload?.components || [];
-  const requisitos: Array<{
-    componente: string;
-    posicaoGlobal: number;
-    marcador: string;
-  }> = [];
-
-  let posicaoGlobal = 0;
-
-  function adicionarRequisitos(componente: string, texto?: string | null) {
-    const total = contarVariaveisNoTexto(texto);
-
-    for (let index = 0; index < total; index += 1) {
-      requisitos.push({
-        componente,
-        posicaoGlobal,
-        marcador: `{{${index + 1}}}`,
-      });
-      posicaoGlobal += 1;
-    }
-  }
-
-  const header = componentes.find(
-    (item) => String(item.type || "").toUpperCase() === "HEADER"
-  );
-  const body = componentes.find(
-    (item) => String(item.type || "").toUpperCase() === "BODY"
-  );
-  const buttons = componentes.find(
-    (item) => String(item.type || "").toUpperCase() === "BUTTONS"
-  );
-
-  adicionarRequisitos("cabecalho", header?.text);
-  adicionarRequisitos("corpo", body?.text);
-
-  for (const [index, button] of (buttons?.buttons || []).entries()) {
-    if (String(button?.type || "").toUpperCase() === "URL") {
-      adicionarRequisitos(`botao_url_${index + 1}`, button?.url);
-    }
-  }
-
-  return requisitos;
-}
-
-function validarTemplateAntesDoEnvio(params: {
-  payload: TemplatePayload | null;
-  variaveis: string[];
-  variaveisConfig: string[];
+async function validarLembreteAgendamentoAtivo(agendamento: {
+  empresa_id: string;
+  payload_json?: JsonObject | null;
 }) {
-  const { payload, variaveis, variaveisConfig } = params;
-  const header = payload?.components?.find(
-    (item) => String(item.type || "").toUpperCase() === "HEADER"
-  );
-  const formatoHeader = String(header?.format || "").toUpperCase();
-
-  if (["IMAGE", "VIDEO", "DOCUMENT"].includes(formatoHeader)) {
-    throw new Error(
-      "O template WhatsApp selecionado possui cabecalho de midia. Use um template sem cabecalho de midia para disparos/lembretes agendados, ou configure um template apenas com texto."
-    );
-  }
-
-  const requisitos = coletarRequisitosVariaveisTemplate(payload);
-  const faltantes = requisitos.filter((requisito) => {
-    return !String(variaveis[requisito.posicaoGlobal] || "").trim();
-  });
-
-  if (faltantes.length === 0) return;
-
-  const detalhes = faltantes
-    .map((requisito) => {
-      const variavelConfigurada = variaveisConfig[requisito.posicaoGlobal];
-
-      if (variavelConfigurada) {
-        return `${requisito.componente} ${requisito.marcador} (${variavelConfigurada})`;
-      }
-
-      return `${requisito.componente} ${requisito.marcador}`;
-    })
-    .join(", ");
-
-  throw new Error(
-    `Template WhatsApp com variaveis obrigatorias sem valor: ${detalhes}. Configure as variaveis do template no bloco antes de agendar o disparo.`
-  );
-}
-
-function montarConteudoTextoTemplate(
-  payload: TemplatePayload | null,
-  variaveis: string[]
-) {
-  if (!payload?.components?.length) {
-    return null;
-  }
-
-  const componentes = payload.components || [];
-
-  const header = componentes.find((item) => item.type === "HEADER");
-  const body = componentes.find((item) => item.type === "BODY");
-  const footer = componentes.find((item) => item.type === "FOOTER");
-  const buttons = componentes.find((item) => item.type === "BUTTONS");
-
-  const partes: string[] = [];
-  let variavelOffset = 0;
-
-  function substituirComOffset(texto: string) {
-    const offsetAtual = variavelOffset;
-    const total = contarVariaveisNoTexto(texto);
-    variavelOffset += total;
-
-    return String(texto || "").replace(/\{\{(\d+)\}\}/g, (_, numero) => {
-      const index = offsetAtual + Number(numero) - 1;
-      return variaveis[index] ?? `{{${numero}}}`;
-    });
-  }
-
-  const headerTexto = substituirComOffset(header?.text || "").trim();
-  const bodyTexto = substituirComOffset(body?.text || "").trim();
-  const footerTexto = substituirVariaveisTexto(footer?.text || "", variaveis).trim();
-
-  if (headerTexto) {
-    partes.push(`Header: ${headerTexto}`);
-  }
-
-  if (bodyTexto) {
-    partes.push(bodyTexto);
-  }
-
-  if (footerTexto) {
-    partes.push(`Footer: ${footerTexto}`);
-  }
-
-  const quickReplies =
-    buttons?.buttons
-      ?.filter((button) => button?.type === "QUICK_REPLY" && button?.text)
-      .map((button) => substituirVariaveisTexto(button.text || "", variaveis).trim())
-      .filter(Boolean) || [];
-
-  if (quickReplies.length > 0) {
-    partes.push(
-      [
-        "Respostas rápidas:",
-        ...quickReplies.map((texto, index) => `${index + 1}. ${texto}`),
-      ].join("\n")
-    );
-  }
-
-  if (partes.length === 0) {
-    return null;
-  }
-
-  return partes.join("\n\n");
-}
-
-async function buscarOuCriarProtocoloAtivo(params: {
-  empresaId: string;
-  conversaId: string;
-}) {
-  const { empresaId, conversaId } = params;
-
-  const { data: protocoloAtivo, error: protocoloAtivoError } = await supabaseAdmin
-    .from("conversa_protocolos")
-    .select("id, protocolo, ativo")
-    .eq("empresa_id", empresaId)
-    .eq("conversa_id", conversaId)
-    .eq("ativo", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (protocoloAtivoError) {
-    throw new Error(`Erro ao buscar protocolo: ${protocoloAtivoError.message}`);
-  }
-
-  if (protocoloAtivo) {
-    return protocoloAtivo;
-  }
-
-  const now = new Date().toISOString();
-  const protocoloTexto = `AUTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-  const { data: novoProtocolo, error: novoProtocoloError } = await supabaseAdmin
-    .from("conversa_protocolos")
-    .insert({
-      empresa_id: empresaId,
-      conversa_id: conversaId,
-      protocolo: protocoloTexto,
-      tipo: "automacao",
-      ativo: true,
-      started_at: now,
-      closed_at: null,
-      created_at: now,
-      updated_at: now,
-    })
-    .select("id, protocolo, ativo")
-    .single();
-
-  if (novoProtocoloError || !novoProtocolo) {
-    throw new Error(
-      `Erro ao criar protocolo: ${novoProtocoloError?.message || "Erro desconhecido"}`
-    );
-  }
-
-  return novoProtocolo;
-}
-
-async function carregarNomePerfilWhatsappConversa(params: {
-  empresaId: string;
-  conversaId?: string | null;
-}) {
-  const { empresaId, conversaId } = params;
-
-  if (!conversaId) return "";
-
-  const { data, error } = await supabaseAdmin
-    .from("mensagens")
-    .select("metadata_json")
-    .eq("empresa_id", empresaId)
-    .eq("conversa_id", conversaId)
-    .eq("remetente_tipo", "contato")
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  if (error) {
-    console.error(
-      "[CRON DISPAROS] Erro ao buscar nome de perfil do WhatsApp:",
-      error
-    );
-
-    return "";
-  }
-
-  for (const mensagem of data || []) {
-    const metadata = mensagem.metadata_json || {};
-    const nomeWhatsapp = String(
-      metadata.whatsapp_profile_name ||
-        metadata.profile_name ||
-        metadata.nome_perfil_whatsapp ||
-        ""
-    ).trim();
-
-    if (nomeWhatsapp) return nomeWhatsapp;
-  }
-
-  return "";
-}
-
-async function resolverVariaveisAgendamento(params: {
-  empresaId: string;
-  execucaoId: string | null;
-  conversaId: string;
-  contato: any;
-  variaveisConfig: string[];
-  payload?: Record<string, any>;
-}) {
-  const {
-    empresaId,
-    execucaoId,
-    conversaId,
-    contato,
-    variaveisConfig,
-    payload = {},
-  } = params;
-
-  if (!variaveisConfig.length) {
-    return [];
-  }
-
-  const chaves = variaveisConfig
-    .map((item) => normalizarChaveVariavelFluxo(item))
-    .filter(Boolean);
-
-  const { data: variaveisAutomacao } = execucaoId
-    ? await supabaseAdmin
-        .from("automacao_variaveis")
-        .select("chave, valor")
-        .eq("empresa_id", empresaId)
-        .eq("execucao_id", execucaoId)
-        .in("chave", chaves)
-    : { data: [] };
-
-  const mapa = new Map<string, string>();
-
-  for (const variavel of variaveisAutomacao || []) {
-    mapa.set(
-      String(variavel.chave || "").toLowerCase(),
-      String(variavel.valor || "")
-    );
-  }
-
-  let protocoloAtual = "";
-  let ultimoProtocolo = "";
-
-  const precisaProtocoloAtual = chaves.includes("protocolo_atual");
-  const precisaUltimoProtocolo = chaves.includes("ultimo_protocolo");
-  const precisaNomeWhatsapp = chaves.some(chaveEhVariavelNomeWhatsapp);
-
-  if (conversaId && precisaProtocoloAtual) {
-    const { data: protocoloAtivo, error: protocoloAtivoError } =
-      await supabaseAdmin
-        .from("conversa_protocolos")
-        .select("protocolo")
-        .eq("empresa_id", empresaId)
-        .eq("conversa_id", conversaId)
-        .eq("ativo", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-    if (protocoloAtivoError) {
-      console.error(
-        "[CRON DISPAROS] Erro ao buscar protocolo atual:",
-        protocoloAtivoError
-      );
-    }
-
-    protocoloAtual = String(protocoloAtivo?.protocolo || "").trim();
-  }
-
-  if (conversaId && precisaUltimoProtocolo) {
-    const { data: protocoloEncerrado, error: protocoloEncerradoError } =
-      await supabaseAdmin
-        .from("conversa_protocolos")
-        .select("protocolo")
-        .eq("empresa_id", empresaId)
-        .eq("conversa_id", conversaId)
-        .eq("ativo", false)
-        .order("closed_at", {
-          ascending: false,
-          nullsFirst: false,
-        })
-        .limit(1)
-        .maybeSingle();
-
-    if (protocoloEncerradoError) {
-      console.error(
-        "[CRON DISPAROS] Erro ao buscar último protocolo:",
-        protocoloEncerradoError
-      );
-    }
-
-    ultimoProtocolo = String(
-      protocoloEncerrado?.protocolo || ""
-    ).trim();
-  }
-
-  const nomeWhatsapp = precisaNomeWhatsapp
-    ? (await carregarNomePerfilWhatsappConversa({
-        empresaId,
-        conversaId,
-      })) ||
-      String(payload.nome_whatsapp || payload.whatsapp_profile_name || "").trim()
-    : "";
-
-  const variaveisFixasContato = montarMapaVariaveisFixasContato(contato, {
-    nome_whatsapp: nomeWhatsapp,
-    protocolo_atual: protocoloAtual,
-    ultimo_protocolo: ultimoProtocolo,
-  });
-  const mapaPayload = new Map<string, string>();
-
-  function adicionarPayload(chave: string, valor: unknown) {
-    const chaveNormalizada = normalizarChaveVariavelFluxo(chave);
-    const texto = String(valor || "").trim();
-
-    if (chaveNormalizada && texto) {
-      mapaPayload.set(chaveNormalizada, texto);
-    }
-  }
-
-  adicionarPayload("agenda_data", payload.agenda_data);
-  adicionarPayload("agenda_hora", payload.agenda_hora);
-  adicionarPayload("agenda_inicio_at", payload.agenda_inicio_at);
-  adicionarPayload("agenda_fim_at", payload.agenda_fim_at);
-  adicionarPayload("agenda_agendamento_id", payload.agenda_agendamento_id);
-  adicionarPayload("agenda_id", payload.agenda_id);
-  adicionarPayload("agenda_nome", payload.agenda_nome);
-  adicionarPayload("nome_whatsapp", payload.nome_whatsapp);
-  adicionarPayload("nome_whatsapp", payload.whatsapp_profile_name);
-  adicionarPayload("nome_perfil_whatsapp", payload.nome_whatsapp);
-  adicionarPayload("nome_perfil_whatsapp", payload.whatsapp_profile_name);
-  adicionarPayload("whatsapp_nome", payload.nome_whatsapp);
-  adicionarPayload("whatsapp_nome", payload.whatsapp_profile_name);
-  adicionarPayload("nome_contato", payload.contato_nome);
-  adicionarPayload("contato_nome", payload.contato_nome);
-  adicionarPayload("nome", payload.contato_nome);
-  adicionarPayload("numero_contato", payload.numero_destino);
-  adicionarPayload("contato_numero", payload.numero_destino);
-  adicionarPayload("telefone", payload.numero_destino);
-  adicionarPayload("telefone_contato", payload.numero_destino);
-  adicionarPayload("contato_telefone", payload.numero_destino);
-
-  return chaves.map((chave) => {
-    if (chaveEhVariavelFixaContato(chave)) {
-      return variaveisFixasContato.get(chave) || mapaPayload.get(chave) || "";
-    }
-
-    if (mapa.has(chave)) {
-      return mapa.get(chave) || "";
-    }
-
-    if (mapaPayload.has(chave)) {
-      return mapaPayload.get(chave) || "";
-    }
-
-    if (chave === "nome") {
-      return String(contato?.nome || "");
-    }
-
-    if (chave === "telefone") {
-      return String(contato?.telefone || "");
-    }
-
-    if (chave === "email") {
-      return String(contato?.email || "");
-    }
-
-    if (chave === "empresa") {
-      return String(contato?.empresa || "");
-    }
-
-    if (chave === "campanha") {
-      return String(
-        contato?.campanha ||
-          payload?.campanha ||
-          ""
-      ).trim();
-    }
-
-    if (chave === "origem") {
-      return String(
-        contato?.origem ||
-          payload?.origem_contato ||
-          ""
-      ).trim();
-    }
-
-    if (chave === "status_lead" || chave === "status") {
-      return String(
-        contato?.status_lead ||
-          payload?.status_lead ||
-          ""
-      ).trim();
-    }
-
-    if (chave === "protocolo_atual") {
-      return protocoloAtual;
-    }
-
-    if (chave === "ultimo_protocolo") {
-      return ultimoProtocolo;
-    }
-
-    return "";
-  });
-}
-
-function obterCredenciaisIntegracaoWhatsapp(integracao: any) {
-  const configJson =
-    integracao?.config_json &&
-    typeof integracao.config_json === "object"
-      ? integracao.config_json
-      : {};
-
-  const token = String(
-    configJson.access_token ||
-      configJson.meta_token_response?.access_token ||
-      ""
-  ).trim();
-
-  const phoneNumberId = String(
-    integracao?.phone_number_id ||
-      configJson.phone_number_id ||
-      configJson.embedded_signup?.phone_number_id ||
-      configJson.embedded_signup?.raw?.data?.phone_number_id ||
-      ""
-  ).trim();
-
-  return {
-    token,
-    phoneNumberId,
-  };
-}
-
-async function executarDisparoAgendado(agendamento: any) {
-  const payload = agendamento.payload_json || {};
-  const empresaId = agendamento.empresa_id;
-  const execucaoId = agendamento.execucao_id || null;
-
-  const conversaIdPayload = String(payload.conversa_id || "").trim();
-  const contatoIdPayload = String(payload.contato_id || "").trim();
-  const templateId = String(payload.template_id || "").trim();
-
-  if (!conversaIdPayload && !contatoIdPayload) {
-    throw new Error("Agendamento sem conversa_id ou contato_id no payload.");
-  }
-
-  if (!templateId) {
-    throw new Error("Agendamento sem template_id no payload.");
-  }
-
-  let conversa: any = null;
-
-  if (conversaIdPayload) {
-    const { data, error } = await supabaseAdmin
-      .from("conversas")
-      .select(`
-        id,
-        empresa_id,
-        contato_id,
-        integracao_whatsapp_id,
-        contatos (
-          id,
-          nome,
-          whatsapp_profile_name,
-          telefone,
-          email,
-          empresa,
-          origem,
-          campanha,
-          status_lead
-        )
-      `)
-      .eq("id", conversaIdPayload)
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-
-    if (error || !data) {
-      throw new Error("Conversa não encontrada.");
-    }
-
-    conversa = data;
-  } else {
-    const { data: contato, error: contatoError } = await supabaseAdmin
-      .from("contatos")
-      .select(
-        "id, nome, whatsapp_profile_name, telefone, email, empresa, origem, campanha, status_lead"
-      )
-      .eq("id", contatoIdPayload)
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-
-    if (contatoError || !contato) {
-      throw new Error("Contato não encontrado.");
-    }
-
-    const integracaoWhatsappIdPayload = String(
-      payload.integracao_whatsapp_id || ""
-    ).trim();
-
-    if (!integracaoWhatsappIdPayload) {
-      throw new Error("Agendamento sem integracao_whatsapp_id no payload.");
-    }
-
-    const conversaCriada = await findOrCreateWhatsAppConversation({
-      empresaId,
-      contatoId: contato.id,
-      integracaoWhatsappId: integracaoWhatsappIdPayload,
-    });
-
-    conversa = {
-      ...conversaCriada,
-      contatos: contato,
-    };
-  }
-
-  const contato = Array.isArray(conversa.contatos)
-    ? conversa.contatos[0]
-    : conversa.contatos;
-
-  const numeroDestino = limparNumero(
-    payload.numero_destino || contato?.telefone || ""
-  );
-
-  if (!numeroDestino || numeroDestino.length < 10) {
-    throw new Error("Número do contato inválido.");
-  }
-
-  const { data: template, error: templateError } = await supabaseAdmin
-    .from("whatsapp_templates")
-    .select(`
-      id,
-      empresa_id,
-      integracao_whatsapp_id,
-      nome,
-      idioma,
-      status,
-      payload
-    `)
-    .eq("id", templateId)
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
-
-  if (templateError || !template) {
-    throw new Error("Template não encontrado.");
-  }
-
-  if (String(template.status || "").toUpperCase() !== "APPROVED") {
-    throw new Error("Template não está aprovado.");
-  }
-
-  const integracaoWhatsappId =
-    payload.integracao_whatsapp_id ||
-    conversa.integracao_whatsapp_id ||
-    template.integracao_whatsapp_id;
-
-  if (!integracaoWhatsappId) {
-    throw new Error("Integração WhatsApp não encontrada para o disparo.");
-  }
-
-  const { data: integracao, error: integracaoError } = await supabaseAdmin
-    .from("integracoes_whatsapp")
-    .select(
-      "id, empresa_id, status, phone_number_id, phone_number_status, onboarding_erro, token_ref, meta_messaging_limit, meta_messaging_limit_tier, meta_account_mode, config_json"
-    )
-    .eq("id", integracaoWhatsappId)
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
-
-  if (integracaoError || !integracao) {
-    throw new Error("Integração WhatsApp não encontrada.");
-  }
-
-  if (
-    statusWhatsappMetaBloqueado(integracao.status) ||
-    statusWhatsappMetaBloqueado(integracao.phone_number_status)
-  ) {
-    throw new Error(
-      integracao.onboarding_erro || WHATSAPP_META_BLOCK_DESCRIPTION
-    );
-  }
-
-  const { token, phoneNumberId } =
-    obterCredenciaisIntegracaoWhatsapp(integracao);
-
-  if (!token || !phoneNumberId) {
-    console.error(
-      "[CRON DISPAROS] Credenciais da integração não encontradas:",
-      {
-        agendamento_id: agendamento.id,
-        empresa_id: empresaId,
-        integracao_whatsapp_id: integracao.id,
-        token_ref: integracao.token_ref || null,
-        possui_config_json: Boolean(integracao.config_json),
-        possui_token: Boolean(token),
-        possui_phone_number_id: Boolean(phoneNumberId),
-      }
-    );
-
-    throw new Error(
-      "Token ou phone_number_id do WhatsApp não configurado."
-    );
-  }
-
-  const protocoloAtivo = await buscarOuCriarProtocoloAtivo({
-    empresaId,
-    conversaId: conversa.id,
-  });
-
-  const variaveisConfig = Array.isArray(payload.variaveis)
-    ? payload.variaveis
-    : [];
-
-  const variaveis = await resolverVariaveisAgendamento({
-    empresaId,
-    execucaoId,
-    conversaId: conversa.id,
-    contato,
-    variaveisConfig,
-    payload,
-  });
-
-  const payloadTemplate = (template.payload || null) as TemplatePayload | null;
-  validarTemplateAntesDoEnvio({
-    payload: payloadTemplate,
-    variaveis,
-    variaveisConfig,
-  });
-
-  const components = montarComponentesTemplate(payloadTemplate, variaveis);
-  let reservaIdsLimiteMeta: string[] = [];
-
-  const janela24h = await canSendFreeformWhatsAppMessage({
-    conversaId: conversa.id,
-  });
-
-  if (!janela24h.podeEnviarMensagemLivre) {
-    const reservaLimite = await reservarLimiteMeta({
-      empresaId,
-      integracao,
-      telefones: [numeroDestino],
-      origem: "disparo_template_agendado",
-      templateId: template.id,
-      templateNome: template.nome,
-      usuarioId: null,
-      metadataJson: {
-        agendamento_id: agendamento.id,
-        execucao_id: execucaoId,
-        conversa_id: conversa.id,
-        contato_id: contato?.id || null,
-        rota: "/api/cron/disparos_agendados",
-        motivo_reserva: "fora_janela_24h",
-      },
-    });
-
-    if (!reservaLimite.ok) {
-      throw new Error(
-        `${reservaLimite.error} Limite atual: ${reservaLimite.limite}. Usados/reservados: ${reservaLimite.usados}. Restantes: ${reservaLimite.restantes}.`
-      );
-    }
-
-    reservaIdsLimiteMeta = reservaLimite.reservaIds;
-  }
-
-  const bodyMeta: Record<string, any> = {
-    messaging_product: "whatsapp",
-    to: numeroDestino,
-    type: "template",
-    template: {
-      name: template.nome,
-      language: {
-        code: template.idioma || "pt_BR",
-      },
-    },
-  };
-
-  if (components && components.length > 0) {
-    bodyMeta.template.components = components;
-  }
-
-  const response = await fetch(
-    `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(bodyMeta),
-    }
-  );
-
-  const metaData = await response.json();
-
-  const mensagemTemplate =
-    montarConteudoTextoTemplate(payloadTemplate, variaveis) ||
-    `Template enviado: ${template.nome}`;
-
-  const messageId = metaData?.messages?.[0]?.id || null;
-
-  const now = new Date().toISOString();
-
-  if (!response.ok) {
-    const erroMeta =
-      metaData?.error?.error_user_msg ||
-      metaData?.error?.message ||
-      "Erro ao enviar template pela Meta.";
-
-    await atualizarReservaLimiteMeta({
-      reservaIds: reservaIdsLimiteMeta,
-      telefone: numeroDestino,
-      status: "falha",
-      contatoId: contato?.id || null,
-      conversaId: conversa.id,
-      metadataJson: {
-        erro: erroMeta,
-        status_http: response.status,
-        meta_response: metaData,
-      },
-    });
-
-    await supabaseAdmin.from("mensagens").insert({
-      empresa_id: empresaId,
-      conversa_id: conversa.id,
-      conversa_protocolo_id: protocoloAtivo.id,
-      remetente_tipo: "bot",
-      remetente_id: null,
-      conteudo: `[FALHA NO DISPARO]\n${mensagemTemplate}\n\nMotivo: ${erroMeta}`,
-      tipo_mensagem: "template",
-      origem: "automatica",
-      status_envio: "falha",
-      mensagem_externa_id: null,
-      automacao_execucao_id: execucaoId,
-      automacao_no_id: agendamento.no_id,
-      metadata_json: {
-        tipo: "disparo_template_agendado",
-        agendamento_id: agendamento.id,
-        template_id: template.id,
-        template_nome: template.nome,
-        template_idioma: template.idioma,
-        numero_destino: numeroDestino,
-        variaveis,
-        erro_envio: erroMeta,
-        meta_response: metaData,
-      },
-      created_at: now,
-      updated_at: now,
-    });
-
-    throw new Error(erroMeta);
-  }
-
-  await atualizarReservaLimiteMeta({
-    reservaIds: reservaIdsLimiteMeta,
-    telefone: numeroDestino,
-    status: "processando",
-    messageId,
-    contatoId: contato?.id || null,
-    conversaId: conversa.id,
-    metadataJson: {
-      message_id: messageId,
-      status_meta_inicial:
-        metaData?.messages?.[0]?.message_status || "accepted",
-      meta_response: metaData,
-    },
-  });
-
-  await supabaseAdmin.from("mensagens").insert({
-    empresa_id: empresaId,
-    conversa_id: conversa.id,
-    conversa_protocolo_id: protocoloAtivo.id,
-    remetente_tipo: "bot",
-    remetente_id: null,
-    conteudo: mensagemTemplate,
-    tipo_mensagem: "template",
-    origem: "automatica",
-    status_envio: "enviada",
-    mensagem_externa_id: messageId,
-    automacao_execucao_id: execucaoId,
-    automacao_no_id: agendamento.no_id,
-    metadata_json: {
-      tipo: "disparo_template_agendado",
-      agendamento_id: agendamento.id,
-      template_id: template.id,
-      template_nome: template.nome,
-      template_idioma: template.idioma,
-      numero_destino: numeroDestino,
-      variaveis,
-      conteudo_renderizado: mensagemTemplate,
-      meta_response: metaData,
-    },
-    created_at: now,
-    updated_at: now,
-  });
-
-  await supabaseAdmin
-    .from("conversas")
-    .update({
-      status: "aberta",
-      origem_atendimento: "reativacao",
-      bot_ativo: false,
-      closed_at: null,
-      last_message_at: now,
-      updated_at: now,
-    })
-    .eq("id", conversa.id)
-    .eq("empresa_id", empresaId);
-
-  return {
-    messageId,
-    conversaId: conversa.id,
-    protocoloId: protocoloAtivo.id,
-    templateNome: template.nome,
-    numeroDestino,
-    variaveis,
-    metaData,
-  };
-}
-
-async function validarLembreteAgendamentoAtivo(agendamento: any) {
-  const payload = agendamento.payload_json || {};
+  const payload = objeto(agendamento.payload_json);
 
   if (payload.origem !== "lembrete_agendamento") {
-    return { ok: true };
+    return { ok: true as const };
   }
 
   const agendamentoId = String(payload.agenda_agendamento_id || "").trim();
 
   if (!agendamentoId) {
-    return { ok: false, motivo: "lembrete_sem_agendamento_id" };
+    return {
+      ok: false as const,
+      motivo: "lembrete_sem_agendamento_id",
+    };
   }
 
   const { data, error } = await supabaseAdmin
@@ -1043,11 +40,17 @@ async function validarLembreteAgendamentoAtivo(agendamento: any) {
     .maybeSingle();
 
   if (error || !data) {
-    return { ok: false, motivo: "agendamento_nao_encontrado" };
+    return {
+      ok: false as const,
+      motivo: "agendamento_nao_encontrado",
+    };
   }
 
   if (!["agendado", "confirmado"].includes(String(data.status || ""))) {
-    return { ok: false, motivo: "agendamento_nao_esta_ativo" };
+    return {
+      ok: false as const,
+      motivo: "agendamento_nao_esta_ativo",
+    };
   }
 
   const inicioPayload = payload.agenda_inicio_at
@@ -1064,15 +67,24 @@ async function validarLembreteAgendamentoAtivo(agendamento: any) {
     Number.isFinite(inicioAtual) &&
     inicioPayload !== inicioAtual
   ) {
-    return { ok: false, motivo: "agendamento_foi_remarcado" };
+    return {
+      ok: false as const,
+      motivo: "agendamento_foi_remarcado",
+    };
   }
 
-  return { ok: true };
+  return { ok: true as const };
 }
 
-async function executarEmailLembreteAgendamento(agendamento: any) {
-  const payload = agendamento.payload_json || {};
-  const emailDestino = String(payload.email_destino || "").trim().toLowerCase();
+async function executarEmailLembreteAgendamento(agendamento: {
+  id: string;
+  empresa_id: string;
+  payload_json?: JsonObject | null;
+}) {
+  const payload = objeto(agendamento.payload_json);
+  const emailDestino = String(payload.email_destino || "")
+    .trim()
+    .toLowerCase();
 
   if (!emailDestino) {
     throw new Error("Lembrete por email sem destinatario.");
@@ -1081,15 +93,117 @@ async function executarEmailLembreteAgendamento(agendamento: any) {
   await sendAppointmentReminderEmail({
     empresaId: agendamento.empresa_id,
     to: emailDestino,
-    agendamentoId: String(payload.agenda_agendamento_id || agendamento.id),
-    contatoNome: payload.contato_nome || null,
-    dataLabel: payload.agenda_data || null,
-    horaLabel: payload.agenda_hora || null,
+    agendamentoId: String(
+      payload.agenda_agendamento_id || agendamento.id
+    ),
+    contatoNome: String(payload.contato_nome || "").trim() || null,
+    dataLabel: String(payload.agenda_data || "").trim() || null,
+    horaLabel: String(payload.agenda_hora || "").trim() || null,
   });
 
   return {
     emailDestino,
-    agendamentoId: payload.agenda_agendamento_id || null,
+    agendamentoId: String(payload.agenda_agendamento_id || "").trim() || null,
+  };
+}
+
+async function processarEmailsAgendados(agora: string) {
+  const { data, error } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .select("id, empresa_id, payload_json")
+    .eq("status", "pendente")
+    .eq("tipo_agendamento", "email_lembrete_agendamento")
+    .lte("executar_em", agora)
+    .order("executar_em", { ascending: true })
+    .limit(25);
+
+  if (error) {
+    throw new Error(`Erro ao buscar emails agendados: ${error.message}`);
+  }
+
+  let enviados = 0;
+  let erros = 0;
+  let cancelados = 0;
+
+  for (const agendamento of data || []) {
+    const payload = objeto(agendamento.payload_json);
+
+    try {
+      const validade = await validarLembreteAgendamentoAtivo(agendamento);
+
+      if (!validade.ok) {
+        await supabaseAdmin
+          .from("automacao_agendamentos")
+          .update({
+            status: "cancelado",
+            executed_at: new Date().toISOString(),
+            payload_json: {
+              ...payload,
+              motivo_cancelamento: validade.motivo,
+            },
+          })
+          .eq("id", agendamento.id)
+          .eq("empresa_id", agendamento.empresa_id)
+          .eq("status", "pendente");
+
+        cancelados += 1;
+        continue;
+      }
+
+      const resultado = await executarEmailLembreteAgendamento(agendamento);
+
+      await supabaseAdmin
+        .from("automacao_agendamentos")
+        .update({
+          status: "executado",
+          executed_at: new Date().toISOString(),
+          payload_json: {
+            ...payload,
+            resultado_envio: {
+              email_destino: resultado.emailDestino,
+              agendamento_id: resultado.agendamentoId,
+            },
+          },
+        })
+        .eq("id", agendamento.id)
+        .eq("empresa_id", agendamento.empresa_id)
+        .eq("status", "pendente");
+
+      enviados += 1;
+    } catch (errorEmail) {
+      const mensagem =
+        errorEmail instanceof Error
+          ? errorEmail.message
+          : "Erro desconhecido.";
+
+      console.error("[CRON DISPAROS] Erro ao enviar email agendado:", {
+        agendamentoId: agendamento.id,
+        erro: mensagem,
+      });
+
+      await supabaseAdmin
+        .from("automacao_agendamentos")
+        .update({
+          status: "erro",
+          executed_at: new Date().toISOString(),
+          payload_json: {
+            ...payload,
+            erro_execucao: mensagem,
+          },
+        })
+        .eq("id", agendamento.id)
+        .eq("empresa_id", agendamento.empresa_id)
+        .eq("status", "pendente");
+
+      erros += 1;
+    }
+  }
+
+  return {
+    encontrados: data?.length || 0,
+    enviados,
+    erros,
+    cancelados,
   };
 }
 
@@ -1108,128 +222,33 @@ export async function GET(request: Request) {
 
   try {
     const agora = new Date().toISOString();
+    const [disparos, emails] = await Promise.all([
+      enfileirarDisparosAgendadosVencidos({ limite: 1000 }),
+      processarEmailsAgendados(agora),
+    ]);
 
-    const { data: agendamentos, error } = await supabaseAdmin
-      .from("automacao_agendamentos")
-      .select("*")
-      .eq("status", "pendente")
-      .in("tipo_agendamento", [
-        "disparo_template",
-        "email_lembrete_agendamento",
-      ])
-      .lte("executar_em", agora)
-      .order("executar_em", { ascending: true })
-      .limit(25);
-            
-      console.log("[CRON DISPAROS] Resultado da busca:", {
-        agora,
-        quantidade: agendamentos?.length || 0,
-        ids: (agendamentos || []).map((item) => item.id),
-      });
-
-    if (error) {
-      console.error("[CRON DISPAROS] Erro ao buscar agendamentos:", error);
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: error.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    let enviados = 0;
-    let erros = 0;
-
-    for (const agendamento of agendamentos || []) {
-      try {
-        const validadeLembrete = await validarLembreteAgendamentoAtivo(
-          agendamento
-        );
-
-        if (!validadeLembrete.ok) {
-          await supabaseAdmin
-            .from("automacao_agendamentos")
-            .update({
-              status: "cancelado",
-              executed_at: new Date().toISOString(),
-              payload_json: {
-                ...(agendamento.payload_json || {}),
-                motivo_cancelamento: validadeLembrete.motivo,
-              },
-            })
-            .eq("id", agendamento.id)
-            .eq("empresa_id", agendamento.empresa_id);
-
-          continue;
-        }
-
-        const ehEmailLembrete =
-          agendamento.tipo_agendamento === "email_lembrete_agendamento";
-        const resultado: any = ehEmailLembrete
-          ? await executarEmailLembreteAgendamento(agendamento)
-          : await executarDisparoAgendado(agendamento);
-
-        await supabaseAdmin
-          .from("automacao_agendamentos")
-          .update({
-            status: "executado",
-            executed_at: new Date().toISOString(),
-            payload_json: {
-              ...(agendamento.payload_json || {}),
-              resultado_envio: ehEmailLembrete
-                ? {
-                    email_destino: resultado.emailDestino,
-                    agendamento_id: resultado.agendamentoId,
-                  }
-                : {
-                    message_id: resultado.messageId,
-                    conversa_id: resultado.conversaId,
-                    protocolo_id: resultado.protocoloId,
-                    template_nome: resultado.templateNome,
-                    numero_destino: resultado.numeroDestino,
-                    variaveis: resultado.variaveis,
-                  },
-            },
-          })
-          .eq("id", agendamento.id)
-          .eq("empresa_id", agendamento.empresa_id);
-
-        enviados += 1;
-      } catch (error: any) {
-        console.error("[CRON DISPAROS] Erro ao executar disparo:", error);
-
-        await supabaseAdmin
-          .from("automacao_agendamentos")
-          .update({
-            status: "erro",
-            executed_at: new Date().toISOString(),
-            payload_json: {
-              ...(agendamento.payload_json || {}),
-              erro_execucao: error?.message || "Erro desconhecido.",
-            },
-          })
-          .eq("id", agendamento.id)
-          .eq("empresa_id", agendamento.empresa_id);
-
-        erros += 1;
-      }
-    }
+    console.log("[CRON DISPAROS] Processamento concluido:", {
+      agora,
+      disparos,
+      emails,
+    });
 
     return NextResponse.json({
       ok: true,
-      processados: agendamentos?.length || 0,
-      enviados,
-      erros,
+      modelo_disparos: "fila_qstash",
+      disparos,
+      emails,
     });
-  } catch (error: any) {
+  } catch (error) {
+    const mensagem =
+      error instanceof Error ? error.message : "Erro geral no cron.";
+
     console.error("[CRON DISPAROS] Erro geral:", error);
 
     return NextResponse.json(
       {
         ok: false,
-        error: error.message,
+        error: mensagem,
       },
       { status: 500 }
     );

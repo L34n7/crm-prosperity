@@ -311,6 +311,11 @@ const VARIAVEIS_FIXAS_SISTEMA = [
     descricao: "Nome salvo no cadastro do contato.",
   },
   {
+    chave: "nome",
+    exemplo: "{{nome}}",
+    descricao: "Nome do contato.",
+  },
+  {
     chave: "nome_whatsapp",
     exemplo: "{{nome_whatsapp}}",
     descricao:
@@ -979,6 +984,7 @@ function FluxosPageContent() {
   >([]);
   const [loadingVariaveis, setLoadingVariaveis] = useState(false);
   const [salvandoVariavel, setSalvandoVariavel] = useState(false);
+  const [erroVariavelModal, setErroVariavelModal] = useState("");
   const [novaVariavelChave, setNovaVariavelChave] = useState("");
   const [novaVariavelValor, setNovaVariavelValor] = useState("");
   const [novaVariavelDescricao, setNovaVariavelDescricao] = useState("");
@@ -1363,7 +1369,9 @@ function FluxosPageContent() {
     }
   }
 
-  async function carregarVariaveisPersonalizadas() {
+  async function carregarVariaveisPersonalizadas(
+    options: { erroNoModal?: boolean } = {}
+  ) {
     try {
       setLoadingVariaveis(true);
 
@@ -1381,7 +1389,14 @@ function FluxosPageContent() {
         Array.isArray(json.variaveis) ? json.variaveis : []
       );
     } catch (error: unknown) {
-      setErro(error instanceof Error ? error.message : "Erro ao carregar variaveis.");
+      const mensagem =
+        error instanceof Error ? error.message : "Erro ao carregar variaveis.";
+
+      if (options.erroNoModal) {
+        setErroVariavelModal(mensagem);
+      } else {
+        setErro(mensagem);
+      }
     } finally {
       setLoadingVariaveis(false);
     }
@@ -1394,8 +1409,9 @@ function FluxosPageContent() {
     setNovaVariavelChave("");
     setNovaVariavelValor("");
     setNovaVariavelDescricao("");
+    setErroVariavelModal("");
     setModalVariaveisAberto(true);
-    await carregarVariaveisPersonalizadas();
+    await carregarVariaveisPersonalizadas({ erroNoModal: true });
   }
 
   function fecharModalGerenciarVariaveis() {
@@ -1403,23 +1419,25 @@ function FluxosPageContent() {
     setNovaVariavelChave("");
     setNovaVariavelValor("");
     setNovaVariavelDescricao("");
+    setErroVariavelModal("");
   }
 
   async function salvarVariavelPersonalizada() {
     try {
       setErro("");
+      setErroVariavelModal("");
       setSucesso("");
 
       const chave = normalizarEntradaVariavelTemplate(novaVariavelChave);
       const valor = novaVariavelValor.trim();
 
       if (!chave) {
-        setErro("Informe o nome da variavel.");
+        setErroVariavelModal("Informe o nome da variavel.");
         return;
       }
 
       if (!valor) {
-        setErro("Informe o valor da variavel.");
+        setErroVariavelModal("Informe o valor da variavel.");
         return;
       }
 
@@ -1448,9 +1466,11 @@ function FluxosPageContent() {
       setNovaVariavelDescricao("");
 
       setSucesso("Variavel salva com sucesso.");
-      await carregarVariaveisPersonalizadas();
+      await carregarVariaveisPersonalizadas({ erroNoModal: true });
     } catch (error: unknown) {
-      setErro(error instanceof Error ? error.message : "Erro ao salvar variavel.");
+      setErroVariavelModal(
+        error instanceof Error ? error.message : "Erro ao salvar variavel."
+      );
     } finally {
       setSalvandoVariavel(false);
     }
@@ -1459,6 +1479,7 @@ function FluxosPageContent() {
   async function removerVariavelPersonalizada(id: string) {
     try {
       setErro("");
+      setErroVariavelModal("");
       setSucesso("");
 
       const res = await fetch("/api/variaveis", {
@@ -1476,9 +1497,11 @@ function FluxosPageContent() {
       }
 
       setSucesso("Variavel removida com sucesso.");
-      await carregarVariaveisPersonalizadas();
+      await carregarVariaveisPersonalizadas({ erroNoModal: true });
     } catch (error: unknown) {
-      setErro(error instanceof Error ? error.message : "Erro ao remover variavel.");
+      setErroVariavelModal(
+        error instanceof Error ? error.message : "Erro ao remover variavel."
+      );
     }
   }
 
@@ -8084,6 +8107,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     {"}}"}
                   </strong>
                 </div>
+
+                {erroVariavelModal && (
+                  <div className={styles.errorAlert}>{erroVariavelModal}</div>
+                )}
 
                 <div className={styles.variableFormActions}>
                   <button

@@ -12,6 +12,7 @@ import {
 } from "@/lib/whatsapp/send-template-disparo";
 import { notificarCampanhaDisparoPausada } from "@/lib/whatsapp/disparo-alertas";
 import { qstash } from "@/lib/qstash/client";
+import { resolverDisparoAgendadoParaFila } from "@/lib/whatsapp/disparo-agendado-variaveis";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -22,6 +23,8 @@ type DisparoCampanhaRow = {
   template_id: string;
   usuario_id: string | null;
   status: string;
+  pausa_motivo?: string | null;
+  erro?: string | null;
   limite_meta_reserva_ids?: string[] | null;
   qstash_flow_control_key?: string | null;
   metadata_json?: Record<string, unknown> | null;
@@ -30,6 +33,7 @@ type DisparoCampanhaRow = {
 type DisparoItemRow = {
   id: string;
   campanha_id: string;
+  automacao_agendamento_id?: string | null;
   empresa_id: string;
   integracao_whatsapp_id: string;
   template_id: string;
@@ -465,11 +469,30 @@ async function recalcularCampanha(campanhaId: string) {
   return Array.isArray(data) ? data[0] || null : data || null;
 }
 
+async function sincronizarAgendamentosCampanha(campanhaId: string) {
+  const { error } = await supabaseAdmin.rpc(
+    "sincronizar_automacao_agendamentos_campanha",
+    {
+      p_campanha_id: campanhaId,
+    }
+  );
+
+  if (error && error.code !== "PGRST202") {
+    console.error(
+      "[WHATSAPP DISPARO FILA] Erro ao sincronizar agendamentos:",
+      {
+        campanhaId,
+        erro: error,
+      }
+    );
+  }
+}
+
 async function buscarCampanha(campanhaId: string) {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_disparo_campanhas")
     .select(
-      "id, empresa_id, integracao_whatsapp_id, template_id, usuario_id, status, limite_meta_reserva_ids, qstash_flow_control_key, metadata_json"
+      "id, empresa_id, integracao_whatsapp_id, template_id, usuario_id, status, pausa_motivo, erro, limite_meta_reserva_ids, qstash_flow_control_key, metadata_json"
     )
     .eq("id", campanhaId)
     .maybeSingle();
@@ -589,15 +612,17 @@ async function pausarCampanha(params: {
   await supabaseAdmin
     .from("whatsapp_disparo_itens")
     .update({
-      status: "pendente",
+      status: "cancelado",
+      erro: params.motivo,
       locked_at: null,
+      processed_at: agora,
       updated_at: agora,
       metadata_json: {
-        motivo_liberacao: "campanha_pausada",
+        motivo_cancelamento: "campanha_pausada",
       },
     })
     .eq("campanha_id", params.campanhaId)
-    .eq("status", "processando");
+    .in("status", ["pendente", "processando"]);
 
   if (params.status === "pausada_por_conta_bloqueada") {
     await pausarFlowControlIntegracaoQstash(params.integracaoWhatsappId);
@@ -621,6 +646,7 @@ async function pausarCampanha(params: {
   }
 
   await recalcularCampanha(params.campanhaId);
+  await sincronizarAgendamentosCampanha(params.campanhaId);
 
   await notificarCampanhaDisparoPausada({
     empresaId: params.empresaId,
@@ -800,40 +826,65 @@ async function processarItemDisparo(item: DisparoItemRow) {
   const campanha = await buscarCampanha(item.campanha_id);
 
   if (!["pendente", "enviando"].includes(campanha.status)) {
+    const agora = new Date().toISOString();
+
     await supabaseAdmin
       .from("whatsapp_disparo_itens")
       .update({
-        status: "pendente",
+        status: "cancelado",
+        erro:
+          campanha.pausa_motivo ||
+          campanha.erro ||
+          "Campanha encerrada antes do processamento deste item.",
         locked_at: null,
-        updated_at: new Date().toISOString(),
+        processed_at: agora,
+        updated_at: agora,
       })
       .eq("id", item.id);
 
-    return { status: "ignorado" as const };
+    await recalcularCampanha(campanha.id);
+    await sincronizarAgendamentosCampanha(campanha.id);
+
+    return { status: "cancelado" as const };
   }
 
   const [template, integracao] = await Promise.all([
     buscarTemplate(campanha.template_id, campanha.empresa_id),
     buscarIntegracao(campanha.integracao_whatsapp_id, campanha.empresa_id),
   ]);
+  let variaveis = normalizarVariaveis(item.variaveis);
+  let nomeContato = item.nome_contato;
+  let origem = "disparo_template_fila";
+
+  if (item.automacao_agendamento_id) {
+    const agendado = await resolverDisparoAgendadoParaFila({
+      agendamentoId: item.automacao_agendamento_id,
+      templatePayload: template.payload || null,
+    });
+
+    variaveis = agendado.variaveis;
+    nomeContato = agendado.nomeContato || nomeContato;
+    origem = "disparo_template_agendado_fila";
+  }
 
   const resultado = await enviarTemplateDisparo({
     empresaId: item.empresa_id,
     integracaoWhatsappId: item.integracao_whatsapp_id,
     usuarioId: item.usuario_id || campanha.usuario_id,
     numero: item.numero,
-    nomeContato: item.nome_contato,
-    variaveis: normalizarVariaveis(item.variaveis),
+    nomeContato,
+    variaveis,
     template,
     integracao,
     reservaIdsLimiteMeta: campanha.limite_meta_reserva_ids || [],
     campanhaId: campanha.id,
     itemId: item.id,
-    origem: "disparo_template_fila",
+    origem,
   });
 
   await atualizarItemComResultado(item, resultado);
   await recalcularCampanha(campanha.id);
+  await sincronizarAgendamentosCampanha(campanha.id);
 
   if (!resultado.ok) {
     await avaliarCircuitBreakerCampanha({
@@ -851,7 +902,9 @@ async function processarItemDisparo(item: DisparoItemRow) {
 async function buscarItemDisparoStatus(itemId: string) {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_disparo_itens")
-    .select("id, campanha_id, status, tentativas, max_tentativas")
+    .select(
+      "id, campanha_id, automacao_agendamento_id, status, tentativas, max_tentativas"
+    )
     .eq("id", itemId)
     .maybeSingle();
 
@@ -905,7 +958,7 @@ export async function processarItemDisparoPorId(itemId: string) {
 
     return {
       ok: true,
-      processado: resultado.status !== "ignorado",
+      processado: true,
       status: resultado.status,
       itemId: item.id,
       campanhaId: item.campanha_id,
@@ -922,6 +975,7 @@ export async function processarItemDisparoPorId(itemId: string) {
 
     const status = await reagendarItemComErro(item, erro);
     await recalcularCampanha(item.campanha_id);
+    await sincronizarAgendamentosCampanha(item.campanha_id);
 
     if (status === "reagendado") {
       const delaySegundos = backoffSegundos(Number(item.tentativas || 1));
@@ -995,7 +1049,7 @@ export async function processarFilaDisparosWhatsapp(params: {
 
       if (resultado.status === "enviado") enviados += 1;
       if (resultado.status === "falha") falhas += 1;
-      if (resultado.status === "ignorado") ignorados += 1;
+      if (resultado.status === "cancelado") ignorados += 1;
     } catch (errorItem) {
       const erro =
         errorItem instanceof Error ? errorItem.message : "Erro desconhecido.";
@@ -1010,6 +1064,7 @@ export async function processarFilaDisparosWhatsapp(params: {
       if (status === "falha") falhas += 1;
 
       await recalcularCampanha(item.campanha_id);
+      await sincronizarAgendamentosCampanha(item.campanha_id);
     }
   }
 
@@ -1083,6 +1138,7 @@ export async function atualizarItemDisparoPeloWebhook({
   }
 
   await recalcularCampanha(String(item.campanha_id));
+  await sincronizarAgendamentosCampanha(String(item.campanha_id));
 
   if (falhou) {
     await avaliarCircuitBreakerCampanha({

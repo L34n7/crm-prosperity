@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -111,6 +112,10 @@ export async function POST(request: NextRequest) {
     const integracaoWhatsappId = String(body.integracao_whatsapp_id || "").trim();
     const templateId = String(body.template_id || "").trim();
     const executarEm = String(body.executar_em || "").trim();
+    const nomeCampanha = String(body.nome_campanha || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 90);
     const variaveis = Array.isArray(body.variaveis)
       ? body.variaveis
           .map((variavel: unknown) =>
@@ -311,6 +316,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const agendamentoGrupoId = randomUUID();
     const registros = contatosValidos.map((contato: any) => ({
       empresa_id: usuario.empresa_id,
       execucao_id: null,
@@ -339,6 +345,9 @@ export async function POST(request: NextRequest) {
         segundos_para_agendar: null,
 
         origem: "manual_agendado",
+        agendamento_grupo_id: agendamentoGrupoId,
+        usuario_id: usuario.id,
+        nome_campanha: nomeCampanha || null,
         contato_nome: contato.nome,
         integracao_nome: integracao.nome_conexao || integracao.numero || null,
         automacao_no_titulo: "Disparo manual agendado",
@@ -375,6 +384,8 @@ export async function POST(request: NextRequest) {
         template_id: template.id,
         template_nome: template.nome,
         integracao_whatsapp_id: integracaoWhatsappId,
+        agendamento_grupo_id: agendamentoGrupoId,
+        nome_campanha: nomeCampanha || null,
       },
       metadata: {
         disparos_ids: (disparosCriados || []).map((disparo) => disparo.id),
@@ -386,6 +397,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       quantidade: disparosCriados?.length || 0,
+      agendamento_grupo_id: agendamentoGrupoId,
       disparos: disparosCriados || [],
     });
   } catch (error: any) {

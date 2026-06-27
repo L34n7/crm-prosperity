@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
 import styles from "./disparos-whatsapp.module.css";
 import { can } from "@/lib/permissoes/frontend";
 import { createClient } from "@/lib/supabase/client";
@@ -244,6 +245,11 @@ const VARIAVEIS_FIXAS_SISTEMA = [
     chave: "nome_contato",
     exemplo: "{{nome_contato}}",
     descricao: "Nome salvo no cadastro do contato.",
+  },
+  {
+    chave: "nome",
+    exemplo: "{{nome}}",
+    descricao: "Nome do contato.",
   },
   {
     chave: "nome_whatsapp",
@@ -536,9 +542,9 @@ function getTemplateStatusLabel(status: string | null | undefined) {
 function formatarCategoriaMeta(categoria: string | null | undefined) {
   switch (String(categoria || "").toUpperCase()) {
     case "UTILITY":
-      return "Utilidade";
+      return "UTILITY";
     case "MARKETING":
-      return "Marketing";
+      return "MARKETING";
     case "AUTHENTICATION":
       return "Autenticação";
     default:
@@ -739,6 +745,14 @@ function formatarDataHora(data?: string | null) {
   } catch {
     return "";
   }
+}
+
+function dataHojeParaInput() {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+  const dia = String(hoje.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
 }
 
 function formatarDataHoraCurta(data?: string | null) {
@@ -1132,10 +1146,13 @@ export default function DisparosWhatsAppPage() {
 
   const [integracaoId, setIntegracaoId] = useState("");
   const [templateId, setTemplateId] = useState("");
-  const [templateVariavel1, setTemplateVariavel1] = useState("nome_contato");
-  const [templateVariavel2, setTemplateVariavel2] = useState("campanha");
-  const [templateVariavel3, setTemplateVariavel3] = useState("telefone");
+  const [templateVariavel1, setTemplateVariavel1] = useState("");
+  const [templateVariavel2, setTemplateVariavel2] = useState("");
+  const [templateVariavel3, setTemplateVariavel3] = useState("");
   const [nomeCampanhaDisparo, setNomeCampanhaDisparo] = useState("");
+  const [agendarDisparo, setAgendarDisparo] = useState(false);
+  const [agendamentoData, setAgendamentoData] = useState("");
+  const [agendamentoHora, setAgendamentoHora] = useState("");
   const [buscaContato, setBuscaContato] = useState("");
   const [origemFiltro, setOrigemFiltro] = useState("");
   const [origensDisponiveis, setOrigensDisponiveis] = useState<string[]>([]);
@@ -1163,6 +1180,7 @@ export default function DisparosWhatsAppPage() {
   >([]);
   const [loadingVariaveis, setLoadingVariaveis] = useState(false);
   const [salvandoVariavel, setSalvandoVariavel] = useState(false);
+  const [erroVariavelModal, setErroVariavelModal] = useState("");
   const [novaVariavelChave, setNovaVariavelChave] = useState("");
   const [novaVariavelValor, setNovaVariavelValor] = useState("");
   const [novaVariavelDescricao, setNovaVariavelDescricao] = useState("");
@@ -1172,12 +1190,18 @@ export default function DisparosWhatsAppPage() {
   >("todos");
   const [filtroHistoricoCampanha, setFiltroHistoricoCampanha] = useState("");
   const [loadingConflitos, setLoadingConflitos] = useState(false);
+
   const [gruposConflitoDisparo, setGruposConflitoDisparo] = useState<
     GrupoConflitoDisparo[]
   >([]);
   const [conflitosPorContato, setConflitosPorContato] = useState<
     Record<string, CampanhaConflitoContato[]>
   >({});
+
+  const [historicoDisparosPorContato, setHistoricoDisparosPorContato] = useState<
+    Record<string, CampanhaConflitoContato[]>
+  >({});
+
   const [decisoesConflitoDisparo, setDecisoesConflitoDisparo] = useState<
     Record<string, DecisaoConflitoDisparo>
   >({});
@@ -1494,6 +1518,47 @@ export default function DisparosWhatsAppPage() {
     }
   }
 
+
+    async function carregarHistoricoDisparosDosContatos(contatosLista: ContatoOpcao[]) {
+      const contatosValidos = contatosLista.filter(contatoTemTelefoneValido);
+
+      if (contatosValidos.length === 0) {
+        setHistoricoDisparosPorContato({});
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/whatsapp/disparos/conflitos", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            janela_dias: 7,
+            contatos: contatosValidos.map((contato) => ({
+              id: contato.id,
+              telefone: contato.telefone,
+            })),
+          }),
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+          return;
+        }
+
+        const contatosConflito =
+          json.contatos && typeof json.contatos === "object"
+            ? (json.contatos as Record<string, CampanhaConflitoContato[]>)
+            : {};
+
+        setHistoricoDisparosPorContato(contatosConflito);
+      } catch {
+        return;
+      }
+    }
+
   async function carregarBloqueioDisparoEmMassa(integracaoWhatsappId = "") {
     const integracaoConsultaId = integracaoWhatsappId.trim();
     const params = new URLSearchParams();
@@ -1597,6 +1662,14 @@ export default function DisparosWhatsAppPage() {
 
     return () => clearTimeout(timer);
   }, [buscaContato, origemFiltro, campanhaFiltro]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      carregarHistoricoDisparosDosContatos(contatos);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [contatos]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1798,15 +1871,35 @@ export default function DisparosWhatsAppPage() {
     return contatos.filter((item) => !idsSelecionados.has(item.id));
   }, [contatos, contatosSelecionados]);
 
+  const obterHistoricoDisparosDoContato = useCallback(
+    (contatoId: string) => {
+      const campanhasHistorico = historicoDisparosPorContato[contatoId] || [];
+      const campanhasConflito = conflitosPorContato[contatoId] || [];
+
+      const mapa = new Map<string, CampanhaConflitoContato>();
+
+      for (const campanha of campanhasHistorico) {
+        mapa.set(campanha.campanha_id, campanha);
+      }
+
+      for (const campanha of campanhasConflito) {
+        mapa.set(campanha.campanha_id, campanha);
+      }
+
+      return Array.from(mapa.values());
+    },
+    [historicoDisparosPorContato, conflitosPorContato]
+  );
+
   const contatoPassaFiltroDisparoAnterior = useCallback(
     (contato: ContatoOpcao) => {
       if (!disparoAnteriorFiltroContatos) return true;
 
-      return (conflitosPorContato[contato.id] || []).some(
+      return obterHistoricoDisparosDoContato(contato.id).some(
         (campanha) => campanha.campanha_id === disparoAnteriorFiltroContatos
       );
     },
-    [conflitosPorContato, disparoAnteriorFiltroContatos]
+    [disparoAnteriorFiltroContatos, obterHistoricoDisparosDoContato]
   );
 
   const contatoPassaFiltrosSelecionados = useCallback(
@@ -1822,7 +1915,7 @@ export default function DisparosWhatsAppPage() {
             contato.origem,
             contato.campanha,
             contato.status_lead,
-            ...(conflitosPorContato[contato.id] || []).map(
+            ...obterHistoricoDisparosDoContato(contato.id).map(
               (campanha) => campanha.campanha_nome
             ),
           ]
@@ -1848,8 +1941,8 @@ export default function DisparosWhatsAppPage() {
   );
 
   const contatosDisponiveisFiltrados = useMemo(() => {
-    return contatosDisponiveis.filter(contatoPassaFiltroDisparoAnterior);
-  }, [contatosDisponiveis, contatoPassaFiltroDisparoAnterior]);
+    return contatosDisponiveis.filter(contatoPassaFiltrosSelecionados);
+  }, [contatosDisponiveis, contatoPassaFiltrosSelecionados]);
 
   const contatosDisponiveisValidos = useMemo(() => {
     return contatosDisponiveisFiltrados.filter(contatoTemTelefoneValido);
@@ -1884,12 +1977,39 @@ export default function DisparosWhatsAppPage() {
   const temConflitosPendentes = gruposConflitoPendentes.length > 0;
 
   const campanhasConflitoFiltro = useMemo(() => {
-    return gruposConflitoAtivos.map((grupo) => ({
-      id: grupo.campanha_id,
-      nome: grupo.campanha_nome,
-      total: grupo.contatos_ids.length,
-    }));
-  }, [gruposConflitoAtivos]);
+    const mapa = new Map<
+      string,
+      {
+        id: string;
+        nome: string;
+        total: number;
+      }
+    >();
+
+    const contatosParaContar = [...contatosDisponiveis, ...contatosSelecionados];
+
+    for (const contato of contatosParaContar) {
+      const campanhas = obterHistoricoDisparosDoContato(contato.id);
+
+      for (const campanha of campanhas) {
+        const itemAtual = mapa.get(campanha.campanha_id);
+
+        if (itemAtual) {
+          itemAtual.total += 1;
+        } else {
+          mapa.set(campanha.campanha_id, {
+            id: campanha.campanha_id,
+            nome: campanha.campanha_nome,
+            total: 1,
+          });
+        }
+      }
+    }
+
+    return Array.from(mapa.values()).sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR")
+    );
+  }, [contatosDisponiveis, contatosSelecionados, obterHistoricoDisparosDoContato]);
 
   const totalContatosComConflitoSelecionados = useMemo(() => {
     const ids = new Set<string>();
@@ -2119,7 +2239,9 @@ export default function DisparosWhatsAppPage() {
     });
   }
 
-  async function carregarVariaveisPersonalizadas() {
+  async function carregarVariaveisPersonalizadas(
+    options: { erroNoModal?: boolean } = {}
+  ) {
     try {
       setLoadingVariaveis(true);
 
@@ -2136,8 +2258,15 @@ export default function DisparosWhatsAppPage() {
       setVariaveisPersonalizadas(
         Array.isArray(json.variaveis) ? json.variaveis : []
       );
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar variáveis.");
+    } catch (error: unknown) {
+      const mensagem =
+        error instanceof Error ? error.message : "Erro ao carregar variáveis.";
+
+      if (options.erroNoModal) {
+        setErroVariavelModal(mensagem);
+      } else {
+        setErro(mensagem);
+      }
     } finally {
       setLoadingVariaveis(false);
     }
@@ -2146,18 +2275,19 @@ export default function DisparosWhatsAppPage() {
   async function salvarVariavelPersonalizada() {
     try {
       setErro("");
+      setErroVariavelModal("");
       setMensagem("");
 
       const chave = normalizarEntradaVariavelTemplate(novaVariavelChave);
       const valor = novaVariavelValor.trim();
 
       if (!chave) {
-        setErro("Informe o nome da variável.");
+        setErroVariavelModal("Informe o nome da variável.");
         return;
       }
 
       if (!valor) {
-        setErro("Informe o valor da variável.");
+        setErroVariavelModal("Informe o valor da variável.");
         return;
       }
 
@@ -2186,9 +2316,11 @@ export default function DisparosWhatsAppPage() {
       setNovaVariavelDescricao("");
 
       setMensagem("Variável salva com sucesso.");
-      await carregarVariaveisPersonalizadas();
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao salvar variável.");
+      await carregarVariaveisPersonalizadas({ erroNoModal: true });
+    } catch (error: unknown) {
+      setErroVariavelModal(
+        error instanceof Error ? error.message : "Erro ao salvar variável."
+      );
     } finally {
       setSalvandoVariavel(false);
     }
@@ -2197,6 +2329,7 @@ export default function DisparosWhatsAppPage() {
   async function removerVariavelPersonalizada(id: string) {
     try {
       setErro("");
+      setErroVariavelModal("");
       setMensagem("");
 
       const res = await fetch("/api/variaveis", {
@@ -2214,9 +2347,11 @@ export default function DisparosWhatsAppPage() {
       }
 
       setMensagem("Variável removida com sucesso.");
-      await carregarVariaveisPersonalizadas();
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao remover variável.");
+      await carregarVariaveisPersonalizadas({ erroNoModal: true });
+    } catch (error: unknown) {
+      setErroVariavelModal(
+        error instanceof Error ? error.message : "Erro ao remover variável."
+      );
     }
   }
 
@@ -2297,7 +2432,7 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
-    if (disparoBloqueado) {
+    if (disparoBloqueado && !agendarDisparo) {
       setErro(
         integracaoDisparoProcessando
           ? "Ja existe um disparo em massa em processamento nesta integracao WhatsApp. Aguarde a finalizacao antes de iniciar outro."
@@ -2319,6 +2454,25 @@ export default function DisparosWhatsAppPage() {
     if (contatosSelecionados.length === 0) {
       setErro("Selecione pelo menos um contato.");
       return;
+    }
+
+    let executarEm: Date | null = null;
+
+    if (agendarDisparo) {
+      if (!agendamentoData || !agendamentoHora) {
+        setErro("Selecione a data e a hora do disparo agendado.");
+        return;
+      }
+
+      executarEm = new Date(`${agendamentoData}T${agendamentoHora}:00`);
+
+      if (
+        Number.isNaN(executarEm.getTime()) ||
+        executarEm.getTime() <= Date.now()
+      ) {
+        setErro("A data e a hora do agendamento precisam ser futuras.");
+        return;
+      }
     }
 
     if (temConflitosPendentes) {
@@ -2344,6 +2498,51 @@ export default function DisparosWhatsAppPage() {
 
     try {
       setDisparando(true);
+
+      if (agendarDisparo && executarEm) {
+        const res = await fetch("/api/disparos-agendados/criar", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            integracao_whatsapp_id: integracaoId,
+            template_id: templateId,
+            nome_campanha: nomeCampanhaDisparo,
+            executar_em: executarEm.toISOString(),
+            variaveis: variaveisObrigatorias,
+            contatos: contatosSelecionados.map((contato) => ({
+              id: contato.id,
+              nome: contato.nome,
+              telefone: limparNumero(contato.telefone),
+              email: contato.email || null,
+              origem: contato.origem || null,
+              campanha: contato.campanha || null,
+              status_lead: contato.status_lead || null,
+            })),
+          }),
+        });
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error || "Erro ao agendar disparo.");
+        }
+
+        setMensagem(
+          `Disparo agendado com sucesso para ${formatarDataHora(
+            executarEm.toISOString()
+          )}. Contatos: ${Number(
+            json.quantidade || contatosSelecionados.length
+          )}.`
+        );
+        solicitarAtualizacaoDisparosPendentesHeader();
+        setAgendarDisparo(false);
+        setAgendamentoData("");
+        setAgendamentoHora("");
+        setNomeCampanhaDisparo("");
+        setContatosSelecionados([]);
+        return;
+      }
 
       const protocolosPorContato = variaveisUsamProtocolo(variaveisObrigatorias)
         ? await carregarProtocolosDosContatos(contatosSelecionados)
@@ -2578,6 +2777,27 @@ export default function DisparosWhatsAppPage() {
       });
 }
 
+  function abrirConfirmacaoDisparo() {
+    if (agendarDisparo) {
+      const executarEm = new Date(
+        `${agendamentoData}T${agendamentoHora}:00`
+      );
+
+      if (
+        !agendamentoData ||
+        !agendamentoHora ||
+        Number.isNaN(executarEm.getTime()) ||
+        executarEm.getTime() <= Date.now()
+      ) {
+        setErro("Selecione uma data e hora futuras para o agendamento.");
+        return;
+      }
+    }
+
+    setErro("");
+    setModalConfirmacaoAberto(true);
+  }
+
   async function confirmarEDisparar() {
     if (!confirmacaoCobranca) return;
 
@@ -2592,7 +2812,10 @@ export default function DisparosWhatsAppPage() {
   }
 
   function renderBadgesDisparoAntigo(contato: ContatoOpcao) {
-    const campanhas = conflitosPorContato[contato.id] || [];
+    const campanhas =
+      historicoDisparosPorContato[contato.id] ||
+      conflitosPorContato[contato.id] ||
+      [];
 
     if (campanhas.length === 0) return null;
 
@@ -2611,7 +2834,7 @@ export default function DisparosWhatsAppPage() {
                 : ""
             }`}
           >
-            {truncarNomeBadge(campanha.campanha_nome)}
+            {truncarNomeBadge(campanha.campanha_nome, 70)}
           </span>
         ))}
 
@@ -2755,19 +2978,57 @@ export default function DisparosWhatsAppPage() {
                   <div className={styles.field}>
 
                     
-                    {templateSelecionado ? (
-                      <div className={styles.templateInfoBox}>
-                        <div>
-                          <strong>Categoria:</strong> {formatarCategoriaMeta(templateSelecionado.categoria)}
-                        </div>
+                    <div
+                      className={`${styles.scheduleToggleCard} ${
+                        agendarDisparo ? styles.scheduleToggleCardActive : ""
+                      }`}
+                    >
+                      <label className={styles.scheduleToggleRow}>
+                        <span className={styles.scheduleToggleText}>
+                          <strong>Agendar disparo</strong>
+                        </span>
 
-                        <div className={styles.templateInfoDivider} />
+                        <input
+                          type="checkbox"
+                          checked={agendarDisparo}
+                          onChange={(e) => setAgendarDisparo(e.target.checked)}
+                          className={styles.scheduleToggleInput}
+                        />
+                        <span
+                          className={styles.scheduleToggleControl}
+                          aria-hidden="true"
+                        />
+                      </label>
 
-                        <div>
-                          <strong>Idioma:</strong> {templateSelecionado.idioma || "-"}
+                      {agendarDisparo ? (
+                        <div className={styles.scheduleFields}>
+                          <div className={styles.field}>
+                            <label className={styles.label}>Data</label>
+                            <input
+                              type="date"
+                              value={agendamentoData}
+                              min={dataHojeParaInput()}
+                              onChange={(e) =>
+                                setAgendamentoData(e.target.value)
+                              }
+                              className={styles.input}
+                            />
+                          </div>
+
+                          <div className={styles.field}>
+                            <label className={styles.label}>Hora</label>
+                            <input
+                              type="time"
+                              value={agendamentoHora}
+                              onChange={(e) =>
+                                setAgendamentoHora(e.target.value)
+                              }
+                              className={styles.input}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
+                      ) : null}
+                    </div>
                     
                       {totalVariaveis > 0 ? (
                         <>
@@ -2781,7 +3042,10 @@ export default function DisparosWhatsAppPage() {
                             <button
                               type="button"
                               className={styles.variablesButton}
-                              onClick={() => setModalVariaveisAberto(true)}
+                              onClick={() => {
+                                setErroVariavelModal("");
+                                setModalVariaveisAberto(true);
+                              }}
                             >
                               Gerenciar variáveis
                             </button>
@@ -2835,7 +3099,7 @@ export default function DisparosWhatsAppPage() {
                             ) : null}
                           </div>
                             <span className={styles.help}>
-                              Variáveis fixas: {"{{nome_contato}}"}, {"{{email_contato}}"}, {"{{numero_contato}}"}, {"{{campanha}}"}, {"{{origem}}"}, {"{{status_lead}}"}, {"{{protocolo_atual}}"} e {"{{ultimo_protocolo}}"}.
+                              Variáveis fixas: {"{{nome_whatsapp}}"}, {"{{nome_contato}}"}, {"{{email_contato}}"}, {"{{numero_contato}}"}, {"{{campanha}}"}, {"{{origem}}"}, {"{{status_lead}}"}, {"{{protocolo_atual}}"} e {"{{ultimo_protocolo}}"}.
                             </span>
                         </>
                       ) : null}
@@ -2843,6 +3107,13 @@ export default function DisparosWhatsAppPage() {
 
                   <aside className={styles.previewSideCard}>
                     <div className={styles.previewTopLine}>
+                      {templateSelecionado ? (
+                        <span className={styles.previewCategoryBadge}>
+                          {formatarCategoriaMeta(
+                            templateSelecionado.categoria
+                          )}
+                        </span>
+                      ) : null}
                       <strong>Prévia</strong>
                     </div>
 
@@ -2864,10 +3135,12 @@ export default function DisparosWhatsAppPage() {
                               </span>
 
                               <span className={styles.whatsappPreviewTime}>
-                                {new Date().toLocaleTimeString("pt-BR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
+                                {agendarDisparo && agendamentoHora
+                                  ? agendamentoHora
+                                  : new Date().toLocaleTimeString("pt-BR", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
                               </span>
                             </div>
 
@@ -2887,7 +3160,33 @@ export default function DisparosWhatsAppPage() {
                   </aside>
                 </div>
 
-                <div className={styles.searchRow}>
+                <div className={styles.contactsFilterCard}>
+                  <div className={styles.contactsFilterHeader}>
+                    <div>
+                      <h3>Filtrar contatos</h3>
+                      <p>Selecione quem receberá o disparo.</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={styles.clearFiltersButton}
+                      onClick={() => {
+                        setBuscaContato("");
+                        setOrigemFiltro("");
+                        setCampanhaFiltro("");
+                        setDisparoAnteriorFiltroContatos("");
+                      }}
+                      disabled={
+                        !buscaContato &&
+                        !origemFiltro &&
+                        !campanhaFiltro &&
+                        !disparoAnteriorFiltroContatos
+                      }
+                    >
+                      Limpar filtros
+                    </button>
+                  </div>
+
                   <div className={styles.searchFilters}>
                     <div className={styles.field}>
                       <label className={styles.label}>Buscar contatos salvos</label>
@@ -2953,7 +3252,7 @@ export default function DisparosWhatsAppPage() {
                           setDisparoAnteriorFiltroContatos(e.target.value)
                         }
                         className={styles.input}
-                        disabled={campanhasConflitoFiltro.length === 0}
+                        disabled={loadingContatos || campanhasConflitoFiltro.length === 0}
                       >
                         <option value="">Todos</option>
                         {campanhasConflitoFiltro.map((campanha) => (
@@ -2964,58 +3263,37 @@ export default function DisparosWhatsAppPage() {
                       </select>
                     </div>
                   </div>
-
-                  <div className={styles.inlineActions}>
-                    <button
-                      type="button"
-                      className={styles.secondaryButton}
-                      onClick={adicionarTodosDisponiveis}
-                      disabled={loadingContatos || contatosDisponiveisValidos.length === 0}
-                    >
-                      Adicionar filtrados
-                    </button>
-
-                    <button
-                      type="button"
-                      className={styles.secondaryButton}
-                      onClick={() => {
-                        setBuscaContato("");
-                        setOrigemFiltro("");
-                        setCampanhaFiltro("");
-                        setDisparoAnteriorFiltroContatos("");
-                      }}
-                      disabled={
-                        !buscaContato &&
-                        !origemFiltro &&
-                        !campanhaFiltro &&
-                        !disparoAnteriorFiltroContatos
-                      }
-                    >
-                      Limpar filtros
-                    </button>
-
-                    <button
-                      type="button"
-                      className={styles.secondaryButton}
-                      onClick={limparSelecao}
-                      disabled={contatosSelecionados.length === 0}
-                    >
-                      Limpar selecao
-                    </button>
-                  </div>
                 </div>
 
                 <div className={styles.contactsSection}>
                   <div className={styles.contactsColumn}>
                     <div className={styles.contactsHeader}>
-                      <h3 className={styles.contactsTitle}>Contatos salvos</h3>
-                      <span className={styles.contactsCount}>
-                        {loadingContatos
-                          ? "..."
-                          : disparoAnteriorFiltroContatos
-                          ? `${contatosDisponiveisFiltrados.length}/${totalContatosDisponiveis}`
-                          : totalContatosDisponiveis}
-                      </span>
+                      <h3 className={styles.contactsTitle}>Disponíveis</h3>
+
+                      <div className={styles.contactsHeaderActions}>
+                        <button
+                          type="button"
+                          className={styles.TextButtonAdd}
+                          onClick={adicionarTodosDisponiveis}
+                          disabled={
+                            loadingContatos ||
+                            contatosDisponiveisValidos.length === 0
+                          }
+                        >
+                          Add todos
+                        </button>
+
+                        <span className={styles.contactsCount}>
+                          {loadingContatos
+                            ? "..."
+                            : buscaContato ||
+                              origemFiltro ||
+                              campanhaFiltro ||
+                              disparoAnteriorFiltroContatos
+                            ? `${contatosDisponiveisFiltrados.length}/${totalContatosDisponiveis}`
+                            : totalContatosDisponiveis}
+                        </span>
+                      </div>
                     </div>
 
                     <div className={styles.contactsList}>
@@ -3078,7 +3356,7 @@ export default function DisparosWhatsAppPage() {
                                 onClick={() => adicionarContato(contato)}
                                 disabled={!telefoneValido}
                               >
-                                Add
+                                Adicionar
                               </button>
                             </div>
                           );
@@ -3089,13 +3367,25 @@ export default function DisparosWhatsAppPage() {
 
                   <div className={styles.contactsColumn}>
                     <div className={styles.contactsHeader}>
-                      <h3 className={styles.contactsTitle}>Selecionados para disparo</h3>
-                      <span className={styles.contactsCount}>
-                        {contatosSelecionadosFiltrados.length ===
-                        contatosSelecionados.length
-                          ? contatosSelecionados.length
-                          : `${contatosSelecionadosFiltrados.length}/${contatosSelecionados.length}`}
-                      </span>
+                      <h3 className={styles.contactsTitle}>Selecionados</h3>
+
+                      <div className={styles.contactsHeaderActions}>
+                        <button
+                          type="button"
+                          className={styles.TextButtonRemover}
+                          onClick={limparSelecao}
+                          disabled={contatosSelecionados.length === 0}
+                        >
+                          Remover todos
+                        </button>
+
+                        <span className={styles.contactsCount}>
+                          {contatosSelecionadosFiltrados.length ===
+                          contatosSelecionados.length
+                            ? contatosSelecionados.length
+                            : `${contatosSelecionadosFiltrados.length}/${contatosSelecionados.length}`}
+                        </span>
+                      </div>
                     </div>
 
                     <div className={styles.contactsList}>
@@ -3365,8 +3655,9 @@ export default function DisparosWhatsAppPage() {
 
                     {selecaoExcedeLimite && (
                       <p className={styles.metaHealthAlert}>
-                        A selecao atual ultrapassa o limite disponivel. O CRM
-                        vai bloquear o envio antes de chamar a Meta.
+                        {agendarDisparo
+                          ? "A selecao ultrapassa o limite disponivel agora. O CRM vai reavaliar o limite quando chegar o horario agendado."
+                          : "A selecao atual ultrapassa o limite disponivel. O CRM vai bloquear o envio antes de chamar a Meta."}
                       </p>
                     )}
                   </div>
@@ -3376,6 +3667,16 @@ export default function DisparosWhatsAppPage() {
                   {/* ESQUERDA */}
                   <div className={styles.submitLeft}>
                     <span>Template: {templateSelecionado?.nome}</span>
+                    {agendarDisparo && agendamentoData && agendamentoHora ? (
+                      <span>
+                        Agendado:{" "}
+                        {formatarDataHora(
+                          new Date(
+                            `${agendamentoData}T${agendamentoHora}:00`
+                          ).toISOString()
+                        )}
+                      </span>
+                    ) : null}
                     <span>Variáveis: {totalVariaveis}</span>
                   </div>
 
@@ -3413,21 +3714,25 @@ export default function DisparosWhatsAppPage() {
                     <button
                       type="button"
                       className={styles.primaryButton}
-                      onClick={() => setModalConfirmacaoAberto(true)}
+                      onClick={abrirConfirmacaoDisparo}
                       disabled={
                         !templateSelecionado ||
                         contatosSelecionados.length === 0 ||
+                        (agendarDisparo &&
+                          (!agendamentoData || !agendamentoHora)) ||
                         disparando ||
-                        disparoBloqueado ||
-                        selecaoExcedeLimite ||
+                        (!agendarDisparo && disparoBloqueado) ||
+                        (!agendarDisparo && selecaoExcedeLimite) ||
                         loadingConflitos ||
                         temConflitosPendentes
                       }
                     >
                       {temConflitosPendentes
                         ? "Resolver repetidos"
-                        : disparoBloqueado
+                        : !agendarDisparo && disparoBloqueado
                         ? textoDisparoBloqueado
+                        : agendarDisparo
+                        ? "Agendar disparo"
                         : "Enviar disparos"}
                     </button>
                   </div>
@@ -3700,7 +4005,7 @@ export default function DisparosWhatsAppPage() {
 
                         {item.campanha_nome ? (
                           <>
-                            {" â€¢ "}
+                            {"   "}
                             <span
                               className={styles.badgeMassHistory}
                               title={item.campanha_nome}
@@ -3842,7 +4147,10 @@ export default function DisparosWhatsAppPage() {
       {modalVariaveisAberto && (
         <div
           className={styles.modalOverlay}
-          onClick={() => setModalVariaveisAberto(false)}
+          onClick={() => {
+            setErroVariavelModal("");
+            setModalVariaveisAberto(false);
+          }}
         >
           <div
             className={styles.modalConfirmacao}
@@ -3860,7 +4168,10 @@ export default function DisparosWhatsAppPage() {
               <button
                 type="button"
                 className={styles.modalClose}
-                onClick={() => setModalVariaveisAberto(false)}
+                onClick={() => {
+                  setErroVariavelModal("");
+                  setModalVariaveisAberto(false);
+                }}
               >
                 ×
               </button>
@@ -3918,6 +4229,10 @@ export default function DisparosWhatsAppPage() {
                     {"}}"}
                   </strong>
                 </div>
+
+                {erroVariavelModal && (
+                  <div className={styles.errorAlert}>{erroVariavelModal}</div>
+                )}
 
                 <div className={styles.variableFormActions}>
                   <button
@@ -4012,7 +4327,10 @@ export default function DisparosWhatsAppPage() {
               <button
                 type="button"
                 className={styles.secondaryButton}
-                onClick={() => setModalVariaveisAberto(false)}
+                onClick={() => {
+                  setErroVariavelModal("");
+                  setModalVariaveisAberto(false);
+                }}
               >
                 Fechar
               </button>
@@ -4030,7 +4348,11 @@ export default function DisparosWhatsAppPage() {
             <div className={styles.modalHeader}>
               <div>
                 <p className={styles.modalEyebrow}>Confirmação de cobrança</p>
-                <h3 className={styles.modalTitle}>Confirmar disparo de mensagens</h3>
+                <h3 className={styles.modalTitle}>
+                  {agendarDisparo
+                    ? "Confirmar agendamento"
+                    : "Confirmar disparo de mensagens"}
+                </h3>
                 <p className={styles.modalSubtitle}>
                   Revise as informações abaixo antes de continuar. Este envio pode gerar cobrança.
                 </p>
@@ -4050,6 +4372,19 @@ export default function DisparosWhatsAppPage() {
                 <h4 className={styles.modalSectionTitle}>Resumo do disparo</h4>
 
                 <div className={styles.modalGridResumo}>
+                  {agendarDisparo && agendamentoData && agendamentoHora ? (
+                    <div className={styles.modalInfoItem}>
+                      <span className={styles.modalInfoLabel}>Data e hora</span>
+                      <strong className={styles.modalInfoValue}>
+                        {formatarDataHora(
+                          new Date(
+                            `${agendamentoData}T${agendamentoHora}:00`
+                          ).toISOString()
+                        )}
+                      </strong>
+                    </div>
+                  ) : null}
+
                   <div className={styles.modalInfoItem}>
                     <span className={styles.modalInfoLabel}>Disparo em massa</span>
                     <strong className={styles.modalInfoValue}>
@@ -4119,6 +4454,12 @@ export default function DisparosWhatsAppPage() {
                 <h4 className={styles.modalSectionTitle}>Informações importantes</h4>
 
                 <ul className={styles.modalList}>
+                  {agendarDisparo ? (
+                    <li>
+                      No horario escolhido, o disparo sera criado e processado
+                      gradualmente pela fila.
+                    </li>
+                  ) : null}
                   <li>O valor em real exibido aqui é uma estimativa e serve apenas como referência.</li>
                   <li>O valor final pode variar conforme cotação do USD, IOF, impostos, tarifas bancárias e regras de cobrança aplicáveis.</li>
                   <li>Conversas isentas não entram no total cobrado.</li>
@@ -4155,15 +4496,19 @@ export default function DisparosWhatsAppPage() {
                 disabled={
                   !confirmacaoCobranca ||
                   disparando ||
-                  disparoBloqueado ||
+                  (!agendarDisparo && disparoBloqueado) ||
+                  (agendarDisparo &&
+                    (!agendamentoData || !agendamentoHora)) ||
                   loadingConflitos ||
                   temConflitosPendentes
                 }
               >
                 {temConflitosPendentes
                   ? "Resolver repetidos"
-                  : disparoBloqueado
+                  : !agendarDisparo && disparoBloqueado
                   ? textoDisparoBloqueado
+                  : agendarDisparo
+                  ? "Confirmar agendamento"
                   : "Confirmar e enviar"}
               </button>
             </div>

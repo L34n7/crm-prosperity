@@ -27,6 +27,13 @@ const VARIAVEIS_FIXAS = new Set([
   "ultimo_protocolo",
 ]);
 
+type MetadataVariavel = {
+  descricao?: string;
+  escopo?: string;
+  ativo?: boolean;
+  [key: string]: unknown;
+};
+
 function normalizarChaveVariavel(valor: string) {
   return String(valor || "")
     .replace(/[{}]/g, "")
@@ -39,12 +46,12 @@ function normalizarChaveVariavel(valor: string) {
     .replace(/^_|_$/g, "");
 }
 
-function getMetadataVariavel(metadata: any) {
+function getMetadataVariavel(metadata: unknown): MetadataVariavel {
   if (!metadata || typeof metadata !== "object") {
     return {};
   }
 
-  return metadata;
+  return metadata as MetadataVariavel;
 }
 
 export async function GET() {
@@ -103,9 +110,12 @@ export async function GET() {
       ok: true,
       variaveis,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Erro interno.",
+      },
       { status: 500 }
     );
   }
@@ -181,6 +191,8 @@ export async function POST(req: NextRequest) {
       .is("execucao_id", null)
       .is("contato_id", null)
       .eq("metadata_json->>tipo", "global_empresa")
+      .eq("metadata_json->>ativo", "true")
+      .limit(1)
       .maybeSingle();
 
     if (buscarError) {
@@ -206,25 +218,14 @@ export async function POST(req: NextRequest) {
     };
 
     if (existente?.id) {
-      const { data, error } = await supabaseAdmin
-        .from("automacao_variaveis")
-        .update(payload)
-        .eq("id", existente.id)
-        .eq("empresa_id", empresaId)
-        .select("id, chave, valor, metadata_json, created_at, updated_at")
-        .single();
-
-      if (error) {
-        return NextResponse.json(
-          { ok: false, error: `Erro ao atualizar variável: ${error.message}` },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({
-        ok: true,
-        variavel: data,
-      });
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Já existe uma variável personalizada com esse nome nesta empresa. Use outro nome.",
+        },
+        { status: 409 }
+      );
     }
 
     const { data, error } = await supabaseAdmin
@@ -234,6 +235,17 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Já existe uma variável personalizada com esse nome nesta empresa. Use outro nome.",
+          },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
         { ok: false, error: `Erro ao salvar variável: ${error.message}` },
         { status: 500 }
@@ -244,9 +256,12 @@ export async function POST(req: NextRequest) {
       ok: true,
       variavel: data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Erro interno.",
+      },
       { status: 500 }
     );
   }
@@ -324,9 +339,12 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({
       ok: true,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Erro interno.",
+      },
       { status: 500 }
     );
   }

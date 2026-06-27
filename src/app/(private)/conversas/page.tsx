@@ -388,6 +388,11 @@ const VARIAVEIS_FIXAS_SISTEMA = [
     descricao: "Nome salvo no cadastro do contato.",
   },
   {
+    chave: "nome",
+    exemplo: "{{nome}}",
+    descricao: "Nome do contato.",
+  },
+  {
     chave: "nome_whatsapp",
     exemplo: "{{nome_whatsapp}}",
     descricao:
@@ -2511,6 +2516,7 @@ function ConversasPageContent() {
   const [variaveisGlobais, setVariaveisGlobais] = useState<VariavelGlobal[]>([]);
   const [carregandoVariaveis, setCarregandoVariaveis] = useState(false);
   const [modalVariavelAberto, setModalVariavelAberto] = useState(false);
+  const [erroVariavelModal, setErroVariavelModal] = useState("");
   const [variavelForm, setVariavelForm] = useState<VariavelForm>({
     chave: "",
     valor: "",
@@ -3430,7 +3436,9 @@ function ConversasPageContent() {
     }
   }
 
-  async function carregarVariaveisGlobais() {
+  async function carregarVariaveisGlobais(
+    options: { erroNoModal?: boolean } = {}
+  ) {
     try {
       setCarregandoVariaveis(true);
 
@@ -3438,13 +3446,24 @@ function ConversasPageContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErro(data.error || "Erro ao carregar variáveis");
+        const mensagem = data.error || "Erro ao carregar variáveis";
+
+        if (options.erroNoModal) {
+          setErroVariavelModal(mensagem);
+        } else {
+          setErro(mensagem);
+        }
+
         return;
       }
 
       setVariaveisGlobais(data.variaveis || []);
     } catch {
-      setErro("Erro ao carregar variáveis");
+      if (options.erroNoModal) {
+        setErroVariavelModal("Erro ao carregar variáveis");
+      } else {
+        setErro("Erro ao carregar variáveis");
+      }
     } finally {
       setCarregandoVariaveis(false);
     }
@@ -3586,8 +3605,9 @@ function ConversasPageContent() {
       valor: "",
       descricao: "",
     });
+    setErroVariavelModal("");
     setModalVariavelAberto(true);
-    await carregarVariaveisGlobais();
+    await carregarVariaveisGlobais({ erroNoModal: true });
   }
 
   function fecharModalVariavel() {
@@ -3597,17 +3617,19 @@ function ConversasPageContent() {
       valor: "",
       descricao: "",
     });
+    setErroVariavelModal("");
   }
 
   async function salvarVariavelGlobal() {
     setMensagemSucesso("");
     setErro("");
+    setErroVariavelModal("");
 
     const chave = normalizarChaveVariavelMacro(variavelForm.chave);
     const valor = variavelForm.valor.trim();
 
     if (!chave || !valor) {
-      setErro("Informe o nome e o valor da variável.");
+      setErroVariavelModal("Informe o nome e o valor da variável.");
       return;
     }
 
@@ -3630,7 +3652,7 @@ function ConversasPageContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErro(data.error || "Erro ao salvar variável");
+        setErroVariavelModal(data.error || "Erro ao salvar variável");
         return;
       }
 
@@ -3640,9 +3662,9 @@ function ConversasPageContent() {
         valor: "",
         descricao: "",
       });
-      await carregarVariaveisGlobais();
+      await carregarVariaveisGlobais({ erroNoModal: true });
     } catch {
-      setErro("Erro ao salvar variável");
+      setErroVariavelModal("Erro ao salvar variável");
     } finally {
       setSalvandoVariavel(false);
     }
@@ -3651,6 +3673,7 @@ function ConversasPageContent() {
   async function removerVariavelGlobal(id: string) {
     setMensagemSucesso("");
     setErro("");
+    setErroVariavelModal("");
 
     try {
       const res = await fetch("/api/variaveis", {
@@ -3664,14 +3687,14 @@ function ConversasPageContent() {
       const data = await res.json();
 
       if (!res.ok || data.ok === false) {
-        setErro(data.error || "Erro ao remover variável");
+        setErroVariavelModal(data.error || "Erro ao remover variável");
         return;
       }
 
       setMensagemSucesso("Variável removida com sucesso.");
-      await carregarVariaveisGlobais();
+      await carregarVariaveisGlobais({ erroNoModal: true });
     } catch {
-      setErro("Erro ao remover variável");
+      setErroVariavelModal("Erro ao remover variável");
     }
   }
 
@@ -11421,6 +11444,10 @@ const templateFooterTexto = useMemo(() => {
                     {"}}"}
                   </strong>
                 </div>
+
+                {erroVariavelModal && (
+                  <div className={styles.errorAlert}>{erroVariavelModal}</div>
+                )}
 
                 <div className={styles.variableFormActions}>
                   <button

@@ -19,7 +19,7 @@ type DisparoAgendado = {
   no_id: string | null;
   tipo_agendamento: string;
   executar_em: string;
-  status: "pendente" | "executado" | "cancelado" | "erro";
+  status: "pendente" | "executando" | "executado" | "cancelado" | "erro";
   payload_json: Record<string, any>;
   created_at: string;
   executed_at: string | null;
@@ -55,6 +55,7 @@ function formatarData(valor?: string | null) {
 
 function statusLabel(status: string) {
   if (status === "pendente") return "Pendente";
+  if (status === "executando") return "Em processamento";
   if (status === "executado") return "Executado";
   if (status === "cancelado") return "Cancelado";
   if (status === "erro") return "Erro";
@@ -63,6 +64,7 @@ function statusLabel(status: string) {
 
 function statusClass(status: string) {
   if (status === "pendente") return `${styles.badge} ${styles.badgeYellow}`;
+  if (status === "executando") return `${styles.badge} ${styles.badgeYellow}`;
   if (status === "executado") return `${styles.badge} ${styles.badgeGreen}`;
   if (status === "cancelado") return `${styles.badge} ${styles.badgeCancel}`;
   if (status === "erro") return `${styles.badge} ${styles.badgeRed}`;
@@ -335,38 +337,28 @@ function DisparosAgendadosPageContent() {
 
   const [cancelando, setCancelando] = useState(false);
   const [modalNovoDisparo, setModalNovoDisparo] = useState(false);
-  const [integracoes, setIntegracoes] = useState<any[]>([]);
+  const [integracoes] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
-
   const [integracaoSelecionada, setIntegracaoSelecionada] = useState("");
   const [templateSelecionado, setTemplateSelecionado] = useState("");
-
-  const [templateVariavel1, setTemplateVariavel1] =
-    useState("nome_contato");
-
-  const [templateVariavel2, setTemplateVariavel2] =
-    useState("campanha");
-
+  const [templateVariavel1, setTemplateVariavel1] = useState("nome_contato");
+  const [templateVariavel2, setTemplateVariavel2] = useState("campanha");
   const [templateVariavel3, setTemplateVariavel3] =
     useState("numero_contato");
-
   const [agendamentoData, setAgendamentoData] = useState("");
   const [agendamentoHora, setAgendamentoHora] = useState("");
-
-  const [loadingModal, setLoadingModal] = useState(false);
+  const [loadingModal] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [contatos, setContatos] = useState<any[]>([]);
   const [contatosSelecionados, setContatosSelecionados] = useState<any[]>([]);
   const [buscaContato, setBuscaContato] = useState("");
   const [salvandoDisparo, setSalvandoDisparo] = useState(false);
-
   const [loadingContatos, setLoadingContatos] = useState(false);
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [origemFiltro, setOrigemFiltro] = useState("");
   const [origensDisponiveis, setOrigensDisponiveis] = useState<string[]>([]);
   const [campanhaFiltro, setCampanhaFiltro] = useState("");
   const [campanhasDisponiveis, setCampanhasDisponiveis] = useState<string[]>([]);
-
   const [erroModal, setErroModal] = useState("");
   const [previewCusto, setPreviewCusto] = useState<{
     categoria: string;
@@ -385,7 +377,6 @@ function DisparosAgendadosPageContent() {
     cotacaoDataHora?: string | null;
     cotacaoFallback?: boolean;
   } | null>(null);
-
   const [loadingPreviewCusto, setLoadingPreviewCusto] = useState(false);
 
   async function carregarDisparos() {
@@ -463,69 +454,37 @@ function DisparosAgendadosPageContent() {
     }
   }
 
-  async function carregarDadosModalDisparo() {
-    try {
-      setLoadingModal(true);
-
-      const [resIntegracoes] = await Promise.all([
-        fetch("/api/integracoes-whatsapp/listar", { cache: "no-store" })
-      ]);
-
-      const jsonIntegracoes = await resIntegracoes.json();
-
-      if (jsonIntegracoes.ok) {
-        setIntegracoes(jsonIntegracoes.data || []);
-      }
-
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoadingModal(false);
-    }
-  }
-
   async function carregarContatos(busca = "", origem = "", campanha = "") {
     try {
       setLoadingContatos(true);
-      setErro("");
+      const params = new URLSearchParams({
+        pagina: "1",
+        limite: "2000",
+      });
 
-      const params = new URLSearchParams();
-
-      if (busca.trim()) {
-        params.set("busca", busca.trim());
-      }
-
-      if (origem.trim()) {
-        params.set("origem", origem.trim());
-      }
-
-      if (campanha.trim()) {
-        params.set("campanha", campanha.trim());
-      }
-
-      params.set("pagina", "1");
-      params.set("limite", "2000");
+      if (busca.trim()) params.set("busca", busca.trim());
+      if (origem.trim()) params.set("origem", origem.trim());
+      if (campanha.trim()) params.set("campanha", campanha.trim());
 
       const res = await fetch(`/api/contatos?${params.toString()}`, {
         cache: "no-store",
       });
-
       const json = await res.json();
 
       if (!res.ok) {
         throw new Error(json.error || "Erro ao carregar contatos.");
       }
 
-      const lista = Array.isArray(json.contatos) ? json.contatos : [];
-
-      setContatos(lista);
+      setContatos(Array.isArray(json.contatos) ? json.contatos : []);
       setOrigensDisponiveis(Array.isArray(json.origens) ? json.origens : []);
       setCampanhasDisponiveis(
         Array.isArray(json.campanhas) ? json.campanhas : []
       );
       setTotalContatosDisponiveis(Number(json.total || 0));
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar contatos.");
+    } catch (error) {
+      setErro(
+        error instanceof Error ? error.message : "Erro ao carregar contatos."
+      );
     } finally {
       setLoadingContatos(false);
     }
@@ -539,30 +498,28 @@ function DisparosAgendadosPageContent() {
       }
 
       setLoadingTemplates(true);
-      setErro("");
-
       const res = await fetch(
         `/api/whatsapp/templates?integracao_whatsapp_id=${encodeURIComponent(
           integracaoId
         )}`,
         { cache: "no-store" }
       );
-
       const json = await res.json();
 
       if (!res.ok || !json.ok) {
         throw new Error(json.error || "Erro ao carregar templates.");
       }
 
-      const lista = Array.isArray(json.data) ? json.data : [];
-
-      const aprovados = lista.filter(
-        (item: any) => String(item.status || "").toUpperCase() === "APPROVED"
+      setTemplates(
+        (Array.isArray(json.data) ? json.data : []).filter(
+          (item: any) =>
+            String(item.status || "").toUpperCase() === "APPROVED"
+        )
       );
-
-      setTemplates(aprovados);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar templates.");
+    } catch (error) {
+      setErro(
+        error instanceof Error ? error.message : "Erro ao carregar templates."
+      );
     } finally {
       setLoadingTemplates(false);
     }
@@ -716,7 +673,9 @@ function DisparosAgendadosPageContent() {
 
   const metricas = useMemo(() => {
     const total = disparos.length;
-    const pendentes = disparos.filter((item) => item.status === "pendente").length;
+    const pendentes = disparos.filter((item) =>
+      ["pendente", "executando"].includes(item.status)
+    ).length;
     const executados = disparos.filter((item) => item.status === "executado").length;
     const cancelados = disparos.filter((item) => item.status === "cancelado").length;
     const erros = disparos.filter((item) => item.status === "erro").length;
@@ -733,7 +692,11 @@ function DisparosAgendadosPageContent() {
   const disparosFiltrados = useMemo(() => {
     if (filtroStatus === "todos") return disparos;
 
-    return disparos.filter((item) => item.status === filtroStatus);
+    return disparos.filter((item) =>
+      filtroStatus === "pendente"
+        ? ["pendente", "executando"].includes(item.status)
+        : item.status === filtroStatus
+    );
   }, [disparos, filtroStatus]);
 
   const totalPaginas = useMemo(() => {
@@ -976,19 +939,12 @@ function DisparosAgendadosPageContent() {
                 {carregando ? "Atualizando..." : "Atualizar"}
               </button>
                 
-              <button
-                type="button"
+              <Link
+                href="/disparos-whatsapp"
                 className={styles.primaryButton}
-                onClick={async () => {
-                  setModalNovoDisparo(true);
-                  setErroModal("");
-                  await carregarDadosModalDisparo();
-                  setCampanhaFiltro("");
-                  await carregarContatos("", "", "");
-                }}
               >
                 + Novo disparo
-              </button>
+              </Link>
             </div>
           </header>
 
@@ -1623,7 +1579,7 @@ function DisparosAgendadosPageContent() {
                             </div>
 
                             <span className={styles.templateVariablesHelp}>
-                                Variáveis fixas: {"{{nome_contato}}"}, {"{{email_contato}}"}, {"{{numero_contato}}"}, {"{{campanha}}"}, {"{{origem}}"}, {"{{status_lead}}"}, {"{{protocolo_atual}}"} e {"{{ultimo_protocolo}}"}.
+                                Variáveis fixas: {"{{nome_whatsapp}}"}, {"{{nome_contato}}"}, {"{{email_contato}}"}, {"{{numero_contato}}"}, {"{{campanha}}"}, {"{{origem}}"}, {"{{status_lead}}"}, {"{{protocolo_atual}}"} e {"{{ultimo_protocolo}}"}.
                             </span>
                           </div>
                         ) : templateAtual ? (
