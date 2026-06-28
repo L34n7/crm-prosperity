@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
+import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 import styles from "./disparos-agendados.module.css";
 
 type StatusDisparo = "todos" | "pendente" | "executado" | "cancelado" | "erro";
@@ -317,8 +319,10 @@ function contatoTemTelefoneValido(contato: any) {
 function DisparosAgendadosPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const headerUser = useHeaderUser();
   const disparoParam = searchParams.get("disparo");
   const mobileDetailActive = Boolean(disparoParam);
+  const podeRealizarDisparos = usuarioPodeRealizarDisparos(headerUser);
 
   const [disparos, setDisparos] = useState<DisparoAgendado[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -421,6 +425,11 @@ function DisparosAgendadosPageContent() {
 
   async function cancelarDisparo() {
     if (!disparoParaCancelar) return;
+    if (!podeRealizarDisparos) {
+      setErro("Você não tem permissão para cancelar disparos.");
+      setDisparoParaCancelar(null);
+      return;
+    }
 
     try {
       setCancelando(true);
@@ -528,6 +537,11 @@ function DisparosAgendadosPageContent() {
   async function criarDisparoAgendado() {
     try {
       setErroModal("");
+
+      if (!podeRealizarDisparos) {
+        setErroModal("Você não tem permissão para agendar disparos.");
+        return;
+      }
 
       if (!integracaoSelecionada) {
         setErroModal("Selecione uma integração.");
@@ -939,12 +953,14 @@ function DisparosAgendadosPageContent() {
                 {carregando ? "Atualizando..." : "Atualizar"}
               </button>
                 
-              <Link
-                href="/disparos-whatsapp"
-                className={styles.primaryButton}
-              >
-                + Novo disparo
-              </Link>
+              {podeRealizarDisparos ? (
+                <Link
+                  href="/disparos-whatsapp"
+                  className={styles.primaryButton}
+                >
+                  + Novo disparo
+                </Link>
+              ) : null}
             </div>
           </header>
 
@@ -1123,7 +1139,8 @@ function DisparosAgendadosPageContent() {
                           </Link>
                         )}
 
-                        {disparo.status === "pendente" && (
+                        {disparo.status === "pendente" &&
+                        podeRealizarDisparos ? (
                           <button
                             type="button"
                             className={styles.dangerButton}
@@ -1134,7 +1151,7 @@ function DisparosAgendadosPageContent() {
                           >
                             Cancelar
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     </article>
                   );
@@ -1333,7 +1350,8 @@ function DisparosAgendadosPageContent() {
               </div>
             </div>
 
-            {disparoSelecionado.status === "pendente" && (
+            {disparoSelecionado.status === "pendente" &&
+            podeRealizarDisparos ? (
               <button
                 type="button"
                 className={styles.dangerButtonFull}
@@ -1341,11 +1359,11 @@ function DisparosAgendadosPageContent() {
               >
                 Cancelar disparo
               </button>
-            )}
+            ) : null}
           </aside>
         )}
 
-        {modalNovoDisparo ? (
+        {modalNovoDisparo && podeRealizarDisparos ? (
           <div
             className={styles.modalOverlay}
             onClick={() => setModalNovoDisparo(false)}
@@ -1956,7 +1974,7 @@ function DisparosAgendadosPageContent() {
           </div>
         ) : null}
 
-        {disparoParaCancelar && (
+        {disparoParaCancelar && podeRealizarDisparos ? (
           <div className={styles.modalOverlay}>
             <div className={`${styles.modalCard}`}>
               <div className={styles.modalHeader}>
@@ -2008,7 +2026,7 @@ function DisparosAgendadosPageContent() {
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </main>
     </>
   );

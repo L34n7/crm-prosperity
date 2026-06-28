@@ -414,6 +414,49 @@
   white-space: nowrap;
 }
 
+.massProgressHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.massProgressCancelButton,
+.cancelCampaignConfirmButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #efb4b4;
+  background: #fff7f7;
+  color: #a52a2a;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.massProgressCancelButton {
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+
+.massProgressCancelButton:hover:not(:disabled),
+.cancelCampaignConfirmButton:hover:not(:disabled) {
+  border-color: #dc6f6f;
+  background: #ffeaea;
+  color: #861d1d;
+}
+
+.massProgressCancelButton:disabled,
+.cancelCampaignConfirmButton:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .massProgressMetrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -472,6 +515,34 @@
   font-size: 13px;
   font-weight: 600;
   line-height: 1.45;
+}
+
+.cancelCampaignSummary {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  background: var(--crm-surface-soft);
+  padding: 14px;
+}
+
+.cancelCampaignSummary > strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+}
+
+.cancelCampaignSummary > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  color: var(--crm-text);
+  font-size: 13px;
+}
+
+.cancelCampaignConfirmButton {
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 10px 14px;
 }
 
 @keyframes massProgressSpin {
@@ -2575,8 +2646,12 @@
     grid-template-columns: 18px minmax(0, 1fr);
   }
 
-  .massProgressStatus {
+  .massProgressHeaderActions {
     grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .massProgressStatus {
     width: fit-content;
   }
 
@@ -2728,8 +2803,12 @@
     grid-template-columns: 18px minmax(0, 1fr);
   }
 
-  .massProgressStatus {
+  .massProgressHeaderActions {
     grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .massProgressStatus {
     width: fit-content;
   }
 

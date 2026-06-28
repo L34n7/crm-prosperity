@@ -5,6 +5,7 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import { podeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 
 export async function PATCH(
   request: NextRequest,
@@ -27,6 +28,16 @@ export async function PATCH(
         { ok: false, error: "Usuário sem empresa vinculada." },
         { status: 400 }
     );
+    }
+
+    if (!podeRealizarDisparos(usuario)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Voce nao tem permissao para cancelar disparos.",
+        },
+        { status: 403 }
+      );
     }
 
     const { id } = await params;

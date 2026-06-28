@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -161,6 +162,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },
         { status: 400 }
+      );
+    }
+
+    if (!podeVisualizarDisparos(usuario)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Voce nao tem permissao para visualizar disparos.",
+        },
+        { status: 403 }
       );
     }
 

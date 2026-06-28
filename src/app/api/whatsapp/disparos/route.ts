@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getUsuarioContexto,
-  type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
-import { isAdministrador } from "@/lib/auth/authorization";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 import { isAmbienteConfigurado } from "@/lib/whatsapp/ambiente-configurado";
+import {
+  podeRealizarDisparos,
+  podeVisualizarDisparos,
+} from "@/lib/whatsapp/disparo-permissoes";
 import {
   montarRespostaLimiteMetaExcedido,
   reservarLimiteMeta,
@@ -27,11 +29,6 @@ type DestinatarioEntrada = {
   contato_id?: string | null;
   variaveis?: string[];
 };
-
-type UsuarioPermissoes = Pick<
-  UsuarioContexto,
-  "assinatura" | "permissoes" | "perfil_dinamico_principal" | "perfis_dinamicos"
->;
 
 type ConfigJsonWhatsapp = {
   access_token?: string;
@@ -123,25 +120,6 @@ function montarNomeCampanhaDisparo(params: {
   const sufixo = `${formatarDataHoraCampanha(params.data)} - ${total} ${unidade}`;
 
   return `${base} - ${sufixo}`.slice(0, 180);
-}
-
-function usuarioTemPermissao(usuario: UsuarioPermissoes, permissao: string) {
-  const permissoes = Array.isArray(usuario?.permissoes)
-    ? usuario.permissoes
-    : [];
-  return permissoes.includes(permissao);
-}
-
-function podeRealizarDisparos(usuario: UsuarioPermissoes) {
-  if (usuario?.assinatura?.status === "bloqueada") {
-    return false;
-  }
-
-  return (
-    isAdministrador(usuario) ||
-    usuarioTemPermissao(usuario, "whatsapp.disparos.enviar") ||
-    usuarioTemPermissao(usuario, "mensagens.enviar")
-  );
 }
 
 async function buscarCampanhaAtivaDaIntegracao(params: {
@@ -413,6 +391,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    if (!podeVisualizarDisparos(usuario)) {
+      return NextResponse.json(
+        { ok: false, error: "Voce nao tem permissao para visualizar disparos." },
+        { status: 403 }
+      );
+    }
+
     const limitParam = Number(req.nextUrl.searchParams.get("limit") || "50");
     const limit = Number.isFinite(limitParam)
       ? Math.min(Math.max(limitParam, 1), 100)
@@ -522,7 +507,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!podeRealizarDisparos(usuario)) {
+    if (
+      usuario.assinatura?.status === "bloqueada" ||
+      !podeRealizarDisparos(usuario)
+    ) {
       return NextResponse.json(
         {
           ok: false,

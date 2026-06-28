@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 
 export default async function DisparosWhatsappLayout({
   children,
@@ -8,8 +9,16 @@ export default async function DisparosWhatsappLayout({
 }) {
   const resultado = await getUsuarioContexto();
 
-  if (resultado.ok && resultado.usuario.assinatura?.status === "bloqueada") {
+  if (!resultado.ok) {
+    redirect("/login");
+  }
+
+  if (resultado.usuario.assinatura?.status === "bloqueada") {
     redirect("/conversas");
+  }
+
+  if (!podeVisualizarDisparos(resultado.usuario)) {
+    redirect("/");
   }
 
   return children;

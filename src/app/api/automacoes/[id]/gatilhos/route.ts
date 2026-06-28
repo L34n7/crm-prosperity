@@ -14,6 +14,91 @@ type RouteParams = {
   }>;
 };
 
+const CONSTRAINT_PALAVRA_CHAVE_UNICA =
+  "automacao_gatilhos_empresa_palavra_chave_unique";
+
+function erroDePalavraChaveDuplicada(error: unknown) {
+  const erro =
+    error && typeof error === "object"
+      ? (error as {
+          code?: string;
+          constraint?: string;
+          message?: string;
+        })
+      : null;
+
+  return (
+    erro?.code === "23505" &&
+    (erro.constraint === CONSTRAINT_PALAVRA_CHAVE_UNICA ||
+      String(erro.message || "").includes("palavra-chave"))
+  );
+}
+
+async function buscarPalavraChaveExistente(params: {
+  empresaId: string;
+  valor: string;
+  excluirGatilhoId?: string;
+}) {
+  let consulta = supabaseAdmin
+    .from("automacao_gatilhos")
+    .select("id, fluxo_id")
+    .eq("empresa_id", params.empresaId)
+    .eq("tipo_gatilho", "palavra_chave")
+    .eq("valor", params.valor);
+
+  if (params.excluirGatilhoId) {
+    consulta = consulta.neq("id", params.excluirGatilhoId);
+  }
+
+  const { data: gatilho, error } = await consulta.limit(1).maybeSingle();
+
+  if (error) {
+    throw new Error(`Erro ao validar palavra-chave: ${error.message}`);
+  }
+
+  if (!gatilho) return null;
+
+  const { data: fluxo } = await supabaseAdmin
+    .from("automacao_fluxos")
+    .select("id, nome, status")
+    .eq("id", gatilho.fluxo_id)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  return {
+    gatilhoId: gatilho.id,
+    fluxoId: gatilho.fluxo_id,
+    fluxoNome: fluxo?.nome || null,
+    fluxoStatus: fluxo?.status || null,
+  };
+}
+
+function respostaPalavraChaveDuplicada(params: {
+  valor: string;
+  fluxoIdAtual: string;
+  conflito?: Awaited<ReturnType<typeof buscarPalavraChaveExistente>>;
+}) {
+  const mesmoFluxo = params.conflito?.fluxoId === params.fluxoIdAtual;
+  const identificacaoFluxo = params.conflito?.fluxoNome
+    ? ` no fluxo "${params.conflito.fluxoNome}"`
+    : " em outro fluxo";
+  const statusFluxo = params.conflito?.fluxoStatus
+    ? ` (${params.conflito.fluxoStatus})`
+    : "";
+
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "PALAVRA_CHAVE_DUPLICADA",
+      error: mesmoFluxo
+        ? `A palavra-chave "${params.valor}" já existe neste fluxo.`
+        : `A palavra-chave "${params.valor}" já está cadastrada${identificacaoFluxo}${statusFluxo}. Cada palavra-chave pode pertencer a apenas um fluxo por empresa.`,
+      conflito: params.conflito || null,
+    },
+    { status: 409 }
+  );
+}
+
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const { id: fluxoId } = await params;
@@ -149,20 +234,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { data: gatilhoExistente } = await supabaseAdmin
-      .from("automacao_gatilhos")
-      .select("id")
-      .eq("empresa_id", usuario.empresa_id)
-      .eq("fluxo_id", fluxoId)
-      .eq("tipo_gatilho", tipoGatilho)
-      .eq("valor", valor)
-      .maybeSingle();
+    if (tipoGatilho === "palavra_chave") {
+      const conflito = await buscarPalavraChaveExistente({
+        empresaId: usuario.empresa_id,
+        valor,
+      });
 
-    if (gatilhoExistente) {
-      return NextResponse.json(
-        { ok: false, error: "Esse gatilho já existe neste fluxo." },
-        { status: 400 }
-      );
+      if (conflito) {
+        return respostaPalavraChaveDuplicada({
+          valor,
+          fluxoIdAtual: fluxoId,
+          conflito,
+        });
+      }
     }
 
     const { data, error } = await supabaseAdmin
@@ -177,6 +261,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       })
       .select("*")
       .single();
+
+    if (erroDePalavraChaveDuplicada(error)) {
+      return respostaPalavraChaveDuplicada({
+        valor,
+        fluxoIdAtual: fluxoId,
+      });
+    }
 
     if (error) {
       return NextResponse.json(
@@ -245,13 +336,30 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { data: gatilhoAntes } = await supabaseAdmin
+    const { data: gatilhoAntes, error: gatilhoAntesError } = await supabaseAdmin
       .from("automacao_gatilhos")
       .select("*")
       .eq("id", gatilhoId)
       .eq("fluxo_id", fluxoId)
       .eq("empresa_id", usuario.empresa_id)
       .maybeSingle();
+
+    if (gatilhoAntesError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Erro ao buscar gatilho: ${gatilhoAntesError.message}`,
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!gatilhoAntes) {
+      return NextResponse.json(
+        { ok: false, error: "Gatilho não encontrado." },
+        { status: 404 }
+      );
+    }
 
     const atualizacao: Record<string, any> = {
       updated_at: new Date().toISOString(),
@@ -288,6 +396,25 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       atualizacao.ativo = Boolean(body.ativo);
     }
 
+    if (
+      atualizacao.valor !== undefined &&
+      gatilhoAntes.tipo_gatilho === "palavra_chave"
+    ) {
+      const conflito = await buscarPalavraChaveExistente({
+        empresaId: usuario.empresa_id,
+        valor: atualizacao.valor,
+        excluirGatilhoId: gatilhoId,
+      });
+
+      if (conflito) {
+        return respostaPalavraChaveDuplicada({
+          valor: atualizacao.valor,
+          fluxoIdAtual: fluxoId,
+          conflito,
+        });
+      }
+    }
+
     const { data, error } = await supabaseAdmin
       .from("automacao_gatilhos")
       .update(atualizacao)
@@ -296,6 +423,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       .eq("empresa_id", usuario.empresa_id)
       .select("*")
       .single();
+
+    if (erroDePalavraChaveDuplicada(error)) {
+      return respostaPalavraChaveDuplicada({
+        valor: String(atualizacao.valor || gatilhoAntes.valor || ""),
+        fluxoIdAtual: fluxoId,
+      });
+    }
 
     if (error) {
       return NextResponse.json(

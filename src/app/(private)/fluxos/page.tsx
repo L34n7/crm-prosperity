@@ -2121,6 +2121,14 @@ async function criarFluxoRapido() {
         canal: "whatsapp",
         status: "rascunho",
         fluxo_padrao: fluxoPadraoFinal,
+        gatilhos: fluxoPadraoFinal
+          ? []
+          : gatilhosValidos.map((gatilho) => ({
+              tipo_gatilho: "palavra_chave",
+              valor: gatilho.valor,
+              condicao: gatilho.condicao,
+              ativo: gatilho.ativo !== false,
+            })),
         configuracao_json: {
           encerramento_inatividade: {
             ativo: true,
@@ -2139,33 +2147,6 @@ async function criarFluxoRapido() {
     }
 
     const fluxoCriado = json.fluxo;
-
-    if (!fluxoPadraoFinal) {
-      for (const gatilho of gatilhosValidos) {
-      const gatilhoRes = await fetch(
-        `/api/automacoes/${fluxoCriado.id}/gatilhos`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            tipo_gatilho: "palavra_chave",
-            valor: gatilho.valor,
-            condicao: gatilho.condicao,
-            ativo: gatilho.ativo !== false,
-           }),
-        }
-      );
-
-      const gatilhoJson = await gatilhoRes.json();
-
-      if (!gatilhoRes.ok || !gatilhoJson.ok) {
-        throw new Error(
-          gatilhoJson.error || "Fluxo criado, mas houve erro ao criar um gatilho."
-        );
-      }
-    }}
 
     setNovoFluxoNome("");
     setDescricaoNovoFluxo("");
@@ -3968,13 +3949,13 @@ async function criarGatilhoFluxo() {
   if (!fluxoParaEditar) return;
 
   try {
-    setErro("");
+    setErroEdicaoFluxo("");
     setSucesso("");
 
     const valor = novoGatilhoValor.trim();
 
     if (!valor) {
-      setErro("Informe a palavra-chave do gatilho.");
+      setErroEdicaoFluxo("Informe a palavra-chave do gatilho.");
       return;
     }
 
@@ -4004,7 +3985,7 @@ async function criarGatilhoFluxo() {
     setSucesso("Gatilho criado com sucesso.");
     await carregarGatilhosFluxo(fluxoParaEditar.id);
   } catch (error: any) {
-    setErro(error?.message || "Erro ao criar gatilho.");
+    setErroEdicaoFluxo(error?.message || "Erro ao criar gatilho.");
   }
 }
 
@@ -4083,28 +4064,28 @@ function adicionarGatilhoNovoFluxo() {
   const valor = novoGatilhoValor.trim().toLowerCase();
 
   if (!valor) {
-    setErro("Informe a palavra-chave do gatilho.");
+    setErroCriacaoFluxo("Informe a palavra-chave do gatilho.");
     return;
   }
 
   const jaExiste = gatilhosNovoFluxo.some(
-    (gatilho) =>
-      gatilho.valor === valor && gatilho.condicao === novoGatilhoCondicao
+    (gatilho) => gatilho.valor === valor
   );
 
   if (jaExiste) {
-    setErro("Esse gatilho já foi adicionado.");
+    setErroCriacaoFluxo("Essa palavra-chave já foi adicionada.");
     return;
   }
 
-    setGatilhosNovoFluxo((atuais) => [
+  setErroCriacaoFluxo("");
+  setGatilhosNovoFluxo((atuais) => [
     ...atuais,
     {
-        valor,
-        condicao: novoGatilhoCondicao,
-        ativo: true,
+      valor,
+      condicao: novoGatilhoCondicao,
+      ativo: true,
     },
-    ]);
+  ]);
 
   setNovoGatilhoValor("");
   setNovoGatilhoCondicao("contem");

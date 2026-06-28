@@ -13,6 +13,7 @@ import {
 import { notificarCampanhaDisparoPausada } from "@/lib/whatsapp/disparo-alertas";
 import { qstash } from "@/lib/qstash/client";
 import { resolverDisparoAgendadoParaFila } from "@/lib/whatsapp/disparo-agendado-variaveis";
+import { atualizarReservaLimiteMeta } from "@/lib/whatsapp/meta-limites";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -436,6 +437,186 @@ async function cancelarMensagensCampanhaQstash(campanhaId: string) {
   }
 }
 
+export async function cancelarCampanhaDisparo(params: {
+  campanhaId: string;
+  empresaId: string;
+  usuarioId: string | null;
+  motivo?: string | null;
+}) {
+  const agora = new Date().toISOString();
+  const motivo =
+    String(params.motivo || "").trim() ||
+    "Disparo em massa cancelado pelo usuario.";
+  const { data: campanhaAtual, error: campanhaError } = await supabaseAdmin
+    .from("whatsapp_disparo_campanhas")
+    .select(
+      "id, status, metadata_json, limite_meta_reserva_ids, total_enviados, total_falhas, total_cancelados"
+    )
+    .eq("id", params.campanhaId)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  if (campanhaError) {
+    throw new Error(`Erro ao buscar campanha: ${campanhaError.message}`);
+  }
+
+  if (!campanhaAtual) {
+    return {
+      ok: false as const,
+      motivo: "campanha_nao_encontrada",
+      status: null,
+    };
+  }
+
+  const metadataCampanha = objeto(campanhaAtual.metadata_json);
+  const campanhaAtiva = ["pendente", "enviando"].includes(
+    String(campanhaAtual.status || "")
+  );
+  const cancelamentoManualEmRecuperacao =
+    campanhaAtual.status === "cancelada" &&
+    metadataCampanha.cancelamento_manual === true;
+
+  if (!campanhaAtiva && !cancelamentoManualEmRecuperacao) {
+    return {
+      ok: false as const,
+      motivo: "campanha_nao_esta_ativa",
+      status: campanhaAtual.status,
+    };
+  }
+
+  const { data: itensAbertos, error: itensError } = await supabaseAdmin
+    .from("whatsapp_disparo_itens")
+    .select("id, status, telefone_normalizado, consome_limite_meta")
+    .eq("campanha_id", params.campanhaId)
+    .in("status", ["pendente", "processando"]);
+
+  if (itensError) {
+    throw new Error(`Erro ao buscar itens da campanha: ${itensError.message}`);
+  }
+
+  if (campanhaAtiva) {
+    const { data: campanhaCancelada, error: cancelamentoError } =
+      await supabaseAdmin
+        .from("whatsapp_disparo_campanhas")
+        .update({
+          status: "cancelada",
+          pausa_motivo: motivo,
+          erro: null,
+          finished_at: agora,
+          updated_at: agora,
+          metadata_json: {
+            ...metadataCampanha,
+            cancelamento_manual: true,
+            cancelado_em: agora,
+            cancelado_por_usuario_id: params.usuarioId,
+            motivo_cancelamento: motivo,
+          },
+        })
+        .eq("id", params.campanhaId)
+        .eq("empresa_id", params.empresaId)
+        .in("status", ["pendente", "enviando"])
+        .select("id, status")
+        .maybeSingle();
+
+    if (cancelamentoError) {
+      throw new Error(
+        `Erro ao cancelar campanha: ${cancelamentoError.message}`
+      );
+    }
+
+    if (!campanhaCancelada) {
+      return {
+        ok: false as const,
+        motivo: "campanha_alterada_concorrente",
+        status: campanhaAtual.status,
+      };
+    }
+  }
+
+  await cancelarMensagensCampanhaQstash(params.campanhaId);
+
+  const idsAbertos = (itensAbertos || []).map((item) => item.id);
+
+  if (idsAbertos.length > 0) {
+    const { error: itensCancelamentoError } = await supabaseAdmin
+      .from("whatsapp_disparo_itens")
+      .update({
+        status: "cancelado",
+        erro: motivo,
+        locked_at: null,
+        processed_at: agora,
+        updated_at: agora,
+        metadata_json: {
+          cancelamento_manual: true,
+          cancelado_em: agora,
+          cancelado_por_usuario_id: params.usuarioId,
+          motivo_cancelamento: motivo,
+        },
+      })
+      .in("id", idsAbertos)
+      .in("status", ["pendente", "processando"]);
+
+    if (itensCancelamentoError) {
+      throw new Error(
+        `Campanha cancelada, mas houve erro ao cancelar itens: ${itensCancelamentoError.message}`
+      );
+    }
+  }
+
+  const telefonesPendentes = Array.from(
+    new Set(
+      (itensAbertos || [])
+        .filter(
+          (item) =>
+            item.status === "pendente" && item.consome_limite_meta === true
+        )
+        .map((item) => String(item.telefone_normalizado || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const reservaIds = Array.isArray(campanhaAtual.limite_meta_reserva_ids)
+    ? campanhaAtual.limite_meta_reserva_ids.filter(Boolean)
+    : [];
+
+  if (reservaIds.length > 0 && telefonesPendentes.length > 0) {
+    const { error: reservasError } = await supabaseAdmin
+      .from("whatsapp_meta_conversas_iniciadas")
+      .update({
+        status: "cancelado",
+        updated_at: agora,
+        metadata_json: {
+          campanha_disparo_id: params.campanhaId,
+          cancelamento_manual: true,
+          motivo_cancelamento: motivo,
+        },
+      })
+      .in("id", reservaIds)
+      .in("telefone_normalizado", telefonesPendentes)
+      .eq("status", "reservado");
+
+    if (reservasError) {
+      console.warn(
+        "[WHATSAPP DISPARO FILA] Campanha cancelada com reservas pendentes:",
+        {
+          campanhaId: params.campanhaId,
+          erro: reservasError,
+        }
+      );
+    }
+  }
+
+  const resumo = await recalcularCampanha(params.campanhaId);
+  await sincronizarAgendamentosCampanha(params.campanhaId);
+
+  return {
+    ok: true as const,
+    campanhaId: params.campanhaId,
+    status: "cancelada",
+    motivo,
+    resumo,
+  };
+}
+
 async function pausarFlowControlIntegracaoQstash(integracaoWhatsappId: string) {
   if (!process.env.QSTASH_TOKEN) {
     return;
@@ -827,20 +1008,32 @@ async function processarItemDisparo(item: DisparoItemRow) {
 
   if (!["pendente", "enviando"].includes(campanha.status)) {
     const agora = new Date().toISOString();
+    const motivoCancelamento =
+      campanha.pausa_motivo ||
+      campanha.erro ||
+      "Campanha encerrada antes do processamento deste item.";
 
     await supabaseAdmin
       .from("whatsapp_disparo_itens")
       .update({
         status: "cancelado",
-        erro:
-          campanha.pausa_motivo ||
-          campanha.erro ||
-          "Campanha encerrada antes do processamento deste item.",
+        erro: motivoCancelamento,
         locked_at: null,
         processed_at: agora,
         updated_at: agora,
       })
       .eq("id", item.id);
+
+    await atualizarReservaLimiteMeta({
+      reservaIds: campanha.limite_meta_reserva_ids || [],
+      telefone: item.numero,
+      status: "cancelado",
+      metadataJson: {
+        campanha_disparo_id: campanha.id,
+        item_disparo_id: item.id,
+        motivo_cancelamento: motivoCancelamento,
+      },
+    });
 
     await recalcularCampanha(campanha.id);
     await sincronizarAgendamentosCampanha(campanha.id);

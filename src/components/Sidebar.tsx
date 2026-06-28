@@ -43,6 +43,7 @@ import {
   PERMISSAO_INTERNA_EMPRESAS,
   PERMISSAO_RELATORIOS_INTERNOS,
 } from "@/lib/permissoes/internas";
+import { PERMISSAO_VISUALIZAR_DISPAROS } from "@/lib/whatsapp/disparo-permissoes";
 import styles from "./Sidebar.module.css";
 
 type MenuItem = {
@@ -87,8 +88,18 @@ const mobileLabelByHref: Record<string, string> = {
 const menuItems: MenuItem[] = [
   { label: "Painel", href: "/", icon: LayoutDashboard },
   { label: "Conversas", href: "/conversas", icon: MessageSquare },
-  { label: "Disparos", href: "/disparos-whatsapp", icon: Send },
-  { label: "Disparos agendados", href: "/disparos-agendados", icon: CalendarClock },
+  {
+    label: "Disparos",
+    href: "/disparos-whatsapp",
+    icon: Send,
+    permissao: PERMISSAO_VISUALIZAR_DISPAROS,
+  },
+  {
+    label: "Disparos agendados",
+    href: "/disparos-agendados",
+    icon: CalendarClock,
+    permissao: PERMISSAO_VISUALIZAR_DISPAROS,
+  },
   { label: "Agendas", href: "/agendas", icon: CalendarCheck },
   { label: "Templates", href: "/configuracoes/templates-whatsapp", icon: FileText },
   { label: "Fluxos", href: "/fluxos", icon: GitBranch },

@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CircleStop } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
 import styles from "./disparos-whatsapp.module.css";
-import { can } from "@/lib/permissoes/frontend";
 import { createClient } from "@/lib/supabase/client";
+import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 
 type IntegracaoWhatsApp = {
   id: string;
@@ -1133,6 +1134,9 @@ export default function DisparosWhatsAppPage() {
   const [loadingHistorico, setLoadingHistorico] = useState(false);
   const [loadingSaudeMeta, setLoadingSaudeMeta] = useState(false);
   const [disparando, setDisparando] = useState(false);
+  const [cancelandoCampanha, setCancelandoCampanha] = useState(false);
+  const [modalCancelarCampanhaAberto, setModalCancelarCampanhaAberto] =
+    useState(false);
   const [disparoEmMassaProcessando, setDisparoEmMassaProcessando] =
     useState(false);
   const [integracaoDisparoProcessando, setIntegracaoDisparoProcessando] =
@@ -1806,16 +1810,7 @@ export default function DisparosWhatsAppPage() {
   ]);
 
   const permissoes = usuarioLogado?.permissoes || [];
-  const nomesPerfisDinamicos = Array.isArray(usuarioLogado?.perfis_dinamicos)
-    ? usuarioLogado.perfis_dinamicos.map((perfil) => perfil.nome)
-    : [];
-
-  const ehAdministrador = nomesPerfisDinamicos.includes("Administrador");
-
-  const podeDisparar =
-    ehAdministrador ||
-    can(permissoes, "whatsapp.disparos.enviar") ||
-    can(permissoes, "mensagens.enviar");
+  const podeDisparar = usuarioPodeRealizarDisparos({ permissoes });
 
   const disparoBloqueado =
     disparoEmMassaProcessando || integracaoDisparoProcessando;
@@ -2420,6 +2415,101 @@ export default function DisparosWhatsAppPage() {
     }
   }
 
+  async function cancelarCampanhaEmAndamento() {
+    if (!campanhaPagina?.id || !campanhaPaginaAtiva) return;
+    if (!podeDisparar) {
+      setErro("Você não tem permissão para cancelar disparos.");
+      return;
+    }
+
+    try {
+      setCancelandoCampanha(true);
+      setErro("");
+      setMensagem("");
+
+      const res = await fetch(
+        `/api/whatsapp/disparos/${encodeURIComponent(
+          campanhaPagina.id
+        )}/cancelar`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            motivo: "Cancelado manualmente na tela de disparos.",
+          }),
+        }
+      );
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao cancelar disparo em massa.");
+      }
+
+      const resumo =
+        json.resumo && typeof json.resumo === "object" ? json.resumo : {};
+      const total = Number(
+        resumo.total_itens ?? campanhaPagina.total ?? 0
+      );
+      const enviados = Number(
+        resumo.total_enviados ?? campanhaPagina.enviados ?? 0
+      );
+      const falhas = Number(
+        resumo.total_falhas ?? campanhaPagina.falhas ?? 0
+      );
+      const cancelados = Number(
+        resumo.total_cancelados ??
+          Math.max(total - enviados - falhas, 0)
+      );
+
+      setCampanhaPagina((atual) =>
+        atual
+          ? {
+              ...atual,
+              status: "cancelada",
+              enviados,
+              falhas,
+              cancelados,
+              pendentes: 0,
+              processando: 0,
+              processados: Math.min(
+                total,
+                enviados + falhas + cancelados
+              ),
+              motivo:
+                json.motivo ||
+                "Disparo em massa cancelado manualmente.",
+              updated_at: new Date().toISOString(),
+              finished_at: new Date().toISOString(),
+            }
+          : atual
+      );
+      setDisparoEmMassaProcessando(false);
+      setIntegracaoDisparoProcessando(false);
+      setModalCancelarCampanhaAberto(false);
+      setMensagem(
+        `Disparo cancelado. Enviados: ${enviados}. Cancelados: ${cancelados}.`
+      );
+      emitirRefreshDisparoEmMassa();
+
+      await Promise.all([
+        carregarHistorico(),
+        carregarBloqueioDisparoEmMassa(integracaoId),
+      ]);
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao cancelar disparo em massa."
+      );
+      setModalCancelarCampanhaAberto(false);
+      await carregarCampanhaPagina(integracaoId);
+    } finally {
+      setCancelandoCampanha(false);
+    }
+  }
+
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -2778,6 +2868,11 @@ export default function DisparosWhatsAppPage() {
 }
 
   function abrirConfirmacaoDisparo() {
+    if (!podeDisparar) {
+      setErro("Você não tem permissão para realizar disparos.");
+      return;
+    }
+
     if (agendarDisparo) {
       const executarEm = new Date(
         `${agendamentoData}T${agendamentoHora}:00`
@@ -2897,7 +2992,8 @@ export default function DisparosWhatsAppPage() {
               ) : !podeDisparar ? (
                 <div className={styles.inlineBlock}>
                   <div className={styles.errorAlert}>
-                    Você não tem permissão para acessar este recurso.
+                    Você pode acompanhar os disparos, mas não possui permissão
+                    para enviar ou agendar novas campanhas.
                   </div>
                 </div> 
               ) : (
@@ -3779,9 +3875,24 @@ export default function DisparosWhatsAppPage() {
                   </p>
                 </div>
 
-                <span className={styles.massProgressStatus}>
-                  {campanhaPagina.enviados || 0}/{campanhaPagina.total || 0}
-                </span>
+                <div className={styles.massProgressHeaderActions}>
+                  <span className={styles.massProgressStatus}>
+                    {campanhaPagina.enviados || 0}/{campanhaPagina.total || 0}
+                  </span>
+
+                  {campanhaPaginaAtiva && podeDisparar ? (
+                    <button
+                      type="button"
+                      className={styles.massProgressCancelButton}
+                      onClick={() => setModalCancelarCampanhaAberto(true)}
+                      disabled={cancelandoCampanha}
+                      aria-label="Cancelar disparo em massa"
+                    >
+                      <CircleStop size={16} aria-hidden="true" />
+                      {cancelandoCampanha ? "Cancelando..." : "Cancelar disparo"}
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               <div className={styles.massProgressMetrics}>
@@ -4339,7 +4450,99 @@ export default function DisparosWhatsAppPage() {
         </div>
       )}
 
-      {modalConfirmacaoAberto && (
+      {modalCancelarCampanhaAberto &&
+      campanhaPaginaAtiva &&
+      campanhaPagina &&
+      podeDisparar ? (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => {
+            if (!cancelandoCampanha) {
+              setModalCancelarCampanhaAberto(false);
+            }
+          }}
+        >
+          <div
+            className={styles.modalConfirmacao}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.modalEyebrow}>Interromper campanha</p>
+                <h3 className={styles.modalTitle}>
+                  Cancelar disparos pendentes?
+                </h3>
+                <p className={styles.modalSubtitle}>
+                  Os envios que ainda nao foram processados serao cancelados.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setModalCancelarCampanhaAberto(false)}
+                disabled={cancelandoCampanha}
+                aria-label="Fechar confirmacao"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <div className={styles.cancelCampaignSummary}>
+                <strong>{campanhaPagina.nome || "Disparo em massa"}</strong>
+                <div>
+                  <span>
+                    Enviados: <strong>{campanhaPagina.enviados || 0}</strong>
+                  </span>
+                  <span>
+                    Restantes:{" "}
+                    <strong>
+                      {Math.max(
+                        Number(campanhaPagina.total || 0) -
+                          Number(campanhaPagina.enviados || 0) -
+                          Number(campanhaPagina.falhas || 0) -
+                          Number(campanhaPagina.cancelados || 0),
+                        0
+                      )}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className={styles.modalAlert}>
+                Mensagens ja aceitas pela Meta nao podem ser desfeitas e
+                continuarao aparecendo como enviadas.
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setModalCancelarCampanhaAberto(false)}
+                disabled={cancelandoCampanha}
+              >
+                Continuar disparo
+              </button>
+
+              <button
+                type="button"
+                className={styles.cancelCampaignConfirmButton}
+                onClick={cancelarCampanhaEmAndamento}
+                disabled={cancelandoCampanha}
+              >
+                <CircleStop size={16} aria-hidden="true" />
+                {cancelandoCampanha
+                  ? "Cancelando..."
+                  : "Cancelar disparos pendentes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {modalConfirmacaoAberto && podeDisparar && (
         <div className={styles.modalOverlay} onClick={() => setModalConfirmacaoAberto(false)}>
           <div
             className={styles.modalConfirmacao}

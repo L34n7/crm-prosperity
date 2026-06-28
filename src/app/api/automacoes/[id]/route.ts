@@ -313,58 +313,27 @@ export async function PUT(
     );
     const nosAlterados = listarNosAlterados(nosAntes || [], nos);
 
-    await supabaseAdmin
-      .from("automacao_conexoes")
-      .update({ ativo: false, updated_at: agora })
-      .eq("fluxo_id", id)
-      .eq("empresa_id", usuario.empresa_id);
+    const nosParaSalvar = nos.map((no: any) => {
+      const tipoNo = String(no.tipo_no || "");
 
-    await supabaseAdmin
-      .from("automacao_nos")
-      .update({ ativo: false, updated_at: agora })
-      .eq("fluxo_id", id)
-      .eq("empresa_id", usuario.empresa_id);
+      return {
+        id: no.id,
+        tipo_no: tipoNo,
+        titulo: no.titulo || "Bloco",
+        descricao: no.descricao || null,
+        posicao_x: Math.round(Number(no.posicao_x || 0)),
+        posicao_y: Math.round(Number(no.posicao_y || 0)),
+        configuracao_json: no.configuracao_json || {},
+        delay_segundos:
+          tipoNo === "inicio"
+            ? null
+            : normalizarDelaySegundosApi(no.delay_segundos),
+      };
+    });
 
-    if (nos.length > 0) {
-      const nosParaSalvar = nos.map((no: any) => {
-        const tipoNo = String(no.tipo_no || "");
-
-        return {
-          id: no.id,
-          empresa_id: usuario.empresa_id,
-          fluxo_id: id,
-          tipo_no: tipoNo,
-          titulo: no.titulo || "Bloco",
-          descricao: no.descricao || null,
-          posicao_x: Math.round(Number(no.posicao_x || 0)),
-          posicao_y: Math.round(Number(no.posicao_y || 0)),
-          configuracao_json: no.configuracao_json || {},
-          delay_segundos:
-            tipoNo === "inicio"
-              ? null
-              : normalizarDelaySegundosApi(no.delay_segundos),
-          ativo: true,
-          updated_at: agora,
-        };
-      });
-
-      const { error: nosUpsertError } = await supabaseAdmin
-        .from("automacao_nos")
-        .upsert(nosParaSalvar, { onConflict: "id" });
-
-      if (nosUpsertError) {
-        return NextResponse.json(
-          { ok: false, error: nosUpsertError.message },
-          { status: 500 }
-        );
-      }
-    }
-
-    if (conexoes.length > 0) {
-      const conexoesParaSalvar = conexoes.map((conexao: any, index: number) => ({
+    const conexoesParaSalvar = conexoes.map(
+      (conexao: any, index: number) => ({
         id: conexao.id,
-        empresa_id: usuario.empresa_id,
-        fluxo_id: id,
         no_origem_id: conexao.no_origem_id,
         no_destino_id: conexao.no_destino_id,
         condicao_json: conexao.condicao_json || {},
@@ -375,31 +344,44 @@ export async function PUT(
         descricao_ia: conexao.descricao_ia
           ? String(conexao.descricao_ia).trim()
           : null,
-
-        ativo: true,
-        updated_at: agora,
-      }));
-
-      const { error: conexoesUpsertError } = await supabaseAdmin
-        .from("automacao_conexoes")
-        .upsert(conexoesParaSalvar, { onConflict: "id" });
-
-      if (conexoesUpsertError) {
-        return NextResponse.json(
-          { ok: false, error: conexoesUpsertError.message },
-          { status: 500 }
-        );
-      }
-    }
-
-    await supabaseAdmin
-      .from("automacao_fluxos")
-      .update({
-        updated_at: agora,
-        atualizado_por: usuario.id,
       })
-      .eq("id", id)
-      .eq("empresa_id", usuario.empresa_id);
+    );
+
+    const { error: salvarEstruturaError } = await supabaseAdmin.rpc(
+      "salvar_estrutura_automacao_fluxo_atomica",
+      {
+        p_empresa_id: usuario.empresa_id,
+        p_fluxo_id: id,
+        p_usuario_id: usuario.id,
+        p_nos: nosParaSalvar,
+        p_conexoes: conexoesParaSalvar,
+        p_atualizado_em: agora,
+      }
+    );
+
+    if (salvarEstruturaError) {
+      const errosDeValidacao = new Set([
+        "21000",
+        "22023",
+        "22P02",
+        "23503",
+        "23514",
+      ]);
+      const status =
+        salvarEstruturaError.code === "P0002"
+          ? 404
+          : errosDeValidacao.has(salvarEstruturaError.code || "")
+            ? 400
+            : 500;
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Erro ao salvar estrutura: ${salvarEstruturaError.message}`,
+        },
+        { status }
+      );
+    }
 
     await registrarLogAuditoriaSeguro({
       empresa_id: usuario.empresa_id!,

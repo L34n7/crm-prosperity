@@ -15,8 +15,134 @@ import {
 
 const supabaseAdmin = getSupabaseAdmin();
 
+const CONSTRAINT_PALAVRA_CHAVE_UNICA =
+  "automacao_gatilhos_empresa_palavra_chave_unique";
+
+type GatilhoNovoFluxo = {
+  tipo_gatilho: string;
+  valor: string;
+  condicao: string;
+  ativo: boolean;
+};
+
 function obterMensagemErro(error: unknown, fallback = "Erro interno.") {
   return error instanceof Error ? error.message : fallback;
+}
+
+function erroDePalavraChaveDuplicada(error: unknown) {
+  const erro =
+    error && typeof error === "object"
+      ? (error as {
+          code?: string;
+          constraint?: string;
+          message?: string;
+        })
+      : null;
+
+  return (
+    erro?.code === "23505" &&
+    (erro.constraint === CONSTRAINT_PALAVRA_CHAVE_UNICA ||
+      String(erro.message || "").includes("palavra-chave"))
+  );
+}
+
+function normalizarGatilhosNovoFluxo(valor: unknown): GatilhoNovoFluxo[] {
+  if (!Array.isArray(valor)) return [];
+
+  return valor.map((item: unknown) => {
+    const gatilho =
+      item && typeof item === "object"
+        ? (item as Record<string, unknown>)
+        : {};
+
+    return {
+      tipo_gatilho: String(
+        gatilho.tipo_gatilho || "palavra_chave"
+      ).trim(),
+      valor: String(gatilho.valor || "").trim().toLowerCase(),
+      condicao: String(gatilho.condicao || "contem").trim(),
+      ativo: gatilho.ativo !== false,
+    };
+  });
+}
+
+async function buscarConflitoPalavraChave(params: {
+  empresaId: string;
+  valores: string[];
+}) {
+  if (params.valores.length === 0) return null;
+
+  const { data: gatilhos, error } = await supabaseAdmin
+    .from("automacao_gatilhos")
+    .select("id, fluxo_id, valor")
+    .eq("empresa_id", params.empresaId)
+    .eq("tipo_gatilho", "palavra_chave")
+    .in("valor", params.valores)
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Erro ao validar palavras-chave: ${error.message}`);
+  }
+
+  const gatilho = gatilhos?.[0];
+  if (!gatilho) return null;
+
+  const { data: fluxo } = await supabaseAdmin
+    .from("automacao_fluxos")
+    .select("id, nome, status")
+    .eq("id", gatilho.fluxo_id)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  return {
+    valor: gatilho.valor,
+    fluxoId: gatilho.fluxo_id,
+    fluxoNome: fluxo?.nome || null,
+    fluxoStatus: fluxo?.status || null,
+  };
+}
+
+function respostaPalavraChaveDuplicada(params: {
+  valor: string;
+  fluxoNome?: string | null;
+  fluxoStatus?: string | null;
+}) {
+  const identificacaoFluxo = params.fluxoNome
+    ? ` no fluxo "${params.fluxoNome}"`
+    : " em outro fluxo";
+  const statusFluxo = params.fluxoStatus ? ` (${params.fluxoStatus})` : "";
+
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "PALAVRA_CHAVE_DUPLICADA",
+      error: `A palavra-chave "${params.valor}" já está cadastrada${identificacaoFluxo}${statusFluxo}. Cada palavra-chave pode pertencer a apenas um fluxo por empresa.`,
+    },
+    { status: 409 }
+  );
+}
+
+async function removerFluxoCriadoComFalha(params: {
+  empresaId: string;
+  fluxoId: string;
+}) {
+  await supabaseAdmin
+    .from("automacao_gatilhos")
+    .delete()
+    .eq("empresa_id", params.empresaId)
+    .eq("fluxo_id", params.fluxoId);
+
+  await supabaseAdmin
+    .from("automacao_nos")
+    .delete()
+    .eq("empresa_id", params.empresaId)
+    .eq("fluxo_id", params.fluxoId);
+
+  await supabaseAdmin
+    .from("automacao_fluxos")
+    .delete()
+    .eq("empresa_id", params.empresaId)
+    .eq("id", params.fluxoId);
 }
 
 function respostaAssinaturaBloqueada() {
@@ -289,6 +415,62 @@ export async function POST(req: NextRequest) {
     const canal = String(body?.canal || "whatsapp").trim();
     const status = String(body?.status || "rascunho").trim();
     const fluxoPadrao = Boolean(body?.fluxo_padrao);
+    const gatilhos = normalizarGatilhosNovoFluxo(body?.gatilhos);
+    const condicoesPermitidas = new Set([
+      "contem",
+      "exata",
+      "inicia_com",
+      "regex",
+    ]);
+    const tiposGatilhoPermitidos = new Set([
+      "palavra_chave",
+      "primeira_mensagem",
+      "evento",
+      "webhook",
+      "manual",
+    ]);
+
+    const gatilhoInvalido = gatilhos.find(
+      (gatilho) =>
+        !gatilho.valor ||
+        !condicoesPermitidas.has(gatilho.condicao) ||
+        !tiposGatilhoPermitidos.has(gatilho.tipo_gatilho)
+    );
+
+    if (gatilhoInvalido) {
+      return NextResponse.json(
+        { ok: false, error: "Há um gatilho inválido na criação do fluxo." },
+        { status: 400 }
+      );
+    }
+
+    if (fluxoPadrao && gatilhos.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: "Fluxos padrão não podem ter palavras-chave." },
+        { status: 400 }
+      );
+    }
+
+    const palavrasChave = gatilhos
+      .filter((gatilho) => gatilho.tipo_gatilho === "palavra_chave")
+      .map((gatilho) => gatilho.valor);
+    const palavrasChaveUnicas = [...new Set(palavrasChave)];
+
+    if (palavrasChaveUnicas.length !== palavrasChave.length) {
+      const palavraDuplicada =
+        palavrasChave.find(
+          (palavra, indice) => palavrasChave.indexOf(palavra) !== indice
+        ) || "";
+
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "PALAVRA_CHAVE_DUPLICADA",
+          error: `A palavra-chave "${palavraDuplicada}" foi informada mais de uma vez neste fluxo.`,
+        },
+        { status: 409 }
+      );
+    }
 
     if (status === "ativo" && usuario.assinatura?.status === "bloqueada") {
       return respostaAssinaturaBloqueada();
@@ -327,6 +509,19 @@ export async function POST(req: NextRequest) {
         { ok: false, error: "Nome do fluxo é obrigatório." },
         { status: 400 }
       );
+    }
+
+    const conflitoPalavraChave = await buscarConflitoPalavraChave({
+      empresaId: usuario.empresa_id,
+      valores: palavrasChaveUnicas,
+    });
+
+    if (conflitoPalavraChave) {
+      return respostaPalavraChaveDuplicada({
+        valor: conflitoPalavraChave.valor,
+        fluxoNome: conflitoPalavraChave.fluxoNome,
+        fluxoStatus: conflitoPalavraChave.fluxoStatus,
+      });
     }
 
     const { data, error } = await supabaseAdmin
@@ -369,13 +564,62 @@ export async function POST(req: NextRequest) {
       });
 
     if (inicioError) {
+      await removerFluxoCriadoComFalha({
+        empresaId: usuario.empresa_id,
+        fluxoId: data.id,
+      });
+
       return NextResponse.json(
         {
           ok: false,
-          error: `Fluxo criado, mas houve erro ao criar o bloco inicial: ${inicioError.message}`,
+          error: `Houve erro ao criar o bloco inicial: ${inicioError.message}`,
         },
         { status: 500 }
       );
+    }
+
+    let gatilhosCriados: Array<Record<string, unknown>> = [];
+
+    if (gatilhos.length > 0) {
+      const { data: gatilhosInseridos, error: gatilhosError } =
+        await supabaseAdmin
+          .from("automacao_gatilhos")
+          .insert(
+            gatilhos.map((gatilho) => ({
+              empresa_id: usuario.empresa_id,
+              fluxo_id: data.id,
+              ...gatilho,
+            }))
+          )
+          .select("*");
+
+      if (gatilhosError) {
+        await removerFluxoCriadoComFalha({
+          empresaId: usuario.empresa_id,
+          fluxoId: data.id,
+        });
+
+        if (erroDePalavraChaveDuplicada(gatilhosError)) {
+          return respostaPalavraChaveDuplicada({
+            valor:
+              palavrasChave.find((palavra) =>
+                String(gatilhosError.message || "").includes(palavra)
+              ) ||
+              palavrasChave[0] ||
+              "",
+          });
+        }
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Erro ao criar gatilhos: ${gatilhosError.message}`,
+          },
+          { status: 500 }
+        );
+      }
+
+      gatilhosCriados = gatilhosInseridos || [];
     }
 
     await registrarLogAuditoriaSeguro({
@@ -392,7 +636,24 @@ export async function POST(req: NextRequest) {
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
     });
-    
+
+    for (const gatilho of gatilhosCriados) {
+      await registrarLogAuditoriaSeguro({
+        empresa_id: usuario.empresa_id!,
+        categoria: "fluxos",
+        entidade: "fluxo",
+        entidade_id: data.id,
+        acao: "fluxo_gatilho_criado",
+        descricao: `Gatilho ${String(gatilho.valor || "")} criado`,
+        usuario_id: usuario.id,
+        usuario_nome: usuario.nome,
+        usuario_email: usuario.email,
+        depois: gatilho,
+        ip: auditMeta.ip,
+        user_agent: auditMeta.user_agent,
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       fluxo: data,

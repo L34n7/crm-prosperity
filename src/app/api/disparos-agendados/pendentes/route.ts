@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 
 const POLLING_HEADERS = {
   "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
@@ -8,7 +9,7 @@ const POLLING_HEADERS = {
 
 export async function GET() {
   try {
-    const resultado = await getUsuarioBasico();
+    const resultado = await getUsuarioContexto();
 
     if (!resultado.ok) {
       return NextResponse.json(
@@ -23,6 +24,16 @@ export async function GET() {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },
         { status: 400 }
+      );
+    }
+
+    if (!podeVisualizarDisparos(usuario)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Voce nao tem permissao para visualizar disparos.",
+        },
+        { status: 403, headers: POLLING_HEADERS }
       );
     }
 

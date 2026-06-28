@@ -272,6 +272,52 @@ export async function criarCopiaFluxoCompartilhado(params: {
 
   validarSnapshot(snapshot);
 
+  const gatilhosNormalizados = (snapshot.gatilhos || [])
+    .filter((gatilho) => String(gatilho.valor || "").trim())
+    .map((gatilho) => ({
+      tipo_gatilho: gatilho.tipo_gatilho || "palavra_chave",
+      valor: String(gatilho.valor || "").trim().toLowerCase(),
+      condicao: gatilho.condicao || "contem",
+      ativo: gatilho.ativo !== false,
+    }));
+  const palavrasChave = gatilhosNormalizados
+    .filter((gatilho) => gatilho.tipo_gatilho === "palavra_chave")
+    .map((gatilho) => gatilho.valor);
+  const palavrasChaveUnicas = [...new Set(palavrasChave)];
+
+  if (palavrasChaveUnicas.length !== palavrasChave.length) {
+    const palavraDuplicada =
+      palavrasChave.find(
+        (palavra, indice) => palavrasChave.indexOf(palavra) !== indice
+      ) || "";
+
+    throw new Error(
+      `A palavra-chave "${palavraDuplicada}" aparece mais de uma vez no fluxo importado.`
+    );
+  }
+
+  if (palavrasChaveUnicas.length > 0) {
+    const { data: conflitos, error: conflitosError } = await supabase
+      .from("automacao_gatilhos")
+      .select("valor")
+      .eq("empresa_id", empresaDestinoId)
+      .eq("tipo_gatilho", "palavra_chave")
+      .in("valor", palavrasChaveUnicas)
+      .limit(1);
+
+    if (conflitosError) {
+      throw new Error(
+        `Erro ao validar palavras-chave do fluxo: ${conflitosError.message}`
+      );
+    }
+
+    if (conflitos?.[0]) {
+      throw new Error(
+        `A palavra-chave "${conflitos[0].valor}" já está cadastrada em um fluxo desta empresa. Remova o conflito antes de importar.`
+      );
+    }
+  }
+
   const { data: novoFluxo, error: novoFluxoError } = await supabase
     .from("automacao_fluxos")
     .insert({
@@ -365,16 +411,11 @@ export async function criarCopiaFluxoCompartilhado(params: {
     }
   }
 
-  const gatilhosParaInserir = (snapshot.gatilhos || [])
-    .filter((gatilho) => String(gatilho.valor || "").trim())
-    .map((gatilho) => ({
-      empresa_id: empresaDestinoId,
-      fluxo_id: novoFluxo.id,
-      tipo_gatilho: gatilho.tipo_gatilho || "palavra_chave",
-      valor: String(gatilho.valor || "").trim().toLowerCase(),
-      condicao: gatilho.condicao || "contem",
-      ativo: gatilho.ativo !== false,
-    }));
+  const gatilhosParaInserir = gatilhosNormalizados.map((gatilho) => ({
+    empresa_id: empresaDestinoId,
+    fluxo_id: novoFluxo.id,
+    ...gatilho,
+  }));
 
   if (gatilhosParaInserir.length > 0) {
     const { error: inserirGatilhosError } = await supabase
@@ -382,6 +423,22 @@ export async function criarCopiaFluxoCompartilhado(params: {
       .insert(gatilhosParaInserir);
 
     if (inserirGatilhosError) {
+      await supabase
+        .from("automacao_conexoes")
+        .delete()
+        .eq("empresa_id", empresaDestinoId)
+        .eq("fluxo_id", novoFluxo.id);
+      await supabase
+        .from("automacao_nos")
+        .delete()
+        .eq("empresa_id", empresaDestinoId)
+        .eq("fluxo_id", novoFluxo.id);
+      await supabase
+        .from("automacao_fluxos")
+        .delete()
+        .eq("empresa_id", empresaDestinoId)
+        .eq("id", novoFluxo.id);
+
       throw new Error(
         `Erro ao importar gatilhos: ${inserirGatilhosError.message}`
       );

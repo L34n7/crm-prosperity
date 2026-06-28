@@ -6,6 +6,7 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import { podeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 
 function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
@@ -102,6 +103,16 @@ export async function POST(request: NextRequest) {
           ok: false,
           code: "ASSINATURA_BLOQUEADA",
           error: "Plano bloqueado. Renove a assinatura para criar disparos.",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (!podeRealizarDisparos(usuario)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Voce nao tem permissao para agendar disparos.",
         },
         { status: 403 }
       );

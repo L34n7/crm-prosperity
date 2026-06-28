@@ -2830,11 +2830,31 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     };
   }
 
-  const { data: gatilhos, error: gatilhosError } = await supabaseAdmin
-    .from("automacao_gatilhos")
-    .select("*")
+  const { data: fluxosAtivos, error: fluxosAtivosError } = await supabaseAdmin
+    .from("automacao_fluxos")
+    .select("id")
     .eq("empresa_id", empresaId)
-    .eq("ativo", true);
+    .eq("status", "ativo")
+    .eq("canal", "whatsapp");
+
+  if (fluxosAtivosError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao buscar fluxos ativos:",
+      fluxosAtivosError
+    );
+    return { ok: false, error: "Erro ao buscar fluxos ativos." };
+  }
+
+  const fluxoIdsAtivos = (fluxosAtivos || []).map((fluxo) => fluxo.id);
+  const { data: gatilhos, error: gatilhosError } =
+    fluxoIdsAtivos.length > 0
+      ? await supabaseAdmin
+          .from("automacao_gatilhos")
+          .select("*")
+          .eq("empresa_id", empresaId)
+          .eq("ativo", true)
+          .in("fluxo_id", fluxoIdsAtivos)
+      : { data: [], error: null };
 
   if (gatilhosError) {
     console.error("[AUTOMATION_ENGINE] Erro ao buscar gatilhos:", gatilhosError);
