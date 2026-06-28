@@ -5,59 +5,78 @@ import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-const STATUS_CAMPANHAS_INTERROMPIDAS = [
-  "pausada_por_falhas",
-  "pausada_por_lista_invalida",
-  "pausada_por_erro_meta",
-  "pausada_por_conta_bloqueada",
-  "cancelada",
-  "erro",
-];
+const STATUS_HISTORICO = new Set([
+  "todos",
+  "sucesso",
+  "falha",
+  "processando",
+]);
 
-type CampanhaDisparoHistorico = {
-  id: string;
-  nome?: string | null;
-  integracao_whatsapp_id?: string | null;
-  status?: string | null;
+type CursorHistorico = {
+  data: string;
+  chave: string;
+};
+
+type RegistroHistoricoBanco = {
+  cursor_data?: string | null;
+  cursor_chave?: string | null;
+  registro_id?: string | null;
+  campanha_id?: string | null;
+  campanha_nome?: string | null;
+  numero?: string | null;
+  nome_contato?: string | null;
   template_nome?: string | null;
   template_idioma?: string | null;
+  template_categoria?: string | null;
+  mensagem_template?: string | null;
+  status_disparo?: string | null;
+  status_label?: string | null;
+  status_http?: number | null;
+  message_id?: string | null;
+  conversa_id?: string | null;
+  conversa_protocolo_id?: string | null;
+  contato_id?: string | null;
+  integracao_whatsapp_id?: string | null;
+  erro?: string | null;
+  erro_codigo_meta?: string | number | null;
+  metadata_json?: unknown;
+  origem_historico?: string | null;
+  ok?: boolean | null;
+  status_campanha?: string | null;
   total_itens?: number | null;
-  total_pendentes?: number | null;
-  total_processando?: number | null;
   total_enviados?: number | null;
   total_falhas?: number | null;
   total_cancelados?: number | null;
   pausa_motivo?: string | null;
-  erro?: string | null;
-  metadata_json?: unknown;
-  created_at?: string | null;
-  updated_at?: string | null;
-  paused_at?: string | null;
-  finished_at?: string | null;
 };
 
-function numeroInteiro(valor: unknown) {
-  const numero = Number(valor || 0);
-  return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : 0;
+function codificarCursor(cursor: CursorHistorico) {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
 }
 
-function normalizarMetadata(valor: unknown): Record<string, unknown> {
-  if (!valor) return {};
+function decodificarCursor(valor: string | null): CursorHistorico | null {
+  if (!valor) return null;
 
-  if (typeof valor === "string") {
-    try {
-      const parsed = JSON.parse(valor);
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? parsed
-        : {};
-    } catch {
-      return {};
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(valor, "base64url").toString("utf8")
+    ) as Partial<CursorHistorico>;
+
+    if (
+      !parsed.data ||
+      !parsed.chave ||
+      Number.isNaN(new Date(parsed.data).getTime())
+    ) {
+      return null;
     }
-  }
 
-  return typeof valor === "object" && !Array.isArray(valor)
-    ? (valor as Record<string, unknown>)
-    : {};
+    return {
+      data: parsed.data,
+      chave: parsed.chave,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function traduzirPausaCampanhaDisparo(
@@ -98,19 +117,19 @@ function traduzirErroMetaWhatsApp(
 
   switch (code) {
     case 131031:
-      return "A conta WhatsApp Business foi bloqueada ou desativada pela Meta. Enquanto o numero estiver banido/bloqueado, nao e possivel enviar mensagens por essa integracao. Acesse o Gerenciador do WhatsApp na Meta e solicite uma analise se acreditar que foi um engano.";
+      return "A conta WhatsApp Business foi bloqueada ou desativada pela Meta. Enquanto o numero estiver bloqueado, nao e possivel enviar mensagens por essa integracao.";
 
     case 131042:
-      return "A conta WhatsApp Business possui pendências financeiras na Meta. Acesse o Gerenciador de Negócios da Meta, entre em Cobrança/Pagamentos, selecione a conta WhatsApp Business e regularize o pagamento pendente. Após a confirmação do pagamento, tente enviar o disparo novamente.";
+      return "A conta WhatsApp Business possui pendencias financeiras na Meta. Regularize o pagamento no Gerenciador de Negocios antes de tentar novamente.";
 
     case 131026:
-      return "O número do destinatário está inválido, indisponível ou não pode receber mensagens pelo WhatsApp.";
+      return "O numero do destinatario esta invalido, indisponivel ou nao pode receber mensagens pelo WhatsApp.";
 
     case 470:
       return "A janela de atendimento de 24 horas foi encerrada. Envie um template aprovado para iniciar uma nova conversa.";
 
     case 368:
-      return "A conta WhatsApp está temporariamente bloqueada pela Meta.";
+      return "A conta WhatsApp esta temporariamente bloqueada pela Meta.";
 
     default:
       return erroTecnico || "Falha ao enviar mensagem pelo WhatsApp.";
@@ -160,7 +179,7 @@ export async function GET(req: NextRequest) {
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
-        { ok: false, error: "Usuário sem empresa vinculada." },
+        { ok: false, error: "Usuario sem empresa vinculada." },
         { status: 400 }
       );
     }
@@ -176,299 +195,113 @@ export async function GET(req: NextRequest) {
     }
 
     const searchParams = req.nextUrl.searchParams;
-    const limitParam = Number(searchParams.get("limit") || "50");
-    const campanhaFiltroId =
+    const limiteParam = Number(searchParams.get("limit") || "7");
+    const limite = Number.isFinite(limiteParam)
+      ? Math.min(Math.max(Math.trunc(limiteParam), 1), 25)
+      : 7;
+    const cursorParam = searchParams.get("cursor");
+    const cursor = decodificarCursor(cursorParam);
+
+    if (cursorParam && !cursor) {
+      return NextResponse.json(
+        { ok: false, error: "Cursor de historico invalido." },
+        { status: 400 }
+      );
+    }
+
+    const statusParam = searchParams.get("status")?.trim().toLowerCase() || "";
+    const status = STATUS_HISTORICO.has(statusParam) ? statusParam : "todos";
+    const campanhaId =
       searchParams.get("campanha_id")?.trim() ||
       searchParams.get("campanha_disparo_id")?.trim() ||
       "";
+    const busca = (searchParams.get("busca") || "").trim().slice(0, 120);
+    const incluirTotais = searchParams.get("incluir_totais") === "true";
+    const incluirCampanhas =
+      searchParams.get("incluir_campanhas") === "true";
 
-    const limit = Number.isFinite(limitParam)
-      ? Math.min(Math.max(limitParam, 1), 200)
-      : 50;
+    const consultaPagina = supabaseAdmin.rpc(
+      "buscar_whatsapp_disparo_historico_paginado",
+      {
+        p_empresa_id: usuario.empresa_id,
+        p_limite: limite + 1,
+        p_cursor_data: cursor?.data || null,
+        p_cursor_chave: cursor?.chave || null,
+        p_status: status,
+        p_campanha_id: campanhaId || null,
+        p_busca: busca || null,
+      }
+    );
 
-    let queryLogs = supabaseAdmin
-      .from("whatsapp_disparos_logs")
-      .select(`
-        id,
-        campanha_disparo_id,
-        conversa_id,
-        conversa_protocolo_id,
-        contato_id,
-        integracao_whatsapp_id,
-        numero,
-        nome_contato,
-        template_nome,
-        template_idioma,
-        mensagem,
-        status,
-        erro,
-        status_http,
-        message_id,
-        metadata_json,
-        created_at
-      `)
-      .eq("empresa_id", usuario.empresa_id)
-      .order("created_at", { ascending: false });
+    const consultaTotais = incluirTotais
+      ? supabaseAdmin.rpc("contar_whatsapp_disparo_historico", {
+          p_empresa_id: usuario.empresa_id,
+          p_campanha_id: campanhaId || null,
+          p_busca: busca || null,
+        })
+      : Promise.resolve({ data: null, error: null });
 
-    if (campanhaFiltroId) {
-      queryLogs = queryLogs.eq("campanha_disparo_id", campanhaFiltroId);
-    }
+    const consultaCampanhas = incluirCampanhas
+      ? buscarCampanhasFiltroHistorico(usuario.empresa_id)
+      : Promise.resolve(null);
 
-    const { data, error } = await queryLogs.limit(limit);
+    const [
+      { data: paginaData, error: paginaError },
+      { data: totaisData, error: totaisError },
+      campanhas,
+    ] = await Promise.all([
+      consultaPagina,
+      consultaTotais,
+      consultaCampanhas,
+    ]);
 
-    if (error) {
+    if (paginaError) {
+      const funcaoHistoricoAusente =
+        paginaError.code === "PGRST202" ||
+        paginaError.message.includes(
+          "buscar_whatsapp_disparo_historico_paginado"
+        );
+
       return NextResponse.json(
         {
           ok: false,
-          error: `Erro ao buscar histórico de disparos: ${error.message}`,
+          error: funcaoHistoricoAusente
+            ? "A migration do histórico paginado ainda não foi aplicada neste banco de dados."
+            : `Erro ao buscar historico paginado: ${paginaError.message}`,
         },
         { status: 500 }
       );
     }
 
-    const { data: mensagensAgendadas, error: mensagensAgendadasError } =
-      campanhaFiltroId
-        ? { data: [], error: null }
-        : await supabaseAdmin
-            .from("mensagens")
-            .select(`
-        id,
-        empresa_id,
-        conversa_id,
-        conversa_protocolo_id,
-        conteudo,
-        status_envio,
-        mensagem_externa_id,
-        metadata_json,
-        created_at,
-        updated_at,
-        automacao_execucao_id,
-        automacao_no_id
-      `)
-            .eq("empresa_id", usuario.empresa_id)
-            .eq("tipo_mensagem", "template")
-            .eq("origem", "automatica")
-            .eq("metadata_json->>tipo", "disparo_template_agendado")
-            .order("created_at", { ascending: false })
-            .limit(limit);
-
-  if (mensagensAgendadasError) {
-    console.error(
-      "[HISTÓRICO DISPAROS] Erro ao buscar mensagens agendadas:",
-      mensagensAgendadasError
-    );
-  }
-
-    let queryCampanhasInterrompidas = supabaseAdmin
-        .from("whatsapp_disparo_campanhas")
-        .select(
-          `
-          id,
-          nome,
-          integracao_whatsapp_id,
-          status,
-          template_nome,
-          template_idioma,
-          total_itens,
-          total_pendentes,
-          total_processando,
-          total_enviados,
-          total_falhas,
-          total_cancelados,
-          pausa_motivo,
-          erro,
-          metadata_json,
-          created_at,
-          updated_at,
-          paused_at,
-          finished_at
-        `
-        )
-        .eq("empresa_id", usuario.empresa_id)
-        .in("status", STATUS_CAMPANHAS_INTERROMPIDAS)
-        .order("updated_at", { ascending: false });
-
-    if (campanhaFiltroId) {
-      queryCampanhasInterrompidas =
-        queryCampanhasInterrompidas.eq("id", campanhaFiltroId);
-    }
-
-    const { data: campanhasInterrompidas, error: campanhasInterrompidasError } =
-      await queryCampanhasInterrompidas.limit(limit);
-
-    if (campanhasInterrompidasError) {
+    if (totaisError) {
       console.error(
-        "[HISTORICO DISPAROS] Erro ao buscar campanhas interrompidas:",
-        campanhasInterrompidasError
+        "[HISTORICO DISPAROS] Erro ao calcular totais:",
+        totaisError
       );
     }
 
-    const messageIds = Array.from(
-      new Set(
-        (data || [])
-          .map((item: any) => item.message_id)
-          .filter((messageId: any): messageId is string => Boolean(messageId))
-      )
-    );
+    const registrosBanco = Array.isArray(paginaData)
+      ? (paginaData as RegistroHistoricoBanco[])
+      : [];
+    const temMais = registrosBanco.length > limite;
+    const pagina = temMais ? registrosBanco.slice(0, limite) : registrosBanco;
 
-    let mensagensPorMessageId = new Map<string, any>();
-
-    if (messageIds.length > 0) {
-      const { data: mensagensData, error: mensagensError } = await supabaseAdmin
-        .from("mensagens")
-        .select(`
-          mensagem_externa_id,
-          metadata_json,
-          status_envio
-        `)
-        .eq("empresa_id", usuario.empresa_id)
-        .in("mensagem_externa_id", messageIds);
-
-      if (!mensagensError && mensagensData) {
-        mensagensPorMessageId = new Map(
-          mensagensData.map((mensagem: any) => [
-            mensagem.mensagem_externa_id,
-            mensagem,
-          ])
-        );
-      }
-    }
-
-    const campanhasIdsLogs = Array.from(
-      new Set(
-        (data || [])
-          .map((item: any) => item.campanha_disparo_id)
-          .filter((campanhaId: any): campanhaId is string =>
-            Boolean(campanhaId)
+    const resultados = pagina.map((item) => {
+      const campanhaPausada =
+        item.origem_historico === "campanha_pausada";
+      const motivoCampanha = campanhaPausada
+        ? traduzirPausaCampanhaDisparo(
+            item.status_campanha,
+            item.pausa_motivo,
+            item.erro
           )
-      )
-    );
-    const campanhasPorId = new Map<string, CampanhaDisparoHistorico>();
-
-    if (campanhasIdsLogs.length > 0) {
-      const { data: campanhasData, error: campanhasError } =
-        await supabaseAdmin
-          .from("whatsapp_disparo_campanhas")
-          .select(
-            `
-              id,
-              nome,
-              template_nome,
-              template_idioma,
-              total_itens,
-              created_at
-            `
-          )
-          .eq("empresa_id", usuario.empresa_id)
-          .in("id", campanhasIdsLogs);
-
-      if (!campanhasError && campanhasData) {
-        for (const campanha of campanhasData as CampanhaDisparoHistorico[]) {
-          campanhasPorId.set(campanha.id, campanha);
-        }
-      }
-    }
-
-    const resultados = (data || []).map((item: any) => {
-      const mensagemVinculada = item.message_id
-        ? mensagensPorMessageId.get(item.message_id)
         : null;
 
-      const metadataLog =
-        typeof item.metadata_json === "string"
-          ? (() => {
-              try {
-                return JSON.parse(item.metadata_json);
-              } catch {
-                return {};
-              }
-            })()
-          : item.metadata_json || {};
-
-      const metadataMensagem =
-        typeof mensagemVinculada?.metadata_json === "string"
-          ? (() => {
-              try {
-                return JSON.parse(mensagemVinculada.metadata_json);
-              } catch {
-                return {};
-              }
-            })()
-          : mensagemVinculada?.metadata_json || {};
-
-      const metadataFinal = {
-        ...metadataLog,
-        ...metadataMensagem,
-        log_metadata: metadataLog,
-        mensagem_metadata: metadataMensagem,
-      };
-
-      const statusMensagem = mensagemVinculada?.status_envio || null;
-
-      const rawStatus = metadataFinal?.whatsapp_status?.raw_status || null;
-      const erroMeta =
-        rawStatus?.errors?.[0] ||
-        metadataFinal?.meta_error ||
-        metadataFinal?.meta_response?.error ||
-        null;
-
-      const codigoErroMeta = erroMeta?.code || null;
-
-      const erroTecnico =
-        metadataFinal?.whatsapp_status?.error_message ||
-        erroMeta?.error_data?.details ||
-        erroMeta?.message ||
-        erroMeta?.title ||
-        item.erro ||
-        null;
-
-      const erroAmigavel = traduzirErroMetaWhatsApp(
-        codigoErroMeta,
-        erroTecnico
-      );
-
-      const statusFinal:
-        | "falha"
-        | "sucesso"
-        | "processando"
-        | "pendente" =
-        statusMensagem === "falha"
-          ? "falha"
-          : statusMensagem === "enviada" ||
-            statusMensagem === "entregue" ||
-            statusMensagem === "lida"
-          ? "sucesso"
-          : item.status === "falha"
-          ? "falha"
-          : item.status === "sucesso"
-          ? "sucesso"
-          : item.status === "processando"
-          ? "processando"
-          : "pendente";
-
-      const tipoLog = String(
-        metadataLog?.tipo || metadataFinal?.tipo || ""
-      ).toLowerCase();
-
-      const origemLog = String(
-        metadataLog?.origem || metadataFinal?.origem || ""
-      ).toLowerCase();
-
-      const origemHistorico =
-        tipoLog === "disparo_template_individual" || origemLog === "individual"
-          ? "individual"
-          : tipoLog === "disparo_template_agendado" || origemLog === "agendado"
-          ? "agendado"
-          : "manual";
-
-      const campanhaId = item.campanha_disparo_id || null;
-      const campanhaLog = campanhaId ? campanhasPorId.get(campanhaId) : null;
-
       return {
-        id: item.id,
-        campanha_id: campanhaId,
-        campanha_nome: campanhaLog?.nome || null,
-        created_at: item.created_at,
+        id: item.registro_id || null,
+        campanha_id: item.campanha_id || null,
+        campanha_nome: item.campanha_nome || null,
+        created_at: item.cursor_data || null,
         conversa_id: item.conversa_id || null,
         conversa_protocolo_id: item.conversa_protocolo_id || null,
         contato_id: item.contato_id || null,
@@ -477,208 +310,71 @@ export async function GET(req: NextRequest) {
         nome_contato: item.nome_contato || "Sem nome",
         template_nome: item.template_nome || "-",
         template_idioma: item.template_idioma || null,
-        mensagem_template: item.mensagem || "Sem conteúdo",
-        status_disparo: statusFinal,
-        status_label:
-          statusFinal === "sucesso"
-            ? statusMensagem === "lida"
-              ? "Lida"
-              : statusMensagem === "entregue"
-              ? "Entregue"
-              : "Enviado"
-            : statusFinal === "processando"
-            ? "Aguardando confirmação"
-            : statusFinal === "pendente"
-            ? "Pendente"
-            : "Falhou",
+        template_categoria: item.template_categoria || null,
+        mensagem_template:
+          motivoCampanha || item.mensagem_template || "Sem conteudo",
+        status_disparo: item.status_disparo || "pendente",
+        status_label: item.status_label || "Pendente",
         status_http: item.status_http || null,
         message_id: item.message_id || null,
-        erro: erroTecnico,
-        erro_amigavel: erroAmigavel,
-        erro_codigo_meta: codigoErroMeta,
-        metadata_json: metadataFinal,
-        origem_historico: origemHistorico,
-        ok: statusFinal === "sucesso",
+        erro: item.erro || null,
+        erro_amigavel: campanhaPausada
+          ? motivoCampanha
+          : traduzirErroMetaWhatsApp(item.erro_codigo_meta, item.erro),
+        erro_codigo_meta: item.erro_codigo_meta || null,
+        metadata_json: item.metadata_json || {},
+        origem_historico: item.origem_historico || "manual",
+        ok: item.ok === true,
+        status_campanha: item.status_campanha || null,
+        total_itens: item.total_itens || 0,
+        total_enviados: item.total_enviados || 0,
+        total_falhas: item.total_falhas || 0,
+        total_cancelados: item.total_cancelados || 0,
+        pausa_motivo: motivoCampanha || item.pausa_motivo || null,
       };
     });
 
+    const ultimo = pagina[pagina.length - 1];
+    const proximoCursor =
+      temMais && ultimo?.cursor_data && ultimo?.cursor_chave
+        ? codificarCursor({
+            data: ultimo.cursor_data,
+            chave: ultimo.cursor_chave,
+          })
+        : null;
+    const totaisRaw = Array.isArray(totaisData) ? totaisData[0] : null;
+    const totais = totaisRaw
+      ? {
+          total: Number(totaisRaw.total || 0),
+          sucesso: Number(totaisRaw.sucesso || 0),
+          processando: Number(totaisRaw.processando || 0),
+          falha: Number(totaisRaw.falha || 0),
+        }
+      : null;
 
-    
-    const resultadosAgendados = (mensagensAgendadas || []).map((mensagem: any) => {
-      const metadata = mensagem.metadata_json || {};
-      const whatsappStatus = metadata.whatsapp_status || {};
-      const rawStatus = whatsappStatus.raw_status || {};
-      const erroMeta = rawStatus.errors?.[0] || null;
-
-      const codigoErroMeta = erroMeta?.code || null;
-
-      const erroTecnico =
-        whatsappStatus.error_message ||
-        erroMeta?.message ||
-        erroMeta?.title ||
-        null;
-
-      const statusFinal:
-        | "falha"
-        | "sucesso"
-        | "processando"
-        | "pendente" =
-        mensagem.status_envio === "falha"
-          ? "falha"
-          : mensagem.status_envio === "enviada" ||
-            mensagem.status_envio === "entregue" ||
-            mensagem.status_envio === "lida"
-          ? "sucesso"
-          : mensagem.status_envio === "processando"
-          ? "processando"
-          : "pendente";
-
-      return {
-        id: mensagem.id,
-        campanha_id: null,
-        campanha_nome: null,
-        created_at: mensagem.created_at,
-        conversa_id: mensagem.conversa_id || null,
-        conversa_protocolo_id: mensagem.conversa_protocolo_id || null,
-        contato_id: metadata.contato_id || null,
-        numero: metadata.numero_destino || "-",
-        nome_contato: metadata.nome_contato || "Sem nome",
-        template_nome: metadata.template_nome || "-",
-        template_idioma: metadata.template_idioma || null,
-        mensagem_template:
-          metadata.conteudo_renderizado || mensagem.conteudo || "Sem conteúdo",
-        status_disparo: statusFinal,
-        status_label:
-          statusFinal === "sucesso"
-            ? mensagem.status_envio === "lida"
-              ? "Lida"
-              : mensagem.status_envio === "entregue"
-              ? "Entregue"
-              : "Enviado"
-            : statusFinal === "processando"
-            ? "Aguardando confirmação"
-            : statusFinal === "pendente"
-            ? "Pendente"
-            : "Falhou",
-        status_http: null,
-        message_id: mensagem.mensagem_externa_id || null,
-        erro: erroTecnico,
-        erro_amigavel: traduzirErroMetaWhatsApp(codigoErroMeta, erroTecnico),
-        erro_codigo_meta: codigoErroMeta,
-        metadata_json: metadata,
-        ok: statusFinal === "sucesso",
-        origem_historico: "agendado",
-      };
-    });
-
-    const resultadosCampanhasInterrompidas = (
-      (campanhasInterrompidas || []) as CampanhaDisparoHistorico[]
-    ).map((campanha) => {
-      const totalItens = numeroInteiro(campanha.total_itens);
-      const totalPendentes = numeroInteiro(campanha.total_pendentes);
-      const totalProcessando = numeroInteiro(campanha.total_processando);
-      const totalEnviados = numeroInteiro(campanha.total_enviados);
-      const totalFalhas = numeroInteiro(campanha.total_falhas);
-      const totalCanceladosBanco = numeroInteiro(campanha.total_cancelados);
-      const totalCancelados = Math.max(
-        totalCanceladosBanco + totalPendentes + totalProcessando,
-        0
-      );
-
-      const dataReferencia =
-        campanha.paused_at ||
-        campanha.finished_at ||
-        campanha.updated_at ||
-        campanha.created_at ||
-        new Date().toISOString();
-
-      const motivo = traduzirPausaCampanhaDisparo(
-        campanha.status,
-        campanha.pausa_motivo,
-        campanha.erro
-      );
-
-      const metadataCampanha = normalizarMetadata(campanha.metadata_json);
-
-      return {
-        id: `campanha-${campanha.id}`,
-        campanha_id: campanha.id,
-        campanha_nome: campanha.nome || null,
-        created_at: dataReferencia,
-        conversa_id: null,
-        conversa_protocolo_id: null,
-        contato_id: null,
-        integracao_whatsapp_id: campanha.integracao_whatsapp_id || null,
-        numero: `${totalItens} contatos`,
-        nome_contato: "Disparo em massa",
-        template_nome: campanha.template_nome || "-",
-        template_idioma: campanha.template_idioma || null,
-        mensagem_template: motivo,
-        status_disparo: "falha",
-        status_label: "Disparo em massa cancelado",
-        status_http: null,
-        message_id: null,
-        erro: campanha.erro || campanha.pausa_motivo || null,
-        erro_amigavel: motivo,
-        erro_codigo_meta: null,
-        metadata_json: {
-          ...metadataCampanha,
-          tipo: "campanha_disparo_pausada",
-          campanha_id: campanha.id,
-          campanha_nome: campanha.nome || null,
-          status_campanha: campanha.status || null,
-          total_itens: totalItens,
-          total_enviados: totalEnviados,
-          total_falhas: totalFalhas,
-          total_cancelados: totalCancelados,
-          total_pendentes: totalPendentes,
-          total_processando: totalProcessando,
-          pausa_motivo: campanha.pausa_motivo || null,
+    return NextResponse.json(
+      {
+        ok: true,
+        resultados,
+        tem_mais: temMais,
+        proximo_cursor: proximoCursor,
+        totais,
+        ...(campanhas ? { campanhas } : {}),
+      },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
         },
-        origem_historico: "campanha_pausada",
-        ok: false,
-        status_campanha: campanha.status || null,
-        total_itens: totalItens,
-        total_enviados: totalEnviados,
-        total_falhas: totalFalhas,
-        total_cancelados: totalCancelados,
-        pausa_motivo: campanha.pausa_motivo || null,
-      };
-    });
-
-    const messageIdsLogs = new Set(
-      resultados
-        .map((item: any) => item.message_id)
-        .filter(Boolean)
+      }
     );
-
-    const resultadosAgendadosSemDuplicar = resultadosAgendados.filter(
-      (item: any) => !item.message_id || !messageIdsLogs.has(item.message_id)
-    );
-
-    const todosResultados = [
-      ...resultados,
-      ...resultadosAgendadosSemDuplicar,
-      ...resultadosCampanhasInterrompidas,
-    ]
-      .sort(
-        (a: any, b: any) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-      .slice(0, limit);
-
-    return NextResponse.json({
-      ok: true,
-      total: todosResultados.length,
-      resultados: todosResultados,
-      campanhas: await buscarCampanhasFiltroHistorico(usuario.empresa_id),
-    });
-
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
       {
         ok: false,
-        error: error?.message || "Erro interno ao buscar histórico.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro interno ao buscar historico.",
       },
       { status: 500 }
     );

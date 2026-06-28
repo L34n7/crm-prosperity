@@ -102,6 +102,8 @@ type ResultadoDisparo = {
   status_disparo?: string | null;
   status_label?: string | null;
   template_nome?: string | null;
+  template_categoria?: string | null;
+  categoria?: string | null;
   mensagem_template?: string | null;
   message_id?: string | null;
   conversa_id?: string | null;
@@ -196,6 +198,37 @@ type CampanhaHistoricoFiltro = {
   status?: string | null;
 };
 
+type TotaisHistorico = {
+  total: number;
+  sucesso: number;
+  processando: number;
+  falha: number;
+};
+
+type PaginaHistoricoCache = {
+  resultados: ResultadoDisparo[];
+  temMais: boolean;
+  proximoCursor: string | null;
+};
+
+type ConsultaHistoricoCache = {
+  atualizadoEm: number;
+  paginaAtual: number;
+  paginas: Record<string, PaginaHistoricoCache>;
+  totais: TotaisHistorico | null;
+};
+
+type CampanhasHistoricoCache = {
+  atualizadoEm: number;
+  campanhas: CampanhaHistoricoFiltro[];
+};
+
+type HistoricoCachePersistido = {
+  versao: 1;
+  consultas: Record<string, ConsultaHistoricoCache>;
+  campanhasPorEmpresa: Record<string, CampanhasHistoricoCache>;
+};
+
 type CampanhaConflitoContato = {
   campanha_id: string;
   campanha_nome: string;
@@ -223,6 +256,147 @@ const STATUS_CAMPANHAS_ATIVAS = new Set(["pendente", "enviando"]);
 const TEMPO_CARD_CAMPANHA_TERMINAL_MS = 8000;
 const TESTE_CARD_PAGINA_DISPARO_KEY =
   "crm-whatsapp-disparo-page-card-test";
+const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v1";
+const HISTORICO_CACHE_TTL_MS = 5 * 60 * 1000;
+const HISTORICO_CACHE_MAX_CONSULTAS = 20;
+
+let historicoCacheMemoria: HistoricoCachePersistido | null = null;
+
+function criarHistoricoCacheVazio(): HistoricoCachePersistido {
+  return {
+    versao: 1,
+    consultas: {},
+    campanhasPorEmpresa: {},
+  };
+}
+
+function carregarHistoricoCachePersistido() {
+  if (historicoCacheMemoria) return historicoCacheMemoria;
+
+  if (typeof window === "undefined") {
+    historicoCacheMemoria = criarHistoricoCacheVazio();
+    return historicoCacheMemoria;
+  }
+
+  try {
+    const valor = window.sessionStorage.getItem(HISTORICO_CACHE_STORAGE_KEY);
+    const parsed = valor
+      ? (JSON.parse(valor) as HistoricoCachePersistido)
+      : null;
+
+    historicoCacheMemoria =
+      parsed?.versao === 1 ? parsed : criarHistoricoCacheVazio();
+  } catch {
+    historicoCacheMemoria = criarHistoricoCacheVazio();
+  }
+
+  return historicoCacheMemoria;
+}
+
+function persistirHistoricoCache() {
+  if (typeof window === "undefined" || !historicoCacheMemoria) return;
+
+  try {
+    window.sessionStorage.setItem(
+      HISTORICO_CACHE_STORAGE_KEY,
+      JSON.stringify(historicoCacheMemoria)
+    );
+  } catch {
+    // O cache em memória continua disponível se o limite da sessão for atingido.
+  }
+}
+
+function chaveConsultaHistorico(
+  empresaId: string,
+  status: string,
+  campanhaId: string,
+  busca: string
+) {
+  return JSON.stringify([
+    empresaId,
+    status,
+    campanhaId,
+    busca.trim().toLocaleLowerCase("pt-BR"),
+  ]);
+}
+
+function obterConsultaHistoricoCache(chave: string) {
+  const cache = carregarHistoricoCachePersistido();
+  const consulta = cache.consultas[chave];
+
+  if (!consulta) return null;
+
+  if (Date.now() - consulta.atualizadoEm > HISTORICO_CACHE_TTL_MS) {
+    delete cache.consultas[chave];
+    persistirHistoricoCache();
+    return null;
+  }
+
+  return consulta;
+}
+
+function salvarConsultaHistoricoCache(
+  chave: string,
+  consulta: ConsultaHistoricoCache
+) {
+  const cache = carregarHistoricoCachePersistido();
+  cache.consultas[chave] = consulta;
+
+  const chaves = Object.entries(cache.consultas).sort(
+    ([, a], [, b]) => b.atualizadoEm - a.atualizadoEm
+  );
+
+  for (const [chaveAntiga] of chaves.slice(HISTORICO_CACHE_MAX_CONSULTAS)) {
+    delete cache.consultas[chaveAntiga];
+  }
+
+  persistirHistoricoCache();
+}
+
+function obterCampanhasHistoricoCache(empresaId: string) {
+  const cache = carregarHistoricoCachePersistido();
+  const registro = cache.campanhasPorEmpresa[empresaId];
+
+  if (!registro) return null;
+
+  if (Date.now() - registro.atualizadoEm > HISTORICO_CACHE_TTL_MS) {
+    delete cache.campanhasPorEmpresa[empresaId];
+    persistirHistoricoCache();
+    return null;
+  }
+
+  return registro.campanhas;
+}
+
+function salvarCampanhasHistoricoCache(
+  empresaId: string,
+  campanhas: CampanhaHistoricoFiltro[]
+) {
+  const cache = carregarHistoricoCachePersistido();
+  cache.campanhasPorEmpresa[empresaId] = {
+    atualizadoEm: Date.now(),
+    campanhas,
+  };
+  persistirHistoricoCache();
+}
+
+function invalidarHistoricoCacheEmpresa(empresaId: string) {
+  const cache = carregarHistoricoCachePersistido();
+
+  for (const chave of Object.keys(cache.consultas)) {
+    try {
+      const [empresaConsulta] = JSON.parse(chave) as string[];
+      if (empresaConsulta === empresaId) {
+        delete cache.consultas[chave];
+      }
+    } catch {
+      delete cache.consultas[chave];
+    }
+  }
+
+  delete cache.campanhasPorEmpresa[empresaId];
+  persistirHistoricoCache();
+}
 
 type VariavelPersonalizada = {
   id: string;
@@ -1069,6 +1243,20 @@ function obterMotivoCampanhaPausada(item: ResultadoDisparo) {
   );
 }
 
+function obterCategoriaHistorico(item: ResultadoDisparo) {
+  const metadata = normalizarMetadataJson(item.metadata_json) || {};
+
+  return (
+    item.template_categoria ||
+    item.categoria ||
+    metadata.template_categoria ||
+    metadata.categoria ||
+    metadata.template?.category ||
+    metadata.template?.categoria ||
+    null
+  );
+}
+
 function obterStatusCampanhaPausada(item: ResultadoDisparo) {
   const metadata = normalizarMetadataJson(item.metadata_json) || {};
   const status = String(item.status_campanha || metadata.status_campanha || "");
@@ -1120,6 +1308,7 @@ export default function DisparosWhatsAppPage() {
     null
   );
   const timerCardCampanhaRef = useRef<number | null>(null);
+  const historicoConsultaAtivaRef = useRef("");
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
 
   const [integracoes, setIntegracoes] = useState<IntegracaoWhatsApp[]>([]);
@@ -1170,6 +1359,13 @@ export default function DisparosWhatsAppPage() {
   const [erro, setErro] = useState("");
   const [erroConflitos, setErroConflitos] = useState("");
   const [resultado, setResultado] = useState<ResultadoDisparo[]>([]);
+  const [totaisHistorico, setTotaisHistorico] = useState<TotaisHistorico>({
+    total: 0,
+    sucesso: 0,
+    processando: 0,
+    falha: 0,
+  });
+  const [historicoTemMais, setHistoricoTemMais] = useState(false);
   const [campanhasHistorico, setCampanhasHistorico] = useState<
     CampanhaHistoricoFiltro[]
   >([]);
@@ -1192,6 +1388,8 @@ export default function DisparosWhatsAppPage() {
   const [filtroHistorico, setFiltroHistorico] = useState<
     "todos" | "sucesso" | "falha" | "processando"
   >("todos");
+  const [buscaHistorico, setBuscaHistorico] = useState("");
+  const [buscaHistoricoConsulta, setBuscaHistoricoConsulta] = useState("");
   const [filtroHistoricoCampanha, setFiltroHistoricoCampanha] = useState("");
   const [loadingConflitos, setLoadingConflitos] = useState(false);
 
@@ -1415,36 +1613,194 @@ export default function DisparosWhatsAppPage() {
     }
   }
 
-  async function carregarHistorico(campanhaId = filtroHistoricoCampanha) {
-    try {
-      setLoadingHistorico(true);
+  const carregarHistorico = useCallback(
+    async (
+      opcoes: {
+        pagina?: number;
+        forcar?: boolean;
+        restaurarPagina?: boolean;
+      } = {}
+    ) => {
+      const empresaId = usuarioLogado?.empresa_id;
 
-      const params = new URLSearchParams({ limit: "80" });
+      if (!empresaId) return;
 
-      if (campanhaId) {
-        params.set("campanha_id", campanhaId);
+      const forcar = opcoes.forcar ?? true;
+
+      if (forcar) {
+        invalidarHistoricoCacheEmpresa(empresaId);
       }
 
-      const res = await fetch(`/api/whatsapp/disparos/historico?${params}`, {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar histórico de disparos.");
-      }
-
-      setResultado(Array.isArray(json.resultados) ? json.resultados : []);
-      setCampanhasHistorico(
-        Array.isArray(json.campanhas) ? json.campanhas : []
+      const chaveConsulta = chaveConsultaHistorico(
+        empresaId,
+        filtroHistorico,
+        filtroHistoricoCampanha,
+        buscaHistoricoConsulta
       );
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar histórico de disparos.");
-    } finally {
-      setLoadingHistorico(false);
-    }
-  }
+      let consultaCache = obterConsultaHistoricoCache(chaveConsulta);
+      const paginaRestaurada =
+        opcoes.restaurarPagina && consultaCache?.paginaAtual
+          ? consultaCache.paginaAtual
+          : 1;
+      const paginaAlvo = Math.max(
+        1,
+        forcar ? 1 : opcoes.pagina || paginaRestaurada
+      );
+      const requisicaoId = `${chaveConsulta}:${paginaAlvo}:${Date.now()}`;
+      historicoConsultaAtivaRef.current = requisicaoId;
+
+      const campanhasCache = obterCampanhasHistoricoCache(empresaId);
+
+      if (campanhasCache) {
+        setCampanhasHistorico(campanhasCache);
+      }
+
+      const paginaCache = !forcar
+        ? consultaCache?.paginas[String(paginaAlvo)]
+        : null;
+
+      if (paginaCache && campanhasCache) {
+        consultaCache = {
+          ...consultaCache!,
+          paginaAtual: paginaAlvo,
+          atualizadoEm: Date.now(),
+        };
+        salvarConsultaHistoricoCache(chaveConsulta, consultaCache);
+        setResultado(paginaCache.resultados);
+        setHistoricoTemMais(paginaCache.temMais);
+        setTotaisHistorico(
+          consultaCache.totais || {
+            total: paginaCache.resultados.length,
+            sucesso: paginaCache.resultados.filter(disparoTeveSucesso).length,
+            processando: paginaCache.resultados.filter(disparoEstaProcessando)
+              .length,
+            falha: paginaCache.resultados.filter(disparoTeveFalha).length,
+          }
+        );
+        setPaginaHistorico(paginaAlvo);
+        setLoadingHistorico(false);
+        return;
+      }
+
+      const paginaAnterior =
+        paginaAlvo > 1
+          ? consultaCache?.paginas[String(paginaAlvo - 1)]
+          : null;
+
+      if (paginaAlvo > 1 && !paginaAnterior?.proximoCursor) {
+        setHistoricoTemMais(false);
+        return;
+      }
+
+      try {
+        setLoadingHistorico(true);
+
+        const params = new URLSearchParams({
+          limit: String(ITENS_HISTORICO_POR_PAGINA),
+          status: filtroHistorico,
+        });
+
+        if (paginaAnterior?.proximoCursor) {
+          params.set("cursor", paginaAnterior.proximoCursor);
+        }
+
+        if (filtroHistoricoCampanha) {
+          params.set("campanha_id", filtroHistoricoCampanha);
+        }
+
+        if (buscaHistoricoConsulta) {
+          params.set("busca", buscaHistoricoConsulta);
+        }
+
+        if (!consultaCache?.totais) {
+          params.set("incluir_totais", "true");
+        }
+
+        if (!campanhasCache) {
+          params.set("incluir_campanhas", "true");
+        }
+
+        const res = await fetch(`/api/whatsapp/disparos/historico?${params}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+          throw new Error(
+            json.error || "Erro ao carregar histórico de disparos."
+          );
+        }
+
+        if (historicoConsultaAtivaRef.current !== requisicaoId) return;
+
+        const resultadosPagina = Array.isArray(json.resultados)
+          ? (json.resultados as ResultadoDisparo[])
+          : [];
+        const totaisRecebidos = json.totais
+          ? {
+              total: Number(json.totais.total || 0),
+              sucesso: Number(json.totais.sucesso || 0),
+              processando: Number(json.totais.processando || 0),
+              falha: Number(json.totais.falha || 0),
+            }
+          : consultaCache?.totais || null;
+        const novaConsulta: ConsultaHistoricoCache = {
+          atualizadoEm: Date.now(),
+          paginaAtual: paginaAlvo,
+          paginas: {
+            ...(consultaCache?.paginas || {}),
+            [String(paginaAlvo)]: {
+              resultados: resultadosPagina,
+              temMais: json.tem_mais === true,
+              proximoCursor:
+                typeof json.proximo_cursor === "string"
+                  ? json.proximo_cursor
+                  : null,
+            },
+          },
+          totais: totaisRecebidos,
+        };
+
+        salvarConsultaHistoricoCache(chaveConsulta, novaConsulta);
+
+        if (Array.isArray(json.campanhas)) {
+          const campanhas = json.campanhas as CampanhaHistoricoFiltro[];
+          salvarCampanhasHistoricoCache(empresaId, campanhas);
+          setCampanhasHistorico(campanhas);
+        }
+
+        setResultado(resultadosPagina);
+        setHistoricoTemMais(json.tem_mais === true);
+        setTotaisHistorico(
+          totaisRecebidos || {
+            total: resultadosPagina.length,
+            sucesso: resultadosPagina.filter(disparoTeveSucesso).length,
+            processando: resultadosPagina.filter(disparoEstaProcessando).length,
+            falha: resultadosPagina.filter(disparoTeveFalha).length,
+          }
+        );
+        setPaginaHistorico(paginaAlvo);
+      } catch (error) {
+        if (historicoConsultaAtivaRef.current !== requisicaoId) return;
+
+        setErro(
+          error instanceof Error
+            ? error.message
+            : "Erro ao carregar histórico de disparos."
+        );
+      } finally {
+        if (historicoConsultaAtivaRef.current === requisicaoId) {
+          setLoadingHistorico(false);
+        }
+      }
+    },
+    [
+      usuarioLogado?.empresa_id,
+      filtroHistorico,
+      filtroHistoricoCampanha,
+      buscaHistoricoConsulta,
+    ]
+  );
 
   async function carregarConflitosDisparo(contatosLista: ContatoOpcao[]) {
     const contatosValidos = contatosLista.filter(contatoTemTelefoneValido);
@@ -1639,7 +1995,6 @@ export default function DisparosWhatsAppPage() {
     carregarUsuarioLogado();
     carregarIntegracoes();
     carregarContatos("", "", "");
-    carregarHistorico();
     carregarBloqueioDisparoEmMassa();
     carregarCampanhaPagina();
     carregarVariaveisPersonalizadas();
@@ -1684,8 +2039,21 @@ export default function DisparosWhatsAppPage() {
   }, [contatosSelecionados]);
 
   useEffect(() => {
-    carregarHistorico(filtroHistoricoCampanha);
-  }, [filtroHistoricoCampanha]);
+    const timer = window.setTimeout(() => {
+      setBuscaHistoricoConsulta(buscaHistorico.trim());
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [buscaHistorico]);
+
+  useEffect(() => {
+    if (!usuarioLogado?.empresa_id) return;
+
+    void carregarHistorico({
+      forcar: false,
+      restaurarPagina: true,
+    });
+  }, [usuarioLogado?.empresa_id, carregarHistorico]);
 
   useEffect(() => {
     setTemplateId("");
@@ -1760,7 +2128,12 @@ export default function DisparosWhatsAppPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [usuarioLogado?.empresa_id, integracaoId, aplicarCampanhaPagina]);
+  }, [
+    usuarioLogado?.empresa_id,
+    integracaoId,
+    aplicarCampanhaPagina,
+    carregarHistorico,
+  ]);
 
   useEffect(() => {
     if (timerCardCampanhaRef.current) {
@@ -2018,60 +2391,38 @@ export default function DisparosWhatsAppPage() {
     return ids.size;
   }, [gruposConflitoAtivos]);
 
-  const totalSucesso = useMemo(() => {
-    return resultado.filter(disparoTeveSucesso).length;
-  }, [resultado]);
-
-  const totalFalha = useMemo(() => {
-    return resultado.filter(disparoTeveFalha).length;
-  }, [resultado]);
-
-  const totalProcessando = useMemo(() => {
-    return resultado.filter(disparoEstaProcessando).length;
-  }, [resultado]);
-
-  const resultadoFiltrado = useMemo(() => {
-    if (filtroHistorico === "todos") return resultado;
-
-    return resultado.filter((item) => {
-      if (filtroHistorico === "falha") {
-        return disparoTeveFalha(item);
-      }
-
-      if (filtroHistorico === "processando") {
-        return disparoEstaProcessando(item);
-      }
-
-      if (filtroHistorico === "sucesso") {
-        return disparoTeveSucesso(item);
-      }
-
-      return true;
-    });
-  }, [resultado, filtroHistorico]);
+  const totalSucesso = totaisHistorico.sucesso;
+  const totalFalha = totaisHistorico.falha;
+  const totalProcessando = totaisHistorico.processando;
+  const resultadoFiltrado = resultado;
+  const totalResultadosFiltroAtivo =
+    filtroHistorico === "sucesso"
+      ? totaisHistorico.sucesso
+      : filtroHistorico === "processando"
+      ? totaisHistorico.processando
+      : filtroHistorico === "falha"
+      ? totaisHistorico.falha
+      : totaisHistorico.total;
 
   const totalPaginasHistorico = useMemo(() => {
     return Math.max(
       1,
-      Math.ceil(resultadoFiltrado.length / ITENS_HISTORICO_POR_PAGINA)
+      Math.ceil(totalResultadosFiltroAtivo / ITENS_HISTORICO_POR_PAGINA)
     );
-  }, [resultadoFiltrado.length]);
+  }, [totalResultadosFiltroAtivo]);
 
-  const resultadoHistoricoPaginado = useMemo(() => {
-    const inicio = (paginaHistorico - 1) * ITENS_HISTORICO_POR_PAGINA;
-    const fim = inicio + ITENS_HISTORICO_POR_PAGINA;
-
-    return resultadoFiltrado.slice(inicio, fim);
-  }, [resultadoFiltrado, paginaHistorico]);
+  const resultadoHistoricoPaginado = resultadoFiltrado;
 
   const primeiroItemHistorico =
-    resultadoFiltrado.length === 0
+    totalResultadosFiltroAtivo === 0
       ? 0
       : (paginaHistorico - 1) * ITENS_HISTORICO_POR_PAGINA + 1;
 
   const ultimoItemHistorico = Math.min(
-    paginaHistorico * ITENS_HISTORICO_POR_PAGINA,
-    resultadoFiltrado.length
+    resultadoHistoricoPaginado.length === 0
+      ? 0
+      : primeiroItemHistorico + resultadoHistoricoPaginado.length - 1,
+    totalResultadosFiltroAtivo
   );
 
   const campanhaPaginaAtiva = campanhaEstaAtiva(campanhaPagina);
@@ -2706,14 +3057,6 @@ export default function DisparosWhatsAppPage() {
 
         await carregarHistorico();
 
-        setTimeout(() => {
-          carregarHistorico();
-        }, 5000);
-
-        setTimeout(() => {
-          carregarHistorico();
-        }, 12000);
-
         return;
       }
 
@@ -2727,14 +3070,6 @@ export default function DisparosWhatsAppPage() {
       );
 
       await carregarHistorico();
-
-      setTimeout(() => {
-        carregarHistorico();
-      }, 5000);
-
-      setTimeout(() => {
-        carregarHistorico();
-      }, 12000);
 
     } catch (error: any) {
       setErro(error?.message || "Erro ao realizar disparo.");
@@ -2951,10 +3286,6 @@ export default function DisparosWhatsAppPage() {
 
     calcularPreviewCusto(categoria, contatosSelecionados);
   }, [templateSelecionado, contatosSelecionados]);
-
-  useEffect(() => {
-    setPaginaHistorico(1);
-  }, [resultado.length, filtroHistorico, filtroHistoricoCampanha]);
 
   return (
     <>
@@ -3683,11 +4014,22 @@ export default function DisparosWhatsAppPage() {
                           que poderiam ultrapassar esse teto.
                         </p>
                       </div>
-                      <strong>
-                        {loadingSaudeMeta
-                          ? "Atualizando"
-                          : `${formatarPercentualMeta(limiteMeta?.percentual)} usado`}
-                      </strong>
+
+                      <div className={styles.metaHealthHeaderActions}>
+                        <a
+                          href="https://business.facebook.com/latest/whatsapp_manager/messaging_limits"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.metaCapacityButton}
+                        >
+                          Mais capacidade
+                        </a>
+                        <strong className={styles.metaHealthUsageBadge}>
+                          {loadingSaudeMeta
+                            ? "Atualizando"
+                            : `${formatarPercentualMeta(limiteMeta?.percentual)} usado`}
+                        </strong>
+                      </div>
                     </div>
 
                     <div className={styles.metaHealthGrid}>
@@ -3930,29 +4272,13 @@ export default function DisparosWhatsAppPage() {
           ) : null}
 
       <section className={styles.resultsCard}>
-        <div className={`${styles.cardHeader} ${styles.resultsHeader}`}>
-          <div className={styles.resultsHeaderText}>
+        <div className={styles.cardHeader}>
+          <div>
             <p className={styles.eyebrow}>Histórico</p>
             <h2 className={styles.cardTitle}>Resultados dos disparos</h2>
             <p className={styles.cardSubtitle}>
               Os disparos salvos ficam sempre visíveis aqui.
             </p>
-          </div>
-
-          <div className={styles.resultsHeaderFilter}>
-            <label className={styles.label}>Disparo em massa</label>
-            <select
-              value={filtroHistoricoCampanha}
-              onChange={(e) => setFiltroHistoricoCampanha(e.target.value)}
-              className={styles.input}
-            >
-              <option value="">Todos os disparos em massa</option>
-              {campanhasHistorico.map((campanha) => (
-                <option key={campanha.id} value={campanha.id}>
-                  {nomeCampanhaHistorico(campanha)}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 
@@ -3967,7 +4293,9 @@ export default function DisparosWhatsAppPage() {
               onClick={() => setFiltroHistorico("todos")}
             >
               <span className={styles.summaryLabel}>Total</span>
-              <strong className={styles.summaryValue}>{resultado.length}</strong>
+              <strong className={styles.summaryValue}>
+                {totaisHistorico.total}
+              </strong>
             </button>
 
             <button
@@ -4010,6 +4338,34 @@ export default function DisparosWhatsAppPage() {
             </button>
           </div>
 
+          <div className={styles.historySearchBar}>
+            <div className={styles.historySearchField}>
+              <label className={styles.label}>Busca</label>
+              <input
+                value={buscaHistorico}
+                onChange={(e) => setBuscaHistorico(e.target.value)}
+                className={styles.input}
+                placeholder="Busque por número, nome ou template..."
+              />
+            </div>
+
+            <div className={styles.historyMassFilter}>
+              <label className={styles.label}>Disparo em massa</label>
+              <select
+                value={filtroHistoricoCampanha}
+                onChange={(e) => setFiltroHistoricoCampanha(e.target.value)}
+                className={styles.input}
+              >
+                <option value="">Todos os disparos em massa</option>
+                {campanhasHistorico.map((campanha) => (
+                  <option key={campanha.id} value={campanha.id}>
+                    {nomeCampanhaHistorico(campanha)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
             {loadingHistorico ? (
               <div className={styles.emptyState}>Carregando histórico...</div>
             ) : resultadoFiltrado.length === 0 ? (
@@ -4036,6 +4392,8 @@ export default function DisparosWhatsAppPage() {
 
                             <p className={styles.resultCompactMeta}>
                               Template: {item.template_nome || "-"}
+                              {" • "}
+                              Categoria: {formatarCategoriaMeta(obterCategoriaHistorico(item))}
                               {" • "}
                               Disparo interrompido pelo sistema de segurança
                             </p>
@@ -4109,10 +4467,12 @@ export default function DisparosWhatsAppPage() {
                         {item.nome_contato || "Sem nome"} • {item.numero}
                       </strong>
 
-                      <p className={styles.resultCompactMeta}>
-                        Template: {item.template_nome}
-                        {" • "}
-                        {formatarDataHora(item.created_at)}
+                        <p className={styles.resultCompactMeta}>
+                          Template: {item.template_nome || "-"}
+                          {" • "}
+                          Categoria: {formatarCategoriaMeta(obterCategoriaHistorico(item))}
+                          {" • "}
+                          {formatarDataHora(item.created_at)}
 
                         {item.campanha_nome ? (
                           <>
@@ -4213,19 +4573,26 @@ export default function DisparosWhatsAppPage() {
                   );
                 })}
                 
-                {resultadoFiltrado.length > ITENS_HISTORICO_POR_PAGINA ? (
+                {totalResultadosFiltroAtivo > ITENS_HISTORICO_POR_PAGINA ||
+                paginaHistorico > 1 ||
+                historicoTemMais ? (
                   <div className={styles.paginationBar}>
                     <span className={styles.paginationInfo}>
                       Mostrando {primeiroItemHistorico} a {ultimoItemHistorico} de{" "}
-                      {resultadoFiltrado.length} disparos
+                      {totalResultadosFiltroAtivo} disparos
                     </span>
 
                     <div className={styles.paginationActions}>
                       <button
                         type="button"
                         className={styles.paginationButton}
-                        onClick={() => setPaginaHistorico((prev) => Math.max(1, prev - 1))}
-                        disabled={paginaHistorico <= 1}
+                        onClick={() =>
+                          void carregarHistorico({
+                            pagina: Math.max(1, paginaHistorico - 1),
+                            forcar: false,
+                          })
+                        }
+                        disabled={paginaHistorico <= 1 || loadingHistorico}
                       >
                         Anterior
                       </button>
@@ -4238,11 +4605,12 @@ export default function DisparosWhatsAppPage() {
                         type="button"
                         className={styles.paginationButton}
                         onClick={() =>
-                          setPaginaHistorico((prev) =>
-                            Math.min(totalPaginasHistorico, prev + 1)
-                          )
+                          void carregarHistorico({
+                            pagina: paginaHistorico + 1,
+                            forcar: false,
+                          })
                         }
-                        disabled={paginaHistorico >= totalPaginasHistorico}
+                        disabled={!historicoTemMais || loadingHistorico}
                       >
                         Próxima
                       </button>
@@ -4473,7 +4841,7 @@ export default function DisparosWhatsAppPage() {
                   Cancelar disparos pendentes?
                 </h3>
                 <p className={styles.modalSubtitle}>
-                  Os envios que ainda nao foram processados serao cancelados.
+                  Os envios que ainda não foram processados serão cancelados.
                 </p>
               </div>
 
@@ -4511,7 +4879,7 @@ export default function DisparosWhatsAppPage() {
               </div>
 
               <div className={styles.modalAlert}>
-                Mensagens ja aceitas pela Meta nao podem ser desfeitas e
+                Mensagens ja aceitas pela Meta não podem ser desfeitas e
                 continuarao aparecendo como enviadas.
               </div>
             </div>
@@ -4627,13 +4995,6 @@ export default function DisparosWhatsAppPage() {
                     <span className={styles.modalInfoLabel}>Cobrados</span>
                     <strong className={styles.modalInfoValue}>
                       {previewCusto?.totalCobrados ?? 0}
-                    </strong>
-                  </div>
-
-                  <div className={styles.modalInfoItem}>
-                    <span className={styles.modalInfoLabel}>Total USD</span>
-                    <strong className={styles.modalInfoValue}>
-                      US$ {(previewCusto?.valorTotalUsd ?? 0).toFixed(4)}
                     </strong>
                   </div>
                 </div>

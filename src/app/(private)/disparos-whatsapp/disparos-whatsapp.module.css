@@ -280,6 +280,27 @@
   gap: 12px;
 }
 
+.historySearchBar {
+  padding: 14px 18px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: 12px;
+  align-items: end;
+}
+
+.historySearchField,
+.historyMassFilter {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.historyMassFilter .input,
+.historySearchField .input {
+  height: 42px;
+}
+
 .summaryCard {
   border: 1px solid var(--crm-border);
   background: var(--crm-surface);
@@ -1340,7 +1361,16 @@
   font-weight: 900;
 }
 
-.metaHealthHeader > strong {
+.metaHealthHeader .metaHealthHeaderActions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.metaHealthHeaderActions > strong {
   min-width: 118px;
   border: 1px solid rgba(18, 165, 132, 0.25);
   border-radius: 999px;
@@ -1349,6 +1379,40 @@
   color: var(--crm-primary-text);
   font-size: 13px;
   text-align: center;
+}
+
+.metaCapacityButton {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 14px;
+  border: 1px solid #d5ffeb;
+  background: linear-gradient(80deg, #f4fff8 0%, #c8ffdd 100%);
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.metaCapacityButton:hover {
+  background: linear-gradient(80deg, #c8ffe3 0%, #c8ffdb 100%);
+  border: 1px solid #d8f5ff;
+  transform: translateY(-1px);
+}
+
+.metaHealthUsageBadge {
+  min-width: 118px;
+  border: 1px solid rgba(18, 165, 132, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 8px 12px;
+  color: var(--crm-primary-text);
+  font-size: 13px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .metaHealthHeader p {
@@ -2610,13 +2674,14 @@
   .searchRow,
   .searchFilters,
   .historyFilters,
+  .historySearchBar,
   .conflictGroup,
   .contactsSection,
   .resultsSummary,
   .modalGridResumo,
   .setupPreviewGrid,
   .setupColumn,
-  .scheduleFields,
+  .templateInfoBox,
   .templateVariablesGrid,
   .variableFormGrid,
   .disparoCardExpandido,
@@ -2624,19 +2689,23 @@
     grid-template-columns: 1fr;
   }
 
+  .historySearchBar {
+    padding: 12px 16px 0;
+  }
+
   .campaignNameField {
-  min-width: 0;
-}
+    min-width: 0;
+  }
 
-.labelWithHelp {
-  justify-content: flex-start;
-}
+  .labelWithHelp {
+    justify-content: flex-start;
+  }
 
-.infoTooltipText {
-  left: 0;
-  right: auto;
-  width: min(280px, calc(100vw - 48px));
-}
+  .infoTooltipText {
+    left: 0;
+    right: auto;
+    width: min(280px, calc(100vw - 48px));
+  }
 
   .summaryCard {
     padding: 12px 14px;
@@ -2686,6 +2755,17 @@
 
   .metaHealthHeader {
     flex-direction: column;
+  }
+
+  .metaHealthHeaderActions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .metaCapacityButton,
+  .metaHealthUsageBadge {
+    width: fit-content;
   }
 
   .metaHealthGrid {
