@@ -108,7 +108,7 @@ async function atualizarUltimaMensagemRecebidaConversa(params: {
   const dataMensagemRecebida = timestampWhatsappParaIso(params.timestamp);
   const agora = new Date().toISOString();
 
-  const { error } = await supabaseAdmin
+  const { data: conversaAtualizada, error } = await supabaseAdmin
     .from("conversas")
     .update({
       last_message_at: dataMensagemRecebida,
@@ -116,13 +116,17 @@ async function atualizarUltimaMensagemRecebidaConversa(params: {
       updated_at: agora,
     })
     .eq("empresa_id", params.empresaId)
-    .eq("id", params.conversaId);
+    .eq("id", params.conversaId)
+    .select("status")
+    .single();
 
   if (error) {
     throw new Error(
       `Erro ao atualizar last_inbound_message_at da conversa: ${error.message}`
     );
   }
+
+  return conversaAtualizada?.status || null;
 }
 
 async function buscarMensagemExistentePorExternaId(
@@ -587,7 +591,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
       const inicioConversa = Date.now();
 
-      const conversation = await findOrCreateWhatsAppConversation({
+      let conversation = await findOrCreateWhatsAppConversation({
         empresaId: integration.empresa_id,
         contatoId: contact.id,
         integracaoWhatsappId: integration.id,
@@ -635,11 +639,27 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         }
       }
 
-      await atualizarUltimaMensagemRecebidaConversa({
-        empresaId: integration.empresa_id,
-        conversaId: conversation.id,
-        timestamp: message.timestamp,
-      });
+      const statusAposRegistrarMensagem =
+        await atualizarUltimaMensagemRecebidaConversa({
+          empresaId: integration.empresa_id,
+          conversaId: conversation.id,
+          timestamp: message.timestamp,
+        });
+
+      if (
+        [
+          "encerrada",
+          "encerrado_manual",
+          "encerrado_24h",
+          "encerrado_aut",
+        ].includes(statusAposRegistrarMensagem || "")
+      ) {
+        conversation = await findOrCreateWhatsAppConversation({
+          empresaId: integration.empresa_id,
+          contatoId: contact.id,
+          integracaoWhatsappId: integration.id,
+        });
+      }
 
       const conversaEmAtendimentoHumano =
         conversation.status === "em_atendimento" &&

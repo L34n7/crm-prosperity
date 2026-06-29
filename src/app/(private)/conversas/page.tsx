@@ -9,6 +9,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
@@ -17,8 +18,8 @@ import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events
 import { solicitarAtualizacaoConversasNaoLidasHeader } from "@/lib/header-summary/events";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./conversas.module.css";
+import VirtualizedConversationRows from "./VirtualizedConversationRows";
 import { can } from "@/lib/permissoes/frontend";
-import EmojiPicker from "emoji-picker-react";
 import {
   MessageSquareText,
   Pencil,
@@ -29,6 +30,11 @@ import {
   Variable,
 } from "lucide-react";
 import twemoji from "twemoji";
+
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
+  ssr: false,
+  loading: () => <span>Carregando emojis...</span>,
+});
 
 type Conversa = {
   id: string;
@@ -1927,12 +1933,19 @@ function ConversasPageContent() {
 
   const carregandoMaisConversasRef = useRef(false);
   const conversasRef = useRef<Conversa[]>([]);
+  const proximoCursorConversasRef = useRef<string | null>(null);
+  const versaoCargaConversasRef = useRef(0);
+  const listaConversasRef = useRef<HTMLDivElement | null>(null);
   const atualizandoConversasAutomaticamenteRef = useRef(false);
   const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
     null
   );
   const realtimeConversasTimerRef = useRef<number | null>(null);
   const realtimeMensagensTimerRef = useRef<number | null>(null);
+  const marcarLidaAposRealtimeRef = useRef(false);
+  const marcarLidaAoFinalTimerRef = useRef<number | null>(null);
+  const marcandoConversasComoLidasRef = useRef<Set<string>>(new Set());
+  const marcacaoLidaPendenteRef = useRef<Set<string>>(new Set());
   const [conversaSelecionada, setConversaSelecionada] =
     useState<Conversa | null>(null);
   const [mensagensFavoritasPainel, setMensagensFavoritasPainel] = useState<
@@ -3771,11 +3784,22 @@ function ConversasPageContent() {
     } catch {}
   }
 
-  function montarQueryConversas(offset: number, limit: number) {
+  function montarQueryConversas(
+    cursor: string | null,
+    limit: number,
+    incluirTotais: boolean
+  ) {
     const params = new URLSearchParams();
 
     params.set("limit", String(limit));
-    params.set("offset", String(offset));
+
+    if (cursor) {
+      params.set("cursor", cursor);
+    }
+
+    if (incluirTotais) {
+      params.set("incluir_totais", "true");
+    }
 
     if (buscaDebounced) {
       params.set("busca", buscaDebounced);
@@ -3812,8 +3836,14 @@ function ConversasPageContent() {
     async function carregarConversas(
       silencioso = false,
       append = false,
-      limitCustom?: number
+      limitCustom?: number,
+      incluirTotais = false,
+      preservarExistentes = false
     ) {
+      const versaoCarga = append
+        ? versaoCargaConversasRef.current
+        : ++versaoCargaConversasRef.current;
+
       try {
         if (append && carregandoMaisConversasRef.current) {
           return conversasRef.current;
@@ -3831,16 +3861,29 @@ function ConversasPageContent() {
         setErro("");
 
         const conversasAtuais = conversasRef.current;
-        const offset = append ? conversasAtuais.length : 0;
         const limiteBusca = limitCustom || LIMITE_CONVERSAS;
+        const cursor = append ? proximoCursorConversasRef.current : null;
 
-        const queryString = montarQueryConversas(offset, limiteBusca);
+        if (append && !cursor) {
+          setTemMaisConversas(false);
+          return conversasAtuais;
+        }
+
+        const queryString = montarQueryConversas(
+          cursor,
+          limiteBusca,
+          incluirTotais
+        );
 
         const res = await fetch(`/api/conversas?${queryString}`, {
           cache: "no-store",
         });
 
         const data = await res.json();
+
+        if (versaoCarga !== versaoCargaConversasRef.current) {
+          return conversasRef.current;
+        }
 
         if (!res.ok) {
           setErro(data.error || "Erro ao carregar conversas");
@@ -3856,11 +3899,15 @@ function ConversasPageContent() {
           );
         }
 
-        setTemMaisConversas(Boolean(data.pagination?.hasMore));
+        if (!preservarExistentes) {
+          const proximoCursor = data.pagination?.nextCursor || null;
+          proximoCursorConversasRef.current = proximoCursor;
+          setTemMaisConversas(Boolean(data.pagination?.hasMore));
+        }
 
         const mapa = new Map<string, Conversa>();
 
-        if (append) {
+        if (append || preservarExistentes) {
           conversasAtuais.forEach((item) => mapa.set(item.id, item));
           listaNova.forEach((item) => mapa.set(item.id, item));
         } else {
@@ -3910,12 +3957,13 @@ function ConversasPageContent() {
     }
 
   async function atualizarConversasCarregadas() {
-    const quantidadeAtual = Math.max(
-      conversasRef.current.length,
-      LIMITE_CONVERSAS
+    return await carregarConversas(
+      true,
+      false,
+      LIMITE_CONVERSAS,
+      false,
+      true
     );
-
-    return await carregarConversas(true, false, quantidadeAtual);
   }
 
   function getSupabaseRealtime() {
@@ -3949,11 +3997,18 @@ function ConversasPageContent() {
     }, REALTIME_CONVERSAS_DEBOUNCE_MS);
   }
 
-  function agendarAtualizacaoMensagensRealtime(conversaId: string) {
+  function agendarAtualizacaoMensagensRealtime(
+    conversaId: string,
+    marcarComoLidaDepois = false
+  ) {
     if (!abaVisivelRef.current) return;
     if (!conversaEstaSelecionada(conversaId)) return;
     if (enviandoRef.current) return;
     if (editandoCampoRef.current) return;
+
+    if (marcarComoLidaDepois) {
+      marcarLidaAposRealtimeRef.current = true;
+    }
 
     if (realtimeMensagensTimerRef.current) {
       window.clearTimeout(realtimeMensagensTimerRef.current);
@@ -3985,6 +4040,14 @@ function ConversasPageContent() {
         }
       );
 
+      const deveMarcarComoLida =
+        estavaNoFinal && marcarLidaAposRealtimeRef.current;
+      marcarLidaAposRealtimeRef.current = false;
+
+      if (deveMarcarComoLida && conversaEstaSelecionada(conversaId)) {
+        agendarMarcacaoAutomaticaComoLida(conversaId);
+      }
+
       agendarAtualizacaoConversasRealtime();
     }, REALTIME_MENSAGENS_DEBOUNCE_MS);
   }
@@ -3994,7 +4057,13 @@ function ConversasPageContent() {
 
     try {
       setAtualizandoConversas(true);
-      await atualizarConversasCarregadas();
+      await carregarConversas(
+        true,
+        false,
+        LIMITE_CONVERSAS,
+        false,
+        true
+      );
     } finally {
       setAtualizandoConversas(false);
     }
@@ -4258,15 +4327,79 @@ function ConversasPageContent() {
   }
 
   async function marcarConversaComoLida(conversaId: string) {
+    if (marcandoConversasComoLidasRef.current.has(conversaId)) {
+      marcacaoLidaPendenteRef.current.add(conversaId);
+      return false;
+    }
+
+    marcandoConversasComoLidasRef.current.add(conversaId);
+
     try {
       const res = await fetch(`/api/conversas/${conversaId}/marcar-lida`, {
         method: "POST",
       });
 
       if (res.ok) {
+        const conversaAtual = conversasRef.current.find(
+          (conversa) => conversa.id === conversaId
+        );
+        const tinhaMensagensNaoLidas =
+          Number(conversaAtual?.unread_count || 0) > 0;
+        const conversasAtualizadas =
+          chipRapido === "nao_lidas"
+            ? conversasRef.current.filter(
+                (conversa) => conversa.id !== conversaId
+              )
+            : conversasRef.current.map((conversa) =>
+                conversa.id === conversaId
+                  ? { ...conversa, unread_count: 0 }
+                  : conversa
+              );
+
+        conversasRef.current = conversasAtualizadas;
+        setConversas(conversasAtualizadas);
+
+        if (tinhaMensagensNaoLidas) {
+          setTotaisChipsRapidos((totais) => ({
+            ...totais,
+            nao_lidas: Math.max(0, totais.nao_lidas - 1),
+          }));
+        }
+
         solicitarAtualizacaoConversasNaoLidasHeader();
+        conversaLidaRef.current = conversaId;
+        return true;
       }
-    } catch {}
+    } catch {
+      return false;
+    } finally {
+      marcandoConversasComoLidasRef.current.delete(conversaId);
+
+      if (marcacaoLidaPendenteRef.current.delete(conversaId)) {
+        agendarMarcacaoAutomaticaComoLida(conversaId);
+      }
+    }
+
+    return false;
+  }
+
+  function agendarMarcacaoAutomaticaComoLida(conversaId: string) {
+    if (!abaVisivelRef.current) return;
+    if (!conversaEstaSelecionada(conversaId)) return;
+
+    if (marcarLidaAoFinalTimerRef.current) {
+      window.clearTimeout(marcarLidaAoFinalTimerRef.current);
+    }
+
+    marcarLidaAoFinalTimerRef.current = window.setTimeout(() => {
+      marcarLidaAoFinalTimerRef.current = null;
+
+      if (!abaVisivelRef.current) return;
+      if (!conversaEstaSelecionada(conversaId)) return;
+      if (!verificarSeUsuarioEstaNoFinal()) return;
+
+      void marcarConversaComoLida(conversaId);
+    }, 300);
   }
 
   async function carregarMaisHistorico() {
@@ -6363,6 +6496,16 @@ async function baixarConversaPDF() {
       el.scrollTop + el.clientHeight >= el.scrollHeight - margem;
 
     setMostrarBotaoIrFinal(!estaNoFinal);
+
+    if (
+      estaNoFinal &&
+      !loadingMensagens &&
+      conversaSelecionadaIdRef.current
+    ) {
+      agendarMarcacaoAutomaticaComoLida(
+        conversaSelecionadaIdRef.current
+      );
+    }
   }
 
   function scrollParaMensagem(mensagemId: string) {
@@ -6920,7 +7063,6 @@ const templateFooterTexto = useMemo(() => {
   useEffect(() => {
     carregarUsuarioLogado();
     carregarPoliticaAtendimento();
-    carregarConversas();
     carregarSetores();
     carregarListasEmpresa();
     carregarEtiquetasEmpresa();
@@ -6929,9 +7071,10 @@ const templateFooterTexto = useMemo(() => {
 
   useEffect(() => {
     conversasRef.current = [];
+    proximoCursorConversasRef.current = null;
     setConversas([]);
     setTemMaisConversas(true);
-    carregarConversas(true, false);
+    carregarConversas(false, false, undefined, true);
   }, [
     buscaDebounced,
     statusFiltro,
@@ -6956,7 +7099,31 @@ const templateFooterTexto = useMemo(() => {
           table: "conversas",
           filter: `empresa_id=eq.${usuarioLogado.empresa_id}`,
         },
-        () => {
+        (payload) => {
+          const conversaNova = payload.new as Partial<Conversa> & {
+            id?: string;
+          };
+          const conversaAntiga = payload.old as Partial<Conversa> & {
+            id?: string;
+          };
+          const conversaId = conversaNova.id || conversaAntiga.id || null;
+
+          if (conversaId) {
+            setConversas((atuais) => {
+              const listaAtualizada =
+                payload.eventType === "DELETE"
+                  ? atuais.filter((conversa) => conversa.id !== conversaId)
+                  : atuais.map((conversa) =>
+                      conversa.id === conversaId
+                        ? { ...conversa, ...conversaNova }
+                        : conversa
+                    );
+
+              conversasRef.current = listaAtualizada;
+              return listaAtualizada;
+            });
+          }
+
           agendarAtualizacaoConversasRealtime();
         }
       )
@@ -6982,8 +7149,19 @@ const templateFooterTexto = useMemo(() => {
           table: "mensagens",
           filter: `conversa_id=eq.${conversaId}`,
         },
-        () => {
-          agendarAtualizacaoMensagensRealtime(conversaId);
+        (payload) => {
+          const mensagem = payload.new as {
+            origem?: string | null;
+            remetente_tipo?: string | null;
+          };
+          const mensagemRecebida =
+            mensagem.origem === "recebida" ||
+            mensagem.remetente_tipo === "contato";
+
+          agendarAtualizacaoMensagensRealtime(
+            conversaId,
+            mensagemRecebida
+          );
         }
       )
       .on(
@@ -7006,6 +7184,12 @@ const templateFooterTexto = useMemo(() => {
         realtimeMensagensTimerRef.current = null;
       }
 
+      if (marcarLidaAoFinalTimerRef.current) {
+        window.clearTimeout(marcarLidaAoFinalTimerRef.current);
+        marcarLidaAoFinalTimerRef.current = null;
+      }
+
+      marcarLidaAposRealtimeRef.current = false;
       void supabase.removeChannel(channel);
     };
   }, [conversaSelecionada?.id]);
@@ -7018,6 +7202,10 @@ const templateFooterTexto = useMemo(() => {
 
       if (realtimeMensagensTimerRef.current) {
         window.clearTimeout(realtimeMensagensTimerRef.current);
+      }
+
+      if (marcarLidaAoFinalTimerRef.current) {
+        window.clearTimeout(marcarLidaAoFinalTimerRef.current);
       }
     };
   }, []);
@@ -7204,6 +7392,13 @@ const templateFooterTexto = useMemo(() => {
             modoMergeNovas: true,
           }
         );
+      }
+
+      if (
+        estavaNoFinal &&
+        conversaEstaSelecionada(conversaSelecionada.id)
+      ) {
+        agendarMarcacaoAutomaticaComoLida(conversaSelecionada.id);
       }
     }, POLL_MENSAGENS_MS);
 
@@ -7497,7 +7692,12 @@ const templateFooterTexto = useMemo(() => {
                 <div>
                   <h2 className={styles.sidebarTitle}>Conversas</h2>
                   <p className={styles.sidebarCount}>
-                    {conversasFiltradas.length} conversa(s)
+                    {conversasFiltradas.length}
+                    {chipRapido === "Todas" &&
+                    totaisChipsRapidos.Todas > conversasFiltradas.length
+                      ? ` de ${totaisChipsRapidos.Todas}`
+                      : ""}{" "}
+                    conversa(s) carregada(s)
                   </p>
                 </div>
 
@@ -7711,6 +7911,7 @@ const templateFooterTexto = useMemo(() => {
             </div>
 
             <div
+              ref={listaConversasRef}
               className={styles.sidebarBody}
               onScroll={handleScrollListaConversas}
             >
@@ -7720,17 +7921,23 @@ const templateFooterTexto = useMemo(() => {
                 <div className={styles.emptyListState}>Nenhuma conversa encontrada.</div>
               ) : (
                 <>
-                  {conversasFiltradas.map((c) => {
-                  const ativo = conversaSelecionada?.id === c.id;
-                  const unreadCount = c.unread_count || 0;
+                  <VirtualizedConversationRows
+                    items={conversasFiltradas}
+                    scrollRef={listaConversasRef}
+                    getKey={(conversa) => conversa.id}
+                    listClassName={styles.virtualConversationList}
+                    rowClassName={styles.virtualConversationRow}
+                  >
+                    {(c) => {
+                        const ativo = conversaSelecionada?.id === c.id;
+                        const unreadCount = c.unread_count || 0;
 
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => abrirConversa(c)}
-                      className={`${styles.conversationItem} ${
-                        ativo ? styles.conversationItemActive : ""
-                      }`}
+                        return (
+                            <button
+                              onClick={() => abrirConversa(c)}
+                              className={`${styles.conversationItem} ${
+                                ativo ? styles.conversationItemActive : ""
+                              }`}
                     >
                       <div className={styles.conversationAvatar}>
                         {getIniciais(c.contatos?.nome)}
@@ -7803,9 +8010,10 @@ const templateFooterTexto = useMemo(() => {
                           )}
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
+                            </button>
+                        );
+                    }}
+                  </VirtualizedConversationRows>
 
                 {carregandoMaisConversas && (
                   <div className={styles.emptyListState}>

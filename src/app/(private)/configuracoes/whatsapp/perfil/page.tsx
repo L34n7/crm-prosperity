@@ -142,6 +142,9 @@ export default function WhatsappPerfilPage() {
   const [modalNomeAberto, setModalNomeAberto] = useState(false);
   const [novoNomeExibicao, setNovoNomeExibicao] = useState("");
   const [salvandoNome, setSalvandoNome] = useState(false);
+  const [modalDesconectarAberto, setModalDesconectarAberto] = useState(false);
+  const [desconectando, setDesconectando] = useState(false);
+  const [erroDesconexao, setErroDesconexao] = useState("");
 
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
@@ -321,6 +324,60 @@ export default function WhatsappPerfilPage() {
       setErro(getErrorMessage(error, "Erro ao solicitar alteração do nome."));
     } finally {
       setSalvandoNome(false);
+    }
+  }
+
+  function abrirModalDesconexao() {
+    setErroDesconexao("");
+    setModalDesconectarAberto(true);
+  }
+
+  function fecharModalDesconexao() {
+    if (desconectando) return;
+    setModalDesconectarAberto(false);
+    setErroDesconexao("");
+  }
+
+  async function desconectarIntegracao() {
+    if (!integracaoId || desconectando) return;
+
+    let redirecionando = false;
+
+    try {
+      setDesconectando(true);
+      setErroDesconexao("");
+
+      const response = await fetch(
+        `/api/integracoes-whatsapp/${encodeURIComponent(integracaoId)}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            confirmar_desconexao: true,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(
+          data?.error || "Não foi possível desconectar a integração."
+        );
+      }
+
+      redirecionando = true;
+      window.location.replace(data.redirect_to || "/configurar-ambiente");
+    } catch (error: unknown) {
+      setErroDesconexao(
+        getErrorMessage(error, "Não foi possível desconectar a integração.")
+      );
+    } finally {
+      if (!redirecionando) {
+        setDesconectando(false);
+      }
     }
   }
 
@@ -894,6 +951,26 @@ export default function WhatsappPerfilPage() {
             </button>
             </div>
             </form>
+
+            <div className={styles.dangerZone}>
+              <div>
+                <span className={styles.dangerEyebrow}>Zona de risco</span>
+                <strong>Desconectar integração da Meta</strong>
+                <p>
+                  Remove esta conexão do CRM e exige um novo onboarding para
+                  voltar a usar o número.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.disconnectButton}
+                onClick={abrirModalDesconexao}
+                disabled={!integracaoId || carregando || desconectando}
+              >
+                Desconectar integração
+              </button>
+            </div>
           </aside>
         </section>
       </main>
@@ -1046,6 +1123,109 @@ export default function WhatsappPerfilPage() {
               }
             >
               {salvandoNome ? "Enviando..." : "Solicitar alteração"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {modalDesconectarAberto && (
+      <div
+        className={styles.modalOverlay}
+        onClick={fecharModalDesconexao}
+        role="presentation"
+      >
+        <div
+          className={`${styles.modalCard} ${styles.disconnectModal}`}
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-desconectar-integracao"
+          aria-describedby="descricao-desconectar-integracao"
+        >
+          <div className={styles.disconnectModalHeader}>
+            <div className={styles.warningIcon} aria-hidden="true">
+              !
+            </div>
+
+            <div>
+              <h2
+                id="titulo-desconectar-integracao"
+                className={styles.modalTitle}
+              >
+                Desconectar integração da Meta?
+              </h2>
+              <p
+                id="descricao-desconectar-integracao"
+                className={styles.modalSubtitle}
+              >
+                Esta ação interrompe a operação deste número no CRM.
+              </p>
+            </div>
+          </div>
+
+          <div className={styles.disconnectModalBody}>
+            <p className={styles.impactIntro}>
+              Ao confirmar, os seguintes impactos serão aplicados:
+            </p>
+
+            <ul className={styles.impactList}>
+              <li>
+                O envio e o recebimento de novas mensagens por esta integração
+                serão interrompidos.
+              </li>
+              <li>
+                Templates sincronizados, disparos pendentes e filas desta
+                conexão serão removidos ou cancelados.
+              </li>
+              <li>
+                Conversas, contatos, rastreamentos e logs já existentes serão
+                preservados, mas ficarão sem vínculo com a conexão removida.
+              </li>
+              <li>
+                A conta, o número e a WABA continuarão existindo na Meta. A
+                remoção acontece somente dentro do CRM.
+              </li>
+              <li>
+                Você será direcionado ao onboarding e precisará configurar a
+                integração novamente para retomar a operação.
+              </li>
+            </ul>
+
+            <div className={styles.backupNotice}>
+              <strong>Backup de segurança</strong>
+              <span>
+                Antes da exclusão, o sistema salvará uma cópia interna completa
+                dos dados da integração. Se o backup falhar, nada será apagado.
+              </span>
+            </div>
+
+            {erroDesconexao && (
+              <div className={styles.disconnectError} role="alert">
+                {erroDesconexao}
+              </div>
+            )}
+          </div>
+
+          <div className={styles.modalActions}>
+            <button
+              type="button"
+              className={styles.ghostButton}
+              onClick={fecharModalDesconexao}
+              disabled={desconectando}
+            >
+              Manter integração
+            </button>
+
+            <button
+              type="button"
+              className={styles.confirmDisconnectButton}
+              onClick={desconectarIntegracao}
+              disabled={desconectando}
+            >
+              {desconectando
+                ? "Salvando backup e desconectando..."
+                : "Confirmar e desconectar"}
             </button>
           </div>
         </div>

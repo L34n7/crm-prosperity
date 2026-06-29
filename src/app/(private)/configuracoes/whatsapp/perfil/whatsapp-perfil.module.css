@@ -747,6 +747,157 @@
   gap: 12px;
 }
 
+.dangerZone {
+  margin: 0 28px 28px;
+  padding: 18px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 16px;
+  background: var(--crm-danger-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.dangerZone > div {
+  display: grid;
+  gap: 5px;
+}
+
+.dangerEyebrow {
+  color: var(--crm-danger-text);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dangerZone strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+}
+
+.dangerZone p {
+  max-width: 440px;
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.disconnectButton,
+.confirmDisconnectButton {
+  flex: 0 0 auto;
+  border: 1px solid var(--crm-danger-strong);
+  border-radius: 14px;
+  background: var(--crm-danger-strong);
+  color: var(--crm-text-inverse);
+  padding: 11px 15px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.2s ease;
+  white-space: nowrap;
+}
+
+.disconnectButton:hover,
+.confirmDisconnectButton:hover {
+  filter: brightness(0.9);
+  transform: translateY(-1px);
+}
+
+.disconnectButton:disabled,
+.confirmDisconnectButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.disconnectModal {
+  border-color: var(--crm-danger-border);
+}
+
+.disconnectModalHeader {
+  padding: 22px;
+  border-bottom: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.warningIcon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 999px;
+  background: var(--crm-danger-strong);
+  color: var(--crm-text-inverse);
+  display: grid;
+  place-items: center;
+  font-size: 23px;
+  font-weight: 900;
+}
+
+.disconnectModalBody {
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.impactIntro {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.impactList {
+  margin: 0;
+  padding-left: 22px;
+  color: var(--crm-text);
+  display: grid;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.impactList li::marker {
+  color: var(--crm-danger-strong);
+}
+
+.backupNotice {
+  border: 1px solid var(--crm-success-border);
+  border-radius: 14px;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  padding: 13px 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.backupNotice strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.backupNotice span {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.disconnectError {
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 14px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .loadingPage {
   width: 100%;
   min-height: calc(100vh - 120px);
@@ -804,13 +955,24 @@
     grid-template-columns: 1fr;
   }
 
+  .dangerZone {
+    margin: 0 18px 22px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .disconnectButton {
+    width: 100%;
+  }
+
   .modalActions {
     flex-direction: column-reverse;
   }
 
   .ghostButton,
   .primaryButton,
-  .secondaryButton {
+  .secondaryButton,
+  .confirmDisconnectButton {
     width: 100%;
   }
 }

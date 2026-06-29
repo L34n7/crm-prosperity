@@ -38,6 +38,19 @@ type CampanhaRastreamento = {
   rastreamento_origens?: { id: string; nome: string } | null;
 };
 
+type ItemPreviewImportacao = {
+  linha?: number;
+  nome?: string;
+  telefone_normalizado?: string;
+  telefone_original?: string;
+  status_lead?: string;
+  motivo?: string;
+  [campo: string]: unknown;
+};
+
+const MANTER_VALOR_EM_MASSA = "__manter__";
+const REMOVER_VALOR_EM_MASSA = "__remover__";
+
 function getStatusLeadLabel(status: StatusLead) {
   switch (status) {
     case "novo":
@@ -117,6 +130,7 @@ export default function ContatosPage() {
 
   const [modalCriarAberto, setModalCriarAberto] = useState(false);
   const buscaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const selecionarTodosRef = useRef<HTMLInputElement | null>(null);
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
@@ -147,7 +161,7 @@ export default function ContatosPage() {
   const [filtroTelefoneRevisar, setFiltroTelefoneRevisar] = useState(false);
   const [ordenacao, setOrdenacao] = useState("recentes");
   const [paginaAtual, setPaginaAtual] = useState(1);
-  const [itensPorPagina, setItensPorPagina] = useState(25);
+  const [itensPorPagina, setItensPorPagina] = useState(50);
 
   const [totalContatos, setTotalContatos] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
@@ -155,6 +169,15 @@ export default function ContatosPage() {
   const [modalExcluirAberto, setModalExcluirAberto] = useState(false);
   const [contatoParaExcluir, setContatoParaExcluir] = useState<Contato | null>(null);
   const [excluindoContato, setExcluindoContato] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [campanhaEmMassa, setCampanhaEmMassa] = useState(
+    MANTER_VALOR_EM_MASSA
+  );
+  const [origemEmMassa, setOrigemEmMassa] = useState(MANTER_VALOR_EM_MASSA);
+  const [statusEmMassa, setStatusEmMassa] = useState(MANTER_VALOR_EM_MASSA);
+  const [atualizandoEmMassa, setAtualizandoEmMassa] = useState(false);
 
   const [abaPreviewImportacao, setAbaPreviewImportacao] = useState<
     "alertas" | "validos" | "duplicados_banco" | "duplicados_arquivo" | "invalidos"
@@ -172,11 +195,11 @@ export default function ContatosPage() {
       duplicados_arquivo: number;
       invalidos: number;
     };
-    validos: any[];
-    alertas: any[];
-    duplicados_banco: any[];
-    duplicados_arquivo: any[];
-    invalidos: any[];
+    validos: ItemPreviewImportacao[];
+    alertas: ItemPreviewImportacao[];
+    duplicados_banco: ItemPreviewImportacao[];
+    duplicados_arquivo: ItemPreviewImportacao[];
+    invalidos: ItemPreviewImportacao[];
   } | null>(null);
 
   const campanhasLegadasSemVinculo = useMemo(() => {
@@ -287,7 +310,18 @@ export default function ContatosPage() {
       return;
     }
 
-    setContatos(data.contatos || []);
+    const contatosCarregados = Array.isArray(data.contatos)
+      ? data.contatos
+      : [];
+    const idsCarregados = new Set(
+      contatosCarregados.map((contato: Contato) => contato.id)
+    );
+
+    setContatos(contatosCarregados);
+    setSelecionados(
+      (atuais) =>
+        new Set(Array.from(atuais).filter((id) => idsCarregados.has(id)))
+    );
     setTotalContatos(data.total || 0);
     setTotalPaginas(data.totalPaginas || 1);
   }
@@ -469,25 +503,6 @@ export default function ContatosPage() {
     } catch {
       setErro("Erro ao exportar contatos.");
     }
-  }
-
-  function baixarModeloCsv() {
-    const conteudo =
-      "nome,telefone,email,origem,campanha,status_lead,observacoes\n" +
-      "João Silva,31999999999,teste@teste.com.br,whatsapp,Campanha Abril,novo,Cliente interessado\n" +
-      "Maria Silva,31999999999,maria@email.com,instagram,Campanha Meta,qualificado,Quer orçamento";
-
-    const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "modelo-importacao-contatos.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    URL.revokeObjectURL(url);
   }
 
   function iniciarEdicao(contato: Contato) {
@@ -710,6 +725,108 @@ export default function ContatosPage() {
     }
   }
 
+  function alternarContatoSelecionado(contatoId: string) {
+    setSelecionados((atuais) => {
+      const proximos = new Set(atuais);
+
+      if (proximos.has(contatoId)) {
+        proximos.delete(contatoId);
+      } else {
+        proximos.add(contatoId);
+      }
+
+      return proximos;
+    });
+  }
+
+  function alternarPaginaSelecionada() {
+    const idsPagina = contatos.map((contato) => contato.id);
+    const paginaInteiraSelecionada =
+      idsPagina.length > 0 && idsPagina.every((id) => selecionados.has(id));
+
+    setSelecionados((atuais) => {
+      const proximos = new Set(atuais);
+
+      idsPagina.forEach((id) => {
+        if (paginaInteiraSelecionada) {
+          proximos.delete(id);
+        } else {
+          proximos.add(id);
+        }
+      });
+
+      return proximos;
+    });
+  }
+
+  function limparSelecao() {
+    setSelecionados(new Set());
+    setCampanhaEmMassa(MANTER_VALOR_EM_MASSA);
+    setOrigemEmMassa(MANTER_VALOR_EM_MASSA);
+    setStatusEmMassa(MANTER_VALOR_EM_MASSA);
+  }
+
+  async function aplicarAlteracoesEmMassa() {
+    if (selecionados.size === 0) {
+      setErro("Selecione ao menos um contato.");
+      return;
+    }
+
+    const payload: Record<string, unknown> = {
+      ids: Array.from(selecionados),
+    };
+
+    if (campanhaEmMassa !== MANTER_VALOR_EM_MASSA) {
+      payload.rastreamento_campanha_id =
+        campanhaEmMassa === REMOVER_VALOR_EM_MASSA
+          ? null
+          : campanhaEmMassa;
+    }
+
+    if (origemEmMassa !== MANTER_VALOR_EM_MASSA) {
+      payload.origem =
+        origemEmMassa === REMOVER_VALOR_EM_MASSA ? null : origemEmMassa;
+    }
+
+    if (statusEmMassa !== MANTER_VALOR_EM_MASSA) {
+      payload.status_lead = statusEmMassa;
+    }
+
+    if (Object.keys(payload).length === 1) {
+      setErro("Escolha ao menos uma alteração para aplicar.");
+      return;
+    }
+
+    setAtualizandoEmMassa(true);
+    setErro("");
+    setMensagem("");
+
+    try {
+      const res = await fetch("/api/contatos/lote", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar os contatos.");
+        return;
+      }
+
+      setMensagem(data.message || "Contatos atualizados com sucesso.");
+      limparSelecao();
+      await carregarContatos();
+      await carregarOpcoesFiltros();
+    } catch {
+      setErro("Erro ao atualizar os contatos.");
+    } finally {
+      setAtualizandoEmMassa(false);
+    }
+  }
+
   useEffect(() => {
     if (buscaTimeoutRef.current) {
       clearTimeout(buscaTimeoutRef.current);
@@ -770,6 +887,19 @@ export default function ContatosPage() {
   useEffect(() => {
     carregarOpcoesFiltros();
   }, []);
+
+  const selecionadosNaPagina = contatos.filter((contato) =>
+    selecionados.has(contato.id)
+  ).length;
+  const paginaInteiraSelecionada =
+    contatos.length > 0 && selecionadosNaPagina === contatos.length;
+
+  useEffect(() => {
+    if (selecionarTodosRef.current) {
+      selecionarTodosRef.current.indeterminate =
+        selecionadosNaPagina > 0 && !paginaInteiraSelecionada;
+    }
+  }, [paginaInteiraSelecionada, selecionadosNaPagina]);
 
   return (
     <>
@@ -955,7 +1085,7 @@ export default function ContatosPage() {
               setFiltroOrigem("");
               setFiltroTelefoneRevisar(false);
               setOrdenacao("recentes");
-              setItensPorPagina(25);
+              setItensPorPagina(50);
               setPaginaAtual(1);
             }}
             className={styles.secondaryButton}
@@ -988,7 +1118,7 @@ export default function ContatosPage() {
               <p className={styles.eyebrow}>Gestão</p>
               <h2 className={styles.cardTitle}>Contatos cadastrados</h2>
               <p className={styles.cardDescription}>
-                Cards resumidos com expansão sob demanda para manter a tela mais limpa.
+                Selecione linhas para alterar campanha, origem ou status em massa.
               </p>
             </div>
 
@@ -1022,30 +1152,189 @@ export default function ContatosPage() {
             </div>
           </div>
 
+          <div
+            className={`${styles.bulkToolbar} ${
+              selecionados.size > 0 ? styles.bulkToolbarActive : ""
+            }`}
+          >
+            <div className={styles.bulkSelectionInfo}>
+              <strong>{selecionados.size}</strong>
+              <span>
+                {selecionados.size === 1
+                  ? "contato selecionado"
+                  : "contatos selecionados"}
+              </span>
+            </div>
+
+            <div className={styles.bulkFields}>
+              <label className={styles.bulkField}>
+                <span>Campanha</span>
+                <select
+                  value={campanhaEmMassa}
+                  onChange={(e) => setCampanhaEmMassa(e.target.value)}
+                  disabled={selecionados.size === 0 || atualizandoEmMassa}
+                >
+                  <option value={MANTER_VALOR_EM_MASSA}>Não alterar</option>
+                  <option value={REMOVER_VALOR_EM_MASSA}>
+                    Remover campanha
+                  </option>
+                  {campanhasRastreamento.map((campanhaItem) => (
+                    <option key={campanhaItem.id} value={campanhaItem.id}>
+                      {getLabelCampanhaRastreamento(campanhaItem)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className={styles.bulkField}>
+                <span>Origem</span>
+                <select
+                  value={origemEmMassa}
+                  onChange={(e) => setOrigemEmMassa(e.target.value)}
+                  disabled={selecionados.size === 0 || atualizandoEmMassa}
+                >
+                  <option value={MANTER_VALOR_EM_MASSA}>Não alterar</option>
+                  <option value={REMOVER_VALOR_EM_MASSA}>
+                    Remover origem
+                  </option>
+                  {opcoesOrigem.map((origem) => (
+                    <option key={origem} value={origem}>
+                      {origem}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className={styles.bulkField}>
+                <span>Status</span>
+                <select
+                  value={statusEmMassa}
+                  onChange={(e) => setStatusEmMassa(e.target.value)}
+                  disabled={selecionados.size === 0 || atualizandoEmMassa}
+                >
+                  <option value={MANTER_VALOR_EM_MASSA}>Não alterar</option>
+                  <option value="novo">Novo</option>
+                  <option value="em_atendimento">Em atendimento</option>
+                  <option value="qualificado">Qualificado</option>
+                  <option value="cliente">Cliente</option>
+                  <option value="perdido">Perdido</option>
+                </select>
+              </label>
+            </div>
+
+            <div className={styles.bulkActions}>
+              <button
+                type="button"
+                className={styles.bulkApplyButton}
+                onClick={aplicarAlteracoesEmMassa}
+                disabled={
+                  selecionados.size === 0 ||
+                  atualizandoEmMassa ||
+                  (campanhaEmMassa === MANTER_VALOR_EM_MASSA &&
+                    origemEmMassa === MANTER_VALOR_EM_MASSA &&
+                    statusEmMassa === MANTER_VALOR_EM_MASSA)
+                }
+              >
+                {atualizandoEmMassa ? "Aplicando..." : "Aplicar alterações"}
+              </button>
+
+              {selecionados.size > 0 && (
+                <button
+                  type="button"
+                  className={styles.bulkClearButton}
+                  onClick={limparSelecao}
+                  disabled={atualizandoEmMassa}
+                >
+                  Limpar seleção
+                </button>
+              )}
+            </div>
+          </div>
+
           {contatos.length === 0 ? (
             <div className={styles.emptyState}>
               Nenhum contato cadastrado ainda.
             </div>
           ) : (
-            <div className={styles.list}>
-              {contatos.map((contato) => {
-                const expandido = expandidoId === contato.id;
-                const editando = editandoId === contato.id;
+            <div className={styles.sheetScroll}>
+              <div className={styles.sheet}>
+                <div className={styles.sheetHeader} role="row">
+                  <div className={styles.checkboxCell}>
+                    <input
+                      ref={selecionarTodosRef}
+                      type="checkbox"
+                      checked={paginaInteiraSelecionada}
+                      onChange={alternarPaginaSelecionada}
+                      aria-label="Selecionar todos os contatos desta página"
+                    />
+                  </div>
+                  <span>Contato</span>
+                  <span>Telefone</span>
+                  <span>Status</span>
+                  <span>Origem</span>
+                  <span>Campanha</span>
+                  <span className={styles.sheetActionsLabel}>Ações</span>
+                </div>
 
-                return (
-                  <article key={contato.id} className={styles.itemCard}>
-                    <div className={styles.itemSummary}>
-                      <div className={styles.itemLeft}>
-                        <div className={styles.avatar}>
-                          {getIniciais(contato.nome)}
-                        </div>
+                <div className={styles.list}>
+                  {contatos.map((contato) => {
+                    const expandido = expandidoId === contato.id;
+                    const editando = editandoId === contato.id;
+                    const selecionado = selecionados.has(contato.id);
 
-                        <div className={styles.itemIdentity}>
-                          <div className={styles.itemTopRow}>
-                            <h3 className={styles.itemTitle}>
-                              {contato.nome || "Sem nome"}
-                            </h3>
+                    return (
+                      <article
+                        key={contato.id}
+                        className={`${styles.itemCard} ${
+                          selecionado ? styles.itemCardSelected : ""
+                        }`}
+                      >
+                        <div className={styles.itemSummary} role="row">
+                          <div className={styles.checkboxCell}>
+                            <input
+                              type="checkbox"
+                              checked={selecionado}
+                              onChange={() =>
+                                alternarContatoSelecionado(contato.id)
+                              }
+                              aria-label={`Selecionar ${
+                                contato.nome || contato.telefone
+                              }`}
+                            />
+                          </div>
 
+                          <div className={styles.contactCell}>
+                            <div className={styles.avatar}>
+                              {getIniciais(contato.nome)}
+                            </div>
+
+                            <div className={styles.itemIdentity}>
+                              <div className={styles.itemTopRow}>
+                                <h3 className={styles.itemTitle}>
+                                  {contato.nome || "Sem nome"}
+                                </h3>
+
+                                {contato.telefone_revisar && (
+                                  <span
+                                    className={styles.reviewDot}
+                                    title="Telefone para revisar"
+                                    aria-label="Telefone para revisar"
+                                  />
+                                )}
+                              </div>
+                              <p className={styles.itemSubline}>
+                                {contato.email ||
+                                  contato.whatsapp_profile_name ||
+                                  "Sem email"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <span className={styles.sheetCell}>
+                            {contato.telefone}
+                          </span>
+
+                          <div className={styles.sheetCell}>
                             <span
                               className={`${styles.statusBadge} ${getStatusLeadClass(
                                 contato.status_lead
@@ -1053,54 +1342,44 @@ export default function ContatosPage() {
                             >
                               {getStatusLeadLabel(contato.status_lead)}
                             </span>
+                          </div>
 
-                            {contato.telefone_revisar && (
-                              <span className={`${styles.statusBadge} ${styles.statusRevisarTelefone}`}>
-                                Revisar telefone
-                              </span>
+                          <span
+                            className={styles.sheetCell}
+                            title={contato.origem || "Sem origem"}
+                          >
+                            {contato.origem || "—"}
+                          </span>
+
+                          <span
+                            className={styles.sheetCell}
+                            title={getNomeCampanhaContato(contato)}
+                          >
+                            {getNomeCampanhaContato(contato)}
+                          </span>
+
+                          <div className={styles.itemRight}>
+                            {!editando && (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandir(contato.id)}
+                                className={styles.rowActionButton}
+                              >
+                                {expandido ? "Fechar" : "Detalhes"}
+                              </button>
+                            )}
+
+                            {!editando && (
+                              <button
+                                type="button"
+                                onClick={() => iniciarEdicao(contato)}
+                                className={styles.rowActionButton}
+                              >
+                                Editar
+                              </button>
                             )}
                           </div>
-
-                          <p className={styles.itemSubline}>{contato.telefone}</p>
-
-                          <div className={styles.summaryMeta}>
-                            <span className={styles.metaItem}>
-                              <strong>Nome WhatsApp:</strong>{" "}
-                              {contato.whatsapp_profile_name || "Sem nome WhatsApp"}
-                            </span>
-                            <span className={styles.metaItem}>
-                              <strong>Email:</strong> {contato.email || "Sem email"}
-                            </span>
-                            <span className={styles.metaItem}>
-                              <strong>Origem:</strong> {contato.origem || "—"}
-                            </span>
-                            <span className={styles.metaItem}>
-                              <strong>Campanha:</strong> {getNomeCampanhaContato(contato)}
-                            </span>
-                          </div>
                         </div>
-                      </div>
-
-                      <div className={styles.itemRight}>
-                        {!editando && (
-                          <button
-                            onClick={() => toggleExpandir(contato.id)}
-                            className={styles.secondaryButton}
-                          >
-                            {expandido ? "Recolher" : "Expandir"}
-                          </button>
-                        )}
-
-                        {!editando && (
-                          <button
-                            onClick={() => iniciarEdicao(contato)}
-                            className={styles.secondaryButton}
-                          >
-                            Editar
-                          </button>
-                        )}
-                      </div>
-                    </div>
 
                     {(expandido || editando) && (
                       <div className={styles.itemExpanded}>
@@ -1288,6 +1567,8 @@ export default function ContatosPage() {
                   </article>
                 );
               })}
+                </div>
+              </div>
             </div>
           )}
 

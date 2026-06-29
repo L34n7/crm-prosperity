@@ -340,6 +340,18 @@
   overflow-y: auto;
 }
 
+.virtualConversationList {
+  position: relative;
+  width: 100%;
+}
+
+.virtualConversationRow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
 .emptyListState,
 .timelineInfo,
 .emptyTimelineCard {

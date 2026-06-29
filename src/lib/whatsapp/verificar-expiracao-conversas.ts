@@ -2,7 +2,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-export const JANELA_24H_MS = 24 * 60 * 60 * 1000;
+// Margem operacional de um minuto para o cron concluir o encerramento antes
+// do limite externo de 24 horas.
+export const JANELA_24H_MS = (24 * 60 - 1) * 60 * 1000;
 
 const STATUS_EXPIRAVEIS_POR_24H = [
   "bot",

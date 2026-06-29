@@ -25,7 +25,8 @@ export type RegistrarLogAuditoriaInput = {
     | "conversa"
     | "contato"
     | "disparo"
-    | "fluxo";
+    | "fluxo"
+    | "integracao_whatsapp";
   entidade_id: string;
   acao: string;
   descricao?: string | null;

@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/whatsapp_disparos_fila?limit=15",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/expirar_conversas?limit=500",
+      "schedule": "* * * * *"
     }
   ]
 }

@@ -947,3 +947,430 @@
     padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
   }
 }
+
+/* Grade compacta de contatos */
+.pageContent {
+  gap: 16px;
+  padding: 6px 0 24px;
+}
+
+.card {
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.cardHeader,
+.listHeader {
+  margin-bottom: 16px;
+}
+
+.cardTitle {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.cardDescription {
+  font-size: 13px;
+}
+
+.listHeaderActions {
+  gap: 8px;
+}
+
+.listHeaderActions .secondaryButton,
+.listHeaderActions .createContactButton {
+  min-height: 38px;
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.bulkToolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
+  box-shadow: var(--crm-shadow-xs);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bulkToolbarActive {
+  border-color: var(--crm-primary-border);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.bulkSelectionInfo {
+  min-width: 118px;
+  min-height: 38px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.bulkSelectionInfo strong {
+  color: var(--crm-primary-text);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.bulkSelectionInfo span {
+  margin-top: 4px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bulkFields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.bulkField {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bulkField > span {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bulkField select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 9px;
+  padding: 0 30px 0 10px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.bulkField select:focus {
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.bulkField select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bulkActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bulkApplyButton,
+.bulkClearButton {
+  min-height: 38px;
+  border-radius: 9px;
+  padding: 0 13px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bulkApplyButton {
+  border: 1px solid var(--crm-primary-strong);
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+}
+
+.bulkApplyButton:hover:not(:disabled) {
+  background: var(--crm-primary-strong-hover);
+}
+
+.bulkClearButton {
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text);
+}
+
+.bulkApplyButton:disabled,
+.bulkClearButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sheetScroll {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+}
+
+.sheet {
+  min-width: 900px;
+}
+
+.sheetHeader,
+.sheet .itemSummary {
+  display: grid;
+  grid-template-columns:
+    36px
+    minmax(160px, 1.4fr)
+    minmax(110px, 0.8fr)
+    minmax(105px, 0.8fr)
+    minmax(100px, 0.8fr)
+    minmax(150px, 1fr)
+    120px;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.sheetHeader {
+  min-height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sheetActionsLabel {
+  text-align: right;
+}
+
+.sheet .list {
+  gap: 0;
+}
+
+.sheet .itemCard {
+  border: 0;
+  border-bottom: 1px solid var(--crm-border);
+  border-radius: 0;
+  overflow: visible;
+  box-shadow: none;
+}
+
+.sheet .itemCard:last-child {
+  border-bottom: 0;
+}
+
+.sheet .itemCard:hover {
+  border-color: var(--crm-border);
+  background: var(--crm-surface-subtle);
+  box-shadow: none;
+}
+
+.sheet .itemCardSelected {
+  background: var(--crm-primary-soft);
+  box-shadow: inset 3px 0 0 var(--crm-primary-strong);
+}
+
+.sheet .itemCardSelected:hover {
+  background: var(--crm-primary-soft);
+}
+
+.sheet .itemSummary {
+  min-height: 56px;
+  padding: 5px 12px;
+  gap: 0 10px;
+}
+
+.checkboxCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkboxCell input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--crm-primary-strong);
+  cursor: pointer;
+}
+
+.contactCell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sheet .avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 10px;
+}
+
+.sheet .itemTopRow {
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.sheet .itemTitle {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet .itemSubline {
+  max-width: 100%;
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviewDot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--crm-warning-strong);
+  box-shadow: 0 0 0 3px var(--crm-warning-bg);
+}
+
+.sheetCell {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet .statusBadge {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.sheet .itemRight {
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.rowActionButton {
+  min-height: 30px;
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.rowActionButton:hover {
+  border-color: var(--crm-border-strong);
+  background: var(--crm-surface-soft);
+}
+
+.sheet .itemExpanded {
+  padding: 16px;
+}
+
+.paginationBar {
+  margin-top: 14px;
+}
+
+@media (max-width: 1180px) {
+  .bulkToolbar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .bulkSelectionInfo {
+    min-height: auto;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .bulkActions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 768px) {
+  .pageContent {
+    gap: 12px;
+    padding: 0 0 calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .cardTitle {
+    font-size: 19px;
+  }
+
+  .bulkToolbar {
+    position: static;
+    padding: 10px;
+  }
+
+  .bulkFields {
+    grid-template-columns: 1fr;
+  }
+
+  .bulkActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulkApplyButton,
+  .bulkClearButton {
+    width: 100%;
+  }
+
+  .sheet {
+    min-width: 900px;
+  }
+
+  .sheet .itemSummary {
+    display: grid;
+    padding: 5px 12px;
+  }
+
+  .sheet .itemRight {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .sheet .itemRight button {
+    width: auto;
+  }
+}
