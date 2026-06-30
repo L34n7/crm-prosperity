@@ -4,6 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import styles from "./comecar.module.css";
+import {
+  NICHOS_CONFIG,
+  type NichoCodigo,
+} from "@/lib/nichos/config";
 
 type TipoOferta = "normal" | "vip" | "jv" | "af" | "free";
 
@@ -14,6 +18,7 @@ export default function ComecarPage() {
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [empresa, setEmpresa] = useState("");
+  const [nicho, setNicho] = useState<NichoCodigo | "">("");
   const [aceiteContrato, setAceiteContrato] = useState(false);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
@@ -74,8 +79,8 @@ export default function ComecarPage() {
 
     setErro("");
 
-    if (!nome || !email) {
-      setErro("Preencha nome e email.");
+    if (!nome || !email || !nicho) {
+      setErro("Preencha nome, email e segmento da empresa.");
       return;
     }
 
@@ -108,6 +113,7 @@ export default function ComecarPage() {
           email,
           telefone: telefoneLimpo || null,
           empresa,
+          nicho_codigo: nicho,
           tipo_oferta: tipoOferta,
           aceite_contrato: aceiteContrato,
           chave_free:
@@ -230,6 +236,24 @@ export default function ComecarPage() {
                 className={styles.input}
                 autoComplete="organization"
               />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Segmento da empresa</label>
+              <select
+                value={nicho}
+                onChange={(e) =>
+                  setNicho(e.target.value as NichoCodigo | "")
+                }
+                className={styles.input}
+              >
+                <option value="">Selecione o segmento</option>
+                {Object.values(NICHOS_CONFIG).map((item) => (
+                  <option key={item.codigo} value={item.codigo}>
+                    {item.nome}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <label className={styles.consentBox}>

@@ -13,6 +13,7 @@ import {
   type IaTokensRefreshEventDetail,
 } from "@/lib/ia/tokens-client-events";
 import {
+  HEADER_AGENDAS_FEEDBACK_REFRESH_EVENT,
   HEADER_CONVERSAS_NAO_LIDAS_REFRESH_EVENT,
   HEADER_DISPAROS_PENDENTES_REFRESH_EVENT,
 } from "@/lib/header-summary/events";
@@ -42,6 +43,7 @@ type HeaderSummaryContextValue = {
   notificacoesNaoLidas: number;
   conversasNaoLidas: number;
   disparosPendentes: number;
+  agendamentosFeedbackPendentes: number;
   saldoTokensIa: HeaderSummarySaldoTokensIa | null;
   refreshResumo: (forcarAtualizacao?: boolean) => Promise<void>;
   marcarNotificacaoLidaLocal: (id: string) => void;
@@ -58,6 +60,7 @@ const HeaderSummaryContext = createContext<HeaderSummaryContextValue>({
   notificacoesNaoLidas: 0,
   conversasNaoLidas: 0,
   disparosPendentes: 0,
+  agendamentosFeedbackPendentes: 0,
   saldoTokensIa: null,
   refreshResumo: async () => {},
   marcarNotificacaoLidaLocal: () => {},
@@ -146,6 +149,7 @@ export function HeaderSummaryProvider({
   const carregandoDisparosPendentesRef = useRef(false);
   const conversasNaoLidasTimerRef = useRef<number | null>(null);
   const disparosPendentesTimerRef = useRef<number | null>(null);
+  const feedbackAgendasTimerRef = useRef<number | null>(null);
   const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
     null
   );
@@ -156,6 +160,8 @@ export function HeaderSummaryProvider({
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [conversasNaoLidas, setConversasNaoLidas] = useState(0);
   const [disparosPendentes, setDisparosPendentes] = useState(0);
+  const [agendamentosFeedbackPendentes, setAgendamentosFeedbackPendentes] =
+    useState(0);
   const [saldoTokensIa, setSaldoTokensIa] =
     useState<HeaderSummarySaldoTokensIa | null>(null);
   const [contextoRealtime, setContextoRealtime] =
@@ -208,6 +214,12 @@ export function HeaderSummaryProvider({
       if (blocoOk<{ quantidade: number }>(json.disparos_pendentes)) {
         setDisparosPendentes(
           Number(json.disparos_pendentes.data.quantidade || 0)
+        );
+      }
+
+      if (blocoOk<{ quantidade: number }>(json.feedback_agendas)) {
+        setAgendamentosFeedbackPendentes(
+          Number(json.feedback_agendas.data.quantidade || 0)
         );
       }
 
@@ -304,6 +316,22 @@ export function HeaderSummaryProvider({
     [atualizarDisparosPendentes]
   );
 
+  const agendarAtualizacaoFeedbackAgendas = useCallback(
+    (delay = REALTIME_CONTADOR_DEBOUNCE_MS) => {
+      if (document.visibilityState !== "visible") return;
+
+      if (feedbackAgendasTimerRef.current) {
+        window.clearTimeout(feedbackAgendasTimerRef.current);
+      }
+
+      feedbackAgendasTimerRef.current = window.setTimeout(() => {
+        feedbackAgendasTimerRef.current = null;
+        void refreshResumo(true);
+      }, delay);
+    },
+    [refreshResumo]
+  );
+
   useEffect(() => {
     notificacoesRef.current = notificacoes;
   }, [notificacoes]);
@@ -394,6 +422,10 @@ export function HeaderSummaryProvider({
       agendarAtualizacaoDisparosPendentes(EVENTO_LOCAL_DEBOUNCE_MS);
     }
 
+    function atualizarFeedbackAgendasPorEventoLocal() {
+      agendarAtualizacaoFeedbackAgendas(EVENTO_LOCAL_DEBOUNCE_MS);
+    }
+
     document.addEventListener("visibilitychange", atualizarAoVoltarParaAba);
     window.addEventListener(IA_TOKENS_REFRESH_EVENT, atualizarPorEventoTokens);
     window.addEventListener(
@@ -403,6 +435,10 @@ export function HeaderSummaryProvider({
     window.addEventListener(
       HEADER_DISPAROS_PENDENTES_REFRESH_EVENT,
       atualizarDisparosPorEventoLocal
+    );
+    window.addEventListener(
+      HEADER_AGENDAS_FEEDBACK_REFRESH_EVENT,
+      atualizarFeedbackAgendasPorEventoLocal
     );
 
     return () => {
@@ -420,11 +456,16 @@ export function HeaderSummaryProvider({
         HEADER_DISPAROS_PENDENTES_REFRESH_EVENT,
         atualizarDisparosPorEventoLocal
       );
+      window.removeEventListener(
+        HEADER_AGENDAS_FEEDBACK_REFRESH_EVENT,
+        atualizarFeedbackAgendasPorEventoLocal
+      );
     };
   }, [
     refreshResumo,
     agendarAtualizacaoConversasNaoLidas,
     agendarAtualizacaoDisparosPendentes,
+    agendarAtualizacaoFeedbackAgendas,
   ]);
 
   useEffect(() => {
@@ -546,6 +587,32 @@ export function HeaderSummaryProvider({
   }, [contextoRealtime?.empresa_id, agendarAtualizacaoDisparosPendentes]);
 
   useEffect(() => {
+    const empresaId = contextoRealtime?.empresa_id;
+    if (!empresaId) return;
+
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
+      .channel(`crm-header-feedback-agendas:${empresaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "agenda_agendamentos",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        () => {
+          agendarAtualizacaoFeedbackAgendas();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [contextoRealtime?.empresa_id, agendarAtualizacaoFeedbackAgendas]);
+
+  useEffect(() => {
     return () => {
       if (conversasNaoLidasTimerRef.current) {
         window.clearTimeout(conversasNaoLidasTimerRef.current);
@@ -553,6 +620,10 @@ export function HeaderSummaryProvider({
 
       if (disparosPendentesTimerRef.current) {
         window.clearTimeout(disparosPendentesTimerRef.current);
+      }
+
+      if (feedbackAgendasTimerRef.current) {
+        window.clearTimeout(feedbackAgendasTimerRef.current);
       }
     };
   }, []);
@@ -564,6 +635,7 @@ export function HeaderSummaryProvider({
         notificacoesNaoLidas,
         conversasNaoLidas,
         disparosPendentes,
+        agendamentosFeedbackPendentes,
         saldoTokensIa,
         refreshResumo,
         marcarNotificacaoLidaLocal,

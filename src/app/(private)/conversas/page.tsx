@@ -2035,6 +2035,12 @@ function ConversasPageContent() {
   >(null);
   const [novoSetorId, setNovoSetorId] = useState("");
   const [novoResponsavelId, setNovoResponsavelId] = useState("");
+  const [encerramentoTipoEvento, setEncerramentoTipoEvento] =
+    useState<RastreamentoEventoTipoManual>("venda_realizada");
+  const [encerramentoValor, setEncerramentoValor] = useState("");
+  const [encerramentoObservacao, setEncerramentoObservacao] = useState("");
+  const [encerramentoInterrompeAutomacao, setEncerramentoInterrompeAutomacao] =
+    useState(false);
   const [salvandoAcao, setSalvandoAcao] = useState(false);
   const [abaVisivel, setAbaVisivel] = useState(true);
   const abaVisivelRef = useRef(true);
@@ -4814,8 +4820,28 @@ function ConversasPageContent() {
   }
 
   async function confirmarEncerramento() {
+    if (
+      eventoRastreamentoExigeValor(encerramentoTipoEvento) &&
+      !encerramentoValor.trim()
+    ) {
+      setErro("Informe o valor da venda.");
+      return;
+    }
+
+    if (encerramentoInterrompeAutomacao) {
+      await pararAutomacaoEEncerrar();
+      return;
+    }
+
     await atualizarConversa(
-      { status: "encerrado_manual" },
+      {
+        status: "encerrado_manual",
+        tipo_evento_resultado: encerramentoTipoEvento,
+        valor_resultado: eventoRastreamentoExigeValor(encerramentoTipoEvento)
+          ? encerramentoValor
+          : null,
+        observacao_resultado: encerramentoObservacao.trim() || null,
+      },
       "Conversa encerrada com sucesso."
     );
   }
@@ -4825,6 +4851,7 @@ function ConversasPageContent() {
 
   try {
     setAssumindo(true);
+    setSalvandoAcao(true);
     setErro("");
     setMensagemSucesso("");
 
@@ -4840,6 +4867,11 @@ function ConversasPageContent() {
           bot_ativo: false,
           responsavel_id: null,
           acao: "parar_automacao_encerrar",
+          tipo_evento_resultado: encerramentoTipoEvento,
+          valor_resultado: eventoRastreamentoExigeValor(encerramentoTipoEvento)
+            ? encerramentoValor
+            : null,
+          observacao_resultado: encerramentoObservacao.trim() || null,
         }),
       }
     );
@@ -4854,6 +4886,8 @@ function ConversasPageContent() {
     setMensagemSucesso(
       data.message || "Automação parada e conversa encerrada com sucesso."
     );
+    setAcaoAberta(null);
+    setEncerramentoInterrompeAutomacao(false);
 
     const listaAtualizada = await atualizarConversasCarregadas();
 
@@ -4876,6 +4910,7 @@ function ConversasPageContent() {
     setErro("Erro ao parar automação e encerrar conversa.");
   } finally {
     setAssumindo(false);
+    setSalvandoAcao(false);
   }
 }
 
@@ -6416,9 +6451,13 @@ async function baixarConversaPDF() {
     }
   }
 
-  function abrirEncerrar() {
+  function abrirEncerrar(interromperAutomacao = false) {
     setErro("");
     setMensagemSucesso("");
+    setEncerramentoTipoEvento("venda_realizada");
+    setEncerramentoValor("");
+    setEncerramentoObservacao("");
+    setEncerramentoInterrompeAutomacao(interromperAutomacao);
 
     // Fecha o painel de detalhes para exibir o card no chat.
     setPainelDireitoAberto(false);
@@ -8516,7 +8555,11 @@ const templateFooterTexto = useMemo(() => {
                       {acaoAberta === "encerrar" && (
                         <>
                           <div className={styles.actionPanelHeader}>
-                            <h3 className={styles.actionPanelTitle}>Encerrar conversa</h3>
+                            <h3 className={styles.actionPanelTitle}>
+                              {encerramentoInterrompeAutomacao
+                                ? "Parar automação e encerrar"
+                                : "Encerrar conversa"}
+                            </h3>
                             <button
                               className={styles.textButton}
                               onClick={() => setAcaoAberta(null)}
@@ -8527,8 +8570,67 @@ const templateFooterTexto = useMemo(() => {
 
                           <div className={styles.actionPanelBody}>
                             <p className={styles.actionText}>
-                              Tem certeza de que deseja encerrar esta conversa?
+                              {encerramentoInterrompeAutomacao
+                                ? "A automação será interrompida e o protocolo será encerrado. Informe o resultado deste atendimento."
+                                : "Tem certeza de que deseja encerrar esta conversa?"}
                             </p>
+
+                            <label className={styles.actionLabel}>
+                              Tipo de evento
+                            </label>
+                            <select
+                              value={encerramentoTipoEvento}
+                              onChange={(event) => {
+                                const novoTipo = event.target
+                                  .value as RastreamentoEventoTipoManual;
+                                setEncerramentoTipoEvento(novoTipo);
+
+                                if (!eventoRastreamentoExigeValor(novoTipo)) {
+                                  setEncerramentoValor("");
+                                }
+                              }}
+                              className={styles.actionSelect}
+                            >
+                              {RASTREAMENTO_EVENTOS_MANUAIS.map((evento) => (
+                                <option key={evento.value} value={evento.value}>
+                                  {evento.label}
+                                </option>
+                              ))}
+                            </select>
+
+                            {eventoRastreamentoExigeValor(
+                              encerramentoTipoEvento
+                            ) && (
+                              <>
+                                <label className={styles.actionLabel}>
+                                  Valor da venda
+                                </label>
+                                <input
+                                  className={styles.messageInput}
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={encerramentoValor}
+                                  onChange={(event) =>
+                                    setEncerramentoValor(event.target.value)
+                                  }
+                                  placeholder="497,00"
+                                />
+                              </>
+                            )}
+
+                            <label className={styles.actionLabel}>
+                              Observação
+                            </label>
+                            <textarea
+                              className={styles.noteInput}
+                              rows={3}
+                              value={encerramentoObservacao}
+                              onChange={(event) =>
+                                setEncerramentoObservacao(event.target.value)
+                              }
+                              placeholder="Ex: venda confirmada pelo atendente, cliente escolheu plano anual"
+                            />
 
                             <div className={styles.actionButtons}>
                               <button
@@ -8891,10 +8993,10 @@ const templateFooterTexto = useMemo(() => {
                                 <button
                                   type="button"
                                   className={styles.dangerButton}
-                                  onClick={pararAutomacaoEEncerrar}
+                                  onClick={() => abrirEncerrar(true)}
                                   disabled={assumindo}
                                 >
-                                  {assumindo ? "Parando automação..." : "Parar automação"}
+                                  Parar automação
                                 </button>
                               </div>
                             </div>
@@ -11850,7 +11952,7 @@ const templateFooterTexto = useMemo(() => {
               </div>
 
               <div className={styles.contactModalField}>
-                <label className={styles.actionLabel}>Observacao</label>
+                <label className={styles.actionLabel}>Observação</label>
                 <textarea
                   className={styles.noteInput}
                   rows={4}

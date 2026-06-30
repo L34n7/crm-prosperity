@@ -91,20 +91,44 @@ export async function GET(request: Request) {
     searchParams.get("rastreamento_campanha_id")?.trim() || "";
   const telefoneRevisar = searchParams.get("telefone_revisar");
   const ordenacao = searchParams.get("ordenacao") || "recentes";
+  const classificacoes = (searchParams.get("classificacoes") || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) =>
+      ["qualificado", "convertido", "perdido"].includes(item)
+    );
+  const statusConversa = (searchParams.get("status_conversa") || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) =>
+      [
+        "aberta",
+        "bot",
+        "fila",
+        "em_atendimento",
+        "aguardando_cliente",
+        "encerrado_manual",
+        "encerrado_24h",
+        "encerrado_aut",
+        "sem_conversa",
+      ].includes(item)
+    );
+  const apenasNovos = searchParams.get("contato_novo") === "true";
 
   const pagina = Math.max(1, Number(searchParams.get("pagina") || "1"));
 
   const limite = Math.max(
     1,
-    Math.min(5000, Number(searchParams.get("limite") || "5000"))
+    Math.min(500, Number(searchParams.get("limite") || "50"))
   );
 
   const from = (pagina - 1) * limite;
+  const to = from + limite - 1;
 
   const supabaseAdmin = getSupabaseAdmin();
 
   let query = supabaseAdmin
-    .from("contatos")
+    .from("contatos_visao_operacional")
     .select(
       `
         id,
@@ -119,33 +143,67 @@ export async function GET(request: Request) {
         rastreamento_campanha_id,
         rastreamento_link_id,
         rastreamento_clique_id,
-        status_lead,
         observacoes,
         telefone_revisar,
+        classificacao,
+        classificacao_atualizada_em,
+        classificacao_evento_id,
+        classificacao_protocolo_id,
+        contato_novo,
+        campanha_exibicao,
+        campanha_status,
+        campanha_origem_nome,
+        conversa_id,
+        conversa_status,
+        conversa_ultima_mensagem_em,
+        conversa_encerrada_em,
+        protocolo_atual,
+        protocolo_resultado,
+        contato_novo_no_inicio,
+        iniciado_com_bot,
+        finalizado_com_bot,
+        finalizado_por_tipo,
+        finalizado_por_usuario_id,
+        finalizado_por_usuario_nome,
         created_at,
-        updated_at,
-        rastreamento_campanhas (
-          id,
-          nome,
-          codigo,
-          status,
-          rastreamento_origens (
-            id,
-            nome
-          )
-        )
+        updated_at
       `,
       { count: "exact" }
     )
     .eq("empresa_id", usuario.empresa_id);
 
-  if (
-    statusLead &&
-    ["novo", "em_atendimento", "qualificado", "cliente", "perdido"].includes(
-      statusLead
-    )
-  ) {
-    query = query.eq("status_lead", statusLead);
+  if (classificacoes.length > 0) {
+    query = query.in("classificacao", classificacoes);
+  } else if (statusLead === "qualificado") {
+    query = query.eq("classificacao", "qualificado");
+  } else if (statusLead === "cliente") {
+    query = query.eq("classificacao", "convertido");
+  } else if (statusLead === "perdido") {
+    query = query.eq("classificacao", "perdido");
+  }
+
+  if (apenasNovos || statusLead === "novo") {
+    query = query.gte(
+      "created_at",
+      new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+    );
+  }
+
+  if (statusConversa.length > 0) {
+    const statusExistentes = statusConversa.filter(
+      (item) => item !== "sem_conversa"
+    );
+
+    if (statusConversa.includes("sem_conversa")) {
+      query =
+        statusExistentes.length > 0
+          ? query.or(
+              `conversa_status.in.(${statusExistentes.join(",")}),conversa_status.is.null`
+            )
+          : query.is("conversa_status", null);
+    } else {
+      query = query.in("conversa_status", statusExistentes);
+    }
   }
 
   if (origem) {
@@ -155,7 +213,7 @@ export async function GET(request: Request) {
   if (rastreamentoCampanhaId) {
     query = query.eq("rastreamento_campanha_id", rastreamentoCampanhaId);
   } else if (campanha) {
-    query = query.ilike("campanha", `%${campanha}%`);
+    query = query.ilike("campanha_exibicao", `%${campanha}%`);
   }
 
   if (telefoneRevisar === "true") {
@@ -168,7 +226,7 @@ export async function GET(request: Request) {
 
   if (busca) {
     query = query.or(
-      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha.ilike.%${busca}%,telefone.ilike.%${busca}%`
+      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
     );
   }
 
@@ -182,168 +240,14 @@ export async function GET(request: Request) {
     query = query.order("created_at", { ascending: false });
   }
 
-  const tamanhoLote = 1000;
-  let contatosAcumulados: any[] = [];
-  let totalCount = 0;
-  let offsetAtual = from;
+  const { data, error, count } = await query.range(from, to);
 
-  while (contatosAcumulados.length < limite) {
-    let queryLote = supabaseAdmin
-      .from("contatos")
-      .select(
-        `
-          id,
-          empresa_id,
-          nome,
-          whatsapp_profile_name,
-          telefone,
-          email,
-          origem,
-          campanha,
-          rastreamento_origem_id,
-          rastreamento_campanha_id,
-          rastreamento_link_id,
-          rastreamento_clique_id,
-          status_lead,
-          observacoes,
-          telefone_revisar,
-          created_at,
-          updated_at,
-          rastreamento_campanhas (
-            id,
-            nome,
-            codigo,
-            status,
-            rastreamento_origens (
-              id,
-              nome
-            )
-          )
-        `,
-        { count: "exact" }
-      )
-      .eq("empresa_id", usuario.empresa_id);
-
-    if (
-      statusLead &&
-      ["novo", "em_atendimento", "qualificado", "cliente", "perdido"].includes(
-        statusLead
-      )
-    ) {
-      queryLote = queryLote.eq("status_lead", statusLead);
-    }
-
-    if (origem) {
-      queryLote = queryLote.eq("origem", origem);
-    }
-
-    if (rastreamentoCampanhaId) {
-      queryLote = queryLote.eq("rastreamento_campanha_id", rastreamentoCampanhaId);
-    } else if (campanha) {
-      queryLote = queryLote.eq("campanha", campanha);
-    }
-
-    if (telefoneRevisar === "true") {
-      queryLote = queryLote.eq("telefone_revisar", true);
-    }
-
-    if (telefoneRevisar === "false") {
-      queryLote = queryLote.eq("telefone_revisar", false);
-    }
-
-    if (busca) {
-      queryLote = queryLote.or(
-        `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha.ilike.%${busca}%,telefone.ilike.%${busca}%`
-      );
-    }
-
-    if (ordenacao === "antigos") {
-      queryLote = queryLote.order("created_at", { ascending: true });
-    } else if (ordenacao === "nome_asc") {
-      queryLote = queryLote.order("nome", { ascending: true });
-    } else if (ordenacao === "nome_desc") {
-      queryLote = queryLote.order("nome", { ascending: false });
-    } else {
-      queryLote = queryLote.order("created_at", { ascending: false });
-    }
-
-    const loteFrom = offsetAtual;
-    const loteTo = offsetAtual + tamanhoLote - 1;
-
-    const { data: loteData, error: loteError, count } = await queryLote.range(
-      loteFrom,
-      loteTo
+  if (error) {
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 }
     );
-
-    if (loteError) {
-      return NextResponse.json(
-        { ok: false, error: loteError.message },
-        { status: 500 }
-      );
-    }
-
-    if (typeof count === "number") {
-      totalCount = count;
-    }
-
-    const lote = loteData ?? [];
-
-    contatosAcumulados.push(...lote);
-
-    if (lote.length < tamanhoLote) {
-      break;
-    }
-
-    offsetAtual += tamanhoLote;
   }
-
-  const data = contatosAcumulados.slice(0, limite);
-  const count = totalCount;
-
-  const { data: origensData } = await supabaseAdmin
-    .from("contatos")
-    .select("origem")
-    .eq("empresa_id", usuario.empresa_id)
-    .not("origem", "is", null);
-
-  const origens = Array.from(
-    new Set(
-      (origensData || [])
-        .map((item) => String(item.origem || "").trim())
-        .filter(Boolean)
-    )
-  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-
-  const { data: campanhasData } = await supabaseAdmin
-    .from("contatos")
-    .select("campanha")
-    .eq("empresa_id", usuario.empresa_id)
-    .not("campanha", "is", null);
-
-  const { data: campanhasRastreamentoData } = await supabaseAdmin
-    .from("rastreamento_campanhas")
-    .select("nome")
-    .eq("empresa_id", usuario.empresa_id);
-
-  const campanhasLegadas = Array.from(
-    new Set(
-      (campanhasData || [])
-        .map((item) => String(item.campanha || "").trim())
-        .filter(Boolean)
-    )
-  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-
-  const campanhas = Array.from(
-    new Set(
-      [
-        ...campanhasLegadas,
-        ...(campanhasRastreamentoData || []).map((item) =>
-          String(item.nome || "").trim()
-        ),
-      ]
-        .filter(Boolean)
-    )
-  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   return NextResponse.json({
     ok: true,
@@ -352,9 +256,6 @@ export async function GET(request: Request) {
     pagina,
     limite,
     totalPaginas: Math.max(1, Math.ceil((count ?? 0) / limite)),
-    origens, 
-    campanhas,
-    campanhas_legadas: campanhasLegadas,
   });
 }
 

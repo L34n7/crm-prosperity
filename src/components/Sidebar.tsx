@@ -34,6 +34,7 @@ import {
   Moon,
   Sun,
   X,
+  ChevronDown,
 } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
 import { useHeaderSummary } from "@/components/header-summary-context";
@@ -45,6 +46,10 @@ import {
 } from "@/lib/permissoes/internas";
 import { PERMISSAO_VISUALIZAR_DISPAROS } from "@/lib/whatsapp/disparo-permissoes";
 import styles from "./Sidebar.module.css";
+import {
+  getNichoConfig,
+  type NichoCodigo,
+} from "@/lib/nichos/config";
 
 type MenuItem = {
   label: string;
@@ -58,6 +63,7 @@ type SidebarProps = {
   permissoes?: string[];
   assinatura?: AssinaturaEmpresa | null;
   isAdmin?: boolean;
+  nichoCodigo?: NichoCodigo;
 };
 
 type WhatsappSidebarPerfil = {
@@ -149,6 +155,15 @@ const menuItems: MenuItem[] = [
   { label: "Perfil WhatsApp", href: "/configuracoes/whatsapp/perfil", icon: Settings2 },
 ];
 
+const configuracoesHrefs = new Set([
+  "/usuarios",
+  "/empresas",
+  "/configuracoes/setores",
+  "/configuracoes/perfis",
+  "/configuracoes/permissoes",
+  "/auditoria",
+]);
+
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -165,6 +180,7 @@ export default function Sidebar({
   permissoes = [],
   assinatura = null,
   isAdmin = false,
+  nichoCodigo = "comercio",
 }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -177,9 +193,14 @@ export default function Sidebar({
       searchParams.get("conversaId")
   );
   const headerUser = useHeaderUser();
-  const { conversasNaoLidas, disparosPendentes } = useHeaderSummary();
+  const {
+    conversasNaoLidas,
+    disparosPendentes,
+    agendamentosFeedbackPendentes,
+  } = useHeaderSummary();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [configuracoesOpen, setConfiguracoesOpen] = useState(false);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>(() => {
     if (typeof document === "undefined") return "light";
     return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
@@ -207,23 +228,89 @@ export default function Sidebar({
   const letraAvatar = nomeFinal?.trim()?.charAt(0)?.toUpperCase() || "U";
   const temaEscuroAtivo = temaVisual === "dark";
   const temaBotaoLabel = temaEscuroAtivo ? "Tema claro" : "Tema escuro";
+  const nichoConfig = getNichoConfig(nichoCodigo);
+  const modulosNichoMenu: MenuItem[] = [
+    ...(nichoConfig.modulos.includes("saude.prontuarios")
+      ? [
+          {
+            label: "Prontuários",
+            href: "/prontuarios",
+            icon: FileText,
+            permissao: "prontuarios.visualizar",
+          },
+        ]
+      : []),
+    ...(nichoConfig.modulos.includes("saude.odontograma")
+      ? [
+          {
+            label: "Odontograma",
+            href: "/odontograma",
+            icon: Layers3,
+            permissao: "odontograma.visualizar",
+          },
+        ]
+      : []),
+    ...(nichoConfig.modulos.includes("imobiliario.imoveis")
+      ? [
+          {
+            label: "Imóveis",
+            href: "/imoveis",
+            icon: Building2,
+            permissao: "imoveis.visualizar",
+          },
+        ]
+      : []),
+  ];
+  const menuItemsComCadastro: MenuItem[] = [
+    ...menuItems.slice(0, 8),
+    {
+      label: nichoConfig.cadastroPlural,
+      href: "/cadastros",
+      icon: Users,
+      permissao: "pessoas.visualizar",
+    },
+    ...modulosNichoMenu,
+    ...menuItems.slice(8),
+  ];
 
-  const visibleMenuItems = menuItems.filter((item) => {
+  const visibleMenuItems = menuItemsComCadastro.filter((item) => {
     if (assinaturaBloqueada) {
       return isAdmin && item.href === "/conversas";
     }
 
     return !item.permissao || permissoes.includes(item.permissao);
   });
-  const desktopMenuItems = visibleMenuItems.filter(
-    (item) => item.href !== "/configuracoes/whatsapp/perfil"
+
+  const configuracoesItems = visibleMenuItems.filter((item) =>
+    configuracoesHrefs.has(item.href)
   );
+
+  const desktopMenuItems = visibleMenuItems.filter(
+    (item) =>
+      item.href !== "/configuracoes/whatsapp/perfil" &&
+      !configuracoesHrefs.has(item.href)
+  );
+
+  const configuracoesActive = configuracoesItems.some((item) =>
+    isActivePath(pathname, item.href)
+  );
+
+  useEffect(() => {
+    if (configuracoesActive) {
+      setConfiguracoesOpen(true);
+    }
+  }, [configuracoesActive]);
+
   const mobilePrimaryItems = mobilePrimaryHrefs
     .map((href) => visibleMenuItems.find((item) => item.href === href))
     .filter((item): item is MenuItem => Boolean(item));
+    
   const mobileMoreItems = visibleMenuItems.filter(
-    (item) => !mobilePrimaryHrefs.includes(item.href)
+    (item) =>
+      !mobilePrimaryHrefs.includes(item.href) &&
+      !configuracoesHrefs.has(item.href)
   );
+
   const mobileMoreActive =
     mobileMoreItems.some((item) => isActivePath(pathname, item.href)) ||
     isActivePath(pathname, "/perfil");
@@ -357,39 +444,107 @@ export default function Sidebar({
                   className={`${styles.link} ${active ? styles.linkActive : ""}`}
                   title={collapsed ? item.label : undefined}
                 >
-                <span className={styles.linkIcon}>
-                  {item.href === "/configuracoes/whatsapp/perfil" &&
-                  whatsappPerfil?.foto ? (
-                    <img
-                      src={whatsappPerfil.foto}
-                      alt={whatsappPerfil.nome}
-                      className={styles.whatsappSidebarAvatar}
-                    />
-                  ) : (
-                    <Icon size={18} strokeWidth={2} />
-                  )}
+                  <span className={styles.linkIcon}>
+                    {item.href === "/configuracoes/whatsapp/perfil" &&
+                    whatsappPerfil?.foto ? (
+                      <img
+                        src={whatsappPerfil.foto}
+                        alt={whatsappPerfil.nome}
+                        className={styles.whatsappSidebarAvatar}
+                      />
+                    ) : (
+                      <Icon size={18} strokeWidth={2} />
+                    )}
 
-                  {item.href === "/disparos-agendados" && disparosPendentesVisiveis > 0 && (
-                      <span className={styles.notificationDot}>
-                        {disparosPendentesVisiveis > 9 ? "9+" : disparosPendentesVisiveis}
+                    {item.href === "/disparos-agendados" &&
+                      disparosPendentesVisiveis > 0 && (
+                        <span className={styles.notificationDot}>
+                          {disparosPendentesVisiveis > 9
+                            ? "9+"
+                            : disparosPendentesVisiveis}
+                        </span>
+                      )}
+
+                    {item.href === "/conversas" && conversasNaoLidas > 0 && (
+                      <span
+                        className={`${styles.notificationDot} ${styles.conversationsNotificationDot}`}
+                      >
+                        {conversasNaoLidas > 9 ? "9+" : conversasNaoLidas}
                       </span>
-                  )}
+                    )}
 
-                  {item.href === "/conversas" && conversasNaoLidas > 0 && (
-                    <span
-                      className={`${styles.notificationDot} ${styles.conversationsNotificationDot}`}
-                    >
-                      {conversasNaoLidas > 9 ? "9+" : conversasNaoLidas}
-                    </span>
-                  )}
+                    {item.href === "/agendas" &&
+                      agendamentosFeedbackPendentes > 0 && (
+                        <span className={styles.notificationDot}>
+                          {agendamentosFeedbackPendentes > 9
+                            ? "9+"
+                            : agendamentosFeedbackPendentes}
+                        </span>
+                      )}
                   </span>
 
-                  {!collapsed && (
-                    <span className={styles.linkText}>{item.label}</span>
-                  )}
+                  {!collapsed && <span className={styles.linkText}>{item.label}</span>}
                 </Link>
               );
             })}
+
+            {configuracoesItems.length > 0 && (
+              <div className={styles.submenuGroup}>
+                <button
+                  type="button"
+                  className={`${styles.link} ${styles.submenuButton} ${
+                    configuracoesActive ? styles.configuracoesActive : ""
+                  }`}
+                  onClick={() => setConfiguracoesOpen((current) => !current)}
+                  title={collapsed ? "Configurações" : undefined}
+                  aria-expanded={configuracoesOpen}
+                >
+                  <span className={styles.linkIcon}>
+                    <Settings2 size={18} strokeWidth={2} />
+                  </span>
+
+                  {!collapsed && (
+                    <>
+                      <span className={styles.linkText}>Configurações</span>
+
+                      <span
+                        className={`${styles.submenuChevron} ${
+                          configuracoesOpen ? styles.submenuChevronOpen : ""
+                        }`}
+                      >
+                        <ChevronDown size={15} strokeWidth={2.4} />
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                {configuracoesOpen && (
+                  <div className={styles.submenuList}>
+                    {configuracoesItems.map((item) => {
+                      const active = isActivePath(pathname, item.href);
+                      const Icon = item.icon;
+
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`${styles.submenuLink} ${
+                            active ? styles.submenuLinkActive : ""
+                          }`}
+                          title={collapsed ? item.label : undefined}
+                        >
+                          <span className={styles.submenuIcon}>
+                            <Icon size={15} strokeWidth={2.1} />
+                          </span>
+
+                          {!collapsed && <span>{item.label}</span>}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
         </div>
       </div>
@@ -604,6 +759,56 @@ export default function Sidebar({
                   </Link>
                 );
               })}
+
+              {configuracoesItems.length > 0 && (
+                <div className={styles.mobileSubmenuGroup}>
+                  <button
+                    type="button"
+                    className={`${styles.mobileMoreLink} ${
+                      configuracoesActive ? styles.mobileMoreLinkActive : ""
+                    }`}
+                    onClick={() => setConfiguracoesOpen((current) => !current)}
+                    aria-expanded={configuracoesOpen}
+                  >
+                    <span className={styles.mobileMoreIcon}>
+                      <Settings2 size={18} strokeWidth={2.1} />
+                    </span>
+
+                    <span>Configurações</span>
+
+                    <ChevronDown
+                      size={16}
+                      strokeWidth={2.4}
+                      className={`${styles.mobileSubmenuChevron} ${
+                        configuracoesOpen ? styles.mobileSubmenuChevronOpen : ""
+                      }`}
+                    />
+                  </button>
+
+                  {configuracoesOpen && (
+                    <div className={styles.mobileSubmenuList}>
+                      {configuracoesItems.map((item) => {
+                        const active = isActivePath(pathname, item.href);
+                        const Icon = item.icon;
+
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={`${styles.mobileSubmenuLink} ${
+                              active ? styles.mobileSubmenuLinkActive : ""
+                            }`}
+                            onClick={() => setMobileMoreOpen(false)}
+                          >
+                            <Icon size={16} strokeWidth={2.1} />
+                            <span>{item.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className={styles.mobileProfileActions}>

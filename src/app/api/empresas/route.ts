@@ -47,6 +47,12 @@ export async function GET() {
       created_at,
       updated_at,
       plano_id,
+      nicho_id,
+      nichos (
+        id,
+        codigo,
+        nome
+      ),
       planos (
         id,
         nome,
@@ -101,6 +107,8 @@ export async function POST(request: Request) {
   const telefone = body?.telefone?.trim() || null;
   const nome_responsavel = body?.nome_responsavel?.trim() || null;
   const plano_id = body?.plano_id || null;
+  const nicho_id =
+    body?.nicho_id || "10000000-0000-4000-8000-000000000001";
   const timezone = body?.timezone?.trim() || "America/Sao_Paulo";
   const logo_url = body?.logo_url?.trim() || null;
   const observacoes = body?.observacoes?.trim() || null;
@@ -139,11 +147,26 @@ export async function POST(request: Request) {
     );
   }
 
+  const { data: nicho } = await supabaseAdmin
+    .from("nichos")
+    .select("id")
+    .eq("id", nicho_id)
+    .eq("ativo", true)
+    .maybeSingle();
+
+  if (!nicho) {
+    return NextResponse.json(
+      { ok: false, error: "Nicho não encontrado" },
+      { status: 404 }
+    );
+  }
+
   const { data, error } = await supabaseAdmin
     .from("empresas")
     .insert([
       {
         plano_id,
+        nicho_id,
         nome_fantasia,
         razao_social,
         documento,
@@ -171,6 +194,13 @@ export async function POST(request: Request) {
       created_at,
       updated_at,
       plano_id
+      ,
+      nicho_id,
+      nichos (
+        id,
+        codigo,
+        nome
+      )
     `)
     .single();
 

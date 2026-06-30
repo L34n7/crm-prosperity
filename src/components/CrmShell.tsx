@@ -7,6 +7,7 @@ import { HeaderSummaryProvider } from "@/components/header-summary-context";
 import SessionActivityTracker from "@/components/SessionActivityTracker";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import styles from "./CrmShell.module.css";
+import type { NichoCodigo } from "@/lib/nichos/config";
 
 type CrmShellProps = {
   children: React.ReactNode;
@@ -16,6 +17,7 @@ type CrmShellProps = {
   permissoes?: string[];
   assinatura?: AssinaturaEmpresa | null;
   isAdmin?: boolean;
+  nichoCodigo?: NichoCodigo;
 };
 
 export default function CrmShell({
@@ -26,6 +28,7 @@ export default function CrmShell({
   permissoes = [],
   assinatura = null,
   isAdmin = false,
+  nichoCodigo = "comercio",
 }: CrmShellProps) {
   return (
     <HeaderUserProvider
@@ -40,6 +43,7 @@ export default function CrmShell({
             permissoes={permissoes}
             assinatura={assinatura}
             isAdmin={isAdmin}
+            nichoCodigo={nichoCodigo}
           />
 
           <div className={styles.contentArea}>

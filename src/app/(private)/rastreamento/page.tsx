@@ -250,7 +250,7 @@ function StatusControl({
 }
 
 export default function RastreamentoPage() {
-  const [aba, setAba] = useState<Aba>("origens");
+  const [aba, setAba] = useState<Aba>("eventos");
   const [origens, setOrigens] = useState<Origem[]>([]);
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
   const [links, setLinks] = useState<LinkRastreavel[]>([]);
@@ -668,10 +668,10 @@ export default function RastreamentoPage() {
 
         <nav className={styles.tabs}>
           {[
+            ["eventos", "Eventos", Activity],
             ["origens", "Origens", Route],
             ["campanhas", "Campanhas", Megaphone],
             ["links", "Links rastreaveis", Link2],
-            ["eventos", "Eventos", Activity],
           ].map(([id, label, Icon]) => {
             const TabIcon = Icon as typeof Route;
             return (

@@ -12,6 +12,12 @@ type Plano = {
   slug: string;
 };
 
+type Nicho = {
+  id: string;
+  codigo: string;
+  nome: string;
+};
+
 type StatusEmpresa = "ativa" | "inativa" | "suspensa" | "cancelada";
 
 type Empresa = {
@@ -27,6 +33,8 @@ type Empresa = {
   logo_url: string | null;
   observacoes: string | null;
   plano_id: string;
+  nicho_id: string;
+  nichos?: Nicho | null;
   planos?: {
     id: string;
     nome: string;
@@ -82,6 +90,7 @@ export default function EmpresasPage() {
   );
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [planos, setPlanos] = useState<Plano[]>([]);
+  const [nichos, setNichos] = useState<Nicho[]>([]);
 
   const [nomeFantasia, setNomeFantasia] = useState("");
   const [razaoSocial, setRazaoSocial] = useState("");
@@ -90,6 +99,7 @@ export default function EmpresasPage() {
   const [telefone, setTelefone] = useState("");
   const [nomeResponsavel, setNomeResponsavel] = useState("");
   const [planoId, setPlanoId] = useState("");
+  const [nichoId, setNichoId] = useState("");
   const [timezone, setTimezone] = useState("America/Sao_Paulo");
   const [logoUrl, setLogoUrl] = useState("");
   const [observacoes, setObservacoes] = useState("");
@@ -108,6 +118,7 @@ export default function EmpresasPage() {
   const [editTelefone, setEditTelefone] = useState("");
   const [editNomeResponsavel, setEditNomeResponsavel] = useState("");
   const [editPlanoId, setEditPlanoId] = useState("");
+  const [editNichoId, setEditNichoId] = useState("");
   const [editTimezone, setEditTimezone] = useState("America/Sao_Paulo");
   const [editLogoUrl, setEditLogoUrl] = useState("");
   const [editObservacoes, setEditObservacoes] = useState("");
@@ -136,6 +147,13 @@ export default function EmpresasPage() {
     setPlanos(data.planos || []);
   }
 
+  async function carregarNichos() {
+    const res = await fetch("/api/nichos", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    setNichos(data.nichos || []);
+  }
+
   async function criarEmpresa() {
     setMensagem("");
     setErro("");
@@ -155,6 +173,11 @@ export default function EmpresasPage() {
       return;
     }
 
+    if (!nichoId) {
+      setErro("Selecione um segmento.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -171,6 +194,7 @@ export default function EmpresasPage() {
           telefone,
           nome_responsavel: nomeResponsavel,
           plano_id: planoId,
+          nicho_id: nichoId,
           timezone,
           logo_url: logoUrl,
           observacoes,
@@ -192,6 +216,7 @@ export default function EmpresasPage() {
       setTelefone("");
       setNomeResponsavel("");
       setPlanoId("");
+      setNichoId("");
       setTimezone("America/Sao_Paulo");
       setLogoUrl("");
       setObservacoes("");
@@ -213,6 +238,7 @@ export default function EmpresasPage() {
     setEditTelefone(empresa.telefone || "");
     setEditNomeResponsavel(empresa.nome_responsavel || "");
     setEditPlanoId(empresa.plano_id);
+    setEditNichoId(empresa.nicho_id);
     setEditTimezone(empresa.timezone || "America/Sao_Paulo");
     setEditLogoUrl(empresa.logo_url || "");
     setEditObservacoes(empresa.observacoes || "");
@@ -244,6 +270,7 @@ export default function EmpresasPage() {
         telefone: editTelefone,
         nome_responsavel: editNomeResponsavel,
         plano_id: editPlanoId,
+        nicho_id: editNichoId,
         timezone: editTimezone,
         logo_url: editLogoUrl,
         observacoes: editObservacoes,
@@ -270,6 +297,7 @@ export default function EmpresasPage() {
   useEffect(() => {
     carregarEmpresas();
     carregarPlanos();
+    carregarNichos();
   }, []);
 
   return (
@@ -364,6 +392,22 @@ export default function EmpresasPage() {
                 {planos.map((plano) => (
                   <option key={plano.id} value={plano.id}>
                     {plano.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Segmento</label>
+              <select
+                className={styles.select}
+                value={nichoId}
+                onChange={(e) => setNichoId(e.target.value)}
+              >
+                <option value="">Selecione um segmento</option>
+                {nichos.map((nicho) => (
+                  <option key={nicho.id} value={nicho.id}>
+                    {nicho.nome}
                   </option>
                 ))}
               </select>
@@ -471,6 +515,10 @@ export default function EmpresasPage() {
                               <strong>Plano:</strong> {empresa.planos?.nome ?? "—"}
                             </span>
                             <span className={styles.metaItem}>
+                              <strong>Segmento:</strong>{" "}
+                              {empresa.nichos?.nome ?? "—"}
+                            </span>
+                            <span className={styles.metaItem}>
                               <strong>Responsável:</strong>{" "}
                               {empresa.nome_responsavel ?? "—"}
                             </span>
@@ -573,6 +621,21 @@ export default function EmpresasPage() {
                                 {planos.map((plano) => (
                                   <option key={plano.id} value={plano.id}>
                                     {plano.nome}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className={styles.field}>
+                              <label className={styles.label}>Segmento</label>
+                              <select
+                                className={styles.select}
+                                value={editNichoId}
+                                onChange={(e) => setEditNichoId(e.target.value)}
+                              >
+                                {nichos.map((nicho) => (
+                                  <option key={nicho.id} value={nicho.id}>
+                                    {nicho.nome}
                                   </option>
                                 ))}
                               </select>

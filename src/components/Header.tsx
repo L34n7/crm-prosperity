@@ -156,6 +156,8 @@ export default function Header({
   const [paginaNotificacoes, setPaginaNotificacoes] = useState(1);
   const [alertaTokensOpen, setAlertaTokensOpen] = useState(false);
   const [modalPlanosOpen, setModalPlanosOpen] = useState(false);
+  const [feedbackAgendaPopup, setFeedbackAgendaPopup] =
+    useState<Notificacao | null>(null);
   const [planoCheckoutLoading, setPlanoCheckoutLoading] =
     useState<PlanoRenovacaoSlug | null>(null);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
@@ -376,22 +378,71 @@ export default function Header({
 
       setNotificacoesOpen(false);
       setModalNotificacoesOpen(false);
-      if (notificacao.conversa_id) {
+      setFeedbackAgendaPopup(null);
+      const href =
+        typeof notificacao.metadata_json?.href === "string" &&
+        notificacao.metadata_json.href.startsWith("/")
+          ? notificacao.metadata_json.href
+          : null;
+
+      if (href) {
+        router.push(href);
+      } else if (notificacao.conversa_id) {
         router.push(`/conversas?id=${notificacao.conversa_id}`);
       }
     } catch {
       setNotificacoesOpen(false);
       setModalNotificacoesOpen(false);
 
-      if (notificacao.conversa_id) {
+      setFeedbackAgendaPopup(null);
+      const href =
+        typeof notificacao.metadata_json?.href === "string" &&
+        notificacao.metadata_json.href.startsWith("/")
+          ? notificacao.metadata_json.href
+          : null;
+
+      if (href) {
+        router.push(href);
+      } else if (notificacao.conversa_id) {
         router.push(`/conversas?id=${notificacao.conversa_id}`);
       }
     }
   }
 
+  function fecharFeedbackAgendaPopup() {
+    if (feedbackAgendaPopup) {
+      window.sessionStorage.setItem(
+        `crm:feedback-agenda-popup:${feedbackAgendaPopup.id}`,
+        "dismissed"
+      );
+    }
+
+    setFeedbackAgendaPopup(null);
+  }
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted || feedbackAgendaPopup) return;
+
+    const pendente = notificacoes.find(
+      (notificacao) =>
+        !notificacao.lida &&
+        notificacao.metadata_json?.tipo_notificacao === "feedback_agendamento"
+    );
+
+    if (!pendente) return;
+
+    const dispensada = window.sessionStorage.getItem(
+      `crm:feedback-agenda-popup:${pendente.id}`
+    );
+
+    if (!dispensada) {
+      setFeedbackAgendaPopup(pendente);
+    }
+  }, [feedbackAgendaPopup, mounted, notificacoes]);
 
   useEffect(() => {
     const temaAtual =
@@ -1064,6 +1115,16 @@ export default function Header({
                 Meu perfil
               </Link>
 
+              {headerUser.isAdmin ? (
+                <Link
+                  href="/configuracoes"
+                  className={styles.dropdownItem}
+                  onClick={closeMenu}
+                >
+                  Configurações
+                </Link>
+              ) : null}
+
               <a
                 href={AJUDA_WHATSAPP_URL}
                 className={styles.dropdownItem}
@@ -1108,8 +1169,8 @@ export default function Header({
         </div>
       </div>
 
-      {mounted &&
-        alertaTokensOpen &&
+        {mounted &&
+          alertaTokensOpen &&
         saldoTokensIa &&
         createPortal(
           <div
@@ -1198,6 +1259,36 @@ export default function Header({
           </div>,
           document.body
         )}
+
+        {mounted &&
+          feedbackAgendaPopup &&
+          createPortal(
+            <div className={styles.feedbackAgendaPopup} role="status">
+              <button
+                type="button"
+                className={styles.feedbackAgendaPopupClose}
+                onClick={fecharFeedbackAgendaPopup}
+                aria-label="Fechar aviso de agendamento"
+              >
+                ×
+              </button>
+
+              <span className={styles.feedbackAgendaPopupEyebrow}>
+                Agenda
+              </span>
+              <strong>{feedbackAgendaPopup.titulo}</strong>
+              <p>{feedbackAgendaPopup.mensagem}</p>
+
+              <button
+                type="button"
+                className={styles.feedbackAgendaPopupAction}
+                onClick={() => abrirNotificacao(feedbackAgendaPopup)}
+              >
+                Ver na Agenda
+              </button>
+            </div>,
+            document.body
+          )}
     </header>
   );
 }

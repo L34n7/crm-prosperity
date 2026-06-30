@@ -312,6 +312,118 @@
   gap: 10px;
 }
 
+.feedbackSection {
+  flex: 0 0 auto;
+  max-height: 270px;
+  margin: 10px 14px 0;
+  overflow-y: auto;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 16px;
+  padding: 12px;
+  background: var(--crm-primary-soft);
+}
+
+.feedbackSectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.feedbackSectionHeader h2 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 15px;
+}
+
+.feedbackCount {
+  min-width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.feedbackLoading {
+  padding: 12px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.feedbackGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 10px;
+}
+
+.feedbackCard {
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--crm-surface);
+}
+
+.feedbackCardMain {
+  display: grid;
+  gap: 3px;
+}
+
+.feedbackCardMain strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.feedbackCardMain span,
+.feedbackCardMain small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.feedbackActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.feedbackSuccessButton,
+.feedbackMissedButton,
+.feedbackCancelButton {
+  min-height: 32px;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.feedbackSuccessButton {
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+}
+
+.feedbackMissedButton,
+.feedbackCancelButton {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.feedbackSuccessButton:disabled,
+.feedbackMissedButton:disabled,
+.feedbackCancelButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .successAlert,
 .errorAlert {
   border-radius: 16px;
@@ -1002,6 +1114,23 @@
     margin: 10px;
     padding: 10px;
     border-radius: 16px;
+  }
+
+  .feedbackSection {
+    max-height: none;
+    margin: 10px;
+  }
+
+  .feedbackGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .feedbackActions {
+    flex-direction: column;
+  }
+
+  .feedbackActions button {
+    width: 100%;
   }
 
   .calendarToolbar {

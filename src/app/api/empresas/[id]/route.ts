@@ -5,6 +5,7 @@ import {
 } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
 import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
+import { invalidarCacheNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -44,6 +45,7 @@ export async function PUT(
   const telefone = body?.telefone?.trim() || null;
   const nome_responsavel = body?.nome_responsavel?.trim() || null;
   const plano_id = body?.plano_id || null;
+  const nicho_id = body?.nicho_id || null;
   const timezone = body?.timezone?.trim() || "America/Sao_Paulo";
   const logo_url = body?.logo_url?.trim() || null;
   const observacoes = body?.observacoes?.trim() || null;
@@ -79,7 +81,16 @@ export async function PUT(
 
   const { data: empresaAtual } = await supabaseAdmin
     .from("empresas")
-    .select("id, status")
+    .select(
+      `
+        id,
+        status,
+        nicho_id,
+        nichos (
+          grupo
+        )
+      `
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -100,6 +111,21 @@ export async function PUT(
     );
   }
 
+  const nichoIdFinal = nicho_id || empresaAtual.nicho_id;
+  const { data: nicho } = await supabaseAdmin
+    .from("nichos")
+    .select("id, grupo")
+    .eq("id", nichoIdFinal)
+    .eq("ativo", true)
+    .maybeSingle();
+
+  if (!nicho) {
+    return NextResponse.json(
+      { ok: false, error: "Nicho não encontrado" },
+      { status: 404 }
+    );
+  }
+
   const { data, error } = await supabaseAdmin
     .from("empresas")
     .update({
@@ -110,6 +136,7 @@ export async function PUT(
       telefone,
       nome_responsavel,
       plano_id,
+      nicho_id: nichoIdFinal,
       timezone,
       logo_url,
       observacoes,
@@ -131,6 +158,13 @@ export async function PUT(
       created_at,
       updated_at,
       plano_id
+      ,
+      nicho_id,
+      nichos (
+        id,
+        codigo,
+        nome
+      )
     `)
     .single();
 
@@ -140,6 +174,8 @@ export async function PUT(
       { status: 500 }
     );
   }
+
+  invalidarCacheNichoEmpresa(id);
 
   return NextResponse.json({
     ok: true,

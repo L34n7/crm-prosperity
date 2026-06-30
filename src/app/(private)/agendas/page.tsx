@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { solicitarAtualizacaoFeedbackAgendasHeader } from "@/lib/header-summary/events";
 import styles from "./agendas.module.css";
 
 type Agenda = {
@@ -109,6 +110,27 @@ type GoogleCalendarIntegracao = {
   conectado: boolean;
   email?: string | null;
   ultima_sincronizacao_em?: string | null;
+};
+
+type FeedbackAgendamentoPendente = {
+  id: string;
+  agenda_id: string;
+  contato_id: string | null;
+  conversa_id: string | null;
+  nome_cliente: string | null;
+  telefone_cliente: string | null;
+  inicio_at: string;
+  fim_at: string;
+  status: "agendado" | "confirmado";
+  feedback_solicitado_em: string;
+  agenda_calendarios:
+    | { id: string; nome: string }
+    | Array<{ id: string; nome: string }>
+    | null;
+  contatos:
+    | { id: string; nome: string | null; telefone: string | null }
+    | Array<{ id: string; nome: string | null; telefone: string | null }>
+    | null;
 };
 
 const DIAS = [
@@ -320,6 +342,10 @@ function feedbackGoogleCalendar(status: string) {
   };
 }
 
+function relacaoUnica<T>(valor: T | T[] | null | undefined): T | null {
+  return Array.isArray(valor) ? valor[0] ?? null : valor ?? null;
+}
+
 function AgendasPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -361,6 +387,13 @@ function AgendasPageContent() {
   const [formAgendamento, setFormAgendamento] = useState<AgendamentoForm>(() =>
     agendamentoFormPadrao()
   );
+  const [feedbacksPendentes, setFeedbacksPendentes] = useState<
+    FeedbackAgendamentoPendente[]
+  >([]);
+  const [carregandoFeedbacks, setCarregandoFeedbacks] = useState(true);
+  const [respondendoFeedbackId, setRespondendoFeedbackId] = useState<
+    string | null
+  >(null);
 
   const agendaSelecionada = useMemo(
     () => agendas.find((agenda) => agenda.id === agendaSelecionadaId) || null,
@@ -429,6 +462,30 @@ function AgendasPageContent() {
     }
 
     setAgendamentos(json.agendamentos || []);
+  }, []);
+
+  const carregarFeedbacksPendentes = useCallback(async () => {
+    try {
+      setCarregandoFeedbacks(true);
+      const res = await fetch("/api/agendas/feedback", {
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar confirmações pendentes.");
+      }
+
+      setFeedbacksPendentes(
+        Array.isArray(json.pendencias) ? json.pendencias : []
+      );
+    } catch (error: unknown) {
+      setErro(
+        mensagemErro(error, "Erro ao carregar confirmações de agendamentos.")
+      );
+    } finally {
+      setCarregandoFeedbacks(false);
+    }
   }, []);
 
   const carregarEventosGoogle = useCallback(
@@ -585,6 +642,10 @@ function AgendasPageContent() {
   useEffect(() => {
     carregarAgendas();
   }, [carregarAgendas]);
+
+  useEffect(() => {
+    void carregarFeedbacksPendentes();
+  }, [carregarFeedbacksPendentes]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1185,6 +1246,48 @@ function AgendasPageContent() {
     }
   }
 
+  async function responderFeedbackAgendamento(
+    agendamentoId: string,
+    resposta: "realizado" | "faltou" | "cancelado",
+    agendaId: string
+  ) {
+    try {
+      setRespondendoFeedbackId(agendamentoId);
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch("/api/agendas/feedback", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          agendamento_id: agendamentoId,
+          resposta,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao registrar o resultado.");
+      }
+
+      setFeedbacksPendentes((atuais) =>
+        atuais.filter((item) => item.id !== agendamentoId)
+      );
+      setSucesso(json.message || "Resultado do agendamento registrado.");
+      solicitarAtualizacaoFeedbackAgendasHeader();
+
+      if (agendaSelecionadaId === agendaId) {
+        await carregarAgendamentos(agendaId);
+      }
+    } catch (error: unknown) {
+      setErro(mensagemErro(error, "Erro ao registrar o resultado."));
+    } finally {
+      setRespondendoFeedbackId(null);
+    }
+  }
+
   return (
     <>
       <Header
@@ -1298,6 +1401,100 @@ function AgendasPageContent() {
             success={sucesso}
             onSuccessDismiss={() => setSucesso("")}
           />
+
+          {(carregandoFeedbacks || feedbacksPendentes.length > 0) && (
+            <section className={styles.feedbackSection}>
+              <div className={styles.feedbackSectionHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Confirmação necessária</p>
+                  <h2>Agendamentos aguardando resultado</h2>
+                </div>
+                <span className={styles.feedbackCount}>
+                  {feedbacksPendentes.length}
+                </span>
+              </div>
+
+              {carregandoFeedbacks ? (
+                <div className={styles.feedbackLoading}>
+                  Carregando confirmações...
+                </div>
+              ) : (
+                <div className={styles.feedbackGrid}>
+                  {feedbacksPendentes.map((pendencia) => {
+                    const contato = relacaoUnica(pendencia.contatos);
+                    const agenda = relacaoUnica(pendencia.agenda_calendarios);
+                    const respondendo =
+                      respondendoFeedbackId === pendencia.id;
+
+                    return (
+                      <article
+                        key={pendencia.id}
+                        className={styles.feedbackCard}
+                      >
+                        <div className={styles.feedbackCardMain}>
+                          <strong>
+                            {contato?.nome ||
+                              pendencia.nome_cliente ||
+                              "Contato sem nome"}
+                          </strong>
+                          <span>{agenda?.nome || "Agenda"}</span>
+                          <small>
+                            {formatarData(pendencia.inicio_at)} até{" "}
+                            {formatarData(pendencia.fim_at)}
+                          </small>
+                        </div>
+
+                        <div className={styles.feedbackActions}>
+                          <button
+                            type="button"
+                            className={styles.feedbackSuccessButton}
+                            disabled={respondendo}
+                            onClick={() =>
+                              responderFeedbackAgendamento(
+                                pendencia.id,
+                                "realizado",
+                                pendencia.agenda_id
+                              )
+                            }
+                          >
+                            Sim, foi realizado
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.feedbackMissedButton}
+                            disabled={respondendo}
+                            onClick={() =>
+                              responderFeedbackAgendamento(
+                                pendencia.id,
+                                "faltou",
+                                pendencia.agenda_id
+                              )
+                            }
+                          >
+                            Não compareceu
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.feedbackCancelButton}
+                            disabled={respondendo}
+                            onClick={() =>
+                              responderFeedbackAgendamento(
+                                pendencia.id,
+                                "cancelado",
+                                pendencia.agenda_id
+                              )
+                            }
+                          >
+                            Cancelado
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
 
           {!agendaSelecionada ? (
             <div className={styles.emptyState}>Crie ou selecione uma agenda.</div>

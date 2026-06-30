@@ -6,6 +6,7 @@ import {
   VERSAO_POLITICA_PRIVACIDADE,
   VERSAO_TERMOS_SERVICO,
 } from "@/lib/lgpd/termos";
+import { getNichoConfig, isNichoCodigo } from "@/lib/nichos/config";
 
 const supabase = getSupabaseAdmin();
 
@@ -51,6 +52,9 @@ export async function POST(request: Request) {
     const email = String(body?.email ?? "").toLowerCase().trim();
     const telefone = String(body?.telefone ?? "").trim();
     const empresa = String(body?.empresa ?? "").trim();
+    const nichoCodigo = isNichoCodigo(body?.nicho_codigo)
+      ? body.nicho_codigo
+      : "comercio";
     const aceiteContrato = body?.aceite_contrato === true;
     const tipoOferta = normalizarTipoOferta(
       body?.tipo_oferta,
@@ -69,6 +73,17 @@ export async function POST(request: Request) {
       throw new Error(
         "Aceite dos termos, da política de privacidade e das responsabilidades LGPD é obrigatório."
       );
+    }
+
+    const { data: nicho, error: nichoError } = await supabase
+      .from("nichos")
+      .select("id")
+      .eq("codigo", getNichoConfig(nichoCodigo).codigo)
+      .eq("ativo", true)
+      .maybeSingle();
+
+    if (nichoError || !nicho) {
+      throw new Error("Segmento informado não está disponível.");
     }
 
     // 🔍 verificar se já existe usuário com esse email
@@ -91,6 +106,7 @@ export async function POST(request: Request) {
         email,
         telefone: telefone || null,
         empresa: empresa || null,
+        nicho_id: nicho.id,
         status: "novo",
         plano_slug: "basico",
         tipo_oferta: tipoOferta,

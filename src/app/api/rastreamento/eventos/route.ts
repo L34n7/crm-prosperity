@@ -53,7 +53,11 @@ export async function GET(request: Request) {
     .from("rastreamento_eventos")
     .select(`
       *,
-      contatos ( id, nome, telefone ),
+      contatos!rastreamento_eventos_contato_id_fkey (
+        id,
+        nome,
+        telefone
+      ),
       conversas ( id ),
       rastreamento_origens ( id, nome ),
       rastreamento_campanhas ( id, nome ),

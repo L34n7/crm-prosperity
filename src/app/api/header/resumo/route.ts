@@ -110,6 +110,30 @@ async function buscarResumoDisparosPendentes(empresaId: string) {
   }
 }
 
+async function buscarResumoFeedbackAgendas(empresaId: string) {
+  try {
+    const { count, error } = await supabaseAdmin
+      .from("agenda_agendamentos")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .in("status", ["agendado", "confirmado"])
+      .not("feedback_solicitado_em", "is", null)
+      .is("feedback_respondido_em", null);
+
+    if (error) {
+      return blocoErro(error.message);
+    }
+
+    return blocoOk({
+      quantidade: count || 0,
+    });
+  } catch (error) {
+    return blocoErro(
+      getMensagemErro(error, "Erro ao contar feedbacks de agendas.")
+    );
+  }
+}
+
 async function buscarResumoTokensIa(empresaId: string) {
   try {
     const saldo = await buscarSaldoTokensIa(empresaId);
@@ -155,6 +179,7 @@ export async function GET() {
     notificacoes,
     conversasNaoLidas,
     disparosPendentes,
+    feedbackAgendas,
     tokensIa,
   ] = await Promise.all([
     buscarResumoNotificacoes(usuario.empresa_id),
@@ -170,6 +195,7 @@ export async function GET() {
           blocoErro("Sem permissao para visualizar conversas.", "sem_permissao")
         ),
     buscarResumoDisparosPendentes(usuario.empresa_id),
+    buscarResumoFeedbackAgendas(usuario.empresa_id),
     podeVerTokensIa
       ? buscarResumoTokensIa(usuario.empresa_id)
       : Promise.resolve(
@@ -187,6 +213,7 @@ export async function GET() {
       notificacoes,
       conversas_nao_lidas: conversasNaoLidas,
       disparos_pendentes: disparosPendentes,
+      feedback_agendas: feedbackAgendas,
       tokens_ia: tokensIa,
     },
     { headers: RESUMO_HEADERS }

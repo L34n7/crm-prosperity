@@ -1,0 +1,589 @@
+.page {
+  width: min(1200px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 20px 0 42px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.toolbar,
+.sideCard,
+.contentCard,
+.formCard,
+.itemCard {
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
+  border-radius: 24px;
+  box-shadow: var(--crm-shadow-xs);
+}
+
+.toolbar {
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.searchArea {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  max-width: 640px;
+}
+
+.searchArea input,
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 13px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  outline: none;
+  font: inherit;
+}
+
+.searchArea input,
+.field input,
+.field select {
+  min-height: 44px;
+  padding: 10px 13px;
+}
+
+.field textarea {
+  min-height: 96px;
+  padding: 12px 13px;
+  resize: vertical;
+}
+
+.searchArea input:focus,
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton,
+.searchArea button {
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: 0.2s ease;
+}
+
+.primaryButton,
+.searchArea button {
+  border: 0;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+}
+
+.secondaryButton {
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+}
+
+.dangerButton {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.primaryButton:hover,
+.searchArea button:hover {
+  background: var(--crm-primary-strong-hover);
+}
+
+.secondaryButton:hover {
+  background: var(--crm-surface-soft);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.moduleGrid {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.sideCard,
+.contentCard,
+.formCard {
+  padding: 22px;
+}
+
+.contentCard,
+.formCard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.eyebrow {
+  display: block;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cardHeader h2,
+.cardHeader h3,
+.formCard h2,
+.formCard h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+}
+
+.cardHeader p,
+.muted {
+  margin: 6px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.listItem {
+  width: 100%;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  padding: 13px;
+  text-align: left;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.listItem:hover,
+.listItemActive {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.listItem strong {
+  color: var(--crm-text-strong);
+}
+
+.listItem span,
+.listItem small {
+  color: var(--crm-text-muted);
+}
+
+.badge,
+.statusBadge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: 1px solid var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.statusBadge {
+  border-color: var(--crm-border);
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+}
+
+.empty,
+.error {
+  border-radius: 16px;
+  padding: 16px;
+  font-size: 13px;
+}
+
+.empty {
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--crm-text-muted);
+  border: 1px dashed var(--crm-border-strong);
+}
+
+.error {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--crm-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.field small {
+  color: var(--crm-text-muted);
+  font-weight: 500;
+}
+
+.fullField {
+  grid-column: 1 / -1;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timelineItem,
+.itemCard {
+  padding: 16px;
+}
+
+.timelineItem {
+  border: 1px solid var(--crm-border);
+  border-radius: 18px;
+  background: var(--crm-surface);
+}
+
+.timelineHeader,
+.itemHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.timelineHeader h3,
+.itemHeader h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 16px;
+}
+
+.timelineBody {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.timelineBody p {
+  margin: 0;
+  color: var(--crm-text);
+  line-height: 1.55;
+}
+
+.timelineBody strong {
+  color: var(--crm-text-strong);
+}
+
+.toothGrid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.toothButton {
+  min-height: 62px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.toothButton:hover,
+.toothButtonActive {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.toothNumber {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.toothStatus {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.propertyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.itemCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.itemMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.itemMeta span {
+  border-radius: 999px;
+  background: var(--crm-surface-soft);
+  border: 1px solid var(--crm-border);
+  padding: 6px 9px;
+  color: var(--crm-text);
+  font-size: 12px;
+}
+
+.itemActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.twoColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 18px;
+  align-items: start;
+}
+
+.portalList,
+.compactList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.portalRow {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(120px, 180px) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--crm-border);
+}
+
+.portalRow:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.portalInfo {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.portalIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  border: 1px solid var(--crm-primary-border);
+  flex: 0 0 auto;
+}
+
+.portalInfo strong,
+.compactItem strong {
+  display: block;
+  color: var(--crm-text-strong);
+}
+
+.portalInfo small,
+.portalState small,
+.compactItem span,
+.compactItem small,
+.compactMeta {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.portalState,
+.compactMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+}
+
+.portalActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.statusSuccess {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+}
+
+.statusWarning {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+}
+
+.statusDanger {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.statusMuted {
+  border-color: var(--crm-border);
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+}
+
+.dangerText {
+  color: var(--crm-danger-text) !important;
+}
+
+.compactItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--crm-border);
+}
+
+.compactItem:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.compactItem > div:first-child {
+  min-width: 0;
+}
+
+.compactItem span,
+.compactItem small {
+  display: block;
+  margin-top: 4px;
+}
+
+.compactMeta {
+  align-items: flex-end;
+  text-align: right;
+  min-width: 110px;
+}
+
+.inlineLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--crm-primary-text);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.inlineLink:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 980px) {
+  .moduleGrid,
+  .twoColumns,
+  .propertyGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .portalRow {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .portalActions {
+    justify-content: flex-start;
+  }
+
+  .toothGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .page {
+    width: min(100% - 20px, 1200px);
+    padding-bottom: 92px;
+  }
+
+  .toolbar,
+  .searchArea {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fullField {
+    grid-column: auto;
+  }
+
+  .compactItem {
+    flex-direction: column;
+  }
+
+  .compactMeta {
+    align-items: flex-start;
+    text-align: left;
+  }
+}

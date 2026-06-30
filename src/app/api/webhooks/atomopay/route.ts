@@ -441,6 +441,8 @@ async function criarEmpresa(params: {
     .from("empresas")
     .insert({
       plano_id: planoId,
+      nicho_id:
+        lead?.nicho_id ?? "10000000-0000-4000-8000-000000000001",
       nome_fantasia: montarNomeEmpresa(lead, payload),
       razao_social: montarNomeEmpresa(lead, payload),
       documento: payload.customer?.document ?? null,

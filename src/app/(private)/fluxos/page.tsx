@@ -9161,9 +9161,12 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   </div>
                 )}
               </div>
+              
               {erroCriacaoFluxo && (
-                <div className={styles.errorAlert}>
-                  {erroCriacaoFluxo}
+                <div className={styles.errorAlertBox}>
+                  <div className={styles.errorAlert}>
+                    {erroCriacaoFluxo}
+                  </div>
                 </div>
               )}
               <div className={styles.modalFooter}>

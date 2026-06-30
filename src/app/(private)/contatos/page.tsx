@@ -5,12 +5,7 @@ import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./contatos.module.css";
 
-type StatusLead =
-  | "novo"
-  | "em_atendimento"
-  | "qualificado"
-  | "cliente"
-  | "perdido";
+type ClassificacaoContato = "qualificado" | "convertido" | "perdido" | null;
 
 type Contato = {
   id: string;
@@ -21,11 +16,27 @@ type Contato = {
   email: string | null;
   origem: string | null;
   campanha: string | null;
-  status_lead: StatusLead;
   observacoes: string | null;
   telefone_revisar: boolean;
+  classificacao: ClassificacaoContato;
+  classificacao_atualizada_em?: string | null;
+  contato_novo: boolean;
+  campanha_exibicao?: string | null;
+  campanha_status?: "ativo" | "inativo" | null;
+  campanha_origem_nome?: string | null;
+  conversa_id?: string | null;
+  conversa_status?: string | null;
+  conversa_ultima_mensagem_em?: string | null;
+  conversa_encerrada_em?: string | null;
+  protocolo_atual?: string | null;
+  protocolo_resultado?: string | null;
+  contato_novo_no_inicio?: boolean;
+  iniciado_com_bot?: boolean;
+  finalizado_com_bot?: boolean | null;
+  finalizado_por_tipo?: "bot" | "atendente" | "sistema" | null;
+  finalizado_por_usuario_id?: string | null;
+  finalizado_por_usuario_nome?: string | null;
   rastreamento_campanha_id?: string | null;
-  rastreamento_campanhas?: CampanhaRastreamento | null;
   created_at: string;
   updated_at?: string;
 };
@@ -51,38 +62,62 @@ type ItemPreviewImportacao = {
 const MANTER_VALOR_EM_MASSA = "__manter__";
 const REMOVER_VALOR_EM_MASSA = "__remover__";
 
-function getStatusLeadLabel(status: StatusLead) {
-  switch (status) {
-    case "novo":
-      return "Novo";
-    case "em_atendimento":
-      return "Em atendimento";
+function getClassificacaoLabel(classificacao: ClassificacaoContato) {
+  switch (classificacao) {
     case "qualificado":
       return "Qualificado";
-    case "cliente":
-      return "Cliente";
+    case "convertido":
+      return "Convertido";
     case "perdido":
       return "Perdido";
     default:
-      return status;
+      return "Sem classificação";
   }
 }
 
-function getStatusLeadClass(status: StatusLead) {
-  switch (status) {
-    case "novo":
-      return styles.statusNovo;
-    case "em_atendimento":
-      return styles.statusAtendimento;
+function getClassificacaoClass(classificacao: ClassificacaoContato) {
+  switch (classificacao) {
     case "qualificado":
       return styles.statusQualificado;
-    case "cliente":
+    case "convertido":
       return styles.statusCliente;
     case "perdido":
       return styles.statusPerdido;
     default:
       return styles.statusPadrao;
   }
+}
+
+function getStatusConversaLabel(status?: string | null) {
+  switch (status) {
+    case "aberta":
+      return "Aberta";
+    case "bot":
+      return "Robô";
+    case "fila":
+      return "Fila";
+    case "em_atendimento":
+      return "Em atendimento";
+    case "aguardando_cliente":
+      return "Aguardando cliente";
+    case "encerrado_manual":
+      return "Encerrada manualmente";
+    case "encerrado_24h":
+      return "Encerrada após 24h";
+    case "encerrado_aut":
+      return "Encerrada pela automação";
+    default:
+      return "Sem conversa";
+  }
+}
+
+function getStatusConversaClass(status?: string | null) {
+  if (status === "em_atendimento") return styles.statusAtendimento;
+  if (status === "fila") return styles.statusNovo;
+  if (status === "bot") return styles.statusBot;
+  if (status === "aguardando_cliente") return styles.statusAguardando;
+  if (status?.startsWith("encerrado")) return styles.statusEncerrado;
+  return styles.statusPadrao;
 }
 
 function getIniciais(nome?: string | null) {
@@ -96,7 +131,7 @@ function getIniciais(nome?: string | null) {
 }
 
 function getNomeCampanhaContato(contato: Contato) {
-  return contato.rastreamento_campanhas?.nome || contato.campanha || "—";
+  return contato.campanha_exibicao || contato.campanha || "—";
 }
 
 function getLabelCampanhaRastreamento(campanha: CampanhaRastreamento) {
@@ -117,10 +152,15 @@ export default function ContatosPage() {
   const [origem, setOrigem] = useState("");
   const [campanha, setCampanha] = useState("");
   const [rastreamentoCampanhaId, setRastreamentoCampanhaId] = useState("");
-  const [statusLead, setStatusLead] = useState<StatusLead>("novo");
   const [observacoes, setObservacoes] = useState("");
 
-  const [filtroStatus, setFiltroStatus] = useState("");
+  const [filtroClassificacoes, setFiltroClassificacoes] = useState<string[]>(
+    []
+  );
+  const [filtroStatusConversa, setFiltroStatusConversa] = useState<string[]>(
+    []
+  );
+  const [filtroApenasNovos, setFiltroApenasNovos] = useState(false);
   const [busca, setBusca] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -141,7 +181,6 @@ export default function ContatosPage() {
   const [editCampanha, setEditCampanha] = useState("");
   const [editRastreamentoCampanhaId, setEditRastreamentoCampanhaId] =
     useState("");
-  const [editStatusLead, setEditStatusLead] = useState<StatusLead>("novo");
   const [editObservacoes, setEditObservacoes] = useState("");
 
   const [modalImportarAberto, setModalImportarAberto] = useState(false);
@@ -176,7 +215,6 @@ export default function ContatosPage() {
     MANTER_VALOR_EM_MASSA
   );
   const [origemEmMassa, setOrigemEmMassa] = useState(MANTER_VALOR_EM_MASSA);
-  const [statusEmMassa, setStatusEmMassa] = useState(MANTER_VALOR_EM_MASSA);
   const [atualizandoEmMassa, setAtualizandoEmMassa] = useState(false);
 
   const [abaPreviewImportacao, setAbaPreviewImportacao] = useState<
@@ -246,7 +284,6 @@ export default function ContatosPage() {
     setOrigem("");
     setCampanha("");
     setRastreamentoCampanhaId("");
-    setStatusLead("novo");
     setObservacoes("");
   }
 
@@ -267,8 +304,16 @@ export default function ContatosPage() {
 
     const params = new URLSearchParams();
 
-    if (filtroStatus) {
-      params.set("status_lead", filtroStatus);
+    if (filtroClassificacoes.length > 0) {
+      params.set("classificacoes", filtroClassificacoes.join(","));
+    }
+
+    if (filtroStatusConversa.length > 0) {
+      params.set("status_conversa", filtroStatusConversa.join(","));
+    }
+
+    if (filtroApenasNovos) {
+      params.set("contato_novo", "true");
     }
 
     if (busca.trim()) {
@@ -350,7 +395,6 @@ export default function ContatosPage() {
           origem,
           campanha,
           rastreamento_campanha_id: rastreamentoCampanhaId || null,
-          status_lead: statusLead,
           observacoes,
         }),
       });
@@ -472,8 +516,37 @@ export default function ContatosPage() {
     try {
       const params = new URLSearchParams();
 
-      if (filtroStatus) {
-        params.set("status_lead", filtroStatus);
+      if (filtroClassificacoes.length > 0) {
+        params.set("classificacoes", filtroClassificacoes.join(","));
+      }
+
+      if (filtroStatusConversa.length > 0) {
+        params.set("status_conversa", filtroStatusConversa.join(","));
+      }
+
+      if (filtroApenasNovos) {
+        params.set("contato_novo", "true");
+      }
+
+      if (busca.trim()) {
+        params.set("busca", busca.trim());
+      }
+
+      if (filtroOrigem.trim()) {
+        params.set("origem", filtroOrigem.trim());
+      }
+
+      if (filtroCampanha.startsWith("rastreamento:")) {
+        params.set(
+          "rastreamento_campanha_id",
+          filtroCampanha.replace("rastreamento:", "")
+        );
+      } else if (filtroCampanha.trim()) {
+        params.set("campanha", filtroCampanha.trim());
+      }
+
+      if (filtroTelefoneRevisar) {
+        params.set("telefone_revisar", "true");
       }
 
       const queryString = params.toString();
@@ -523,7 +596,6 @@ export default function ContatosPage() {
     setEditOrigem(contato.origem || "");
     setEditCampanha(contato.campanha || "");
     setEditRastreamentoCampanhaId(campanhaVinculada);
-    setEditStatusLead(contato.status_lead);
     setEditObservacoes(contato.observacoes || "");
     setMensagem("");
     setErro("");
@@ -537,7 +609,6 @@ export default function ContatosPage() {
     setEditOrigem("");
     setEditCampanha("");
     setEditRastreamentoCampanhaId("");
-    setEditStatusLead("novo");
     setEditObservacoes("");
   }
 
@@ -626,7 +697,6 @@ export default function ContatosPage() {
       email: editEmail,
       origem: editOrigem,
       campanha: editCampanha,
-      status_lead: editStatusLead,
       observacoes: editObservacoes,
     };
 
@@ -763,7 +833,6 @@ export default function ContatosPage() {
     setSelecionados(new Set());
     setCampanhaEmMassa(MANTER_VALOR_EM_MASSA);
     setOrigemEmMassa(MANTER_VALOR_EM_MASSA);
-    setStatusEmMassa(MANTER_VALOR_EM_MASSA);
   }
 
   async function aplicarAlteracoesEmMassa() {
@@ -788,9 +857,6 @@ export default function ContatosPage() {
         origemEmMassa === REMOVER_VALOR_EM_MASSA ? null : origemEmMassa;
     }
 
-    if (statusEmMassa !== MANTER_VALOR_EM_MASSA) {
-      payload.status_lead = statusEmMassa;
-    }
 
     if (Object.keys(payload).length === 1) {
       setErro("Escolha ao menos uma alteração para aplicar.");
@@ -827,6 +893,18 @@ export default function ContatosPage() {
     }
   }
 
+  function alternarFiltro(
+    valor: string,
+    atual: string[],
+    atualizar: (valores: string[]) => void
+  ) {
+    atualizar(
+      atual.includes(valor)
+        ? atual.filter((item) => item !== valor)
+        : [...atual, valor]
+    );
+  }
+
   useEffect(() => {
     if (buscaTimeoutRef.current) {
       clearTimeout(buscaTimeoutRef.current);
@@ -843,7 +921,9 @@ export default function ContatosPage() {
     };
   }, [
     busca,
-    filtroStatus,
+    filtroClassificacoes,
+    filtroStatusConversa,
+    filtroApenasNovos,
     filtroOrigem,
     filtroCampanha,
     filtroTelefoneRevisar,
@@ -876,7 +956,9 @@ export default function ContatosPage() {
     setPaginaAtual(1);
   }, [
     busca,
-    filtroStatus,
+    filtroClassificacoes,
+    filtroStatusConversa,
+    filtroApenasNovos,
     filtroOrigem,
     filtroCampanha,
     filtroTelefoneRevisar,
@@ -944,90 +1026,132 @@ export default function ContatosPage() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Status</label>
+            <label className={styles.label}>Campanha</label>
             <select
               className={styles.select}
-              value={filtroStatus}
-              onChange={(e) => setFiltroStatus(e.target.value)}
+              value={filtroCampanha}
+              onChange={(e) => setFiltroCampanha(e.target.value)}
             >
-              <option value="">Todos</option>
-              <option value="novo">Novo</option>
-              <option value="em_atendimento">Em atendimento</option>
-              <option value="qualificado">Qualificado</option>
-              <option value="cliente">Cliente</option>
-              <option value="perdido">Perdido</option>
+              <option value="">Todas</option>
+
+              {campanhasRastreamento.length === 0 &&
+              campanhasLegadasSemVinculo.length === 0 ? (
+                <option value="" disabled>
+                  Sem campanhas
+                </option>
+              ) : (
+                <>
+                  {campanhasRastreamento.map((campanhaItem) => (
+                    <option
+                      key={campanhaItem.id}
+                      value={`rastreamento:${campanhaItem.id}`}
+                    >
+                      {getLabelCampanhaRastreamento(campanhaItem)}
+                    </option>
+                  ))}
+
+                  {campanhasLegadasSemVinculo.map((campanhaLegada) => (
+                    <option key={campanhaLegada} value={campanhaLegada}>
+                      {campanhaLegada}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Origem</label>
+            <select
+              className={styles.select}
+              value={filtroOrigem}
+              onChange={(e) => setFiltroOrigem(e.target.value)}
+            >
+              <option value="">Todas</option>
+              {opcoesOrigem.map((origem) => (
+                <option key={origem} value={origem}>
+                  {origem}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div className={styles.filterGroupsRow}>
+            <div className={styles.filterGroupBox}>
+              <label className={styles.label}>Status da conversa</label>
+
+              <div className={styles.filterChecklist}>
+                {[
+                  ["aberta", "Aberta"],
+                  ["fila", "Fila"],
+                  ["bot", "Robô"],
+                  ["em_atendimento", "Em atendimento"],
+                  ["aguardando_cliente", "Aguardando cliente"],
+                  ["encerrado_manual", "Encerrada manualmente"],
+                  ["encerrado_24h", "Encerrada após 24h"],
+                  ["encerrado_aut", "Encerrada pela automação"],
+                  ["sem_conversa", "Sem conversa"],
+                ].map(([valor, label]) => (
+                  <label key={valor} className={styles.filterCheck}>
+                    <input
+                      type="checkbox"
+                      checked={filtroStatusConversa.includes(valor)}
+                      onChange={() =>
+                        alternarFiltro(
+                          valor,
+                          filtroStatusConversa,
+                          setFiltroStatusConversa
+                        )
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.filterGroupBox}>
+              <label className={styles.label}>Classificações</label>
+
+              <div className={styles.filterChecklist}>
+                <label className={styles.filterCheck}>
+                  <input
+                    type="checkbox"
+                    checked={filtroApenasNovos}
+                    onChange={(e) => setFiltroApenasNovos(e.target.checked)}
+                  />
+                  <span>Novo</span>
+                </label>
+
+                {[
+                  ["qualificado", "Qualificado"],
+                  ["convertido", "Convertido"],
+                  ["perdido", "Perdido"],
+                ].map(([valor, label]) => (
+                  <label key={valor} className={styles.filterCheck}>
+                    <input
+                      type="checkbox"
+                      checked={filtroClassificacoes.includes(valor)}
+                      onChange={() =>
+                        alternarFiltro(
+                          valor,
+                          filtroClassificacoes,
+                          setFiltroClassificacoes
+                        )
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
         </div>
 
         {filtrosAvancadosAbertos && (
           <div className={styles.advancedFiltersWrapper}>
             <div className={styles.filterGrid}>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Campanha</label>
-                <select
-                  className={styles.select}
-                  value={filtroCampanha}
-                  onChange={(e) => setFiltroCampanha(e.target.value)}
-                >
-                  <option value="">Todas</option>
-
-                  {campanhasRastreamento.length === 0 &&
-                  campanhasLegadasSemVinculo.length === 0 ? (
-                    <option value="" disabled>
-                      Sem campanhas
-                    </option>
-                  ) : (
-                    <>
-                      {campanhasRastreamento.map((campanhaItem) => (
-                        <option
-                          key={campanhaItem.id}
-                          value={`rastreamento:${campanhaItem.id}`}
-                        >
-                          {getLabelCampanhaRastreamento(campanhaItem)}
-                        </option>
-                      ))}
-
-                      {campanhasLegadasSemVinculo.map((campanhaLegada) => (
-                        <option key={campanhaLegada} value={campanhaLegada}>
-                          {campanhaLegada}
-                        </option>
-                      ))}
-                    </>
-                  )}
-                </select>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Origem</label>
-                <select
-                  className={styles.select}
-                  value={filtroOrigem}
-                  onChange={(e) => setFiltroOrigem(e.target.value)}
-                >
-                  <option value="">Todas</option>
-                  {opcoesOrigem.map((origem) => (
-                    <option key={origem} value={origem}>
-                      {origem}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Ordenação</label>
-                <select
-                  className={styles.select}
-                  value={ordenacao}
-                  onChange={(e) => setOrdenacao(e.target.value)}
-                >
-                  <option value="recentes">Mais recentes</option>
-                  <option value="antigos">Mais antigos</option>
-                  <option value="nome_asc">Nome A → Z</option>
-                  <option value="nome_desc">Nome Z → A</option>
-                </select>
-              </div>
 
               <div className={styles.field}>
                 <label className={styles.label}>Telefone para revisar</label>
@@ -1050,6 +1174,20 @@ export default function ContatosPage() {
                       : "Mostrar contatos com revisão"}
                   </span>
                 </button>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Ordenação</label>
+                <select
+                  className={styles.select}
+                  value={ordenacao}
+                  onChange={(e) => setOrdenacao(e.target.value)}
+                >
+                  <option value="recentes">Mais recentes</option>
+                  <option value="antigos">Mais antigos</option>
+                  <option value="nome_asc">Nome A → Z</option>
+                  <option value="nome_desc">Nome Z → A</option>
+                </select>
               </div>
               
               <div className={styles.field}>
@@ -1081,7 +1219,9 @@ export default function ContatosPage() {
             onClick={() => {
               setBusca("");
               setFiltroCampanha("");
-              setFiltroStatus("");
+              setFiltroClassificacoes([]);
+              setFiltroStatusConversa([]);
+              setFiltroApenasNovos(false);
               setFiltroOrigem("");
               setFiltroTelefoneRevisar(false);
               setOrdenacao("recentes");
@@ -1118,7 +1258,7 @@ export default function ContatosPage() {
               <p className={styles.eyebrow}>Gestão</p>
               <h2 className={styles.cardTitle}>Contatos cadastrados</h2>
               <p className={styles.cardDescription}>
-                Selecione linhas para alterar campanha, origem ou status em massa.
+                Visualize, filtre, importe e edite seus contatos cadastrados.
               </p>
             </div>
 
@@ -1152,93 +1292,70 @@ export default function ContatosPage() {
             </div>
           </div>
 
-          <div
-            className={`${styles.bulkToolbar} ${
-              selecionados.size > 0 ? styles.bulkToolbarActive : ""
-            }`}
-          >
-            <div className={styles.bulkSelectionInfo}>
-              <strong>{selecionados.size}</strong>
-              <span>
-                {selecionados.size === 1
-                  ? "contato selecionado"
-                  : "contatos selecionados"}
-              </span>
-            </div>
+          {selecionados.size > 0 && (
+            <div className={`${styles.bulkToolbar} ${styles.bulkToolbarActive}`}>
+              <div className={styles.bulkSelectionInfo}>
+                <strong>{selecionados.size}</strong>
+                <span>
+                  {selecionados.size === 1
+                    ? "contato selecionado"
+                    : "contatos selecionados"}
+                </span>
+              </div>
 
-            <div className={styles.bulkFields}>
-              <label className={styles.bulkField}>
-                <span>Campanha</span>
-                <select
-                  value={campanhaEmMassa}
-                  onChange={(e) => setCampanhaEmMassa(e.target.value)}
-                  disabled={selecionados.size === 0 || atualizandoEmMassa}
+              <div className={styles.bulkFields}>
+                <label className={styles.bulkField}>
+                  <span>Campanha</span>
+                  <select
+                    value={campanhaEmMassa}
+                    onChange={(e) => setCampanhaEmMassa(e.target.value)}
+                    disabled={atualizandoEmMassa}
+                  >
+                    <option value={MANTER_VALOR_EM_MASSA}>Não alterar</option>
+                    <option value={REMOVER_VALOR_EM_MASSA}>Remover campanha</option>
+
+                    {campanhasRastreamento.map((campanhaItem) => (
+                      <option key={campanhaItem.id} value={campanhaItem.id}>
+                        {getLabelCampanhaRastreamento(campanhaItem)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={styles.bulkField}>
+                  <span>Origem</span>
+                  <select
+                    value={origemEmMassa}
+                    onChange={(e) => setOrigemEmMassa(e.target.value)}
+                    disabled={atualizandoEmMassa}
+                  >
+                    <option value={MANTER_VALOR_EM_MASSA}>Não alterar</option>
+                    <option value={REMOVER_VALOR_EM_MASSA}>Remover origem</option>
+
+                    {opcoesOrigem.map((origem) => (
+                      <option key={origem} value={origem}>
+                        {origem}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+              </div>
+
+              <div className={styles.bulkActions}>
+                <button
+                  type="button"
+                  className={styles.bulkApplyButton}
+                  onClick={aplicarAlteracoesEmMassa}
+                  disabled={
+                    atualizandoEmMassa ||
+                    (campanhaEmMassa === MANTER_VALOR_EM_MASSA &&
+                      origemEmMassa === MANTER_VALOR_EM_MASSA)
+                  }
                 >
-                  <option value={MANTER_VALOR_EM_MASSA}>Não alterar</option>
-                  <option value={REMOVER_VALOR_EM_MASSA}>
-                    Remover campanha
-                  </option>
-                  {campanhasRastreamento.map((campanhaItem) => (
-                    <option key={campanhaItem.id} value={campanhaItem.id}>
-                      {getLabelCampanhaRastreamento(campanhaItem)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  {atualizandoEmMassa ? "Aplicando..." : "Aplicar alterações"}
+                </button>
 
-              <label className={styles.bulkField}>
-                <span>Origem</span>
-                <select
-                  value={origemEmMassa}
-                  onChange={(e) => setOrigemEmMassa(e.target.value)}
-                  disabled={selecionados.size === 0 || atualizandoEmMassa}
-                >
-                  <option value={MANTER_VALOR_EM_MASSA}>Não alterar</option>
-                  <option value={REMOVER_VALOR_EM_MASSA}>
-                    Remover origem
-                  </option>
-                  {opcoesOrigem.map((origem) => (
-                    <option key={origem} value={origem}>
-                      {origem}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className={styles.bulkField}>
-                <span>Status</span>
-                <select
-                  value={statusEmMassa}
-                  onChange={(e) => setStatusEmMassa(e.target.value)}
-                  disabled={selecionados.size === 0 || atualizandoEmMassa}
-                >
-                  <option value={MANTER_VALOR_EM_MASSA}>Não alterar</option>
-                  <option value="novo">Novo</option>
-                  <option value="em_atendimento">Em atendimento</option>
-                  <option value="qualificado">Qualificado</option>
-                  <option value="cliente">Cliente</option>
-                  <option value="perdido">Perdido</option>
-                </select>
-              </label>
-            </div>
-
-            <div className={styles.bulkActions}>
-              <button
-                type="button"
-                className={styles.bulkApplyButton}
-                onClick={aplicarAlteracoesEmMassa}
-                disabled={
-                  selecionados.size === 0 ||
-                  atualizandoEmMassa ||
-                  (campanhaEmMassa === MANTER_VALOR_EM_MASSA &&
-                    origemEmMassa === MANTER_VALOR_EM_MASSA &&
-                    statusEmMassa === MANTER_VALOR_EM_MASSA)
-                }
-              >
-                {atualizandoEmMassa ? "Aplicando..." : "Aplicar alterações"}
-              </button>
-
-              {selecionados.size > 0 && (
                 <button
                   type="button"
                   className={styles.bulkClearButton}
@@ -1247,9 +1364,9 @@ export default function ContatosPage() {
                 >
                   Limpar seleção
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
           {contatos.length === 0 ? (
             <div className={styles.emptyState}>
@@ -1270,7 +1387,8 @@ export default function ContatosPage() {
                   </div>
                   <span>Contato</span>
                   <span>Telefone</span>
-                  <span>Status</span>
+                  <span>Classificação</span>
+                  <span>Conversa</span>
                   <span>Origem</span>
                   <span>Campanha</span>
                   <span className={styles.sheetActionsLabel}>Ações</span>
@@ -1314,6 +1432,14 @@ export default function ContatosPage() {
                                   {contato.nome || "Sem nome"}
                                 </h3>
 
+                                {contato.contato_novo && (
+                                  <span
+                                    className={`${styles.statusBadge} ${styles.statusNovo}`}
+                                  >
+                                    Novo
+                                  </span>
+                                )}
+
                                 {contato.telefone_revisar && (
                                   <span
                                     className={styles.reviewDot}
@@ -1335,12 +1461,26 @@ export default function ContatosPage() {
                           </span>
 
                           <div className={styles.sheetCell}>
+                            {contato.classificacao ? (
+                              <span
+                                className={`${styles.statusBadge} ${getClassificacaoClass(
+                                  contato.classificacao
+                                )}`}
+                              >
+                                {getClassificacaoLabel(contato.classificacao)}
+                              </span>
+                            ) : (
+                              <span className={styles.mutedCell}>—</span>
+                            )}
+                          </div>
+
+                          <div className={styles.sheetCell}>
                             <span
-                              className={`${styles.statusBadge} ${getStatusLeadClass(
-                                contato.status_lead
+                              className={`${styles.statusBadge} ${getStatusConversaClass(
+                                contato.conversa_status
                               )}`}
                             >
-                              {getStatusLeadLabel(contato.status_lead)}
+                              {getStatusConversaLabel(contato.conversa_status)}
                             </span>
                           </div>
 
@@ -1455,23 +1595,6 @@ export default function ContatosPage() {
                               </select>
                             </div>
 
-                            <div className={styles.field}>
-                              <label className={styles.label}>Status</label>
-                              <select
-                                className={styles.select}
-                                value={editStatusLead}
-                                onChange={(e) =>
-                                  setEditStatusLead(e.target.value as StatusLead)
-                                }
-                              >
-                                <option value="novo">Novo</option>
-                                <option value="em_atendimento">Em atendimento</option>
-                                <option value="qualificado">Qualificado</option>
-                                <option value="cliente">Cliente</option>
-                                <option value="perdido">Perdido</option>
-                              </select>
-                            </div>
-
                             <div className={styles.fieldFull}>
                               <label className={styles.label}>Observações</label>
                               <textarea
@@ -1510,6 +1633,58 @@ export default function ContatosPage() {
                           </div>
                         ) : (
                           <div className={styles.detailsGrid}>
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Classificação</span>
+                              <span className={styles.infoValue}>
+                                {getClassificacaoLabel(contato.classificacao)}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>
+                                Status da conversa
+                              </span>
+                              <span className={styles.infoValue}>
+                                {getStatusConversaLabel(contato.conversa_status)}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Protocolo atual</span>
+                              <span className={styles.infoValue}>
+                                {contato.protocolo_atual || "Sem protocolo"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>
+                                Início do atendimento
+                              </span>
+                              <span className={styles.infoValue}>
+                                {contato.iniciado_com_bot
+                                  ? "Iniciado com o robô"
+                                  : "Iniciado sem o robô"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>
+                                Finalização
+                              </span>
+                              <span className={styles.infoValue}>
+                                {contato.finalizado_por_tipo === "atendente"
+                                  ? `Atendente: ${
+                                      contato.finalizado_por_usuario_nome ||
+                                      "não identificado"
+                                    }`
+                                  : contato.finalizado_por_tipo === "bot"
+                                    ? "Finalizado pelo robô"
+                                    : contato.finalizado_por_tipo === "sistema"
+                                      ? "Finalizado pelo sistema"
+                                      : "Atendimento em andamento"}
+                              </span>
+                            </div>
+
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>Nome WhatsApp</span>
                               <span className={styles.infoValue}>
@@ -1763,21 +1938,6 @@ export default function ContatosPage() {
                       {getLabelCampanhaRastreamento(campanhaItem)}
                     </option>
                   ))}
-                </select>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Status do lead</label>
-                <select
-                  className={styles.select}
-                  value={statusLead}
-                  onChange={(e) => setStatusLead(e.target.value as StatusLead)}
-                >
-                  <option value="novo">Novo</option>
-                  <option value="em_atendimento">Em atendimento</option>
-                  <option value="qualificado">Qualificado</option>
-                  <option value="cliente">Cliente</option>
-                  <option value="perdido">Perdido</option>
                 </select>
               </div>
 

@@ -936,32 +936,7 @@ export default function WhatsappPerfilPage() {
             </label>
             </div>
 
-            <div className={styles.noticeBox}>
-            O nome oficial do WhatsApp Business normalmente passa por revisão do Meta e não
-            pode ser alterado diretamente nesta tela.
-            </div>
-
             <div className={styles.saveArea}>
-            <button
-                type="submit"
-                className={styles.saveButton}
-                disabled={salvando || carregando || !integracaoId || integracaoBloqueada}
-            >
-                {salvando ? "Salvando..." : "Salvar alterações"}
-            </button>
-            </div>
-            </form>
-
-            <div className={styles.dangerZone}>
-              <div>
-                <span className={styles.dangerEyebrow}>Zona de risco</span>
-                <strong>Desconectar integração da Meta</strong>
-                <p>
-                  Remove esta conexão do CRM e exige um novo onboarding para
-                  voltar a usar o número.
-                </p>
-              </div>
-
               <button
                 type="button"
                 className={styles.disconnectButton}
@@ -970,7 +945,16 @@ export default function WhatsappPerfilPage() {
               >
                 Desconectar integração
               </button>
+              
+              <button
+                  type="submit"
+                  className={styles.saveButton}
+                  disabled={salvando || carregando || !integracaoId || integracaoBloqueada}
+              >
+                  {salvando ? "Salvando..." : "Salvar alterações"}
+              </button>
             </div>
+            </form>
           </aside>
         </section>
       </main>
@@ -1098,7 +1082,6 @@ export default function WhatsappPerfilPage() {
             <div className={styles.noticeBox}>
               Use um nome que represente claramente sua empresa. Evite emojis,
               slogans, termos como “Oficial” ou “Verificado” e nomes genéricos.
-              Após aprovação, pode ser necessário registrar novamente o número.
             </div>
           </div>
 

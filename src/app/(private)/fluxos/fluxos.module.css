@@ -358,6 +358,10 @@
   border: 1px solid var(--crm-success-border);
 }
 
+.errorAlertBox {
+  padding: 14px 14px;
+}
+
 .errorAlert {
   background: var(--crm-danger-bg);
   color: var(--crm-danger-text);

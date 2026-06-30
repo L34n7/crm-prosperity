@@ -10,7 +10,10 @@
   padding: 20px 16px 16px;
   box-sizing: border-box;
   transition: width 0.25s ease, min-width 0.25s ease, padding 0.25s ease;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--crm-sidebar-text-muted) 28%, transparent) transparent;
   position: sticky;
   top: 0;
 }
@@ -21,16 +24,33 @@
   padding: 20px 10px 16px;
 }
 
+.sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--crm-sidebar-text-muted) 24%, transparent);
+  border-radius: 999px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--crm-sidebar-text-muted) 38%, transparent);
+}
+
 .sidebarTop {
   flex-shrink: 0;
 }
 
 .sidebarMiddle {
-  flex: 1;
+  flex: 1 0 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .sidebarBottom {
@@ -100,11 +120,10 @@
 }
 
 .navArea {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
   padding-top: 20px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 .sectionTitle {
@@ -136,8 +155,7 @@
 }
 
 .sidebarCollapsed .navArea {
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 .sidebarCollapsed .sidebarBottom {
@@ -210,13 +228,44 @@
   text-overflow: ellipsis;
 }
 
+.configuracoesActive {
+  background: var(--crm-success-bg-strong);
+  color: var(--crm-success-strong);
+  box-shadow: 0 10px 22px rgba(22, 101, 52, 0.12);
+  margin-bottom: 8px;
+}
+
+.configuracoesActive:hover {
+  background: #cff3e2;
+  color: #0f5132;
+}
+
+.configuracoesActive .linkIcon {
+  color: var(--crm-success-text);
+}
+
+.configuracoesActive .linkText {
+  color: var(--crm-success-text);
+}
+
+.configuracoesActive .submenuChevron {
+  color: var(--crm-success-text);
+}
+
+.sidebarCollapsed .configuracoesActive {
+  background: var(--crm-success-bg-strong);
+  color: var(--crm-success-strong);
+  box-shadow: 0 8px 18px rgba(22, 101, 52, 0.14);
+  margin-bottom: 0px;
+}
+
 .menuButton {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  padding: 8px 18px;
+  gap: 12px;
+  min-height: 42px;
+  padding: 10px 12px;
   border-radius: 26px;
   background: #f4f4f4;
   color: var(--crm-sidebar-text);
@@ -233,12 +282,13 @@
 
 .menuIcon {
   width: 36px;
-  min-width: 10px;
-  height: 12px;
-  margin-left: 4px;
+  min-width: 36px;
+  height: 16px;
+  margin-left: 0;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
   gap: 2px;
   flex-shrink: 0;
@@ -247,9 +297,9 @@
 .menuIcon span {
   display: block;
   width: 20px;
-  height: 10px;
+  height: 2px;
   background: color-mix(in srgb, var(--crm-sidebar-text-strong) 64%, transparent);
-  border-radius: 2px;
+  border-radius: 999px;
 }
 
 .menuText {
@@ -265,11 +315,140 @@
 }
 
 .sidebarCollapsed .menuButton {
-  padding: 8px 18px;
+  min-height: 42px;
+  justify-content: center;
+  padding: 10px 12px;
+}
+
+.sidebarCollapsed .menuIcon {
+  width: 36px;
+  min-width: 36px;
+  margin-left: 0;
+  align-items: center;
+}
+
+.sidebarCollapsed .submenuGroup {
+  gap: 6px;
 }
 
 .linkIcon {
   position: relative;
+}
+.submenuGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.submenuButton {
+  width: 100%;
+  border: 0;
+  font-family: inherit;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.submenuButton.configuracoesActive {
+  background: var(--crm-success-bg-strong);
+  box-shadow: 0 8px 18px rgba(22, 101, 52, 0.14);
+}
+
+.submenuButton:hover {
+  background: var(--crm-sidebar-hover);
+  color: var(--crm-sidebar-text-strong);
+}
+
+.submenuChevron {
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.submenuChevronOpen {
+  transform: rotate(180deg);
+}
+
+.submenuList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0px 0 4px 38px;
+  padding-left: 10px;
+  border-left: 1px solid var(--crm-sidebar-border);
+}
+
+.submenuLink {
+  min-height: 30px;
+  padding: 7px 10px;
+  border-radius: 18px;
+  color: var(--crm-sidebar-text);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.submenuLink:hover {
+  background: var(--crm-sidebar-hover);
+  color: var(--crm-sidebar-text-strong);
+}
+
+.submenuLinkActive {
+  background: var(--crm-sidebar-active-bg);
+  color: var(--crm-sidebar-active-text);
+  box-shadow: var(--crm-sidebar-active-shadow);
+}
+
+.submenuIcon {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebarCollapsed .submenuButton {
+  justify-content: center;
+  padding: 10px 12px;
+}
+
+.sidebarCollapsed .submenuList {
+  display: flex;
+  margin: 0;
+  padding-left: 0;
+  border-left: 0;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.sidebarCollapsed .submenuLink {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 0;
+  justify-content: center;
+  border-radius: 22px;
+}
+
+.sidebarCollapsed .submenuIcon {
+  width: 36px;
+  min-width: 36px;
+  height: 20px;
+}
+
+.sidebarCollapsed .submenuChevron {
+  display: none;
 }
 
 .notificationDot {
@@ -380,7 +559,7 @@
 }
 
 .sidebarCollapsed .planButton {
-  min-height: 0px;
+  min-height: 42px;
   justify-content: center;
   padding: 7px;
 }
@@ -390,11 +569,11 @@
 }
 
 .linkWhatsappPerfil {
-  margin-bottom: 0px;
-  padding: 12px 3px;
+  padding: 8px 10px;
   border-radius: 22px;
-  min-height: 30px;
+  min-height: 52px;
   align-items: center;
+  box-sizing: border-box;
 }
 
 .linkWhatsappPerfil:hover {
@@ -406,14 +585,33 @@
   display: none;
 }
 
+.sidebarCollapsed .linkWhatsappPerfil {
+  min-height: 48px;
+  padding: 6px 0;
+  justify-content: center;
+}
+
+.sidebarCollapsed .linkWhatsappPerfil .linkIcon {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+}
+
+.sidebarCollapsed .linkWhatsappPerfil .whatsappSidebarAvatar {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+}
+
 .linkWhatsappPerfil .linkIcon {
-  width: 58px;
-  min-width: 58px;
-  height: 30px;
+  width: 44px;
+  min-width: 44px;
+  height: 40px;
 }
 
 .linkWhatsappPerfil .whatsappSidebarAvatar {
   width: 38px;
+  min-width: 38px;
   height: 38px;
   border-radius: 999px;
   object-fit: cover;
@@ -434,6 +632,7 @@
 .linkWhatsappPerfil.linkWhatsappActive .linkText {
   color: var(--crm-sidebar-active-text);
 }
+
 
 @media (max-width: 1024px) {
   .sidebar {
@@ -459,7 +658,42 @@
 
   .menuButton {
     justify-content: center;
-    padding: 12px;
+    padding: 10px 12px;
+  }
+
+  .menuIcon {
+    width: 36px;
+    min-width: 36px;
+    margin-left: 0;
+    align-items: center;
+  }
+
+  .submenuList {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding-left: 0;
+    border-left: 0;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .submenuLink {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 0;
+    justify-content: center;
+    border-radius: 22px;
+  }
+
+  .submenuIcon {
+    width: 36px;
+    min-width: 36px;
+    height: 20px;
+  }
+
+  .submenuChevron {
+    display: none;
   }
 }
 
@@ -792,5 +1026,50 @@
     background: var(--crm-danger-bg);
     color: var(--crm-danger-text);
     text-align: center;
+  }
+
+  .mobileSubmenuGroup {
+    display: grid;
+    gap: 6px;
+  }
+
+  .mobileSubmenuChevron {
+    transition: transform 0.2s ease;
+  }
+
+  .mobileSubmenuChevronOpen {
+    transform: rotate(180deg);
+  }
+
+  .mobileSubmenuList {
+    display: grid;
+    gap: 5px;
+    margin-left: 18px;
+    padding-left: 10px;
+    border-left: 1px solid var(--crm-border);
+  }
+
+  .mobileSubmenuLink {
+    min-height: 40px;
+    border-radius: 12px;
+    color: var(--crm-text);
+    text-decoration: none;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 12.5px;
+    font-weight: 800;
+  }
+
+  .mobileSubmenuLink:hover {
+    background: var(--crm-surface-soft);
+    color: var(--crm-text-strong);
+  }
+
+  .mobileSubmenuLinkActive {
+    background: var(--crm-primary-soft);
+    color: var(--crm-primary-text);
   }
 }

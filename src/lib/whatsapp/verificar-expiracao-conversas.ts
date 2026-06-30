@@ -96,6 +96,32 @@ async function buscarUltimaMensagemRecebidaContato({
   return dataValidaOuNull(ultimaMensagemCliente?.created_at ?? null);
 }
 
+async function buscarExpiracaoPersistidaConversa({
+  empresaId,
+  conversaId,
+}: {
+  empresaId: string;
+  conversaId: string;
+}) {
+  const { data: conversa, error } = await supabaseAdmin
+    .from("conversas")
+    .select("last_inbound_message_at, window_expires_at")
+    .eq("empresa_id", empresaId)
+    .eq("id", conversaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Erro ao buscar expiracao da conversa: ${error.message}`);
+  }
+
+  return {
+    lastInboundMessageAt: dataValidaOuNull(
+      conversa?.last_inbound_message_at ?? null
+    ),
+    windowExpiresAt: dataValidaOuNull(conversa?.window_expires_at ?? null),
+  };
+}
+
 export async function verificarEEncerrarConversaSe24hExpirada({
   empresaId,
   conversaId,
@@ -108,6 +134,7 @@ export async function verificarEEncerrarConversaSe24hExpirada({
   agora?: Date;
 }) {
   let ultimaMensagemContatoAt = dataValidaOuNull(lastInboundMessageAt);
+  let windowExpiresAt: string | null = null;
 
   if (!ultimaMensagemContatoAt || janela24hExpirada(ultimaMensagemContatoAt, agora)) {
     const ultimaMensagemBanco = await buscarUltimaMensagemRecebidaContato({
@@ -121,7 +148,29 @@ export async function verificarEEncerrarConversaSe24hExpirada({
     );
   }
 
-  if (!janela24hExpirada(ultimaMensagemContatoAt, agora)) {
+  if (!ultimaMensagemContatoAt) {
+    const expiracaoPersistida = await buscarExpiracaoPersistidaConversa({
+      empresaId,
+      conversaId,
+    });
+
+    ultimaMensagemContatoAt = dataMaisRecente(
+      ultimaMensagemContatoAt,
+      expiracaoPersistida.lastInboundMessageAt
+    );
+    windowExpiresAt = expiracaoPersistida.windowExpiresAt;
+  }
+
+  const expirouPelaMensagemRecebida = janela24hExpirada(
+    ultimaMensagemContatoAt,
+    agora
+  );
+  const expirouPelaJanelaPersistida =
+    !ultimaMensagemContatoAt &&
+    !!windowExpiresAt &&
+    agora.getTime() >= new Date(windowExpiresAt).getTime();
+
+  if (!expirouPelaMensagemRecebida && !expirouPelaJanelaPersistida) {
     return {
       expirada: false,
       encerrada: false,

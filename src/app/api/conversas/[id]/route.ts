@@ -16,6 +16,32 @@ import { verificarEEncerrarConversaSe24hExpirada } from "@/lib/whatsapp/verifica
 
 const supabaseAdmin = getSupabaseAdmin();
 
+const TIPOS_EVENTO_RESULTADO = [
+  "venda_realizada",
+  "venda_perdida",
+  "lead_qualificado",
+  "agendamento_criado",
+  "agendamento_confirmado",
+] as const;
+
+function normalizarValorResultado(valor: unknown) {
+  if (valor === "" || valor === null || valor === undefined) {
+    return null;
+  }
+
+  if (typeof valor === "number") {
+    return valor;
+  }
+
+  const texto = String(valor)
+    .trim()
+    .replace(/[R$\s]/g, "")
+    .replace(/\.(?=\d{3}(\D|$))/g, "")
+    .replace(",", ".");
+
+  return Number(texto);
+}
+
 type ConversaAtual = {
   id: string;
   empresa_id: string;
@@ -394,6 +420,17 @@ export async function PUT(
   const integracao_whatsapp_id =
     body?.integracao_whatsapp_id ?? conversaAtual.integracao_whatsapp_id;
   const status = body?.status ?? conversaAtual.status;
+  const tipoEventoResultado =
+    String(body?.tipo_evento_resultado || "").trim() || "lead_qualificado";
+  const valorResultadoNormalizado = normalizarValorResultado(
+    body?.valor_resultado
+  );
+  const valorEventoResultado =
+    tipoEventoResultado === "venda_realizada"
+      ? valorResultadoNormalizado
+      : null;
+  const observacaoResultado =
+    String(body?.observacao_resultado || "").trim() || null;
   const bot_ativo =
     "bot_ativo" in body
       ? Boolean(body.bot_ativo)
@@ -457,6 +494,40 @@ export async function PUT(
 
   const estaEncerrando =
     novoStatusEhEncerrado && !conversaAtualEstaEncerrada;
+
+  if (
+    estaEncerrando &&
+    !TIPOS_EVENTO_RESULTADO.includes(
+      tipoEventoResultado as (typeof TIPOS_EVENTO_RESULTADO)[number]
+    )
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Tipo de evento do encerramento inválido" },
+      { status: 400 }
+    );
+  }
+
+  if (
+    estaEncerrando &&
+    tipoEventoResultado === "venda_realizada" &&
+    valorEventoResultado === null
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Informe o valor da venda" },
+      { status: 400 }
+    );
+  }
+
+  if (
+    estaEncerrando &&
+    valorEventoResultado !== null &&
+    (!Number.isFinite(valorEventoResultado) || valorEventoResultado < 0)
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Informe um valor de venda válido" },
+      { status: 400 }
+    );
+  }
 
   const estaReabrindo =
     !novoStatusEhEncerrado && conversaAtualEstaEncerrada;
@@ -817,6 +888,83 @@ export async function PUT(
     );
   }
 
+  if (estaEncerrando) {
+    const encerradoEm = dataFechamento || new Date().toISOString();
+    const { data: protocoloEncerrado, error: protocoloBuscaError } =
+      await supabaseAdmin
+        .from("conversa_protocolos")
+        .select("id, protocolo")
+        .eq("empresa_id", empresa_id)
+        .eq("conversa_id", id)
+        .order("started_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (protocoloBuscaError || !protocoloEncerrado) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            protocoloBuscaError?.message ||
+            "Protocolo encerrado não encontrado para registrar o resultado",
+        },
+        { status: 500 }
+      );
+    }
+
+    const { error: finalizadorError } = await supabaseAdmin
+      .from("conversa_protocolos")
+      .update({
+        finalizado_com_bot: false,
+        finalizado_por_tipo: "atendente",
+        finalizado_por_usuario_id: usuario.id,
+        motivo_encerramento: parandoAutomacaoEEncerrando
+          ? "automacao_interrompida_pelo_atendente"
+          : "encerrado_manual",
+        updated_at: encerradoEm,
+      })
+      .eq("id", protocoloEncerrado.id)
+      .eq("empresa_id", empresa_id);
+
+    if (finalizadorError) {
+      return NextResponse.json(
+        { ok: false, error: finalizadorError.message },
+        { status: 500 }
+      );
+    }
+
+    const { error: eventoResultadoError } = await supabaseAdmin.rpc(
+      "rastreamento_criar_evento",
+      {
+        p_empresa_id: empresa_id,
+        p_tipo: tipoEventoResultado,
+        p_contato_id: contato_id,
+        p_conversa_id: id,
+        p_valor: valorEventoResultado,
+        p_origem_registro: "manual",
+        p_idempotency_key: `protocolo:${protocoloEncerrado.id}:resultado_encerramento`,
+        p_metadata_json: {
+          origem_interface: "conversas",
+          conversa_protocolo_id: protocoloEncerrado.id,
+          protocolo: protocoloEncerrado.protocolo,
+          observacao: observacaoResultado,
+          finalizado_por_tipo: "atendente",
+          finalizado_por_usuario_id: usuario.id,
+          automacao_interrompida: parandoAutomacaoEEncerrando,
+        },
+        p_created_by: usuario.id,
+      }
+    );
+
+    if (eventoResultadoError) {
+      return NextResponse.json(
+        { ok: false, error: eventoResultadoError.message },
+        { status: 500 }
+      );
+    }
+  }
+
   const acao = parandoAutomacaoEEncerrando
     ? "automacao_parada_conversa_encerrada"
     : estaEncerrando
@@ -861,6 +1009,9 @@ export async function PUT(
       assunto: data.assunto,
       closed_at: data.closed_at ?? null,
       automacoes_canceladas: automacoesCanceladas,
+      tipo_evento_resultado: estaEncerrando ? tipoEventoResultado : null,
+      valor_resultado: estaEncerrando ? valorEventoResultado : null,
+      observacao_resultado: estaEncerrando ? observacaoResultado : null,
     },
     ip: auditMeta.ip,
     user_agent: auditMeta.user_agent,

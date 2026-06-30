@@ -3,6 +3,8 @@ import CrmShell from "@/components/CrmShell";
 import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
+import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
+import type { NichoCodigo } from "@/lib/nichos/config";
 
 export default async function PrivateLayout({
   children,
@@ -18,6 +20,7 @@ export default async function PrivateLayout({
   let permissoes: string[] = [];
   let assinatura: AssinaturaEmpresa | null = null;
   let isAdmin = false;
+  let nichoCodigo: NichoCodigo = "comercio";
 
   const resultado = await getUsuarioContexto();
 
@@ -27,6 +30,15 @@ export default async function PrivateLayout({
     permissoes = resultado.usuario.permissoes;
     assinatura = resultado.usuario.assinatura;
     isAdmin = resultado.usuario.is_admin;
+
+    if (resultado.usuario.empresa_id) {
+      try {
+        const nicho = await buscarNichoEmpresa(resultado.usuario.empresa_id);
+        nichoCodigo = nicho.codigo;
+      } catch (error) {
+        console.error("Erro ao carregar nicho da empresa:", error);
+      }
+    }
   }
 
   return (
@@ -37,6 +49,7 @@ export default async function PrivateLayout({
       permissoes={permissoes}
       assinatura={assinatura}
       isAdmin={isAdmin}
+      nichoCodigo={nichoCodigo}
     >
       {children}
       <AmbienteObrigatorioGuard />
