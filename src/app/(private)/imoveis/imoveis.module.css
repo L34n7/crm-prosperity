@@ -8,7 +8,6 @@
 }
 
 .toolbar,
-.sideCard,
 .contentCard,
 .formCard,
 .itemCard {
@@ -94,6 +93,7 @@
   border: 1px solid var(--crm-border-strong);
   background: var(--crm-surface);
   color: var(--crm-text-strong);
+  font-size: 14px;
 }
 
 .dangerButton {
@@ -118,21 +118,9 @@
   cursor: not-allowed;
 }
 
-.moduleGrid {
-  display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-  gap: 18px;
-  align-items: start;
-}
-
-.sideCard,
 .contentCard,
 .formCard {
   padding: 22px;
-}
-
-.contentCard,
-.formCard {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -147,12 +135,12 @@
 
 .eyebrow {
   display: block;
+  margin-bottom: 5px;
   color: var(--crm-text-muted);
   font-size: 12px;
   font-weight: 800;
-  margin-bottom: 5px;
-  text-transform: uppercase;
   letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .cardHeader h2,
@@ -170,51 +158,16 @@
   font-size: 13px;
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-.listItem {
-  width: 100%;
-  border: 1px solid var(--crm-border);
-  border-radius: 16px;
-  padding: 13px;
-  text-align: left;
-  background: var(--crm-surface);
-  color: var(--crm-text);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.listItem:hover,
-.listItemActive {
-  border-color: var(--crm-primary-border);
-  background: var(--crm-primary-soft);
-}
-
-.listItem strong {
-  color: var(--crm-text-strong);
-}
-
-.listItem span,
-.listItem small {
-  color: var(--crm-text-muted);
-}
-
 .badge,
 .statusBadge {
   display: inline-flex;
   width: fit-content;
   align-items: center;
+  padding: 6px 10px;
   border: 1px solid var(--crm-primary-border);
+  border-radius: 999px;
   background: var(--crm-primary-soft);
   color: var(--crm-primary-text);
-  border-radius: 999px;
-  padding: 6px 10px;
   font-size: 12px;
   font-weight: 800;
 }
@@ -227,8 +180,8 @@
 
 .empty,
 .error {
-  border-radius: 16px;
   padding: 16px;
+  border-radius: 16px;
   font-size: 13px;
 }
 
@@ -236,9 +189,9 @@
   min-height: 140px;
   display: grid;
   place-items: center;
-  text-align: center;
-  color: var(--crm-text-muted);
   border: 1px dashed var(--crm-border-strong);
+  color: var(--crm-text-muted);
+  text-align: center;
 }
 
 .error {
@@ -271,92 +224,6 @@
   grid-column: 1 / -1;
 }
 
-.timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.timelineItem,
-.itemCard {
-  padding: 16px;
-}
-
-.timelineItem {
-  border: 1px solid var(--crm-border);
-  border-radius: 18px;
-  background: var(--crm-surface);
-}
-
-.timelineHeader,
-.itemHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.timelineHeader h3,
-.itemHeader h3 {
-  margin: 0;
-  color: var(--crm-text-strong);
-  font-size: 16px;
-}
-
-.timelineBody {
-  margin-top: 12px;
-  display: grid;
-  gap: 10px;
-}
-
-.timelineBody p {
-  margin: 0;
-  color: var(--crm-text);
-  line-height: 1.55;
-}
-
-.timelineBody strong {
-  color: var(--crm-text-strong);
-}
-
-.toothGrid {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.toothButton {
-  min-height: 62px;
-  border: 1px solid var(--crm-border);
-  border-radius: 16px;
-  background: var(--crm-surface);
-  color: var(--crm-text);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.toothButton:hover,
-.toothButtonActive {
-  border-color: var(--crm-primary-border);
-  background: var(--crm-primary-soft);
-  color: var(--crm-primary-text);
-}
-
-.toothNumber {
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.toothStatus {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
 .propertyGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -364,9 +231,23 @@
 }
 
 .itemCard {
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.itemHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.itemHeader h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 16px;
 }
 
 .itemMeta {
@@ -376,18 +257,18 @@
 }
 
 .itemMeta span {
+  padding: 6px 9px;
+  border: 1px solid var(--crm-border);
   border-radius: 999px;
   background: var(--crm-surface-soft);
-  border: 1px solid var(--crm-border);
-  padding: 6px 9px;
   color: var(--crm-text);
   font-size: 12px;
 }
 
 .itemActions {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
 .twoColumns {
@@ -414,27 +295,27 @@
 }
 
 .portalRow:first-child {
-  border-top: 0;
   padding-top: 0;
+  border-top: 0;
 }
 
 .portalInfo {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 11px;
-  min-width: 0;
 }
 
 .portalIcon {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
-  color: var(--crm-primary-text);
-  background: var(--crm-primary-soft);
   border: 1px solid var(--crm-primary-border);
-  flex: 0 0 auto;
+  border-radius: 12px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
 }
 
 .portalInfo strong,
@@ -456,8 +337,8 @@
 .compactMeta {
   display: flex;
   flex-direction: column;
-  gap: 5px;
   align-items: flex-start;
+  gap: 5px;
 }
 
 .portalActions {
@@ -496,16 +377,16 @@
 }
 
 .compactItem {
+  padding: 12px 0;
+  border-top: 1px solid var(--crm-border);
   display: flex;
   justify-content: space-between;
   gap: 14px;
-  padding: 12px 0;
-  border-top: 1px solid var(--crm-border);
 }
 
 .compactItem:first-child {
-  border-top: 0;
   padding-top: 0;
+  border-top: 0;
 }
 
 .compactItem > div:first-child {
@@ -519,9 +400,9 @@
 }
 
 .compactMeta {
+  min-width: 110px;
   align-items: flex-end;
   text-align: right;
-  min-width: 110px;
 }
 
 .inlineLink {
@@ -538,7 +419,6 @@
 }
 
 @media (max-width: 980px) {
-  .moduleGrid,
   .twoColumns,
   .propertyGrid {
     grid-template-columns: 1fr;
@@ -551,10 +431,6 @@
 
   .portalActions {
     justify-content: flex-start;
-  }
-
-  .toothGrid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

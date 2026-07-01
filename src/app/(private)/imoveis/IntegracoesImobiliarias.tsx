@@ -13,7 +13,7 @@ import {
   CANAIS_IMOBILIARIOS,
   getStatusPublicacaoLabel,
 } from "@/lib/imoveis/publicacao";
-import styles from "../modulos-nicho.module.css";
+import styles from "./imoveis.module.css";
 
 export type PublicacaoImovelResumo = {
   id: string;

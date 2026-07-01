@@ -604,7 +604,7 @@ export default function CadastrosPage() {
         <div className={styles.personMain}>
           <div className={styles.personTitle}>
             <h3>{pessoa.nome}</h3>
-            {pessoa.paciente?.numero_prontuario ? (
+            {ehSaude && pessoa.paciente?.numero_prontuario ? (
               <span className={styles.recordBadge}>
                 {pessoa.paciente.numero_prontuario}
               </span>

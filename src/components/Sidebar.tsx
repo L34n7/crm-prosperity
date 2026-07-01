@@ -21,6 +21,7 @@ import {
   Layers3,
   IdCard,
   ShieldCheck,
+  Settings,
   Settings2,
   FileText,
   GitBranch,
@@ -500,7 +501,7 @@ export default function Sidebar({
                   aria-expanded={configuracoesOpen}
                 >
                   <span className={styles.linkIcon}>
-                    <Settings2 size={18} strokeWidth={2} />
+                    <Settings  size={18} strokeWidth={2} />
                   </span>
 
                   {!collapsed && (

@@ -160,7 +160,7 @@
 .textarea {
   width: 100%;
   border: 1px solid var(--crm-border-strong);
-  background: var(--crm-surface);
+  background: var(--crm-surface-input);
   color: var(--crm-text-strong);
   border-radius: 14px;
   padding: 11px 14px;
@@ -288,13 +288,13 @@
 }
 
 .limitCard {
-  margin: 12px 28px 0;
+  margin-bottom: 10px;
   border: 1px solid var(--crm-border);
   border-radius: 16px;
-  background: var(--crm-surface);
-  padding: 14px;
+  background: var(--crm-bottom-Hover);
+  padding: 12px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .limitCardWarning {
@@ -307,19 +307,6 @@
   background: var(--crm-danger-bg);
 }
 
-.limitHeader {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.limitHeader div {
-  display: grid;
-  gap: 4px;
-}
-
-.limitHeader span,
 .limitMeta span,
 .limitGrid span {
   color: var(--crm-text-muted);
@@ -329,45 +316,116 @@
   letter-spacing: 0.04em;
 }
 
-.limitHeader strong {
-  color: var(--crm-text-strong);
-  font-size: 16px;
-  font-weight: 900;
-}
-
 .limitGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .limitGrid div {
   border: 1px solid var(--crm-border);
   border-radius: 12px;
   background: var(--crm-surface-soft);
-  padding: 10px;
+  padding: 7px 10px;
   display: grid;
-  gap: 4px;
+  gap: 1px;
+}
+
+.limitGrid span {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .limitGrid strong {
   color: var(--crm-text-strong);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 900;
+  line-height: 1.1;
 }
 
-.limitMeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
+.integrationInfoGrid {
   border-top: 1px solid var(--crm-border);
   padding-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+}
+
+.integrationInfoItem {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.integrationInfoItem span {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.integrationInfoItem strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 800;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qualityBadge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  line-height: 1;
+}
+
+.qualityBadge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.qualityHigh {
+  color: #047857 !important;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+}
+
+.qualityMedium {
+  color: #92400e !important;
+  background: #fef3c7;
+  border: 1px solid #facc15;
+}
+
+.qualityLow {
+  color: #b91c1c !important;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
+.qualityNeutral {
+  color: var(--crm-text-muted) !important;
+  background: var(--crm-surface-soft);
+  border: 1px solid var(--crm-border);
 }
 
 .saveArea {
   display: flex;
-  justify-content: flex-end;
-  padding-top: 4px;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 14px;
   gap: 10px;
 }
 
@@ -1004,12 +1062,16 @@
     margin: 10px 18px 0;
   }
 
-  .limitHeader {
-    flex-direction: column;
-  }
-
   .limitGrid {
     grid-template-columns: 1fr;
+  }
+
+  .integrationInfoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .integrationInfoItem {
+    flex-wrap: wrap;
   }
 
   .formGrid {

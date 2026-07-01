@@ -117,7 +117,8 @@ export async function GET(
 
     return NextResponse.json({
       ok: true,
-      pessoa,
+      pessoa:
+        nicho.grupo === "saude" ? pessoa : { ...pessoa, paciente: null },
       contexto: {
         nicho,
         entidade: nicho.grupo === "saude" ? "paciente" : "cliente",
@@ -338,7 +339,10 @@ export async function PUT(
       ok: true,
       message: `${nicho.cadastroSingular} atualizado com sucesso.`,
       pessoa_id: (rpcData as SalvarCadastroResult | null)?.pessoa_id ?? id,
-      pessoa: depois,
+      pessoa:
+        nicho.grupo === "saude" || !depois
+          ? depois
+          : { ...depois, paciente: null },
     });
   } catch (error) {
     return NextResponse.json(

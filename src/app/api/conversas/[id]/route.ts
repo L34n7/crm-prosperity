@@ -12,17 +12,13 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import {
+  obterResultadoFluxoEventoManual,
+  tipoEventoManualValido,
+} from "@/lib/rastreamento/eventos-manuais";
 import { verificarEEncerrarConversaSe24hExpirada } from "@/lib/whatsapp/verificar-expiracao-conversas";
 
 const supabaseAdmin = getSupabaseAdmin();
-
-const TIPOS_EVENTO_RESULTADO = [
-  "venda_realizada",
-  "venda_perdida",
-  "lead_qualificado",
-  "agendamento_criado",
-  "agendamento_confirmado",
-] as const;
 
 function normalizarValorResultado(valor: unknown) {
   if (valor === "" || valor === null || valor === undefined) {
@@ -497,9 +493,7 @@ export async function PUT(
 
   if (
     estaEncerrando &&
-    !TIPOS_EVENTO_RESULTADO.includes(
-      tipoEventoResultado as (typeof TIPOS_EVENTO_RESULTADO)[number]
-    )
+    !tipoEventoManualValido(tipoEventoResultado)
   ) {
     return NextResponse.json(
       { ok: false, error: "Tipo de evento do encerramento inválido" },
@@ -949,6 +943,8 @@ export async function PUT(
           conversa_protocolo_id: protocoloEncerrado.id,
           protocolo: protocoloEncerrado.protocolo,
           observacao: observacaoResultado,
+          resultado_fluxo:
+            obterResultadoFluxoEventoManual(tipoEventoResultado),
           finalizado_por_tipo: "atendente",
           finalizado_por_usuario_id: usuario.id,
           automacao_interrompida: parandoAutomacaoEEncerrando,

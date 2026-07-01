@@ -988,6 +988,10 @@ function NodeCustom({ data, dragging }: any) {
   );
 }
 
+function configuracaoMarcada(valor: unknown) {
+  return valor === true || valor === "true" || valor === 1 || valor === "1";
+}
+
 function FluxosPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -4372,13 +4376,14 @@ function validarFluxoAntesDeAtivar(params?: {
     }
 
     if (tipoNo === "agendar_disparo") {
-      if (!String(config.template_id || "").trim()) {
+      const templateId = String(config.template_id || "").trim();
+      const templateSelecionado = templatesWhatsapp.find(
+        (template) => template.id === templateId
+      );
+
+      if (!templateId || !templateSelecionado) {
         return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp.`;
       }
-
-      const templateSelecionado = templatesWhatsapp.find(
-        (template) => template.id === String(config.template_id || "").trim()
-      );
 
       if (templateWhatsappTemCabecalhoMidia(templateSelecionado)) {
         return `O bloco "${node.data?.titulo}" usa um template com cabecalho de midia. Use um template apenas com texto para disparos agendados.`;
@@ -4428,8 +4433,24 @@ function validarFluxoAntesDeAtivar(params?: {
     }
 
     if (tipoNo === "agenda_criar_agendamento") {
-      if (config.lembrete_agendamento_ativo === true) {
+      const lembreteAtivo = configuracaoMarcada(
+        config.lembrete_agendamento_ativo
+      );
+      const lembreteWhatsapp = configuracaoMarcada(
+        config.lembrete_agendamento_whatsapp
+      );
+      const lembreteEmail = configuracaoMarcada(
+        config.lembrete_agendamento_email
+      );
+
+      if (lembreteAtivo) {
         const quantidade = Number(config.lembrete_agendamento_quantidade || 0);
+        const templateLembreteId = String(
+          config.lembrete_agendamento_template_id || ""
+        ).trim();
+        const templateLembreteSelecionado = templatesWhatsapp.find(
+          (template) => template.id === templateLembreteId
+        );
 
         if (!Number.isFinite(quantidade) || quantidade <= 0) {
           return `O bloco "${node.data?.titulo}" precisa ter uma antecedencia valida para o lembrete.`;
@@ -4443,34 +4464,27 @@ function validarFluxoAntesDeAtivar(params?: {
           return `O bloco "${node.data?.titulo}" precisa ter uma unidade valida para o lembrete.`;
         }
 
-        if (
-          config.lembrete_agendamento_whatsapp !== true &&
-          config.lembrete_agendamento_email !== true
-        ) {
+        if (!lembreteWhatsapp && !lembreteEmail) {
           return `O bloco "${node.data?.titulo}" precisa ter pelo menos um canal de lembrete.`;
         }
 
         if (
-          config.lembrete_agendamento_whatsapp === true &&
-          !String(config.lembrete_agendamento_template_id || "").trim()
+          lembreteWhatsapp &&
+          (!templateLembreteId || !templateLembreteSelecionado)
         ) {
-          return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp para o lembrete.`;
+          return "Selecione um template WhatsApp para o lembrete.";
         }
 
-        if (config.lembrete_agendamento_whatsapp === true) {
-          const templateSelecionado = templatesWhatsapp.find(
-            (template) =>
-              template.id ===
-              String(config.lembrete_agendamento_template_id || "").trim()
-          );
-
-          if (templateWhatsappTemCabecalhoMidia(templateSelecionado)) {
+        if (lembreteWhatsapp) {
+          if (
+            templateWhatsappTemCabecalhoMidia(templateLembreteSelecionado)
+          ) {
             return `O bloco "${node.data?.titulo}" usa um template de lembrete com cabecalho de midia. Use um template apenas com texto.`;
           }
 
-          if (templateSelecionado) {
+          if (templateLembreteSelecionado) {
             const totalVariaveisTemplate =
-              contarVariaveisTemplateWhatsapp(templateSelecionado);
+              contarVariaveisTemplateWhatsapp(templateLembreteSelecionado);
             const totalVariaveisConfiguradas =
               contarVariaveisObrigatoriasPreenchidas(
                 Array.isArray(config.lembrete_agendamento_variaveis)
@@ -4539,14 +4553,30 @@ async function alterarStatusFluxo(
         return;
       }
 
-      const erroValidacao = validarFluxoAntesDeAtivar();
+      const fluxoEstaNoCanvas = fluxoSelecionado?.id === fluxo.id;
+      let nodesValidacao = nodes;
+      let edgesValidacao = edges;
+
+      if (!fluxoEstaNoCanvas || carregandoEstrutura) {
+        const estrutura = await carregarEstruturaParaValidacao(fluxo.id);
+        nodesValidacao = estrutura.nodesValidacao;
+        edgesValidacao = estrutura.edgesValidacao;
+      }
+
+      const erroValidacao = validarFluxoAntesDeAtivar({
+        fluxo,
+        nodesValidacao,
+        edgesValidacao,
+      });
 
       if (erroValidacao) {
         setErro(erroValidacao);
         return;
       }
 
-      await salvarEstrutura();
+      if (fluxoEstaNoCanvas && !carregandoEstrutura) {
+        await salvarEstrutura();
+      }
     }
 
     const res = await fetch("/api/automacoes", {
@@ -9319,7 +9349,6 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   <p>Quando o disparo ocorrer:</p>
 
                   <ul className={styles.warningList}>
-                    <li>Poderá abrir uma nova janela de conversa</li>
                     <li>Poderá gerar cobrança da Meta</li>
                     <li>O envio será realizado automaticamente</li>
                   </ul>

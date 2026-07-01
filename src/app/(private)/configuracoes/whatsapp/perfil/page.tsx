@@ -22,6 +22,7 @@ type Integracao = {
   meta_messaging_limit?: number | null;
   meta_account_mode?: string | null;
   meta_saude_ultima_verificacao_em?: string | null;
+  setup_completed_at?: string | null;
   onboarding_erro?: string | null;
 };
 
@@ -33,6 +34,12 @@ type LimiteMeta = {
   tier: string | null;
   origem: string;
   alerta: "normal" | "amarelo" | "vermelho";
+};
+
+type AdministradorEmpresa = {
+  id: string;
+  nome: string;
+  email?: string | null;
 };
 
 type PerfilWhatsapp = {
@@ -78,6 +85,56 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function normalizarTextoPerfil(valor?: string | null) {
+  return String(valor || "").trim();
+}
+
+function normalizarWebsitesPerfil(websites?: string[] | null) {
+  return (websites || [])
+    .map((item) => normalizarTextoPerfil(item))
+    .filter(Boolean);
+}
+
+function dadosPerfilForamAlterados(params: {
+  perfil: PerfilWhatsapp | null;
+  about: string;
+  address: string;
+  description: string;
+  email: string;
+  website1: string;
+  website2: string;
+  vertical: string;
+  foto: File | null;
+}) {
+  const {
+    perfil,
+    about,
+    address,
+    description,
+    email,
+    website1,
+    website2,
+    vertical,
+    foto,
+  } = params;
+
+  if (foto) return true;
+
+  const websitesFormulario = normalizarWebsitesPerfil([website1, website2]);
+  const websitesAtuais = normalizarWebsitesPerfil(perfil?.websites);
+
+  return (
+    normalizarTextoPerfil(about) !== normalizarTextoPerfil(perfil?.about) ||
+    normalizarTextoPerfil(address) !== normalizarTextoPerfil(perfil?.address) ||
+    normalizarTextoPerfil(description) !==
+      normalizarTextoPerfil(perfil?.description) ||
+    normalizarTextoPerfil(email) !== normalizarTextoPerfil(perfil?.email) ||
+    normalizarTextoPerfil(vertical) !==
+      normalizarTextoPerfil(perfil?.vertical) ||
+    JSON.stringify(websitesFormulario) !== JSON.stringify(websitesAtuais)
+  );
+}
+
 function normalizarStatus(valor?: string | null) {
   return String(valor || "").trim().toLowerCase();
 }
@@ -108,6 +165,81 @@ function formatarPercentual(valor?: number | null) {
   return `${Math.round(valor * 100)}%`;
 }
 
+function formatarData(valor?: string | null) {
+  if (!valor) return "Não informado";
+
+  const data = new Date(valor);
+
+  if (Number.isNaN(data.getTime())) {
+    return "Não informado";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(data);
+}
+
+function obterQualidadeNumero(quality?: string | null) {
+  const valor = normalizarStatus(quality);
+
+  if (valor === "green") {
+    return {
+      texto: "Alta",
+      classe: styles.qualityHigh,
+    };
+  }
+
+  if (valor === "yellow") {
+    return {
+      texto: "Média",
+      classe: styles.qualityMedium,
+    };
+  }
+
+  if (valor === "red") {
+    return {
+      texto: "Baixa",
+      classe: styles.qualityLow,
+    };
+  }
+
+  return {
+    texto: "Não informada",
+    classe: styles.qualityNeutral,
+  };
+}
+
+function obterTextoStatusIntegracao(
+  status?: string | null,
+  phoneStatus?: string | null
+) {
+  const statusIntegracao = normalizarStatus(status);
+  const statusNumero = normalizarStatus(phoneStatus);
+
+  if (
+    ["bloqueado", "banido", "blocked", "banned", "restricted"].includes(
+      statusIntegracao
+    ) ||
+    ["bloqueado", "banido", "blocked", "banned", "restricted"].includes(
+      statusNumero
+    )
+  ) {
+    return "Atenção necessária na conexão";
+  }
+
+  if (statusIntegracao === "ativa" || statusNumero === "connected") {
+    return "WhatsApp conectado e operacional";
+  }
+
+  if (statusIntegracao === "desconectada") {
+    return "Integração desconectada";
+  }
+
+  return "Status da conexão não informado";
+}
+
 export default function WhatsappPerfilPage() {
   const [integracoes, setIntegracoes] = useState<Integracao[]>([]);
   const [integracaoId, setIntegracaoId] = useState("");
@@ -136,6 +268,8 @@ export default function WhatsappPerfilPage() {
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
+  const [administrador, setAdministrador] =
+  useState<AdministradorEmpresa | null>(null);
   const [diagnosticoWhatsapp, setDiagnosticoWhatsapp] =
     useState<DiagnosticoWhatsApp | null>(null);
 
@@ -163,6 +297,27 @@ export default function WhatsappPerfilPage() {
     ["banned", "blocked"].includes(
       normalizarStatus(integracaoSelecionada?.phone_number_status)
     );
+
+  const qualidadeNumero = obterQualidadeNumero(
+    integracaoSelecionada?.quality_rating
+  );
+
+  const textoStatusIntegracao = obterTextoStatusIntegracao(
+    integracaoSelecionada?.status,
+    integracaoSelecionada?.phone_number_status
+  );
+
+  const haAlteracoesPerfil = dadosPerfilForamAlterados({
+    perfil,
+    about,
+    address,
+    description,
+    email,
+    website1,
+    website2,
+    vertical,
+    foto,
+  });
 
   async function carregarPerfil(
     id?: string,
@@ -216,12 +371,14 @@ export default function WhatsappPerfilPage() {
           meta_account_mode: integracaoAtualizada.meta_account_mode,
           meta_saude_ultima_verificacao_em:
             integracaoAtualizada.meta_saude_ultima_verificacao_em,
+          setup_completed_at: integracaoAtualizada.setup_completed_at,
           onboarding_erro: integracaoAtualizada.onboarding_erro,
         };
       });
 
       setIntegracoes(listaComNomeAtualizado);
       setLimiteMeta(json.limite_meta || null);
+      setAdministrador(json.administrador || null);
 
       const novaIntegracaoId = integracaoAtualizada?.id || "";
 
@@ -248,6 +405,12 @@ export default function WhatsappPerfilPage() {
 
   async function salvarPerfil(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (!haAlteracoesPerfil) {
+      setErro("");
+      setSucesso("Nenhuma alteração para salvar.");
+      return;
+    }
 
     try {
       setSalvando(true);
@@ -791,37 +954,48 @@ export default function WhatsappPerfilPage() {
                     : ""
                 }`}
               >
-                <div className={styles.limitHeader}>
-                  <div>
-                    <span>Saude Meta</span>
-                    <strong>Limite de conversas iniciadas em 24h</strong>
-                  </div>
-                  <strong>{formatarPercentual(limiteMeta.percentual)}</strong>
-                </div>
-
                 <div className={styles.limitGrid}>
                   <div>
-                    <span>Limite atual</span>
+                    <span>Limite diário</span>
                     <strong>{formatarNumero(limiteMeta.limite)}</strong>
                   </div>
+
                   <div>
-                    <span>Usadas/reservadas</span>
+                    <span>Usadas hoje</span>
                     <strong>{formatarNumero(limiteMeta.usados)}</strong>
                   </div>
+
                   <div>
                     <span>Restantes</span>
                     <strong>{formatarNumero(limiteMeta.restantes)}</strong>
                   </div>
                 </div>
 
-                <div className={styles.limitMeta}>
-                  <span>Tier: {limiteMeta.tier || "Nao informado"}</span>
-                  <span>
-                    Qualidade: {integracaoSelecionada?.quality_rating || "Nao informada"}
-                  </span>
-                  <span>
-                    Modo: {integracaoSelecionada?.meta_account_mode || "Nao informado"}
-                  </span>
+                <div className={styles.integrationInfoGrid}>
+                  <div className={styles.integrationInfoItem}>
+                    <span>Nome verificado:</span>
+                    <strong>{integracaoSelecionada?.verified_name || nomePerfil}</strong>
+                  </div>
+
+                  <div className={styles.integrationInfoItem}>
+                    <span>Administrador:</span>
+                    <strong>{administrador?.nome || "Não informado"}</strong>
+                  </div>
+
+                  <div className={styles.integrationInfoItem}>
+                    <span>Qualidade do número:</span>
+                    <strong className={`${styles.qualityBadge} ${qualidadeNumero.classe}`}>
+                      <i />
+                      {qualidadeNumero.texto}
+                    </strong>
+                  </div>
+
+                  <div className={styles.integrationInfoItem}>
+                    <span>Data início:</span>
+                    <strong>
+                      {formatarData(integracaoSelecionada?.setup_completed_at)}
+                    </strong>
+                  </div>
                 </div>
               </div>
             )}
@@ -949,7 +1123,13 @@ export default function WhatsappPerfilPage() {
               <button
                   type="submit"
                   className={styles.saveButton}
-                  disabled={salvando || carregando || !integracaoId || integracaoBloqueada}
+                  disabled={
+                    salvando ||
+                    carregando ||
+                    !integracaoId ||
+                    integracaoBloqueada ||
+                    !haAlteracoesPerfil
+                  }
               >
                   {salvando ? "Salvando..." : "Salvar alterações"}
               </button>
@@ -1162,8 +1342,13 @@ export default function WhatsappPerfilPage() {
                 conexão serão removidos ou cancelados.
               </li>
               <li>
+                Fluxos que usam esses templates serão pausados. A seleção do
+                template e suas variáveis serão limpas nos blocos afetados.
+              </li>
+              <li>
                 Conversas, contatos, rastreamentos e logs já existentes serão
-                preservados, mas ficarão sem vínculo com a conexão removida.
+                preservados. As conversas serão vinculadas novamente se o mesmo
+                número for reconectado.
               </li>
               <li>
                 A conta, o número e a WABA continuarão existindo na Meta. A

@@ -11,9 +11,11 @@ import {
   Power,
   RefreshCw,
   Route,
+  SlidersHorizontal,
 } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { obterResultadoFluxoEventoManual } from "@/lib/rastreamento/eventos-manuais";
 import styles from "./rastreamento.module.css";
 
 type Aba = "origens" | "campanhas" | "links" | "eventos";
@@ -60,6 +62,7 @@ type Evento = {
   ocorrido_em: string;
   metadata_json?: EventoMetadata | string | null;
   contatos?: { id: string; nome: string | null; telefone: string } | null;
+  conversa_protocolos?: { id: string; protocolo: string | null } | null;
   rastreamento_origens?: { id: string; nome: string } | null;
   rastreamento_campanhas?: { id: string; nome: string } | null;
   rastreamento_links?: { id: string; nome: string; slug: string } | null;
@@ -73,6 +76,7 @@ type EventoMetadata = {
   meta_source_id?: string | null;
   meta_source_type?: string | null;
   meta_headline?: string | null;
+  protocolo?: string | null;
 };
 
 type IntegracaoWhatsapp = {
@@ -113,6 +117,17 @@ const EVENTOS_MANUAIS = [
 ];
 
 const EVENTOS_POR_PAGINA = 10;
+type ResultadoFluxoValor = "positivo" | "negativo" | "neutro" | "incompleto";
+
+const RESULTADOS_FLUXO: Array<{
+  value: ResultadoFluxoValor;
+  label: string;
+}> = [
+  { value: "positivo", label: "Positivo" },
+  { value: "negativo", label: "Negativo" },
+  { value: "neutro", label: "Neutro" },
+  { value: "incompleto", label: "Incompleto" },
+];
 
 function eventoManualValido(tipo: string) {
   return EVENTOS_MANUAIS.some((evento) => evento.value === tipo);
@@ -166,25 +181,92 @@ function obterMetadataEvento(evento: Evento): EventoMetadata {
 
 function obterResultadoFluxo(evento: Evento) {
   const metadata = obterMetadataEvento(evento);
-  const resultado = String(metadata.resultado_fluxo || "").toLowerCase();
+  const resultado = String(
+    metadata.resultado_fluxo ||
+      (evento.origem_registro === "manual"
+        ? obterResultadoFluxoEventoManual(evento.tipo)
+        : "") ||
+      ""
+  ).toLowerCase();
 
   if (resultado === "positivo") {
-    return { label: "Positivo", className: styles.eventResultPositive };
+    return {
+      value: "positivo" as const,
+      label: "Positivo",
+      className: styles.eventResultPositive,
+    };
   }
 
   if (resultado === "negativo") {
-    return { label: "Negativo", className: styles.eventResultNegative };
+    return {
+      value: "negativo" as const,
+      label: "Negativo",
+      className: styles.eventResultNegative,
+    };
   }
 
   if (resultado === "neutro") {
-    return { label: "Neutro", className: styles.eventResultNeutral };
+    return {
+      value: "neutro" as const,
+      label: "Neutro",
+      className: styles.eventResultNeutral,
+    };
   }
 
   if (evento.tipo === "fluxo_incompleto_timeout") {
-    return { label: "Incompleto", className: styles.eventResultNeutral };
+    return {
+      value: "incompleto" as const,
+      label: "Incompleto",
+      className: styles.eventResultNeutral,
+    };
   }
 
   return null;
+}
+
+function obterClassificacaoResultado(resultado?: ResultadoFluxoValor) {
+  if (resultado === "positivo") {
+    return {
+      label: "Convertido",
+      className: styles.eventOutcomeConverted,
+    };
+  }
+
+  if (resultado === "negativo" || resultado === "incompleto") {
+    return {
+      label: "Perdido",
+      className: styles.eventOutcomeLost,
+    };
+  }
+
+  if (resultado === "neutro") {
+    return {
+      label: "Qualificado",
+      className: styles.eventOutcomeQualified,
+    };
+  }
+
+  return null;
+}
+
+function obterProtocoloEvento(evento: Evento, metadata = obterMetadataEvento(evento)) {
+  return (
+    String(evento.conversa_protocolos?.protocolo || "").trim() ||
+    String(metadata.protocolo || "").trim() ||
+    null
+  );
+}
+
+function normalizarTextoBusca(valor: string | null | undefined) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function normalizarNumeroBusca(valor: string | null | undefined) {
+  return String(valor || "").replace(/\D/g, "");
 }
 
 function limitarTexto(valor: string, limite: number) {
@@ -286,6 +368,16 @@ export default function RastreamentoPage() {
   const [eventoEdicaoContatoId, setEventoEdicaoContatoId] = useState("");
   const [eventoEdicaoValor, setEventoEdicaoValor] = useState("");
   const [paginaEventos, setPaginaEventos] = useState(1);
+  const [filtroProtocolo, setFiltroProtocolo] = useState("");
+  const [filtroNumero, setFiltroNumero] = useState("");
+  const [filtroNome, setFiltroNome] = useState("");
+  const [filtroResultados, setFiltroResultados] = useState<ResultadoFluxoValor[]>(
+    []
+  );
+  const [filtroDataInicial, setFiltroDataInicial] = useState("");
+  const [filtroDataFinal, setFiltroDataFinal] = useState("");
+  const [filtroValorMinimo, setFiltroValorMinimo] = useState("");
+  const [filtroValorMaximo, setFiltroValorMaximo] = useState("");
 
   const carregarDados = useCallback(async () => {
     setLoading(true);
@@ -303,7 +395,9 @@ export default function RastreamentoPage() {
         fetch("/api/rastreamento/origens", { cache: "no-store" }).then(lerResposta),
         fetch("/api/rastreamento/campanhas", { cache: "no-store" }).then(lerResposta),
         fetch("/api/rastreamento/links", { cache: "no-store" }).then(lerResposta),
-        fetch("/api/rastreamento/eventos", { cache: "no-store" }).then(lerResposta),
+        fetch("/api/rastreamento/eventos?limite=200", { cache: "no-store" }).then(
+          lerResposta
+        ),
         fetch("/api/integracoes-whatsapp/listar", { cache: "no-store" }).then(lerResposta),
         fetch("/api/contatos?limite=500", { cache: "no-store" }).then(lerResposta),
       ]);
@@ -341,27 +435,131 @@ export default function RastreamentoPage() {
     [eventos]
   );
 
+  const eventosFiltrados = useMemo(() => {
+    const protocoloBusca = normalizarTextoBusca(filtroProtocolo);
+    const numeroBusca = normalizarNumeroBusca(filtroNumero);
+    const nomeBusca = normalizarTextoBusca(filtroNome);
+    const dataInicial = filtroDataInicial
+      ? new Date(`${filtroDataInicial}T00:00:00`).getTime()
+      : null;
+    const dataFinal = filtroDataFinal
+      ? new Date(`${filtroDataFinal}T23:59:59.999`).getTime()
+      : null;
+    const valorMinimo =
+      filtroValorMinimo === "" ? null : Number(filtroValorMinimo);
+    const valorMaximo =
+      filtroValorMaximo === "" ? null : Number(filtroValorMaximo);
+
+    return eventos.filter((evento) => {
+      const metadata = obterMetadataEvento(evento);
+      const protocolo = normalizarTextoBusca(
+        obterProtocoloEvento(evento, metadata)
+      );
+      const numero = normalizarNumeroBusca(evento.contatos?.telefone);
+      const nome = normalizarTextoBusca(evento.contatos?.nome);
+      const resultado = obterResultadoFluxo(evento)?.value;
+      const ocorridoEm = new Date(evento.ocorrido_em).getTime();
+      const valor = evento.valor == null ? null : Number(evento.valor);
+
+      if (protocoloBusca && !protocolo.includes(protocoloBusca)) return false;
+      if (numeroBusca && !numero.includes(numeroBusca)) return false;
+      if (nomeBusca && !nome.includes(nomeBusca)) return false;
+      if (
+        filtroResultados.length > 0 &&
+        (!resultado || !filtroResultados.includes(resultado))
+      ) {
+        return false;
+      }
+      if (dataInicial !== null && ocorridoEm < dataInicial) return false;
+      if (dataFinal !== null && ocorridoEm > dataFinal) return false;
+      if (valorMinimo !== null && (valor === null || valor < valorMinimo)) {
+        return false;
+      }
+      if (valorMaximo !== null && (valor === null || valor > valorMaximo)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [
+    eventos,
+    filtroDataFinal,
+    filtroDataInicial,
+    filtroNome,
+    filtroNumero,
+    filtroProtocolo,
+    filtroResultados,
+    filtroValorMaximo,
+    filtroValorMinimo,
+  ]);
+
+  const temFiltrosEventosAtivos =
+    Boolean(
+      filtroProtocolo ||
+        filtroNumero ||
+        filtroNome ||
+        filtroDataInicial ||
+        filtroDataFinal ||
+        filtroValorMinimo ||
+        filtroValorMaximo
+    ) || filtroResultados.length > 0;
+
   const totalPaginasEventos = useMemo(
-    () => Math.max(1, Math.ceil(eventos.length / EVENTOS_POR_PAGINA)),
-    [eventos.length]
+    () => Math.max(1, Math.ceil(eventosFiltrados.length / EVENTOS_POR_PAGINA)),
+    [eventosFiltrados.length]
   );
 
   const paginaEventosAtual = Math.min(paginaEventos, totalPaginasEventos);
   const primeiroEventoExibido =
-    eventos.length === 0 ? 0 : (paginaEventosAtual - 1) * EVENTOS_POR_PAGINA + 1;
+    eventosFiltrados.length === 0
+      ? 0
+      : (paginaEventosAtual - 1) * EVENTOS_POR_PAGINA + 1;
   const ultimoEventoExibido = Math.min(
     paginaEventosAtual * EVENTOS_POR_PAGINA,
-    eventos.length
+    eventosFiltrados.length
   );
   const eventosPaginados = useMemo(() => {
     const inicio = (paginaEventosAtual - 1) * EVENTOS_POR_PAGINA;
 
-    return eventos.slice(inicio, inicio + EVENTOS_POR_PAGINA);
-  }, [eventos, paginaEventosAtual]);
+    return eventosFiltrados.slice(inicio, inicio + EVENTOS_POR_PAGINA);
+  }, [eventosFiltrados, paginaEventosAtual]);
 
   useEffect(() => {
     setPaginaEventos((paginaAtual) => Math.min(paginaAtual, totalPaginasEventos));
   }, [totalPaginasEventos]);
+
+  useEffect(() => {
+    setPaginaEventos(1);
+  }, [
+    filtroDataFinal,
+    filtroDataInicial,
+    filtroNome,
+    filtroNumero,
+    filtroProtocolo,
+    filtroResultados,
+    filtroValorMaximo,
+    filtroValorMinimo,
+  ]);
+
+  function alternarFiltroResultado(resultado: ResultadoFluxoValor) {
+    setFiltroResultados((resultadosAtuais) =>
+      resultadosAtuais.includes(resultado)
+        ? resultadosAtuais.filter((item) => item !== resultado)
+        : [...resultadosAtuais, resultado]
+    );
+  }
+
+  function limparFiltrosEventos() {
+    setFiltroProtocolo("");
+    setFiltroNumero("");
+    setFiltroNome("");
+    setFiltroResultados([]);
+    setFiltroDataInicial("");
+    setFiltroDataFinal("");
+    setFiltroValorMinimo("");
+    setFiltroValorMaximo("");
+    setPaginaEventos(1);
+  }
 
   function limparFeedback() {
     setErro("");
@@ -966,127 +1164,284 @@ export default function RastreamentoPage() {
                   </div>
                 </form>
 
-                <section className={styles.card}>
-                  <div className={styles.sectionHeader}>
-                    <div>
-                      <p className={styles.eyebrow}>Jornada do lead</p>
-                      <h2>Eventos recentes</h2>
-                    </div>
-                    <span className={styles.countBadge}>{eventos.length}</span>
-                  </div>
-                  <div className={styles.eventList}>
-                    {eventosPaginados.length === 0 && (
-                      <div className={styles.emptyState}>
-                        Nenhum evento registrado ainda.
+                <div className={styles.eventJourneyColumn}>
+                  <section className={`${styles.card} ${styles.eventFilterCard}`}>
+                    <div className={styles.sectionHeader}>
+                      <div>
+                        <p className={styles.eyebrow}>Busca na jornada</p>
+                        <h2>Filtrar eventos</h2>
                       </div>
-                    )}
+                      <SlidersHorizontal size={20} />
+                    </div>
 
-                    {eventosPaginados.map((evento) => {
-                      const metadata = obterMetadataEvento(evento);
-                      const resultadoFluxo = obterResultadoFluxo(evento);
-                      const resumoMeta = obterResumoMetaEvento(metadata);
+                    <div className={styles.eventFilterSearchGrid}>
+                      <label className={styles.field}>
+                        <span>Protocolo</span>
+                        <input
+                          value={filtroProtocolo}
+                          onChange={(event) => setFiltroProtocolo(event.target.value)}
+                          placeholder="Buscar protocolo"
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Número do contato</span>
+                        <input
+                          inputMode="tel"
+                          value={filtroNumero}
+                          onChange={(event) => setFiltroNumero(event.target.value)}
+                          placeholder="Ex.: 5511999999999"
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Nome</span>
+                        <input
+                          value={filtroNome}
+                          onChange={(event) => setFiltroNome(event.target.value)}
+                          placeholder="Nome do contato"
+                        />
+                      </label>
+                    </div>
 
-                      return (
-                        <article className={styles.eventItem} key={evento.id}>
-                          <div className={styles.eventIcon}><Activity size={15} /></div>
-                          <div className={styles.eventContent}>
-                            <div className={styles.eventTitleRow}>
-                              <strong>{EVENTOS_LABEL[evento.tipo] || evento.tipo}</strong>
-                              {metadata.fluxo_nome && (
-                                <span className={styles.eventFlowName}>
-                                  {metadata.fluxo_nome}
-                                </span>
-                              )}
-                              {resultadoFluxo && (
-                                <span
-                                  className={`${styles.eventResultBadge} ${resultadoFluxo.className}`}
-                                >
-                                  {resultadoFluxo.label}
-                                </span>
-                              )}
-                              {resumoMeta && (
-                                <span className={styles.eventMetaSourceBadge}>
-                                  Anuncio Meta
-                                </span>
-                              )}
+                    <div className={styles.eventResultFilter}>
+                      <span>Resultado</span>
+                      <div className={styles.eventResultFilterOptions}>
+                        {RESULTADOS_FLUXO.map((resultado) => {
+                          const ativo = filtroResultados.includes(resultado.value);
+
+                          return (
+                            <button
+                              key={resultado.value}
+                              type="button"
+                              className={
+                                ativo
+                                  ? styles.eventResultFilterButtonActive
+                                  : styles.eventResultFilterButton
+                              }
+                              onClick={() => alternarFiltroResultado(resultado.value)}
+                              aria-pressed={ativo}
+                            >
+                              {resultado.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className={styles.eventFilterRangeGrid}>
+                      <label className={styles.field}>
+                        <span>Data inicial</span>
+                        <input
+                          type="date"
+                          value={filtroDataInicial}
+                          onChange={(event) => setFiltroDataInicial(event.target.value)}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Data final</span>
+                        <input
+                          type="date"
+                          value={filtroDataFinal}
+                          min={filtroDataInicial || undefined}
+                          onChange={(event) => setFiltroDataFinal(event.target.value)}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Valor mínimo</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={filtroValorMinimo}
+                          onChange={(event) => setFiltroValorMinimo(event.target.value)}
+                          placeholder="R$ 0,00"
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Valor máximo</span>
+                        <input
+                          type="number"
+                          min={filtroValorMinimo || "0"}
+                          step="0.01"
+                          value={filtroValorMaximo}
+                          onChange={(event) => setFiltroValorMaximo(event.target.value)}
+                          placeholder="R$ 0,00"
+                        />
+                      </label>
+                    </div>
+
+                    <div className={styles.eventFilterFooter}>
+                      <span>
+                        {eventosFiltrados.length} de {eventos.length} evento(s)
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={limparFiltrosEventos}
+                        disabled={!temFiltrosEventosAtivos}
+                      >
+                        Limpar filtros
+                      </button>
+                    </div>
+                  </section>
+
+                  <section className={styles.card}>
+                    <div className={styles.sectionHeader}>
+                      <div>
+                        <p className={styles.eyebrow}>Jornada do lead</p>
+                        <h2>Eventos recentes</h2>
+                      </div>
+                      <span className={styles.countBadge}>
+                        {eventosFiltrados.length}
+                      </span>
+                    </div>
+                    <div className={styles.eventList}>
+                      {eventosPaginados.length === 0 && (
+                        <div className={styles.emptyState}>
+                          {temFiltrosEventosAtivos
+                            ? "Nenhum evento corresponde aos filtros."
+                            : "Nenhum evento registrado ainda."}
+                        </div>
+                      )}
+
+                      {eventosPaginados.map((evento) => {
+                        const metadata = obterMetadataEvento(evento);
+                        const resultadoFluxo = obterResultadoFluxo(evento);
+                        const classificacaoResultado = obterClassificacaoResultado(
+                          resultadoFluxo?.value
+                        );
+                        const resumoMeta = obterResumoMetaEvento(metadata);
+                        const protocolo = obterProtocoloEvento(evento, metadata);
+
+                        return (
+                          <article className={styles.eventItem} key={evento.id}>
+                            <div className={styles.eventIcon}>
+                              <Activity size={15} />
                             </div>
-                            <p>
-                              {evento.contatos?.nome || evento.contatos?.telefone || "Visitante ainda nao identificado"}
-                              {evento.rastreamento_campanhas?.nome ? ` | ${evento.rastreamento_campanhas.nome}` : ""}
-                              {evento.origem_registro === "manual" ? " | Manual" : ""}
-                            </p>
-                            {resumoMeta && (
-                              <p className={styles.eventAdSummary}>
-                                {resumoMeta.detalhe}
-                                {resumoMeta.sourceId
-                                  ? ` | ID anuncio: ${resumoMeta.sourceId}`
+                            <div className={styles.eventContent}>
+                              <div className={styles.eventTitleRow}>
+                                <strong>
+                                  {EVENTOS_LABEL[evento.tipo] || evento.tipo}
+                                </strong>
+                                {metadata.fluxo_nome && (
+                                  <span className={styles.eventFlowName}>
+                                    {metadata.fluxo_nome}
+                                  </span>
+                                )}
+                                {resultadoFluxo && (
+                                  <span
+                                    className={`${styles.eventResultBadge} ${resultadoFluxo.className}`}
+                                  >
+                                    {resultadoFluxo.label}
+                                  </span>
+                                )}
+                                {resumoMeta && (
+                                  <span className={styles.eventMetaSourceBadge}>
+                                    Anuncio Meta
+                                  </span>
+                                )}
+                              </div>
+                              <p>
+                                {evento.contatos?.nome ||
+                                  "Visitante ainda nao identificado"}
+                                {evento.rastreamento_campanhas?.nome
+                                  ? ` | ${evento.rastreamento_campanhas.nome}`
+                                  : ""}
+                                {evento.origem_registro === "manual"
+                                  ? " | Manual"
                                   : ""}
                               </p>
-                            )}
-                          </div>
-                          <div className={styles.eventMeta}>
-                            {formatarValor(evento.valor) && <b>{formatarValor(evento.valor)}</b>}
-                            <span>{formatarData(evento.ocorrido_em)}</span>
-                            {evento.origem_registro === "manual" && (
-                              <div className={styles.eventActions}>
-                                <button
-                                  type="button"
-                                  className={styles.eventActionButton}
-                                  onClick={() => editarEvento(evento)}
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  type="button"
-                                  className={styles.eventActionDangerButton}
-                                  onClick={() => apagarEvento(evento)}
-                                >
-                                  Apagar
-                                </button>
+                              <div className={styles.eventIdentifiers}>
+                                <span>
+                                  <b>Protocolo</b>
+                                  {protocolo || "Não vinculado"}
+                                </span>
+                                <span>
+                                  <b>Número</b>
+                                  {evento.contatos?.telefone || "Não identificado"}
+                                </span>
                               </div>
-                            )}
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-
-                  {eventos.length > EVENTOS_POR_PAGINA && (
-                    <div className={styles.paginationRow}>
-                      <span>
-                        Mostrando {primeiroEventoExibido}-{ultimoEventoExibido} de{" "}
-                        {eventos.length}
-                      </span>
-                      <div className={styles.paginationActions}>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPaginaEventos((paginaAtual) =>
-                              Math.max(1, paginaAtual - 1)
-                            )
-                          }
-                          disabled={paginaEventosAtual === 1}
-                        >
-                          Anterior
-                        </button>
-                        <strong>
-                          Pagina {paginaEventosAtual} de {totalPaginasEventos}
-                        </strong>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPaginaEventos((paginaAtual) =>
-                              Math.min(totalPaginasEventos, paginaAtual + 1)
-                            )
-                          }
-                          disabled={paginaEventosAtual === totalPaginasEventos}
-                        >
-                          Proxima
-                        </button>
-                      </div>
+                              {resumoMeta && (
+                                <p className={styles.eventAdSummary}>
+                                  {resumoMeta.detalhe}
+                                  {resumoMeta.sourceId
+                                    ? ` | ID anuncio: ${resumoMeta.sourceId}`
+                                    : ""}
+                                </p>
+                              )}
+                            </div>
+                            <div className={styles.eventMeta}>
+                              {classificacaoResultado && (
+                                <span
+                                  className={`${styles.eventOutcomeBadge} ${classificacaoResultado.className}`}
+                                >
+                                  {classificacaoResultado.label}
+                                </span>
+                              )}
+                              {formatarValor(evento.valor) && (
+                                <b>{formatarValor(evento.valor)}</b>
+                              )}
+                              <span>{formatarData(evento.ocorrido_em)}</span>
+                              {evento.origem_registro === "manual" && (
+                                <div className={styles.eventActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.eventActionButton}
+                                    onClick={() => editarEvento(evento)}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.eventActionDangerButton}
+                                    onClick={() => apagarEvento(evento)}
+                                  >
+                                    Apagar
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
                     </div>
-                  )}
-                </section>
+
+                    {eventosFiltrados.length > EVENTOS_POR_PAGINA && (
+                      <div className={styles.paginationRow}>
+                        <span>
+                          Mostrando {primeiroEventoExibido}-{ultimoEventoExibido} de{" "}
+                          {eventosFiltrados.length}
+                        </span>
+                        <div className={styles.paginationActions}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPaginaEventos((paginaAtual) =>
+                                Math.max(1, paginaAtual - 1)
+                              )
+                            }
+                            disabled={paginaEventosAtual === 1}
+                          >
+                            Anterior
+                          </button>
+                          <strong>
+                            Pagina {paginaEventosAtual} de {totalPaginasEventos}
+                          </strong>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPaginaEventos((paginaAtual) =>
+                                Math.min(totalPaginasEventos, paginaAtual + 1)
+                              )
+                            }
+                            disabled={paginaEventosAtual === totalPaginasEventos}
+                          >
+                            Proxima
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                </div>
               </section>
             )}
           </>

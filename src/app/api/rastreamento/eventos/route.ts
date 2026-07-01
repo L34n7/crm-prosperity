@@ -1,18 +1,10 @@
 import { NextResponse } from "next/server";
 import { obterAcessoRastreamento } from "@/lib/rastreamento/api";
+import {
+  obterResultadoFluxoEventoManual,
+  tipoEventoManualValido,
+} from "@/lib/rastreamento/eventos-manuais";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-
-const TIPOS_MANUAIS_PERMITIDOS = [
-  "venda_realizada",
-  "venda_perdida",
-  "lead_qualificado",
-  "agendamento_criado",
-  "agendamento_confirmado",
-];
-
-function tipoManualValido(tipo: string) {
-  return TIPOS_MANUAIS_PERMITIDOS.includes(tipo);
-}
 
 function normalizarValorInformado(valor: unknown) {
   if (valor === "" || valor === null || valor === undefined) {
@@ -59,6 +51,10 @@ export async function GET(request: Request) {
         telefone
       ),
       conversas ( id ),
+      conversa_protocolos!rastreamento_eventos_conversa_protocolo_id_fkey (
+        id,
+        protocolo
+      ),
       rastreamento_origens ( id, nome ),
       rastreamento_campanhas ( id, nome ),
       rastreamento_links ( id, nome, slug )
@@ -111,7 +107,7 @@ export async function POST(request: Request) {
   const observacao = String(body?.observacao || "").trim() || null;
   const valorInformado = normalizarValorInformado(body?.valor);
 
-  if (!tipoManualValido(tipo)) {
+  if (!tipoEventoManualValido(tipo)) {
     return NextResponse.json(
       { ok: false, error: "Tipo de evento manual invalido." },
       { status: 400 }
@@ -205,6 +201,7 @@ export async function POST(request: Request) {
       conversa_protocolo_id: protocolo?.id || null,
       protocolo: protocolo?.protocolo || null,
       observacao,
+      resultado_fluxo: obterResultadoFluxoEventoManual(tipo),
     },
     p_created_by: acesso.usuario.id,
   });

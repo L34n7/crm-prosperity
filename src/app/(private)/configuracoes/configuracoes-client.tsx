@@ -267,9 +267,9 @@ export default function ConfiguracoesClient() {
                     </p>
                     {trocaDeGrupo ? (
                       <p className={styles.groupWarning}>
-                        Esta mudança troca o grupo da empresa. Os cadastros de
-                        pessoas serão preservados e, ao entrar em Saúde,
-                        preparados automaticamente como pacientes.
+                        Esta mudança troca os modulos da empresa. Os cadastros de
+                        pessoas serão preservados e ao trocar de nicho os campos serão
+                        preparados automaticamente de acordo com nicho.
                       </p>
                     ) : null}
                     <div className={styles.confirmActions}>
@@ -314,9 +314,7 @@ export default function ConfiguracoesClient() {
               <div>
                 <strong>O que muda?</strong>
                 <p>
-                  Comércio e imobiliária usam “Clientes”. Medicina e
-                  odontologia usam “Pacientes”. Prontuário, odontograma e
-                  imóveis aparecem somente nos nichos correspondentes.
+                  Ao mudar o nicho, o sistema adapta a experiência para o segmento escolhido, exibindo apenas os recursos mais relevantes para sua operação.
                 </p>
               </div>
             </section>

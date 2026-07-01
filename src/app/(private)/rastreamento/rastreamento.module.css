@@ -183,6 +183,93 @@
   border-radius: 20px;
 }
 
+.eventJourneyColumn {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.eventFilterCard {
+  padding-bottom: 16px;
+}
+
+.eventFilterSearchGrid,
+.eventFilterRangeGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.eventFilterSearchGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.eventFilterRangeGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.eventResultFilter {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.eventResultFilter > span {
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.eventResultFilterOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.eventResultFilterButton,
+.eventResultFilterButtonActive {
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  transition: 0.2s ease;
+}
+
+.eventResultFilterButton {
+  border: 1px solid var(--crm-border-strong);
+  color: var(--crm-text-muted);
+  background: var(--crm-surface);
+}
+
+.eventResultFilterButton:hover {
+  color: var(--crm-text);
+  background: var(--crm-surface-soft);
+}
+
+.eventResultFilterButtonActive {
+  border: 1px solid var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+  background: var(--crm-primary-strong);
+}
+
+.eventFilterFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 3px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.eventFilterFooter .secondaryButton:disabled {
+  cursor: not-allowed;
+}
+
 .sectionHeader,
 .linkTop {
   display: flex;
@@ -481,6 +568,35 @@
   background: var(--crm-surface-soft);
 }
 
+.eventOutcomeBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 23px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.eventOutcomeConverted {
+  border: 1px solid var(--crm-success-border);
+  color: var(--crm-success-text);
+  background: var(--crm-success-bg);
+}
+
+.eventOutcomeLost {
+  border: 1px solid var(--crm-danger-border);
+  color: var(--crm-danger-text);
+  background: var(--crm-danger-bg);
+}
+
+.eventOutcomeQualified {
+  border: 1px solid var(--crm-border-strong);
+  color: var(--crm-text);
+  background: var(--crm-surface-muted);
+}
+
 .eventMetaSourceBadge {
   display: inline-flex;
   align-items: center;
@@ -496,6 +612,29 @@
 
 .eventAdSummary {
   max-width: 620px;
+}
+
+.eventIdentifiers {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 7px;
+}
+
+.eventIdentifiers span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--crm-text-muted);
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.eventIdentifiers b {
+  color: var(--crm-text);
+  font-size: 11px;
 }
 
 .eventIcon {
@@ -699,6 +838,12 @@
   }
 }
 
+@media (max-width: 1280px) {
+  .eventFilterRangeGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
   .pageContent {
     padding: 10px 14px 18px;
@@ -718,7 +863,9 @@
   }
 
   .summaryGrid,
-  .formGrid {
+  .formGrid,
+  .eventFilterSearchGrid,
+  .eventFilterRangeGrid {
     grid-template-columns: 1fr;
   }
 
@@ -731,6 +878,15 @@
     width: 100%;
     align-items: flex-start;
     margin-left: 43px;
+  }
+
+  .eventFilterFooter {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .eventFilterFooter .secondaryButton {
+    width: 100%;
   }
 
   .paginationRow {
@@ -855,4 +1011,3 @@
     min-height: 38px;
   }
 }
-

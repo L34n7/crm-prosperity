@@ -92,6 +92,10 @@
   border: 1px solid var(--crm-border-strong);
   background: var(--crm-surface);
   color: var(--crm-text-strong);
+  text-decoration: none;
+  white-space: nowrap;
+  appearance: none;
+  font-size: 14px;
 }
 
 .primaryButton:hover,
@@ -101,6 +105,8 @@
 
 .secondaryButton:hover {
   background: var(--crm-surface-soft);
+  color: var(--crm-text-strong);
+  text-decoration: none;
 }
 
 .primaryButton:disabled,
@@ -163,6 +169,7 @@
   display: flex;
   flex-direction: column;
   gap: 9px;
+  margin-top: 10px;
 }
 
 .listItem {
@@ -192,6 +199,7 @@
 .listItem span,
 .listItem small {
   color: var(--crm-text-muted);
+  font-size: 13px;
 }
 
 .badge,
@@ -321,5 +329,9 @@
 
   .fullField {
     grid-column: auto;
+  }
+
+  .secondaryButton {
+    width: 100%;
   }
 }

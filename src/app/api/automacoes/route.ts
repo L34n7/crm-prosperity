@@ -207,6 +207,99 @@ async function buscarBloqueioWhatsappMeta(empresaId: string) {
   });
 }
 
+function configuracaoComoObjeto(valor: unknown): Record<string, unknown> {
+  return valor && typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as Record<string, unknown>)
+    : {};
+}
+
+function configuracaoMarcada(valor: unknown) {
+  return valor === true || valor === "true" || valor === 1 || valor === "1";
+}
+
+async function validarTemplatesWhatsappFluxo(params: {
+  empresaId: string;
+  fluxoId: string;
+}) {
+  const { data: nos, error: nosError } = await supabaseAdmin
+    .from("automacao_nos")
+    .select("tipo_no, titulo, configuracao_json")
+    .eq("empresa_id", params.empresaId)
+    .eq("fluxo_id", params.fluxoId)
+    .in("tipo_no", ["agendar_disparo", "agenda_criar_agendamento"]);
+
+  if (nosError) {
+    throw new Error(
+      `Erro ao validar templates de lembrete: ${nosError.message}`
+    );
+  }
+
+  const mensagensPorTemplateId = new Map<string, string>();
+
+  for (const no of nos || []) {
+    const config = configuracaoComoObjeto(no.configuracao_json);
+
+    if (no.tipo_no === "agendar_disparo") {
+      const templateId = String(config.template_id || "").trim();
+      const mensagem =
+        `O bloco "${no.titulo || "Agendar disparo"}" precisa ter um template WhatsApp.`;
+
+      if (!templateId) return mensagem;
+
+      mensagensPorTemplateId.set(templateId, mensagem);
+      continue;
+    }
+
+    const lembreteAtivo = configuracaoMarcada(
+      config.lembrete_agendamento_ativo
+    );
+    const lembreteWhatsapp = configuracaoMarcada(
+      config.lembrete_agendamento_whatsapp
+    );
+
+    if (!lembreteAtivo || !lembreteWhatsapp) continue;
+
+    const templateId = String(
+      config.lembrete_agendamento_template_id || ""
+    ).trim();
+
+    if (!templateId) {
+      return "Selecione um template WhatsApp para o lembrete.";
+    }
+
+    mensagensPorTemplateId.set(
+      templateId,
+      "Selecione um template WhatsApp para o lembrete."
+    );
+  }
+
+  if (mensagensPorTemplateId.size === 0) return null;
+
+  const { data: templates, error: templatesError } = await supabaseAdmin
+    .from("whatsapp_templates")
+    .select("id")
+    .eq("empresa_id", params.empresaId)
+    .in("id", Array.from(mensagensPorTemplateId.keys()));
+
+  if (templatesError) {
+    throw new Error(
+      `Erro ao validar templates WhatsApp: ${templatesError.message}`
+    );
+  }
+
+  const templateIdsEncontrados = new Set(
+    (templates || []).map((template) => String(template.id))
+  );
+  const templateAusente = Array.from(mensagensPorTemplateId.keys()).find(
+    (templateId) => !templateIdsEncontrados.has(templateId)
+  );
+
+  return templateAusente
+    ? mensagensPorTemplateId.get(templateAusente) ||
+        "Selecione um template WhatsApp."
+    : null;
+}
+
 function textoNormalizado(valor: unknown) {
   return String(valor || "").trim().toLowerCase();
 }
@@ -778,6 +871,22 @@ export async function PATCH(req: NextRequest) {
       ).trim();
 
       if (canalFinal.toLowerCase() === "whatsapp") {
+        const erroTemplateWhatsapp = await validarTemplatesWhatsappFluxo({
+          empresaId: usuario.empresa_id,
+          fluxoId: id,
+        });
+
+        if (erroTemplateWhatsapp) {
+          return NextResponse.json(
+            {
+              ok: false,
+              code: "TEMPLATE_WHATSAPP_OBRIGATORIO",
+              error: erroTemplateWhatsapp,
+            },
+            { status: 400 }
+          );
+        }
+
         const bloqueioMeta = await buscarBloqueioWhatsappMeta(usuario.empresa_id);
 
         if (bloqueioMeta) {

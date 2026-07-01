@@ -38,11 +38,11 @@ type IntegracaoWhatsapp = {
   meta_messaging_limit: number | null;
   meta_account_mode: string | null;
   meta_saude_ultima_verificacao_em: string | null;
+  setup_completed_at: string | null;
   onboarding_status: string | null;
   onboarding_erro: string | null;
   config_json: ConfigJson;
   token_ref: string | null;
-
 };
 
 function extrairStringConfig(
@@ -94,7 +94,7 @@ async function buscarIntegracao(
   let query = supabase
     .from("integracoes_whatsapp")
     .select(
-      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, phone_number_status, quality_rating, meta_messaging_limit_tier, meta_messaging_limit, meta_account_mode, meta_saude_ultima_verificacao_em, onboarding_status, onboarding_erro, config_json, token_ref"
+      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, phone_number_status, quality_rating, meta_messaging_limit_tier, meta_messaging_limit, meta_account_mode, meta_saude_ultima_verificacao_em, setup_completed_at, onboarding_status, onboarding_erro, config_json, token_ref"
     )
     .eq("empresa_id", empresaId)
     .eq("provider", "meta_official")
@@ -113,6 +113,32 @@ async function buscarIntegracao(
   return (data || []) as IntegracaoWhatsapp[];
 }
 
+async function buscarAdministradorEmpresa(empresaId: string) {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select("id, nome, email, created_at")
+    .eq("empresa_id", empresaId)
+    .eq("status", "ativo")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[WHATSAPP PERFIL ADMIN ERROR]", error);
+    return null;
+  }
+
+  return data
+    ? {
+        id: data.id,
+        nome: data.nome || data.email || "Administrador",
+        email: data.email || null,
+      }
+    : null;
+}
+
 type PhoneInfoMeta = {
   verified_name?: string;
   display_phone_number?: string;
@@ -122,6 +148,24 @@ type PhoneInfoMeta = {
   quality_rating?: string;
   messaging_limit_tier?: string;
   account_mode?: string;
+};
+
+type BusinessProfileMeta = {
+  about?: string | null;
+  address?: string | null;
+  description?: string | null;
+  email?: string | null;
+  websites?: string[] | null;
+  vertical?: string | null;
+};
+
+type BusinessProfileUpdate = {
+  about: string;
+  address: string;
+  description: string;
+  email: string;
+  websites: string[];
+  vertical: string;
 };
 
 class MetaApiError extends Error {
@@ -145,6 +189,33 @@ function isErroMetaTemporario(body: MetaErrorBody) {
   const code = Number(body?.error?.code);
 
   return code === 131000 && Boolean(message?.includes("something went wrong"));
+}
+
+function normalizarTextoPerfil(valor: unknown) {
+  return typeof valor === "string" ? valor.trim() : "";
+}
+
+function normalizarWebsitesPerfil(valor: unknown) {
+  return Array.isArray(valor)
+    ? valor
+        .map((item) => normalizarTextoPerfil(item))
+        .filter(Boolean)
+    : [];
+}
+
+function perfilMetaCorrespondeAoPayload(
+  perfil: BusinessProfileMeta,
+  payload: BusinessProfileUpdate
+) {
+  return (
+    normalizarTextoPerfil(perfil.about) === payload.about &&
+    normalizarTextoPerfil(perfil.address) === payload.address &&
+    normalizarTextoPerfil(perfil.description) === payload.description &&
+    normalizarTextoPerfil(perfil.email) === payload.email &&
+    normalizarTextoPerfil(perfil.vertical) === payload.vertical &&
+    JSON.stringify(normalizarWebsitesPerfil(perfil.websites)) ===
+      JSON.stringify(payload.websites)
+  );
 }
 
 function extrairMensagemMeta(body: MetaErrorBody, fallback: string) {
@@ -224,6 +295,8 @@ function montarIntegracaoResposta(
       overrides.meta_saude_ultima_verificacao_em ??
       integracao.meta_saude_ultima_verificacao_em ??
       null,
+    setup_completed_at:
+      overrides.setup_completed_at ?? integracao.setup_completed_at ?? null,
     onboarding_erro:
       overrides.onboarding_erro ?? integracao.onboarding_erro ?? null,
   };
@@ -663,6 +736,8 @@ export async function GET(req: NextRequest) {
       integracao: integracaoResumoLimite,
     });
 
+    const administrador = await buscarAdministradorEmpresa(empresaId);
+
     return NextResponse.json({
       ok: true,
       diagnostico: null,
@@ -675,6 +750,7 @@ export async function GET(req: NextRequest) {
         integracaoSelecionada,
         overridesResposta
       ),
+      administrador,
       limite_meta: limiteMeta,
       perfil,
     });
@@ -799,6 +875,55 @@ async function marcarIntegracaoSincronizada(
     .eq("empresa_id", empresaId);
 }
 
+async function confirmarAtualizacaoPerfil(params: {
+  phoneNumberId: string;
+  token: string;
+  payload: BusinessProfileUpdate;
+}) {
+  const { phoneNumberId, token, payload } = params;
+  const fields = "about,address,description,email,websites,vertical";
+
+  try {
+    const metaRes = await fetch(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/whatsapp_business_profile?fields=${encodeURIComponent(
+        fields
+      )}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      }
+    );
+
+    const metaJson = await metaRes.json();
+
+    if (!metaRes.ok) {
+      console.warn(
+        "[WHATSAPP PERFIL PATCH CONFIRMATION ERROR]",
+        metaJson
+      );
+      return false;
+    }
+
+    const perfil = Array.isArray(metaJson?.data)
+      ? metaJson.data[0]
+      : metaJson;
+
+    return Boolean(
+      perfil &&
+        perfilMetaCorrespondeAoPayload(
+          perfil as BusinessProfileMeta,
+          payload
+        )
+    );
+  } catch (error) {
+    console.warn("[WHATSAPP PERFIL PATCH CONFIRMATION ERROR]", error);
+    return false;
+  }
+}
+
 export async function PATCH(req: NextRequest) {
   try {
     const contexto = await getUsuarioContexto();
@@ -850,14 +975,17 @@ export async function PATCH(req: NextRequest) {
 
     const websites = [website1, website2].filter(Boolean);
 
-    const payload: Record<string, unknown> = {
-      messaging_product: "whatsapp",
+    const dadosPerfil: BusinessProfileUpdate = {
       about,
       address,
       description,
       email,
       websites,
       vertical,
+    };
+    const payload: Record<string, unknown> = {
+      messaging_product: "whatsapp",
+      ...dadosPerfil,
     };
 
     let atualizacaoComFoto = false;
@@ -902,20 +1030,46 @@ export async function PATCH(req: NextRequest) {
     const metaJson = await metaRes.json();
 
     if (!metaRes.ok) {
-      if (atualizacaoComFoto && isErroMetaTemporario(metaJson)) {
+      if (isErroMetaTemporario(metaJson)) {
         console.warn("[WHATSAPP PERFIL PATCH META TEMPORARY ERROR]", metaJson);
 
-        await marcarIntegracaoSincronizada(integracao.id, empresaId);
+        if (atualizacaoComFoto) {
+          await marcarIntegracaoSincronizada(integracao.id, empresaId);
 
-        return NextResponse.json(
-          {
+          return NextResponse.json(
+            {
+              ok: true,
+              pending: true,
+              message:
+                "A Meta recebeu a foto. A imagem pode levar alguns segundos para aparecer no WhatsApp.",
+              meta: metaJson,
+            },
+            { status: 202 }
+          );
+        }
+
+        const atualizacaoConfirmada = await confirmarAtualizacaoPerfil({
+          phoneNumberId: integracao.phone_number_id,
+          token,
+          payload: dadosPerfil,
+        });
+
+        if (atualizacaoConfirmada) {
+          await marcarIntegracaoSincronizada(integracao.id, empresaId);
+
+          return NextResponse.json({
             ok: true,
-            pending: true,
             message:
-              "A Meta recebeu a foto. A imagem pode levar alguns segundos para aparecer no WhatsApp.",
+              "Perfil atualizado com sucesso.",
             meta: metaJson,
-          },
-          { status: 202 }
+            confirmed_after_temporary_error: true,
+          });
+        }
+
+        return jsonErro(
+          "A Meta retornou um erro temporário ao atualizar o perfil. Tente novamente em alguns instantes.",
+          503,
+          metaJson
         );
       }
 

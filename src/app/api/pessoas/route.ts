@@ -179,7 +179,8 @@ export async function GET(request: Request) {
 
         return {
           ...dadosPessoa,
-          paciente: relacaoUnica(pacientes),
+          paciente:
+            nicho.grupo === "saude" ? relacaoUnica(pacientes) : null,
         };
       }),
       paginacao: {

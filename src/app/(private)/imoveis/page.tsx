@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
 import { useHeaderUser } from "@/components/header-user-context";
-import styles from "../modulos-nicho.module.css";
+import styles from "./imoveis.module.css";
 import IntegracoesImobiliarias, {
   type PublicacaoImovelResumo,
 } from "./IntegracoesImobiliarias";
