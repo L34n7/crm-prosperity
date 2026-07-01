@@ -46,6 +46,23 @@ function montarNomeConexaoPadrao(nomeEmpresa?: string | null) {
   return "WhatsApp principal";
 }
 
+function erroDeRegistroDuplicado(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+
+  const erro = error as {
+    code?: string;
+    message?: string;
+    details?: string;
+  };
+
+  return (
+    erro.code === "23505" ||
+    `${erro.message || ""} ${erro.details || ""}`.includes(
+      "integracoes_whatsapp_numero_key"
+    )
+  );
+}
+
 export async function GET() {
   try {
     const auth = await getUsuarioLogado();
@@ -118,6 +135,7 @@ export async function GET() {
     }
 
     const agora = new Date().toISOString();
+    const numeroPendente = `pendente_${usuario.empresa_id}`;
 
     // 🆕 Cria integração inicial
     const { data: novaIntegracao, error: createError } =
@@ -126,7 +144,7 @@ export async function GET() {
         .insert({
           empresa_id: usuario.empresa_id,
           nome_conexao: montarNomeConexaoPadrao(empresa.nome_fantasia),
-          numero: `pendente_${usuario.empresa_id}`,
+          numero: numeroPendente,
           provider: "meta_official",
           status: "pendente",
           webhook_verificado: false,
@@ -147,8 +165,51 @@ export async function GET() {
         .single();
 
     if (createError) {
+      if (erroDeRegistroDuplicado(createError)) {
+        const {
+          data: integracaoCriadaEmParalelo,
+          error: buscarConcorrenteError,
+        } = await supabaseAdmin
+          .from("integracoes_whatsapp")
+          .select("*")
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("provider", "meta_official")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!buscarConcorrenteError && integracaoCriadaEmParalelo) {
+          return NextResponse.json({
+            ok: true,
+            created: false,
+            concurrent_creation: true,
+            usuario: {
+              id: usuario.id,
+              nome: usuario.nome,
+              email: usuario.email,
+            },
+            empresa: {
+              id: empresa.id,
+              nome:
+                empresa.nome_fantasia ||
+                empresa.razao_social ||
+                "sua empresa",
+            },
+            integracao: integracaoCriadaEmParalelo,
+          });
+        }
+      }
+
+      console.error(
+        "[INTEGRACAO WHATSAPP] Erro ao criar integração inicial:",
+        createError
+      );
+
       return NextResponse.json(
-        { ok: false, error: createError.message },
+        {
+          ok: false,
+          error: "Não foi possível iniciar a configuração do WhatsApp.",
+        },
         { status: 500 }
       );
     }

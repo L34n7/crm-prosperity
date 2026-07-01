@@ -62,6 +62,15 @@ type PerfilOnboarding = {
   nomeEmpresa: string;
 };
 
+type Nicho = {
+  id: string;
+  codigo: string;
+  nome: string;
+  grupo: "comercial" | "saude";
+  rotulo_cadastro_singular: string;
+  rotulo_cadastro_plural: string;
+};
+
 type TemaVisual = "light" | "dark";
 
 type Etapa = {
@@ -184,6 +193,11 @@ export default function ConfigurarAmbientePage() {
   const [erroPin, setErroPin] = useState("");
 
   const [etapaQuiz, setEtapaQuiz] = useState(0);
+  const [nichos, setNichos] = useState<Nicho[]>([]);
+  const [nichoSelecionadoId, setNichoSelecionadoId] = useState("");
+  const [carregandoNichos, setCarregandoNichos] = useState(true);
+  const [salvandoNicho, setSalvandoNicho] = useState(false);
+  const [erroNicho, setErroNicho] = useState("");
   const [perfilOnboarding, setPerfilOnboarding] =
     useState<PerfilOnboarding>({
       nomeUsuario: "usuário",
@@ -344,12 +358,26 @@ export default function ConfigurarAmbientePage() {
 
       setErro(null);
 
-      const response = await fetch("/api/integracoes-whatsapp", {
+      let response = await fetch("/api/integracoes-whatsapp", {
         method: "GET",
         cache: "no-store",
       });
 
-      const data: ApiResponse = await response.json();
+      let data: ApiResponse = await response.json();
+
+      const conflitoDeCriacaoConcorrente =
+        !response.ok &&
+        String(data.error || "").includes(
+          "integracoes_whatsapp_numero_key"
+        );
+
+      if (conflitoDeCriacaoConcorrente) {
+        response = await fetch("/api/integracoes-whatsapp", {
+          method: "GET",
+          cache: "no-store",
+        });
+        data = await response.json();
+      }
 
       if (!response.ok || !data.ok || !data.integracao) {
         throw new Error(data.error || "Erro ao carregar integração.");
@@ -562,7 +590,7 @@ async function iniciarEmbeddedSignup() {
             }
 
             await carregarIntegracao(false);
-            setEtapaQuiz(1);
+            setEtapaQuiz(2);
             mostrarSucessoToast("Conta Meta conectada com sucesso.");
           } catch (error) {
             console.error("[EMBEDDED SIGNUP CALLBACK ERROR]", error);
@@ -826,8 +854,72 @@ async function carregarPerfilOnboarding() {
   }
 }
 
+async function carregarNichos() {
+  try {
+    setCarregandoNichos(true);
+    setErroNicho("");
+
+    const response = await fetch("/api/configuracoes/nicho", {
+      method: "GET",
+      cache: "no-store",
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erro ao carregar os segmentos.");
+    }
+
+    setNichos(data.nichos || []);
+  } catch (error) {
+    setErroNicho(
+      error instanceof Error
+        ? error.message
+        : "Erro ao carregar os segmentos."
+    );
+  } finally {
+    setCarregandoNichos(false);
+  }
+}
+
+async function salvarNichoEAvancar() {
+  if (!nichoSelecionadoId) return;
+
+  try {
+    setSalvandoNicho(true);
+    setErroNicho("");
+
+    const response = await fetch("/api/configuracoes/nicho", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ nicho_id: nichoSelecionadoId }),
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erro ao salvar o segmento.");
+    }
+
+    mostrarSucessoToast("Segmento configurado com sucesso.");
+    setEtapaQuiz(2);
+    router.refresh();
+  } catch (error) {
+    const mensagem =
+      error instanceof Error
+        ? error.message
+        : "Erro ao salvar o segmento.";
+
+    setErroNicho(mensagem);
+    mostrarErroToast(mensagem);
+  } finally {
+    setSalvandoNicho(false);
+  }
+}
+
   useEffect(() => {
     carregarPerfilOnboarding();
+    carregarNichos();
     carregarIntegracao(true);
   }, []);
 
@@ -839,7 +931,7 @@ async function carregarPerfilOnboarding() {
 
       if (event.data?.ok) {
         carregarIntegracao(false);
-        setEtapaQuiz(1);
+        setEtapaQuiz(2);
         return;
       }
 
@@ -918,10 +1010,10 @@ async function carregarPerfilOnboarding() {
     numeroRegistrado &&
     webhookConfigurado;
 
-  const progressoQuiz = Math.round((etapaQuiz / 3) * 100);
+  const progressoQuiz = Math.round((etapaQuiz / 4) * 100);
 
   function avancarEtapaQuiz() {
-    setEtapaQuiz((etapaAtual) => Math.min(etapaAtual + 1, 3));
+    setEtapaQuiz((etapaAtual) => Math.min(etapaAtual + 1, 4));
   }
 
   function voltarEtapaQuiz() {
@@ -929,11 +1021,11 @@ async function carregarPerfilOnboarding() {
   }
   
   const textoBotaoAtualizarStatus =
-  etapaQuiz === 1
+  etapaQuiz === 2
     ? "Verificar conexão"
-    : etapaQuiz === 2
-    ? "Verificar número"
     : etapaQuiz === 3
+    ? "Verificar número"
+    : etapaQuiz === 4
     ? "Verificar ambiente"
     : "Atualizar status";
 
@@ -1058,13 +1150,14 @@ return (
 
                   <h2 className={styles.quizTitle}>
                     {etapaQuiz === 0 && "Configuração do ambiente oficial do WhatsApp"}
-                    {etapaQuiz === 1 && "Conectar conta Meta"}
-                    {etapaQuiz === 2 && "Ativar número do WhatsApp"}
-                    {etapaQuiz === 3 && "Finalizar ambiente oficial"}
+                    {etapaQuiz === 1 && "Segmento da empresa"}
+                    {etapaQuiz === 2 && "Conectar conta Meta"}
+                    {etapaQuiz === 3 && "Ativar número do WhatsApp"}
+                    {etapaQuiz === 4 && "Finalizar ambiente oficial"}
                   </h2>
                 </div>
 
-                {etapaQuiz > 0 && (
+                {etapaQuiz > 1 && (
                   <button
                     type="button"
                     className={styles.refreshStatusButton}
@@ -1081,7 +1174,7 @@ return (
                   <span>
                     {etapaQuiz === 0
                       ? "Introdução"
-                      : `Etapa ${etapaQuiz} de 3`}
+                      : `Etapa ${etapaQuiz} de 4`}
                   </span>
                   <span>{progressoQuiz}%</span>
                 </div>
@@ -1108,9 +1201,9 @@ return (
                   </p>
 
                   <p className={styles.quizText}>
-                    Em poucos passos, você vai conectar a conta Meta, ativar o
-                    número oficial do WhatsApp, configurar o webhook e concluir
-                    a ativação do ambiente.
+                    Em poucos passos, você vai selecionar o segmento da empresa,
+                    conectar a conta Meta, ativar o número oficial do WhatsApp e
+                    concluir a configuração do ambiente.
                   </p>
 
                   <div className={styles.quizActions}>
@@ -1127,12 +1220,83 @@ return (
 
               {etapaQuiz === 1 && (
                 <div className={styles.quizContent}>
+                  <div className={styles.quizStatusIcon}>1</div>
+
+                  <h3 className={styles.quizHeadline}>
+                    Qual é o segmento de atuação da sua empresa?
+                  </h3>
+
+                  <p className={styles.quizText}>
+                    O sistema será configurado com os recursos mais adequados
+                    para esse segmento.
+                  </p>
+
+                  <div className={styles.nichoSelectField}>
+                    <label htmlFor="nicho-onboarding">Segmento de atuação</label>
+                    <select
+                      id="nicho-onboarding"
+                      value={nichoSelecionadoId}
+                      onChange={(event) => {
+                        setNichoSelecionadoId(event.target.value);
+                        setErroNicho("");
+                      }}
+                      disabled={carregandoNichos || salvandoNicho}
+                    >
+                      <option value="">
+                        {carregandoNichos
+                          ? "Carregando segmentos..."
+                          : "Selecionar segmento"}
+                      </option>
+                      {nichos.map((nicho) => (
+                        <option key={nicho.id} value={nicho.id}>
+                          {nicho.nome}
+                        </option>
+                      ))}
+                    </select>
+
+                    {erroNicho && (
+                      <p className={styles.nichoSelectError}>{erroNicho}</p>
+                    )}
+                  </div>
+
+                  <div className={styles.quizActions}>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={voltarEtapaQuiz}
+                      disabled={salvandoNicho}
+                    >
+                      Voltar
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        nichoSelecionadoId
+                          ? styles.primaryButton
+                          : styles.disabledButton
+                      }
+                      onClick={salvarNichoEAvancar}
+                      disabled={
+                        !nichoSelecionadoId ||
+                        carregandoNichos ||
+                        salvandoNicho
+                      }
+                    >
+                      {salvandoNicho ? "Salvando..." : "Avançar"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {etapaQuiz === 2 && (
+                <div className={styles.quizContent}>
                   <div
                     className={`${styles.quizStatusIcon} ${
                       metaConectado ? styles.quizStatusDone : ""
                     }`}
                   >
-                    {metaConectado ? "✓" : "1"}
+                    {metaConectado ? "✓" : "2"}
                   </div>
 
                   <h3 className={styles.quizHeadline}>
@@ -1198,14 +1362,14 @@ return (
                 </div>
               )}
 
-              {etapaQuiz === 2 && (
+              {etapaQuiz === 3 && (
                 <div className={styles.quizContent}>
                   <div
                     className={`${styles.quizStatusIcon} ${
                       numeroRegistrado ? styles.quizStatusDone : ""
                     }`}
                   >
-                    {numeroRegistrado ? "✓" : "2"}
+                    {numeroRegistrado ? "✓" : "3"}
                   </div>
 
                   <h3 className={styles.quizHeadline}>
@@ -1302,7 +1466,7 @@ return (
                 </div>
               )}
 
-              {etapaQuiz === 3 && (
+              {etapaQuiz === 4 && (
                 <div className={styles.quizContent}>
                   <div className={styles.quizStatusRow}>
                     <div
@@ -1310,7 +1474,7 @@ return (
                         ambienteConcluido ? styles.quizStatusDone : ""
                       }`}
                     >
-                      {ambienteConcluido ? "✓" : "3"}
+                      {ambienteConcluido ? "✓" : "4"}
                     </div>
 
                     {ambienteConcluido && (

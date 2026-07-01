@@ -543,6 +543,49 @@
   line-height: 1.7;
 }
 
+.nichoSelectField {
+  width: min(100%, 520px);
+  margin-top: 12px;
+}
+
+.nichoSelectField label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.nichoSelectField select {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 14px;
+  padding: 0 42px 0 14px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.nichoSelectField select:focus {
+  border-color: var(--crm-primary);
+  outline: 3px solid var(--crm-primary-soft);
+}
+
+.nichoSelectField select:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.nichoSelectError {
+  margin: 8px 0 0;
+  color: var(--crm-danger-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .quizInfoGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(260px, 1fr));
