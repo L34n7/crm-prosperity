@@ -10,6 +10,7 @@ export type WhatsAppTemplateLocal = {
   categoria: string;
   idioma: string;
   status: string;
+  opt_out_habilitado: boolean;
   quality_rating?: string | null;
   rejeicao_motivo?: string | null;
   payload: unknown;
@@ -36,6 +37,7 @@ type SalvarTemplateLocalParams = BuscarTemplatePorChaveParams & {
   payload: unknown;
   respostaMeta: unknown;
   usuarioId: string;
+  optOutHabilitado: boolean;
 };
 
 type ResultadoSalvarTemplateRpc = {
@@ -109,6 +111,7 @@ export async function salvarTemplateWhatsappLocalIdempotente(
       p_payload: params.payload,
       p_resposta_meta: params.respostaMeta,
       p_usuario_id: params.usuarioId,
+      p_opt_out_habilitado: params.optOutHabilitado,
     }
   );
 

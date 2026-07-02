@@ -7,7 +7,10 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { buscarContatosComOptInWhatsapp } from "@/lib/whatsapp/disparo-politica-lista";
-import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
+import {
+  buscarEscoposOptOutPorTelefone,
+  type WhatsAppSupressaoScope,
+} from "@/lib/whatsapp/opt-out";
 
 
 function podeGerenciarContatos(usuario: UsuarioContexto) {
@@ -252,16 +255,19 @@ export async function GET(request: Request) {
   }
 
   let contatosComOptIn: Set<string>;
-  let telefonesSuprimidos: Set<string>;
+  let escoposOptOutPorTelefone: Map<
+    string,
+    Set<WhatsAppSupressaoScope>
+  >;
 
   try {
-    [contatosComOptIn, telefonesSuprimidos] = await Promise.all([
+    [contatosComOptIn, escoposOptOutPorTelefone] = await Promise.all([
       buscarContatosComOptInWhatsapp({
         supabase: supabaseAdmin,
         empresaId: usuario.empresa_id,
         contatoIds: (data || []).map((contato) => contato.id),
       }),
-      buscarTelefonesSuprimidos({
+      buscarEscoposOptOutPorTelefone({
         empresaId: usuario.empresa_id,
         telefones: (data || []).map((contato) => contato.telefone),
       }),
@@ -281,13 +287,26 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    contatos: (data || []).map((contato) => ({
-      ...contato,
-      opt_in_whatsapp: contatosComOptIn.has(contato.id),
-      whatsapp_opt_out: telefonesSuprimidos.has(
-        normalizarTelefoneBrasilParaWhatsApp(contato.telefone || "")
-      ),
-    })),
+    contatos: (data || []).map((contato) => {
+      const telefone = normalizarTelefoneBrasilParaWhatsApp(
+        contato.telefone || ""
+      );
+      const escopos =
+        escoposOptOutPorTelefone.get(telefone) ||
+        new Set<WhatsAppSupressaoScope>();
+      const optOutGeral = escopos.has("todos_disparos");
+      const optOutMarketing = optOutGeral || escopos.has("marketing");
+      const optOutUtility = optOutGeral || escopos.has("utility");
+
+      return {
+        ...contato,
+        opt_in_whatsapp: contatosComOptIn.has(contato.id),
+        whatsapp_opt_out: optOutMarketing || optOutUtility,
+        whatsapp_opt_out_geral: optOutGeral,
+        whatsapp_opt_out_marketing: optOutMarketing,
+        whatsapp_opt_out_utility: optOutUtility,
+      };
+    }),
     total: count ?? 0,
     pagina,
     limite,

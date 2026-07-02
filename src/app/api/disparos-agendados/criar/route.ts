@@ -12,7 +12,6 @@ import {
   validarPoliticaListaDisparo,
 } from "@/lib/whatsapp/disparo-politica-lista";
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
-import { templatePossuiInstrucaoOptOut } from "@/lib/whatsapp/opt-out-policy";
 
 function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
@@ -214,7 +213,7 @@ export async function POST(request: NextRequest) {
     const { data: template, error: templateError } = await supabase
       .from("whatsapp_templates")
       .select(
-        "id, nome, idioma, categoria, status, integracao_whatsapp_id, payload"
+        "id, nome, idioma, categoria, status, integracao_whatsapp_id, opt_out_habilitado, payload"
       )
       .eq("id", templateId)
       .eq("empresa_id", usuario.empresa_id)
@@ -247,6 +246,7 @@ export async function POST(request: NextRequest) {
     const telefonesSuprimidos = await buscarTelefonesSuprimidos({
       empresaId: usuario.empresa_id,
       telefones: contatosValidos.map((contato: any) => contato.telefone),
+      categoria: template.categoria,
     });
 
     if (telefonesSuprimidos.size > 0) {
@@ -255,7 +255,7 @@ export async function POST(request: NextRequest) {
           ok: false,
           code: "WHATSAPP_OPT_OUT_ATIVO",
           error:
-            "A selecao possui contatos que solicitaram opt-out. Remova os contatos bloqueados para continuar.",
+            "A selecao possui contatos com opt-out para a categoria do template. Remova-os para continuar.",
           total_contatos_opt_out: telefonesSuprimidos.size,
         },
         { status: 422 }
@@ -279,7 +279,7 @@ export async function POST(request: NextRequest) {
     if (
       politicaLista.categoria === "utility" &&
       classificacaoLista.totalFrios > 0 &&
-      !templatePossuiInstrucaoOptOut(template.payload || null)
+      template.opt_out_habilitado !== true
     ) {
       return NextResponse.json(
         {

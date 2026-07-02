@@ -427,23 +427,6 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      await telefoneEstaSuprimido({
-        empresaId: usuario.empresa_id,
-        telefone,
-      })
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "WHATSAPP_OPT_OUT_ATIVO",
-          error:
-            "Este contato solicitou opt-out e esta bloqueado para novos disparos.",
-        },
-        { status: 422 }
-      );
-    }
-
     const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")
       .select(`
@@ -527,6 +510,8 @@ export async function POST(request: Request) {
         integracao_whatsapp_id,
         nome,
         idioma,
+        categoria,
+        opt_out_habilitado,
         status,
         payload
       `)
@@ -546,6 +531,24 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, error: "Somente templates aprovados podem ser enviados" },
         { status: 400 }
+      );
+    }
+
+    if (
+      await telefoneEstaSuprimido({
+        empresaId: usuario.empresa_id,
+        telefone,
+        categoria: template.categoria || "",
+      })
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "WHATSAPP_OPT_OUT_ATIVO",
+          error:
+            "Este contato solicitou opt-out para esta categoria de template.",
+        },
+        { status: 422 }
       );
     }
 
@@ -934,7 +937,8 @@ export async function POST(request: Request) {
         integracaoWhatsappId,
         conversaId: conversa.id,
         templateId: template.id,
-        templatePayload: payloadTemplate,
+        templateCategoria: template.categoria || "",
+        optOutHabilitado: template.opt_out_habilitado === true,
         mensagemExternaId,
         origem: "disparo_template_individual",
       });

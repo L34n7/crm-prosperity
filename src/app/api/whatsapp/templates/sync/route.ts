@@ -5,6 +5,7 @@ import { listarPermissoesDoUsuario } from "@/lib/permissoes/can";
 import { can } from "@/lib/permissoes/frontend";
 import { listMetaTemplates } from "@/lib/whatsapp/templates";
 import { salvarTemplateWhatsappLocalIdempotente } from "@/lib/whatsapp/templates-local";
+import { templatePossuiInstrucaoOptOut } from "@/lib/whatsapp/opt-out-policy";
 
 type UsuarioSistema = {
   id: string;
@@ -169,6 +170,10 @@ export async function POST(req: NextRequest) {
         payload,
         respostaMeta: item,
         usuarioId: usuario.id,
+        optOutHabilitado: templatePossuiInstrucaoOptOut(
+          payload,
+          categoria
+        ),
       });
 
       if (resultadoSalvar.error) {

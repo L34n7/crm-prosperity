@@ -13,7 +13,10 @@ import {
   salvarTemplateWhatsappLocalIdempotente,
 } from "@/lib/whatsapp/templates-local";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { aplicarFooterOptOut } from "@/lib/whatsapp/opt-out-policy";
+import {
+  aplicarFooterOptOut,
+  templatePossuiInstrucaoOptOut,
+} from "@/lib/whatsapp/opt-out-policy";
 
 type UsuarioSistema = {
   id: string;
@@ -215,6 +218,10 @@ export async function POST(req: NextRequest) {
       payload: input,
       respostaMeta: metaResponse.data,
       usuarioId: usuario.id,
+      optOutHabilitado: templatePossuiInstrucaoOptOut(
+        input,
+        input.category
+      ),
     });
 
     if (resultadoSalvar.error) {

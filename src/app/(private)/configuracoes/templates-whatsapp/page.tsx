@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./templates-whatsapp.module.css";
-import { WHATSAPP_OPT_OUT_FOOTER } from "@/lib/whatsapp/opt-out-policy";
+import { obterFooterOptOut } from "@/lib/whatsapp/opt-out-policy";
 
 type IntegracaoWhatsApp = {
   id: string;
@@ -39,6 +39,7 @@ type WhatsAppTemplate = {
   categoria: string;
   idioma: string;
   status: string;
+  opt_out_habilitado: boolean;
   quality_rating: string | null;
   rejeicao_motivo: string | null;
   payload: {
@@ -215,7 +216,9 @@ export default function TemplatesWhatsAppPage() {
   const [bodyExample1, setBodyExample1] = useState("João");
   const [bodyExample2, setBodyExample2] = useState("ABC-123456");
   const [bodyExample3, setBodyExample3] = useState("10:00");
-  const [footerText, setFooterText] = useState(WHATSAPP_OPT_OUT_FOOTER);
+  const [footerText, setFooterText] = useState(
+    obterFooterOptOut("UTILITY") || ""
+  );
   const [quickReply1, setQuickReply1] = useState("");
   const [quickReply2, setQuickReply2] = useState("");
   const [quickReply3, setQuickReply3] = useState("");
@@ -226,6 +229,10 @@ export default function TemplatesWhatsAppPage() {
   const [filtroStatus, setFiltroStatus] = useState<
     "todos" | "approved" | "pending" | "rejected"
   >("todos");
+
+  useEffect(() => {
+    setFooterText(obterFooterOptOut(category) || "");
+  }, [category]);
 
   async function carregarIntegracoes() {
     try {
@@ -492,7 +499,7 @@ export default function TemplatesWhatsAppPage() {
       setBodyExample1("João");
       setBodyExample2("ABC-123456");
       setBodyExample3("10:00");
-      setFooterText(WHATSAPP_OPT_OUT_FOOTER);
+      setFooterText(obterFooterOptOut(category) || "");
       setQuickReply1("");
       setQuickReply2("");
       setQuickReply3("");
@@ -986,9 +993,28 @@ export default function TemplatesWhatsAppPage() {
                             <div className={styles.compactTemplateMain}>
                               <div className={styles.compactTemplateTitleRow}>
                                 <h3 className={styles.compactTemplateTitle}>{template.nome}</h3>
-                                <span className={getStatusClass(template.status)}>
-                                  {getStatusLabel(template.status)}
-                                </span>
+                                <div className={styles.compactTemplateBadges}>
+                                  <span className={getStatusClass(template.status)}>
+                                    {getStatusLabel(template.status)}
+                                  </span>
+                                  <span
+                                    className={`${styles.badge} ${
+                                      template.opt_out_habilitado
+                                        ? styles.badgeGreen
+                                        : String(template.categoria).toUpperCase() ===
+                                          "AUTHENTICATION"
+                                        ? styles.badgeGray
+                                        : styles.badgeYellow
+                                    }`}
+                                  >
+                                    {template.opt_out_habilitado
+                                      ? "Opt-out habilitado"
+                                      : String(template.categoria).toUpperCase() ===
+                                        "AUTHENTICATION"
+                                      ? "Opt-out não aplicável"
+                                      : "Sem opt-out"}
+                                  </span>
+                                </div>
                               </div>
 
                               <p className={styles.compactTemplateMeta}>

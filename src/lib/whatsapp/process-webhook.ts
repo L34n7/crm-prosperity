@@ -17,7 +17,7 @@ import { atribuirCampanhaPorMensagemWhatsApp } from "@/lib/rastreamento/atribuir
 import { salvarAtribuicaoMetaAnuncio } from "@/lib/whatsapp/meta-attribution";
 import { atualizarItemDisparoPeloWebhook } from "@/lib/whatsapp/disparo-fila";
 import { processarMensagemRecebidaParaOptOut } from "@/lib/whatsapp/opt-out";
-import { WHATSAPP_OPT_OUT_FEEDBACK } from "@/lib/whatsapp/opt-out-policy";
+import { obterFeedbackOptOut } from "@/lib/whatsapp/opt-out-policy";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -866,6 +866,10 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
       }
 
       if (resultadoOptOut.optOutRegistrado) {
+        const mensagemFeedbackOptOut =
+          obterFeedbackOptOut(resultadoOptOut.escopo) ||
+          "Saída registrada para esta categoria de mensagens.";
+
         await marcarMensagemAutomacaoProcessada({
           mensagemId: mensagemInternaId,
           automationResult: {
@@ -887,7 +891,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
               phoneNumberId,
               accessToken,
               to: message.from,
-              body: WHATSAPP_OPT_OUT_FEEDBACK,
+              body: mensagemFeedbackOptOut,
             });
           } catch (confirmacaoError) {
             confirmacaoOptOutErro =
@@ -906,7 +910,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           conversa_protocolo_id: protocoloAtivo?.id || null,
           remetente_tipo: "sistema",
           remetente_id: null,
-          conteudo: WHATSAPP_OPT_OUT_FEEDBACK,
+          conteudo: mensagemFeedbackOptOut,
           tipo_mensagem: "texto",
           origem: "automatica",
           status_envio: confirmacaoOptOut?.ok ? "enviada" : "falha",
@@ -914,6 +918,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           metadata_json: {
             tipo: "confirmacao_opt_out_disparos",
             supressao_id: resultadoOptOut.supressaoId || null,
+            escopo_opt_out: resultadoOptOut.escopo || null,
             opt_out_ja_existente: resultadoOptOut.jaBloqueado === true,
             meta_response: confirmacaoOptOut?.raw || null,
             erro:

@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  WHATSAPP_OPT_OUT_FOOTER,
+  WHATSAPP_OPT_OUT_FEEDBACKS,
+  WHATSAPP_OPT_OUT_FOOTERS,
   aplicarFooterOptOut,
+  escopoOptOutBloqueiaCategoria,
   identificarComandoOptOutWhatsapp,
+  obterFeedbackOptOut,
   templatePossuiInstrucaoOptOut,
 } from "../src/lib/whatsapp/opt-out-policy.ts";
 
@@ -15,8 +18,8 @@ test("identifica somente comandos exatos de opt-out", () => {
   assert.equal(identificarComandoOptOutWhatsapp("não quero sair da fila"), null);
 });
 
-test("força o footer de opt-out em utility e marketing", () => {
-  const componentes = aplicarFooterOptOut(
+test("aplica o footer específico de utility", () => {
+  const componentesUtility = aplicarFooterOptOut(
     [
       { type: "BODY", text: "Seu pedido foi atualizado." },
       { type: "FOOTER", text: "Equipe de atendimento" },
@@ -26,13 +29,103 @@ test("força o footer de opt-out em utility e marketing", () => {
   );
 
   assert.deepEqual(
-    componentes.filter((item) => item.type === "FOOTER"),
-    [{ type: "FOOTER", text: WHATSAPP_OPT_OUT_FOOTER }]
+    componentesUtility.filter((item) => item.type === "FOOTER"),
+    [{ type: "FOOTER", text: WHATSAPP_OPT_OUT_FOOTERS.utility }]
   );
-  assert.equal(templatePossuiInstrucaoOptOut({ components: componentes }), true);
+  assert.equal(
+    templatePossuiInstrucaoOptOut(
+      { components: componentesUtility },
+      "UTILITY"
+    ),
+    true
+  );
+  assert.equal(
+    templatePossuiInstrucaoOptOut(
+      { components: componentesUtility },
+      "MARKETING"
+    ),
+    false
+  );
   assert.deepEqual(
-    componentes.map((item) => item.type),
+    componentesUtility.map((item) => item.type),
     ["BODY", "FOOTER", "BUTTONS"]
+  );
+});
+
+test("mantém mensagens de saída independentes por categoria", () => {
+  const componentesMarketing = aplicarFooterOptOut(
+    [{ type: "BODY", text: "Confira nossas ofertas." }],
+    "MARKETING"
+  );
+
+  assert.deepEqual(
+    componentesMarketing.filter((item) => item.type === "FOOTER"),
+    [{ type: "FOOTER", text: WHATSAPP_OPT_OUT_FOOTERS.marketing }]
+  );
+  assert.equal(
+    templatePossuiInstrucaoOptOut(
+      { components: componentesMarketing },
+      "MARKETING"
+    ),
+    true
+  );
+  assert.equal(
+    obterFeedbackOptOut("MARKETING"),
+    WHATSAPP_OPT_OUT_FEEDBACKS.marketing
+  );
+  assert.equal(
+    obterFeedbackOptOut("UTILITY"),
+    WHATSAPP_OPT_OUT_FEEDBACKS.utility
+  );
+  assert.notEqual(
+    WHATSAPP_OPT_OUT_FEEDBACKS.marketing,
+    WHATSAPP_OPT_OUT_FEEDBACKS.utility
+  );
+});
+
+test("mantém compatibilidade com o footer geral já aprovado pela Meta", () => {
+  const payloadLegado = {
+    components: [
+      {
+        type: "FOOTER",
+        text: "Para não receber mais mensagens, responda SAIR.",
+      },
+    ],
+  };
+
+  assert.equal(
+    templatePossuiInstrucaoOptOut(payloadLegado, "MARKETING"),
+    true
+  );
+  assert.equal(templatePossuiInstrucaoOptOut(payloadLegado, "UTILITY"), true);
+});
+
+test("classifica template sincronizado sem footer como sem opt-out", () => {
+  assert.equal(
+    templatePossuiInstrucaoOptOut(
+      {
+        components: [
+          { type: "BODY", text: "Seu pedido foi atualizado." },
+        ],
+      },
+      "UTILITY"
+    ),
+    false
+  );
+});
+
+test("bloqueia somente a categoria recusada", () => {
+  assert.equal(escopoOptOutBloqueiaCategoria("marketing", "MARKETING"), true);
+  assert.equal(escopoOptOutBloqueiaCategoria("marketing", "UTILITY"), false);
+  assert.equal(escopoOptOutBloqueiaCategoria("utility", "UTILITY"), true);
+  assert.equal(escopoOptOutBloqueiaCategoria("utility", "MARKETING"), false);
+  assert.equal(
+    escopoOptOutBloqueiaCategoria("todos_disparos", "MARKETING"),
+    true
+  );
+  assert.equal(
+    escopoOptOutBloqueiaCategoria("todos_disparos", "UTILITY"),
+    true
   );
 });
 

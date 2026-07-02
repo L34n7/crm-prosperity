@@ -1,8 +1,28 @@
-export const WHATSAPP_OPT_OUT_FOOTER =
-  "Para não receber mais mensagens, responda SAIR.";
+export type WhatsAppOptOutScope = "marketing" | "utility";
+export type WhatsAppSupressaoScope =
+  | "todos_disparos"
+  | WhatsAppOptOutScope;
 
-export const WHATSAPP_OPT_OUT_FEEDBACK =
-  "Solicitação registrada. Você não receberá mais disparos desta empresa.";
+export const WHATSAPP_OPT_OUT_FOOTERS: Record<
+  WhatsAppOptOutScope,
+  string
+> = {
+  marketing: "Para não receber ofertas, responda SAIR.",
+  utility: "Para não receber atualizações, responda SAIR.",
+};
+
+export const WHATSAPP_OPT_OUT_FEEDBACKS: Record<
+  WhatsAppOptOutScope,
+  string
+> = {
+  marketing:
+    "Saída registrada. Você não receberá mais ofertas desta empresa.",
+  utility:
+    "Saída registrada. Você não receberá mais atualizações desta empresa.",
+};
+
+const WHATSAPP_OPT_OUT_FOOTER_LEGADO =
+  "Para não receber mais mensagens, responda SAIR.";
 
 export const WHATSAPP_OPT_OUT_CONTEXT_DAYS = 7;
 
@@ -34,19 +54,52 @@ export function identificarComandoOptOutWhatsapp(valor: unknown) {
     : null;
 }
 
-export function categoriaTemplateExigeOptOut(categoria: unknown) {
-  const valor = String(categoria || "").trim().toUpperCase();
-  return valor === "MARKETING" || valor === "UTILITY";
+export function normalizarCategoriaOptOut(
+  categoria: unknown
+): WhatsAppOptOutScope | null {
+  const valor = String(categoria || "").trim().toLowerCase();
+  return valor === "marketing" || valor === "utility" ? valor : null;
 }
 
-export function templatePossuiInstrucaoOptOut(payload: TemplatePayloadLike) {
+export function categoriaTemplateExigeOptOut(categoria: unknown) {
+  return normalizarCategoriaOptOut(categoria) !== null;
+}
+
+export function obterFooterOptOut(categoria: unknown) {
+  const escopo = normalizarCategoriaOptOut(categoria);
+  return escopo ? WHATSAPP_OPT_OUT_FOOTERS[escopo] : null;
+}
+
+export function obterFeedbackOptOut(categoria: unknown) {
+  const escopo = normalizarCategoriaOptOut(categoria);
+  return escopo ? WHATSAPP_OPT_OUT_FEEDBACKS[escopo] : null;
+}
+
+export function escopoOptOutBloqueiaCategoria(
+  escopo: unknown,
+  categoria: unknown
+) {
+  if (escopo === "todos_disparos") return true;
+  const categoriaNormalizada = normalizarCategoriaOptOut(categoria);
+  return Boolean(categoriaNormalizada && escopo === categoriaNormalizada);
+}
+
+export function templatePossuiInstrucaoOptOut(
+  payload: TemplatePayloadLike,
+  categoria: unknown
+) {
+  const footerEsperado = obterFooterOptOut(categoria);
+  if (!footerEsperado) return false;
+
   const footer = (payload?.components || []).find(
     (component) => String(component.type || "").toUpperCase() === "FOOTER"
   );
+  const footerNormalizado = normalizarTextoComandoWhatsapp(footer?.text);
 
   return (
-    normalizarTextoComandoWhatsapp(footer?.text) ===
-    normalizarTextoComandoWhatsapp(WHATSAPP_OPT_OUT_FOOTER)
+    footerNormalizado === normalizarTextoComandoWhatsapp(footerEsperado) ||
+    footerNormalizado ===
+      normalizarTextoComandoWhatsapp(WHATSAPP_OPT_OUT_FOOTER_LEGADO)
   );
 }
 
@@ -54,7 +107,8 @@ export function aplicarFooterOptOut<T extends TemplateComponentLike>(
   components: T[],
   categoria: unknown
 ) {
-  if (!categoriaTemplateExigeOptOut(categoria)) {
+  const footerOptOut = obterFooterOptOut(categoria);
+  if (!footerOptOut) {
     return components;
   }
 
@@ -63,7 +117,7 @@ export function aplicarFooterOptOut<T extends TemplateComponentLike>(
   );
   const footer = {
     type: "FOOTER",
-    text: WHATSAPP_OPT_OUT_FOOTER,
+    text: footerOptOut,
   } as T;
   const buttonsIndex = semFooter.findIndex(
     (component) => String(component.type || "").toUpperCase() === "BUTTONS"

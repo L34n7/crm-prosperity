@@ -482,6 +482,14 @@
   margin-bottom: 4px;
 }
 
+.compactTemplateBadges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .compactTemplateTitle {
   margin: 0;
   font-size: 18px;

@@ -28,6 +28,8 @@ export type TemplateDisparo = {
   id: string;
   nome: string;
   idioma?: string | null;
+  categoria?: string | null;
+  opt_out_habilitado?: boolean;
   payload?: TemplatePayloadDisparo | null;
 };
 
@@ -906,7 +908,8 @@ export async function enviarTemplateDisparo({
       integracaoWhatsappId,
       conversaId: recursos.conversa.id,
       templateId: template.id,
-      templatePayload: payloadTemplate,
+      templateCategoria: template.categoria || "",
+      optOutHabilitado: template.opt_out_habilitado === true,
       campanhaId,
       itemId,
       mensagemExternaId: messageId,

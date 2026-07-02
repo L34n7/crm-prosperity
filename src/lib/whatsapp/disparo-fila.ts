@@ -691,7 +691,9 @@ async function buscarCampanha(campanhaId: string) {
 async function buscarTemplate(templateId: string, empresaId: string) {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_templates")
-    .select("id, empresa_id, integracao_whatsapp_id, nome, idioma, status, payload")
+    .select(
+      "id, empresa_id, integracao_whatsapp_id, nome, idioma, categoria, status, opt_out_habilitado, payload"
+    )
     .eq("id", templateId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -708,6 +710,8 @@ async function buscarTemplate(templateId: string, empresaId: string) {
     id: data.id,
     nome: data.nome,
     idioma: data.idioma || null,
+    categoria: data.categoria || null,
+    opt_out_habilitado: data.opt_out_habilitado === true,
     payload: (data.payload || null) as TemplatePayloadDisparo | null,
   } satisfies TemplateDisparo;
 }
@@ -1042,15 +1046,21 @@ async function processarItemDisparo(item: DisparoItemRow) {
     return { status: "cancelado" as const };
   }
 
+  const [template, integracao] = await Promise.all([
+    buscarTemplate(campanha.template_id, campanha.empresa_id),
+    buscarIntegracao(campanha.integracao_whatsapp_id, campanha.empresa_id),
+  ]);
+
   if (
     await telefoneEstaSuprimido({
       empresaId: item.empresa_id,
       telefone: item.telefone_normalizado || item.numero,
+      categoria: template.categoria || "",
     })
   ) {
     const agora = new Date().toISOString();
     const motivoCancelamento =
-      "Envio cancelado porque o contato solicitou opt-out de disparos.";
+      "Envio cancelado porque o contato solicitou opt-out para esta categoria de template.";
 
     await supabaseAdmin
       .from("whatsapp_disparo_itens")
@@ -1084,10 +1094,6 @@ async function processarItemDisparo(item: DisparoItemRow) {
     return { status: "cancelado" as const };
   }
 
-  const [template, integracao] = await Promise.all([
-    buscarTemplate(campanha.template_id, campanha.empresa_id),
-    buscarIntegracao(campanha.integracao_whatsapp_id, campanha.empresa_id),
-  ]);
   let variaveis = normalizarVariaveis(item.variaveis);
   let nomeContato = item.nome_contato;
   let origem = "disparo_template_fila";

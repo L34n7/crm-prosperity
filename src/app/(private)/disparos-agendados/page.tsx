@@ -8,12 +8,65 @@ import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
 import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
 import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
-import { templatePossuiInstrucaoOptOut } from "@/lib/whatsapp/opt-out-policy";
 import styles from "./disparos-agendados.module.css";
 
 type StatusDisparo = "todos" | "pendente" | "executado" | "cancelado" | "erro";
 
 const ITENS_POR_PAGINA = 20;
+
+type ContatoOptOutLike = {
+  whatsapp_opt_out?: boolean;
+  whatsapp_opt_out_geral?: boolean;
+  whatsapp_opt_out_marketing?: boolean;
+  whatsapp_opt_out_utility?: boolean;
+};
+
+function contatoTemOptOutParaCategoria(
+  contato: ContatoOptOutLike,
+  categoria: string
+) {
+  if (contato.whatsapp_opt_out_geral === true) return true;
+
+  const possuiEscoposDetalhados =
+    contato.whatsapp_opt_out_marketing !== undefined ||
+    contato.whatsapp_opt_out_utility !== undefined ||
+    contato.whatsapp_opt_out_geral !== undefined;
+
+  if (!possuiEscoposDetalhados && contato.whatsapp_opt_out === true) {
+    return true;
+  }
+
+  if (categoria === "marketing") {
+    return contato.whatsapp_opt_out_marketing === true;
+  }
+
+  if (categoria === "utility") {
+    return contato.whatsapp_opt_out_utility === true;
+  }
+
+  return false;
+}
+
+function contatoTemAlgumOptOut(contato: ContatoOptOutLike) {
+  return (
+    contato.whatsapp_opt_out === true ||
+    contato.whatsapp_opt_out_geral === true ||
+    contato.whatsapp_opt_out_marketing === true ||
+    contato.whatsapp_opt_out_utility === true
+  );
+}
+
+function rotuloOptOutContato(contato: ContatoOptOutLike) {
+  if (contato.whatsapp_opt_out_geral === true) return "Opt-out de disparos";
+
+  const marketing = contato.whatsapp_opt_out_marketing === true;
+  const utility = contato.whatsapp_opt_out_utility === true;
+
+  if (marketing && utility) return "Opt-out Marketing e Utility";
+  if (marketing) return "Opt-out Marketing";
+  if (utility) return "Opt-out Utility";
+  return contato.whatsapp_opt_out === true ? "Opt-out de disparos" : null;
+}
 
 type DisparoAgendado = {
   id: string;
@@ -574,7 +627,7 @@ function DisparosAgendadosPageContent() {
 
       if (temContatosOptOut) {
         setErroModal(
-          "A seleção possui contatos que solicitaram opt-out. Remova os contatos bloqueados para continuar."
+          "A seleção possui contatos com opt-out para a categoria do template. Remova-os para continuar."
         );
         return;
       }
@@ -786,6 +839,13 @@ function DisparosAgendadosPageContent() {
     setPaginaAtual(1);
   }, [filtroStatus, disparos]);
 
+  const templateAtual =
+    templates.find((item) => item.id === templateSelecionado) || null;
+
+  const categoriaTemplateAtual = String(templateAtual?.categoria || "")
+    .trim()
+    .toLowerCase();
+
   const contatosDisponiveis = useMemo(() => {
     const idsSelecionados = new Set(
       contatosSelecionados.map((item) => item.id)
@@ -798,13 +858,15 @@ function DisparosAgendadosPageContent() {
     return contatosDisponiveis.filter(
       (contato) =>
         contatoTemTelefoneValido(contato) &&
-        contato.whatsapp_opt_out !== true
+        !contatoTemOptOutParaCategoria(contato, categoriaTemplateAtual)
     );
-  }, [contatosDisponiveis]);
+  }, [contatosDisponiveis, categoriaTemplateAtual]);
 
   function adicionarContato(contato: any) {
-    if (contato.whatsapp_opt_out === true) {
-      setErro("Este contato solicitou opt-out e esta bloqueado para disparos.");
+    if (contatoTemOptOutParaCategoria(contato, categoriaTemplateAtual)) {
+      setErro(
+        "Este contato solicitou opt-out para a categoria do template selecionado."
+      );
       return;
     }
 
@@ -932,29 +994,22 @@ function DisparosAgendadosPageContent() {
     }
   }
 
-  const templateAtual =
-    templates.find(
-      (item) => item.id === templateSelecionado
-    ) || null;
-
-  const categoriaTemplateAtual = String(templateAtual?.categoria || "")
-    .trim()
-    .toLowerCase();
   const totalContatosListaFria = useMemo(
     () =>
       contatosSelecionados.filter(
         (contato) =>
-          contato.whatsapp_opt_out !== true &&
+          !contatoTemOptOutParaCategoria(contato, categoriaTemplateAtual) &&
           contato.opt_in_whatsapp !== true
       ).length,
-    [contatosSelecionados]
+    [contatosSelecionados, categoriaTemplateAtual]
   );
   const totalContatosOptOut = useMemo(
     () =>
       contatosSelecionados.filter(
-        (contato) => contato.whatsapp_opt_out === true
+        (contato) =>
+          contatoTemOptOutParaCategoria(contato, categoriaTemplateAtual)
       ).length,
-    [contatosSelecionados]
+    [contatosSelecionados, categoriaTemplateAtual]
   );
   const temContatosOptOut = totalContatosOptOut > 0;
   const temContatosListaFria = totalContatosListaFria > 0;
@@ -964,7 +1019,7 @@ function DisparosAgendadosPageContent() {
     categoriaTemplateAtual === "utility" && temContatosListaFria;
   const utilityListaFriaSemOptOut =
     utilityComListaFria &&
-    !templatePossuiInstrucaoOptOut(templateAtual?.payload || null);
+    templateAtual?.opt_out_habilitado !== true;
 
   const totalVariaveis = useMemo(() => {
     return contarVariaveisTemplate(templateAtual);
@@ -1832,15 +1887,15 @@ function DisparosAgendadosPageContent() {
 
                                       <span
                                         className={
-                                          contato.whatsapp_opt_out === true
+                                          contatoTemAlgumOptOut(contato)
                                             ? styles.contactBadgeOptOut
                                             : contato.opt_in_whatsapp === true
                                             ? styles.contactBadgeOptIn
                                             : styles.contactBadgeCold
                                         }
                                       >
-                                        {contato.whatsapp_opt_out === true
-                                          ? "Opt-out de disparos"
+                                        {contatoTemAlgumOptOut(contato)
+                                          ? rotuloOptOutContato(contato)
                                           : contato.opt_in_whatsapp === true
                                           ? "Opt-in WhatsApp"
                                           : "Lista fria"}
@@ -1860,7 +1915,10 @@ function DisparosAgendadosPageContent() {
                                     onClick={() => adicionarContato(contato)}
                                     disabled={
                                       !telefoneValido ||
-                                      contato.whatsapp_opt_out === true
+                                      contatoTemOptOutParaCategoria(
+                                        contato,
+                                        categoriaTemplateAtual
+                                      )
                                     }
                                   >
                                     Adicionar
@@ -1936,15 +1994,15 @@ function DisparosAgendadosPageContent() {
 
                                       <span
                                         className={
-                                          contato.whatsapp_opt_out === true
+                                          contatoTemAlgumOptOut(contato)
                                             ? styles.contactBadgeOptOut
                                             : contato.opt_in_whatsapp === true
                                             ? styles.contactBadgeOptIn
                                             : styles.contactBadgeCold
                                         }
                                       >
-                                        {contato.whatsapp_opt_out === true
-                                          ? "Opt-out de disparos"
+                                        {contatoTemAlgumOptOut(contato)
+                                          ? rotuloOptOutContato(contato)
                                           : contato.opt_in_whatsapp === true
                                           ? "Opt-in WhatsApp"
                                           : "Lista fria"}
@@ -1974,8 +2032,8 @@ function DisparosAgendadosPageContent() {
                         <strong>Agendamento bloqueado por opt-out</strong>
                         <p>
                           {totalContatosOptOut} contato(s) selecionado(s)
-                          solicitaram o bloqueio de novos disparos. Remova-os
-                          para continuar.
+                          solicitaram o bloqueio da categoria do template
+                          selecionado. Remova-os para continuar.
                         </p>
                       </div>
                     ) : null}
