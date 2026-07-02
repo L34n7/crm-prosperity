@@ -6,6 +6,7 @@ import {
 } from "@/lib/whatsapp/meta";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { processWhatsAppWebhookBody } from "@/lib/whatsapp/process-webhook";
+import { extrairIdentificadoresWebhookWhatsapp } from "@/lib/whatsapp/webhook-recovery";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -80,6 +81,7 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
   const incomingStatuses = extractMessageStatuses(body);
   const bodyHash = calcularBodyHash(body);
   const receivedAt = new Date().toISOString();
+  const identificadores = extrairIdentificadoresWebhookWhatsapp(body);
   const payloadInsert = {
     body_hash: bodyHash,
     body_json: body,
@@ -87,6 +89,8 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
     metadata_json: {
       incoming_messages: incomingMessages.length,
       incoming_statuses: incomingStatuses.length,
+      phone_number_ids: identificadores.phoneNumberIds,
+      mensagem_externa_ids: identificadores.mensagemExternaIds,
       received_at: receivedAt,
     },
     updated_at: receivedAt,
@@ -205,12 +209,19 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
   }
 
   const supabaseAdmin = getSupabaseAdmin();
+  const maxTentativas = normalizarInteiro(
+    process.env.WHATSAPP_WEBHOOK_MAX_TENTATIVAS,
+    5,
+    1,
+    20
+  );
 
   const { data: evento, error } = await supabaseAdmin
     .from("whatsapp_webhook_eventos")
     .select("*")
     .eq("id", eventoId)
-    .eq("status", "pendente")
+    .in("status", ["pendente", "erro"])
+    .lt("tentativas", maxTentativas)
     .maybeSingle();
 
   if (error) {
@@ -229,31 +240,12 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
     return {
       ok: true,
       ignorado: true,
-      motivo: "Evento não encontrado ou já processado.",
+      motivo:
+        "Evento não encontrado, já processado ou com tentativas esgotadas.",
     };
   }
 
-  const { data: eventoTravado, error: lockError } = await supabaseAdmin
-    .from("whatsapp_webhook_eventos")
-    .update({
-      status: "processando",
-      locked_at: new Date().toISOString(),
-      tentativas: (evento.tentativas || 0) + 1,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", evento.id)
-    .eq("status", "pendente")
-    .select("*")
-    .maybeSingle();
-
-  if (lockError) {
-    console.error("[WEBHOOK QUEUE] Erro ao travar evento:", lockError);
-
-    return {
-      ok: false,
-      error: lockError.message,
-    };
-  }
+  const eventoTravado = await reivindicarEvento(evento, maxTentativas);
 
   if (!eventoTravado) {
     return {
@@ -274,6 +266,8 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
         status: "processado",
         processed_at: new Date().toISOString(),
         resultado_json: resultado || {},
+        erro: null,
+        locked_at: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", evento.id);
@@ -303,6 +297,14 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
           error instanceof Error
             ? error.message
             : "Erro desconhecido.",
+        resultado_json: {
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Erro desconhecido.",
+        },
+        locked_at: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", evento.id);

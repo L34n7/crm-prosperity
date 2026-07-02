@@ -155,15 +155,30 @@ export async function POST(req: NextRequest) {
       } else {
         after(async () => {
           try {
-            await processarWebhookWhatsappPorId(eventoFila.evento!.id);
+            const resultado = await processarWebhookWhatsappPorId(
+              eventoFila.evento!.id
+            );
 
-            console.log("[WEBHOOK WHATSAPP] Evento processado direto na Vercel", {
-              eventoId: eventoFila.evento.id,
-              totalMensagensNoSegundo: volumeSegundo.totalMensagens,
-              totalStatusesNoSegundo: volumeSegundo.totalStatuses,
-              limiteQstash,
-              limiteQstashStatuses,
-            });
+            if (resultado.ok && resultado.processado) {
+              console.log(
+                "[WEBHOOK WHATSAPP] Evento processado direto na Vercel",
+                {
+                  eventoId: eventoFila.evento.id,
+                  totalMensagensNoSegundo: volumeSegundo.totalMensagens,
+                  totalStatusesNoSegundo: volumeSegundo.totalStatuses,
+                  limiteQstash,
+                  limiteQstashStatuses,
+                }
+              );
+            } else {
+              console.error(
+                "[WEBHOOK WHATSAPP] Evento direto permaneceu sem processamento",
+                {
+                  eventoId: eventoFila.evento.id,
+                  resultado,
+                }
+              );
+            }
           } catch (error) {
             console.error("[WEBHOOK WHATSAPP] Erro ao processar direto:", error);
           }

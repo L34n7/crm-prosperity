@@ -5,6 +5,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/processar_webhooks_whatsapp?limit=20",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/expirar_conversas?limit=500",
       "schedule": "* * * * *"
     },
