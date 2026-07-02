@@ -185,6 +185,8 @@ type ContatoOpcao = {
   email: string | null;
   origem: string | null;
   campanha: string | null;
+  origem_exibicao?: string | null;
+  campanha_exibicao?: string | null;
   status_lead: string | null;
   opt_in_whatsapp?: boolean;
   whatsapp_opt_out?: boolean;
@@ -194,6 +196,14 @@ type ContatoOpcao = {
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+function obterOrigemContato(contato: ContatoOpcao) {
+  return contato.origem_exibicao || contato.origem || "";
+}
+
+function obterCampanhaContato(contato: ContatoOpcao) {
+  return contato.campanha_exibicao || contato.campanha || "";
+}
 
 function contatoTemOptOutParaCategoria(
   contato: ContatoOpcao,
@@ -699,15 +709,25 @@ function resolverVariavelContato(
   }
 
   if (chave === "campanha") {
-    return contato.campanha || contato.status_lead || contato.telefone || "";
+    return (
+      obterCampanhaContato(contato) ||
+      contato.status_lead ||
+      contato.telefone ||
+      ""
+    );
   }
 
   if (chave === "status_lead" || chave === "status") {
-    return contato.status_lead || contato.campanha || contato.telefone || "";
+    return (
+      contato.status_lead ||
+      obterCampanhaContato(contato) ||
+      contato.telefone ||
+      ""
+    );
   }
 
   if (chave === "origem") {
-    return contato.origem || "";
+    return obterOrigemContato(contato);
   }
 
   if (chave === "protocolo_atual") {
@@ -1661,16 +1681,37 @@ export default function DisparosWhatsAppPage() {
 
       const lista = Array.isArray(json.contatos) ? json.contatos : [];
       setContatos(lista);
-      setOrigensDisponiveis(Array.isArray(json.origens) ? json.origens : []);
-      setCampanhasDisponiveis(
-        Array.isArray(json.campanhas) ? json.campanhas : []
-      );
       setTotalContatosDisponiveis(Number(json.total || 0));
 
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar contatos.");
     } finally {
       setLoadingContatos(false);
+    }
+  }
+
+  async function carregarOpcoesContatos() {
+    try {
+      const res = await fetch("/api/contatos/opcoes", {
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar filtros de contatos.");
+      }
+
+      setOrigensDisponiveis(
+        Array.isArray(json.origens) ? json.origens : []
+      );
+      setCampanhasDisponiveis(
+        Array.isArray(json.campanhas) ? json.campanhas : []
+      );
+    } catch (error) {
+      console.warn(
+        "[DISPAROS WHATSAPP] Erro ao carregar filtros de contatos:",
+        error
+      );
     }
   }
 
@@ -2056,6 +2097,7 @@ export default function DisparosWhatsAppPage() {
     carregarUsuarioLogado();
     carregarIntegracoes();
     carregarContatos("", "", "");
+    carregarOpcoesContatos();
     carregarBloqueioDisparoEmMassa();
     carregarCampanhaPagina();
     carregarVariaveisPersonalizadas();
@@ -2381,8 +2423,8 @@ export default function DisparosWhatsAppPage() {
             contato.nome,
             contato.telefone,
             contato.email,
-            contato.origem,
-            contato.campanha,
+            obterOrigemContato(contato),
+            obterCampanhaContato(contato),
             contato.status_lead,
             ...obterHistoricoDisparosDoContato(contato.id).map(
               (campanha) => campanha.campanha_nome
@@ -2395,8 +2437,18 @@ export default function DisparosWhatsAppPage() {
         if (!textoContato.includes(busca)) return false;
       }
 
-      if (origemFiltro && contato.origem !== origemFiltro) return false;
-      if (campanhaFiltro && contato.campanha !== campanhaFiltro) return false;
+      if (
+        origemFiltro &&
+        obterOrigemContato(contato) !== origemFiltro
+      ) {
+        return false;
+      }
+      if (
+        campanhaFiltro &&
+        obterCampanhaContato(contato) !== campanhaFiltro
+      ) {
+        return false;
+      }
 
       return contatoPassaFiltroDisparoAnterior(contato);
     },
@@ -3101,8 +3153,8 @@ export default function DisparosWhatsAppPage() {
               nome: contato.nome,
               telefone: limparNumero(contato.telefone),
               email: contato.email || null,
-              origem: contato.origem || null,
-              campanha: contato.campanha || null,
+              origem: obterOrigemContato(contato) || null,
+              campanha: obterCampanhaContato(contato) || null,
               status_lead: contato.status_lead || null,
             })),
           }),
@@ -3939,9 +3991,9 @@ export default function DisparosWhatsAppPage() {
                                 ) : null}
 
                                 <div className={styles.contactBadges}>
-                                  {contato.origem ? (
+                                  {obterOrigemContato(contato) ? (
                                     <span className={styles.contactBadge}>
-                                      {contato.origem}
+                                      {obterOrigemContato(contato)}
                                     </span>
                                   ) : null}
 
@@ -3951,9 +4003,9 @@ export default function DisparosWhatsAppPage() {
                                     </span>
                                   ) : null}
 
-                                  {contato.campanha ? (
+                                  {obterCampanhaContato(contato) ? (
                                     <span className={styles.contactBadge}>
-                                      {contato.campanha}
+                                      {obterCampanhaContato(contato)}
                                     </span>
                                   ) : null}
 
@@ -4053,9 +4105,9 @@ export default function DisparosWhatsAppPage() {
 
 
                               <div className={styles.contactBadges}>
-                                {contato.origem ? (
+                                {obterOrigemContato(contato) ? (
                                   <span className={styles.contactBadge}>
-                                    {contato.origem}
+                                    {obterOrigemContato(contato)}
                                   </span>
                                 ) : null}
 
@@ -4065,9 +4117,9 @@ export default function DisparosWhatsAppPage() {
                                   </span>
                                 ) : null}
 
-                                {contato.campanha ? (
+                                {obterCampanhaContato(contato) ? (
                                   <span className={styles.contactBadge}>
-                                    {contato.campanha}
+                                    {obterCampanhaContato(contato)}
                                   </span>
                                 ) : null}
 

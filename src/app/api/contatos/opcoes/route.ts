@@ -2,14 +2,6 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-function nomesUnicos(valores: Array<string | null | undefined>) {
-  return Array.from(
-    new Set(
-      valores.map((valor) => String(valor || "").trim()).filter(Boolean)
-    )
-  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-}
-
 export async function GET() {
   try {
     const resultado = await getUsuarioContexto();
@@ -32,58 +24,32 @@ export async function GET() {
 
     const supabase = getSupabaseAdmin();
 
-    const [{ data: contatosData, error: contatosError }, { data: origensRastreamentoData }, { data: campanhasRastreamentoData }] =
-      await Promise.all([
-        supabase
-          .from("contatos")
-          .select("origem, campanha")
-          .eq("empresa_id", usuario.empresa_id),
-        supabase
-          .from("rastreamento_origens")
-          .select("nome")
-          .eq("empresa_id", usuario.empresa_id)
-          .order("nome", { ascending: true }),
-        supabase
-          .from("rastreamento_campanhas")
-          .select(
-            `
-              id,
-              nome,
-              codigo,
-              status,
-              origem_id,
-              rastreamento_origens (
-                id,
-                nome
-              )
-            `
-          )
-          .eq("empresa_id", usuario.empresa_id)
-          .order("created_at", { ascending: false }),
-      ]);
+    const { data, error } = await supabase.rpc(
+      "listar_opcoes_filtros_contatos",
+      {
+        p_empresa_id: usuario.empresa_id,
+      }
+    );
 
-    if (contatosError) {
+    if (error) {
       return NextResponse.json(
-        { ok: false, error: contatosError.message || "Erro ao buscar opcoes." },
+        { ok: false, error: error.message || "Erro ao buscar opcoes." },
         { status: 400 }
       );
     }
 
-    const origens = nomesUnicos([
-      ...(contatosData || []).map((item) => item.origem),
-      ...(origensRastreamentoData || []).map((item) => item.nome),
-    ]);
-
-    const campanhas = nomesUnicos([
-      ...(contatosData || []).map((item) => item.campanha),
-      ...(campanhasRastreamentoData || []).map((item) => item.nome),
-    ]);
+    const opcoes =
+      data && typeof data === "object" && !Array.isArray(data)
+        ? (data as Record<string, unknown>)
+        : {};
 
     return NextResponse.json({
       ok: true,
-      origens,
-      campanhas,
-      campanhas_rastreamento: campanhasRastreamentoData || [],
+      origens: Array.isArray(opcoes.origens) ? opcoes.origens : [],
+      campanhas: Array.isArray(opcoes.campanhas) ? opcoes.campanhas : [],
+      campanhas_rastreamento: Array.isArray(opcoes.campanhas_rastreamento)
+        ? opcoes.campanhas_rastreamento
+        : [],
     });
   } catch (error: any) {
     return NextResponse.json(

@@ -19,7 +19,19 @@ type ContatoOptOutLike = {
   whatsapp_opt_out_geral?: boolean;
   whatsapp_opt_out_marketing?: boolean;
   whatsapp_opt_out_utility?: boolean;
+  origem?: string | null;
+  campanha?: string | null;
+  origem_exibicao?: string | null;
+  campanha_exibicao?: string | null;
 };
+
+function obterOrigemContato(contato: ContatoOptOutLike) {
+  return contato.origem_exibicao || contato.origem || "";
+}
+
+function obterCampanhaContato(contato: ContatoOptOutLike) {
+  return contato.campanha_exibicao || contato.campanha || "";
+}
 
 function contatoTemOptOutParaCategoria(
   contato: ContatoOptOutLike,
@@ -547,10 +559,6 @@ function DisparosAgendadosPageContent() {
       }
 
       setContatos(Array.isArray(json.contatos) ? json.contatos : []);
-      setOrigensDisponiveis(Array.isArray(json.origens) ? json.origens : []);
-      setCampanhasDisponiveis(
-        Array.isArray(json.campanhas) ? json.campanhas : []
-      );
       setTotalContatosDisponiveis(Number(json.total || 0));
     } catch (error) {
       setErro(
@@ -558,6 +566,31 @@ function DisparosAgendadosPageContent() {
       );
     } finally {
       setLoadingContatos(false);
+    }
+  }
+
+  async function carregarOpcoesContatos() {
+    try {
+      const res = await fetch("/api/contatos/opcoes", {
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar filtros de contatos.");
+      }
+
+      setOrigensDisponiveis(
+        Array.isArray(json.origens) ? json.origens : []
+      );
+      setCampanhasDisponiveis(
+        Array.isArray(json.campanhas) ? json.campanhas : []
+      );
+    } catch (error) {
+      console.warn(
+        "[DISPAROS AGENDADOS] Erro ao carregar filtros de contatos:",
+        error
+      );
     }
   }
 
@@ -704,8 +737,8 @@ function DisparosAgendadosPageContent() {
               nome: contato.nome,
               telefone: limparNumero(contato.telefone),
               email: contato.email || null,
-              origem: contato.origem || null,
-              campanha: contato.campanha || null,
+              origem: obterOrigemContato(contato) || null,
+              campanha: obterCampanhaContato(contato) || null,
               status_lead: contato.status_lead || null,
             })),
           }),
@@ -759,6 +792,7 @@ function DisparosAgendadosPageContent() {
 
   useEffect(() => {
     carregarDisparos();
+    carregarOpcoesContatos();
   }, []);
 
 
@@ -1867,9 +1901,9 @@ function DisparosAgendadosPageContent() {
                                     ) : null}
 
                                     <div className={styles.contactBadges}>
-                                      {contato.origem ? (
+                                      {obterOrigemContato(contato) ? (
                                         <span className={styles.contactBadge}>
-                                          {contato.origem}
+                                          {obterOrigemContato(contato)}
                                         </span>
                                       ) : null}
 
@@ -1879,9 +1913,9 @@ function DisparosAgendadosPageContent() {
                                         </span>
                                       ) : null}
 
-                                      {contato.campanha ? (
+                                      {obterCampanhaContato(contato) ? (
                                         <span className={styles.contactBadge}>
-                                          {contato.campanha}
+                                          {obterCampanhaContato(contato)}
                                         </span>
                                       ) : null}
 
@@ -1974,9 +2008,9 @@ function DisparosAgendadosPageContent() {
                                     ) : null}
 
                                     <div className={styles.contactBadges}>
-                                      {contato.origem ? (
+                                      {obterOrigemContato(contato) ? (
                                         <span className={styles.contactBadge}>
-                                          {contato.origem}
+                                          {obterOrigemContato(contato)}
                                         </span>
                                       ) : null}
 
@@ -1986,9 +2020,9 @@ function DisparosAgendadosPageContent() {
                                         </span>
                                       ) : null}
 
-                                      {contato.campanha ? (
+                                      {obterCampanhaContato(contato) ? (
                                         <span className={styles.contactBadge}>
-                                          {contato.campanha}
+                                          {obterCampanhaContato(contato)}
                                         </span>
                                       ) : null}
 

@@ -6,11 +6,6 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
-import { buscarContatosComOptInWhatsapp } from "@/lib/whatsapp/disparo-politica-lista";
-import {
-  buscarEscoposOptOutPorTelefone,
-  type WhatsAppSupressaoScope,
-} from "@/lib/whatsapp/opt-out";
 
 
 function podeGerenciarContatos(usuario: UsuarioContexto) {
@@ -158,6 +153,13 @@ export async function GET(request: Request) {
         campanha_exibicao,
         campanha_status,
         campanha_origem_nome,
+        telefone_normalizado,
+        origem_exibicao,
+        opt_in_whatsapp,
+        whatsapp_opt_out,
+        whatsapp_opt_out_geral,
+        whatsapp_opt_out_marketing,
+        whatsapp_opt_out_utility,
         conversa_id,
         conversa_status,
         conversa_ultima_mensagem_em,
@@ -212,13 +214,13 @@ export async function GET(request: Request) {
   }
 
   if (origem) {
-    query = query.eq("origem", origem);
+    query = query.eq("origem_exibicao", origem);
   }
 
   if (rastreamentoCampanhaId) {
     query = query.eq("rastreamento_campanha_id", rastreamentoCampanhaId);
   } else if (campanha) {
-    query = query.ilike("campanha_exibicao", `%${campanha}%`);
+    query = query.eq("campanha_exibicao", campanha);
   }
 
   if (telefoneRevisar === "true") {
@@ -231,7 +233,7 @@ export async function GET(request: Request) {
 
   if (busca) {
     query = query.or(
-      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
+      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
     );
   }
 
@@ -254,59 +256,9 @@ export async function GET(request: Request) {
     );
   }
 
-  let contatosComOptIn: Set<string>;
-  let escoposOptOutPorTelefone: Map<
-    string,
-    Set<WhatsAppSupressaoScope>
-  >;
-
-  try {
-    [contatosComOptIn, escoposOptOutPorTelefone] = await Promise.all([
-      buscarContatosComOptInWhatsapp({
-        supabase: supabaseAdmin,
-        empresaId: usuario.empresa_id,
-        contatoIds: (data || []).map((contato) => contato.id),
-      }),
-      buscarEscoposOptOutPorTelefone({
-        empresaId: usuario.empresa_id,
-        telefones: (data || []).map((contato) => contato.telefone),
-      }),
-    ]);
-  } catch (optInError) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          optInError instanceof Error
-            ? optInError.message
-            : "Erro ao verificar a classificacao dos contatos.",
-      },
-      { status: 500 }
-    );
-  }
-
   return NextResponse.json({
     ok: true,
-    contatos: (data || []).map((contato) => {
-      const telefone = normalizarTelefoneBrasilParaWhatsApp(
-        contato.telefone || ""
-      );
-      const escopos =
-        escoposOptOutPorTelefone.get(telefone) ||
-        new Set<WhatsAppSupressaoScope>();
-      const optOutGeral = escopos.has("todos_disparos");
-      const optOutMarketing = optOutGeral || escopos.has("marketing");
-      const optOutUtility = optOutGeral || escopos.has("utility");
-
-      return {
-        ...contato,
-        opt_in_whatsapp: contatosComOptIn.has(contato.id),
-        whatsapp_opt_out: optOutMarketing || optOutUtility,
-        whatsapp_opt_out_geral: optOutGeral,
-        whatsapp_opt_out_marketing: optOutMarketing,
-        whatsapp_opt_out_utility: optOutUtility,
-      };
-    }),
+    contatos: data || [],
     total: count ?? 0,
     pagina,
     limite,

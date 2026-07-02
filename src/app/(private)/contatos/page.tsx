@@ -16,6 +16,7 @@ type Contato = {
   email: string | null;
   origem: string | null;
   campanha: string | null;
+  origem_exibicao?: string | null;
   observacoes: string | null;
   telefone_revisar: boolean;
   classificacao: ClassificacaoContato;
@@ -132,6 +133,10 @@ function getIniciais(nome?: string | null) {
 
 function getNomeCampanhaContato(contato: Contato) {
   return contato.campanha_exibicao || contato.campanha || "—";
+}
+
+function getNomeOrigemContato(contato: Contato) {
+  return contato.origem_exibicao || contato.origem || "—";
 }
 
 function getLabelCampanhaRastreamento(campanha: CampanhaRastreamento) {
@@ -1486,9 +1491,9 @@ export default function ContatosPage() {
 
                           <span
                             className={styles.sheetCell}
-                            title={contato.origem || "Sem origem"}
+                            title={getNomeOrigemContato(contato)}
                           >
-                            {contato.origem || "—"}
+                            {getNomeOrigemContato(contato)}
                           </span>
 
                           <span
@@ -1702,7 +1707,7 @@ export default function ContatosPage() {
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>Origem</span>
                               <span className={styles.infoValue}>
-                                {contato.origem || "—"}
+                                {getNomeOrigemContato(contato)}
                               </span>
                             </div>
 

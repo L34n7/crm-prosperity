@@ -92,6 +92,7 @@ export async function GET(request: Request) {
         telefone,
         email,
         origem,
+        origem_exibicao,
         campanha_exibicao,
         classificacao,
         contato_novo,
@@ -145,7 +146,7 @@ export async function GET(request: Request) {
     }
 
     if (origem) {
-      query = query.eq("origem", origem);
+      query = query.eq("origem_exibicao", origem);
     }
 
     if (rastreamentoCampanhaId) {
@@ -154,7 +155,7 @@ export async function GET(request: Request) {
         rastreamentoCampanhaId
       );
     } else if (campanha) {
-      query = query.ilike("campanha_exibicao", `%${campanha}%`);
+      query = query.eq("campanha_exibicao", campanha);
     }
 
     if (telefoneRevisar === "true") {
@@ -163,7 +164,7 @@ export async function GET(request: Request) {
 
     if (busca) {
       query = query.or(
-        `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
+        `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
       );
     }
 
@@ -225,7 +226,7 @@ export async function GET(request: Request) {
       contato.whatsapp_profile_name,
       contato.telefone,
       contato.email,
-      contato.origem,
+      contato.origem_exibicao,
       contato.campanha_exibicao,
       contato.classificacao,
       contato.contato_novo ? "sim" : "nao",

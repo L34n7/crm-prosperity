@@ -25,39 +25,6 @@ export function normalizarCategoriaDisparo(
   return "outra";
 }
 
-export async function buscarContatosComOptInWhatsapp(params: {
-  supabase: SupabaseAdmin;
-  empresaId: string;
-  contatoIds: string[];
-}) {
-  const contatoIds = Array.from(
-    new Set(params.contatoIds.map((id) => String(id || "").trim()).filter(Boolean))
-  );
-
-  if (contatoIds.length === 0) {
-    return new Set<string>();
-  }
-
-  const { data, error } = await params.supabase
-    .from("conversas")
-    .select("contato_id")
-    .eq("empresa_id", params.empresaId)
-    .in("contato_id", contatoIds)
-    .not("last_inbound_message_at", "is", null);
-
-  if (error) {
-    throw new Error(
-      `Erro ao verificar opt-in dos contatos: ${error.message}`
-    );
-  }
-
-  return new Set(
-    (data || [])
-      .map((conversa) => String(conversa.contato_id || "").trim())
-      .filter(Boolean)
-  );
-}
-
 function somenteDigitos(valor: unknown) {
   return String(valor || "").replace(/\D/g, "");
 }
@@ -78,12 +45,16 @@ export async function classificarDestinatariosPorOptIn(params: {
     )
   );
 
-  const contatosValidos = new Set<string>();
+  const contatosComOptIn = new Set<string>();
+  const contatosPorId = new Map<
+    string,
+    { telefone: string; optIn: boolean }
+  >();
 
   if (contatoIds.length > 0) {
     const { data, error } = await params.supabase
-      .from("contatos")
-      .select("id, telefone")
+      .from("contatos_visao_operacional")
+      .select("id, telefone, opt_in_whatsapp")
       .eq("empresa_id", params.empresaId)
       .in("id", contatoIds);
 
@@ -93,36 +64,40 @@ export async function classificarDestinatariosPorOptIn(params: {
       );
     }
 
-    const telefonesPorContato = new Map(
-      (data || []).map((contato) => [
-        String(contato.id),
-        somenteDigitos(contato.telefone),
-      ])
-    );
+    for (const contato of data || []) {
+      contatosPorId.set(String(contato.id), {
+        telefone: somenteDigitos(contato.telefone),
+        optIn: contato.opt_in_whatsapp === true,
+      });
+    }
 
     for (const destinatario of params.destinatarios) {
       const contatoId = String(destinatario.contatoId || "").trim();
       const telefone = somenteDigitos(destinatario.telefone);
+      const contato = contatosPorId.get(contatoId);
 
       if (
         contatoId &&
         telefone &&
-        telefonesPorContato.get(contatoId) === telefone
+        contato?.telefone === telefone &&
+        contato.optIn
       ) {
-        contatosValidos.add(contatoId);
+        contatosComOptIn.add(contatoId);
       }
     }
   }
 
-  const contatosComOptIn = await buscarContatosComOptInWhatsapp({
-    supabase: params.supabase,
-    empresaId: params.empresaId,
-    contatoIds: Array.from(contatosValidos),
-  });
-
   const contatosFrios = params.destinatarios.filter((destinatario) => {
     const contatoId = String(destinatario.contatoId || "").trim();
-    return !contatoId || !contatosComOptIn.has(contatoId);
+    const telefone = somenteDigitos(destinatario.telefone);
+    const contato = contatosPorId.get(contatoId);
+
+    return (
+      !contatoId ||
+      !telefone ||
+      contato?.telefone !== telefone ||
+      contato?.optIn !== true
+    );
   });
 
   return {
