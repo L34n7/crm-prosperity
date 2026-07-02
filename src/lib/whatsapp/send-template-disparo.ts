@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import { atualizarReservaLimiteMeta } from "@/lib/whatsapp/meta-limites";
+import { registrarContextoOptOutTemplate } from "@/lib/whatsapp/opt-out";
 
 type TemplateButton = {
   type?: string;
@@ -896,6 +897,35 @@ export async function enviarTemplateDisparo({
       item_disparo_id: itemId,
     },
   });
+
+  try {
+    await registrarContextoOptOutTemplate({
+      empresaId,
+      contatoId: recursos.contato.id,
+      telefone: numeroLimpo,
+      integracaoWhatsappId,
+      conversaId: recursos.conversa.id,
+      templateId: template.id,
+      templatePayload: payloadTemplate,
+      campanhaId,
+      itemId,
+      mensagemExternaId: messageId,
+      origem,
+    });
+  } catch (contextoError) {
+    console.error(
+      "[DISPARO WHATSAPP] Template enviado, mas o contexto de opt-out nao foi registrado:",
+      {
+        empresaId,
+        contatoId: recursos.contato.id,
+        messageId,
+        erro:
+          contextoError instanceof Error
+            ? contextoError.message
+            : String(contextoError),
+      }
+    );
+  }
 
   await atualizarUltimaMensagemConversa(recursos.conversa.id);
 

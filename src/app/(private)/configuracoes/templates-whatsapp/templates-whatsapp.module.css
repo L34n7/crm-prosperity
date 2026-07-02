@@ -735,7 +735,7 @@
   .pageContent {
     gap: 14px;
     min-height: auto;
-    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+    padding: 0px 10px calc(96px + env(safe-area-inset-bottom));
   }
 
   .formCard,

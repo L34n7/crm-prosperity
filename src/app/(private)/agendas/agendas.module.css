@@ -367,29 +367,38 @@
   border-radius: 12px;
   padding: 12px;
   background: var(--crm-surface);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .feedbackCardMain {
+  min-width: 0;
   display: grid;
   gap: 3px;
 }
 
 .feedbackCardMain strong {
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .feedbackCardMain span,
 .feedbackCardMain small {
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .feedbackActions {
+  flex-shrink: 0;
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 0;
 }
 
 .feedbackSuccessButton,
@@ -399,7 +408,7 @@
   border-radius: 8px;
   padding: 0 10px;
   font-family: inherit;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -1090,7 +1099,7 @@
     height: auto;
     min-height: auto;
     gap: 10px;
-    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+    padding: 0px 10px calc(96px + env(safe-area-inset-bottom));
   }
 
   .sidebar,

@@ -1329,7 +1329,7 @@
 
 @media (max-width: 820px) {
   .pageContent {
-    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+    padding: 0px 10px calc(96px + env(safe-area-inset-bottom));
     gap: 16px;
   }
 

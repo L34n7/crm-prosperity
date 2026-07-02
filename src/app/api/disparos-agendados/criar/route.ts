@@ -7,6 +7,12 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { podeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import {
+  classificarDestinatariosPorOptIn,
+  validarPoliticaListaDisparo,
+} from "@/lib/whatsapp/disparo-politica-lista";
+import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
+import { templatePossuiInstrucaoOptOut } from "@/lib/whatsapp/opt-out-policy";
 
 function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
@@ -136,6 +142,8 @@ export async function POST(request: NextRequest) {
       : [];
     
     const contatos = Array.isArray(body.contatos) ? body.contatos : [];
+    const responsabilidadeListaFriaConfirmada =
+      body?.confirmacao_responsabilidade_lista_fria === true;
 
     if (!integracaoWhatsappId) {
       return NextResponse.json(
@@ -205,7 +213,9 @@ export async function POST(request: NextRequest) {
 
     const { data: template, error: templateError } = await supabase
       .from("whatsapp_templates")
-      .select("id, nome, idioma, status, integracao_whatsapp_id, payload")
+      .select(
+        "id, nome, idioma, categoria, status, integracao_whatsapp_id, payload"
+      )
       .eq("id", templateId)
       .eq("empresa_id", usuario.empresa_id)
       .maybeSingle();
@@ -231,6 +241,67 @@ export async function POST(request: NextRequest) {
           error: "O template selecionado não pertence à integração WhatsApp escolhida.",
         },
         { status: 400 }
+      );
+    }
+
+    const telefonesSuprimidos = await buscarTelefonesSuprimidos({
+      empresaId: usuario.empresa_id,
+      telefones: contatosValidos.map((contato: any) => contato.telefone),
+    });
+
+    if (telefonesSuprimidos.size > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "WHATSAPP_OPT_OUT_ATIVO",
+          error:
+            "A selecao possui contatos que solicitaram opt-out. Remova os contatos bloqueados para continuar.",
+          total_contatos_opt_out: telefonesSuprimidos.size,
+        },
+        { status: 422 }
+      );
+    }
+
+    const classificacaoLista = await classificarDestinatariosPorOptIn({
+      supabase,
+      empresaId: usuario.empresa_id,
+      destinatarios: contatosValidos.map((contato: any) => ({
+        contatoId: contato.id,
+        telefone: contato.telefone,
+      })),
+    });
+    const politicaLista = validarPoliticaListaDisparo({
+      categoria: template.categoria,
+      totalContatosFrios: classificacaoLista.totalFrios,
+      responsabilidadeListaFriaConfirmada,
+    });
+
+    if (
+      politicaLista.categoria === "utility" &&
+      classificacaoLista.totalFrios > 0 &&
+      !templatePossuiInstrucaoOptOut(template.payload || null)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "TEMPLATE_SEM_OPT_OUT",
+          error:
+            "Templates utility enviados para lista fria precisam conter o rodape de opt-out. Recrie o template com a instrucao para responder SAIR.",
+        },
+        { status: 422 }
+      );
+    }
+
+    if (!politicaLista.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: politicaLista.code,
+          error: politicaLista.error,
+          total_contatos_frios: politicaLista.totalContatosFrios,
+          total_contatos_opt_in: classificacaoLista.totalOptIn,
+        },
+        { status: politicaLista.status }
       );
     }
 
@@ -347,6 +418,7 @@ export async function POST(request: NextRequest) {
         template_id: template.id,
         template_nome: template.nome,
         template_idioma: template.idioma,
+        template_categoria: template.categoria || null,
         template_payload: template.payload || null,
         integracao_whatsapp_id: integracaoWhatsappId,
 
@@ -359,6 +431,12 @@ export async function POST(request: NextRequest) {
         agendamento_grupo_id: agendamentoGrupoId,
         usuario_id: usuario.id,
         nome_campanha: nomeCampanha || null,
+        total_contatos_frios: classificacaoLista.totalFrios,
+        total_contatos_opt_in: classificacaoLista.totalOptIn,
+        responsabilidade_lista_fria_confirmada:
+          politicaLista.categoria === "utility" &&
+          classificacaoLista.totalFrios > 0 &&
+          responsabilidadeListaFriaConfirmada,
         contato_nome: contato.nome,
         integracao_nome: integracao.nome_conexao || integracao.numero || null,
         automacao_no_titulo: "Disparo manual agendado",
@@ -397,6 +475,12 @@ export async function POST(request: NextRequest) {
         integracao_whatsapp_id: integracaoWhatsappId,
         agendamento_grupo_id: agendamentoGrupoId,
         nome_campanha: nomeCampanha || null,
+        total_contatos_frios: classificacaoLista.totalFrios,
+        total_contatos_opt_in: classificacaoLista.totalOptIn,
+        responsabilidade_lista_fria_confirmada:
+          politicaLista.categoria === "utility" &&
+          classificacaoLista.totalFrios > 0 &&
+          responsabilidadeListaFriaConfirmada,
       },
       metadata: {
         disparos_ids: (disparosCriados || []).map((disparo) => disparo.id),

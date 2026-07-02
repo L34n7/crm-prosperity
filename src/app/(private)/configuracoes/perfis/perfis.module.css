@@ -566,6 +566,6 @@
 @media (max-width: 768px) {
   .pageContent {
     gap: 16px;
-    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+    padding: 0px 10px calc(96px + env(safe-area-inset-bottom));
   }
 }

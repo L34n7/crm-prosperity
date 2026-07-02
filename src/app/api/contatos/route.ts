@@ -6,6 +6,8 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import { buscarContatosComOptInWhatsapp } from "@/lib/whatsapp/disparo-politica-lista";
+import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
 
 
 function podeGerenciarContatos(usuario: UsuarioContexto) {
@@ -249,9 +251,43 @@ export async function GET(request: Request) {
     );
   }
 
+  let contatosComOptIn: Set<string>;
+  let telefonesSuprimidos: Set<string>;
+
+  try {
+    [contatosComOptIn, telefonesSuprimidos] = await Promise.all([
+      buscarContatosComOptInWhatsapp({
+        supabase: supabaseAdmin,
+        empresaId: usuario.empresa_id,
+        contatoIds: (data || []).map((contato) => contato.id),
+      }),
+      buscarTelefonesSuprimidos({
+        empresaId: usuario.empresa_id,
+        telefones: (data || []).map((contato) => contato.telefone),
+      }),
+    ]);
+  } catch (optInError) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          optInError instanceof Error
+            ? optInError.message
+            : "Erro ao verificar a classificacao dos contatos.",
+      },
+      { status: 500 }
+    );
+  }
+
   return NextResponse.json({
     ok: true,
-    contatos: data ?? [],
+    contatos: (data || []).map((contato) => ({
+      ...contato,
+      opt_in_whatsapp: contatosComOptIn.has(contato.id),
+      whatsapp_opt_out: telefonesSuprimidos.has(
+        normalizarTelefoneBrasilParaWhatsApp(contato.telefone || "")
+      ),
+    })),
     total: count ?? 0,
     pagina,
     limite,

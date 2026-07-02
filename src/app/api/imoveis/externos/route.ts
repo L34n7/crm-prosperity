@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCanalImobiliario } from "@/lib/imoveis/publicacao";
+import { normalizarUrlHttp } from "@/lib/imoveis/webhook";
 import { obterAcessoImoveis } from "@/lib/imoveis/acesso";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -141,7 +142,7 @@ export async function POST(request: Request) {
       canal_codigo: canal.codigo,
       canal_nome: canal.nome,
       external_id: externalId,
-      external_url: texto(body?.external_url) || null,
+      external_url: normalizarUrlHttp(body?.external_url),
       titulo,
       tipo: texto(body?.tipo) || null,
       finalidade: texto(body?.finalidade) || null,

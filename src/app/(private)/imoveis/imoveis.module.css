@@ -418,10 +418,364 @@
   text-decoration: underline;
 }
 
+.webhookSetup {
+  padding: 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 18px;
+  background: var(--crm-surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.webhookSetupHeader,
+.webhookIntegrationTitle,
+.webhookIntegrationFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.webhookSetupHeader small,
+.webhookIntegration small {
+  display: block;
+  margin-top: 4px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.webhookIntegration {
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 15px;
+  background: var(--crm-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.copyField {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.copyField .secondaryButton {
+  width: 44px;
+  min-width: 44px;
+  padding: 8px;
+}
+
+.secretInput {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace !important;
+  font-size: 12px !important;
+}
+
+.webhookIntegrationFooter small {
+  margin: 0;
+}
+
+.webhookActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.webhookIntegrationFooter .secondaryButton,
+.webhookIntegrationFooter .dangerButton {
+  min-height: 36px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.externalPropertyItem {
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+.externalPropertyImage {
+  position: relative;
+  flex: 0 0 104px;
+  width: 104px;
+  min-height: 88px;
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  background: var(--crm-surface-soft);
+  display: grid;
+  place-items: center;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.externalPropertyImage img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.externalPropertyContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.catalogToolbar .searchArea {
+  max-width: none;
+  align-items: center;
+}
+
+.catalogToolbar .searchArea > svg {
+  flex: 0 0 auto;
+  color: var(--crm-text-muted);
+}
+
+.catalogToolbar .primaryButton {
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+
+.catalogFilter {
+  min-height: 44px;
+  padding: 10px 36px 10px 13px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 13px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  font: inherit;
+  outline: none;
+}
+
+.catalogFilter:focus {
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.catalogGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.catalogCard {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 20px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-xs);
+  display: flex;
+  flex-direction: column;
+}
+
+.catalogImage {
+  position: relative;
+  min-height: 205px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+}
+
+.catalogImageFallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.catalogImage img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.catalogOriginBadge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, white 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--crm-primary-strong) 88%, transparent);
+  color: var(--crm-text-inverse);
+  font-size: 11px;
+  font-weight: 800;
+  backdrop-filter: blur(8px);
+}
+
+.catalogCardBody {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.catalogCompany {
+  min-height: 38px;
+  padding: 9px 11px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 13px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.catalogCompany strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.catalogCompany span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--crm-surface);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.catalogTitleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.catalogTitleRow > div {
+  min-width: 0;
+}
+
+.catalogTitleRow h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.catalogTitleRow p {
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.catalogTitleRow .statusBadge {
+  flex: 0 0 auto;
+  max-width: 120px;
+}
+
+.catalogLocation {
+  color: var(--crm-text-muted);
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 13px;
+}
+
+.catalogLocation svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.catalogFeatures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.catalogFeatures span {
+  padding: 6px 8px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.catalogDescription {
+  margin: 0;
+  overflow: hidden;
+  color: var(--crm-text-muted);
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.catalogCardFooter {
+  margin-top: auto;
+  padding-top: 13px;
+  border-top: 1px solid var(--crm-border);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.catalogCardFooter > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.catalogCardFooter small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.catalogCardFooter strong {
+  color: var(--crm-text-strong);
+  font-size: 17px;
+}
+
+.catalogCardFooter .secondaryButton {
+  min-height: 36px;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
+.catalogPagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.catalogPagination span {
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
 @media (max-width: 980px) {
   .twoColumns,
   .propertyGrid {
     grid-template-columns: 1fr;
+  }
+
+  .catalogGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .portalRow {
@@ -437,13 +791,30 @@
 @media (max-width: 720px) {
   .page {
     width: min(100% - 20px, 1200px);
-    padding-bottom: 92px;
+    padding: 0px 0px 92px 0px;
   }
 
   .toolbar,
   .searchArea {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .catalogToolbar .searchArea {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .catalogToolbar .searchArea button {
+    grid-column: 1 / -1;
+  }
+
+  .catalogGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogFilter {
+    width: 100%;
   }
 
   .formGrid {
@@ -461,5 +832,24 @@
   .compactMeta {
     align-items: flex-start;
     text-align: left;
+  }
+
+  .externalPropertyImage {
+    width: 100%;
+    min-height: 150px;
+  }
+
+  .externalPropertyContent,
+  .webhookIntegrationFooter {
+    flex-direction: column;
+  }
+
+  .webhookActions {
+    justify-content: flex-start;
+  }
+
+  .catalogCardFooter {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

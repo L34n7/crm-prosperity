@@ -6410,7 +6410,7 @@ a.buttonMessageOption:hover {
     min-height: calc(100dvh - 64px);
 
     padding:
-      0
+      0px
       10px
       calc(80px + env(safe-area-inset-bottom));
 
@@ -7473,9 +7473,7 @@ a.buttonMessageOption:hover {
       calc(100dvh - 132px)
     );
   }
-
 }
-
 
 @media (max-width: 375px)  {
   .sidebarHeader {

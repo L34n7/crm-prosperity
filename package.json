@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:imoveis-webhook": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/imoveis-webhook.test.mts"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",

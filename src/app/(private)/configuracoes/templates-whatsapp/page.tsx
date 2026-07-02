@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./templates-whatsapp.module.css";
+import { WHATSAPP_OPT_OUT_FOOTER } from "@/lib/whatsapp/opt-out-policy";
 
 type IntegracaoWhatsApp = {
   id: string;
@@ -214,7 +215,7 @@ export default function TemplatesWhatsAppPage() {
   const [bodyExample1, setBodyExample1] = useState("João");
   const [bodyExample2, setBodyExample2] = useState("ABC-123456");
   const [bodyExample3, setBodyExample3] = useState("10:00");
-  const [footerText, setFooterText] = useState("Equipe de atendimento");
+  const [footerText, setFooterText] = useState(WHATSAPP_OPT_OUT_FOOTER);
   const [quickReply1, setQuickReply1] = useState("");
   const [quickReply2, setQuickReply2] = useState("");
   const [quickReply3, setQuickReply3] = useState("");
@@ -491,7 +492,7 @@ export default function TemplatesWhatsAppPage() {
       setBodyExample1("João");
       setBodyExample2("ABC-123456");
       setBodyExample3("10:00");
-      setFooterText("Equipe de atendimento");
+      setFooterText(WHATSAPP_OPT_OUT_FOOTER);
       setQuickReply1("");
       setQuickReply2("");
       setQuickReply3("");
@@ -700,10 +701,13 @@ export default function TemplatesWhatsAppPage() {
                         <label className={styles.label}>Rodapé</label>
                         <input
                           value={footerText}
-                          onChange={(e) => setFooterText(e.target.value)}
                           className={styles.input}
-                          placeholder="Opcional"
+                          readOnly
                         />
+                        <p className={styles.help}>
+                          Rodapé obrigatório para permitir o opt-out automático
+                          de disparos.
+                        </p>
                       </div>
 
                       <div className={styles.field}>

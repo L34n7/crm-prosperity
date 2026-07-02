@@ -16,8 +16,12 @@ import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { atribuirCampanhaPorMensagemWhatsApp } from "@/lib/rastreamento/atribuir-campanha-whatsapp";
 import { salvarAtribuicaoMetaAnuncio } from "@/lib/whatsapp/meta-attribution";
 import { atualizarItemDisparoPeloWebhook } from "@/lib/whatsapp/disparo-fila";
+import { processarMensagemRecebidaParaOptOut } from "@/lib/whatsapp/opt-out";
+import { WHATSAPP_OPT_OUT_FEEDBACK } from "@/lib/whatsapp/opt-out-policy";
 
 const supabaseAdmin = getSupabaseAdmin();
+
+class OptOutCriticalError extends Error {}
 
 function perf(label: string, inicio: number, extra?: Record<string, any>) {
   console.log(`[PERF] ${label}`, {
@@ -98,6 +102,30 @@ function timestampWhatsappParaIso(timestamp?: string | number | null) {
   }
 
   return new Date().toISOString();
+}
+
+function obterAccessTokenIntegracao(
+  integration: {
+    config_json?: Record<string, unknown> | null;
+    token_ref?: string | null;
+  }
+) {
+  const config = integration.config_json || {};
+  const metaTokenResponse =
+    config.meta_token_response &&
+    typeof config.meta_token_response === "object" &&
+    !Array.isArray(config.meta_token_response)
+      ? (config.meta_token_response as Record<string, unknown>)
+      : {};
+  const tokenRef = String(integration.token_ref || "").trim();
+
+  return String(
+    config.access_token ||
+      metaTokenResponse.access_token ||
+      (tokenRef ? process.env[tokenRef] : "") ||
+      process.env.WHATSAPP_ACCESS_TOKEN ||
+      ""
+  ).trim();
 }
 
 async function atualizarUltimaMensagemRecebidaConversa(params: {
@@ -407,6 +435,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
   }
 
   const processedResults: Array<Record<string, unknown>> = [];
+  let optOutCriticalError: OptOutCriticalError | null = null;
 
   for (const statusItem of incomingStatuses) {
     try {
@@ -806,6 +835,121 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
       const automacaoJaProcessada =
         mensagemExistente?.metadata_json?.automacao_processada === true;
 
+      let resultadoOptOut: Awaited<
+        ReturnType<typeof processarMensagemRecebidaParaOptOut>
+      >;
+
+      try {
+        resultadoOptOut = !automacaoJaProcessada
+          ? await processarMensagemRecebidaParaOptOut({
+              empresaId: integration.empresa_id,
+              contatoId: contact.id,
+              telefone: message.from,
+              integracaoWhatsappId: integration.id,
+              mensagemId: mensagemInternaId,
+              mensagemExternaId: message.messageId,
+              tipoMensagem: message.tipoMensagem,
+              texto: message.text || message.conteudo,
+              contextoMensagemExternaId:
+                message.rawMessage?.context?.id || null,
+            })
+          : {
+              optOutRegistrado: false,
+              contextoConsumido: false,
+            };
+      } catch (optOutError) {
+        throw new OptOutCriticalError(
+          optOutError instanceof Error
+            ? optOutError.message
+            : "Erro critico ao processar opt-out."
+        );
+      }
+
+      if (resultadoOptOut.optOutRegistrado) {
+        await marcarMensagemAutomacaoProcessada({
+          mensagemId: mensagemInternaId,
+          automationResult: {
+            ok: true,
+            status: "ignorado_opt_out",
+          },
+        });
+
+        const accessToken = obterAccessTokenIntegracao(integration);
+        const phoneNumberId = String(integration.phone_number_id || "").trim();
+        let confirmacaoOptOut:
+          | Awaited<ReturnType<typeof sendWhatsAppTextMessage>>
+          | null = null;
+        let confirmacaoOptOutErro: string | null = null;
+
+        if (accessToken && phoneNumberId) {
+          try {
+            confirmacaoOptOut = await sendWhatsAppTextMessage({
+              phoneNumberId,
+              accessToken,
+              to: message.from,
+              body: WHATSAPP_OPT_OUT_FEEDBACK,
+            });
+          } catch (confirmacaoError) {
+            confirmacaoOptOutErro =
+              confirmacaoError instanceof Error
+                ? confirmacaoError.message
+                : "Erro ao enviar confirmacao de opt-out.";
+          }
+        } else {
+          confirmacaoOptOutErro =
+            "Credenciais da integracao indisponiveis.";
+        }
+
+        await supabaseAdmin.from("mensagens").insert({
+          empresa_id: integration.empresa_id,
+          conversa_id: conversaIdParaProcessar,
+          conversa_protocolo_id: protocoloAtivo?.id || null,
+          remetente_tipo: "sistema",
+          remetente_id: null,
+          conteudo: WHATSAPP_OPT_OUT_FEEDBACK,
+          tipo_mensagem: "texto",
+          origem: "automatica",
+          status_envio: confirmacaoOptOut?.ok ? "enviada" : "falha",
+          mensagem_externa_id: confirmacaoOptOut?.messageId || null,
+          metadata_json: {
+            tipo: "confirmacao_opt_out_disparos",
+            supressao_id: resultadoOptOut.supressaoId || null,
+            opt_out_ja_existente: resultadoOptOut.jaBloqueado === true,
+            meta_response: confirmacaoOptOut?.raw || null,
+            erro:
+              confirmacaoOptOut?.error ||
+              confirmacaoOptOutErro,
+          },
+        });
+
+        await supabaseAdmin
+          .from("conversas")
+          .update({
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", conversaIdParaProcessar)
+          .eq("empresa_id", integration.empresa_id);
+
+        processedResults.push({
+          messageId: message.messageId,
+          success: true,
+          duplicated: savedMessage.duplicated,
+          integrationId: integration.id,
+          contactId: contact.id,
+          conversationId: conversaIdParaProcessar,
+          savedMessageId: mensagemInternaId,
+          tipoMensagem: message.tipoMensagem,
+          optOutRegistrado: true,
+          optOutJaExistente: resultadoOptOut.jaBloqueado === true,
+          confirmacaoOptOutEnviada: confirmacaoOptOut?.ok === true,
+          automationOk: true,
+          automationStatus: "ignorado_opt_out",
+        });
+
+        continue;
+      }
+
 
       if (
         deveTranscreverAudioAutomaticamente &&
@@ -937,6 +1081,10 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         automationError: automationResult?.error ?? null,
       });
     } catch (messageError) {
+      if (messageError instanceof OptOutCriticalError) {
+        optOutCriticalError = messageError;
+      }
+
       console.error(
         "[WEBHOOK WHATSAPP] Erro ao processar mensagem individual:",
         messageError
@@ -957,6 +1105,10 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             : "Erro desconhecido ao processar mensagem",
       });
     }
+  }
+
+  if (optOutCriticalError) {
+    throw optOutCriticalError;
   }
 
   return {

@@ -23,6 +23,12 @@ import {
   publicarItensDisparoQstash,
 } from "@/lib/whatsapp/disparo-fila";
 import type { TemplatePayloadDisparo } from "@/lib/whatsapp/send-template-disparo";
+import {
+  classificarDestinatariosPorOptIn,
+  validarPoliticaListaDisparo,
+} from "@/lib/whatsapp/disparo-politica-lista";
+import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
+import { templatePossuiInstrucaoOptOut } from "@/lib/whatsapp/opt-out-policy";
 
 type DestinatarioEntrada = {
   numero: string;
@@ -476,6 +482,8 @@ export async function POST(req: NextRequest) {
     const destinatarios = Array.isArray(body?.destinatarios)
       ? (body.destinatarios as DestinatarioEntrada[])
       : [];
+    const responsabilidadeListaFriaConfirmada =
+      body?.confirmacao_responsabilidade_lista_fria === true;
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
@@ -671,6 +679,67 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const telefonesSuprimidos = await buscarTelefonesSuprimidos({
+      empresaId,
+      telefones: destinatarios.map((destinatario) => destinatario.numero),
+    });
+
+    if (telefonesSuprimidos.size > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "WHATSAPP_OPT_OUT_ATIVO",
+          error:
+            "A selecao possui contatos que solicitaram opt-out. Remova os contatos bloqueados para continuar.",
+          total_contatos_opt_out: telefonesSuprimidos.size,
+        },
+        { status: 422 }
+      );
+    }
+
+    const classificacaoLista = await classificarDestinatariosPorOptIn({
+      supabase: supabaseAdmin,
+      empresaId,
+      destinatarios: destinatarios.map((destinatario) => ({
+        contatoId: destinatario.contato_id,
+        telefone: destinatario.numero,
+      })),
+    });
+    const politicaLista = validarPoliticaListaDisparo({
+      categoria: template.categoria,
+      totalContatosFrios: classificacaoLista.totalFrios,
+      responsabilidadeListaFriaConfirmada,
+    });
+
+    if (
+      politicaLista.categoria === "utility" &&
+      classificacaoLista.totalFrios > 0 &&
+      !templatePossuiInstrucaoOptOut(template.payload || null)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "TEMPLATE_SEM_OPT_OUT",
+          error:
+            "Templates utility enviados para lista fria precisam conter o rodape de opt-out. Recrie o template com a instrucao para responder SAIR.",
+        },
+        { status: 422 }
+      );
+    }
+
+    if (!politicaLista.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: politicaLista.code,
+          error: politicaLista.error,
+          total_contatos_frios: politicaLista.totalContatosFrios,
+          total_contatos_opt_in: classificacaoLista.totalOptIn,
+        },
+        { status: politicaLista.status }
+      );
+    }
+
     const configJson = (integracao.config_json || null) as ConfigJsonWhatsapp | null;
     const credenciais = obterCredenciaisBasicas({
       phoneNumberId: integracao.phone_number_id,
@@ -782,6 +851,12 @@ export async function POST(req: NextRequest) {
         metadata_json: {
           template_payload: (template.payload || null) as TemplatePayloadDisparo | null,
           total_consumem_limite_meta: telefonesQueConsomemLimite.length,
+          total_contatos_frios: classificacaoLista.totalFrios,
+          total_contatos_opt_in: classificacaoLista.totalOptIn,
+          responsabilidade_lista_fria_confirmada:
+            politicaLista.categoria === "utility" &&
+            classificacaoLista.totalFrios > 0 &&
+            responsabilidadeListaFriaConfirmada,
           limite_meta_origem: reservaLimite.limiteInfo?.origem || null,
           limite_meta_tier: reservaLimite.limiteInfo?.tier || null,
           nome_campanha_informado: nomeCampanhaInformado || null,
@@ -882,6 +957,12 @@ export async function POST(req: NextRequest) {
         template_nome: template.nome,
         integracao_whatsapp_id: integracaoWhatsappId,
         modelo_processamento: "fila",
+        total_contatos_frios: classificacaoLista.totalFrios,
+        total_contatos_opt_in: classificacaoLista.totalOptIn,
+        responsabilidade_lista_fria_confirmada:
+          politicaLista.categoria === "utility" &&
+          classificacaoLista.totalFrios > 0 &&
+          responsabilidadeListaFriaConfirmada,
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,

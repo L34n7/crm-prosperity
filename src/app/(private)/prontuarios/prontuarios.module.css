@@ -314,7 +314,7 @@
 @media (max-width: 720px) {
   .page {
     width: min(100% - 20px, 1200px);
-    padding-bottom: 92px;
+    padding: 0px 0px 92px 0px;
   }
 
   .toolbar,

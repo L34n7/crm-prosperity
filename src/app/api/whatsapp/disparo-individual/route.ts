@@ -13,6 +13,10 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import {
+  registrarContextoOptOutTemplate,
+  telefoneEstaSuprimido,
+} from "@/lib/whatsapp/opt-out";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -420,6 +424,23 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, error: "Contato sem telefone" },
         { status: 400 }
+      );
+    }
+
+    if (
+      await telefoneEstaSuprimido({
+        empresaId: usuario.empresa_id,
+        telefone,
+      })
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "WHATSAPP_OPT_OUT_ATIVO",
+          error:
+            "Este contato solicitou opt-out e esta bloqueado para novos disparos.",
+        },
+        { status: 422 }
       );
     }
 
@@ -902,6 +923,25 @@ export async function POST(request: Request) {
           meta: metaData,
         },
         { status: 500 }
+      );
+    }
+
+    try {
+      await registrarContextoOptOutTemplate({
+        empresaId: usuario.empresa_id,
+        contatoId: contato?.id || null,
+        telefone,
+        integracaoWhatsappId,
+        conversaId: conversa.id,
+        templateId: template.id,
+        templatePayload: payloadTemplate,
+        mensagemExternaId,
+        origem: "disparo_template_individual",
+      });
+    } catch (contextoError) {
+      console.error(
+        "[DISPARO INDIVIDUAL] Template enviado, mas contexto de opt-out nao foi registrado:",
+        contextoError
       );
     }
 

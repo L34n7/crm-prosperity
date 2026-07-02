@@ -13,6 +13,7 @@ import {
   salvarTemplateWhatsappLocalIdempotente,
 } from "@/lib/whatsapp/templates-local";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { aplicarFooterOptOut } from "@/lib/whatsapp/opt-out-policy";
 
 type UsuarioSistema = {
   id: string;
@@ -78,11 +79,17 @@ export async function POST(req: NextRequest) {
     console.log("integracaoWhatsAppId recebido:", integracaoWhatsAppId);
     console.log("usuario.empresa_id:", usuario.empresa_id);
 
+    const componentesRecebidos = Array.isArray(body.components)
+      ? (body.components as CreateTemplateInput["components"])
+      : [];
     const input: CreateTemplateInput = {
       name: normalizeTemplateName(String(body.name || "")),
       category: body.category,
       language: body.language || "pt_BR",
-      components: Array.isArray(body.components) ? body.components : [],
+      components: aplicarFooterOptOut(
+        componentesRecebidos,
+        body.category
+      ) as CreateTemplateInput["components"],
     };
 
     const errors = validateTemplateInput(input);

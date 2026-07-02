@@ -14,6 +14,7 @@ import { notificarCampanhaDisparoPausada } from "@/lib/whatsapp/disparo-alertas"
 import { qstash } from "@/lib/qstash/client";
 import { resolverDisparoAgendadoParaFila } from "@/lib/whatsapp/disparo-agendado-variaveis";
 import { atualizarReservaLimiteMeta } from "@/lib/whatsapp/meta-limites";
+import { telefoneEstaSuprimido } from "@/lib/whatsapp/opt-out";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -1032,6 +1033,48 @@ async function processarItemDisparo(item: DisparoItemRow) {
         campanha_disparo_id: campanha.id,
         item_disparo_id: item.id,
         motivo_cancelamento: motivoCancelamento,
+      },
+    });
+
+    await recalcularCampanha(campanha.id);
+    await sincronizarAgendamentosCampanha(campanha.id);
+
+    return { status: "cancelado" as const };
+  }
+
+  if (
+    await telefoneEstaSuprimido({
+      empresaId: item.empresa_id,
+      telefone: item.telefone_normalizado || item.numero,
+    })
+  ) {
+    const agora = new Date().toISOString();
+    const motivoCancelamento =
+      "Envio cancelado porque o contato solicitou opt-out de disparos.";
+
+    await supabaseAdmin
+      .from("whatsapp_disparo_itens")
+      .update({
+        status: "cancelado",
+        erro: motivoCancelamento,
+        locked_at: null,
+        processed_at: agora,
+        updated_at: agora,
+        metadata_json: {
+          ...objeto(item.metadata_json),
+          motivo_cancelamento: "whatsapp_opt_out",
+        },
+      })
+      .eq("id", item.id);
+
+    await atualizarReservaLimiteMeta({
+      reservaIds: campanha.limite_meta_reserva_ids || [],
+      telefone: item.numero,
+      status: "cancelado",
+      metadataJson: {
+        campanha_disparo_id: campanha.id,
+        item_disparo_id: item.id,
+        motivo_cancelamento: "whatsapp_opt_out",
       },
     });
 

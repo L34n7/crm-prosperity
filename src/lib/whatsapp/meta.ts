@@ -133,6 +133,13 @@ type WhatsAppButtonMessage = {
   payload?: string;
 };
 
+type WhatsAppMessageContext = {
+  from?: string;
+  id?: string;
+  forwarded?: boolean;
+  frequently_forwarded?: boolean;
+};
+
 export type WhatsAppReferral = {
   source_url?: string;
   source_type?: string;
@@ -162,6 +169,7 @@ type WhatsAppIncomingRawMessage = {
   contacts?: WhatsAppSharedContact[];
   button?: WhatsAppButtonMessage;
   interactive?: WhatsAppInteractiveMessage;
+  context?: WhatsAppMessageContext;
   referral?: WhatsAppReferral;
 };
 
@@ -248,6 +256,7 @@ export type NormalizedMessageMetadata = {
     address?: string | null;
   } | null;
   interactive?: WhatsAppInteractiveMessage | null;
+  context?: WhatsAppMessageContext | null;
   unsupported?: {
     type?: string | null;
     details?: string | null;
@@ -566,6 +575,7 @@ export function extractIncomingMessages(
         const tipoMensagem = mapWhatsAppTypeToInternalType(type);
         const conteudo = buildConteudo(message, tipoMensagem);
         const metadataJson = buildMetadataJson(message);
+        metadataJson.context = message.context ?? null;
         const textoExtraido =
           message.text?.body ??
           message.interactive?.button_reply?.id ??

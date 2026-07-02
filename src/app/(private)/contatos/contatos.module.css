@@ -1008,13 +1008,6 @@
   }
 }
 
-@media (max-width: 768px) {
-  .pageContent {
-    gap: 16px;
-    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
-  }
-}
-
 /* Grade compacta de contatos */
 .card {
   border-radius: 16px;
@@ -1386,8 +1379,8 @@
 
 @media (max-width: 768px) {
   .pageContent {
-    gap: 12px;
-    padding: 0 0 calc(96px + env(safe-area-inset-bottom));
+    gap: 16px;
+    padding: 0px 10px calc(96px + env(safe-area-inset-bottom));
   }
 
   .card {
@@ -1435,5 +1428,92 @@
 
   .sheet .itemRight button {
     width: auto;
+  }
+
+  .filterGroupsRow {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .filterGroupBox {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .filterChecklist {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+
+  .filterCheck {
+    flex: 0 0 auto;
+  }
+  
+  .input,
+  .select,
+  .textarea {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+@media (max-width: 768px) {
+  .sidebar,
+  .sidebarCollapsed {
+    position: fixed;
+    left: 0;
+    right: auto;
+    bottom: 0;
+    top: auto;
+
+    z-index: 999;
+    width: 100dvw;
+    max-width: 100dvw;
+    min-width: 0;
+
+    height: calc(70px + env(safe-area-inset-bottom));
+    padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+
+    border-right: 0;
+    border-top: 1px solid var(--crm-border);
+    background: var(--crm-surface);
+    box-shadow: 0 -14px 36px rgba(15, 23, 42, 0.14);
+
+    overflow: visible;
+    box-sizing: border-box;
+    transform: none;
+  }
+
+  .mobileNav {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 100%;
+
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 4px;
+
+    box-sizing: border-box;
+  }
+
+  .mobileNavItem {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 56px;
+
+    overflow: hidden;
+  }
+
+  .mobileNavItem span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

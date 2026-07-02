@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
 import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
 import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import { templatePossuiInstrucaoOptOut } from "@/lib/whatsapp/opt-out-policy";
 import styles from "./disparos-agendados.module.css";
 
 type StatusDisparo = "todos" | "pendente" | "executado" | "cancelado" | "erro";
@@ -364,6 +365,14 @@ function DisparosAgendadosPageContent() {
   const [campanhaFiltro, setCampanhaFiltro] = useState("");
   const [campanhasDisponiveis, setCampanhasDisponiveis] = useState<string[]>([]);
   const [erroModal, setErroModal] = useState("");
+  const [
+    modalResponsabilidadeListaFriaAberto,
+    setModalResponsabilidadeListaFriaAberto,
+  ] = useState(false);
+  const [
+    confirmacaoResponsabilidadeListaFria,
+    setConfirmacaoResponsabilidadeListaFria,
+  ] = useState(false);
   const [previewCusto, setPreviewCusto] = useState<{
     categoria: string;
     totalSelecionados: number;
@@ -563,6 +572,27 @@ function DisparosAgendadosPageContent() {
         return;
       }
 
+      if (temContatosOptOut) {
+        setErroModal(
+          "A seleção possui contatos que solicitaram opt-out. Remova os contatos bloqueados para continuar."
+        );
+        return;
+      }
+
+      if (marketingComListaFria) {
+        setErroModal(
+          "Templates de marketing não podem ser enviados para contatos de lista fria. Remova os contatos sem opt-in para continuar."
+        );
+        return;
+      }
+
+      if (utilityListaFriaSemOptOut) {
+        setErroModal(
+          "Este template utility não possui o rodapé de opt-out. Recrie o template com a instrução para responder SAIR."
+        );
+        return;
+      }
+
       if (totalVariaveis > 3) {
         setErroModal(
           "Este template usa mais de 3 variáveis. Selecione um template com no máximo 3 variáveis."
@@ -580,6 +610,14 @@ function DisparosAgendadosPageContent() {
         setErroModal(
           "Preencha todas as variáveis exigidas pelo template."
         );
+        return;
+      }
+
+      if (
+        utilityComListaFria &&
+        !confirmacaoResponsabilidadeListaFria
+      ) {
+        setModalResponsabilidadeListaFriaAberto(true);
         return;
       }
 
@@ -604,6 +642,9 @@ function DisparosAgendadosPageContent() {
             executar_em,
 
             variaveis: variaveisObrigatorias,
+            confirmacao_responsabilidade_lista_fria:
+              utilityComListaFria &&
+              confirmacaoResponsabilidadeListaFria,
 
             contatos: contatosSelecionados.map((contato) => ({
               id: contato.id,
@@ -642,6 +683,8 @@ function DisparosAgendadosPageContent() {
       setAgendamentoHora("");
       setContatosSelecionados([]);
       setBuscaContato("");
+      setModalResponsabilidadeListaFriaAberto(false);
+      setConfirmacaoResponsabilidadeListaFria(false);
 
       await carregarDisparos();
     } catch (error: any) {
@@ -652,6 +695,13 @@ function DisparosAgendadosPageContent() {
     } finally {
       setSalvandoDisparo(false);
     }
+  }
+
+  async function confirmarResponsabilidadeEAgendar() {
+    if (!confirmacaoResponsabilidadeListaFria || !utilityComListaFria) return;
+
+    setModalResponsabilidadeListaFriaAberto(false);
+    await criarDisparoAgendado();
   }
 
   useEffect(() => {
@@ -745,10 +795,19 @@ function DisparosAgendadosPageContent() {
   }, [contatos, contatosSelecionados]);
 
   const contatosDisponiveisValidos = useMemo(() => {
-    return contatosDisponiveis.filter(contatoTemTelefoneValido);
+    return contatosDisponiveis.filter(
+      (contato) =>
+        contatoTemTelefoneValido(contato) &&
+        contato.whatsapp_opt_out !== true
+    );
   }, [contatosDisponiveis]);
 
   function adicionarContato(contato: any) {
+    if (contato.whatsapp_opt_out === true) {
+      setErro("Este contato solicitou opt-out e esta bloqueado para disparos.");
+      return;
+    }
+
     const telefone = limparNumero(contato.telefone);
 
     if (!telefone || telefone.length < 10) {
@@ -878,6 +937,35 @@ function DisparosAgendadosPageContent() {
       (item) => item.id === templateSelecionado
     ) || null;
 
+  const categoriaTemplateAtual = String(templateAtual?.categoria || "")
+    .trim()
+    .toLowerCase();
+  const totalContatosListaFria = useMemo(
+    () =>
+      contatosSelecionados.filter(
+        (contato) =>
+          contato.whatsapp_opt_out !== true &&
+          contato.opt_in_whatsapp !== true
+      ).length,
+    [contatosSelecionados]
+  );
+  const totalContatosOptOut = useMemo(
+    () =>
+      contatosSelecionados.filter(
+        (contato) => contato.whatsapp_opt_out === true
+      ).length,
+    [contatosSelecionados]
+  );
+  const temContatosOptOut = totalContatosOptOut > 0;
+  const temContatosListaFria = totalContatosListaFria > 0;
+  const marketingComListaFria =
+    categoriaTemplateAtual === "marketing" && temContatosListaFria;
+  const utilityComListaFria =
+    categoriaTemplateAtual === "utility" && temContatosListaFria;
+  const utilityListaFriaSemOptOut =
+    utilityComListaFria &&
+    !templatePossuiInstrucaoOptOut(templateAtual?.payload || null);
+
   const totalVariaveis = useMemo(() => {
     return contarVariaveisTemplate(templateAtual);
   }, [templateAtual]);
@@ -918,6 +1006,11 @@ function DisparosAgendadosPageContent() {
     templateAtual?.categoria,
     contatosSelecionados,
   ]);
+
+  useEffect(() => {
+    setModalResponsabilidadeListaFriaAberto(false);
+    setConfirmacaoResponsabilidadeListaFria(false);
+  }, [templateSelecionado, contatosSelecionados]);
    
   return (
     <>
@@ -1737,6 +1830,22 @@ function DisparosAgendadosPageContent() {
                                         </span>
                                       ) : null}
 
+                                      <span
+                                        className={
+                                          contato.whatsapp_opt_out === true
+                                            ? styles.contactBadgeOptOut
+                                            : contato.opt_in_whatsapp === true
+                                            ? styles.contactBadgeOptIn
+                                            : styles.contactBadgeCold
+                                        }
+                                      >
+                                        {contato.whatsapp_opt_out === true
+                                          ? "Opt-out de disparos"
+                                          : contato.opt_in_whatsapp === true
+                                          ? "Opt-in WhatsApp"
+                                          : "Lista fria"}
+                                      </span>
+
                                       {!telefoneValido ? (
                                         <span className={styles.contactBadgeWarning}>
                                           Sem telefone válido
@@ -1749,7 +1858,10 @@ function DisparosAgendadosPageContent() {
                                     type="button"
                                     className={styles.ButtonAdd}
                                     onClick={() => adicionarContato(contato)}
-                                    disabled={!telefoneValido}
+                                    disabled={
+                                      !telefoneValido ||
+                                      contato.whatsapp_opt_out === true
+                                    }
                                   >
                                     Adicionar
                                   </button>
@@ -1821,6 +1933,22 @@ function DisparosAgendadosPageContent() {
                                           {contato.campanha}
                                         </span>
                                       ) : null}
+
+                                      <span
+                                        className={
+                                          contato.whatsapp_opt_out === true
+                                            ? styles.contactBadgeOptOut
+                                            : contato.opt_in_whatsapp === true
+                                            ? styles.contactBadgeOptIn
+                                            : styles.contactBadgeCold
+                                        }
+                                      >
+                                        {contato.whatsapp_opt_out === true
+                                          ? "Opt-out de disparos"
+                                          : contato.opt_in_whatsapp === true
+                                          ? "Opt-in WhatsApp"
+                                          : "Lista fria"}
+                                      </span>
                                     </div>
                                   </div>
 
@@ -1837,6 +1965,54 @@ function DisparosAgendadosPageContent() {
                         </div>
                       </div>
                     </div>
+
+                    {temContatosOptOut ? (
+                      <div
+                        className={`${styles.coldListNotice} ${styles.coldListNoticeBlocked}`}
+                        role="alert"
+                      >
+                        <strong>Agendamento bloqueado por opt-out</strong>
+                        <p>
+                          {totalContatosOptOut} contato(s) selecionado(s)
+                          solicitaram o bloqueio de novos disparos. Remova-os
+                          para continuar.
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {temContatosListaFria ? (
+                      <div
+                        className={`${styles.coldListNotice} ${
+                          marketingComListaFria || utilityListaFriaSemOptOut
+                            ? styles.coldListNoticeBlocked
+                            : styles.coldListNoticeWarning
+                        }`}
+                        role={
+                          marketingComListaFria || utilityListaFriaSemOptOut
+                            ? "alert"
+                            : "status"
+                        }
+                      >
+                        <strong>
+                          {marketingComListaFria
+                            ? "Agendamento de marketing bloqueado"
+                            : utilityListaFriaSemOptOut
+                            ? "Template sem opt-out"
+                            : `${totalContatosListaFria} contato(s) de lista fria selecionado(s)`}
+                        </strong>
+                        <p>
+                          {marketingComListaFria
+                            ? "Remova os contatos sem opt-in para agendar um template de marketing."
+                            : utilityListaFriaSemOptOut
+                            ? "Recrie este template utility com o rodapé obrigatório para responder SAIR antes de utilizá-lo com lista fria."
+                            : "O template utility exigirá a confirmação de responsabilidade antes do agendamento."}
+                        </p>
+                        <span>
+                          O contato possui opt-in quando já existe uma mensagem
+                          recebida dele no WhatsApp da empresa.
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
 
                   <aside className={styles.disparoPreviewSidebar}>
@@ -1963,11 +2139,121 @@ function DisparosAgendadosPageContent() {
                   type="button"
                   className={styles.primaryButton}
                   onClick={criarDisparoAgendado}
-                  disabled={salvandoDisparo}
+                  disabled={
+                    salvandoDisparo ||
+                    marketingComListaFria ||
+                    temContatosOptOut ||
+                    utilityListaFriaSemOptOut
+                  }
                 >
-                  {salvandoDisparo
+                  {temContatosOptOut
+                    ? "Opt-out bloqueado"
+                    : utilityListaFriaSemOptOut
+                    ? "Template sem opt-out"
+                    : marketingComListaFria
+                    ? "Marketing bloqueado"
+                    : salvandoDisparo
                     ? "Agendando..."
                     : "Agendar disparo"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {modalResponsabilidadeListaFriaAberto &&
+        podeRealizarDisparos &&
+        utilityComListaFria ? (
+          <div
+            className={styles.modalOverlay}
+            onClick={() => {
+              setModalResponsabilidadeListaFriaAberto(false);
+              setConfirmacaoResponsabilidadeListaFria(false);
+            }}
+          >
+            <div
+              className={styles.modalCard}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="responsabilidade-agendamento-titulo"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Lista fria</p>
+                  <h3
+                    id="responsabilidade-agendamento-titulo"
+                    className={styles.modalTitle}
+                  >
+                    Confirmar responsabilidade
+                  </h3>
+                  <p className={styles.modalSubtitle}>
+                    O template utility será agendado para{" "}
+                    {totalContatosListaFria} contato(s) sem histórico de
+                    mensagem recebida.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.closePanelButton}
+                  aria-label="Fechar"
+                  onClick={() => {
+                    setModalResponsabilidadeListaFriaAberto(false);
+                    setConfirmacaoResponsabilidadeListaFria(false);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className={styles.modalBody}>
+                <div className={styles.riskBox}>
+                  <strong>Este envio possui risco para a conta WhatsApp.</strong>
+                  <p>
+                    O conteúdo deve ser estritamente transacional ou de
+                    serviço. Promoção, prospecção ou oferta em template utility
+                    pode resultar em denúncias, limitação ou banimento pela
+                    Meta.
+                  </p>
+                </div>
+
+                <label className={styles.responsibilityCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={confirmacaoResponsabilidadeListaFria}
+                    onChange={(e) =>
+                      setConfirmacaoResponsabilidadeListaFria(e.target.checked)
+                    }
+                  />
+                  <span>
+                    Confirmo que o conteúdo é utility, que possuo base legal
+                    para o contato e que assumo integralmente os riscos deste
+                    envio à lista fria.
+                  </span>
+                </label>
+              </div>
+
+              <div className={styles.modalFooter}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => {
+                    setModalResponsabilidadeListaFriaAberto(false);
+                    setConfirmacaoResponsabilidadeListaFria(false);
+                  }}
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={confirmarResponsabilidadeEAgendar}
+                  disabled={
+                    !confirmacaoResponsabilidadeListaFria || salvandoDisparo
+                  }
+                >
+                  {salvandoDisparo ? "Agendando..." : "Assumir e agendar"}
                 </button>
               </div>
             </div>

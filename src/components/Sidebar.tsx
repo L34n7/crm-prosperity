@@ -18,6 +18,7 @@ import {
   Contact,
   Users,
   Building2,
+  House,
   Layers3,
   IdCard,
   ShieldCheck,
@@ -257,6 +258,11 @@ export default function Sidebar({
             label: "Imóveis",
             href: "/imoveis",
             icon: Building2,
+          },
+          {
+            label: "Meus imóveis",
+            href: "/meus-imoveis",
+            icon: House,
             permissao: "imoveis.visualizar",
           },
         ]
@@ -308,13 +314,44 @@ export default function Sidebar({
     
   const mobileMoreItems = visibleMenuItems.filter(
     (item) =>
+      item.href !== "/configuracoes/whatsapp/perfil" &&
       !mobilePrimaryHrefs.includes(item.href) &&
       !configuracoesHrefs.has(item.href)
   );
 
   const mobileMoreActive =
     mobileMoreItems.some((item) => isActivePath(pathname, item.href)) ||
-    isActivePath(pathname, "/perfil");
+    isActivePath(pathname, "/perfil") ||
+    isActivePath(pathname, "/configuracoes/whatsapp/perfil");
+
+  function getMenuNotificationCount(href: string) {
+    if (href === "/conversas") {
+      return conversasNaoLidas;
+    }
+
+    if (href === "/disparos-agendados") {
+      return disparosPendentesVisiveis;
+    }
+
+    if (href === "/agendas") {
+      return agendamentosFeedbackPendentes;
+    }
+
+    return 0;
+  }
+
+  const mobileMoreNotificationCount = mobileMoreItems.reduce(
+    (total, item) => total + getMenuNotificationCount(item.href),
+    0
+  );
+
+  function getMenuNotificationClass(href: string) {
+    if (href === "/conversas") {
+      return `${styles.mobileNotificationDot} ${styles.mobileConversationsNotificationDot}`;
+    }
+
+    return styles.mobileNotificationDot;
+  }
 
   useEffect(() => {
     async function carregarPerfilWhatsapp() {
@@ -622,6 +659,7 @@ export default function Sidebar({
         {mobilePrimaryItems.map((item) => {
           const active = isActivePath(pathname, item.href);
           const Icon = item.icon;
+          const notificationCount = getMenuNotificationCount(item.href);
 
           return (
             <Link
@@ -635,9 +673,9 @@ export default function Sidebar({
               <span className={styles.mobileNavIcon}>
                 <Icon size={20} strokeWidth={2.2} />
 
-                {item.href === "/conversas" && conversasNaoLidas > 0 && (
-                  <span className={styles.mobileNotificationDot}>
-                    {conversasNaoLidas > 9 ? "9+" : conversasNaoLidas}
+                {notificationCount > 0 && (
+                  <span className={getMenuNotificationClass(item.href)}>
+                    {notificationCount > 9 ? "9+" : notificationCount}
                   </span>
                 )}
               </span>
@@ -662,6 +700,12 @@ export default function Sidebar({
             ) : (
               <MoreHorizontal size={22} strokeWidth={2.2} />
             )}
+
+            {mobileMoreNotificationCount > 0 && (
+              <span className={styles.mobileNotificationDot}>
+                {mobileMoreNotificationCount > 9 ? "9+" : mobileMoreNotificationCount}
+              </span>
+            )}
           </span>
 
           <span>Mais</span>
@@ -678,30 +722,34 @@ export default function Sidebar({
             className={styles.mobileMorePanel}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className={styles.mobileMoreHandle} />
+          <div className={styles.mobileMoreHandle} />
 
-            <div className={styles.mobileProfileCard}>
-              <Link
-                href="/perfil"
-                className={styles.mobileProfileLink}
-                onClick={() => setMobileMoreOpen(false)}
-              >
-                <span className={styles.mobileAvatar}>
-                  {avatarFinal ? (
-                    <img src={avatarFinal} alt={`Foto de ${nomeFinal}`} />
-                  ) : (
-                    <span>{letraAvatar}</span>
-                  )}
-                </span>
+            {!assinaturaBloqueada && (
+              <div className={styles.mobileWhatsappCard}>
+                <Link
+                  href="/configuracoes/whatsapp/perfil"
+                  className={styles.mobileWhatsappLink}
+                  onClick={() => setMobileMoreOpen(false)}
+                >
+                  <span className={styles.mobileWhatsappAvatar}>
+                    {whatsappPerfil?.foto ? (
+                      <img
+                        src={whatsappPerfil.foto}
+                        alt={whatsappPerfil.nome}
+                      />
+                    ) : (
+                      <MessageCircle size={20} strokeWidth={2.2} />
+                    )}
+                  </span>
 
-                <span className={styles.mobileProfileText}>
-                  <strong>{nomeFinal}</strong>
-                  <small>Meu perfil</small>
-                </span>
-
-                <UserCircle size={20} strokeWidth={2.2} />
-              </Link>
-            </div>
+                  <span className={styles.mobileWhatsappText}>
+                    <small>Perfil WhatsApp</small>
+                    <strong>{whatsappPerfil?.nome || "WhatsApp"}</strong>
+                    {whatsappPerfil?.numero && <em>{whatsappPerfil.numero}</em>}
+                  </span>
+                </Link>
+              </div>
+            )}
 
             {podeVisualizarPlanoSidebar && (
               <button
@@ -749,14 +797,13 @@ export default function Sidebar({
 
                     <span>{item.label}</span>
 
-                    {item.href === "/disparos-agendados" &&
-                      disparosPendentesVisiveis > 0 && (
-                        <span className={styles.mobileMoreBadge}>
-                          {disparosPendentesVisiveis > 9
-                            ? "9+"
-                            : disparosPendentesVisiveis}
-                        </span>
-                      )}
+                    {getMenuNotificationCount(item.href) > 0 && (
+                      <span className={styles.mobileMoreBadge}>
+                        {getMenuNotificationCount(item.href) > 9
+                          ? "9+"
+                          : getMenuNotificationCount(item.href)}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

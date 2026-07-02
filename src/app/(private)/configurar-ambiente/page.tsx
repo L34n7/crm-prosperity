@@ -7,7 +7,7 @@ import { t } from "@/i18n";
 import FeedbackToast from "@/components/FeedbackToast";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
-import { Moon, Sun } from "lucide-react";
+import { AlertTriangle, ChevronDown, Moon, Sun, X } from "lucide-react";
 
 declare global {
   interface Window {
@@ -94,6 +94,12 @@ const AJUDA_WHATSAPP_MENSAGEM = encodeURIComponent(
 );
 
 const AJUDA_WHATSAPP_URL = `https://api.whatsapp.com/send?phone=${AJUDA_WHATSAPP_NUMERO}&text=${AJUDA_WHATSAPP_MENSAGEM}`;
+
+const AJUDA_PERMISSOES_META_MENSAGEM = encodeURIComponent(
+  "Olá! Estou na etapa de permissões da conexão com a Meta no onboarding do CRM Prosperity e preciso de ajuda para concluir corretamente."
+);
+
+const AJUDA_PERMISSOES_META_URL = `https://api.whatsapp.com/send?phone=${AJUDA_WHATSAPP_NUMERO}&text=${AJUDA_PERMISSOES_META_MENSAGEM}`;
 
 const THEME_STORAGE_KEY = "crm-theme";
 
@@ -198,6 +204,9 @@ export default function ConfigurarAmbientePage() {
   const [carregandoNichos, setCarregandoNichos] = useState(true);
   const [salvandoNicho, setSalvandoNicho] = useState(false);
   const [erroNicho, setErroNicho] = useState("");
+  const [guiaMetaAberto, setGuiaMetaAberto] = useState(false);
+  const [guiaMetaFechandoRapido, setGuiaMetaFechandoRapido] = useState(false);
+  const [cuidadosMetaAbertos, setCuidadosMetaAbertos] = useState(false);
   const [perfilOnboarding, setPerfilOnboarding] =
     useState<PerfilOnboarding>({
       nomeUsuario: "usuário",
@@ -207,6 +216,26 @@ export default function ConfigurarAmbientePage() {
   const [menuContaAberto, setMenuContaAberto] = useState(false);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
   const onboardingMenuRef = useRef<HTMLDivElement | null>(null);
+
+
+  function recolherGuiaMeta() {
+    setGuiaMetaFechandoRapido(false);
+    setGuiaMetaAberto(false);
+  }
+
+  function fecharGuiaMetaRapido() {
+    setGuiaMetaFechandoRapido(true);
+    setGuiaMetaAberto(false);
+
+    window.setTimeout(() => {
+      setGuiaMetaFechandoRapido(false);
+    }, 220);
+  }
+
+  function abrirGuiaMeta() {
+    setGuiaMetaFechandoRapido(false);
+    setGuiaMetaAberto(true);
+  }
 
   function mostrarSucessoToast(mensagem: string) {
     setToastErro("");
@@ -962,6 +991,25 @@ async function salvarNichoEAvancar() {
   }, [toastSucesso, toastErro]);
 
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    if (etapaQuiz === 2) {
+      timeout = setTimeout(() => {
+        setGuiaMetaAberto(true);
+      }, 250);
+    } else {
+      setGuiaMetaAberto(false);
+      setCuidadosMetaAbertos(false);
+    }
+
+    return () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    };
+  }, [etapaQuiz]);
+
+  useEffect(() => {
     const temaAtual =
       document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 
@@ -1304,9 +1352,10 @@ return (
                   </h3>
 
                   <p className={styles.quizText}>
-                    Nesta etapa, o CRM será vinculado à Meta para capturar os
-                    dados oficiais do WhatsApp Business, como WABA ID e ID do
-                    número.
+                    Nesta etapa, vamos conectar o CRM à sua conta Meta
+                    para configurar o WhatsApp Business da sua empresa
+                    com segurança. Os dados técnicos da integração serão
+                    identificados automaticamente.
                   </p>
 
                   <div
@@ -1332,6 +1381,16 @@ return (
                     >
                       Voltar
                     </button>
+
+                    {!guiaMetaAberto && (
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => setGuiaMetaAberto(true)}
+                      >
+                        Ver guia de conexão
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -1675,6 +1734,143 @@ return (
           </section>
         )}
       </div>
+
+      <aside
+        className={`${styles.metaGuideDrawer} ${
+          guiaMetaAberto ? styles.metaGuideDrawerOpen : ""
+        } ${guiaMetaFechandoRapido ? styles.metaGuideDrawerFastClose : ""}`}
+        aria-hidden={!guiaMetaAberto}
+        aria-label="Guia de conexão Meta"
+      >
+
+      <button
+        type="button"
+        className={styles.metaGuideEdgeButton}
+        onClick={recolherGuiaMeta}
+        aria-label="Recolher guia de ajuda"
+        title="Recolher guia"
+      >
+        ›
+      </button>
+        
+        <div className={styles.metaGuideScroll}>
+          <div className={styles.metaGuideHeader}>
+            <div>
+              <span className={styles.metaGuideEyebrow}>Orientações</span>
+              <h2>Guia de conexão Meta</h2>
+            </div>
+
+            <button
+              type="button"
+              className={styles.metaGuideClose}
+              onClick={fecharGuiaMetaRapido}
+              aria-label="Fechar guia rapidamente"
+            >
+              ×
+            </button>
+          </div>
+
+          <p className={styles.metaGuideIntro}>
+            Acompanhe este guia enquanto conclui a conexão na janela da Meta.
+          </p>
+
+          <ol className={styles.metaGuideSteps}>
+            <li className={styles.metaGuideStep}>
+              <span className={styles.metaGuideStepNumber}>1</span>
+              <div>
+                <strong>Avance na Meta</strong>
+                <p>Clique em Continuar e siga as etapas exibidas.</p>
+              </div>
+            </li>
+
+            <li className={styles.metaGuideStep}>
+              <span className={styles.metaGuideStepNumber}>2</span>
+              <div>
+                <strong>Ativos de negócio</strong>
+                <p>
+                  Selecione o portfólio empresarial e a conta do WhatsApp
+                  Business corretos.
+                </p>
+              </div>
+            </li>
+
+            <li className={styles.metaGuideStep}>
+              <span className={styles.metaGuideStepNumber}>3</span>
+              <div>
+                <strong>Dados da empresa</strong>
+                <p>Confira nome, categoria, site, país e fuso horário.</p>
+              </div>
+            </li>
+
+            <li
+              className={`${styles.metaGuideStep} ${styles.metaGuideStepAlert}`}
+            >
+              <span className={styles.metaGuideAlertIcon}>
+                <AlertTriangle size={18} strokeWidth={2.4} />
+              </span>
+              <div>
+                <strong>4. Número do WhatsApp</strong>
+                <p>
+                  Escolha <b>Adicionar um novo número</b> para usar o WhatsApp no
+                  CRM.
+                </p>
+                <p className={styles.metaGuideImportant}>
+                  <b>Importante:</b> o número não pode estar ativo no aplicativo
+                  WhatsApp/WhatsApp Business nem conectado a outro CRM.
+                </p>
+              </div>
+            </li>
+          </ol>
+
+          <div className={styles.metaGuideCare}>
+              <div className={styles.metaGuideCareContent}>
+                <h3>Cuidados antes de validar</h3>
+                <p>Antes de solicitar o código, confira:</p>
+                <ul>
+                  <li>DDI e DDD do telefone.</li>
+                  <li>Se o número recebe SMS ou ligação.</li>
+                  <li>Se o número não está em uso no WhatsApp.</li>
+                  <li>Se o número não está conectado a outro CRM.</li>
+                </ul>
+                <p>
+                  A Meta limita as tentativas de envio do código por SMS.
+                  Solicitações repetidas podem bloquear temporariamente novos
+                  envios, podendo levar horas para liberar.
+                </p>
+                <strong>
+                  Solicite o código apenas quando tiver certeza de que está tudo
+                  correto.
+                </strong>
+              </div>
+          </div>
+
+          <a
+            href={AJUDA_PERMISSOES_META_URL}
+            className={styles.metaGuideWhatsappButton}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span className={styles.metaGuideWhatsappIcon}>?</span>
+
+            <div>
+              <strong>Precisa de ajuda nessa etapa?</strong>
+              <p>Fale com o suporte para revisar as permissões da Meta.</p>
+            </div>
+          </a>
+        </div>
+      </aside>
+
+      {etapaQuiz === 2 && !guiaMetaAberto && (
+        <button
+          type="button"
+          className={styles.metaGuideCollapsedBadge}
+          onClick={abrirGuiaMeta}
+          aria-label="Abrir guia de ajuda"
+        >
+          <span>Ajuda</span>
+          <strong>‹</strong>
+        </button>
+      )}
 
       {modalPinAberto && (
         <div className={styles.modalOverlay}>

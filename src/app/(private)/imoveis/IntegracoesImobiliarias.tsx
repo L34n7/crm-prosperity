@@ -3,8 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownToLine,
+  Copy,
   ExternalLink,
+  KeyRound,
+  Power,
   RadioTower,
+  RefreshCw,
   Send,
   SquareCheckBig,
   UploadCloud,
@@ -54,12 +58,36 @@ type LeadPortal = {
 type ImovelExterno = {
   id: string;
   canal_nome: string;
+  codigo: string | null;
   titulo: string;
   external_url: string | null;
+  imagem_url: string | null;
+  tipo: string | null;
+  finalidade: string | null;
+  status_origem: string | null;
   valor: number | string | null;
   bairro: string | null;
   cidade: string | null;
+  quartos: number | null;
+  banheiros: number | null;
+  vagas: number | null;
+  area_m2: number | string | null;
   recebido_em: string;
+};
+
+type IntegracaoWebhook = {
+  id: string;
+  nome: string;
+  canal_codigo: string;
+  status: "ativo" | "inativo";
+  token_hint: string;
+  ultimo_evento_em: string | null;
+  webhook_url: string;
+};
+
+type CredencialWebhook = {
+  integracaoId: string;
+  secret: string;
 };
 
 type IntegracoesImobiliariasProps = {
@@ -138,11 +166,19 @@ export default function IntegracoesImobiliarias({
   const [leadForm, setLeadForm] = useState(LEAD_INICIAL);
   const [externoForm, setExternoForm] = useState(EXTERNO_INICIAL);
   const [leads, setLeads] = useState<LeadPortal[]>([]);
-  const [externos, setExternos] = useState<ImovelExterno[]>([]);
+  const [externos] = useState<ImovelExterno[]>([]);
+  const [integracoesWebhook, setIntegracoesWebhook] = useState<
+    IntegracaoWebhook[]
+  >([]);
+  const [nomeParceiro, setNomeParceiro] = useState("");
+  const [configurandoWebhook, setConfigurandoWebhook] = useState("");
+  const [credencialWebhook, setCredencialWebhook] =
+    useState<CredencialWebhook | null>(null);
 
   const podePublicar = permissoes.includes("imoveis.publicar");
   const podeGerenciarLeads = permissoes.includes("imoveis.leads_gerenciar");
   const podeImportar = permissoes.includes("imoveis.importar");
+  const mostrarImportacaoManual = false;
 
   const imovelSelecionado = useMemo(() => {
     return (
@@ -165,27 +201,29 @@ export default function IntegracoesImobiliarias({
     setCarregandoApoio(true);
 
     try {
-      const [leadsResponse, externosResponse] = await Promise.all([
+      const [leadsResponse, webhookResponse] = await Promise.all([
         fetch("/api/imoveis/leads-portais?limite=8", { cache: "no-store" }),
-        fetch("/api/imoveis/externos?limite=8", { cache: "no-store" }),
+        podeImportar
+          ? fetch("/api/imoveis/integracoes-webhook", { cache: "no-store" })
+          : Promise.resolve(null),
       ]);
-      const [leadsData, externosData] = await Promise.all([
+      const [leadsData, webhookData] = await Promise.all([
         leadsResponse.json(),
-        externosResponse.json(),
+        webhookResponse?.json() ?? Promise.resolve(null),
       ]);
 
       if (!leadsResponse.ok) {
         throw new Error(leadsData?.error || "Erro ao carregar leads.");
       }
 
-      if (!externosResponse.ok) {
+      if (webhookResponse && !webhookResponse.ok) {
         throw new Error(
-          externosData?.error || "Erro ao carregar imoveis externos."
+          webhookData?.error || "Erro ao carregar webhooks de imoveis."
         );
       }
 
       setLeads(leadsData.leads ?? []);
-      setExternos(externosData.imoveis_externos ?? []);
+      setIntegracoesWebhook(webhookData?.integracoes ?? []);
     } catch (error) {
       onError(
         error instanceof Error
@@ -195,7 +233,7 @@ export default function IntegracoesImobiliarias({
     } finally {
       setCarregandoApoio(false);
     }
-  }, [onError]);
+  }, [onError, podeImportar]);
 
   useEffect(() => {
     if (!imovelSelecionadoId && imoveis[0]?.id) {
@@ -304,7 +342,6 @@ export default function IntegracoesImobiliarias({
 
       setExternoForm(EXTERNO_INICIAL);
       onMessage(data.message || "Imovel externo registrado.");
-      await carregarApoio();
     } catch (error) {
       onError(
         error instanceof Error
@@ -313,6 +350,114 @@ export default function IntegracoesImobiliarias({
       );
     } finally {
       setSalvandoExterno(false);
+    }
+  }
+
+  async function configurarWebhook(integracao?: IntegracaoWebhook) {
+    const nome = nomeParceiro.trim();
+
+    if (!integracao && nome.length < 2) {
+      onError("Informe o nome da empresa de origem.");
+      return;
+    }
+
+    if (
+      integracao &&
+      !window.confirm(
+        `Gerar um novo segredo para "${integracao.nome}"? O segredo atual deixara de funcionar.`
+      )
+    ) {
+      return;
+    }
+
+    setConfigurandoWebhook(integracao?.id ?? "novo");
+    setCredencialWebhook(null);
+    onError("");
+
+    try {
+      const response = await fetch("/api/imoveis/integracoes-webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          integracao_id: integracao?.id,
+          nome: integracao?.nome ?? nome,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Erro ao configurar o webhook.");
+      }
+
+      setCredencialWebhook({
+        integracaoId: data.integracao.id,
+        secret: data.secret,
+      });
+      setNomeParceiro("");
+      onMessage(
+        integracao
+          ? "Novo segredo gerado. Copie antes de sair da pagina."
+          : "Webhook criado. Copie a URL e o segredo."
+      );
+      await carregarApoio();
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? error.message
+          : "Erro ao configurar o webhook."
+      );
+    } finally {
+      setConfigurandoWebhook("");
+    }
+  }
+
+  async function copiarTexto(valor: string, descricao: string) {
+    try {
+      await navigator.clipboard.writeText(valor);
+      onMessage(`${descricao} copiado.`);
+    } catch {
+      onError(`Nao foi possivel copiar ${descricao.toLowerCase()}.`);
+    }
+  }
+
+  async function desativarWebhook(integracao: IntegracaoWebhook) {
+    if (
+      !window.confirm(
+        `Desativar o webhook de "${integracao.nome}"? Novos eventos serao recusados.`
+      )
+    ) {
+      return;
+    }
+
+    setConfigurandoWebhook(integracao.id);
+    onError("");
+
+    try {
+      const response = await fetch("/api/imoveis/integracoes-webhook", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ integracao_id: integracao.id }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Erro ao desativar o webhook.");
+      }
+
+      if (credencialWebhook?.integracaoId === integracao.id) {
+        setCredencialWebhook(null);
+      }
+
+      onMessage(data.message || "Webhook desativado.");
+      await carregarApoio();
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? error.message
+          : "Erro ao desativar o webhook."
+      );
+    } finally {
+      setConfigurandoWebhook("");
     }
   }
 
@@ -605,13 +750,155 @@ export default function IntegracoesImobiliarias({
         <aside className={styles.formCard}>
           <div className={styles.cardHeader}>
             <div>
-              <span className={styles.eyebrow}>Imoveis externos</span>
-              <h2>Importacao autorizada</h2>
-              <p>Cadastre um imovel recebido por parceiro ou feed homologado.</p>
+              <span className={styles.eyebrow}>Integração de entrada</span>
+              <h2>Recebimento por parceiros</h2>
+              <p>
+                Os imóveis recebidos aparecem no catálogo global e nunca são
+                adicionados à carteira da empresa.
+              </p>
             </div>
           </div>
 
-          <div className={styles.formGrid}>
+          <div className={styles.webhookSetup}>
+            <div className={styles.webhookSetupHeader}>
+              <div>
+                <strong>Webhook de entrada</strong>
+                <small>
+                  O nome informado identifica a empresa de origem no catálogo.
+                </small>
+              </div>
+              <KeyRound size={19} strokeWidth={2.1} />
+            </div>
+
+            {integracoesWebhook.map((integracao) => (
+              <div key={integracao.id} className={styles.webhookIntegration}>
+                <div className={styles.webhookIntegrationTitle}>
+                  <strong>{integracao.nome}</strong>
+                  <span
+                    className={`${styles.statusBadge} ${
+                      integracao.status === "ativo"
+                        ? styles.statusSuccess
+                        : styles.statusMuted
+                    }`}
+                  >
+                    {integracao.status === "ativo" ? "Ativo" : "Inativo"}
+                  </span>
+                </div>
+
+                <label className={styles.field}>
+                  <span>URL do webhook</span>
+                  <div className={styles.copyField}>
+                    <input readOnly value={integracao.webhook_url} />
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={() =>
+                        void copiarTexto(
+                          integracao.webhook_url,
+                          "URL do webhook"
+                        )
+                      }
+                      aria-label="Copiar URL do webhook"
+                    >
+                      <Copy size={16} />
+                    </button>
+                  </div>
+                </label>
+
+                {credencialWebhook?.integracaoId === integracao.id ? (
+                  <label className={styles.field}>
+                    <span>Segredo — exibido somente agora</span>
+                    <div className={styles.copyField}>
+                      <input
+                        readOnly
+                        value={credencialWebhook.secret}
+                        className={styles.secretInput}
+                      />
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() =>
+                          void copiarTexto(
+                            credencialWebhook.secret,
+                            "Segredo do webhook"
+                          )
+                        }
+                        aria-label="Copiar segredo do webhook"
+                      >
+                        <Copy size={16} />
+                      </button>
+                    </div>
+                  </label>
+                ) : (
+                  <small>
+                    Segredo atual termina em <code>{integracao.token_hint}</code>.
+                  </small>
+                )}
+
+                <div className={styles.webhookIntegrationFooter}>
+                  <small>
+                    {integracao.ultimo_evento_em
+                      ? `Ultimo evento: ${formatarData(
+                          integracao.ultimo_evento_em
+                        )}`
+                      : "Nenhum evento recebido."}
+                  </small>
+                  <div className={styles.webhookActions}>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      disabled={configurandoWebhook === integracao.id}
+                      onClick={() => void configurarWebhook(integracao)}
+                    >
+                      <RefreshCw size={15} />
+                      {integracao.status === "ativo"
+                        ? "Trocar segredo"
+                        : "Reativar"}
+                    </button>
+                    {integracao.status === "ativo" ? (
+                      <button
+                        type="button"
+                        className={styles.dangerButton}
+                        disabled={configurandoWebhook === integracao.id}
+                        onClick={() => void desativarWebhook(integracao)}
+                      >
+                        <Power size={15} />
+                        Desativar
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <label className={styles.field}>
+              <span>Nome da empresa de origem</span>
+              <input
+                value={nomeParceiro}
+                placeholder="Ex.: Imobiliária Horizonte"
+                onChange={(event) => setNomeParceiro(event.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              disabled={
+                !podeImportar ||
+                configurandoWebhook === "novo" ||
+                nomeParceiro.trim().length < 2
+              }
+              onClick={() => void configurarWebhook()}
+            >
+              <KeyRound size={16} />
+              {configurandoWebhook === "novo"
+                ? "Gerando..."
+                : "Gerar novo webhook"}
+            </button>
+          </div>
+
+          {mostrarImportacaoManual ? (
+            <>
+              <div className={styles.formGrid}>
             <label className={styles.field}>
               <span>Canal</span>
               <select
@@ -737,35 +1024,92 @@ export default function IntegracoesImobiliarias({
           {externos.length > 0 ? (
             <div className={styles.compactList}>
               {externos.map((imovel) => (
-                <div key={imovel.id} className={styles.compactItem}>
-                  <div>
-                    <strong>{imovel.titulo}</strong>
-                    <span>
-                      {imovel.canal_nome} · {imovel.bairro || "Bairro nao inf."}
-                      {imovel.cidade ? ` · ${imovel.cidade}` : ""}
-                    </span>
-                    <small>{formatarMoeda(imovel.valor)}</small>
-                  </div>
-                  <div className={styles.compactMeta}>
-                    <small>{formatarData(imovel.recebido_em)}</small>
-                    {imovel.external_url ? (
-                      <a
-                        href={imovel.external_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles.inlineLink}
-                      >
-                        <ExternalLink size={15} strokeWidth={2.2} />
-                        Abrir
-                      </a>
+                <div
+                  key={imovel.id}
+                  className={`${styles.compactItem} ${styles.externalPropertyItem}`}
+                >
+                  <div className={styles.externalPropertyImage}>
+                    <span>Sem imagem</span>
+                    {imovel.imagem_url ? (
+                      // A imagem permanece no servidor do parceiro; o CRM usa somente a URL.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={imovel.imagem_url}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(event) => {
+                          event.currentTarget.hidden = true;
+                        }}
+                      />
                     ) : null}
+                  </div>
+                  <div className={styles.externalPropertyContent}>
+                    <div>
+                      <strong>{imovel.titulo}</strong>
+                      <span>
+                        {imovel.canal_nome} ·{" "}
+                        {imovel.bairro || "Bairro nao inf."}
+                        {imovel.cidade ? ` · ${imovel.cidade}` : ""}
+                      </span>
+                      {imovel.tipo ||
+                      imovel.finalidade ||
+                      imovel.status_origem ? (
+                        <small>
+                          {[
+                            imovel.tipo,
+                            imovel.finalidade,
+                            imovel.status_origem,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
+                      ) : null}
+                      {imovel.codigo ? (
+                        <small>Codigo: {imovel.codigo}</small>
+                      ) : null}
+                      <small>
+                        {[
+                          imovel.quartos
+                            ? `${imovel.quartos} quarto(s)`
+                            : null,
+                          imovel.banheiros
+                            ? `${imovel.banheiros} banheiro(s)`
+                            : null,
+                          imovel.vagas ? `${imovel.vagas} vaga(s)` : null,
+                          imovel.area_m2 ? `${imovel.area_m2} m²` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </small>
+                      <small>{formatarMoeda(imovel.valor)}</small>
+                    </div>
+                    <div className={styles.compactMeta}>
+                      <small>{formatarData(imovel.recebido_em)}</small>
+                      {imovel.external_url ? (
+                        <a
+                          href={imovel.external_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          referrerPolicy="no-referrer"
+                          className={styles.inlineLink}
+                        >
+                          <ExternalLink size={15} strokeWidth={2.2} />
+                          Ver no site
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className={styles.muted}>Nenhum imovel externo registrado.</p>
-          )}
+              ) : (
+                <p className={styles.muted}>
+                  Nenhum imovel externo registrado.
+                </p>
+              )}
+            </>
+          ) : null}
         </aside>
       </section>
     </>

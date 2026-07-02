@@ -345,7 +345,7 @@
 @media (max-width: 720px) {
   .page {
     width: min(100% - 24px, 1080px);
-    padding-top: 12px;
+    padding-top: 0px;
   }
 
   .nicheGrid {

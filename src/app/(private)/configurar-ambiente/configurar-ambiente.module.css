@@ -736,6 +736,381 @@
   transform: none;
 }
 
+.metaGuideDrawer {
+  position: fixed;
+  top: 62px;
+  right: 0;
+  bottom: 20;
+  z-index: 70;
+  width: min(450px, calc(100vw - 12px));
+  padding: 18px 18px 22px;
+  overflow: visible;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  background: var(--crm-surface);
+  border-left: 1px solid var(--crm-border);
+  opacity: 0;
+  box-shadow: -18px 0 45px rgba(15, 23, 42, 0);
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(100%);
+  transition:
+    transform 1.9s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.45s ease,
+    visibility 0s linear 0.9s;
+}
+
+.metaGuideDrawerOpen {
+  visibility: visible;
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateX(0);
+  box-shadow: -18px 0 45px rgba(15, 23, 42, 0.14);
+  transition-delay: 0s;
+  border-radius: 30px 0 0 30px;
+}
+
+.metaGuideDrawerFastClose {
+  transition:
+    transform 0.18s ease,
+    opacity 0.14s ease,
+    visibility 0s linear 0.18s;
+}
+
+.metaGuideScroll {
+  height: 100%;
+  padding: 0px 10px 0px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.28) transparent;
+}
+
+.metaGuideEdgeButton {
+  position: absolute;
+  top: 50%;
+  left: -18px;
+  z-index: 4;
+
+  width: 18px;
+  height: 72px;
+
+  border: 1px solid var(--crm-border);
+  border-right: 0;
+  border-radius: 18px 0 0 18px;
+
+  background: var(--crm-surface);
+  color: var(--crm-text-muted);
+
+  box-shadow: -4px 4px 14px rgba(15, 23, 42, 0.06);
+
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  transform: translateY(-50%);
+
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.metaGuideEdgeButton:hover {
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-strong);
+  border-color: var(--crm-border-strong);
+  box-shadow: -5px 5px 18px rgba(15, 23, 42, 0.09);
+  transform: translateY(-50%) translateX(-1px);
+}
+
+.metaGuideCollapsedBadge {
+  position: fixed;
+  top: 132px;
+  right: 0;
+  z-index: 72;
+  min-height: 52px;
+  padding: 0 10px 0 14px;
+  border: 1px solid var(--crm-border);
+  border-right: 0;
+  border-radius: 16px 0 0 16px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  box-shadow: -8px 8px 22px rgba(15, 23, 42, 0.12);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.metaGuideCollapsedBadge span {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.metaGuideCollapsedBadge strong {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.metaGuideCollapsedBadge:hover {
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  transform: translateX(-2px);
+}
+
+.metaGuideHeader {
+  position: sticky;
+  top: -18px;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin: -18px -18px 12px;
+  padding: 18px 18px 12px;
+  background: var(--crm-surface);
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.metaGuideEyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.metaGuideHeader h2 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.metaGuideClose {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.metaGuideClose:hover {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  transform: scale(1.03);
+}
+
+.metaGuideIntro {
+  margin: 0 0 14px;
+  color: var(--crm-text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.metaGuideSteps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metaGuideStep {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.metaGuideStepNumber,
+.metaGuideAlertIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--crm-primary-soft-hover);
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.metaGuideStep strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.metaGuideStep p {
+  margin: 3px 0 0;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.metaGuideStepAlert {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+
+.metaGuideStepAlert .metaGuideAlertIcon {
+  background: var(--crm-danger-text);
+  color: var(--crm-text-inverse);
+}
+
+.metaGuideStepAlert strong,
+.metaGuideStepAlert p {
+  color: var(--crm-danger-text);
+}
+
+.metaGuideWhatsappButton {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 14px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  text-decoration: none;
+
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.metaGuideWhatsappButton:hover {
+  background: var(--crm-primary-soft-hover);
+  border-color: var(--crm-primary-border);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.metaGuideWhatsappIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--crm-primary);
+  color: var(--crm-text-inverse);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.metaGuideWhatsappButton strong {
+  display: block;
+  color: var(--crm-primary-text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.metaGuideWhatsappButton p {
+  margin: 3px 0 0;
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.metaGuideImportant {
+  padding-top: 7px;
+  border-top: 1px solid var(--crm-danger-border);
+}
+
+.metaGuideCare {
+  margin: 8px 0;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--crm-warning-bg);
+}
+
+.metaGuideCareContent {
+  padding: 0px 15px 15px;
+  color: var(--crm-warning-text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.metaGuideCareContent h3 {
+  margin: 10px 0 0;
+  font-size: 15px;
+}
+
+.metaGuideCareContent p {
+  margin: 7px 0;
+}
+
+.metaGuideCareContent ul {
+  margin: 6px 0 8px;
+  padding-left: 18px;
+}
+
+.metaGuideCareContent li + li {
+  margin-top: 2px;
+}
+
+.metaGuideCareContent > strong {
+  display: block;
+  margin-top: 8px;
+}
+
 .quizStatusRow {
   display: flex;
   align-items: center;
@@ -906,7 +1281,7 @@
 }
 
 .onboardingAccountName {
-  max-width: 130px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -996,6 +1371,17 @@
 }
 
 @media (max-width: 768px) {
+  .metaGuideDrawer {
+    top: 58px;
+    padding: 16px;
+  }
+
+  .metaGuideHeader {
+    top: -16px;
+    margin: -16px -16px 12px;
+    padding: 16px 16px 12px;
+  }
+
   .quizCard {
     padding: 22px;
     border-radius: 22px;
@@ -1025,6 +1411,23 @@
 
   .quizActions button {
     width: 100%;
+  }
+
+  .metaGuideEdgeButton {
+    top: 118px;
+    right: min(450px, calc(100vw - 12px));
+    width: 32px;
+    height: 52px;
+  }
+
+  .metaGuideCollapsedBadge {
+    top: 118px;
+    min-height: 48px;
+    padding: 0 9px 0 12px;
+  }
+
+  .metaGuideCollapsedBadge span {
+    font-size: 12px;
   }
 }
 

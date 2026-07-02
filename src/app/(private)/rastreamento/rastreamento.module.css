@@ -846,7 +846,7 @@
 
 @media (max-width: 640px) {
   .pageContent {
-    padding: 10px 14px 18px;
+    padding: 0px 14px 18px;
   }
 
   .hero {
@@ -901,7 +901,7 @@
 
 @media (max-width: 768px) {
   .pageContent {
-    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+    padding: 0px 10px calc(96px + env(safe-area-inset-bottom));
   }
 }
 
