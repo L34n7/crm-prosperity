@@ -28,6 +28,7 @@ import {
   validarPoliticaListaDisparo,
 } from "@/lib/whatsapp/disparo-politica-lista";
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 type DestinatarioEntrada = {
   numero: string;
@@ -295,11 +296,13 @@ async function obterTelefonesQueConsomemLimiteMeta(params: {
 function obterCredenciaisBasicas(params: {
   phoneNumberId?: string | null;
   configJson: ConfigJsonWhatsapp | null;
+  tokenRef?: string | null;
 }) {
   const config = params.configJson || {};
-  const token = String(
-    config.access_token || config.meta_token_response?.access_token || ""
-  ).trim();
+  const token = getWhatsAppAccessToken({
+    config_json: config as Record<string, unknown>,
+    token_ref: params.tokenRef || null,
+  });
   const phoneNumberId = String(
     params.phoneNumberId ||
       config.phone_number_id ||
@@ -701,6 +704,8 @@ export async function POST(req: NextRequest) {
     const classificacaoLista = await classificarDestinatariosPorOptIn({
       supabase: supabaseAdmin,
       empresaId,
+      integracaoWhatsappId,
+      phoneNumberId: integracao.phone_number_id,
       destinatarios: destinatarios.map((destinatario) => ({
         contatoId: destinatario.contato_id,
         telefone: destinatario.numero,
@@ -745,6 +750,7 @@ export async function POST(req: NextRequest) {
     const credenciais = obterCredenciaisBasicas({
       phoneNumberId: integracao.phone_number_id,
       configJson,
+      tokenRef: integracao.token_ref,
     });
 
     if (!credenciais.token || !credenciais.phoneNumberId) {

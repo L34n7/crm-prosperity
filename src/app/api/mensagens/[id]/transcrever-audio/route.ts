@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
 import { baixarAudioWhatsApp } from "@/lib/whatsapp/baixar-audio-whatsapp";
+import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -10,12 +12,31 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const contexto = await getUsuarioBasico();
+
+    if (!contexto.ok) {
+      return NextResponse.json(
+        { error: contexto.error },
+        { status: contexto.status }
+      );
+    }
+
+    if (!contexto.usuario.empresa_id) {
+      return NextResponse.json(
+        { error: "Usuário sem empresa vinculada." },
+        { status: 400 }
+      );
+    }
+
     const { id: mensagemId } = await context.params;
 
     const { data: mensagem, error } = await supabaseAdmin
       .from("mensagens")
-      .select("id, empresa_id, tipo_mensagem, conteudo, metadata_json")
+      .select(
+        "id, empresa_id, conversa_id, tipo_mensagem, conteudo, metadata_json"
+      )
       .eq("id", mensagemId)
+      .eq("empresa_id", contexto.usuario.empresa_id)
       .maybeSingle();
 
     if (error || !mensagem) {
@@ -52,7 +73,24 @@ export async function POST(
       );
     }
 
-    const audioBuffer = await baixarAudioWhatsApp(mediaId);
+    const { data: conversa } = await supabaseAdmin
+      .from("conversas")
+      .select("integracao_whatsapp_id")
+      .eq("id", mensagem.conversa_id)
+      .eq("empresa_id", contexto.usuario.empresa_id)
+      .maybeSingle();
+    const { data: integracao } = conversa?.integracao_whatsapp_id
+      ? await supabaseAdmin
+          .from("integracoes_whatsapp")
+          .select("token_ref, config_json")
+          .eq("id", conversa.integracao_whatsapp_id)
+          .eq("empresa_id", contexto.usuario.empresa_id)
+          .maybeSingle()
+      : { data: null };
+    const audioBuffer = await baixarAudioWhatsApp(
+      mediaId,
+      integracao ? getWhatsAppAccessToken(integracao) : null
+    );
 
     const transcricao = await transcreverAudioComIA({
       audioBuffer,
@@ -94,11 +132,16 @@ export async function POST(
       transcricao,
       jaExistia: false,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[TRANSCRICAO AUDIO] Erro:", error);
 
     return NextResponse.json(
-      { error: error?.message || "Erro ao transcrever áudio." },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao transcrever áudio.",
+      },
       { status: 500 }
     );
   }

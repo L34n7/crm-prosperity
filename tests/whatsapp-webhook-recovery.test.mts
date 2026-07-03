@@ -59,3 +59,62 @@ test("somente permite recuperar eventos pertencentes à empresa", () => {
     false
   );
 });
+
+test("extrai identificadores de echoes e histórico do Coexistence", () => {
+  const coexBody: WhatsAppWebhookBody = {
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: "waba-coex",
+        changes: [
+          {
+            field: "smb_message_echoes",
+            value: {
+              metadata: {
+                phone_number_id: "phone-coex",
+              },
+              message_echoes: [
+                {
+                  id: "wamid.echo",
+                  from: "5511999999999",
+                  to: "5511888888888",
+                  type: "text",
+                },
+              ],
+            },
+          },
+          {
+            field: "history",
+            value: {
+              metadata: {
+                phone_number_id: "phone-coex",
+              },
+              history: [
+                {
+                  threads: [
+                    {
+                      id: "5511777777777",
+                      messages: [
+                        {
+                          id: "wamid.history",
+                          from: "5511777777777",
+                          type: "text",
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  assert.deepEqual(extrairIdentificadoresWebhookWhatsapp(coexBody), {
+    phoneNumberIds: ["phone-coex"],
+    mensagemExternaIds: ["wamid.echo", "wamid.history"],
+    telefonesContatos: ["5511888888888", "5511777777777"],
+  });
+});

@@ -7,44 +7,64 @@ import {
   validarPoliticaListaDisparo,
 } from "../src/lib/whatsapp/disparo-politica-lista.ts";
 
-test("classifica opt-in usando a visão operacional em uma consulta", async () => {
+test("classifica opt-in pelo número remetente e telefone atual do contato", async () => {
   const tabelasConsultadas: string[] = [];
+  let phoneNumberIdConsultado = "";
   const supabase = {
     from(tabela: string) {
       tabelasConsultadas.push(tabela);
-      return {
+      const query = {
         select() {
-          return {
-            eq() {
-              return {
-                async in() {
-                  return {
-                    data: [
-                      {
-                        id: "contato-opt-in",
-                        telefone: "5511999999999",
-                        opt_in_whatsapp: true,
-                      },
-                      {
-                        id: "contato-frio",
-                        telefone: "5511888888888",
-                        opt_in_whatsapp: false,
-                      },
-                    ],
-                    error: null,
-                  };
+          return query;
+        },
+        eq(coluna: string, valor: unknown) {
+          if (
+            tabela === "whatsapp_contatos_opt_in_numeros" &&
+            coluna === "phone_number_id"
+          ) {
+            phoneNumberIdConsultado = String(valor || "");
+          }
+
+          return query;
+        },
+        async in() {
+          if (tabela === "contatos") {
+            return {
+              data: [
+                {
+                  id: "contato-opt-in",
+                  telefone: "5511999999999",
                 },
-              };
-            },
+                {
+                  id: "contato-frio",
+                  telefone: "5511888888888",
+                },
+              ],
+              error: null,
+            };
+          }
+
+          return {
+            data: [
+              {
+                contato_id: "contato-opt-in",
+                telefone_normalizado: "5511999999999",
+              },
+            ],
+            error: null,
           };
         },
       };
+
+      return query;
     },
   };
 
   const resultado = await classificarDestinatariosPorOptIn({
     supabase: supabase as never,
     empresaId: "empresa-1",
+    integracaoWhatsappId: "integracao-1",
+    phoneNumberId: "phone-number-1",
     destinatarios: [
       {
         contatoId: "contato-opt-in",
@@ -61,7 +81,11 @@ test("classifica opt-in usando a visão operacional em uma consulta", async () =
     ],
   });
 
-  assert.deepEqual(tabelasConsultadas, ["contatos_visao_operacional"]);
+  assert.deepEqual(tabelasConsultadas, [
+    "contatos",
+    "whatsapp_contatos_opt_in_numeros",
+  ]);
+  assert.equal(phoneNumberIdConsultado, "phone-number-1");
   assert.equal(resultado.totalOptIn, 1);
   assert.equal(resultado.totalFrios, 2);
 });

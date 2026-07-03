@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
 
     const { data: integracao, error: integracaoError } = await supabase
       .from("integracoes_whatsapp")
-      .select("id, nome_conexao, numero, status")
+      .select("id, nome_conexao, numero, status, phone_number_id")
       .eq("id", integracaoWhatsappId)
       .eq("empresa_id", usuario.empresa_id)
       .maybeSingle();
@@ -265,6 +265,8 @@ export async function POST(request: NextRequest) {
     const classificacaoLista = await classificarDestinatariosPorOptIn({
       supabase,
       empresaId: usuario.empresa_id,
+      integracaoWhatsappId,
+      phoneNumberId: integracao.phone_number_id,
       destinatarios: contatosValidos.map((contato: any) => ({
         contatoId: contato.id,
         telefone: contato.telefone,

@@ -68,6 +68,8 @@ export async function GET() {
         numero,
         status,
         provider,
+        modo_integracao,
+        coex_status,
         phone_number_id,
         waba_id,
         created_at

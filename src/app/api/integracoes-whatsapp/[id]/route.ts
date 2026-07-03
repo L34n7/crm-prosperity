@@ -11,6 +11,7 @@ const UUID_REGEX =
 
 type ConfirmacaoDesconexao = {
   confirmar_desconexao?: boolean;
+  confirmar_desconexao_coex_no_app?: boolean;
 };
 
 export async function DELETE(
@@ -61,7 +62,7 @@ export async function DELETE(
     const { data: integracao, error: integracaoError } = await supabase
       .from("integracoes_whatsapp")
       .select(
-        "id, empresa_id, nome_conexao, numero, provider, status, phone_number_id, waba_id"
+        "id, empresa_id, nome_conexao, numero, provider, status, phone_number_id, waba_id, modo_integracao, coex_status"
       )
       .eq("id", id)
       .eq("empresa_id", usuario.empresa_id)
@@ -83,6 +84,21 @@ export async function DELETE(
       return NextResponse.json(
         { ok: false, error: "Integração WhatsApp não encontrada." },
         { status: 404 }
+      );
+    }
+
+    if (
+      integracao.modo_integracao === "coexistence" &&
+      body.confirmar_desconexao_coex_no_app !== true
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Antes de remover a integração do CRM, desconecte a plataforma no WhatsApp Business App em Configurações > Conta > Plataforma de negócios.",
+          requires_coex_app_disconnect: true,
+        },
+        { status: 409 }
       );
     }
 

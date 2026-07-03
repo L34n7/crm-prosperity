@@ -6,6 +6,7 @@ import {
   type WhatsAppMetaErrorDiagnostic,
 } from "@/lib/whatsapp/meta-error-diagnostics";
 import { aplicarBloqueioOperacionalWhatsappMeta } from "@/lib/whatsapp/meta-block";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 const GRAPH_VERSION = "v23.0";
 
@@ -22,21 +23,7 @@ type IntegracaoWhatsapp = {
 };
 
 function extrairToken(integracao: IntegracaoWhatsapp) {
-  const tokenDoConfig =
-    integracao.config_json?.access_token ||
-    integracao.config_json?.accessToken ||
-    integracao.config_json?.token ||
-    integracao.config_json?.meta_access_token ||
-    integracao.config_json?.long_lived_token ||
-    null;
-
-  if (tokenDoConfig) return tokenDoConfig;
-
-  if (integracao.token_ref) {
-    return process.env[integracao.token_ref] || null;
-  }
-
-  return null;
+  return getWhatsAppAccessToken(integracao) || null;
 }
 
 function jsonErro(error: string, status = 400, extra?: any) {

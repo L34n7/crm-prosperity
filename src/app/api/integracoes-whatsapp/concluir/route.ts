@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { sanitizeWhatsAppIntegrationForClient } from "@/lib/whatsapp/access-token";
+import {
+  isCoexistencePhoneReady,
+  normalizeWhatsAppIntegrationMode,
+} from "@/lib/whatsapp/integration-mode";
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,9 +58,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!integracao.phone_registered) {
+    const modoIntegracao = normalizeWhatsAppIntegrationMode(
+      integracao.modo_integracao
+    );
+    const numeroPronto =
+      modoIntegracao === "coexistence"
+        ? isCoexistencePhoneReady(integracao)
+        : integracao.phone_registered === true;
+
+    if (!numeroPronto) {
       return NextResponse.json(
-        { ok: false, error: "O número ainda não foi registrado." },
+        {
+          ok: false,
+          error:
+            modoIntegracao === "coexistence"
+              ? "O número ainda não foi validado para uso simultâneo no WhatsApp Business App e no CRM."
+              : "O número ainda não foi registrado.",
+        },
         { status: 400 }
       );
     }
@@ -78,6 +97,9 @@ export async function POST(request: NextRequest) {
           onboarding_status: "concluido",
           onboarding_erro: null,
           setup_completed_at: agora,
+          ...(modoIntegracao === "coexistence"
+            ? { coex_status: "ativo" }
+            : {}),
           updated_at: agora,
         })
         .eq("id", integracao.id)
@@ -93,7 +115,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      integracao: integracaoAtualizada,
+      integracao:
+        sanitizeWhatsAppIntegrationForClient(integracaoAtualizada),
     });
   } catch (error) {
     console.error("[CONCLUIR INTEGRACAO WHATSAPP] Erro interno:", error);

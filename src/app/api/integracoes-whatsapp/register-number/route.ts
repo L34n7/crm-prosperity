@@ -2,18 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { encryptText } from "@/lib/security/crypto";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
+import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
 
 const supabaseAdmin = getSupabaseAdmin();
-
-function extrairAccessToken(integracao: any) {
-  const tokenConfig = integracao?.config_json?.access_token;
-
-  if (typeof tokenConfig === "string" && tokenConfig.trim()) {
-    return tokenConfig.trim();
-  }
-
-  return null;
-}
 
 async function registerNumber(request: NextRequest) {
   try {
@@ -35,6 +28,7 @@ async function registerNumber(request: NextRequest) {
 
     const empresaId = contexto.usuario.empresa_id;
     const body = await request.json().catch(() => ({}));
+    const integracaoId = String(body?.integracao_id || "").trim();
     const pin =
       typeof body?.pin === "string" && body.pin.trim()
         ? body.pin.trim()
@@ -51,11 +45,17 @@ async function registerNumber(request: NextRequest) {
       );
     }
 
-    const { data: integracao, error: integracaoError } = await supabaseAdmin
+    let integracaoQuery = supabaseAdmin
       .from("integracoes_whatsapp")
       .select("*")
       .eq("empresa_id", empresaId)
-      .eq("provider", "meta_official")
+      .eq("provider", "meta_official");
+
+    if (integracaoId) {
+      integracaoQuery = integracaoQuery.eq("id", integracaoId);
+    }
+
+    const { data: integracao, error: integracaoError } = await integracaoQuery
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -93,7 +93,23 @@ async function registerNumber(request: NextRequest) {
       );
     }
 
-    const accessToken = extrairAccessToken(integracao);
+    if (
+      normalizeWhatsAppIntegrationMode(integracao.modo_integracao) ===
+      "coexistence"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Números em Coexistência já são registrados pelo WhatsApp Business App e não devem usar a etapa de PIN.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const accessToken = getWhatsAppAccessToken(integracao, {
+      allowGlobalFallback: false,
+    });
 
     if (!accessToken) {
       return NextResponse.json(
@@ -107,7 +123,7 @@ async function registerNumber(request: NextRequest) {
     }
 
     const response = await fetch(
-      `https://graph.facebook.com/v25.0/${integracao.phone_number_id}/register`,
+      getWhatsAppGraphUrl(`${integracao.phone_number_id}/register`),
       {
         method: "POST",
         headers: {

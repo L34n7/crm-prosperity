@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   extractIncomingMessages,
   extractMessageStatuses,
+  countCoexistenceWebhookItems,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -79,6 +80,7 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
   const inicioEnfileirar = Date.now();
   const incomingMessages = extractIncomingMessages(body);
   const incomingStatuses = extractMessageStatuses(body);
+  const coexistenceItems = countCoexistenceWebhookItems(body);
   const bodyHash = calcularBodyHash(body);
   const receivedAt = new Date().toISOString();
   const identificadores = extrairIdentificadoresWebhookWhatsapp(body);
@@ -89,6 +91,12 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
     metadata_json: {
       incoming_messages: incomingMessages.length,
       incoming_statuses: incomingStatuses.length,
+      coexistence_total: coexistenceItems.total,
+      coexistence_message_echoes: coexistenceItems.messageEchoes,
+      coexistence_history_messages: coexistenceItems.historyMessages,
+      coexistence_history_states: coexistenceItems.historyStates,
+      coexistence_contacts: coexistenceItems.contacts,
+      coexistence_account_updates: coexistenceItems.accountUpdates,
       phone_number_ids: identificadores.phoneNumberIds,
       mensagem_externa_ids: identificadores.mensagemExternaIds,
       received_at: receivedAt,
@@ -110,6 +118,7 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
       eventId: data.id,
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
+      coexistenceItems: coexistenceItems.total,
     });
 
     return {
@@ -118,6 +127,7 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
       bodyHash,
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
+      coexistenceItems: coexistenceItems.total,
     };
   }
 
@@ -145,6 +155,7 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
     bodyHash,
     incomingMessages: incomingMessages.length,
     incomingStatuses: incomingStatuses.length,
+    coexistenceItems: coexistenceItems.total,
   };
 }
 

@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import {
   extractIncomingMessages,
   extractMessageStatuses,
+  countCoexistenceWebhookItems,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
 import {
@@ -73,13 +74,19 @@ export async function POST(req: NextRequest) {
 
     const incomingMessages = extractIncomingMessages(body);
     const incomingStatuses = extractMessageStatuses(body);
+    const coexistenceItems = countCoexistenceWebhookItems(body);
 
     console.log("[WEBHOOK WHATSAPP] Evento recebido:", {
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
+      coexistenceItems,
     });
 
-    if (incomingMessages.length === 0 && incomingStatuses.length === 0) {
+    if (
+      incomingMessages.length === 0 &&
+      incomingStatuses.length === 0 &&
+      coexistenceItems.total === 0
+    ) {
       return NextResponse.json(
         {
           success: true,
@@ -113,6 +120,9 @@ export async function POST(req: NextRequest) {
       );
 
       const deveUsarQstash =
+        coexistenceItems.historyMessages > 0 ||
+        coexistenceItems.historyStates > 0 ||
+        coexistenceItems.contacts > 0 ||
         (incomingStatuses.length > 0 &&
           (volumeSegundo.totalStatuses || 0) > limiteQstashStatuses) ||
         (incomingMessages.length > 0 &&
@@ -189,6 +199,7 @@ export async function POST(req: NextRequest) {
     perf("WEBHOOK / resposta 200", inicioPost, {
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
+      coexistenceItems: coexistenceItems.total,
     });
 
     return NextResponse.json(
@@ -200,6 +211,7 @@ export async function POST(req: NextRequest) {
         totals: {
           incomingMessages: incomingMessages.length,
           incomingStatuses: incomingStatuses.length,
+          coexistence: coexistenceItems,
         },
       },
       { status: 200 }

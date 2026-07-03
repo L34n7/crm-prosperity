@@ -41,6 +41,26 @@ export function extrairIdentificadoresWebhookWhatsapp(
         mensagemExternaIds.push(status?.id);
         telefonesContatos.push(status?.recipient_id);
       }
+
+      for (const echo of value?.message_echoes || []) {
+        mensagemExternaIds.push(echo?.id);
+        telefonesContatos.push(echo?.to);
+      }
+
+      for (const historyItem of value?.history || []) {
+        for (const thread of historyItem?.threads || []) {
+          telefonesContatos.push(thread?.id);
+
+          for (const mensagem of thread?.messages || []) {
+            mensagemExternaIds.push(mensagem?.id);
+            telefonesContatos.push(mensagem?.to || mensagem?.from);
+          }
+        }
+      }
+
+      for (const state of value?.state_sync || []) {
+        telefonesContatos.push(state?.contact?.phone_number);
+      }
     }
   }
 

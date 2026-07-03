@@ -1,7 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleStop } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Check, ChevronDown, CircleStop, Search } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
@@ -471,6 +478,12 @@ type VariavelPersonalizada = {
   ativo: boolean;
 };
 
+type OpcaoVariavelTemplate = {
+  chave: string;
+  descricao: string;
+  categoria: "Fixa" | "Personalizada";
+};
+
 type ProtocolosContatoMap = Record<
   string,
   {
@@ -670,6 +683,305 @@ function normalizarEntradaVariavelTemplate(valor: string) {
     .replace(/[^a-z0-9_]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_+/g, "");
+}
+
+function normalizarBuscaVariavelTemplate(valor: string) {
+  return String(valor || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function SeletorVariavelTemplate({
+  label,
+  value,
+  onChange,
+  opcoes,
+  carregando,
+}: {
+  label: string;
+  value: string;
+  onChange: (chave: string) => void;
+  opcoes: OpcaoVariavelTemplate[];
+  carregando: boolean;
+}) {
+  const inputId = useId();
+  const listboxId = useId();
+  const descricaoId = useId();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState(value);
+  const [buscando, setBuscando] = useState(false);
+  const [indiceAtivo, setIndiceAtivo] = useState(-1);
+
+  const opcaoSelecionada = useMemo(
+    () => opcoes.find((opcao) => opcao.chave === value) || null,
+    [opcoes, value]
+  );
+
+  const opcoesFiltradas = useMemo(() => {
+    if (!buscando) return opcoes;
+
+    const termo = normalizarBuscaVariavelTemplate(busca);
+    if (!termo) return opcoes;
+
+    return opcoes.filter((opcao) => {
+      const conteudo = normalizarBuscaVariavelTemplate(
+        `${opcao.chave} ${opcao.descricao} ${opcao.categoria}`
+      );
+      return conteudo.includes(termo);
+    });
+  }, [busca, buscando, opcoes]);
+
+  const fecharLista = useCallback(() => {
+    setAberto(false);
+    setBuscando(false);
+    setBusca(value);
+    setIndiceAtivo(-1);
+  }, [value]);
+
+  const abrirLista = useCallback(() => {
+    const indiceSelecionado = opcoes.findIndex(
+      (opcao) => opcao.chave === value
+    );
+
+    setAberto(true);
+    setBuscando(false);
+    setBusca(value);
+    setIndiceAtivo(
+      indiceSelecionado >= 0 ? indiceSelecionado : opcoes.length > 0 ? 0 : -1
+    );
+  }, [opcoes, value]);
+
+  useEffect(() => {
+    if (!aberto) return;
+
+    function fecharAoClicarFora(event: PointerEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        fecharLista();
+      }
+    }
+
+    document.addEventListener("pointerdown", fecharAoClicarFora);
+    return () => document.removeEventListener("pointerdown", fecharAoClicarFora);
+  }, [aberto, fecharLista]);
+
+  useEffect(() => {
+    if (
+      !aberto ||
+      indiceAtivo < 0 ||
+      indiceAtivo >= opcoesFiltradas.length
+    ) {
+      return;
+    }
+
+    document
+      .getElementById(`${listboxId}-option-${indiceAtivo}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [aberto, indiceAtivo, listboxId, opcoesFiltradas.length]);
+
+  function selecionarOpcao(opcao: OpcaoVariavelTemplate) {
+    onChange(opcao.chave);
+    setBusca(opcao.chave);
+    setBuscando(false);
+    setAberto(false);
+    setIndiceAtivo(-1);
+  }
+
+  function navegarOpcoes(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape" && aberto) {
+      event.preventDefault();
+      fecharLista();
+      return;
+    }
+
+    if (event.key === "Tab") {
+      fecharLista();
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+
+      if (!aberto) {
+        abrirLista();
+        return;
+      }
+
+      if (opcoesFiltradas.length === 0) return;
+
+      const direcao = event.key === "ArrowDown" ? 1 : -1;
+      setIndiceAtivo((indiceAtual) => {
+        if (indiceAtual < 0) {
+          return direcao > 0 ? 0 : opcoesFiltradas.length - 1;
+        }
+
+        return (
+          (indiceAtual + direcao + opcoesFiltradas.length) %
+          opcoesFiltradas.length
+        );
+      });
+      return;
+    }
+
+    if (
+      event.key === "Enter" &&
+      aberto &&
+      indiceAtivo >= 0 &&
+      opcoesFiltradas[indiceAtivo]
+    ) {
+      event.preventDefault();
+      selecionarOpcao(opcoesFiltradas[indiceAtivo]);
+    }
+  }
+
+  return (
+    <div className={styles.variableComboboxField} ref={containerRef}>
+      <label className={styles.label} htmlFor={inputId}>
+        {label}
+      </label>
+
+      <div
+        className={`${styles.variableComboboxControl} ${
+          aberto ? styles.variableComboboxControlOpen : ""
+        }`}
+      >
+        <Search
+          size={16}
+          strokeWidth={2}
+          className={styles.variableComboboxSearchIcon}
+          aria-hidden="true"
+        />
+        <input
+          id={inputId}
+          ref={inputRef}
+          type="text"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={aberto}
+          aria-controls={listboxId}
+          aria-describedby={descricaoId}
+          aria-activedescendant={
+            aberto &&
+            indiceAtivo >= 0 &&
+            indiceAtivo < opcoesFiltradas.length
+              ? `${listboxId}-option-${indiceAtivo}`
+              : undefined
+          }
+          autoComplete="off"
+          spellCheck={false}
+          value={aberto ? busca : value}
+          placeholder="Selecione uma variável"
+          className={styles.variableComboboxInput}
+          onFocus={(event) => {
+            abrirLista();
+            event.currentTarget.select();
+          }}
+          onClick={(event) => {
+            if (!aberto) abrirLista();
+            if (!buscando) event.currentTarget.select();
+          }}
+          onChange={(event) => {
+            setBusca(event.target.value);
+            setBuscando(true);
+            setAberto(true);
+            setIndiceAtivo(0);
+          }}
+          onKeyDown={navegarOpcoes}
+        />
+        <button
+          type="button"
+          className={styles.variableComboboxToggle}
+          aria-label={aberto ? "Fechar variáveis" : "Abrir variáveis"}
+          aria-expanded={aberto}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            if (aberto) {
+              fecharLista();
+            } else {
+              abrirLista();
+              inputRef.current?.focus();
+            }
+          }}
+        >
+          <ChevronDown
+            size={18}
+            aria-hidden="true"
+            className={aberto ? styles.variableComboboxChevronOpen : ""}
+          />
+        </button>
+      </div>
+
+      {aberto ? (
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-label={`Opções para ${label}`}
+          className={styles.variableComboboxMenu}
+        >
+          {opcoesFiltradas.map((opcao, index) => {
+            const selecionada = opcao.chave === value;
+            const ativa = index === indiceAtivo;
+
+            return (
+              <button
+                id={`${listboxId}-option-${index}`}
+                key={`${opcao.categoria}-${opcao.chave}`}
+                type="button"
+                role="option"
+                aria-selected={selecionada}
+                className={`${styles.variableComboboxOption} ${
+                  ativa ? styles.variableComboboxOptionActive : ""
+                } ${selecionada ? styles.variableComboboxOptionSelected : ""}`}
+                onMouseEnter={() => setIndiceAtivo(index)}
+                onClick={() => selecionarOpcao(opcao)}
+              >
+                <span className={styles.variableComboboxOptionHeader}>
+                  <strong>{`{{${opcao.chave}}}`}</strong>
+                  <span className={styles.variableComboboxCategory}>
+                    {opcao.categoria}
+                  </span>
+                  {selecionada ? (
+                    <Check
+                      size={16}
+                      strokeWidth={2.5}
+                      aria-hidden="true"
+                      className={styles.variableComboboxCheck}
+                    />
+                  ) : null}
+                </span>
+                <small>{opcao.descricao}</small>
+              </button>
+            );
+          })}
+
+          {opcoesFiltradas.length === 0 ? (
+            <div className={styles.variableComboboxEmpty}>
+              Nenhuma variável encontrada.
+            </div>
+          ) : null}
+
+          {carregando ? (
+            <div className={styles.variableComboboxLoading}>
+              Carregando variáveis personalizadas...
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <p id={descricaoId} className={styles.variableComboboxDescription}>
+        {opcaoSelecionada
+          ? opcaoSelecionada.descricao
+          : "Selecione uma variável disponível para este campo."}
+      </p>
+    </div>
+  );
 }
 
 function resolverVariavelContato(
@@ -1604,7 +1916,18 @@ export default function DisparosWhatsAppPage() {
         throw new Error(json.error || "Erro ao carregar integrações.");
       }
 
-      setIntegracoes(Array.isArray(json.data) ? json.data : []);
+      const lista = Array.isArray(json.data) ? json.data : [];
+      setIntegracoes(lista);
+      setIntegracaoId((integracaoAtual) => {
+        if (lista.length === 1) return String(lista[0].id || "");
+
+        return lista.some(
+          (integracao: IntegracaoWhatsApp) =>
+            integracao.id === integracaoAtual
+        )
+          ? integracaoAtual
+          : "";
+      });
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar integrações.");
     } finally {
@@ -1677,6 +2000,10 @@ export default function DisparosWhatsAppPage() {
 
       if (disparoAnteriorId.trim()) {
         params.set("disparo_anterior_id", disparoAnteriorId.trim());
+      }
+
+      if (integracaoId) {
+        params.set("integracao_whatsapp_id", integracaoId);
       }
 
       params.set("pagina", "1");
@@ -2156,6 +2483,7 @@ export default function DisparosWhatsAppPage() {
     origemFiltro,
     campanhaFiltro,
     disparoAnteriorFiltroContatos,
+    integracaoId,
   ]);
 
   useEffect(() => {
@@ -2405,6 +2733,38 @@ export default function DisparosWhatsAppPage() {
     () => [templateVariavel1, templateVariavel2, templateVariavel3],
     [templateVariavel1, templateVariavel2, templateVariavel3]
   );
+
+  const opcoesVariaveisTemplate = useMemo<OpcaoVariavelTemplate[]>(() => {
+    const chavesAdicionadas = new Set<string>();
+    const opcoes: OpcaoVariavelTemplate[] = [];
+
+    for (const variavel of VARIAVEIS_FIXAS_SISTEMA) {
+      if (chavesAdicionadas.has(variavel.chave)) continue;
+
+      chavesAdicionadas.add(variavel.chave);
+      opcoes.push({
+        chave: variavel.chave,
+        descricao: variavel.descricao,
+        categoria: "Fixa",
+      });
+    }
+
+    for (const variavel of variaveisPersonalizadas) {
+      const chave = normalizarEntradaVariavelTemplate(variavel.chave);
+      if (!variavel.ativo || !chave || chavesAdicionadas.has(chave)) continue;
+
+      chavesAdicionadas.add(chave);
+      opcoes.push({
+        chave,
+        descricao:
+          variavel.descricao?.trim() ||
+          "Variável personalizada cadastrada pela empresa.",
+        categoria: "Personalizada",
+      });
+    }
+
+    return opcoes;
+  }, [variaveisPersonalizadas]);
 
   const previewTemplateSelecionado = useMemo(() => {
     return montarPreviewTemplateDisparo(templateSelecionado, variaveisTemplate);
@@ -3580,8 +3940,13 @@ export default function DisparosWhatsAppPage() {
                         <label className={styles.label}>Integração WhatsApp</label>
                         <select
                           value={integracaoId} 
-                          onChange={(e) => setIntegracaoId(e.target.value)}
+                          onChange={(e) => {
+                            setIntegracaoId(e.target.value);
+                            setContatosSelecionados([]);
+                            setConfirmacaoResponsabilidadeListaFria(false);
+                          }}
                           className={styles.input}
+                          disabled={integracoes.length <= 1}
                         >
                           <option value="">Selecione uma conexão</option>
                           {integracoes.map((item) => (
@@ -3725,55 +4090,34 @@ export default function DisparosWhatsAppPage() {
                           </div>
 
                           <div className={styles.templateVariablesGrid}>
-                            <div className={styles.field}>
-                              <label className={styles.label}>Variável 1</label>
-                              <input
-                                value={templateVariavel1}
-                                onChange={(e) =>
-                                  setTemplateVariavel1(
-                                    normalizarEntradaVariavelTemplate(e.target.value)
-                                  )
-                                }
-                                className={styles.input}
-                                placeholder="nome_contato"
-                              />
-                            </div>
+                            <SeletorVariavelTemplate
+                              label="Variável 1"
+                              value={templateVariavel1}
+                              onChange={setTemplateVariavel1}
+                              opcoes={opcoesVariaveisTemplate}
+                              carregando={loadingVariaveis}
+                            />
 
                             {totalVariaveis >= 2 ? (
-                              <div className={styles.field}>
-                                <label className={styles.label}>Variável 2</label>
-                                <input
-                                  value={templateVariavel2}
-                                  onChange={(e) =>
-                                    setTemplateVariavel2(
-                                      normalizarEntradaVariavelTemplate(e.target.value)
-                                    )
-                                  }
-                                  className={styles.input}
-                                  placeholder="campanha"
-                                />
-                              </div>
+                              <SeletorVariavelTemplate
+                                label="Variável 2"
+                                value={templateVariavel2}
+                                onChange={setTemplateVariavel2}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
                             ) : null}
 
                             {totalVariaveis >= 3 ? (
-                              <div className={styles.field}>
-                                <label className={styles.label}>Variável 3</label>
-                                <input
-                                  value={templateVariavel3}
-                                  onChange={(e) =>
-                                    setTemplateVariavel3(
-                                      normalizarEntradaVariavelTemplate(e.target.value)
-                                    )
-                                  }
-                                  className={styles.input}
-                                  placeholder="telefone"
-                                />
-                              </div>
+                              <SeletorVariavelTemplate
+                                label="Variável 3"
+                                value={templateVariavel3}
+                                onChange={setTemplateVariavel3}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
                             ) : null}
                           </div>
-                            <span className={styles.help}>
-                              Variáveis fixas: {"{{nome_whatsapp}}"}, {"{{nome_contato}}"}, {"{{email_contato}}"}, {"{{numero_contato}}"}, {"{{campanha}}"}, {"{{origem}}"}, {"{{status_lead}}"}, {"{{protocolo_atual}}"} e {"{{ultimo_protocolo}}"}.
-                            </span>
                         </>
                       ) : null}
                   </div>

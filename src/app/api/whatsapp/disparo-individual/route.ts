@@ -17,6 +17,7 @@ import {
   registrarContextoOptOutTemplate,
   telefoneEstaSuprimido,
 } from "@/lib/whatsapp/opt-out";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -552,12 +553,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const configJson = integracao.config_json as ConfigJsonWhatsapp | null;
-
-    const token =
-      typeof configJson?.access_token === "string"
-        ? configJson.access_token.trim()
-        : "";
+    const token = getWhatsAppAccessToken(integracao);
 
     const phoneNumberId =
       typeof integracao.phone_number_id === "string"

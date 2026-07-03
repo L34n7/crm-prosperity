@@ -44,6 +44,14 @@ type IntegracaoWhatsapp = {
   payment_method_added?: boolean;
   phone_registered?: boolean;
   app_assigned?: boolean;
+  modo_integracao?: "cloud_api" | "coexistence";
+  modo_integracao_escolhido_em?: string | null;
+  coex_status?: string | null;
+  is_on_biz_app?: boolean | null;
+  platform_type?: string | null;
+  coex_sync_started_at?: string | null;
+  coex_sync_completed_at?: string | null;
+  tem_token?: boolean;
   config_json?: Record<string, unknown> | null;
 
   created_at?: string;
@@ -138,7 +146,15 @@ function obterIndiceEtapaAtual(integracao: IntegracaoWhatsapp | null) {
   if (!integracao) return 0;
 
   const metaConectado = !!integracao.waba_id && !!integracao.phone_number_id;
-  const numeroRegistrado = !!integracao.phone_registered;
+  const numeroRegistrado =
+    integracao.modo_integracao === "coexistence"
+      ? integracao.is_on_biz_app === true &&
+        String(integracao.platform_type || "").toUpperCase() ===
+          "CLOUD_API" &&
+        ["onboarded", "sincronizando", "ativo"].includes(
+          String(integracao.coex_status || "")
+        )
+      : !!integracao.phone_registered;
   const webhookConfigurado =
     !!integracao.webhook_verificado && !!integracao.app_assigned;
 
@@ -191,6 +207,7 @@ export default function ConfigurarAmbientePage() {
   const [registrandoNumero, setRegistrandoNumero] = useState(false);
   const [erroWebhook, setErroWebhook] = useState<string | null>(null);
   const [configurandoWebhook, setConfigurandoWebhook] = useState(false);
+  const [selecionandoModo, setSelecionandoModo] = useState(false);
   const router = useRouter();
   const numeroValido =
     !!integracao?.numero && !integracao.numero.startsWith("pendente_");
@@ -416,10 +433,7 @@ export default function ConfigurarAmbientePage() {
 
       console.log("[CONFIGURAR AMBIENTE] Integração recebida da API:", integracaoAtualizada);
 
-      const temToken =
-        !!integracaoAtualizada.config_json &&
-        typeof integracaoAtualizada.config_json === "object" &&
-        !!(integracaoAtualizada.config_json as any).access_token;
+      const temToken = integracaoAtualizada.tem_token === true;
 
       const precisaBuscarDadosMeta =
         temToken &&
@@ -460,6 +474,48 @@ export default function ConfigurarAmbientePage() {
     } finally {
       setLoading(false);
       setRecarregando(false);
+    }
+  }
+
+  async function selecionarModoIntegracao(
+    modo: "cloud_api" | "coexistence"
+  ) {
+    if (!integracao?.id || selecionandoModo) return;
+
+    try {
+      setSelecionandoModo(true);
+      const response = await fetch("/api/integracoes-whatsapp", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          integracao_id: integracao.id,
+          modo_integracao: modo,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.ok || !data.integracao) {
+        throw new Error(
+          data.error || "Não foi possível salvar o modo de integração."
+        );
+      }
+
+      setIntegracao(data.integracao);
+      mostrarSucessoToast(
+        modo === "coexistence"
+          ? "Modo WhatsApp Business + CRM selecionado."
+          : "Modo Cloud API exclusiva selecionado."
+      );
+    } catch (error) {
+      mostrarErroToast(
+        error instanceof Error
+          ? error.message
+          : "Erro ao selecionar o modo de integração."
+      );
+    } finally {
+      setSelecionandoModo(false);
     }
   }
   
@@ -509,6 +565,12 @@ async function iniciarEmbeddedSignup() {
       throw new Error("NEXT_PUBLIC_META_CONFIG_ID não configurado.");
     }
 
+    if (!integracao.modo_integracao_escolhido_em) {
+      throw new Error(
+        "Escolha como deseja usar o WhatsApp antes de conectar com a Meta."
+      );
+    }
+
     setConectandoMeta(true);
 
     await carregarFacebookSdk();
@@ -553,11 +615,31 @@ async function iniciarEmbeddedSignup() {
       console.log("✅ DADOS META CAPTURADOS E SALVOS:", dadosEmbeddedSignup);
     };
 
+    const aguardarDadosEmbeddedSignup = async () => {
+      const inicio = Date.now();
+
+      while (!dadosEmbeddedSignup && Date.now() - inicio < 8000) {
+        await new Promise((resolve) => window.setTimeout(resolve, 200));
+      }
+
+      return dadosEmbeddedSignup;
+    };
+
     const onMessage = (event: MessageEvent) => {
-      if (
-        !event.origin.includes("facebook.com") &&
-        !event.origin.includes("meta.com")
-      ) {
+      let eventHostname = "";
+      try {
+        eventHostname = new URL(event.origin).hostname.toLowerCase();
+      } catch {
+        return;
+      }
+
+      const origemMetaValida =
+        eventHostname === "facebook.com" ||
+        eventHostname.endsWith(".facebook.com") ||
+        eventHostname === "meta.com" ||
+        eventHostname.endsWith(".meta.com");
+
+      if (!origemMetaValida) {
         return;
       }
 
@@ -571,7 +653,11 @@ async function iniciarEmbeddedSignup() {
           return;
         }
 
-        if (data.event === "FINISH" || data.event === "FINISH_ONLY_WABA") {
+        if (
+          data.event === "FINISH" ||
+          data.event === "FINISH_ONLY_WABA" ||
+          data.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
+        ) {
           salvarDadosEmbeddedSignup(data);
         }
 
@@ -602,6 +688,9 @@ async function iniciarEmbeddedSignup() {
 
         setTimeout(async () => {
           try {
+            if (integracao.modo_integracao === "coexistence") {
+              await aguardarDadosEmbeddedSignup();
+            }
             window.removeEventListener("message", onMessage);
 
             if (dadosEmbeddedSignup) {
@@ -642,7 +731,16 @@ async function iniciarEmbeddedSignup() {
         scope:
           "business_management,whatsapp_business_management,whatsapp_business_messaging",
         extras: {
-          sessionInfoVersion: "3",
+          ...(integracao.modo_integracao === "coexistence"
+            ? {
+                version: "v3",
+                setup: {},
+                featureType:
+                  "whatsapp_business_app_onboarding",
+              }
+            : {
+                sessionInfoVersion: "3",
+              }),
         },
       }
     );
@@ -750,6 +848,54 @@ async function handleRegistrarNumero(pinInformado?: string) {
     if (pinInformado) {
       setModalPinAberto(true);
     }
+  } finally {
+    setRegistrandoNumero(false);
+  }
+}
+
+async function handleAtivarCoexistencia() {
+  try {
+    if (!integracao?.id) {
+      mostrarErroToast("Integração ainda não carregada.");
+      return;
+    }
+
+    setRegistrandoNumero(true);
+    const response = await fetch(
+      "/api/integracoes-whatsapp/coexistence/activate",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          integracao_id: integracao.id,
+        }),
+      }
+    );
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(
+        data.error ||
+          "Não foi possível ativar o uso simultâneo do WhatsApp."
+      );
+    }
+
+    if (data.integracao) {
+      setIntegracao(data.integracao);
+    }
+
+    mostrarSucessoToast(
+      "Coexistência ativada. Contatos e histórico estão sendo sincronizados."
+    );
+    await carregarIntegracao(false);
+  } catch (error) {
+    mostrarErroToast(
+      error instanceof Error
+        ? error.message
+        : "Erro ao ativar a Coexistência."
+    );
   } finally {
     setRegistrandoNumero(false);
   }
@@ -1047,7 +1193,18 @@ async function salvarNichoEAvancar() {
   const statusGeral = formatarStatus(integracao?.onboarding_status);
   const statusConexao = formatarStatus(integracao?.status);
   const metaConectado = !!integracao?.waba_id && !!integracao?.phone_number_id;
-  const numeroRegistrado = !!integracao?.phone_registered;
+  const modoCoexistencia =
+    integracao?.modo_integracao === "coexistence";
+  const modoIntegracaoEscolhido =
+    !!integracao?.modo_integracao_escolhido_em;
+  const numeroRegistrado = modoCoexistencia
+    ? integracao?.is_on_biz_app === true &&
+      String(integracao?.platform_type || "").toUpperCase() ===
+        "CLOUD_API" &&
+      ["onboarded", "sincronizando", "ativo"].includes(
+        String(integracao?.coex_status || "")
+      )
+    : !!integracao?.phone_registered;
   const webhookConfigurado =
     !!integracao?.webhook_verificado && !!integracao?.app_assigned;
 
@@ -1200,7 +1357,10 @@ return (
                     {etapaQuiz === 0 && "Configuração do ambiente oficial do WhatsApp"}
                     {etapaQuiz === 1 && "Segmento da empresa"}
                     {etapaQuiz === 2 && "Conectar conta Meta"}
-                    {etapaQuiz === 3 && "Ativar número do WhatsApp"}
+                    {etapaQuiz === 3 &&
+                      (modoCoexistencia
+                        ? "Ativar WhatsApp Business + CRM"
+                        : "Ativar número do WhatsApp")}
                     {etapaQuiz === 4 && "Finalizar ambiente oficial"}
                   </h2>
                 </div>
@@ -1358,6 +1518,59 @@ return (
                     identificados automaticamente.
                   </p>
 
+                  <div className={styles.integrationModeGrid}>
+                    <button
+                      type="button"
+                      className={`${styles.integrationModeCard} ${
+                        modoIntegracaoEscolhido && !modoCoexistencia
+                          ? styles.integrationModeCardSelected
+                          : ""
+                      }`}
+                      onClick={() =>
+                        selecionarModoIntegracao("cloud_api")
+                      }
+                      disabled={metaConectado || selecionandoModo}
+                    >
+                      <h1>Cloud API</h1>
+                      <strong>Conectar somente no CRM</strong>
+                      <span>
+                        Para número novo ou operação somente pelo CRM.
+                        O número não continuará ativo no aplicativo Whatsapp.                        .
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`${styles.integrationModeCard} ${
+                        modoIntegracaoEscolhido && modoCoexistencia
+                          ? styles.integrationModeCardSelected
+                          : ""
+                      }`}
+                      onClick={() =>
+                        selecionarModoIntegracao("coexistence")
+                      }
+                      disabled={metaConectado || selecionandoModo}
+                    >
+                      <h1>Coexistência</h1>
+                      <strong>Conectar no CRM e no app WhatsApp</strong>
+                      <span>
+                        Para quem já usa o número no aplicativo WhatsApp Business e quer 
+                        continuar usando no celular, junto com o CRM.
+                      </span>
+                    </button>
+                  </div>
+
+                  {modoIntegracaoEscolhido && modoCoexistencia && (
+                    <div className={styles.pinInfoBox}>
+                      <strong>Pré-requisitos da Coexistência</strong>
+                      <p>
+                        O número continuará disponível no seu WhatsApp e também 
+                        será conectado ao CRM. A Meta verificará se o número é elegível 
+                        para essa opção
+                      </p>
+                    </div>
+                  )}
+
                   <div
                     className={`${styles.quizInfoBox} ${
                       metaConectado ? styles.quizInfoBoxDone : ""
@@ -1396,12 +1609,18 @@ return (
                       type="button"
                       className={styles.primaryButton}
                       onClick={iniciarEmbeddedSignup}
-                      disabled={conectandoMeta}
+                      disabled={
+                        conectandoMeta ||
+                        selecionandoModo ||
+                        !modoIntegracaoEscolhido
+                      }
                     >
                       {conectandoMeta
                         ? "Abrindo Meta..."
                         : metaConectado
                         ? "Reconectar com a Meta"
+                        : modoCoexistencia
+                        ? "Conectar WhatsApp Business"
                         : "Conectar com a Meta"}
                     </button>
 
@@ -1432,26 +1651,31 @@ return (
                   </div>
 
                   <h3 className={styles.quizHeadline}>
-                    Ative o número oficial do WhatsApp
+                    {modoCoexistencia
+                      ? "Confirme o uso simultâneo do número"
+                      : "Ative o número oficial do WhatsApp"}
                   </h3>
 
                   <p className={styles.quizText}>
-                    Agora vamos concluir o registro técnico do número para que ele possa enviar
-                    e receber mensagens pela Cloud API oficial.
+                    {modoCoexistencia
+                      ? "Vamos validar o vínculo com o WhatsApp Business App, configurar o webhook e iniciar a sincronização de contatos e conversas."
+                      : "Agora vamos concluir o registro técnico do número para que ele possa enviar e receber mensagens pela Cloud API oficial."}
                   </p>
 
-                  <div className={styles.pinInfoBox}>
-                    <strong>Importante sobre o PIN do WhatsApp</strong>
+                  {!modoCoexistencia && (
+                    <div className={styles.pinInfoBox}>
+                      <strong>Importante sobre o PIN do WhatsApp</strong>
 
-                    <p>
-                      Nesta etapa será cadastrado ou informado o <b>PIN de verificação em duas</b> etapas do número do WhatsApp Business.
-                    </p>
+                      <p>
+                        Nesta etapa será cadastrado ou informado o <b>PIN de verificação em duas</b> etapas do número do WhatsApp Business.
+                      </p>
 
-                    <p>
-                      <b>Guarde esse PIN com segurança</b>. Ele pode ser necessário no futuro em 
-                      <b> validações</b>, <b>alterações</b> ou <b>migrações</b> do número na Meta.
-                    </p>
-                  </div>
+                      <p>
+                        <b>Guarde esse PIN com segurança</b>. Ele pode ser necessário no futuro em
+                        <b> validações</b>, <b>alterações</b> ou <b>migrações</b> do número na Meta.
+                      </p>
+                    </div>
+                  )}
                   <div
                     className={`${styles.quizInfoBox} ${
                       numeroValido ? styles.quizInfoBoxDone : ""
@@ -1473,7 +1697,13 @@ return (
                     <div>
                       <span>Status da etapa</span>
                       <strong>
-                        {numeroRegistrado ? "Número ativado" : "Aguardando ativação"}
+                        {numeroRegistrado
+                          ? modoCoexistencia
+                            ? integracao?.coex_status === "sincronizando"
+                              ? "Ativa — sincronização em andamento"
+                              : "Coexistência ativa"
+                            : "Número ativado"
+                          : "Aguardando ativação"}
                       </strong>
                     </div>
 
@@ -1497,6 +1727,11 @@ return (
                           : styles.disabledButton
                       }
                       onClick={() => {
+                        if (modoCoexistencia) {
+                          void handleAtivarCoexistencia();
+                          return;
+                        }
+
                         setErroPin("");
                         setModalPinAberto(true);
                       }}
@@ -1506,6 +1741,8 @@ return (
                         ? "Ativando..."
                         : numeroRegistrado
                         ? "Número já ativado"
+                        : modoCoexistencia
+                        ? "Ativar Coexistência"
                         : "Ativar número"}
                     </button>
 

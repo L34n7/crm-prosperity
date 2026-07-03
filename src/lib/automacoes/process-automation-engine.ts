@@ -32,6 +32,7 @@ import {
 import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
 import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { Client as QstashClient } from "@upstash/qstash";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -7318,7 +7319,29 @@ async function registrarInterpretacaoArquivoAutomacao(params: {
   }
 
   try {
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+    const { data: conversationIntegration } = await supabaseAdmin
+      .from("conversas")
+      .select(
+        `
+        id,
+        integracoes_whatsapp (
+          id,
+          token_ref,
+          config_json
+        )
+      `
+      )
+      .eq("id", conversaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const mediaIntegration = Array.isArray(
+      conversationIntegration?.integracoes_whatsapp
+    )
+      ? conversationIntegration.integracoes_whatsapp[0]
+      : conversationIntegration?.integracoes_whatsapp;
+    const accessToken = getWhatsAppAccessToken(
+      mediaIntegration || {}
+    );
 
     if (!accessToken) {
       throw new Error("WHATSAPP_ACCESS_TOKEN não configurado.");
@@ -9052,6 +9075,7 @@ export async function enviarMensagemAutomacao(params: {
         id,
         phone_number_id,
         token_ref,
+        config_json,
         status
       )
     `
@@ -9075,7 +9099,7 @@ export async function enviarMensagemAutomacao(params: {
   const phoneNumberId =
     integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+  const accessToken = getWhatsAppAccessToken(integracao);
 
   if (!phoneNumberId) {
     throw new Error("WHATSAPP_PHONE_NUMBER_ID não configurado.");
@@ -9259,6 +9283,7 @@ async function enviarBotoesAutomacao({
           id,
           phone_number_id,
           token_ref,
+          config_json,
           status
         )
       `
@@ -9278,7 +9303,7 @@ async function enviarBotoesAutomacao({
     const phoneNumberId =
       integracao?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+    const accessToken = getWhatsAppAccessToken(integracao || {});
 
     if (!phoneNumberId) {
       throw new Error("WHATSAPP_PHONE_NUMBER_ID não configurado.");
@@ -9458,6 +9483,7 @@ async function enviarBotaoRedirectAutomacao({
         id,
         phone_number_id,
         token_ref,
+        config_json,
         status
       )
     `
@@ -9479,7 +9505,7 @@ async function enviarBotaoRedirectAutomacao({
   const phoneNumberId =
     integracao?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+  const accessToken = getWhatsAppAccessToken(integracao || {});
 
   if (!phoneNumberId) {
     throw new Error("WHATSAPP_PHONE_NUMBER_ID nao configurado.");
@@ -9654,6 +9680,7 @@ async function enviarMidiaAutomacao(params: {
         id,
         phone_number_id,
         token_ref,
+        config_json,
         status
       )
     `
@@ -9673,7 +9700,7 @@ async function enviarMidiaAutomacao(params: {
   const phoneNumberId =
     integracao?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+  const accessToken = getWhatsAppAccessToken(integracao || {});
 
   if (!phoneNumberId) {
     throw new Error("WHATSAPP_PHONE_NUMBER_ID não configurado.");

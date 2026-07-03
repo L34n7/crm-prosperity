@@ -6,7 +6,13 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import { classificarDestinatariosPorOptIn } from "@/lib/whatsapp/disparo-politica-lista";
 
+type ContatoLista = {
+  id: unknown;
+  telefone: unknown;
+  [chave: string]: unknown;
+};
 
 function podeGerenciarContatos(usuario: UsuarioContexto) {
   const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
@@ -91,6 +97,8 @@ export async function GET(request: Request) {
     searchParams.get("rastreamento_campanha_id")?.trim() || "";
   const disparoAnteriorId =
     searchParams.get("disparo_anterior_id")?.trim() || "";
+  const integracaoWhatsappId =
+    searchParams.get("integracao_whatsapp_id")?.trim() || "";
   const telefoneRevisar = searchParams.get("telefone_revisar");
   const optIn = searchParams.get("opt_in");
   const optOut = searchParams.get("opt_out");
@@ -292,9 +300,47 @@ export async function GET(request: Request) {
     );
   }
 
+  let contatos = (
+    Array.isArray(data) ? data : data ? [data] : []
+  ) as ContatoLista[];
+
+  if (integracaoWhatsappId && contatos.length > 0) {
+    try {
+      const classificacao = await classificarDestinatariosPorOptIn({
+        supabase: supabaseAdmin,
+        empresaId: usuario.empresa_id,
+        integracaoWhatsappId,
+        destinatariosJaCarregadosDoBanco: true,
+        destinatarios: contatos.map((contato) => ({
+          contatoId: String(contato.id || "").trim() || null,
+          telefone: String(contato.telefone || "").trim() || null,
+        })),
+      });
+
+      contatos = contatos.map((contato) => ({
+        ...contato,
+        opt_in_whatsapp: classificacao.contatosComOptIn.has(
+          String(contato.id)
+        ),
+        opt_in_whatsapp_integracao_id: integracaoWhatsappId,
+      }));
+    } catch (optInError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            optInError instanceof Error
+              ? optInError.message
+              : "Erro ao validar o opt-in por numero.",
+        },
+        { status: 500 }
+      );
+    }
+  }
+
   return NextResponse.json({
     ok: true,
-    contatos: data || [],
+    contatos,
     total: count ?? 0,
     pagina,
     limite,

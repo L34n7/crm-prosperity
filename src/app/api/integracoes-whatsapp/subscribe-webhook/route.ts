@@ -1,8 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
 
 export async function POST(request: NextRequest) {
   try {
+    const contexto = await getUsuarioBasico();
+
+    if (!contexto.ok) {
+      return NextResponse.json(
+        { ok: false, error: contexto.error },
+        { status: contexto.status }
+      );
+    }
+
+    if (!contexto.usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada." },
+        { status: 400 }
+      );
+    }
+
     const { integracao_id } = await request.json();
 
     if (!integracao_id) {
@@ -18,7 +37,9 @@ export async function POST(request: NextRequest) {
       .from("integracoes_whatsapp")
       .select("*")
       .eq("id", integracao_id)
-      .single();
+      .eq("empresa_id", contexto.usuario.empresa_id)
+      .eq("provider", "meta_official")
+      .maybeSingle();
 
     if (!integracao) {
       return NextResponse.json(
@@ -27,7 +48,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const accessToken = (integracao.config_json as any)?.access_token;
+    const accessToken = getWhatsAppAccessToken(integracao, {
+      allowGlobalFallback: false,
+    });
 
     if (!accessToken || !integracao.waba_id) {
       return NextResponse.json(
@@ -38,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // 🔥 INSCRIBE APP NO WABA
     const response = await fetch(
-      `https://graph.facebook.com/v25.0/${integracao.waba_id}/subscribed_apps`,
+      getWhatsAppGraphUrl(`${integracao.waba_id}/subscribed_apps`),
       {
         method: "POST",
         headers: {

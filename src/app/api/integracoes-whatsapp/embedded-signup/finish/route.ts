@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sanitizeWhatsAppIntegrationForClient } from "@/lib/whatsapp/access-token";
+import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
 
 type UsuarioSistema = {
   id: string;
@@ -129,6 +131,15 @@ export async function POST(request: NextRequest) {
       updatePayload.phone_number_id = body.phone_number_id;
     }
 
+    if (
+      normalizeWhatsAppIntegrationMode(integracao.modo_integracao) ===
+        "coexistence" &&
+      body.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
+    ) {
+      updatePayload.coex_status = "onboarded";
+      updatePayload.coex_onboarded_at = agora;
+    }
+
     const configJsonAtual =
       integracao.config_json && typeof integracao.config_json === "object"
         ? integracao.config_json
@@ -156,7 +167,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      integracao: integracaoAtualizada,
+      integracao:
+        sanitizeWhatsAppIntegrationForClient(integracaoAtualizada),
     });
   } catch (error) {
     console.error("[EMBEDDED SIGNUP FINISH] Erro interno:", error);

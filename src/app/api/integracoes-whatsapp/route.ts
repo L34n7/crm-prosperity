@@ -1,6 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  sanitizeWhatsAppIntegrationForClient,
+} from "@/lib/whatsapp/access-token";
+import {
+  isWhatsAppIntegrationMode,
+  type WhatsAppIntegrationMode,
+} from "@/lib/whatsapp/integration-mode";
 
 type UsuarioSistema = {
   id: string;
@@ -61,6 +68,10 @@ function erroDeRegistroDuplicado(error: unknown) {
       "integracoes_whatsapp_numero_key"
     )
   );
+}
+
+function respostaIntegracao(integracao: Record<string, unknown>) {
+  return sanitizeWhatsAppIntegrationForClient(integracao);
 }
 
 export async function GET() {
@@ -130,7 +141,7 @@ export async function GET() {
           id: empresa.id,
           nome: empresa.nome_fantasia || empresa.razao_social || "sua empresa",
         },
-        integracao: integracaoExistente,
+        integracao: respostaIntegracao(integracaoExistente),
       });
     }
 
@@ -152,6 +163,8 @@ export async function GET() {
           // onboarding
           onboarding_etapa: "inicio",
           onboarding_status: "pendente",
+          modo_integracao: "cloud_api",
+          modo_integracao_escolhido_em: null,
           phone_registered: false,
           payment_method_added: true,
           app_assigned: false,
@@ -195,7 +208,7 @@ export async function GET() {
                 empresa.razao_social ||
                 "sua empresa",
             },
-            integracao: integracaoCriadaEmParalelo,
+            integracao: respostaIntegracao(integracaoCriadaEmParalelo),
           });
         }
       }
@@ -226,13 +239,132 @@ export async function GET() {
       id: empresa.id,
       nome: empresa.nome_fantasia || empresa.razao_social || "sua empresa",
     },
-    integracao: novaIntegracao,
+    integracao: respostaIntegracao(novaIntegracao),
   });
   } catch (error) {
     console.error("Erro ao iniciar integração WhatsApp:", error);
 
     return NextResponse.json(
       { ok: false, error: "Erro interno." },
+      { status: 500 }
+    );
+  }
+}
+
+type PatchIntegrationPayload = {
+  integracao_id?: string;
+  modo_integracao?: WhatsAppIntegrationMode;
+};
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const auth = await getUsuarioLogado();
+
+    if ("error" in auth) {
+      return NextResponse.json(
+        { ok: false, error: auth.error },
+        { status: auth.status }
+      );
+    }
+
+    if (!auth.usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada." },
+        { status: 400 }
+      );
+    }
+
+    const body = (await request.json().catch(() => null)) as
+      | PatchIntegrationPayload
+      | null;
+    const integracaoId = String(body?.integracao_id || "").trim();
+    const modoIntegracao = body?.modo_integracao;
+
+    if (!integracaoId || !isWhatsAppIntegrationMode(modoIntegracao)) {
+      return NextResponse.json(
+        { ok: false, error: "Integração ou modo de integração inválido." },
+        { status: 400 }
+      );
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: integracao, error: findError } = await supabaseAdmin
+      .from("integracoes_whatsapp")
+      .select("*")
+      .eq("id", integracaoId)
+      .eq("empresa_id", auth.usuario.empresa_id)
+      .eq("provider", "meta_official")
+      .maybeSingle();
+
+    if (findError) {
+      return NextResponse.json(
+        { ok: false, error: findError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!integracao) {
+      return NextResponse.json(
+        { ok: false, error: "Integração WhatsApp não encontrada." },
+        { status: 404 }
+      );
+    }
+
+    if (
+      integracao.status === "ativa" ||
+      integracao.waba_id ||
+      integracao.phone_number_id
+    ) {
+      if (integracao.modo_integracao === modoIntegracao) {
+        return NextResponse.json({
+          ok: true,
+          integracao: respostaIntegracao(integracao),
+        });
+      }
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "O modo não pode ser alterado depois que a conexão com a Meta foi iniciada. Desconecte a integração para escolher outro modo.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const agora = new Date().toISOString();
+    const { data: atualizada, error: updateError } = await supabaseAdmin
+      .from("integracoes_whatsapp")
+      .update({
+        modo_integracao: modoIntegracao,
+        modo_integracao_escolhido_em: agora,
+        coex_status:
+          modoIntegracao === "coexistence" ? "pendente" : null,
+        is_on_biz_app: null,
+        platform_type: null,
+        onboarding_erro: null,
+        updated_at: agora,
+      })
+      .eq("id", integracao.id)
+      .eq("empresa_id", auth.usuario.empresa_id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      return NextResponse.json(
+        { ok: false, error: updateError.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      integracao: respostaIntegracao(atualizada),
+    });
+  } catch (error) {
+    console.error("[INTEGRACAO WHATSAPP] Erro ao escolher modo:", error);
+    return NextResponse.json(
+      { ok: false, error: "Erro interno ao escolher a integração." },
       { status: 500 }
     );
   }

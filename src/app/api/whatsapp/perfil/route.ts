@@ -12,6 +12,7 @@ import {
   obterResumoLimiteMeta,
   resolverLimitePorTier,
 } from "@/lib/whatsapp/meta-limites";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 const GRAPH_VERSION = "v23.0";
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
@@ -41,44 +42,14 @@ type IntegracaoWhatsapp = {
   setup_completed_at: string | null;
   onboarding_status: string | null;
   onboarding_erro: string | null;
+  modo_integracao?: string | null;
+  coex_status?: string | null;
   config_json: ConfigJson;
   token_ref: string | null;
 };
 
-function extrairStringConfig(
-  configJson: ConfigJson,
-  chaves: string[]
-) {
-  for (const chave of chaves) {
-    const valor = configJson?.[chave];
-
-    if (typeof valor === "string" && valor.trim()) {
-      return valor.trim();
-    }
-  }
-
-  return null;
-}
-
 function extrairToken(integracao: IntegracaoWhatsapp) {
-  const tokenDoConfig = extrairStringConfig(integracao.config_json, [
-    "access_token",
-    "accessToken",
-    "token",
-    "meta_access_token",
-    "long_lived_token",
-  ]);
-
-  if (typeof tokenDoConfig === "string" && tokenDoConfig.trim()) {
-    return tokenDoConfig.trim();
-  }
-
-  if (integracao.token_ref) {
-    const tokenDoEnv = process.env[integracao.token_ref];
-    return tokenDoEnv?.trim() || null;
-  }
-
-  return null;
+  return getWhatsAppAccessToken(integracao) || null;
 }
 
 function jsonErro(error: string, status = 400, extra?: unknown) {
@@ -94,7 +65,7 @@ async function buscarIntegracao(
   let query = supabase
     .from("integracoes_whatsapp")
     .select(
-      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, phone_number_status, quality_rating, meta_messaging_limit_tier, meta_messaging_limit, meta_account_mode, meta_saude_ultima_verificacao_em, setup_completed_at, onboarding_status, onboarding_erro, config_json, token_ref"
+      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, phone_number_status, quality_rating, meta_messaging_limit_tier, meta_messaging_limit, meta_account_mode, meta_saude_ultima_verificacao_em, setup_completed_at, onboarding_status, onboarding_erro, modo_integracao, coex_status, config_json, token_ref"
     )
     .eq("empresa_id", empresaId)
     .eq("provider", "meta_official")
@@ -299,6 +270,10 @@ function montarIntegracaoResposta(
       overrides.setup_completed_at ?? integracao.setup_completed_at ?? null,
     onboarding_erro:
       overrides.onboarding_erro ?? integracao.onboarding_erro ?? null,
+    modo_integracao:
+      overrides.modo_integracao ?? integracao.modo_integracao ?? "cloud_api",
+    coex_status:
+      overrides.coex_status ?? integracao.coex_status ?? null,
   };
 }
 

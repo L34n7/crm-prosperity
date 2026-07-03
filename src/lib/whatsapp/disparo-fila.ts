@@ -15,6 +15,10 @@ import { qstash } from "@/lib/qstash/client";
 import { resolverDisparoAgendadoParaFila } from "@/lib/whatsapp/disparo-agendado-variaveis";
 import { atualizarReservaLimiteMeta } from "@/lib/whatsapp/meta-limites";
 import { telefoneEstaSuprimido } from "@/lib/whatsapp/opt-out";
+import {
+  classificarDestinatariosPorOptIn,
+  validarPoliticaListaDisparo,
+} from "@/lib/whatsapp/disparo-politica-lista";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -40,6 +44,7 @@ type DisparoItemRow = {
   integracao_whatsapp_id: string;
   template_id: string;
   usuario_id: string | null;
+  contato_id?: string | null;
   numero: string;
   telefone_normalizado: string;
   nome_contato: string | null;
@@ -1050,6 +1055,73 @@ async function processarItemDisparo(item: DisparoItemRow) {
     buscarTemplate(campanha.template_id, campanha.empresa_id),
     buscarIntegracao(campanha.integracao_whatsapp_id, campanha.empresa_id),
   ]);
+
+  const classificacaoLista = await classificarDestinatariosPorOptIn({
+    supabase: supabaseAdmin,
+    empresaId: item.empresa_id,
+    integracaoWhatsappId: item.integracao_whatsapp_id,
+    phoneNumberId: integracao.phone_number_id,
+    destinatarios: [
+      {
+        contatoId: item.contato_id,
+        telefone: item.telefone_normalizado || item.numero,
+      },
+    ],
+  });
+  const politicaLista = validarPoliticaListaDisparo({
+    categoria: template.categoria,
+    totalContatosFrios: classificacaoLista.totalFrios,
+    responsabilidadeListaFriaConfirmada:
+      objeto(campanha.metadata_json)
+        .responsabilidade_lista_fria_confirmada === true,
+  });
+  const utilityFrioSemOptOut =
+    politicaLista.categoria === "utility" &&
+    classificacaoLista.totalFrios > 0 &&
+    template.opt_out_habilitado !== true;
+
+  if (!politicaLista.ok || utilityFrioSemOptOut) {
+    const agora = new Date().toISOString();
+    const motivoCancelamento = utilityFrioSemOptOut
+      ? "Envio cancelado: o contato e lista fria para este numero e o template utility nao possui opt-out."
+      : politicaLista.error;
+    const motivoCodigo = utilityFrioSemOptOut
+      ? "template_utility_sem_opt_out"
+      : String(politicaLista.code || "politica_lista_fria");
+
+    await supabaseAdmin
+      .from("whatsapp_disparo_itens")
+      .update({
+        status: "cancelado",
+        erro: motivoCancelamento,
+        locked_at: null,
+        processed_at: agora,
+        updated_at: agora,
+        metadata_json: {
+          ...objeto(item.metadata_json),
+          motivo_cancelamento: motivoCodigo,
+          opt_in_phone_number_id: classificacaoLista.phoneNumberId,
+          opt_in_revalidado_em: agora,
+        },
+      })
+      .eq("id", item.id);
+
+    await atualizarReservaLimiteMeta({
+      reservaIds: campanha.limite_meta_reserva_ids || [],
+      telefone: item.numero,
+      status: "cancelado",
+      metadataJson: {
+        campanha_disparo_id: campanha.id,
+        item_disparo_id: item.id,
+        motivo_cancelamento: motivoCodigo,
+      },
+    });
+
+    await recalcularCampanha(campanha.id);
+    await sincronizarAgendamentosCampanha(campanha.id);
+
+    return { status: "cancelado" as const };
+  }
 
   if (
     await telefoneEstaSuprimido({

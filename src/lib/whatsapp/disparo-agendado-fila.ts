@@ -616,6 +616,10 @@ async function enfileirarGrupo(agendamentos: AgendamentoDisparo[]) {
           agendamento_chave: chave,
           executar_em: primeiro.executar_em,
           total_consumem_limite_meta: telefonesQueConsomem.length,
+          total_contatos_frios: Number(payload.total_contatos_frios || 0),
+          total_contatos_opt_in: Number(payload.total_contatos_opt_in || 0),
+          responsabilidade_lista_fria_confirmada:
+            payload.responsabilidade_lista_fria_confirmada === true,
           template_payload:
             (template.payload || null) as TemplatePayloadDisparo | null,
         },

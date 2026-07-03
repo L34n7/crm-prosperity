@@ -1,4 +1,9 @@
 import type { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  buscarContatosComOptInPorNumero,
+  buscarPhoneNumberIdIntegracao,
+  criarChaveDestinatarioOptIn,
+} from "./opt-in-por-numero.ts";
 
 type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
 
@@ -25,82 +30,49 @@ export function normalizarCategoriaDisparo(
   return "outra";
 }
 
-function somenteDigitos(valor: unknown) {
-  return String(valor || "").replace(/\D/g, "");
-}
-
 export async function classificarDestinatariosPorOptIn(params: {
   supabase: SupabaseAdmin;
   empresaId: string;
+  integracaoWhatsappId: string;
+  phoneNumberId?: string | null;
+  destinatariosJaCarregadosDoBanco?: boolean;
   destinatarios: Array<{
     contatoId?: string | null;
     telefone?: string | null;
   }>;
 }) {
-  const contatoIds = Array.from(
-    new Set(
-      params.destinatarios
-        .map((destinatario) => String(destinatario.contatoId || "").trim())
-        .filter(Boolean)
-    )
-  );
+  const phoneNumberId =
+    String(params.phoneNumberId || "").trim() ||
+    (await buscarPhoneNumberIdIntegracao({
+      supabase: params.supabase,
+      empresaId: params.empresaId,
+      integracaoWhatsappId: params.integracaoWhatsappId,
+    }));
 
+  const destinatariosComOptIn = await buscarContatosComOptInPorNumero({
+    supabase: params.supabase,
+    empresaId: params.empresaId,
+    phoneNumberId,
+    destinatarios: params.destinatarios,
+    validarTelefonesAtuais: !params.destinatariosJaCarregadosDoBanco,
+  });
   const contatosComOptIn = new Set<string>();
-  const contatosPorId = new Map<
-    string,
-    { telefone: string; optIn: boolean }
-  >();
-
-  if (contatoIds.length > 0) {
-    const { data, error } = await params.supabase
-      .from("contatos_visao_operacional")
-      .select("id, telefone, opt_in_whatsapp")
-      .eq("empresa_id", params.empresaId)
-      .in("id", contatoIds);
-
-    if (error) {
-      throw new Error(
-        `Erro ao validar os contatos selecionados: ${error.message}`
-      );
-    }
-
-    for (const contato of data || []) {
-      contatosPorId.set(String(contato.id), {
-        telefone: somenteDigitos(contato.telefone),
-        optIn: contato.opt_in_whatsapp === true,
-      });
-    }
-
-    for (const destinatario of params.destinatarios) {
-      const contatoId = String(destinatario.contatoId || "").trim();
-      const telefone = somenteDigitos(destinatario.telefone);
-      const contato = contatosPorId.get(contatoId);
-
-      if (
-        contatoId &&
-        telefone &&
-        contato?.telefone === telefone &&
-        contato.optIn
-      ) {
-        contatosComOptIn.add(contatoId);
-      }
-    }
-  }
 
   const contatosFrios = params.destinatarios.filter((destinatario) => {
     const contatoId = String(destinatario.contatoId || "").trim();
-    const telefone = somenteDigitos(destinatario.telefone);
-    const contato = contatosPorId.get(contatoId);
+    const possuiOptIn =
+      contatoId &&
+      destinatariosComOptIn.has(
+        criarChaveDestinatarioOptIn(contatoId, destinatario.telefone)
+      );
 
-    return (
-      !contatoId ||
-      !telefone ||
-      contato?.telefone !== telefone ||
-      contato?.optIn !== true
-    );
+    if (possuiOptIn) contatosComOptIn.add(contatoId);
+
+    return !possuiOptIn;
   });
 
   return {
+    phoneNumberId,
     total: params.destinatarios.length,
     totalOptIn: params.destinatarios.length - contatosFrios.length,
     totalFrios: contatosFrios.length,

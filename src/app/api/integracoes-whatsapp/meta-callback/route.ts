@@ -1,10 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-
-const REDIRECT_URI = process.env.NEXT_PUBLIC_META_REDIRECT_URI!;
+import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
+import {
+  encryptWhatsAppAccessToken,
+  sanitizeWhatsAppIntegrationForClient,
+} from "@/lib/whatsapp/access-token";
+import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
+import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
 
 export async function POST(request: NextRequest) {
   try {
+    const contexto = await getUsuarioBasico();
+
+    if (!contexto.ok) {
+      return NextResponse.json(
+        { ok: false, error: contexto.error },
+        { status: contexto.status }
+      );
+    }
+
+    if (!contexto.usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada." },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
     const code = body?.code;
     const state = body?.state;
@@ -37,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tokenUrl = new URL("https://graph.facebook.com/v25.0/oauth/access_token");
+    const tokenUrl = new URL(getWhatsAppGraphUrl("oauth/access_token"));
     tokenUrl.searchParams.set("client_id", appId);
     tokenUrl.searchParams.set("client_secret", appSecret);
     tokenUrl.searchParams.set("code", code);
@@ -82,6 +103,7 @@ export async function POST(request: NextRequest) {
       .from("integracoes_whatsapp")
       .select("*")
       .eq("id", state)
+      .eq("empresa_id", contexto.usuario.empresa_id)
       .eq("provider", "meta_official")
       .maybeSingle();
 
@@ -103,6 +125,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const modoIntegracao = normalizeWhatsAppIntegrationMode(
+      integracao.modo_integracao
+    );
+    const embeddedSignupEvent = String(
+      embeddedSignup?.event || ""
+    ).trim();
+
+    if (!integracao.modo_integracao_escolhido_em) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "O modo de integração precisa ser escolhido antes da conexão com a Meta.",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (
+      modoIntegracao === "coexistence" &&
+      embeddedSignupEvent !==
+        "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "A Meta não concluiu o fluxo de Coexistência. Confirme que o número já está ativo no WhatsApp Business App e tente novamente.",
+        },
+        { status: 400 }
+      );
+    }
+
     const agora = new Date().toISOString();
 
     const configJsonAtual =
@@ -117,16 +172,27 @@ export async function POST(request: NextRequest) {
           onboarding_etapa: wabaId ? "waba_criada" : "meta_conectado",
           onboarding_status: "em_andamento",
           onboarding_erro: null,
-          token_ref: "config_json.access_token",
+          token_ref: "config_json.access_token_encrypted",
           waba_id: wabaId || integracao.waba_id,
           phone_number_id: phoneNumberId || integracao.phone_number_id,
           business_portfolio_id: businessPortfolioId || integracao.business_portfolio_id,
+          ...(modoIntegracao === "coexistence"
+            ? {
+                coex_status: "onboarded",
+                coex_onboarded_at: agora,
+              }
+            : {}),
           config_json: {
             ...configJsonAtual,
-            access_token: accessToken,
+            access_token: undefined,
+            access_token_encrypted:
+              encryptWhatsAppAccessToken(accessToken),
             token_type: tokenData?.token_type ?? null,
             expires_in: tokenData?.expires_in ?? null,
-            meta_token_response: tokenData,
+            meta_token_response: {
+              token_type: tokenData?.token_type ?? null,
+              expires_in: tokenData?.expires_in ?? null,
+            },
             meta_connected_at: agora,
             embedded_signup: embeddedSignup,
           },
@@ -146,7 +212,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      integracao: integracaoAtualizada,
+      integracao:
+        sanitizeWhatsAppIntegrationForClient(integracaoAtualizada),
     });
   } catch (error) {
     console.error("[META CALLBACK] Erro interno:", error);

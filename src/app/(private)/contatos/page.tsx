@@ -1581,7 +1581,7 @@ export default function ContatosPage() {
                               className={`${styles.statusBadge} ${
                                 contato.whatsapp_opt_out === true
                                   ? styles.statusPerdido
-                                  : styles.statusCliente
+                                  : styles.statusPadrao
                               }`}
                               title={
                                 contato.whatsapp_opt_out === true

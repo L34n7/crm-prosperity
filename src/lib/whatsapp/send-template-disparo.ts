@@ -3,6 +3,7 @@ import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-conta
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import { atualizarReservaLimiteMeta } from "@/lib/whatsapp/meta-limites";
 import { registrarContextoOptOutTemplate } from "@/lib/whatsapp/opt-out";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 type TemplateButton = {
   type?: string;
@@ -272,14 +273,11 @@ export function montarConteudoTextoTemplateDisparo(
 
 function obterCredenciaisIntegracaoWhatsapp(integracao: IntegracaoDisparo) {
   const configJson = objeto(integracao.config_json);
-  const metaTokenResponse = objeto(configJson.meta_token_response);
   const embeddedSignup = objeto(configJson.embedded_signup);
   const embeddedSignupRaw = objeto(embeddedSignup.raw);
   const embeddedSignupRawData = objeto(embeddedSignupRaw.data);
 
-  const token = texto(
-    configJson.access_token || metaTokenResponse.access_token
-  );
+  const token = getWhatsAppAccessToken(integracao);
 
   const phoneNumberId = texto(
     integracao.phone_number_id ||

@@ -24,6 +24,7 @@ import {
   WHATSAPP_META_BLOCK_HELP_URL,
   WHATSAPP_META_MANAGER_URL,
 } from "@/lib/whatsapp/meta-block";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -828,7 +829,9 @@ export async function POST(request: Request) {
 
   const { data: integracao, error: integracaoError } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("id, status, phone_number_id, phone_number_status, onboarding_erro")
+    .select(
+      "id, status, phone_number_id, phone_number_status, onboarding_erro, token_ref, config_json"
+    )
     .eq("id", conversa.integracao_whatsapp_id)
     .maybeSingle();
 
@@ -876,7 +879,7 @@ export async function POST(request: Request) {
   const phoneNumberId =
     integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+  const accessToken = getWhatsAppAccessToken(integracao);
 
   if (!phoneNumberId) {
     return NextResponse.json(

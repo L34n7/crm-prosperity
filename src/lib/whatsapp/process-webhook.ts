@@ -1,6 +1,7 @@
 import {
   extractIncomingMessages,
   extractMessageStatuses,
+  countCoexistenceWebhookItems,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
 import { findWhatsAppIntegrationByPhoneNumberId } from "@/lib/whatsapp/find-integration";
@@ -18,6 +19,8 @@ import { salvarAtribuicaoMetaAnuncio } from "@/lib/whatsapp/meta-attribution";
 import { atualizarItemDisparoPeloWebhook } from "@/lib/whatsapp/disparo-fila";
 import { processarMensagemRecebidaParaOptOut } from "@/lib/whatsapp/opt-out";
 import { obterFeedbackOptOut } from "@/lib/whatsapp/opt-out-policy";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { processCoexistenceWebhookBody } from "@/lib/whatsapp/process-coexistence-webhook";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -102,30 +105,6 @@ function timestampWhatsappParaIso(timestamp?: string | number | null) {
   }
 
   return new Date().toISOString();
-}
-
-function obterAccessTokenIntegracao(
-  integration: {
-    config_json?: Record<string, unknown> | null;
-    token_ref?: string | null;
-  }
-) {
-  const config = integration.config_json || {};
-  const metaTokenResponse =
-    config.meta_token_response &&
-    typeof config.meta_token_response === "object" &&
-    !Array.isArray(config.meta_token_response)
-      ? (config.meta_token_response as Record<string, unknown>)
-      : {};
-  const tokenRef = String(integration.token_ref || "").trim();
-
-  return String(
-    config.access_token ||
-      metaTokenResponse.access_token ||
-      (tokenRef ? process.env[tokenRef] : "") ||
-      process.env.WHATSAPP_ACCESS_TOKEN ||
-      ""
-  ).trim();
 }
 
 async function atualizarUltimaMensagemRecebidaConversa(params: {
@@ -418,8 +397,13 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
   const incomingMessages = extractIncomingMessages(body);
   const incomingStatuses = extractMessageStatuses(body);
+  const coexistenceItems = countCoexistenceWebhookItems(body);
 
-  if (incomingMessages.length === 0 && incomingStatuses.length === 0) {
+  if (
+    incomingMessages.length === 0 &&
+    incomingStatuses.length === 0 &&
+    coexistenceItems.total === 0
+  ) {
     return {
       success: true,
       message: "Evento recebido sem mensagens nem status processaveis",
@@ -732,7 +716,10 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
               message.rawMessage?.audio?.id;
 
             if (mediaId) {
-              const audioBuffer = await baixarAudioWhatsApp(mediaId);
+              const audioBuffer = await baixarAudioWhatsApp(
+                mediaId,
+                getWhatsAppAccessToken(integration)
+              );
 
               transcricaoAudio = await transcreverAudioComIA({
                 audioBuffer,
@@ -878,7 +865,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           },
         });
 
-        const accessToken = obterAccessTokenIntegracao(integration);
+        const accessToken = getWhatsAppAccessToken(integration);
         const phoneNumberId = String(integration.phone_number_id || "").trim();
         let confirmacaoOptOut:
           | Awaited<ReturnType<typeof sendWhatsAppTextMessage>>
@@ -966,7 +953,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           process.env.WHATSAPP_PHONE_NUMBER_ID ||
           "";
 
-        const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+        const accessToken = getWhatsAppAccessToken(integration);
 
         const mensagemAvisoAudio = falhaAoTranscreverAudio
           ? "No momento não consegui ouvir seu áudio por aqui. Pode me enviar uma mensagem de texto, por favor?"
@@ -1116,14 +1103,30 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
     throw optOutCriticalError;
   }
 
+  const coexistenceResult =
+    coexistenceItems.total > 0
+      ? await processCoexistenceWebhookBody(body)
+      : {
+          processed: 0,
+          messageEchoes: 0,
+          historyMessages: 0,
+          contacts: 0,
+          historyStates: 0,
+          accountUpdates: 0,
+        };
+
   return {
     success: true,
     message: "Webhook processado",
     totals: {
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
-      processed: processedResults.length,
-      successCount: processedResults.filter((item) => item.success).length,
+      coexistence: coexistenceResult,
+      processed:
+        processedResults.length + coexistenceResult.processed,
+      successCount:
+        processedResults.filter((item) => item.success).length +
+        coexistenceResult.processed,
       errorCount: processedResults.filter((item) => !item.success).length,
     },
     results: processedResults,

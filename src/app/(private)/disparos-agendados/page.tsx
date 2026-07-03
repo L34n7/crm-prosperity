@@ -14,6 +14,12 @@ type StatusDisparo = "todos" | "pendente" | "executado" | "cancelado" | "erro";
 
 const ITENS_POR_PAGINA = 20;
 
+type IntegracaoWhatsappOpcao = {
+  id: string;
+  nome_conexao?: string | null;
+  numero?: string | null;
+};
+
 type ContatoOptOutLike = {
   whatsapp_opt_out?: boolean;
   whatsapp_opt_out_geral?: boolean;
@@ -407,7 +413,10 @@ function DisparosAgendadosPageContent() {
 
   const [cancelando, setCancelando] = useState(false);
   const [modalNovoDisparo, setModalNovoDisparo] = useState(false);
-  const [integracoes] = useState<any[]>([]);
+  const [integracoes, setIntegracoes] = useState<
+    IntegracaoWhatsappOpcao[]
+  >([]);
+  const [loadingIntegracoes, setLoadingIntegracoes] = useState(true);
   const [templates, setTemplates] = useState<any[]>([]);
   const [integracaoSelecionada, setIntegracaoSelecionada] = useState("");
   const [templateSelecionado, setTemplateSelecionado] = useState("");
@@ -537,7 +546,46 @@ function DisparosAgendadosPageContent() {
     }
   }
 
+  async function carregarIntegracoes() {
+    try {
+      setLoadingIntegracoes(true);
+
+      const res = await fetch("/api/integracoes-whatsapp/listar", {
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar integrações.");
+      }
+
+      const lista = (
+        Array.isArray(json.data) ? json.data : []
+      ) as IntegracaoWhatsappOpcao[];
+      setIntegracoes(lista);
+      setIntegracaoSelecionada((integracaoAtual) => {
+        if (lista.length === 1) return String(lista[0].id || "");
+
+        return lista.some((integracao) => integracao.id === integracaoAtual)
+          ? integracaoAtual
+          : "";
+      });
+    } catch (error) {
+      setErro(
+        error instanceof Error ? error.message : "Erro ao carregar integrações."
+      );
+    } finally {
+      setLoadingIntegracoes(false);
+    }
+  }
+
   async function carregarContatos(busca = "", origem = "", campanha = "") {
+    if (!integracaoSelecionada) {
+      setContatos([]);
+      setTotalContatosDisponiveis(0);
+      return;
+    }
+
     try {
       setLoadingContatos(true);
       const params = new URLSearchParams({
@@ -548,6 +596,9 @@ function DisparosAgendadosPageContent() {
       if (busca.trim()) params.set("busca", busca.trim());
       if (origem.trim()) params.set("origem", origem.trim());
       if (campanha.trim()) params.set("campanha", campanha.trim());
+      if (integracaoSelecionada) {
+        params.set("integracao_whatsapp_id", integracaoSelecionada);
+      }
 
       const res = await fetch(`/api/contatos?${params.toString()}`, {
         cache: "no-store",
@@ -758,7 +809,9 @@ function DisparosAgendadosPageContent() {
 
       setModalNovoDisparo(false);
 
-      setIntegracaoSelecionada("");
+      setIntegracaoSelecionada(
+        integracoes.length === 1 ? String(integracoes[0].id || "") : ""
+      );
       setTemplateSelecionado("");
 
       setTemplateVariavel1("nome_contato");
@@ -792,6 +845,7 @@ function DisparosAgendadosPageContent() {
 
   useEffect(() => {
     carregarDisparos();
+    carregarIntegracoes();
     carregarOpcoesContatos();
   }, []);
 
@@ -819,7 +873,13 @@ function DisparosAgendadosPageContent() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [buscaContato, origemFiltro, campanhaFiltro, modalNovoDisparo]);
+  }, [
+    buscaContato,
+    origemFiltro,
+    campanhaFiltro,
+    modalNovoDisparo,
+    integracaoSelecionada,
+  ]);
 
 
   const metricas = useMemo(() => {
@@ -1614,7 +1674,12 @@ function DisparosAgendadosPageContent() {
                             onChange={(e) => {
                               setIntegracaoSelecionada(e.target.value);
                               setTemplateSelecionado("");
+                              setContatosSelecionados([]);
+                              setConfirmacaoResponsabilidadeListaFria(false);
                             }}
+                            disabled={
+                              loadingIntegracoes || integracoes.length <= 1
+                            }
                           >
                             <option value="">Selecionar integração</option>
 

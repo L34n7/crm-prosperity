@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 type SendWhatsAppTextMessageParams = {
   integracaoId: string;
@@ -11,6 +12,7 @@ type IntegracaoWhatsAppRow = {
   phone_number_id: string | null;
   status: string | null;
   token_ref: string | null;
+  config_json: Record<string, unknown> | null;
 };
 
 type SendWhatsAppTextMessageResult = {
@@ -27,7 +29,7 @@ async function getIntegracaoWhatsApp(
 
   const { data, error } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("id, phone_number_id, status, token_ref")
+    .select("id, phone_number_id, status, token_ref, config_json")
     .eq("id", integracaoId)
     .maybeSingle();
 
@@ -36,13 +38,6 @@ async function getIntegracaoWhatsApp(
   }
 
   return data as IntegracaoWhatsAppRow | null;
-}
-
-function getAccessTokenFromEnv(tokenRef: string | null): string | null {
-  if (!tokenRef) return null;
-
-  const token = process.env[tokenRef];
-  return token ?? null;
 }
 
 export async function sendWhatsAppTextMessage(
@@ -58,7 +53,7 @@ export async function sendWhatsAppTextMessage(
     };
   }
 
-  const token = getAccessTokenFromEnv(integracao.token_ref);
+  const token = getWhatsAppAccessToken(integracao);
 
   if (!token) {
     return {

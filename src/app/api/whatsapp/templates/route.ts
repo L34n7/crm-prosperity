@@ -17,6 +17,7 @@ import {
   aplicarFooterOptOut,
   templatePossuiInstrucaoOptOut,
 } from "@/lib/whatsapp/opt-out-policy";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 type UsuarioSistema = {
   id: string;
@@ -116,7 +117,9 @@ export async function POST(req: NextRequest) {
 
     const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")
-      .select("id, empresa_id, waba_id, token_ref, status, nome_conexao")
+      .select(
+        "id, empresa_id, waba_id, token_ref, status, nome_conexao, config_json"
+      )
       .eq("id", integracaoWhatsAppId)
       .eq("empresa_id", usuario.empresa_id)
       .single();
@@ -177,7 +180,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Ajuste aqui depois para buscar token por token_ref, vault, etc.
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const accessToken = getWhatsAppAccessToken(integracao);
 
     if (!accessToken) {
       return NextResponse.json(

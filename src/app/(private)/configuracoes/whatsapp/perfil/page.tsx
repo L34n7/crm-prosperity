@@ -24,6 +24,8 @@ type Integracao = {
   meta_saude_ultima_verificacao_em?: string | null;
   setup_completed_at?: string | null;
   onboarding_erro?: string | null;
+  modo_integracao?: "cloud_api" | "coexistence";
+  coex_status?: string | null;
 };
 
 type LimiteMeta = {
@@ -279,6 +281,10 @@ export default function WhatsappPerfilPage() {
   const [modalDesconectarAberto, setModalDesconectarAberto] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
   const [erroDesconexao, setErroDesconexao] = useState("");
+  const [
+    confirmouDesconexaoCoexNoApp,
+    setConfirmouDesconexaoCoexNoApp,
+  ] = useState(false);
 
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
@@ -492,6 +498,7 @@ export default function WhatsappPerfilPage() {
 
   function abrirModalDesconexao() {
     setErroDesconexao("");
+    setConfirmouDesconexaoCoexNoApp(false);
     setModalDesconectarAberto(true);
   }
 
@@ -499,6 +506,7 @@ export default function WhatsappPerfilPage() {
     if (desconectando) return;
     setModalDesconectarAberto(false);
     setErroDesconexao("");
+    setConfirmouDesconexaoCoexNoApp(false);
   }
 
   async function desconectarIntegracao() {
@@ -519,6 +527,10 @@ export default function WhatsappPerfilPage() {
           },
           body: JSON.stringify({
             confirmar_desconexao: true,
+            confirmar_desconexao_coex_no_app:
+              integracaoSelecionada?.modo_integracao ===
+                "coexistence" &&
+              confirmouDesconexaoCoexNoApp,
           }),
         }
       );
@@ -1368,6 +1380,30 @@ export default function WhatsappPerfilPage() {
               </span>
             </div>
 
+            {integracaoSelecionada?.modo_integracao ===
+              "coexistence" && (
+              <div className={styles.coexDisconnectNotice}>
+                <strong>Desconecte primeiro no celular</strong>
+                <span>
+                  No WhatsApp Business App, abra Configurações → Conta →
+                  Plataforma de negócios, selecione o Prosperity e toque em
+                  Desconectar.
+                </span>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={confirmouDesconexaoCoexNoApp}
+                    onChange={(event) =>
+                      setConfirmouDesconexaoCoexNoApp(
+                        event.target.checked
+                      )
+                    }
+                  />
+                  Já desconectei a plataforma no WhatsApp Business App.
+                </label>
+              </div>
+            )}
+
             {erroDesconexao && (
               <div className={styles.disconnectError} role="alert">
                 {erroDesconexao}
@@ -1389,7 +1425,12 @@ export default function WhatsappPerfilPage() {
               type="button"
               className={styles.confirmDisconnectButton}
               onClick={desconectarIntegracao}
-              disabled={desconectando}
+              disabled={
+                desconectando ||
+                (integracaoSelecionada?.modo_integracao ===
+                  "coexistence" &&
+                  !confirmouDesconexaoCoexNoApp)
+              }
             >
               {desconectando
                 ? "Salvando backup e desconectando..."

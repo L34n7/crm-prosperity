@@ -1,12 +1,20 @@
-export async function baixarAudioWhatsApp(mediaId: string) {
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || "";
+import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
+
+export async function baixarAudioWhatsApp(
+  mediaId: string,
+  integrationAccessToken?: string | null
+) {
+  const accessToken =
+    integrationAccessToken?.trim() ||
+    process.env.WHATSAPP_ACCESS_TOKEN ||
+    "";
 
   if (!accessToken) {
     throw new Error("WHATSAPP_ACCESS_TOKEN não configurado.");
   }
 
   const mediaRes = await fetch(
-    `https://graph.facebook.com/v22.0/${mediaId}`,
+    getWhatsAppGraphUrl(mediaId),
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,

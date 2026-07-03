@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,7 @@ type MetaMediaInfoResponse = {
 type IntegracaoWhatsapp = {
   id: string;
   status: string | null;
+  token_ref?: string | null;
   config_json: {
     access_token?: string;
     token_type?: string;
@@ -77,7 +79,7 @@ async function buscarAccessTokenDaMidia(mediaId: string) {
 
   const { data: integracao, error: integracaoError } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("id, status, config_json")
+    .select("id, status, token_ref, config_json")
     .eq("id", conversa.integracao_whatsapp_id)
     .maybeSingle();
 
@@ -85,9 +87,9 @@ async function buscarAccessTokenDaMidia(mediaId: string) {
     throw new Error(integracaoError.message);
   }
 
-  const configJson = integracao?.config_json as IntegracaoWhatsapp["config_json"];
-
-  return configJson?.access_token || process.env.WHATSAPP_ACCESS_TOKEN || "";
+  return getWhatsAppAccessToken(
+    integracao as IntegracaoWhatsapp
+  );
 }
 
 export async function GET(

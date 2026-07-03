@@ -13,6 +13,10 @@ export type WhatsAppIntegration = {
   webhook_verificado: boolean | null;
   config_json: Record<string, unknown> | null;
   token_ref: string | null;
+  modo_integracao?: string | null;
+  coex_status?: string | null;
+  is_on_biz_app?: boolean | null;
+  platform_type?: string | null;
   ultimo_sync_at: string | null;
   created_at: string;
   updated_at: string;
@@ -33,6 +37,29 @@ export async function findWhatsAppIntegrationByPhoneNumberId(
   if (error) {
     console.error(
       "[WHATSAPP] Erro ao buscar integração por phone_number_id:",
+      error
+    );
+    return null;
+  }
+
+  return (data as WhatsAppIntegration | null) ?? null;
+}
+
+export async function findWhatsAppIntegrationByWabaId(
+  wabaId: string
+): Promise<WhatsAppIntegration | null> {
+  if (!wabaId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select("*")
+    .eq("waba_id", wabaId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "[WHATSAPP] Erro ao buscar integração por waba_id:",
       error
     );
     return null;

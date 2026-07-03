@@ -125,6 +125,7 @@
   width: 100%;
   height: 12px;
   border-radius: 999px;
+  margin-bottom: -5px;
   overflow: hidden;
   background: var(--crm-surface-muted);
 }
@@ -460,9 +461,9 @@
 }
 
 .quizTitle {
-  margin: 6px 0 0;
+  margin: 6px 0px -2px 0px;
   font-size: clamp(24px, 3vw, 32px);
-  line-height: 1.15;
+  line-height: 0.55;
   font-weight: 800;
   color: var(--crm-text-strong);
   letter-spacing: -0.04em;
@@ -584,6 +585,79 @@
   color: var(--crm-danger-text);
   font-size: 13px;
   font-weight: 700;
+}
+
+.integrationModeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.integrationModeCard {
+  min-height: 132px;
+  padding: 18px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 18px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.integrationModeCard:hover:not(:disabled) {
+  border-color: var(--crm-primary);
+  background: var(--crm-primary-soft);
+  transform: translateY(-1px);
+}
+
+.integrationModeCard h1,
+.integrationModeCard strong,
+.integrationModeCard span {
+  display: block;
+}
+
+.integrationModeCard h1 {
+  margin: -8px 0px 5px 5px;
+  color: #899790;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.integrationModeCard strong {
+  display: block;
+  margin: 0;
+  color: #123a54;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.integrationModeCard span {
+  display: block;
+  margin-top: 6px;
+  color:  #526677;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.integrationModeCardSelected {
+  border-color: var(--crm-primary);
+  background: var(--crm-primary-soft);
+  box-shadow: 0 0 0 3px var(--crm-primary-soft-hover);
+}
+
+.integrationModeCard:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
 .quizInfoGrid {
@@ -1133,7 +1207,7 @@
 }
 
 .pinInfoBox {
-  margin-top: 0px;
+  margin-top: 14px;
   padding: 16px 18px;
   border-radius: 18px;
   background: var(--crm-warning-bg);
@@ -1401,6 +1475,10 @@
   }
 
   .quizInfoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .integrationModeGrid {
     grid-template-columns: 1fr;
   }
 

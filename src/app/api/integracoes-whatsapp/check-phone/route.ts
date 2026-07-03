@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import {
+  getWhatsAppAccessToken,
+  sanitizeWhatsAppIntegrationForClient,
+} from "@/lib/whatsapp/access-token";
+import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
+import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
 
 const supabaseAdmin = getSupabaseAdmin();
-
-function extrairAccessToken(integracao: any) {
-  const tokenConfig = integracao?.config_json?.access_token;
-
-  if (typeof tokenConfig === "string" && tokenConfig.trim()) {
-    return tokenConfig.trim();
-  }
-
-  if (process.env.WHATSAPP_ACCESS_TOKEN?.trim()) {
-    return process.env.WHATSAPP_ACCESS_TOKEN.trim();
-  }
-
-  return null;
-}
 
 export async function GET() {
   try {
@@ -79,7 +71,7 @@ export async function GET() {
       );
     }
 
-    const accessToken = extrairAccessToken(integracao);
+    const accessToken = getWhatsAppAccessToken(integracao);
 
     if (!accessToken) {
       return NextResponse.json(
@@ -93,7 +85,9 @@ export async function GET() {
     }
 
     const response = await fetch(
-      `https://graph.facebook.com/v23.0/${integracao.waba_id}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status,status,account_mode,messaging_limit_tier`,
+      getWhatsAppGraphUrl(
+        `${integracao.waba_id}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status,status,account_mode,messaging_limit_tier,is_on_biz_app,platform_type`
+      ),
       {
         method: "GET",
         headers: {
@@ -182,6 +176,24 @@ export async function GET() {
         payloadUpdate.meta_account_mode = numeroAtual.account_mode;
       }
 
+      if (
+        normalizeWhatsAppIntegrationMode(integracao.modo_integracao) ===
+        "coexistence"
+      ) {
+        payloadUpdate.is_on_biz_app =
+          numeroAtual.is_on_biz_app === true;
+        payloadUpdate.platform_type =
+          numeroAtual.platform_type || null;
+        payloadUpdate.coex_status =
+          numeroAtual.is_on_biz_app === true &&
+          String(numeroAtual.platform_type || "").toUpperCase() ===
+            "CLOUD_API"
+            ? integracao.coex_status === "ativo"
+              ? "ativo"
+              : "onboarded"
+            : "erro";
+      }
+
       payloadUpdate.meta_saude_ultima_verificacao_em = new Date().toISOString();
       payloadUpdate.meta_saude_raw_json = numeroAtual;
       payloadUpdate.config_json = {
@@ -219,7 +231,8 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      integracao: integracaoAtualizada,
+      integracao:
+        sanitizeWhatsAppIntegrationForClient(integracaoAtualizada),
       total_numeros: lista.length,
       numero_atual: numeroAtual ?? null,
       data,

@@ -1,3 +1,8 @@
+import {
+  isCoexistencePhoneReady,
+  normalizeWhatsAppIntegrationMode,
+} from "@/lib/whatsapp/integration-mode";
+
 export type IntegracaoWhatsappAmbiente = {
   status?: string | null;
   webhook_verificado?: boolean | null;
@@ -8,6 +13,10 @@ export type IntegracaoWhatsappAmbiente = {
   app_assigned?: boolean | null;
   waba_id?: string | null;
   phone_number_id?: string | null;
+  modo_integracao?: string | null;
+  coex_status?: string | null;
+  is_on_biz_app?: boolean | null;
+  platform_type?: string | null;
 };
 
 export function isAmbienteConfigurado(
@@ -15,12 +24,18 @@ export function isAmbienteConfigurado(
 ) {
   if (!integracao) return false;
 
+  const numeroPronto =
+    normalizeWhatsAppIntegrationMode(integracao.modo_integracao) ===
+    "coexistence"
+      ? isCoexistencePhoneReady(integracao)
+      : integracao.phone_registered === true;
+
   return (
     integracao.status === "ativa" &&
     integracao.webhook_verificado === true &&
     integracao.onboarding_etapa === "concluido" &&
     integracao.onboarding_status === "concluido" &&
-    integracao.phone_registered === true &&
+    numeroPronto &&
     integracao.app_assigned === true &&
     !!integracao.waba_id &&
     !!integracao.phone_number_id &&
