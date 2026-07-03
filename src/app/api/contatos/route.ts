@@ -89,7 +89,11 @@ export async function GET(request: Request) {
   const campanha = searchParams.get("campanha")?.trim() || "";
   const rastreamentoCampanhaId =
     searchParams.get("rastreamento_campanha_id")?.trim() || "";
+  const disparoAnteriorId =
+    searchParams.get("disparo_anterior_id")?.trim() || "";
   const telefoneRevisar = searchParams.get("telefone_revisar");
+  const optIn = searchParams.get("opt_in");
+  const optOut = searchParams.get("opt_out");
   const ordenacao = searchParams.get("ordenacao") || "recentes";
   const classificacoes = (searchParams.get("classificacoes") || "")
     .split(",")
@@ -116,10 +120,11 @@ export async function GET(request: Request) {
   const apenasNovos = searchParams.get("contato_novo") === "true";
 
   const pagina = Math.max(1, Number(searchParams.get("pagina") || "1"));
+  const limiteMaximo = disparoAnteriorId ? 2000 : 500;
 
   const limite = Math.max(
     1,
-    Math.min(500, Number(searchParams.get("limite") || "50"))
+    Math.min(limiteMaximo, Number(searchParams.get("limite") || "50"))
   );
 
   const from = (pagina - 1) * limite;
@@ -127,10 +132,19 @@ export async function GET(request: Request) {
 
   const supabaseAdmin = getSupabaseAdmin();
 
-  let query = supabaseAdmin
-    .from("contatos_visao_operacional")
-    .select(
-      `
+  if (
+    disparoAnteriorId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      disparoAnteriorId
+    )
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Disparo anterior inválido." },
+      { status: 400 }
+    );
+  }
+
+  const camposContatos = `
         id,
         empresa_id,
         nome,
@@ -174,10 +188,24 @@ export async function GET(request: Request) {
         finalizado_por_usuario_nome,
         created_at,
         updated_at
-      `,
-      { count: "exact" }
-    )
-    .eq("empresa_id", usuario.empresa_id);
+      `;
+
+  let query = disparoAnteriorId
+    ? supabaseAdmin
+        .rpc(
+          "listar_contatos_operacionais_por_disparo_anterior",
+          {
+            p_empresa_id: usuario.empresa_id,
+            p_campanha_id: disparoAnteriorId,
+          },
+          { count: "exact" }
+        )
+        .select(camposContatos)
+    : supabaseAdmin
+        .from("contatos_visao_operacional")
+        .select(camposContatos, { count: "exact" });
+
+  query = query.eq("empresa_id", usuario.empresa_id);
 
   if (classificacoes.length > 0) {
     query = query.in("classificacao", classificacoes);
@@ -229,6 +257,14 @@ export async function GET(request: Request) {
 
   if (telefoneRevisar === "false") {
     query = query.eq("telefone_revisar", false);
+  }
+
+  if (optIn === "true" || optIn === "false") {
+    query = query.eq("opt_in_whatsapp", optIn === "true");
+  }
+
+  if (optOut === "true" || optOut === "false") {
+    query = query.eq("whatsapp_opt_out", optOut === "true");
   }
 
   if (busca) {

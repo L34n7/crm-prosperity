@@ -57,6 +57,8 @@ export async function GET(request: Request) {
   const rastreamentoCampanhaId =
     searchParams.get("rastreamento_campanha_id")?.trim() || "";
   const telefoneRevisar = searchParams.get("telefone_revisar");
+  const optIn = searchParams.get("opt_in");
+  const optOut = searchParams.get("opt_out");
   const classificacoes = (searchParams.get("classificacoes") || "")
     .split(",")
     .map((item) => item.trim())
@@ -96,6 +98,11 @@ export async function GET(request: Request) {
         campanha_exibicao,
         classificacao,
         contato_novo,
+        opt_in_whatsapp,
+        whatsapp_opt_out,
+        whatsapp_opt_out_geral,
+        whatsapp_opt_out_marketing,
+        whatsapp_opt_out_utility,
         conversa_status,
         protocolo_atual,
         protocolo_resultado,
@@ -162,6 +169,14 @@ export async function GET(request: Request) {
       query = query.eq("telefone_revisar", true);
     }
 
+    if (optIn === "true" || optIn === "false") {
+      query = query.eq("opt_in_whatsapp", optIn === "true");
+    }
+
+    if (optOut === "true" || optOut === "false") {
+      query = query.eq("whatsapp_opt_out", optOut === "true");
+    }
+
     if (busca) {
       query = query.or(
         `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
@@ -206,6 +221,11 @@ export async function GET(request: Request) {
     "campanha",
     "classificacao",
     "contato_novo",
+    "opt_in_whatsapp",
+    "opt_out_whatsapp",
+    "opt_out_geral",
+    "opt_out_marketing",
+    "opt_out_utility",
     "status_conversa",
     "protocolo_atual",
     "resultado_protocolo",
@@ -230,6 +250,11 @@ export async function GET(request: Request) {
       contato.campanha_exibicao,
       contato.classificacao,
       contato.contato_novo ? "sim" : "nao",
+      contato.opt_in_whatsapp ? "sim" : "nao",
+      contato.whatsapp_opt_out ? "sim" : "nao",
+      contato.whatsapp_opt_out_geral ? "sim" : "nao",
+      contato.whatsapp_opt_out_marketing ? "sim" : "nao",
+      contato.whatsapp_opt_out_utility ? "sim" : "nao",
       contato.conversa_status,
       contato.protocolo_atual,
       contato.protocolo_resultado,

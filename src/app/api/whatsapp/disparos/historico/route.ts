@@ -145,6 +145,7 @@ async function buscarCampanhasFiltroHistorico(empresaId: string) {
         nome,
         template_nome,
         total_itens,
+        total_enviados,
         created_at,
         status
       `

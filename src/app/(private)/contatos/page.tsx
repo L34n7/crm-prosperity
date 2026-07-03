@@ -25,6 +25,11 @@ type Contato = {
   campanha_exibicao?: string | null;
   campanha_status?: "ativo" | "inativo" | null;
   campanha_origem_nome?: string | null;
+  opt_in_whatsapp?: boolean;
+  whatsapp_opt_out?: boolean;
+  whatsapp_opt_out_geral?: boolean;
+  whatsapp_opt_out_marketing?: boolean;
+  whatsapp_opt_out_utility?: boolean;
   conversa_id?: string | null;
   conversa_status?: string | null;
   conversa_ultima_mensagem_em?: string | null;
@@ -121,6 +126,18 @@ function getStatusConversaClass(status?: string | null) {
   return styles.statusPadrao;
 }
 
+function getOptOutLabel(contato: Contato) {
+  if (contato.whatsapp_opt_out_geral === true) return "Todos os disparos";
+
+  const marketing = contato.whatsapp_opt_out_marketing === true;
+  const utility = contato.whatsapp_opt_out_utility === true;
+
+  if (marketing && utility) return "Marketing e Utility";
+  if (marketing) return "Marketing";
+  if (utility) return "Utility";
+  return contato.whatsapp_opt_out === true ? "Sim" : "Não";
+}
+
 function getIniciais(nome?: string | null) {
   const valor = nome?.trim() || "Contato";
   const partes = valor.split(" ").filter(Boolean);
@@ -202,6 +219,8 @@ export default function ContatosPage() {
   >([]);
   const [filtroOrigem, setFiltroOrigem] = useState("");
   const [filtroCampanha, setFiltroCampanha] = useState("");
+  const [filtroOptIn, setFiltroOptIn] = useState("");
+  const [filtroOptOut, setFiltroOptOut] = useState("");
   const [filtroTelefoneRevisar, setFiltroTelefoneRevisar] = useState(false);
   const [ordenacao, setOrdenacao] = useState("recentes");
   const [paginaAtual, setPaginaAtual] = useState(1);
@@ -340,6 +359,14 @@ export default function ContatosPage() {
 
     if (filtroTelefoneRevisar) {
       params.set("telefone_revisar", "true");
+    }
+
+    if (filtroOptIn) {
+      params.set("opt_in", filtroOptIn);
+    }
+
+    if (filtroOptOut) {
+      params.set("opt_out", filtroOptOut);
     }
 
     if (ordenacao) {
@@ -552,6 +579,14 @@ export default function ContatosPage() {
 
       if (filtroTelefoneRevisar) {
         params.set("telefone_revisar", "true");
+      }
+
+      if (filtroOptIn) {
+        params.set("opt_in", filtroOptIn);
+      }
+
+      if (filtroOptOut) {
+        params.set("opt_out", filtroOptOut);
       }
 
       const queryString = params.toString();
@@ -931,6 +966,8 @@ export default function ContatosPage() {
     filtroApenasNovos,
     filtroOrigem,
     filtroCampanha,
+    filtroOptIn,
+    filtroOptOut,
     filtroTelefoneRevisar,
     ordenacao,
     paginaAtual,
@@ -966,6 +1003,8 @@ export default function ContatosPage() {
     filtroApenasNovos,
     filtroOrigem,
     filtroCampanha,
+    filtroOptIn,
+    filtroOptOut,
     filtroTelefoneRevisar,
     ordenacao,
     itensPorPagina,
@@ -1080,7 +1119,39 @@ export default function ContatosPage() {
               ))}
             </select>
           </div>
-          
+
+          <div className={styles.field}>
+            <label className={styles.label}>Opt-in</label>
+            <select
+              className={styles.select}
+              value={filtroOptIn}
+              onChange={(e) => {
+                setFiltroOptIn(e.target.value);
+                setPaginaAtual(1);
+              }}
+            >
+              <option value="">Todos</option>
+              <option value="true">Com opt-in</option>
+              <option value="false">Sem opt-in (lista fria)</option>
+            </select>
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Opt-out</label>
+            <select
+              className={styles.select}
+              value={filtroOptOut}
+              onChange={(e) => {
+                setFiltroOptOut(e.target.value);
+                setPaginaAtual(1);
+              }}
+            >
+              <option value="">Todos</option>
+              <option value="true">Com opt-out</option>
+              <option value="false">Sem opt-out</option>
+            </select>
+          </div>
+
           <div className={styles.filterGroupsRow}>
             <div className={styles.filterGroupBox}>
               <label className={styles.label}>Status da conversa</label>
@@ -1228,6 +1299,8 @@ export default function ContatosPage() {
               setFiltroStatusConversa([]);
               setFiltroApenasNovos(false);
               setFiltroOrigem("");
+              setFiltroOptIn("");
+              setFiltroOptOut("");
               setFiltroTelefoneRevisar(false);
               setOrdenacao("recentes");
               setItensPorPagina(50);
@@ -1394,6 +1467,8 @@ export default function ContatosPage() {
                   <span>Telefone</span>
                   <span>Classificação</span>
                   <span>Conversa</span>
+                  <span>Opt-in</span>
+                  <span>Opt-out</span>
                   <span>Origem</span>
                   <span>Campanha</span>
                   <span className={styles.sheetActionsLabel}>Ações</span>
@@ -1486,6 +1561,35 @@ export default function ContatosPage() {
                               )}`}
                             >
                               {getStatusConversaLabel(contato.conversa_status)}
+                            </span>
+                          </div>
+
+                          <div className={styles.sheetCell}>
+                            <span
+                              className={`${styles.statusBadge} ${
+                                contato.opt_in_whatsapp === true
+                                  ? styles.statusCliente
+                                  : styles.statusPadrao
+                              }`}
+                            >
+                              {contato.opt_in_whatsapp === true ? "Sim" : "Não"}
+                            </span>
+                          </div>
+
+                          <div className={styles.sheetCell}>
+                            <span
+                              className={`${styles.statusBadge} ${
+                                contato.whatsapp_opt_out === true
+                                  ? styles.statusPerdido
+                                  : styles.statusCliente
+                              }`}
+                              title={
+                                contato.whatsapp_opt_out === true
+                                  ? `Opt-out: ${getOptOutLabel(contato)}`
+                                  : "Sem opt-out"
+                              }
+                            >
+                              {getOptOutLabel(contato)}
                             </span>
                           </div>
 
@@ -1651,6 +1755,24 @@ export default function ContatosPage() {
                               </span>
                               <span className={styles.infoValue}>
                                 {getStatusConversaLabel(contato.conversa_status)}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Opt-in</span>
+                              <span className={styles.infoValue}>
+                                {contato.opt_in_whatsapp === true
+                                  ? "Contato com opt-in"
+                                  : "Sem opt-in (lista fria)"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Opt-out</span>
+                              <span className={styles.infoValue}>
+                                {contato.whatsapp_opt_out === true
+                                  ? getOptOutLabel(contato)
+                                  : "Sem opt-out"}
                               </span>
                             </div>
 
