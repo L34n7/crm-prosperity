@@ -146,11 +146,6 @@ const FAQ = [
       "Você conta com atendimento humanizado para dúvidas de uso e configuração, além de materiais práticos para acelerar a implantação.",
   },
   {
-    question: "Posso criar uma conta grátis?",
-    answer:
-      "Sim. Você pode criar sua conta, conhecer a experiência do CRM Prosperity e começar a organizar sua operação.",
-  },
-  {
     question: "Vocês integram com meu sistema atual?",
     answer:
       "O CRM possui integrações nativas e recursos de API para se conectar às principais ferramentas da sua operação.",
@@ -214,7 +209,7 @@ export default function SobrePage() {
 
         <div className={styles.heroActions}>
           <Link href="/comecar" className={styles.heroPrimaryButton}>
-            Criar Conta Grátis
+            Criar Conta
             <ArrowRight size={17} />
           </Link>
           <a href="#recursos" className={styles.heroSecondaryButton}>
@@ -402,10 +397,10 @@ export default function SobrePage() {
           Chega de perder vendas
           <span>por falta de organização.</span>
         </h2>
-        <p>Comece agora. Crie sua conta grátis em 2 minutos.</p>
+        <p>Comece agora. Crie sua conta em 2 minutos.</p>
         <div className={styles.heroActions}>
           <Link href="/comecar" className={styles.heroPrimaryButton}>
-            Criar Conta Grátis
+            Criar Conta 
             <ArrowRight size={17} />
           </Link>
           <Link href="/plano" className={styles.heroSecondaryButton}>
@@ -452,7 +447,7 @@ export default function SobrePage() {
           <div className={styles.footerColumn}>
             <strong>Suporte</strong>
             <a href="#faq">Central de Ajuda</a>
-            <a href="mailto:suporte@crmprosperity.com">Contato</a>
+            <a href="mailto:contato@crmprosperity.com">Contato</a>
             <a href="#faq">WhatsApp</a>
             <Link href="/login">Entrar no CRM</Link>
           </div>

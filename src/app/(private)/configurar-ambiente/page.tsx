@@ -1564,11 +1564,9 @@ return (
                     <div className={styles.pinInfoBox}>
                       <strong>Pré-requisitos da Coexistência</strong>
                       <p>
-                        O número continuará disponível no seu WhatsApp e também 
-                        será conectado ao CRM. A Meta verificará se o número é elegível 
-                        para essa opção. Durante a autenticação, o WhatsApp Business
-                        poderá exibir um QR code e pedir autorização para compartilhar
-                        o histórico. Essa escolha é feita diretamente no fluxo da Meta.
+                        O número continuará disponível no WhatsApp Business App e 
+                        também será conectado ao CRM. A Meta verificará se o número é 
+                        elegível para essa opção
                       </p>
                     </div>
                   )}
