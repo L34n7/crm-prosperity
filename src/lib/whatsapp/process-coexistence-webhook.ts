@@ -8,15 +8,18 @@ import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-conta
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import {
   extractCoexistenceContacts,
-  extractCoexistenceHistoryMessages,
   extractCoexistenceHistoryStates,
   extractCoexistenceMessageEchoes,
   extractWhatsAppAccountUpdates,
-  type ExtractedCoexistenceHistoryMessage,
   type ExtractedCoexistenceEcho,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
 import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
+import {
+  enqueueCoexistenceHistory,
+  finishCoexistenceIntegrationIfReady,
+  refreshCoexistenceHistoryStats,
+} from "@/lib/whatsapp/coexistence-history-queue";
 
 const supabase = getSupabaseAdmin();
 
@@ -33,23 +36,6 @@ function timestampToIso(value?: string | null) {
   }
 
   return new Date().toISOString();
-}
-
-function mapHistoryStatus(value?: string | null) {
-  switch (String(value || "").toUpperCase()) {
-    case "READ":
-    case "PLAYED":
-      return "lida";
-    case "DELIVERED":
-      return "entregue";
-    case "ERROR":
-      return "falha";
-    case "PENDING":
-      return "pendente";
-    case "SENT":
-    default:
-      return "enviada";
-  }
 }
 
 async function findActiveProtocolId(conversationId: string) {
@@ -69,78 +55,6 @@ async function findActiveProtocolId(conversationId: string) {
   }
 
   return data?.id || null;
-}
-
-async function findHistoryConversation(params: {
-  integration: WhatsAppIntegration;
-  contactId: string;
-  firstMessageAt: string;
-}) {
-  const { data: existing, error: existingError } = await supabase
-    .from("conversas")
-    .select("*")
-    .eq("empresa_id", params.integration.empresa_id)
-    .eq("contato_id", params.contactId)
-    .eq("integracao_whatsapp_id", params.integration.id)
-    .eq("canal", "whatsapp")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (existingError) {
-    throw new Error(
-      `Erro ao localizar conversa para o histórico: ${existingError.message}`
-    );
-  }
-
-  if (existing) return existing;
-
-  const now = new Date().toISOString();
-  const { data: created, error: createError } = await supabase
-    .from("conversas")
-    .insert({
-      empresa_id: params.integration.empresa_id,
-      contato_id: params.contactId,
-      setor_id: null,
-      responsavel_id: null,
-      integracao_whatsapp_id: params.integration.id,
-      status: "encerrada",
-      canal: "whatsapp",
-      origem_atendimento: "historico_coexistence",
-      prioridade: "media",
-      assunto: "Histórico importado do WhatsApp Business",
-      started_at: params.firstMessageAt,
-      last_message_at: params.firstMessageAt,
-      closed_at: now,
-      bot_ativo: false,
-      created_at: now,
-      updated_at: now,
-    })
-    .select("*")
-    .single();
-
-  if (createError) {
-    if (createError.code === "23505") {
-      const { data: concurrent } = await supabase
-        .from("conversas")
-        .select("*")
-        .eq("empresa_id", params.integration.empresa_id)
-        .eq("contato_id", params.contactId)
-        .eq("integracao_whatsapp_id", params.integration.id)
-        .eq("canal", "whatsapp")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (concurrent) return concurrent;
-    }
-
-    throw new Error(
-      `Erro ao criar conversa para o histórico: ${createError.message}`
-    );
-  }
-
-  return created;
 }
 
 async function updateConversationLastMessage(
@@ -175,9 +89,7 @@ async function saveCoexistenceMessage(params: {
   integration: WhatsAppIntegration;
   conversation: { id: string; last_message_at?: string | null };
   protocolId?: string | null;
-  message: ExtractedCoexistenceHistoryMessage | ExtractedCoexistenceEcho;
-  direction: "inbound" | "outbound";
-  source: "history" | "business_app";
+  message: ExtractedCoexistenceEcho;
 }) {
   const messageAt = timestampToIso(params.message.timestamp);
   const { data: existing, error: existingError } = await supabase
@@ -193,27 +105,6 @@ async function saveCoexistenceMessage(params: {
   }
 
   if (existing) {
-    if (
-      params.source === "history" &&
-      params.message.type !== "media_placeholder" &&
-      (existing.metadata_json as Record<string, unknown> | null)
-        ?.tipo_original_whatsapp ===
-        "media_placeholder"
-    ) {
-      await supabase
-        .from("mensagens")
-        .update({
-          conteudo: params.message.conteudo,
-          tipo_mensagem: params.message.tipoMensagem,
-          metadata_json: {
-            ...(existing.metadata_json || {}),
-            ...(params.message.metadataJson || {}),
-            coex_media_historica_atualizada: true,
-          },
-        })
-        .eq("id", existing.id);
-    }
-
     return {
       id: existing.id,
       duplicated: true,
@@ -221,52 +112,30 @@ async function saveCoexistenceMessage(params: {
     };
   }
 
-  const historyMessage =
-    "phase" in params.message ? params.message : null;
-  const status =
-    params.source === "history"
-      ? mapHistoryStatus(historyMessage?.status)
-      : "enviada";
   const { data: inserted, error: insertError } = await supabase
     .from("mensagens")
     .insert({
       empresa_id: params.integration.empresa_id,
       conversa_id: params.conversation.id,
       conversa_protocolo_id: params.protocolId || null,
-      remetente_tipo:
-        params.direction === "inbound" ? "contato" : "usuario",
+      remetente_tipo: "usuario",
       remetente_id: null,
       conteudo: params.message.conteudo,
       tipo_mensagem: params.message.tipoMensagem,
-      origem:
-        params.direction === "inbound" ? "recebida" : "enviada",
-      status_envio: status,
+      origem: "enviada",
+      status_envio: "enviada",
       mensagem_externa_id: params.message.messageId,
       metadata_json: {
         ...(params.message.metadataJson || {}),
         coex: true,
-        coex_source: params.source,
-        coex_history: params.source === "history",
-        coex_direction: params.direction,
+        coex_source: "business_app",
+        coex_history: false,
+        coex_direction: "outbound",
         automacao_processada: true,
         automacao_resultado: {
           ok: true,
-          status:
-            params.source === "history"
-              ? "ignorado_historico_coex"
-              : "ignorado_echo_business_app",
+          status: "ignorado_echo_business_app",
         },
-        ...(historyMessage
-          ? {
-              coex_history_phase: historyMessage.phase,
-              coex_history_chunk_order: historyMessage.chunkOrder,
-              coex_history_progress: historyMessage.progress,
-              coex_history_thread_id: historyMessage.threadId,
-              coex_history_thread_context:
-                historyMessage.threadContext,
-              coex_history_status: historyMessage.status,
-            }
-          : {}),
         timestamp_original_whatsapp:
           params.message.timestamp || null,
       },
@@ -296,35 +165,6 @@ async function saveCoexistenceMessage(params: {
     duplicated: false,
     messageAt,
   };
-}
-
-async function markHistoryAsReadForCompany(params: {
-  empresaId: string;
-  conversationId: string;
-  latestHistoryAt: string;
-}) {
-  const { data: users, error: usersError } = await supabase
-    .from("usuarios")
-    .select("id")
-    .eq("empresa_id", params.empresaId)
-    .eq("status", "ativo");
-
-  if (usersError || !users?.length) return;
-
-  const now = new Date().toISOString();
-  await supabase.from("conversa_leituras").upsert(
-    users.map((user) => ({
-      empresa_id: params.empresaId,
-      conversa_id: params.conversationId,
-      usuario_id: user.id,
-      ultima_mensagem_lida_at: params.latestHistoryAt,
-      updated_at: now,
-    })),
-    {
-      onConflict: "conversa_id,usuario_id",
-      ignoreDuplicates: true,
-    }
-  );
 }
 
 async function processMessageEchoes(body: WhatsAppWebhookBody) {
@@ -358,8 +198,6 @@ async function processMessageEchoes(body: WhatsAppWebhookBody) {
       conversation,
       protocolId,
       message: echo,
-      direction: "outbound",
-      source: "business_app",
     });
 
     await supabase
@@ -377,75 +215,8 @@ async function processMessageEchoes(body: WhatsAppWebhookBody) {
 }
 
 async function processHistory(body: WhatsAppWebhookBody) {
-  const messages = extractCoexistenceHistoryMessages(body);
-  const latestByConversation = new Map<
-    string,
-    { empresaId: string; latest: string }
-  >();
-
-  for (const message of messages) {
-    const integration =
-      await findWhatsAppIntegrationByPhoneNumberId(
-        message.phoneNumberId
-      );
-    if (
-      !integration ||
-      normalizeWhatsAppIntegrationMode(integration.modo_integracao) !==
-        "coexistence"
-    ) {
-      continue;
-    }
-
-    const contextName =
-      typeof message.threadContext?.username === "string"
-        ? message.threadContext.username
-        : null;
-    const contact = await findOrCreateWhatsAppContact({
-      empresaId: integration.empresa_id,
-      phone: message.contactPhone,
-      profileName: contextName,
-      salvarProfileNameWhatsapp: false,
-    });
-    const messageAt = timestampToIso(message.timestamp);
-    const conversation = await findHistoryConversation({
-      integration,
-      contactId: contact.id,
-      firstMessageAt: messageAt,
-    });
-    const protocolId = await findActiveProtocolId(conversation.id).catch(
-      () => null
-    );
-
-    await saveCoexistenceMessage({
-      integration,
-      conversation,
-      protocolId,
-      message,
-      direction: message.direction,
-      source: "history",
-    });
-
-    const current = latestByConversation.get(conversation.id);
-    if (
-      !current ||
-      new Date(messageAt).getTime() > new Date(current.latest).getTime()
-    ) {
-      latestByConversation.set(conversation.id, {
-        empresaId: integration.empresa_id,
-        latest: messageAt,
-      });
-    }
-  }
-
-  for (const [conversationId, item] of latestByConversation) {
-    await markHistoryAsReadForCompany({
-      empresaId: item.empresaId,
-      conversationId,
-      latestHistoryAt: item.latest,
-    });
-  }
-
-  return messages.length;
+  const result = await enqueueCoexistenceHistory(body);
+  return result.received;
 }
 
 async function processContacts(body: WhatsAppWebhookBody) {
@@ -525,6 +296,8 @@ async function processContacts(body: WhatsAppWebhookBody) {
       })
       .eq("integracao_whatsapp_id", integrationId)
       .eq("tipo", "contacts");
+
+    await finishCoexistenceIntegrationIfReady(integrationId);
   }
 
   return contacts.length;
@@ -545,9 +318,7 @@ async function updateHistorySyncState(body: WhatsAppWebhookBody) {
       ? "recusado_usuario"
       : state.errorCode
         ? "erro"
-        : completed
-          ? "concluido"
-          : "processando";
+        : "processando";
     const now = new Date().toISOString();
 
     const { error } = await supabase
@@ -555,14 +326,15 @@ async function updateHistorySyncState(body: WhatsAppWebhookBody) {
       .update({
         status,
         progresso: declined ? 100 : state.progress || 0,
+        meta_concluido:
+          declined || completed || state.errorCode !== null,
         fase: state.phase,
         chunk_order: state.chunkOrder,
         erro_codigo: state.errorCode
           ? String(state.errorCode)
           : null,
         erro_mensagem: state.errorMessage,
-        concluido_em:
-          declined || completed ? now : null,
+        concluido_em: declined ? now : null,
         updated_at: now,
       })
       .eq("integracao_whatsapp_id", integration.id)
@@ -578,6 +350,8 @@ async function updateHistorySyncState(body: WhatsAppWebhookBody) {
   }
 
   for (const integrationId of affectedIntegrations) {
+    await refreshCoexistenceHistoryStats(integrationId);
+
     const { data: jobs } = await supabase
       .from("whatsapp_coex_sync_jobs")
       .select("status")

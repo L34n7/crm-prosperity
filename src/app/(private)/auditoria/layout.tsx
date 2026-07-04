@@ -14,7 +14,7 @@ export default async function AuditoriaLayout({
   }
 
   if (!can(resultado.usuario.permissoes, "auditoria.visualizar")) {
-    redirect("/");
+    redirect("/painel");
   }
 
   return children;

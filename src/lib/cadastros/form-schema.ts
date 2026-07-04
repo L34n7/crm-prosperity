@@ -71,6 +71,20 @@ const CAMPOS_NICHO: Record<NichoCodigo, CampoCadastro[]> = {
       escopo: "paciente",
     },
   ],
+  outro: [
+    {
+      chave: "profissao",
+      nome: "Profissão",
+      tipo: "texto",
+      escopo: "pessoa",
+    },
+    {
+      chave: "como_conheceu",
+      nome: "Como conheceu a empresa?",
+      tipo: "texto",
+      escopo: "pessoa",
+    },
+  ],
 };
 
 export function getCamposPadraoNicho(
@@ -78,4 +92,3 @@ export function getCamposPadraoNicho(
 ): CampoCadastro[] {
   return CAMPOS_NICHO[nichoCodigo] ?? [];
 }
-

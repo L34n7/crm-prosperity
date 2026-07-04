@@ -11,7 +11,7 @@ export default async function ConfiguracoesPage() {
   }
 
   if (!isAdministrador(resultado.usuario) || !resultado.usuario.empresa_id) {
-    redirect("/");
+    redirect("/painel");
   }
 
   return <ConfiguracoesClient />;

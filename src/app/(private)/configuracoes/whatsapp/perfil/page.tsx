@@ -23,6 +23,7 @@ type Integracao = {
   meta_account_mode?: string | null;
   meta_saude_ultima_verificacao_em?: string | null;
   setup_completed_at?: string | null;
+  onboarding_status?: string | null;
   onboarding_erro?: string | null;
   modo_integracao?: "cloud_api" | "coexistence";
   coex_status?: string | null;
@@ -274,6 +275,10 @@ export default function WhatsappPerfilPage() {
   useState<AdministradorEmpresa | null>(null);
   const [diagnosticoWhatsapp, setDiagnosticoWhatsapp] =
     useState<DiagnosticoWhatsApp | null>(null);
+  const [onboardingIncompleto, setOnboardingIncompleto] =
+    useState(false);
+  const [onboardingRedirect, setOnboardingRedirect] =
+    useState("/configurar-ambiente");
 
   const [modalNomeAberto, setModalNomeAberto] = useState(false);
   const [novoNomeExibicao, setNovoNomeExibicao] = useState("");
@@ -296,6 +301,7 @@ export default function WhatsappPerfilPage() {
     "Empresa";
 
   const integracaoBloqueada =
+    onboardingIncompleto ||
     Boolean(diagnosticoWhatsapp?.bloqueiaOperacao) ||
     ["bloqueado", "banido", "blocked", "banned"].includes(
       normalizarStatus(integracaoSelecionada?.status)
@@ -354,6 +360,10 @@ export default function WhatsappPerfilPage() {
       }
 
       setDiagnosticoWhatsapp(json.diagnostico || null);
+      setOnboardingIncompleto(json.onboarding_incompleto === true);
+      setOnboardingRedirect(
+        json.onboarding_redirect || "/configurar-ambiente"
+      );
 
       const listaIntegracoes = json.integracoes || [];
       const integracaoAtualizada = json.integracao || null;
@@ -378,6 +388,7 @@ export default function WhatsappPerfilPage() {
           meta_saude_ultima_verificacao_em:
             integracaoAtualizada.meta_saude_ultima_verificacao_em,
           setup_completed_at: integracaoAtualizada.setup_completed_at,
+          onboarding_status: integracaoAtualizada.onboarding_status,
           onboarding_erro: integracaoAtualizada.onboarding_erro,
         };
       });
@@ -845,6 +856,26 @@ export default function WhatsappPerfilPage() {
             {(erro || sucesso) && (
               <div className={styles.alertArea}>
                 {erro && <div className={styles.errorAlert}>{erro}</div>}
+              </div>
+            )}
+
+            {onboardingIncompleto && (
+              <div className={styles.diagnosticAlert}>
+                <div className={styles.diagnosticHeader}>
+                  <span>WhatsApp</span>
+                  <strong>Configuração ainda não concluída</strong>
+                </div>
+
+                <p>
+                  Conclua o onboarding para consultar e editar o perfil
+                  comercial na Meta.
+                </p>
+
+                <div className={styles.diagnosticActions}>
+                  <a href={onboardingRedirect}>
+                    Concluir configuração
+                  </a>
+                </div>
               </div>
             )}
 

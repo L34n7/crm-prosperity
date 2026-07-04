@@ -81,12 +81,28 @@ export async function GET() {
   }
 
   const configurado = isAmbienteConfigurado(integracao);
+  let coexSync = null;
+
+  if (integracao?.modo_integracao === "coexistence") {
+    const { data: jobs, error: jobsError } = await supabaseAdmin
+      .from("whatsapp_coex_sync_jobs")
+      .select(
+        "tipo, status, progresso, processamento_progresso, itens_recebidos, itens_processados, itens_com_erro, erro_codigo, erro_mensagem, solicitado_em, concluido_em, updated_at"
+      )
+      .eq("integracao_whatsapp_id", integracao.id)
+      .order("tipo", { ascending: true });
+
+    if (!jobsError) {
+      coexSync = jobs || [];
+    }
+  }
 
   return NextResponse.json(
     {
       ok: true,
       configurado,
       integracao: integracao || null,
+      coex_sync: coexSync,
     },
     { headers: STATUS_HEADERS }
   );

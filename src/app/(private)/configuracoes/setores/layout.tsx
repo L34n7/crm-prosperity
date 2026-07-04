@@ -14,7 +14,7 @@ export default async function SetoresLayout({
   }
 
   if (!can(resultado.usuario.permissoes, "setores.visualizar")) {
-    redirect("/");
+    redirect("/painel");
   }
 
   return children;

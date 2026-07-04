@@ -21,7 +21,7 @@ async function obterRotaAposLogin() {
     const data = await response.json();
 
     if (!response.ok || !data.ok) {
-      return "/";
+      return "/painel";
     }
 
     const ambienteConfigurado = data.configurado === true;
@@ -36,10 +36,10 @@ async function obterRotaAposLogin() {
       return "/configurar-ambiente";
     }
 
-    return "/";
+    return "/painel";
   } catch (error) {
     console.warn("[LOGIN] Erro ao verificar ambiente:", error);
-    return "/";
+    return "/painel";
   }
 }
 

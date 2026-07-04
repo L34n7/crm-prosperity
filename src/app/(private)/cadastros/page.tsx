@@ -15,10 +15,11 @@ import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
 import { useHeaderUser } from "@/components/header-user-context";
 import { formatarTelefoneExibicao } from "@/lib/contatos/normalizar-telefone";
+import type { NichoCodigo } from "@/lib/nichos/config";
 import styles from "./cadastros.module.css";
 
 type NichoContexto = {
-  codigo: "comercio" | "imobiliaria" | "medicina" | "odontologia";
+  codigo: NichoCodigo;
   nome: string;
   grupo: "comercial" | "saude";
   cadastroSingular: "Cliente" | "Paciente";

@@ -33,6 +33,29 @@ type WebhookEventoMetadata = {
   metadata_json?: Record<string, unknown> | null;
 };
 
+function compactarBodyHistoricoProcessado(evento: {
+  body_json?: WhatsAppWebhookBody | null;
+  metadata_json?: Record<string, unknown> | null;
+}) {
+  const historyMessages = Number(
+    evento.metadata_json?.coexistence_history_messages || 0
+  );
+  const historyStates = Number(
+    evento.metadata_json?.coexistence_history_states || 0
+  );
+
+  if (historyMessages <= 0 && historyStates <= 0) return null;
+
+  return {
+    object: evento.body_json?.object || "whatsapp_business_account",
+    archived: true,
+    archived_reason: "coex_history_enqueued",
+    history_messages: historyMessages,
+    history_states: historyStates,
+    archived_at: new Date().toISOString(),
+  };
+}
+
 function normalizarInteiro(
   valor: number | string | undefined,
   fallback: number,
@@ -270,6 +293,9 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
     const resultado = await processWhatsAppWebhookBody(
       eventoTravado.body_json as WhatsAppWebhookBody
     );
+    const bodyCompactado = compactarBodyHistoricoProcessado(
+      eventoTravado
+    );
 
     await supabaseAdmin
       .from("whatsapp_webhook_eventos")
@@ -280,6 +306,7 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
         erro: null,
         locked_at: null,
         updated_at: new Date().toISOString(),
+        ...(bodyCompactado ? { body_json: bodyCompactado } : {}),
       })
       .eq("id", evento.id);
 
@@ -391,6 +418,9 @@ export async function processarFilaWebhooksWhatsapp(
       const resultado = await processWhatsAppWebhookBody(
         eventoReivindicado.body_json as WhatsAppWebhookBody
       );
+      const bodyCompactado = compactarBodyHistoricoProcessado(
+        eventoReivindicado
+      );
 
       perf("FILA / evento processado", inicioEventoFila, {
         eventId: eventoReivindicado.id,
@@ -407,6 +437,7 @@ export async function processarFilaWebhooksWhatsapp(
           locked_at: null,
           processed_at: agora,
           updated_at: agora,
+          ...(bodyCompactado ? { body_json: bodyCompactado } : {}),
         })
         .eq("id", eventoReivindicado.id);
 

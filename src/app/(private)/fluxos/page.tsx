@@ -18,6 +18,9 @@ import {
 } from "@xyflow/react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import TemplateVariableCombobox, {
+  type TemplateVariableOption,
+} from "@/components/TemplateVariableCombobox";
 import { useHeaderUser } from "@/components/header-user-context";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
@@ -112,6 +115,10 @@ type VariavelPersonalizada = {
 };
 
 type AlvoVariavelFluxo = "mensagem" | "agendar_disparo" | "agenda_lembrete";
+
+function templateWhatsappAprovado(template?: TemplateWhatsappOpcao | null) {
+  return String(template?.status || "").trim().toUpperCase() === "APPROVED";
+}
 
 function contarVariaveisTextoTemplate(texto?: string | null) {
   const matches = String(texto || "").match(/\{\{\d+\}\}/g) || [];
@@ -1307,6 +1314,117 @@ function FluxosPageContent() {
     );
   }, [templatesWhatsapp, agendaLembreteTemplateIdNode]);
 
+  const opcoesVariaveisTemplate = useMemo<TemplateVariableOption[]>(() => {
+    const chavesAdicionadas = new Set<string>();
+    const opcoes: TemplateVariableOption[] = [];
+
+    for (const variavel of VARIAVEIS_FIXAS_SISTEMA) {
+      if (chavesAdicionadas.has(variavel.chave)) continue;
+
+      chavesAdicionadas.add(variavel.chave);
+      opcoes.push({
+        key: variavel.chave,
+        description: variavel.descricao,
+        category: "Fixa",
+      });
+    }
+
+    for (const variavel of variaveisPersonalizadas) {
+      const chave = normalizarEntradaVariavelTemplate(variavel.chave);
+      if (!variavel.ativo || !chave || chavesAdicionadas.has(chave)) continue;
+
+      chavesAdicionadas.add(chave);
+      opcoes.push({
+        key: chave,
+        description:
+          variavel.descricao?.trim() ||
+          "Variável personalizada cadastrada pela empresa.",
+        category: "Personalizada",
+      });
+    }
+
+    return opcoes;
+  }, [variaveisPersonalizadas]);
+
+  const opcoesVariaveisFluxo = useMemo<TemplateVariableOption[]>(() => {
+    const opcoes = [...opcoesVariaveisTemplate];
+    const chavesAdicionadas = new Set(opcoes.map((opcao) => opcao.key));
+
+    for (const node of nodes) {
+      if (String(node.data?.tipo_no || "") !== "capturar_resposta") continue;
+
+      const configuracao = (node.data?.configuracao_json || {}) as Record<
+        string,
+        unknown
+      >;
+      const chave = normalizarEntradaVariavelTemplate(
+        String(configuracao.variavel || "")
+      );
+
+      if (!chave || chavesAdicionadas.has(chave)) continue;
+
+      const titulo = String(node.data?.titulo || "Capturar resposta").trim();
+      chavesAdicionadas.add(chave);
+      opcoes.push({
+        key: chave,
+        description: `Resposta armazenada pelo bloco "${titulo}".`,
+        category: "Fluxo",
+      });
+    }
+
+    return opcoes;
+  }, [nodes, opcoesVariaveisTemplate]);
+
+  const opcoesVariaveisAgendamento = useMemo<TemplateVariableOption[]>(() => {
+    const opcoes = [...opcoesVariaveisFluxo];
+    const chavesAdicionadas = new Set(opcoes.map((opcao) => opcao.key));
+    const variaveisAgendamento: TemplateVariableOption[] = [
+      {
+        key: "agenda_data",
+        description: "Data do agendamento formatada para exibição.",
+        category: "Agendamento",
+      },
+      {
+        key: "agenda_hora",
+        description: "Hora do agendamento formatada para exibição.",
+        category: "Agendamento",
+      },
+      {
+        key: "agenda_nome",
+        description: "Nome da agenda em que o horário foi reservado.",
+        category: "Agendamento",
+      },
+      {
+        key: "agenda_inicio_at",
+        description: "Data e hora inicial completas do agendamento.",
+        category: "Agendamento",
+      },
+      {
+        key: "agenda_fim_at",
+        description: "Data e hora final completas do agendamento.",
+        category: "Agendamento",
+      },
+      {
+        key: "agenda_agendamento_id",
+        description: "Identificador único do agendamento criado.",
+        category: "Agendamento",
+      },
+      {
+        key: "agenda_id",
+        description: "Identificador da agenda utilizada.",
+        category: "Agendamento",
+      },
+    ];
+
+    for (const variavel of variaveisAgendamento) {
+      if (chavesAdicionadas.has(variavel.key)) continue;
+      chavesAdicionadas.add(variavel.key);
+      opcoes.push(variavel);
+    }
+
+    return opcoes;
+  }, [opcoesVariaveisFluxo]);
+
   const previewTemplateAgendarDisparo = useMemo(() => {
     return montarPreviewTemplateWhatsapp(
       templateAgendarDisparoSelecionado,
@@ -1385,7 +1503,17 @@ function FluxosPageContent() {
         throw new Error(json.error || "Erro ao carregar templates.");
       }
 
-      setTemplatesWhatsapp(json.templates || json.data || []);
+      const templatesRecebidos = Array.isArray(json.templates)
+        ? json.templates
+        : Array.isArray(json.data)
+        ? json.data
+        : [];
+
+      setTemplatesWhatsapp(
+        templatesRecebidos.filter((template: TemplateWhatsappOpcao) =>
+          templateWhatsappAprovado(template)
+        )
+      );
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar templates.");
     } finally {
@@ -1999,6 +2127,7 @@ function FluxosPageContent() {
     carregarMidias();
     carregarTemplatesWhatsapp();
     carregarAgendasOpcoes();
+    carregarVariaveisPersonalizadas();
   }, []);
 
   useEffect(() => {
@@ -2929,6 +3058,15 @@ async function aplicarEdicaoNoInterno() {
       setErro("Informe uma URL iniciando com http:// ou https://.");
       return;
     }
+  }
+
+  if (
+    tipoNodeEdicao === "agendar_disparo" &&
+    (!templateAgendarDisparoSelecionado ||
+      !templateWhatsappAprovado(templateAgendarDisparoSelecionado))
+  ) {
+    setErro("Selecione um template WhatsApp aprovado.");
+    return;
   }
 
   if (tipoNodeEdicao === "agendar_disparo" && templateAgendarDisparoSelecionado) {
@@ -4382,7 +4520,7 @@ function validarFluxoAntesDeAtivar(params?: {
       );
 
       if (!templateId || !templateSelecionado) {
-        return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp.`;
+        return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp aprovado.`;
       }
 
       if (templateWhatsappTemCabecalhoMidia(templateSelecionado)) {
@@ -6492,33 +6630,31 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                             <div className={styles.templateVariableGrid}>
                               {indicesVariaveisTemplateAgendarDisparo.map((index) => (
-                                <label key={index} className={styles.field}>
-                                  <span className={styles.label}>Variável {index + 1}</span>
-                                  <input
-                                    className={styles.input}
-                                    value={obterLinhasVariaveisTemplate(agendarDisparoVariaveisNode)[index]}
-                                    onChange={(e) =>
-                                      setAgendarDisparoVariaveisNode((atual) =>
-                                        atualizarLinhaVariavelTemplate(atual, index, e.target.value)
+                                <TemplateVariableCombobox
+                                  key={index}
+                                  label={`Variável ${index + 1}`}
+                                  value={
+                                    obterLinhasVariaveisTemplate(
+                                      agendarDisparoVariaveisNode
+                                    )[index]
+                                  }
+                                  onChange={(chave) =>
+                                    setAgendarDisparoVariaveisNode((atual) =>
+                                      atualizarLinhaVariavelTemplate(
+                                        atual,
+                                        index,
+                                        chave
                                       )
-                                    }
-                                    placeholder={
-                                      index === 0
-                                        ? "nome_whatsapp"
-                                        : index === 1
-                                        ? "numero_contato"
-                                        : "email_contato"
-                                    }
-                                  />
-                                </label>
+                                    )
+                                  }
+                                  options={opcoesVariaveisFluxo}
+                                  loading={loadingVariaveis}
+                                />
                               ))}
                             </div>
 
                             <span className={styles.help}>
                               Variável 1 substitui {"{{1}}"}, Variável 2 substitui {"{{2}}"} e Variável 3 substitui {"{{3}}"}.
-                            </span>
-                            <span className={styles.help}>
-                              {VARIAVEIS_FIXAS_CONTATO_HELP}
                             </span>
                             <button
                               type="button"
@@ -6974,21 +7110,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               </label>
 
                               {agendaEmailOrigemNode === "variavel" && (
-                                <label className={styles.field}>
-                                  <span className={styles.label}>Variavel do email</span>
-                                  <input
-                                    className={styles.input}
-                                    value={agendaEmailVariavelNode}
-                                    onChange={(e) =>
-                                      setAgendaEmailVariavelNode(e.target.value)
-                                    }
-                                    placeholder="email"
-                                  />
-                                  <span className={styles.help}>
-                                    Use o nome da variavel criada em Capturar resposta.
-                                    Exemplo: email.
-                                  </span>
-                                </label>
+                                <TemplateVariableCombobox
+                                  label="Variável do email"
+                                  value={agendaEmailVariavelNode}
+                                  onChange={setAgendaEmailVariavelNode}
+                                  options={opcoesVariaveisFluxo}
+                                  loading={loadingVariaveis}
+                                />
                               )}
                             </>
                           )}
@@ -7110,40 +7238,32 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                                         <div className={`${styles.templateVariableGrid} ${styles.templateVariableStack}`}>
                                           {indicesVariaveisTemplateAgendaLembrete.map((index) => (
-                                            <label key={index} className={styles.field}>
-                                              <span className={styles.label}>Variavel {index + 1}</span>
-                                              <input
-                                                className={styles.input}
-                                                value={obterLinhasVariaveisTemplate(agendaLembreteVariaveisNode)[index]}
-                                                onChange={(e) =>
-                                                  setAgendaLembreteVariaveisNode((atual) =>
+                                            <TemplateVariableCombobox
+                                              key={index}
+                                              label={`Variável ${index + 1}`}
+                                              value={
+                                                obterLinhasVariaveisTemplate(
+                                                  agendaLembreteVariaveisNode
+                                                )[index]
+                                              }
+                                              onChange={(chave) =>
+                                                setAgendaLembreteVariaveisNode(
+                                                  (atual) =>
                                                     atualizarLinhaVariavelTemplate(
                                                       atual,
                                                       index,
-                                                      e.target.value
+                                                      chave
                                                     )
-                                                  )
-                                                }
-                                                placeholder={
-                                                  index === 0
-                                                    ? "nome_whatsapp"
-                                                    : index === 1
-                                                    ? "agenda_data"
-                                                    : "agenda_hora"
-                                                }
-                                              />
-                                            </label>
+                                                )
+                                              }
+                                              options={opcoesVariaveisAgendamento}
+                                              loading={loadingVariaveis}
+                                            />
                                           ))}
                                         </div>
 
                                         <span className={styles.help}>
                                           Variavel 1 substitui {"{{1}}"}, Variavel 2 substitui {"{{2}}"} e Variavel 3 substitui {"{{3}}"}.
-                                        </span>
-                                        <span className={styles.help}>
-                                          Variaveis do agendamento como agenda_data e agenda_hora ficam disponiveis para o template.
-                                        </span>
-                                        <span className={styles.help}>
-                                          {VARIAVEIS_FIXAS_CONTATO_HELP}
                                         </span>
                                         <button
                                           type="button"

@@ -878,11 +878,24 @@ export default function TemplatesWhatsAppPage() {
 
           <div className={styles.resultsCard}>
               <div className={styles.cardHeader}>
-                <p className={styles.eyebrow}>Templates cadastrados</p>
-                <h2 className={styles.cardTitle}>Lista de templates</h2>
-                <p className={styles.cardSubtitle}>
-                  Acompanhe status, conteúdo e sincronize a conexão com a Meta.
-                </p>
+                <div className={styles.cardHeaderContent}>
+                  <div>
+                    <p className={styles.eyebrow}>Templates cadastrados</p>
+                    <h2 className={styles.cardTitle}>Lista de templates</h2>
+                    <p className={styles.cardSubtitle}>
+                      Acompanhe status, conteúdo e sincronize a conexão com a Meta.
+                    </p>
+                  </div>
+
+                  <a
+                    href="https://business.facebook.com/latest/whatsapp_manager/message_templates"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.metaPaymentButton}
+                  >
+                    Ver templates na Meta
+                  </a>
+                </div>
               </div>
 
               <div className={styles.resultsSummary}>

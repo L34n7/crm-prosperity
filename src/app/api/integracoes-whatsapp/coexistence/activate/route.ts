@@ -63,6 +63,7 @@ async function solicitarSincronizacao(params: {
   phoneNumberId: string;
   accessToken: string;
   tipo: SyncType;
+  force?: boolean;
 }) {
   const supabase = getSupabaseAdmin();
   const { data: existingJob, error: existingError } = await supabase
@@ -79,6 +80,7 @@ async function solicitarSincronizacao(params: {
   }
 
   if (
+    !params.force &&
     existingJob &&
     ["solicitado", "processando", "concluido", "recusado_usuario"].includes(
       existingJob.status
@@ -96,8 +98,20 @@ async function solicitarSincronizacao(params: {
         integracao_whatsapp_id: params.integracaoId,
         tipo: params.tipo,
         status: "pendente",
+        progresso: 0,
+        fase: null,
+        chunk_order: null,
         erro_codigo: null,
         erro_mensagem: null,
+        concluido_em: null,
+        ...(params.tipo === "history"
+          ? {
+              meta_concluido: false,
+              worker_qstash_message_id: null,
+              worker_agendado_em: null,
+              worker_erro: null,
+            }
+          : {}),
         updated_at: agora,
       },
       {
@@ -194,6 +208,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const integracaoId = String(body?.integracao_id || "").trim();
+    const reprocessarSync = body?.reprocessar_sync === true;
 
     if (!integracaoId) {
       return NextResponse.json(
@@ -358,6 +373,7 @@ export async function POST(request: NextRequest) {
       phoneNumberId: integracao.phone_number_id,
       accessToken,
       tipo: "contacts",
+      force: reprocessarSync,
     });
     const historyJob = await solicitarSincronizacao({
       empresaId: contexto.usuario.empresa_id,
@@ -365,6 +381,7 @@ export async function POST(request: NextRequest) {
       phoneNumberId: integracao.phone_number_id,
       accessToken,
       tipo: "history",
+      force: reprocessarSync,
     });
 
     const { data: atualizada, error: updateError } = await supabase

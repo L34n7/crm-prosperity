@@ -56,6 +56,35 @@
   line-height: 1.6;
 }
 
+.cardHeaderContent {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.metaPaymentButton {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 14px;
+  border: 1px solid #d5ffeb;
+  background: linear-gradient(80deg, #f4fff8 0%, #c8ffdd 100%);
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.metaPaymentButton:hover {
+  background: linear-gradient(80deg, #c8ffe3 0%, #c8ffdb 100%);
+  border: 1px solid #d8f5ff;
+  transform: translateY(-1px);
+}
+
 .form {
   padding: 22px;
   display: flex;
@@ -781,6 +810,15 @@
 
   .primaryButton,
   .secondaryButton {
+    width: 100%;
+  }
+
+  .cardHeaderContent {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .metaPaymentButton {
     width: 100%;
   }
 }

@@ -104,6 +104,11 @@
   --automaticBadgeTexto: #997513;
   --conflictCardPending: #ffdded;
   --conflictCardPendingBorder: #ff9191;
+  --statusMiniBotBd: #dcfff1a4;
+  --statusMiniBotTxt: #009c61;
+  --robotMiniBadge: #e1fef4;
+  --headerDropdownItemHover: #f5fbf7;
+  --AtivarBotHover: #e7fff3;
 }
 
 html[data-theme="dark"] {
@@ -206,6 +211,11 @@ html[data-theme="dark"] {
   --messageBubbleOutgoing: #237845;
   --automaticBadge: #816318;
   --automaticBadgeTexto: #fff6df;
+  --statusMiniBotBd: #3fe8a4e5;
+  --statusMiniBotTxt: #075336;
+  --robotMiniBadge: #588575f7;
+  --headerDropdownItemHover: #05232a;
+  --AtivarBotHover: #012614;
 }
 
 html,

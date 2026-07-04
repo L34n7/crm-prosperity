@@ -285,6 +285,7 @@ export async function GET(req: NextRequest) {
 
     const searchParams = req.nextUrl.searchParams;
     const integracaoWhatsAppId = searchParams.get("integracao_whatsapp_id");
+    const status = String(searchParams.get("status") || "").trim();
 
     const supabaseAdmin = getSupabaseAdmin();
 
@@ -296,6 +297,10 @@ export async function GET(req: NextRequest) {
 
     if (integracaoWhatsAppId) {
       query = query.eq("integracao_whatsapp_id", integracaoWhatsAppId);
+    }
+
+    if (status) {
+      query = query.eq("status", status);
     }
 
     const { data, error } = await query;

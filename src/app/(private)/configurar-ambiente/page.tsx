@@ -1566,7 +1566,9 @@ return (
                       <p>
                         O número continuará disponível no seu WhatsApp e também 
                         será conectado ao CRM. A Meta verificará se o número é elegível 
-                        para essa opção
+                        para essa opção. Durante a autenticação, o WhatsApp Business
+                        poderá exibir um QR code e pedir autorização para compartilhar
+                        o histórico. Essa escolha é feita diretamente no fluxo da Meta.
                       </p>
                     </div>
                   )}

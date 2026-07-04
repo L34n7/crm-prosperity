@@ -3,6 +3,7 @@ export const NICHO_CODIGOS = [
   "imobiliaria",
   "medicina",
   "odontologia",
+  "outro",
 ] as const;
 
 export type NichoCodigo = (typeof NICHO_CODIGOS)[number];
@@ -63,6 +64,14 @@ export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
       "saude.odontograma",
     ],
   },
+  outro: {
+    codigo: "outro",
+    nome: "Outro / ainda não definido",
+    grupo: "comercial",
+    cadastroSingular: "Cliente",
+    cadastroPlural: "Clientes",
+    modulos: ["cadastros.pessoas"],
+  },
 };
 
 export function isNichoCodigo(valor: unknown): valor is NichoCodigo {
@@ -77,4 +86,3 @@ export function getNichoConfig(valor: unknown): NichoConfig {
     ? NICHOS_CONFIG[valor]
     : NICHOS_CONFIG.comercio;
 }
-

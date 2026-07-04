@@ -33,14 +33,17 @@ Antes de liberar o modo em produção:
 1. O usuário escolhe Cloud API exclusiva ou WhatsApp Business + CRM.
 2. No modo Coexistence, o frontend inicia o Embedded Signup com
    `featureType: "whatsapp_business_app_onboarding"`.
-3. O backend só aceita
+3. O compartilhamento do histórico é autorizado ou recusado pelo usuário
+   dentro do fluxo da Meta/WhatsApp Business App (incluindo o QR code). O
+   Prosperity não apresenta uma segunda opção de consentimento.
+4. O backend só aceita
    `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING` nesse modo.
-4. O número é validado com `is_on_biz_app=true` e
+5. O número é validado com `is_on_biz_app=true` e
    `platform_type=CLOUD_API`.
-5. O endpoint de ativação inscreve o app na WABA e solicita, nesta ordem:
+6. O endpoint de ativação inscreve o app na WABA e solicita, nesta ordem:
    - contatos (`smb_app_state_sync`);
    - histórico (`history`).
-6. Os pedidos e o progresso ficam em `whatsapp_coex_sync_jobs`.
+7. Os pedidos e o progresso ficam em `whatsapp_coex_sync_jobs`.
 
 Não execute `/{phone_number_id}/register` para Coexistence.
 
@@ -60,6 +63,47 @@ O histórico é idempotente pelo `mensagem_externa_id`. A recusa de
 compartilhamento (`2593109`) é registrada como `recusado_usuario`, não como
 falha da conexão.
 
+## Processamento do histórico
+
+O webhook `history` não grava todas as mensagens diretamente:
+
+1. o payload original é salvo em `whatsapp_webhook_eventos`;
+2. cada mensagem é normalizada em `whatsapp_coex_historico_itens`;
+3. o worker `/api/worker/whatsapp-coex-history` reserva itens com
+   `FOR UPDATE SKIP LOCKED`;
+4. contatos, conversas, protocolos e mensagens existentes são buscados em
+   grupo;
+5. as mensagens são inseridas em lotes e o payload da fila é compactado;
+6. o cron `/api/cron/whatsapp_coex_history` retoma lotes sem QStash.
+
+O progresso da Meta (`progresso`) e o progresso real do banco
+(`processamento_progresso`) são independentes. O job só fica `concluido`
+quando a Meta terminou de enviar os chunks e todos os itens foram persistidos.
+
+Configuração opcional:
+
+- `WHATSAPP_COEX_HISTORY_BATCH_SIZE` (padrão `50`);
+- `WHATSAPP_COEX_HISTORY_MAX_ATTEMPTS` (padrão `5`);
+- `WHATSAPP_COEX_HISTORY_LOCK_TIMEOUT_MINUTES` (padrão `5`);
+- `WHATSAPP_COEX_HISTORY_QSTASH_RATE` (padrão `2` lotes/minuto);
+- `WHATSAPP_COEX_HISTORY_QSTASH_RETRIES` (padrão `5`);
+- `QSTASH_WHATSAPP_COEX_HISTORY_WORKER_URL` (fallback para a URL pública do
+  Prosperity).
+
+Para reenviar contatos e histórico após corrigir uma assinatura de webhook,
+chame `POST /api/integracoes-whatsapp/coexistence/activate` com:
+
+```json
+{
+  "integracao_id": "<ID>",
+  "reprocessar_sync": true
+}
+```
+
+Esse parâmetro não altera o consentimento dado no WhatsApp Business App. Ele
+apenas repete a solicitação técnica à Meta; mensagens já importadas continuam
+idempotentes.
+
 ## Desconexão
 
 Uma integração Coexistence deve ser desconectada primeiro no celular:
@@ -68,4 +112,3 @@ WhatsApp Business App > Configurações > Conta > Plataforma de negócios >
 Prosperity > Desconectar.
 
 Depois disso, a integração pode ser removida no perfil do WhatsApp no CRM.
-

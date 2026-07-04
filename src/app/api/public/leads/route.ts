@@ -6,7 +6,8 @@ import {
   VERSAO_POLITICA_PRIVACIDADE,
   VERSAO_TERMOS_SERVICO,
 } from "@/lib/lgpd/termos";
-import { getNichoConfig, isNichoCodigo } from "@/lib/nichos/config";
+import { getNichoConfig } from "@/lib/nichos/config";
+import { getSegmentoEmpresa } from "@/lib/segmentos/catalogo";
 
 const supabase = getSupabaseAdmin();
 
@@ -52,9 +53,7 @@ export async function POST(request: Request) {
     const email = String(body?.email ?? "").toLowerCase().trim();
     const telefone = String(body?.telefone ?? "").trim();
     const empresa = String(body?.empresa ?? "").trim();
-    const nichoCodigo = isNichoCodigo(body?.nicho_codigo)
-      ? body.nicho_codigo
-      : "comercio";
+    const segmento = getSegmentoEmpresa(body?.segmento_codigo);
     const aceiteContrato = body?.aceite_contrato === true;
     const tipoOferta = normalizarTipoOferta(
       body?.tipo_oferta,
@@ -69,6 +68,10 @@ export async function POST(request: Request) {
       throw new Error("Email é obrigatório.");
     }
 
+    if (!segmento) {
+      throw new Error("Segmento da empresa é obrigatório.");
+    }
+
     if (!aceiteContrato) {
       throw new Error(
         "Aceite dos termos, da política de privacidade e das responsabilidades LGPD é obrigatório."
@@ -78,7 +81,7 @@ export async function POST(request: Request) {
     const { data: nicho, error: nichoError } = await supabase
       .from("nichos")
       .select("id")
-      .eq("codigo", getNichoConfig(nichoCodigo).codigo)
+      .eq("codigo", getNichoConfig(segmento.nichoCodigo).codigo)
       .eq("ativo", true)
       .maybeSingle();
 
@@ -107,6 +110,8 @@ export async function POST(request: Request) {
         telefone: telefone || null,
         empresa: empresa || null,
         nicho_id: nicho.id,
+        segmento_codigo: segmento.codigo,
+        segmento_nome: segmento.nome,
         status: "novo",
         plano_slug: "basico",
         tipo_oferta: tipoOferta,

@@ -18,7 +18,7 @@ export default async function DisparosAgendadosLayout({
   }
 
   if (!podeVisualizarDisparos(resultado.usuario)) {
-    redirect("/");
+    redirect("/painel");
   }
 
   return children;

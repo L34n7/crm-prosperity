@@ -14,7 +14,7 @@ export default async function TokensIaLayout({
   }
 
   if (!can(resultado.usuario.permissoes, "ia.tokens.visualizar_extrato")) {
-    redirect("/");
+    redirect("/painel");
   }
 
   return children;

@@ -15,7 +15,7 @@ export default async function RelatoriosInternosLayout({
   }
 
   if (!can(resultado.usuario.permissoes, PERMISSAO_RELATORIOS_INTERNOS)) {
-    redirect("/");
+    redirect("/painel");
   }
 
   return children;

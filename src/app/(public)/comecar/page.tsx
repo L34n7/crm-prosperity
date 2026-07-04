@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import styles from "./comecar.module.css";
 import {
-  NICHOS_CONFIG,
-  type NichoCodigo,
-} from "@/lib/nichos/config";
+  SEGMENTOS_EMPRESA,
+  type SegmentoCodigo,
+} from "@/lib/segmentos/catalogo";
 
 type TipoOferta = "normal" | "vip" | "jv" | "af" | "free";
 
@@ -18,7 +18,7 @@ export default function ComecarPage() {
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [empresa, setEmpresa] = useState("");
-  const [nicho, setNicho] = useState<NichoCodigo | "">("");
+  const [segmento, setSegmento] = useState<SegmentoCodigo | "">("");
   const [aceiteContrato, setAceiteContrato] = useState(false);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
@@ -79,7 +79,7 @@ export default function ComecarPage() {
 
     setErro("");
 
-    if (!nome || !email || !nicho) {
+    if (!nome || !email || !segmento) {
       setErro("Preencha nome, email e segmento da empresa.");
       return;
     }
@@ -113,7 +113,7 @@ export default function ComecarPage() {
           email,
           telefone: telefoneLimpo || null,
           empresa,
-          nicho_codigo: nicho,
+          segmento_codigo: segmento,
           tipo_oferta: tipoOferta,
           aceite_contrato: aceiteContrato,
           chave_free:
@@ -241,14 +241,14 @@ export default function ComecarPage() {
             <div className={styles.field}>
               <label className={styles.label}>Segmento da empresa</label>
               <select
-                value={nicho}
+                value={segmento}
                 onChange={(e) =>
-                  setNicho(e.target.value as NichoCodigo | "")
+                  setSegmento(e.target.value as SegmentoCodigo | "")
                 }
                 className={styles.input}
               >
                 <option value="">Selecione o segmento</option>
-                {Object.values(NICHOS_CONFIG).map((item) => (
+                {SEGMENTOS_EMPRESA.map((item) => (
                   <option key={item.codigo} value={item.codigo}>
                     {item.nome}
                   </option>

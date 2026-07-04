@@ -15,7 +15,7 @@ export default async function EmpresasLayout({
   }
 
   if (!can(resultado.usuario.permissoes, PERMISSAO_INTERNA_EMPRESAS)) {
-    redirect("/");
+    redirect("/painel");
   }
 
   return children;

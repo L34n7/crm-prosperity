@@ -14,7 +14,7 @@ export default async function PerfisLayout({
   }
 
   if (!can(resultado.usuario.permissoes, "perfis.visualizar")) {
-    redirect("/");
+    redirect("/painel");
   }
 
   return children;

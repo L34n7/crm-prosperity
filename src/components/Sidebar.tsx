@@ -94,7 +94,7 @@ const mobileLabelByHref: Record<string, string> = {
 };
 
 const menuItems: MenuItem[] = [
-  { label: "Painel", href: "/", icon: LayoutDashboard },
+  { label: "Painel", href: "/painel", icon: LayoutDashboard },
   { label: "Conversas", href: "/conversas", icon: MessageSquare },
   {
     label: "Disparos",
@@ -167,7 +167,6 @@ const configuracoesHrefs = new Set([
 ]);
 
 function isActivePath(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

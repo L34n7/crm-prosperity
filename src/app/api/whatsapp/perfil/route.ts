@@ -13,6 +13,7 @@ import {
   resolverLimitePorTier,
 } from "@/lib/whatsapp/meta-limites";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { isWhatsAppProfileMetaAvailable } from "@/lib/whatsapp/profile-availability";
 
 const GRAPH_VERSION = "v23.0";
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
@@ -268,6 +269,8 @@ function montarIntegracaoResposta(
       null,
     setup_completed_at:
       overrides.setup_completed_at ?? integracao.setup_completed_at ?? null,
+    onboarding_status:
+      overrides.onboarding_status ?? integracao.onboarding_status ?? null,
     onboarding_erro:
       overrides.onboarding_erro ?? integracao.onboarding_erro ?? null,
     modo_integracao:
@@ -548,19 +551,44 @@ export async function GET(req: NextRequest) {
 
     const integracoes = await buscarIntegracao(empresaId, null);
 
-    const integracoesComToken = integracoes.filter((item) => extrairToken(item));
-
     const integracaoSelecionada =
-      integracoesComToken.find((item) => item.id === integracaoId) ||
-      integracoesComToken.find((item) => item.status === "ativa") ||
-      integracoesComToken[0] ||
+      integracoes.find((item) => item.id === integracaoId) ||
+      integracoes.find((item) =>
+        isWhatsAppProfileMetaAvailable(item)
+      ) ||
+      integracoes[0] ||
       null;
 
     if (!integracaoSelecionada) {
-      return jsonErro(
-        "Nenhuma integração com token configurado foi encontrada. Verifique a coluna token_ref e a variável na Vercel.",
-        400
-      );
+      return NextResponse.json({
+        ok: true,
+        onboarding_incompleto: true,
+        onboarding_redirect: "/configurar-ambiente",
+        message:
+          "Conclua a configuração do WhatsApp para liberar o perfil.",
+        integracoes: [],
+        integracao: null,
+        administrador: await buscarAdministradorEmpresa(empresaId),
+        limite_meta: null,
+        perfil: null,
+      });
+    }
+
+    if (!isWhatsAppProfileMetaAvailable(integracaoSelecionada)) {
+      return NextResponse.json({
+        ok: true,
+        onboarding_incompleto: true,
+        onboarding_redirect: "/configurar-ambiente",
+        message:
+          "Esta conexão ainda não concluiu o onboarding do WhatsApp.",
+        integracoes: integracoes.map((item) =>
+          montarIntegracaoResposta(item)
+        ),
+        integracao: montarIntegracaoResposta(integracaoSelecionada),
+        administrador: await buscarAdministradorEmpresa(empresaId),
+        limite_meta: null,
+        perfil: null,
+      });
     }
 
     if (!integracaoSelecionada.phone_number_id) {
@@ -621,7 +649,7 @@ export async function GET(req: NextRequest) {
           blocked: true,
           diagnostico,
           meta: metaJson,
-          integracoes: integracoesComToken.map((item) =>
+          integracoes: integracoes.map((item) =>
             item.id === integracaoSelecionada.id
               ? montarIntegracaoResposta(item, overridesBloqueio)
               : montarIntegracaoResposta(item)
@@ -716,7 +744,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       diagnostico: null,
-      integracoes: integracoesComToken.map((item) =>
+      integracoes: integracoes.map((item) =>
         item.id === integracaoSelecionada.id
           ? montarIntegracaoResposta(item, overridesResposta)
           : montarIntegracaoResposta(item)
@@ -933,6 +961,14 @@ export async function PATCH(req: NextRequest) {
 
     if (!integracao) {
       return jsonErro("Integração não encontrada.", 404);
+    }
+
+    if (!isWhatsAppProfileMetaAvailable(integracao)) {
+      return jsonErro(
+        "Conclua o onboarding do WhatsApp antes de editar o perfil.",
+        409,
+        { onboarding_redirect: "/configurar-ambiente" }
+      );
     }
 
     if (!integracao.phone_number_id) {

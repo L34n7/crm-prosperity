@@ -18,7 +18,7 @@ export default async function DisparosWhatsappLayout({
   }
 
   if (!podeVisualizarDisparos(resultado.usuario)) {
-    redirect("/");
+    redirect("/painel");
   }
 
   return children;
