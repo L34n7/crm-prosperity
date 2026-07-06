@@ -41,6 +41,7 @@ import {
 import LogoutButton from "@/components/LogoutButton";
 import { useHeaderSummary } from "@/components/header-summary-context";
 import { useHeaderUser } from "@/components/header-user-context";
+import { montarWaMeUrl } from "@/lib/contatos/sistema";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import {
   PERMISSAO_INTERNA_EMPRESAS,
@@ -75,7 +76,7 @@ type WhatsappSidebarPerfil = {
 };
 
 const PERMISSAO_VISUALIZAR_PLANO_SIDEBAR = "assinaturas.plano.visualizar";
-const AJUDA_WHATSAPP_URL = "https://wa.me/5531975117638";
+const AJUDA_WHATSAPP_URL = montarWaMeUrl();
 const THEME_STORAGE_KEY = "crm-theme";
 const mobilePrimaryHrefs = [
   "/conversas",

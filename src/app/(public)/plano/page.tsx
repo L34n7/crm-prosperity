@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { montarWaMeUrl } from "@/lib/contatos/sistema";
 import styles from "./plano.module.css";
 
 type Plano = {
@@ -26,8 +27,6 @@ export default function PlanoPage() {
   const router = useRouter();
   const [planosExpandidos, setPlanosExpandidos] = useState<string[]>([]);
   const [loadingCheckout, setLoadingCheckout] = useState(false);
-  const whatsappComercial =
-    process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
 
   useEffect(() => {
     function resetarLoadingCheckout() {
@@ -83,11 +82,10 @@ export default function PlanoPage() {
   }
 
   function abrirCotacaoWhatsApp() {
-    const mensagem = encodeURIComponent(
-      "Olá! Quero fazer uma cotação do plano Profissional do CRM Prosperity."
-    );
+    const mensagem =
+      "Olá! Quero fazer uma cotação do plano Profissional do CRM Prosperity.";
 
-    const url = `https://wa.me/${whatsappComercial}?text=${mensagem}`;
+    const url = montarWaMeUrl(mensagem);
 
     window.open(url, "_blank", "noopener,noreferrer");
   }

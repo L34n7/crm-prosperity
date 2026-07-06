@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/LogoutButton";
 import { useHeaderUser } from "@/components/header-user-context";
 import { useHeaderSummary } from "@/components/header-summary-context";
+import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import styles from "./Header.module.css";
 import { createPortal } from "react-dom";
 
@@ -71,14 +72,10 @@ type CheckoutPlanoResponse = {
 
 type TemaVisual = "light" | "dark";
 
-const AJUDA_WHATSAPP_NUMERO =
-  process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
+const AJUDA_WHATSAPP_MENSAGEM =
+  "Olá! Preciso de ajuda com o CRM Prosperity. Pode me auxiliar?";
 
-const AJUDA_WHATSAPP_MENSAGEM = encodeURIComponent(
-  "Olá! Preciso de ajuda com o CRM Prosperity. Pode me auxiliar?"
-);
-
-const AJUDA_WHATSAPP_URL = `https://api.whatsapp.com/send?phone=${AJUDA_WHATSAPP_NUMERO}&text=${AJUDA_WHATSAPP_MENSAGEM}`;
+const AJUDA_WHATSAPP_URL = montarWhatsappUrl(AJUDA_WHATSAPP_MENSAGEM);
 
 const THEME_STORAGE_KEY = "crm-theme";
 
@@ -578,14 +575,10 @@ export default function Header({
   }
 
   function abrirCotacaoPlano() {
-    const whatsappComercial =
-      process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
+    const mensagem =
+      "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity.";
 
-    const mensagem = encodeURIComponent(
-      "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity."
-    );
-
-    const url = `https://api.whatsapp.com/send?phone=${whatsappComercial}&text=${mensagem}`;
+    const url = montarWhatsappUrl(mensagem);
 
     setModalPlanosOpen(false);
     window.open(url, "_blank", "noopener,noreferrer");

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from "./configurar-ambiente.module.css";
 import { t } from "@/i18n";
 import FeedbackToast from "@/components/FeedbackToast";
+import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import { AlertTriangle, ChevronDown, Moon, Sun, X } from "lucide-react";
@@ -94,20 +95,17 @@ type Etapa = {
     | "concluido";
 };
 
-const AJUDA_WHATSAPP_NUMERO =
-  process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
+const AJUDA_WHATSAPP_MENSAGEM =
+  "Olá! Preciso de ajuda com a configuração do ambiente oficial do WhatsApp no CRM Prosperity.";
 
-const AJUDA_WHATSAPP_MENSAGEM = encodeURIComponent(
-  "Olá! Preciso de ajuda com a configuração do ambiente oficial do WhatsApp no CRM Prosperity."
+const AJUDA_WHATSAPP_URL = montarWhatsappUrl(AJUDA_WHATSAPP_MENSAGEM);
+
+const AJUDA_PERMISSOES_META_MENSAGEM =
+  "Olá! Estou na etapa de permissões da conexão com a Meta no onboarding do CRM Prosperity e preciso de ajuda para concluir corretamente.";
+
+const AJUDA_PERMISSOES_META_URL = montarWhatsappUrl(
+  AJUDA_PERMISSOES_META_MENSAGEM
 );
-
-const AJUDA_WHATSAPP_URL = `https://api.whatsapp.com/send?phone=${AJUDA_WHATSAPP_NUMERO}&text=${AJUDA_WHATSAPP_MENSAGEM}`;
-
-const AJUDA_PERMISSOES_META_MENSAGEM = encodeURIComponent(
-  "Olá! Estou na etapa de permissões da conexão com a Meta no onboarding do CRM Prosperity e preciso de ajuda para concluir corretamente."
-);
-
-const AJUDA_PERMISSOES_META_URL = `https://api.whatsapp.com/send?phone=${AJUDA_WHATSAPP_NUMERO}&text=${AJUDA_PERMISSOES_META_MENSAGEM}`;
 
 const THEME_STORAGE_KEY = "crm-theme";
 

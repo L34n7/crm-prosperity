@@ -1,17 +1,15 @@
+import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const WHATSAPP_META_MANAGER_URL =
   "https://business.facebook.com/latest/whatsapp_manager";
 
-const HELP_WHATSAPP_NUMBER =
-  process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975117638";
-
 export const WHATSAPP_META_BLOCK_HELP_MESSAGE =
   "Olá! Preciso de ajuda com minha conta WhatsApp Business desativada pela Meta.";
 
-export const WHATSAPP_META_BLOCK_HELP_URL = `https://api.whatsapp.com/send?phone=${HELP_WHATSAPP_NUMBER}&text=${encodeURIComponent(
+export const WHATSAPP_META_BLOCK_HELP_URL = montarWhatsappUrl(
   WHATSAPP_META_BLOCK_HELP_MESSAGE
-)}`;
+);
 
 export const WHATSAPP_META_BLOCK_TITLE =
   "Conta WhatsApp Business desativada pela Meta";
