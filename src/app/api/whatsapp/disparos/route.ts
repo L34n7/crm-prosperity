@@ -28,6 +28,7 @@ import {
   validarPoliticaListaDisparo,
 } from "@/lib/whatsapp/disparo-politica-lista";
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
+import { buscarTelefonesEmCooldownDisparo } from "@/lib/whatsapp/disparo-cooldown";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 
 type DestinatarioEntrada = {
@@ -696,6 +697,29 @@ export async function POST(req: NextRequest) {
           error:
             "A selecao possui contatos com opt-out para a categoria do template. Remova-os para continuar.",
           total_contatos_opt_out: telefonesSuprimidos.size,
+        },
+        { status: 422 }
+      );
+    }
+
+    const templateEhMarketing =
+      String(template.categoria || "").trim().toLowerCase() === "marketing";
+    const telefonesEmCooldown = templateEhMarketing
+      ? await buscarTelefonesEmCooldownDisparo({
+          empresaId,
+          telefones: destinatarios.map((destinatario) => destinatario.numero),
+          categoria: "marketing",
+        })
+      : new Set<string>();
+
+    if (templateEhMarketing && telefonesEmCooldown.size > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "WHATSAPP_DISPARO_COOLDOWN_META",
+          error:
+            `A selecao possui ${telefonesEmCooldown.size} contato(s) em pausa temporaria para disparos de marketing porque a Meta recusou uma entrega recente por limite de qualidade/frequencia. Remova-os para continuar.`,
+          total_contatos_cooldown: telefonesEmCooldown.size,
         },
         { status: 422 }
       );

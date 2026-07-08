@@ -7,6 +7,7 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { classificarDestinatariosPorOptIn } from "@/lib/whatsapp/disparo-politica-lista";
+import { buscarCooldownsDisparoPorTelefone } from "@/lib/whatsapp/disparo-cooldown";
 
 type ContatoLista = {
   id: unknown;
@@ -332,6 +333,57 @@ export async function GET(request: Request) {
             optInError instanceof Error
               ? optInError.message
               : "Erro ao validar o opt-in por numero.",
+        },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (contatos.length > 0) {
+    try {
+      const cooldownsMarketing = await buscarCooldownsDisparoPorTelefone({
+        empresaId: usuario.empresa_id,
+        categoria: "marketing",
+        telefones: contatos.map((contato) =>
+          String(
+            contato.telefone_normalizado || contato.telefone || ""
+          ).trim()
+        ),
+      });
+
+      if (cooldownsMarketing.size > 0) {
+        contatos = contatos.map((contato) => {
+          const telefoneDigitos = String(
+            contato.telefone_normalizado || contato.telefone || ""
+          ).replace(/\D/g, "");
+          const telefone =
+            normalizarTelefoneBrasilParaWhatsApp(telefoneDigitos) ||
+            telefoneDigitos;
+          const cooldown = telefone
+            ? cooldownsMarketing.get(telefone)
+            : null;
+
+          if (!cooldown) return contato;
+
+          return {
+            ...contato,
+            whatsapp_disparo_cooldown_ativo: true,
+            whatsapp_disparo_cooldown_categoria: cooldown.categoria,
+            whatsapp_disparo_cooldown_expira_em: cooldown.expiraEm,
+            whatsapp_disparo_cooldown_ocorrencias:
+              cooldown.ocorrenciasJanela,
+            whatsapp_disparo_cooldown_horas: cooldown.cooldownHoras,
+          };
+        });
+      }
+    } catch (cooldownError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            cooldownError instanceof Error
+              ? cooldownError.message
+              : "Erro ao validar pausas temporarias dos contatos.",
         },
         { status: 500 }
       );

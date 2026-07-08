@@ -19,6 +19,11 @@ import {
   classificarDestinatariosPorOptIn,
   validarPoliticaListaDisparo,
 } from "@/lib/whatsapp/disparo-politica-lista";
+import {
+  ERRO_META_LIMITE_QUALIDADE_MARKETING,
+  registrarCooldownDisparoMeta131049,
+  telefoneEstaEmCooldownDisparo,
+} from "@/lib/whatsapp/disparo-cooldown";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -151,7 +156,7 @@ function normalizarFlowControlKeyQstash(valor: string) {
 
 function obterConfigFlowControlDisparo() {
   const periodoRaw = String(
-    process.env.WHATSAPP_DISPARO_QSTASH_PERIOD || "1m"
+    process.env.WHATSAPP_DISPARO_QSTASH_PERIOD || "10s"
   ).trim();
   const periodoMatch = periodoRaw.match(/^(\d+)(s|m|h|d)?$/i);
   const periodoValor = periodoMatch ? Number(periodoMatch[1]) : 60;
@@ -162,7 +167,7 @@ function obterConfigFlowControlDisparo() {
   return {
     rate: normalizarInteiro(
       process.env.WHATSAPP_DISPARO_QSTASH_RATE,
-      10,
+      1,
       1,
       100
     ),
@@ -873,7 +878,7 @@ async function avaliarCircuitBreakerCampanha(params: {
     return;
   }
 
-  if (erroCodigo === 131042 || erroCodigo === 131049 || erroCodigo === 368) {
+  if (erroCodigo === 131042 || erroCodigo === 368) {
     await pausarCampanha({
       campanhaId: params.campanhaId,
       empresaId: params.empresaId,
@@ -893,14 +898,37 @@ async function avaliarCircuitBreakerCampanha(params: {
     .order("processed_at", { ascending: false, nullsFirst: false })
     .limit(50);
 
-  if (error || !data || data.length < 50) {
+  if (error || !data) {
     return;
   }
 
   const falhas = data.filter((item) => item.status === "falha");
+  const falhasLimiteQualidadeMarketing = falhas.filter(
+    (item) =>
+      Number(item.erro_codigo_meta || 0) ===
+      ERRO_META_LIMITE_QUALIDADE_MARKETING
+  );
+
+  if (data.length >= 10 && falhasLimiteQualidadeMarketing.length >= 3) {
+    await pausarCampanha({
+      campanhaId: params.campanhaId,
+      empresaId: params.empresaId,
+      integracaoWhatsappId: params.integracaoWhatsappId,
+      status: "pausada_por_erro_meta",
+      motivo:
+        "Campanha pausada porque a Meta recusou varias mensagens de marketing por limite de qualidade ou frequencia.",
+      erroCodigoMeta: ERRO_META_LIMITE_QUALIDADE_MARKETING,
+    });
+    return;
+  }
+
   const falhasNumeroInvalido = falhas.filter(
     (item) => Number(item.erro_codigo_meta || 0) === 131026
   );
+
+  if (data.length < 50) {
+    return;
+  }
 
   if (falhasNumeroInvalido.length >= 10) {
     await pausarCampanha({
@@ -1079,6 +1107,8 @@ async function processarItemDisparo(item: DisparoItemRow) {
     politicaLista.categoria === "utility" &&
     classificacaoLista.totalFrios > 0 &&
     template.opt_out_habilitado !== true;
+  const templateEhMarketing =
+    String(template.categoria || "").trim().toLowerCase() === "marketing";
 
   if (!politicaLista.ok || utilityFrioSemOptOut) {
     const agora = new Date().toISOString();
@@ -1166,6 +1196,50 @@ async function processarItemDisparo(item: DisparoItemRow) {
     return { status: "cancelado" as const };
   }
 
+  if (
+    templateEhMarketing &&
+    await telefoneEstaEmCooldownDisparo({
+      empresaId: item.empresa_id,
+      telefone: item.telefone_normalizado || item.numero,
+      categoria: "marketing",
+    })
+  ) {
+    const agora = new Date().toISOString();
+    const motivoCancelamento =
+      "Envio cancelado porque a Meta recusou uma entrega recente para este contato por limite de qualidade ou frequencia.";
+
+    await supabaseAdmin
+      .from("whatsapp_disparo_itens")
+      .update({
+        status: "cancelado",
+        erro: motivoCancelamento,
+        locked_at: null,
+        processed_at: agora,
+        updated_at: agora,
+        metadata_json: {
+          ...objeto(item.metadata_json),
+          motivo_cancelamento: "whatsapp_disparo_cooldown_meta_131049",
+        },
+      })
+      .eq("id", item.id);
+
+    await atualizarReservaLimiteMeta({
+      reservaIds: campanha.limite_meta_reserva_ids || [],
+      telefone: item.numero,
+      status: "cancelado",
+      metadataJson: {
+        campanha_disparo_id: campanha.id,
+        item_disparo_id: item.id,
+        motivo_cancelamento: "whatsapp_disparo_cooldown_meta_131049",
+      },
+    });
+
+    await recalcularCampanha(campanha.id);
+    await sincronizarAgendamentosCampanha(campanha.id);
+
+    return { status: "cancelado" as const };
+  }
+
   let variaveis = normalizarVariaveis(item.variaveis);
   let nomeContato = item.nome_contato;
   let origem = "disparo_template_fila";
@@ -1201,6 +1275,37 @@ async function processarItemDisparo(item: DisparoItemRow) {
   await sincronizarAgendamentosCampanha(campanha.id);
 
   if (!resultado.ok) {
+    if (
+      templateEhMarketing &&
+      resultado.erroCodigoMeta === ERRO_META_LIMITE_QUALIDADE_MARKETING
+    ) {
+      try {
+        await registrarCooldownDisparoMeta131049({
+          empresaId: item.empresa_id,
+          telefone: item.telefone_normalizado || item.numero,
+          categoria: template.categoria || "",
+          contatoId: resultado.contatoId || item.contato_id || null,
+          integracaoWhatsappId: item.integracao_whatsapp_id,
+          campanhaId: campanha.id,
+          itemId: item.id,
+          mensagemExternaId: resultado.messageId,
+          metadataJson: {
+            origem: "resposta_envio_meta",
+            erro: resultado.erro,
+          },
+        });
+      } catch (cooldownError) {
+        console.warn("[WHATSAPP DISPARO] Erro ao registrar cooldown 131049:", {
+          itemId: item.id,
+          campanhaId: campanha.id,
+          erro:
+            cooldownError instanceof Error
+              ? cooldownError.message
+              : "Erro desconhecido.",
+        });
+      }
+    }
+
     await avaliarCircuitBreakerCampanha({
       campanhaId: campanha.id,
       empresaId: campanha.empresa_id,
@@ -1411,7 +1516,7 @@ export async function atualizarItemDisparoPeloWebhook({
   const { data: item, error } = await supabaseAdmin
     .from("whatsapp_disparo_itens")
     .select(
-      "id, campanha_id, empresa_id, integracao_whatsapp_id, status, metadata_json"
+      "id, campanha_id, empresa_id, integracao_whatsapp_id, template_id, contato_id, numero, telefone_normalizado, status, metadata_json"
     )
     .eq("message_id", mensagemExternaId)
     .maybeSingle();
@@ -1455,6 +1560,47 @@ export async function atualizarItemDisparoPeloWebhook({
   await sincronizarAgendamentosCampanha(String(item.campanha_id));
 
   if (falhou) {
+    if (erroCodigoMeta === ERRO_META_LIMITE_QUALIDADE_MARKETING) {
+      try {
+        const { data: templateCooldown } = await supabaseAdmin
+          .from("whatsapp_templates")
+          .select("categoria")
+          .eq("id", item.template_id)
+          .maybeSingle();
+
+        if (
+          String(templateCooldown?.categoria || "")
+            .trim()
+            .toLowerCase() === "marketing"
+        ) {
+          await registrarCooldownDisparoMeta131049({
+            empresaId: String(item.empresa_id),
+            telefone: String(item.telefone_normalizado || item.numero || ""),
+            categoria: "marketing",
+            contatoId: item.contato_id ? String(item.contato_id) : null,
+            integracaoWhatsappId: String(item.integracao_whatsapp_id),
+            campanhaId: String(item.campanha_id),
+            itemId: String(item.id),
+            mensagemExternaId,
+            metadataJson: {
+              origem: "webhook_status_meta",
+              erro,
+              raw_status: rawStatus || null,
+            },
+          });
+        }
+      } catch (cooldownError) {
+        console.warn("[WHATSAPP DISPARO] Erro ao registrar cooldown 131049:", {
+          itemId: item.id,
+          campanhaId: item.campanha_id,
+          erro:
+            cooldownError instanceof Error
+              ? cooldownError.message
+              : "Erro desconhecido.",
+        });
+      }
+    }
+
     await avaliarCircuitBreakerCampanha({
       campanhaId: String(item.campanha_id),
       empresaId: String(item.empresa_id),

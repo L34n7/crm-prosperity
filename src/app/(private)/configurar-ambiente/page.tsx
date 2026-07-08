@@ -1564,7 +1564,7 @@ return (
                       <p>
                         O número continuará disponível no WhatsApp Business App e 
                         também será conectado ao CRM. A Meta verificará se o número é 
-                        elegível para essa opção
+                        elegível.
                       </p>
                     </div>
                   )}

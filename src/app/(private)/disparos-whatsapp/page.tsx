@@ -200,6 +200,11 @@ type ContatoOpcao = {
   whatsapp_opt_out_geral?: boolean;
   whatsapp_opt_out_marketing?: boolean;
   whatsapp_opt_out_utility?: boolean;
+  whatsapp_disparo_cooldown_ativo?: boolean;
+  whatsapp_disparo_cooldown_categoria?: string | null;
+  whatsapp_disparo_cooldown_expira_em?: string | null;
+  whatsapp_disparo_cooldown_ocorrencias?: number | null;
+  whatsapp_disparo_cooldown_horas?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -257,6 +262,29 @@ function rotuloOptOutContato(contato: ContatoOpcao) {
   if (marketing) return "Opt-out Marketing";
   if (utility) return "Opt-out Utility";
   return contato.whatsapp_opt_out === true ? "Opt-out de disparos" : null;
+}
+
+function contatoTemCooldownMarketing(contato: ContatoOpcao) {
+  return (
+    contato.whatsapp_disparo_cooldown_ativo === true &&
+    String(contato.whatsapp_disparo_cooldown_categoria || "marketing")
+      .trim()
+      .toLowerCase() === "marketing"
+  );
+}
+
+function formatarDuracaoCooldownContato(contato: ContatoOpcao) {
+  const horas = Math.max(
+    1,
+    Math.floor(Number(contato.whatsapp_disparo_cooldown_horas || 6))
+  );
+
+  if (horas >= 24 && horas % 24 === 0) {
+    const dias = horas / 24;
+    return `${dias}d`;
+  }
+
+  return `${horas}hr`;
 }
 
 type CampanhaHistoricoFiltro = {
@@ -2713,8 +2741,17 @@ export default function DisparosWhatsAppPage() {
       ),
     [contatosSelecionados, categoriaTemplateSelecionado]
   );
+  const contatosCooldownSelecionados = useMemo(
+    () =>
+      categoriaTemplateSelecionado === "utility"
+        ? []
+        : contatosSelecionados.filter(contatoTemCooldownMarketing),
+    [contatosSelecionados, categoriaTemplateSelecionado]
+  );
   const totalContatosOptOut = contatosOptOutSelecionados.length;
   const temContatosOptOut = totalContatosOptOut > 0;
+  const totalContatosCooldown = contatosCooldownSelecionados.length;
+  const temContatosCooldown = totalContatosCooldown > 0;
   const totalContatosListaFria = contatosListaFriaSelecionados.length;
   const temContatosListaFria = totalContatosListaFria > 0;
   const marketingComListaFria =
@@ -2853,6 +2890,10 @@ export default function DisparosWhatsAppPage() {
         !contatoTemOptOutParaCategoria(
           contato,
           categoriaTemplateSelecionado
+        ) &&
+        !(
+          contatoTemCooldownMarketing(contato) &&
+          categoriaTemplateSelecionado !== "utility"
         )
     );
   }, [contatosDisponiveisFiltrados, categoriaTemplateSelecionado]);
@@ -2974,6 +3015,16 @@ export default function DisparosWhatsAppPage() {
     ) {
       setErro(
         "Este contato solicitou opt-out para a categoria do template selecionado."
+      );
+      return;
+    }
+
+    if (
+      contatoTemCooldownMarketing(contato) &&
+      categoriaTemplateSelecionado !== "utility"
+    ) {
+      setErro(
+        "Este contato esta em pausa temporaria para disparos de marketing porque a Meta recusou uma entrega recente."
       );
       return;
     }
@@ -3441,6 +3492,13 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
+    if (temContatosCooldown) {
+      setErro(
+        "A seleção possui contatos em pausa temporária para disparos de marketing. Remova-os para continuar."
+      );
+      return;
+    }
+
     if (marketingComListaFria) {
       setErro(
         "Templates de marketing não podem ser enviados para contatos de lista fria. Remova os contatos sem opt-in para continuar."
@@ -3795,6 +3853,13 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
+    if (temContatosCooldown) {
+      setErro(
+        "A seleção possui contatos em pausa temporária para disparos de marketing. Remova-os para continuar."
+      );
+      return;
+    }
+
     if (marketingComListaFria) {
       setErro(
         "Templates de marketing não podem ser enviados para contatos de lista fria. Remova os contatos sem opt-in para continuar."
@@ -3845,6 +3910,27 @@ export default function DisparosWhatsAppPage() {
 
     await handleSubmit(fakeEvent);
     setConfirmacaoResponsabilidadeListaFria(false);
+  }
+
+  function renderBadgeCooldownContato(contato: ContatoOpcao) {
+    if (!contatoTemCooldownMarketing(contato)) return null;
+    if (categoriaTemplateSelecionado === "utility") return null;
+
+    const duracao = formatarDuracaoCooldownContato(contato);
+    const expiraEm = contato.whatsapp_disparo_cooldown_expira_em;
+    const tooltip = [
+      "Pausa temporaria para disparos de marketing.",
+      "A Meta recusou uma entrega recente para este contato por limite de qualidade ou frequencia.",
+      expiraEm ? `Expira em ${formatarDataHora(expiraEm)}.` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return (
+      <span className={styles.contactBadgeCooldown} title={tooltip}>
+        Pausa {duracao}
+      </span>
+    );
   }
 
   function renderBadgesDisparoAntigo(contato: ContatoOpcao) {
@@ -4330,6 +4416,9 @@ export default function DisparosWhatsAppPage() {
                       ) : (
                         contatosDisponiveisFiltrados.map((contato) => {
                           const telefoneValido = contatoTemTelefoneValido(contato);
+                          const cooldownMarketingAtivo =
+                            contatoTemCooldownMarketing(contato) &&
+                            categoriaTemplateSelecionado !== "utility";
 
                           return (
                             <div key={contato.id} className={styles.contactCard}>
@@ -4386,6 +4475,8 @@ export default function DisparosWhatsAppPage() {
                                       Sem telefone válido
                                     </span>
                                   ) : null}
+
+                                  {renderBadgeCooldownContato(contato)}
                                 </div>
                                 {renderBadgesDisparoAntigo(contato)}
                               </div>
@@ -4399,7 +4490,8 @@ export default function DisparosWhatsAppPage() {
                                   contatoTemOptOutParaCategoria(
                                     contato,
                                     categoriaTemplateSelecionado
-                                  )
+                                  ) ||
+                                  cooldownMarketingAtivo
                                 }
                               >
                                 Adicionar
@@ -4494,6 +4586,8 @@ export default function DisparosWhatsAppPage() {
                                     ? "Opt-in WhatsApp"
                                     : "Lista fria"}
                                 </span>
+
+                                {renderBadgeCooldownContato(contato)}
                               </div>
                               {renderBadgesDisparoAntigo(contato)}
                             </div>
@@ -4522,6 +4616,21 @@ export default function DisparosWhatsAppPage() {
                       {totalContatosOptOut} contato(s) selecionado(s)
                       solicitaram o bloqueio da categoria do template
                       selecionado. Remova-os da seleção para continuar.
+                    </p>
+                  </div>
+                ) : null}
+
+                {temContatosCooldown ? (
+                  <div
+                    className={`${styles.coldListNotice} ${styles.coldListNoticeBlocked}`}
+                    role="alert"
+                  >
+                    <strong>Disparo bloqueado por pausa da Meta</strong>
+                    <p>
+                      {totalContatosCooldown} contato(s) selecionado(s) estão
+                      em pausa temporária para marketing porque a Meta recusou
+                      uma entrega recente por limite de qualidade ou frequência.
+                      Remova-os da seleção para continuar.
                     </p>
                   </div>
                 ) : null}
@@ -4848,11 +4957,14 @@ export default function DisparosWhatsAppPage() {
                         temConflitosPendentes ||
                         marketingComListaFria ||
                         temContatosOptOut ||
+                        temContatosCooldown ||
                         utilityListaFriaSemOptOut
                       }
                     >
                       {temContatosOptOut
                         ? "Opt-out bloqueado"
+                        : temContatosCooldown
+                        ? "Pausa Meta"
                         : utilityListaFriaSemOptOut
                         ? "Template sem opt-out"
                         : marketingComListaFria
