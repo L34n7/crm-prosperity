@@ -195,6 +195,13 @@ function extrairMensagemMeta(body: MetaErrorBody, fallback: string) {
   const details = body?.error?.error_data?.details?.trim();
   const fallbackLower = fallback.toLowerCase();
 
+  if (Number(body?.error?.code) === 100) {
+    return (
+      details ||
+      "A Meta recusou algum campo do perfil. Revise a foto, categoria, e-mail, site e descrição. Use imagem JPG ou PNG de até 5 MB."
+    );
+  }
+  
   if (
     isErroMetaTemporario(body) &&
     (fallbackLower.includes("upload") || fallbackLower.includes("foto"))
@@ -984,20 +991,44 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const websites = [website1, website2].filter(Boolean);
+  const websites = [website1, website2].filter(Boolean);
 
-    const dadosPerfil: BusinessProfileUpdate = {
-      about,
-      address,
-      description,
-      email,
-      websites,
-      vertical,
-    };
-    const payload: Record<string, unknown> = {
-      messaging_product: "whatsapp",
-      ...dadosPerfil,
-    };
+  const dadosPerfil: BusinessProfileUpdate = {
+    about,
+    address,
+    description,
+    email,
+    websites,
+    vertical,
+  };
+
+  const payload: Record<string, unknown> = {
+    messaging_product: "whatsapp",
+  };
+
+  if (about) {
+    payload.about = about;
+  }
+
+  if (address) {
+    payload.address = address;
+  }
+
+  if (description) {
+    payload.description = description;
+  }
+
+  if (email) {
+    payload.email = email;
+  }
+
+  if (websites.length > 0) {
+    payload.websites = websites;
+  }
+
+  if (vertical) {
+    payload.vertical = vertical;
+  }
 
     let atualizacaoComFoto = false;
 
@@ -1041,6 +1072,11 @@ export async function PATCH(req: NextRequest) {
     const metaJson = await metaRes.json();
 
     if (!metaRes.ok) {
+      console.warn("[WHATSAPP PERFIL PATCH META ERROR]", {
+        status: metaRes.status,
+        payload,
+        metaJson,
+      });
       if (isErroMetaTemporario(metaJson)) {
         console.warn("[WHATSAPP PERFIL PATCH META TEMPORARY ERROR]", metaJson);
 

@@ -445,7 +445,19 @@ export default function WhatsappPerfilPage() {
       formData.set("website2", website2);
       formData.set("vertical", vertical);
 
-      if (foto) formData.set("profile_picture", foto);
+      if (foto) {
+        const tiposPermitidos = ["image/jpeg", "image/png"];
+
+        if (!tiposPermitidos.includes(foto.type)) {
+          throw new Error("A foto precisa estar em JPG ou PNG.");
+        }
+
+        if (foto.size > 5 * 1024 * 1024) {
+          throw new Error("A foto precisa ter no máximo 5 MB.");
+        }
+
+        formData.set("profile_picture", foto);
+      }
 
       const res = await fetch("/api/whatsapp/perfil", {
         method: "PATCH",
@@ -1162,8 +1174,18 @@ export default function WhatsappPerfilPage() {
               >
                 Desconectar integração
               </button>
-              
-              <button
+
+              <div className={styles.saveActions}>
+                <a
+                  className={styles.metaButton}
+                  href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Ajustar no Meta
+                </a>
+
+                <button
                   type="submit"
                   className={styles.saveButton}
                   disabled={
@@ -1173,9 +1195,10 @@ export default function WhatsappPerfilPage() {
                     integracaoBloqueada ||
                     !haAlteracoesPerfil
                   }
-              >
+                >
                   {salvando ? "Salvando..." : "Salvar alterações"}
-              </button>
+                </button>
+              </div>
             </div>
             </form>
           </aside>
