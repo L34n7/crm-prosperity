@@ -76,6 +76,19 @@ export async function POST(req: NextRequest) {
     const incomingStatuses = extractMessageStatuses(body);
     const coexistenceItems = countCoexistenceWebhookItems(body);
 
+    const camposWebhook = body.entry?.flatMap((entry) =>
+      entry.changes?.map((change) => change.field)
+    ) ?? [];
+
+    const temEventoAdministrativo = camposWebhook.some((field) =>
+      [
+        "phone_number_name_update",
+        "phone_number_quality_update",
+        "account_update",
+        "message_template_status_update",
+      ].includes(String(field))
+    );
+
     console.log("[WEBHOOK WHATSAPP] Evento recebido:", {
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
@@ -85,8 +98,13 @@ export async function POST(req: NextRequest) {
     if (
       incomingMessages.length === 0 &&
       incomingStatuses.length === 0 &&
-      coexistenceItems.total === 0
+      coexistenceItems.total === 0 &&
+      !temEventoAdministrativo
     ) {
+      console.log("[WEBHOOK WHATSAPP] Evento recebido sem mensagens/status/coex:", {
+        fields: camposWebhook,
+      });
+
       return NextResponse.json(
         {
           success: true,
