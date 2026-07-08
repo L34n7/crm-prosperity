@@ -43,7 +43,7 @@ type IntegracaoWhatsapp = {
   setup_completed_at: string | null;
   onboarding_status: string | null;
   onboarding_erro: string | null;
-  modo_integracao?: string | null;
+  modo_integracao?: "cloud_api" | "coexistence" | string | null;
   coex_status?: string | null;
   config_json: ConfigJson;
   token_ref: string | null;
@@ -985,6 +985,20 @@ export async function PATCH(req: NextRequest) {
 
     if (!integracao.phone_number_id) {
       return jsonErro("Essa integração não possui phone_number_id.", 400);
+    }
+
+    if (integracao.modo_integracao === "coexistence") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Este número está conectado por coexistência. A Meta não permite que o CRM altere o perfil desse número por API. Ajuste o perfil diretamente no Gerenciador do WhatsApp da Meta ou no WhatsApp Business App.",
+          requires_meta_profile_edit: true,
+          meta_manager_url:
+            "https://business.facebook.com/latest/whatsapp_manager/phone_numbers",
+        },
+        { status: 409 }
+      );
     }
 
     const token = extrairToken(integracao);

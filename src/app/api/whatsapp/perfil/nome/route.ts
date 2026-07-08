@@ -206,14 +206,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await supabase
-      .from("integracoes_whatsapp")
-      .update({
-        updated_at: new Date().toISOString(),
-        ultimo_sync_at: new Date().toISOString(),
-      })
-      .eq("id", integracao.id)
-      .eq("empresa_id", empresaId);
+  const agora = new Date().toISOString();
+
+  await supabase
+    .from("integracoes_whatsapp")
+    .update({
+      updated_at: agora,
+      ultimo_sync_at: agora,
+      config_json: {
+        ...objetoConfig(integracao.config_json),
+        display_name_change_requested: {
+          novo_nome: novoNome,
+          solicitado_em: agora,
+          status: "em_analise",
+          meta_response: metaJson,
+        },
+      },
+    })
+    .eq("id", integracao.id)
+    .eq("empresa_id", empresaId);
 
     return NextResponse.json({
       ok: true,

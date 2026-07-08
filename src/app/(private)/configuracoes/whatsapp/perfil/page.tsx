@@ -295,6 +295,9 @@ export default function WhatsappPerfilPage() {
     return integracoes.find((item) => item.id === integracaoId) || null;
   }, [integracoes, integracaoId]);
 
+  const perfilEditavelNoCrm =
+    integracaoSelecionada?.modo_integracao !== "coexistence";
+    
   const nomePerfil =
     integracaoSelecionada?.phone_number_display_name ||
     integracaoSelecionada?.verified_name ||
@@ -1179,6 +1182,15 @@ export default function WhatsappPerfilPage() {
             </label>
             </div>
 
+            {!perfilEditavelNoCrm && (
+              <div className={styles.noticeBox}>
+                Este número está conectado por coexistência. Alguns dados do perfil não
+                podem ser editados pelo CRM. Use o botão <strong>Ajustar no Meta</strong>{" "}
+                para alterar o perfil diretamente no Gerenciador do WhatsApp ou no
+                WhatsApp Business App.
+              </div>
+            )}
+
             {(erro || sucesso) && (
               <div className={styles.alertArea}>
                 {erro && <div className={styles.errorAlert}>{erro}</div>}
@@ -1213,7 +1225,8 @@ export default function WhatsappPerfilPage() {
                     carregando ||
                     !integracaoId ||
                     integracaoBloqueada ||
-                    !haAlteracoesPerfil
+                    !haAlteracoesPerfil ||
+                    !perfilEditavelNoCrm
                   }
                 >
                   {salvando ? "Salvando..." : "Salvar alterações"}
