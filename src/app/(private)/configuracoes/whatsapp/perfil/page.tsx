@@ -436,6 +436,12 @@ export default function WhatsappPerfilPage() {
 
       const formData = new FormData();
 
+      formData.delete("display_name");
+      formData.delete("verified_name");
+      formData.delete("nome_exibicao");
+      formData.delete("nome");
+      formData.delete("novo_nome");
+
       formData.set("integracao_id", integracaoId);
       formData.set("about", about);
       formData.set("address", address);
@@ -457,6 +463,33 @@ export default function WhatsappPerfilPage() {
         }
 
         formData.set("profile_picture", foto);
+      }
+
+      const validarUrlPerfil = (valor: string) => {
+        const site = valor.trim();
+
+        if (!site) {
+          return true;
+        }
+
+        try {
+          const url = new URL(site);
+          return url.protocol === "http:" || url.protocol === "https:";
+        } catch {
+          return false;
+        }
+      };
+
+      if (!validarUrlPerfil(website1)) {
+        throw new Error(
+          "O Site principal precisa ser uma URL completa, por exemplo: https://seudominio.com.br"
+        );
+      }
+
+      if (!validarUrlPerfil(website2)) {
+        throw new Error(
+          "O Site secundário precisa ser uma URL completa, por exemplo: https://seudominio.com.br"
+        );
       }
 
       const res = await fetch("/api/whatsapp/perfil", {
@@ -834,11 +867,6 @@ export default function WhatsappPerfilPage() {
                   </div>
 
                   <div className={styles.profileSection}>
-                    <span>Sobre</span>
-                    <strong>{about || "Adicione uma frase curta sobre sua empresa."}</strong>
-                  </div>
-
-                  <div className={styles.profileSection}>
                     <span>Descrição</span>
                     <p>
                       {description ||
@@ -864,12 +892,6 @@ export default function WhatsappPerfilPage() {
                 <h1>Perfil Whatsapp Business</h1>
               </div>
             </div>
-
-            {(erro || sucesso) && (
-              <div className={styles.alertArea}>
-                {erro && <div className={styles.errorAlert}>{erro}</div>}
-              </div>
-            )}
 
             {onboardingIncompleto && (
               <div className={styles.diagnosticAlert}>
@@ -1081,15 +1103,14 @@ export default function WhatsappPerfilPage() {
             </label>
 
             <label className={styles.fieldLabel}>
-              Sobre
-              <input
+                E-mail
+                <input
                 className={styles.input}
-                value={about}
-                onChange={(e) => setAbout(e.target.value)}
-                maxLength={139}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={integracaoBloqueada}
-                placeholder="Ex: Atendimento oficial da empresa"
-              />
+                placeholder="Insira o email comercial"
+                />
             </label>
 
             <label className={styles.fieldLabel}>
@@ -1132,38 +1153,37 @@ export default function WhatsappPerfilPage() {
             </label>
 
             <label className={styles.fieldLabel}>
-                E-mail
-                <input
-                className={styles.input}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={integracaoBloqueada}
-                placeholder="Insira o email comercial"
-                />
-            </label>
-
-            <label className={styles.fieldLabel}>
                 Site principal
                 <input
+                type="url"
+                placeholder="https://seusite.com.br"
+                inputMode="url"
                 className={styles.input}
                 value={website1}
                 onChange={(e) => setWebsite1(e.target.value)}
                 disabled={integracaoBloqueada}
-                placeholder="https://seudominio.com"
                 />
             </label>
 
             <label className={styles.fieldLabel}>
                 Site secundário
                 <input
+                type="url"
+                placeholder="https://instagram.com/suaempresa"
+                inputMode="url"
                 className={styles.input}
                 value={website2}
                 onChange={(e) => setWebsite2(e.target.value)}
                 disabled={integracaoBloqueada}
-                placeholder="https://instagram.com/suaempresa"
                 />
             </label>
             </div>
+
+            {(erro || sucesso) && (
+              <div className={styles.alertArea}>
+                {erro && <div className={styles.errorAlert}>{erro}</div>}
+              </div>
+            )}
 
             <div className={styles.saveArea}>
               <button

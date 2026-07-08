@@ -195,10 +195,15 @@ function extrairMensagemMeta(body: MetaErrorBody, fallback: string) {
   const details = body?.error?.error_data?.details?.trim();
   const fallbackLower = fallback.toLowerCase();
 
+  if (message?.includes("Param websites")) {
+    return "Um dos sites informados não é válido. Use uma URL completa começando com https:// ou http://.";
+  }
+
   if (Number(body?.error?.code) === 100) {
     return (
       details ||
-      "A Meta recusou algum campo do perfil. Revise a foto, categoria, e-mail, site e descrição. Use imagem JPG ou PNG de até 5 MB."
+      fallback ||
+      "A Meta recusou algum parâmetro enviado. Revise os dados do perfil e tente novamente."
     );
   }
   
@@ -991,7 +996,30 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-  const websites = [website1, website2].filter(Boolean);
+  const websitesBrutos = [website1, website2]
+    .map((site) => site?.trim())
+    .filter(Boolean) as string[];
+
+  const siteInvalido = websitesBrutos.find((site) => {
+    try {
+      const url = new URL(site);
+      return url.protocol !== "http:" && url.protocol !== "https:";
+    } catch {
+      return true;
+    }
+  });
+
+  if (siteInvalido) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `O site "${siteInvalido}" não é válido. Informe uma URL completa começando com https:// ou http://.`,
+      },
+      { status: 400 }
+    );
+  }
+
+  const websites = websitesBrutos;
 
   const dadosPerfil: BusinessProfileUpdate = {
     about,
@@ -1004,27 +1032,12 @@ export async function PATCH(req: NextRequest) {
 
   const payload: Record<string, unknown> = {
     messaging_product: "whatsapp",
+    about: about ?? "",
+    address: address ?? "",
+    description: description ?? "",
+    email: email ?? "",
+    websites,
   };
-
-  if (about) {
-    payload.about = about;
-  }
-
-  if (address) {
-    payload.address = address;
-  }
-
-  if (description) {
-    payload.description = description;
-  }
-
-  if (email) {
-    payload.email = email;
-  }
-
-  if (websites.length > 0) {
-    payload.websites = websites;
-  }
 
   if (vertical) {
     payload.vertical = vertical;
