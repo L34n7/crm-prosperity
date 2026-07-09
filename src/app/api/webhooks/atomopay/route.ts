@@ -197,6 +197,52 @@ function obterTipoOferta(payload: any, lead?: any) {
   return "normal";
 }
 
+function obterTipoOfertaPorOferta(oferta: any) {
+  const metadata =
+    oferta?.metadata_json && typeof oferta.metadata_json === "object"
+      ? oferta.metadata_json
+      : {};
+
+  const tipo = String(metadata.tipo_oferta || "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    tipo === "normal" ||
+    tipo === "vip" ||
+    tipo === "jv" ||
+    tipo === "af" ||
+    tipo === "free"
+  ) {
+    return tipo;
+  }
+
+  const origem = String(metadata.origem || "").trim().toLowerCase();
+  const referencia = String(oferta?.referencia || "").trim();
+
+  if (origem.includes("beta") || referencia === "2psef") {
+    return "vip";
+  }
+
+  if (
+    origem.includes("afiliado") ||
+    origem.includes("_af") ||
+    origem === "atomopay_afiliado"
+  ) {
+    return "af";
+  }
+
+  if (origem.includes("jv")) {
+    return "jv";
+  }
+
+  if (origem.includes("free") || referencia.startsWith("offer_free")) {
+    return "free";
+  }
+
+  return "normal";
+}
+
 function montarNomeEmpresa(lead: any, payload: any) {
   const empresaLead = String(lead?.empresa ?? "").trim();
   const nomeCliente = String(payload.customer?.name ?? "").trim();
@@ -242,6 +288,7 @@ async function buscarOfertaAtomopay(params: {
       empresa_id,
       quantidade_tokens,
       ativa,
+      metadata_json,
       planos (
         id,
         nome,
@@ -305,6 +352,7 @@ async function obterPlanoPagamento(params: {
       planoId: planoOferta.id as string,
       planoSlug: normalizarPlanoSlug(planoOferta.slug) ?? planoOferta.slug,
       oferta,
+      tipoOferta: obterTipoOfertaPorOferta(oferta),
     };
   }
 
@@ -320,6 +368,7 @@ async function obterPlanoPagamento(params: {
     planoId,
     planoSlug,
     oferta,
+    tipoOferta: obterTipoOferta(params.payload, params.lead),
   };
 }
 
@@ -373,7 +422,7 @@ async function buscarLeadCadastro(params: {
 
 async function criarLeadAutomatico(payload: any) {
   const planoPagamento = await obterPlanoPagamento({ payload });
-  const tipoOferta = obterTipoOferta(payload);
+  const tipoOferta = planoPagamento.tipoOferta || obterTipoOferta(payload);
 
   const { data, error } = await supabase
     .from("leads_cadastro")
@@ -437,6 +486,34 @@ async function criarEmpresa(params: {
     throw new Error("Não foi possível criar empresa sem email.");
   }
 
+  const { data: empresaExistente, error: empresaExistenteError } = await supabase
+    .from("empresas")
+    .select("*")
+    .ilike("email", emailEmpresa)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (empresaExistenteError) {
+    throw new Error(
+      `Erro ao buscar empresa existente: ${empresaExistenteError.message}`
+    );
+  }
+
+  if (empresaExistente) {
+    if (lead?.id && !lead?.empresa_id) {
+      await supabase
+        .from("leads_cadastro")
+        .update({
+          empresa_id: empresaExistente.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", lead.id);
+    }
+
+    return empresaExistente;
+  }
+
   const { data, error } = await supabase
     .from("empresas")
     .insert({
@@ -479,6 +556,8 @@ async function aplicarAssinaturaPlano(params: {
   planoId: string;
   planoSlug: string;
   payload: any;
+  oferta?: any;
+  tipoOferta?: string;
 }) {
   const referencia = obterTransactionId(params.payload);
   const pagoEm = obterPagoEm(params.payload);
@@ -496,6 +575,13 @@ async function aplicarAssinaturaPlano(params: {
     assinatura_metadata_json: {
       origem: "webhook_atomopay",
       plano_slug: params.planoSlug,
+      tipo_oferta:
+        params.tipoOferta ||
+        obterTipoOfertaPorOferta(params.oferta) ||
+        obterTipoOferta(params.payload),
+      oferta_id: params.oferta?.id ?? null,
+      oferta_referencia: params.oferta?.referencia ?? obterOfferHash(params.payload),
+      oferta_nome: params.oferta?.nome ?? null,
       status: normalizarStatusPagamento(params.payload),
       payment_method: obterMetodoPagamento(params.payload),
       offer_hash: obterOfferHash(params.payload),
@@ -775,14 +861,16 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
     payload,
   });
 
-  if (!ehRecargaTokens) {
-    await aplicarAssinaturaPlano({
-      empresaId: empresa.id,
-      planoId: planoPagamento.planoId,
-      planoSlug: planoPagamento.planoSlug,
-      payload,
-    });
-  }
+    if (!ehRecargaTokens) {
+      await aplicarAssinaturaPlano({
+        empresaId: empresa.id,
+        planoId: planoPagamento.planoId,
+        planoSlug: planoPagamento.planoSlug,
+        payload,
+        oferta: planoPagamento.oferta,
+        tipoOferta: planoPagamento.tipoOferta,
+      });
+    }
 
   const resultadoTokens = await aplicarPagamentoTokensIa({
     empresaId: empresa.id,
@@ -831,6 +919,10 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
       pago_em: obterPagoEm(payload),
       empresa_id: empresa.id,
       plano_slug: planoPagamento.planoSlug,
+      tipo_oferta:
+        planoPagamento.tipoOferta ||
+        obterTipoOfertaPorOferta(planoPagamento.oferta) ||
+        obterTipoOferta(payload, lead),
       atomopay_checkout_id: transactionId,
       atomopay_customer_id: payload.customer?.id ?? null,
       metadata_json: payload,

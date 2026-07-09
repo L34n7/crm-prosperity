@@ -292,9 +292,16 @@ export default function Header({
     planoAtual: boolean,
     carregando: boolean
   ) {
-    if (planoAtual) return "Plano atual";
-    if (plano.tipo === "cotacao") return "Solicitar cotação";
     if (carregando) return "Preparando...";
+
+    if (planoAtual && assinaturaEmAberto) {
+      return "Renovar plano";
+    }
+
+    if (planoAtual) return "Plano atual";
+
+    if (plano.tipo === "cotacao") return "Solicitar cotação";
+
     return "Contratar plano";
   }
 
@@ -596,7 +603,10 @@ export default function Header({
       const res = await fetch("/api/assinaturas/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plano_slug: plano.slug }),
+        body: JSON.stringify({
+          plano_slug: plano.slug,
+          renovar_plano_atual: planoEhAtual(plano),
+        }),
       });
       const data = (await res.json()) as CheckoutPlanoResponse;
 
@@ -605,7 +615,7 @@ export default function Header({
         return;
       }
 
-      window.location.assign(data.checkout_url);
+      window.open(data.checkout_url, "_blank", "noopener,noreferrer");
     } catch {
       alert("Erro inesperado ao iniciar o checkout.");
     } finally {
@@ -955,7 +965,7 @@ export default function Header({
                   <h2 id="plan-renewal-title">Gerenciar plano</h2>
                   <p>
                     Veja o plano atual da empresa, renove ou escolha outro.
-                    A liberacao acontece automaticamente apos a confirmacao.
+                    A liberação acontece automaticamente após a confirmação do pagamento.
                   </p>
                 </div>
 
@@ -1046,23 +1056,15 @@ export default function Header({
                       <button
                         type="button"
                         className={
-                          planoAtual
+                          planoAtual && !assinaturaEmAberto
                             ? styles.planRenewalCurrent
                             : plano.tipo === "cotacao"
                               ? styles.planRenewalSecondary
                               : styles.planRenewalPrimary
                         }
-                        onClick={
-                          planoAtual
-                            ? undefined
-                            : () => contratarPlanoAssinatura(plano)
-                        }
-                        title={getPlanoActionLabel(
-                          plano,
-                          planoAtual,
-                          carregando
-                        )}
-                        disabled={planoAtual || carregando}
+                        onClick={() => contratarPlanoAssinatura(plano)}
+                        title={getPlanoActionLabel(plano, planoAtual, carregando)}
+                        disabled={(planoAtual && !assinaturaEmAberto) || carregando}
                       >
                         {getPlanoActionLabel(plano, planoAtual, carregando)}
                       </button>
