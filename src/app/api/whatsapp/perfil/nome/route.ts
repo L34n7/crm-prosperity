@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   diagnosticarErroMetaWhatsapp,
   type WhatsAppMetaErrorDiagnostic,
@@ -127,6 +128,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = await createClient();
+    const supabaseAdmin = getSupabaseAdmin();
 
     const { data: integracao, error } = await supabase
       .from("integracoes_whatsapp")
@@ -219,7 +221,7 @@ export async function POST(req: NextRequest) {
     const agoraIso = agora.toISOString();
     const proximaVerificacao = new Date(agora.getTime() + 3 * 60 * 1000).toISOString();
 
-    await supabase
+    await supabaseAdmin
       .from("whatsapp_display_name_changes")
       .update({
         status: "cancelado",
@@ -237,7 +239,7 @@ export async function POST(req: NextRequest) {
         "erro_ao_aplicar",
       ]);
 
-    const { error: insertChangeError } = await supabase
+    const { error: insertChangeError } = await supabaseAdmin
       .from("whatsapp_display_name_changes")
       .insert({
         empresa_id: empresaId,

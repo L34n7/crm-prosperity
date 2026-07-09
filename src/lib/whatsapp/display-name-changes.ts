@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
 import { decryptText } from "@/lib/security/crypto";
-
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const GRAPH_VERSION = "v23.0";
 
@@ -145,7 +145,7 @@ export async function processarAlteracoesNomeWhatsappPendentes(params?: {
   limite?: number;
 }) {
   const limite = params?.limite || 10;
-  const supabase = await createClient();
+  const supabase = getSupabaseAdmin();
   const agoraIso = new Date().toISOString();
 
   const { data: pendencias, error: pendenciasError } = await supabase
