@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sendAppointmentReminderEmail } from "@/lib/email/send-appointment-reminder-email";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { enfileirarDisparosAgendadosVencidos } from "@/lib/whatsapp/disparo-agendado-fila";
+import { processarAlteracoesNomeWhatsappPendentes } from "@/lib/whatsapp/display-name-changes";
 
 type JsonObject = Record<string, unknown>;
 
@@ -209,8 +210,20 @@ async function processarEmailsAgendados(agora: string) {
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
+  const userAgent = request.headers.get("user-agent") || "";
 
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const chamadaComSecret =
+    !!process.env.CRON_SECRET &&
+    authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+  const chamadaVercelCron = userAgent.includes("vercel-cron");
+
+  if (!chamadaComSecret || !chamadaVercelCron) {
+    console.warn("[CRON DISPAROS] Chamada recusada:", {
+      userAgent,
+      temAuthorization: Boolean(authHeader),
+    });
+
     return NextResponse.json(
       {
         ok: false,
@@ -222,15 +235,18 @@ export async function GET(request: Request) {
 
   try {
     const agora = new Date().toISOString();
-    const [disparos, emails] = await Promise.all([
+
+    const [disparos, emails, nomesWhatsapp] = await Promise.all([
       enfileirarDisparosAgendadosVencidos({ limite: 1000 }),
       processarEmailsAgendados(agora),
+      processarAlteracoesNomeWhatsappPendentes({ limite: 10 }),
     ]);
 
     console.log("[CRON DISPAROS] Processamento concluido:", {
       agora,
       disparos,
       emails,
+      nomesWhatsapp,
     });
 
     return NextResponse.json({
@@ -238,6 +254,7 @@ export async function GET(request: Request) {
       modelo_disparos: "fila_qstash",
       disparos,
       emails,
+      nomesWhatsapp,
     });
   } catch (error) {
     const mensagem =

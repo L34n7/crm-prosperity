@@ -16,9 +16,11 @@ type IntegracaoWhatsapp = {
   nome_conexao: string;
   numero: string;
   status: string;
+  modo_integracao?: string | null;
   phone_number_id: string | null;
   phone_number_status?: string | null;
   token_ref: string | null;
+  verified_name?: string | null;
   config_json: any;
 };
 
@@ -129,7 +131,7 @@ export async function POST(req: NextRequest) {
     const { data: integracao, error } = await supabase
       .from("integracoes_whatsapp")
       .select(
-        "id, empresa_id, nome_conexao, numero, status, phone_number_id, phone_number_status, token_ref, config_json"
+        "id, empresa_id, nome_conexao, numero, status, modo_integracao, phone_number_id, phone_number_status, token_ref, verified_name, config_json"
       )
       .eq("id", integracaoId)
       .eq("empresa_id", empresaId)
@@ -145,6 +147,13 @@ export async function POST(req: NextRequest) {
 
     if (!integracao.phone_number_id) {
       return jsonErro("Essa integração não possui phone_number_id.", 400);
+    }
+
+    if (integracao.modo_integracao === "coexistence") {
+      return jsonErro(
+        "Este número está conectado por coexistência. Solicite a alteração do nome diretamente no Gerenciador do WhatsApp da Meta ou no WhatsApp Business App.",
+        409
+      );
     }
 
     const token = extrairToken(integracao);
@@ -206,25 +215,85 @@ export async function POST(req: NextRequest) {
       );
     }
 
-  const agora = new Date().toISOString();
+    const agora = new Date();
+    const agoraIso = agora.toISOString();
+    const proximaVerificacao = new Date(agora.getTime() + 3 * 60 * 1000).toISOString();
 
-  await supabase
-    .from("integracoes_whatsapp")
-    .update({
-      updated_at: agora,
-      ultimo_sync_at: agora,
-      config_json: {
-        ...objetoConfig(integracao.config_json),
-        display_name_change_requested: {
-          novo_nome: novoNome,
-          solicitado_em: agora,
-          status: "em_analise",
-          meta_response: metaJson,
+    await supabase
+      .from("whatsapp_display_name_changes")
+      .update({
+        status: "cancelado",
+        cancelado_em: agoraIso,
+        updated_at: agoraIso,
+      })
+      .eq("integracao_whatsapp_id", integracao.id)
+      .in("status", [
+        "solicitado",
+        "em_analise",
+        "aguardando_liberacao_meta",
+        "pronto_para_registro",
+        "aprovado_pendente_pin",
+        "erro_verificacao",
+        "erro_ao_aplicar",
+      ]);
+
+    const { error: insertChangeError } = await supabase
+      .from("whatsapp_display_name_changes")
+      .insert({
+        empresa_id: empresaId,
+        integracao_whatsapp_id: integracao.id,
+        phone_number_id: integracao.phone_number_id,
+        display_phone_number: integracao.numero,
+        nome_antigo:
+          integracao.verified_name ||
+          integracao.nome_conexao ||
+          null,
+        nome_atual_meta:
+          integracao.verified_name ||
+          integracao.nome_conexao ||
+          null,
+        nome_solicitado: novoNome,
+        status: "solicitado",
+        precisa_registro: true,
+        auto_aplicar: true,
+        tentativas_verificacao: 0,
+        proxima_verificacao_em: proximaVerificacao,
+        solicitado_em: agoraIso,
+        meta_response: metaJson,
+        created_at: agoraIso,
+        updated_at: agoraIso,
+      });
+
+    if (insertChangeError) {
+      console.warn("[WHATSAPP ALTERAR NOME INSERT CHANGE ERROR]", insertChangeError);
+
+      return jsonErro(
+        "A solicitação foi enviada para a Meta, mas não foi possível registrar o acompanhamento no CRM.",
+        500,
+        insertChangeError
+      );
+    }
+
+    await supabase
+      .from("integracoes_whatsapp")
+      .update({
+        updated_at: agoraIso,
+        ultimo_sync_at: agoraIso,
+        config_json: {
+          ...objetoConfig(integracao.config_json),
+          display_name_change_requested: {
+            novo_nome: novoNome,
+            solicitado_em: agoraIso,
+            status: "solicitado",
+            precisa_registro: true,
+            auto_aplicar: true,
+            proxima_verificacao_em: proximaVerificacao,
+            meta_response: metaJson,
+          },
         },
-      },
-    })
-    .eq("id", integracao.id)
-    .eq("empresa_id", empresaId);
+      })
+      .eq("id", integracao.id)
+      .eq("empresa_id", empresaId);
 
     return NextResponse.json({
       ok: true,
