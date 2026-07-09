@@ -25,6 +25,8 @@ type DisplayNameChange = {
   empresa_id: string;
   integracao_whatsapp_id: string;
   phone_number_id: string;
+  display_phone_number: string | null;
+  nome_antigo: string | null;
   nome_solicitado: string;
   tentativas_verificacao: number;
   max_tentativas: number;
@@ -141,6 +143,96 @@ function extrairPin(integracao: IntegracaoWhatsapp) {
   }
 }
 
+async function criarNotificacaoNomeWhatsappAplicado(params: {
+  supabase: any;
+  empresaId: string;
+  integracaoWhatsappId: string;
+  displayNameChangeId: string;
+  phoneNumberId: string;
+  displayPhoneNumber?: string | null;
+  nomeAnterior?: string | null;
+  nomeNovo: string;
+}) {
+  const {
+    supabase,
+    empresaId,
+    integracaoWhatsappId,
+    displayNameChangeId,
+    phoneNumberId,
+    displayPhoneNumber,
+    nomeAnterior,
+    nomeNovo,
+  } = params;
+
+  const { data: notificacaoExistente, error: erroBusca } = await supabase
+    .from("notificacoes")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .eq("tipo", "whatsapp_nome_aplicado")
+    .contains("metadata_json", {
+      display_name_change_id: displayNameChangeId,
+    })
+    .limit(1)
+    .maybeSingle();
+
+  if (erroBusca) {
+    console.warn("[WHATSAPP DISPLAY NAME] Erro ao verificar notificacao existente:", {
+      displayNameChangeId,
+      erro: erroBusca,
+    });
+  }
+
+  if (notificacaoExistente) {
+    return {
+      criada: false,
+      motivo: "notificacao_ja_existente",
+    };
+  }
+
+  const numeroLabel = displayPhoneNumber || phoneNumberId;
+  const nomeAnteriorLabel = nomeAnterior?.trim() || "nome anterior";
+
+  const mensagem =
+    nomeAnterior && nomeAnterior.trim()
+      ? `O nome do WhatsApp ${numeroLabel} foi alterado de "${nomeAnteriorLabel}" para "${nomeNovo}".`
+      : `O nome do WhatsApp ${numeroLabel} foi alterado para "${nomeNovo}".`;
+
+  const { error } = await supabase.from("notificacoes").insert({
+    empresa_id: empresaId,
+    usuario_id: null,
+    tipo: "whatsapp_nome_aplicado",
+    titulo: "Nome do WhatsApp alterado",
+    mensagem,
+    lida: false,
+    metadata_json: {
+      origem: "cron_display_name_changes",
+      display_name_change_id: displayNameChangeId,
+      integracao_whatsapp_id: integracaoWhatsappId,
+      phone_number_id: phoneNumberId,
+      display_phone_number: displayPhoneNumber || null,
+      nome_anterior: nomeAnterior || null,
+      nome_novo: nomeNovo,
+    },
+  });
+
+  if (error) {
+    console.warn("[WHATSAPP DISPLAY NAME] Erro ao criar notificacao:", {
+      displayNameChangeId,
+      erro: error,
+    });
+
+    return {
+      criada: false,
+      motivo: "erro_ao_criar_notificacao",
+      error,
+    };
+  }
+
+  return {
+    criada: true,
+  };
+}
+
 export async function processarAlteracoesNomeWhatsappPendentes(params?: {
   limite?: number;
 }) {
@@ -151,7 +243,7 @@ export async function processarAlteracoesNomeWhatsappPendentes(params?: {
   const { data: pendencias, error: pendenciasError } = await supabase
     .from("whatsapp_display_name_changes")
     .select(
-      "id, empresa_id, integracao_whatsapp_id, phone_number_id, nome_solicitado, tentativas_verificacao, max_tentativas"
+      "id, empresa_id, integracao_whatsapp_id, phone_number_id, display_phone_number, nome_antigo, nome_solicitado, tentativas_verificacao, max_tentativas"
     )
     .eq("auto_aplicar", true)
     .eq("precisa_registro", true)
@@ -331,6 +423,17 @@ export async function processarAlteracoesNomeWhatsappPendentes(params?: {
         .eq("id", integracao.id)
         .eq("empresa_id", integracao.empresa_id);
 
+      await criarNotificacaoNomeWhatsappAplicado({
+        supabase,
+        empresaId: integracao.empresa_id,
+        integracaoWhatsappId: integracao.id,
+        displayNameChangeId: pendencia.id,
+        phoneNumberId: integracao.phone_number_id,
+        displayPhoneNumber: displayPhoneNumber || pendencia.display_phone_number,
+        nomeAnterior: pendencia.nome_antigo,
+        nomeNovo: pendencia.nome_solicitado,
+      });
+
       resultados.push({
         id: pendencia.id,
         ok: true,
@@ -476,6 +579,22 @@ export async function processarAlteracoesNomeWhatsappPendentes(params?: {
       })
       .eq("id", integracao.id)
       .eq("empresa_id", integracao.empresa_id);
+
+    if (aplicado) {
+      await criarNotificacaoNomeWhatsappAplicado({
+        supabase,
+        empresaId: integracao.empresa_id,
+        integracaoWhatsappId: integracao.id,
+        displayNameChangeId: pendencia.id,
+        phoneNumberId: integracao.phone_number_id,
+        displayPhoneNumber:
+          statusDepoisRegister.json?.display_phone_number ||
+          displayPhoneNumber ||
+          pendencia.display_phone_number,
+        nomeAnterior: pendencia.nome_antigo || verifiedName,
+        nomeNovo: pendencia.nome_solicitado,
+      });
+    }
 
     resultados.push({
       id: pendencia.id,
