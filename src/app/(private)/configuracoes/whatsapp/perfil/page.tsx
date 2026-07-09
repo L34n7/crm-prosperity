@@ -283,6 +283,8 @@ export default function WhatsappPerfilPage() {
   const [modalNomeAberto, setModalNomeAberto] = useState(false);
   const [novoNomeExibicao, setNovoNomeExibicao] = useState("");
   const [salvandoNome, setSalvandoNome] = useState(false);
+  const [erroNomeExibicao, setErroNomeExibicao] = useState("");
+  const [sucessoNomeExibicao, setSucessoNomeExibicao] = useState("");
   const [modalDesconectarAberto, setModalDesconectarAberto] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
   const [erroDesconexao, setErroDesconexao] = useState("");
@@ -521,6 +523,8 @@ export default function WhatsappPerfilPage() {
       setSalvandoNome(true);
       setErro("");
       setSucesso("");
+      setErroNomeExibicao("");
+      setSucessoNomeExibicao("");
 
       const res = await fetch("/api/whatsapp/perfil/nome", {
         method: "POST",
@@ -537,19 +541,36 @@ export default function WhatsappPerfilPage() {
 
       if (!res.ok || !json.ok) {
         setDiagnosticoWhatsapp(json.diagnostico || null);
-        throw new Error(json.error || "Erro ao solicitar alteração do nome.");
+
+        const mensagem =
+          json.error ||
+          "Erro ao solicitar alteração do nome.";
+
+        setErroNomeExibicao(mensagem);
+        return;
       }
+
+      setSucessoNomeExibicao(
+        json.message ||
+          "Solicitação enviada ao Meta. A aprovação pode levar algum tempo."
+      );
 
       setSucesso(
         "Solicitação de alteração do nome enviada ao Meta. A aprovação pode levar algum tempo."
       );
 
-      setModalNomeAberto(false);
       setNovoNomeExibicao("");
 
-      await carregarPerfil(integracaoId);
+      setTimeout(() => {
+        setModalNomeAberto(false);
+        setSucessoNomeExibicao("");
+      }, 1200);
+
+      await carregarPerfil(integracaoId, { preservarMensagens: true });
     } catch (error: unknown) {
-      setErro(getErrorMessage(error, "Erro ao solicitar alteração do nome."));
+      setErroNomeExibicao(
+        getErrorMessage(error, "Erro ao solicitar alteração do nome.")
+      );
     } finally {
       setSalvandoNome(false);
     }
@@ -1095,6 +1116,8 @@ export default function WhatsappPerfilPage() {
                   type="button"
                   className={styles.secondaryButton}
                   onClick={() => {
+                    setErroNomeExibicao("");
+                    setSucessoNomeExibicao("");
                     setNovoNomeExibicao(nomePerfil === "Empresa" ? "" : nomePerfil);
                     setModalNomeAberto(true);
                   }}
@@ -1362,6 +1385,18 @@ export default function WhatsappPerfilPage() {
               Use um nome que represente claramente sua empresa. Evite emojis,
               slogans, termos como “Oficial” ou “Verificado” e nomes genéricos.
             </div>
+
+            {erroNomeExibicao && (
+              <div className={styles.modalErrorAlert}>
+                {erroNomeExibicao}
+              </div>
+            )}
+
+            {sucessoNomeExibicao && (
+              <div className={styles.modalSuccessAlert}>
+                {sucessoNomeExibicao}
+              </div>
+            )}
           </div>
 
           <div className={styles.modalActions}>

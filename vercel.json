@@ -9,15 +9,19 @@
       "schedule": "* * * * *"
     },
     {
-      "path": "/api/cron/feedback_agendamentos?limit=100",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/cron/whatsapp_coex_history?limit=3",
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/feedback_agendamentos?limit=100",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/disparos_agendados",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/timeout_sem_resposta",
       "schedule": "*/5 * * * *"
     }
   ]

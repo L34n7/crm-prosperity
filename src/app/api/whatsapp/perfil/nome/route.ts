@@ -33,6 +33,22 @@ function jsonErro(error: string, status = 400, extra?: any) {
   return NextResponse.json({ ok: false, error, extra }, { status });
 }
 
+function isErroLimiteAlteracaoNomeMeta(metaJson: any) {
+  const mensagem = String(metaJson?.error?.message || "").toLowerCase();
+  const detalhes = String(metaJson?.error?.error_data?.details || "").toLowerCase();
+  const codigo = Number(metaJson?.error?.code);
+
+  return (
+    codigo === 4 ||
+    mensagem.includes("application request limit reached") ||
+    mensagem.includes("request limit reached") ||
+    mensagem.includes("too many calls") ||
+    mensagem.includes("too many requests") ||
+    detalhes.includes("application request limit reached") ||
+    detalhes.includes("request limit reached")
+  );
+}
+
 function objetoConfig(configJson: any) {
   return configJson && typeof configJson === "object" && !Array.isArray(configJson)
     ? configJson
@@ -167,6 +183,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { data: alteracaoPendente, error: alteracaoPendenteError } =
+      await supabaseAdmin
+        .from("whatsapp_display_name_changes")
+        .select("id, nome_solicitado, status, proxima_verificacao_em, created_at")
+        .eq("integracao_whatsapp_id", integracao.id)
+        .in("status", [
+          "solicitado",
+          "em_analise",
+          "aguardando_liberacao_meta",
+          "pronto_para_registro",
+          "aprovado_pendente_pin",
+          "erro_verificacao",
+          "erro_ao_aplicar",
+        ])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (alteracaoPendenteError) {
+      console.warn("[WHATSAPP ALTERAR NOME] Erro ao buscar alteração pendente:", {
+        integracaoId: integracao.id,
+        error: alteracaoPendenteError,
+      });
+    }
+
+    if (alteracaoPendente) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            `Já existe uma alteração de nome em andamento para "${alteracaoPendente.nome_solicitado}". Aguarde a finalização antes de solicitar outro nome.`,
+          motivo: "alteracao_nome_ja_pendente",
+          alteracao_pendente: alteracaoPendente,
+        },
+        { status: 409 }
+      );
+    }
+
     const metaRes = await fetch(
       `https://graph.facebook.com/${GRAPH_VERSION}/${integracao.phone_number_id}`,
       {
@@ -184,6 +238,21 @@ export async function POST(req: NextRequest) {
     const metaJson = await metaRes.json();
 
     if (!metaRes.ok) {
+      if (isErroLimiteAlteracaoNomeMeta(metaJson)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Você atingiu o limite de alterações de nome permitido pela Meta para este número. Aguarde antes de tentar novamente.",
+            titulo: "Limite de alteração de nome atingido",
+            motivo: "meta_display_name_change_limit",
+            tentar_novamente_depois: true,
+            meta: metaJson,
+          },
+          { status: 429 }
+        );
+      }
+
       const diagnostico = diagnosticarErroMetaWhatsapp(
         metaJson,
         "Erro ao solicitar alteracao do nome de exibicao."
