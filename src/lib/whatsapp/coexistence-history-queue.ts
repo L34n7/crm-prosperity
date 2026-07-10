@@ -172,6 +172,7 @@ export async function refreshCoexistenceHistoryStats(
   const [
     { count: total, error: totalError },
     { count: processed, error: processedError },
+    { count: ignored, error: ignoredError },
     { count: fatalErrors, error: fatalError },
     { data: job, error: jobError },
   ] = await Promise.all([
@@ -188,6 +189,11 @@ export async function refreshCoexistenceHistoryStats(
       .from("whatsapp_coex_historico_itens")
       .select("id", { count: "exact", head: true })
       .eq("integracao_whatsapp_id", integrationId)
+      .eq("status", "ignorado"),
+    supabase
+      .from("whatsapp_coex_historico_itens")
+      .select("id", { count: "exact", head: true })
+      .eq("integracao_whatsapp_id", integrationId)
       .eq("status", "erro")
       .gte("tentativas", maxAttempts),
     supabase
@@ -199,7 +205,7 @@ export async function refreshCoexistenceHistoryStats(
   ]);
 
   const firstError =
-    totalError || processedError || fatalError || jobError;
+    totalError || processedError || ignoredError || fatalError || jobError;
   if (firstError) {
     throw new Error(
       `Erro ao calcular progresso do histórico Coex: ${firstError.message}`
@@ -214,6 +220,7 @@ export async function refreshCoexistenceHistoryStats(
     return {
       total: total || 0,
       processed: processed || 0,
+      ignored: ignored || 0,
       fatalErrors: fatalErrors || 0,
       status: job?.status || null,
     };
@@ -222,6 +229,7 @@ export async function refreshCoexistenceHistoryStats(
   const progress = calculateCoexistenceHistoryProgress({
     total: total || 0,
     processed: processed || 0,
+    ignored: ignored || 0,
     fatalErrors: fatalErrors || 0,
     metaCompleted: job.meta_concluido === true,
   });
@@ -233,6 +241,7 @@ export async function refreshCoexistenceHistoryStats(
       status: progress.status,
       itens_recebidos: progress.total,
       itens_processados: progress.processed,
+      itens_ignorados: progress.ignored,
       itens_com_erro: progress.fatalErrors,
       processamento_progresso: progress.processingProgress,
       concluido_em: progress.completed ? now : null,
@@ -254,6 +263,7 @@ export async function refreshCoexistenceHistoryStats(
   return {
     total: progress.total,
     processed: progress.processed,
+    ignored: progress.ignored,
     fatalErrors: progress.fatalErrors,
     processingProgress: progress.processingProgress,
     status: progress.status,
@@ -524,64 +534,16 @@ export async function processCoexistenceHistoryBatch(params: {
     return { ok: true, processed: 0, stats };
   }
 
+  let integration: WhatsAppIntegration;
+
   try {
-    const integration = await loadIntegration(params.integrationId);
-    const messages = claimed
-      .map((item) => item.payload_json)
-      .filter(isHistoryMessage);
-
-    if (messages.length !== claimed.length) {
-      throw new Error(
-        "Um ou mais itens do histórico possuem payload inválido."
-      );
-    }
-
-    const result = await persistCoexistenceHistoryBatch({
-      integration,
-      messages,
-    });
-    const now = new Date().toISOString();
-    const { error: updateError } = await supabase
-      .from("whatsapp_coex_historico_itens")
-      .update({
-        status: "processado",
-        erro: null,
-        locked_at: null,
-        payload_json: {},
-        processado_em: now,
-        updated_at: now,
-      })
-      .in(
-        "id",
-        claimed.map((item) => item.id)
-      );
-
-    if (updateError) {
-      throw new Error(
-        `Erro ao concluir lote do histórico Coex: ${updateError.message}`
-      );
-    }
-
-    const stats = await refreshCoexistenceHistoryStats(
-      params.integrationId
-    );
-    const next =
-      params.scheduleNext === false
-        ? null
-        : await scheduleCoexistenceHistoryBatch(params.integrationId);
-
-    return {
-      ok: true,
-      processed: claimed.length,
-      result,
-      stats,
-      next,
-    };
-  } catch (error) {
+    integration = await loadIntegration(params.integrationId);
+  } catch (loadError) {
     const message =
-      error instanceof Error
-        ? error.message
-        : "Erro ao processar lote do histórico Coex.";
+      loadError instanceof Error
+        ? loadError.message
+        : "Erro ao carregar integração do histórico Coex.";
+
     await supabase
       .from("whatsapp_coex_historico_itens")
       .update({
@@ -594,9 +556,143 @@ export async function processCoexistenceHistoryBatch(params: {
         "id",
         claimed.map((item) => item.id)
       );
+
     await refreshCoexistenceHistoryStats(params.integrationId);
-    throw error;
+    throw loadError;
   }
+  const validItems: Array<{
+    item: HistoryQueueRow;
+    message: ExtractedCoexistenceHistoryMessage;
+  }> = [];
+  const ignoredIds: string[] = [];
+
+  for (const item of claimed) {
+    if (isHistoryMessage(item.payload_json)) {
+      validItems.push({ item, message: item.payload_json });
+    } else {
+      ignoredIds.push(item.id);
+    }
+  }
+
+  const processedIds: string[] = [];
+  const failedItems: Array<{ id: string; error: string }> = [];
+  const results: Array<Awaited<ReturnType<typeof persistCoexistenceHistoryBatch>>> =
+    [];
+
+  if (validItems.length) {
+    try {
+      const result = await persistCoexistenceHistoryBatch({
+        integration,
+        messages: validItems.map((entry) => entry.message),
+      });
+
+      results.push(result);
+      processedIds.push(...validItems.map((entry) => entry.item.id));
+    } catch (batchError) {
+      console.warn(
+        "[WHATSAPP COEX HISTORY] Lote falhou; reprocessando item a item.",
+        batchError
+      );
+
+      for (const entry of validItems) {
+        try {
+          const result = await persistCoexistenceHistoryBatch({
+            integration,
+            messages: [entry.message],
+          });
+
+          results.push(result);
+          processedIds.push(entry.item.id);
+        } catch (itemError) {
+          failedItems.push({
+            id: entry.item.id,
+            error:
+              itemError instanceof Error
+                ? itemError.message
+                : "Erro ao processar item do histórico Coex.",
+          });
+        }
+      }
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  for (const idChunk of chunk(ignoredIds, 100)) {
+    const { error: ignoredError } = await supabase
+      .from("whatsapp_coex_historico_itens")
+      .update({
+        status: "ignorado",
+        erro: "Payload inválido ignorado pelo worker.",
+        locked_at: null,
+        payload_json: {},
+        processado_em: now,
+        updated_at: now,
+      })
+      .in("id", idChunk);
+
+    if (ignoredError) {
+      throw new Error(
+        `Erro ao ignorar itens inválidos do histórico Coex: ${ignoredError.message}`
+      );
+    }
+  }
+
+  for (const idChunk of chunk(processedIds, 100)) {
+    const { error: updateError } = await supabase
+      .from("whatsapp_coex_historico_itens")
+      .update({
+        status: "processado",
+        erro: null,
+        locked_at: null,
+        payload_json: {},
+        processado_em: now,
+        updated_at: now,
+      })
+      .in("id", idChunk);
+
+    if (updateError) {
+      throw new Error(
+        `Erro ao concluir lote do histórico Coex: ${updateError.message}`
+      );
+    }
+  }
+
+  for (const failedItem of failedItems) {
+    const { error: itemUpdateError } = await supabase
+      .from("whatsapp_coex_historico_itens")
+      .update({
+        status: "erro",
+        erro: failedItem.error,
+        locked_at: null,
+        updated_at: now,
+      })
+      .eq("id", failedItem.id);
+
+    if (itemUpdateError) {
+      throw new Error(
+        `Erro ao marcar item com erro no histórico Coex: ${itemUpdateError.message}`
+      );
+    }
+  }
+
+  const stats = await refreshCoexistenceHistoryStats(
+    params.integrationId
+  );
+  const next =
+    params.scheduleNext === false
+      ? null
+      : await scheduleCoexistenceHistoryBatch(params.integrationId);
+
+  return {
+    ok: failedItems.length === 0,
+    processed: processedIds.length,
+    ignored: ignoredIds.length,
+    failed: failedItems.length,
+    result: results.length === 1 ? results[0] : results,
+    stats,
+    next,
+  };
 }
 
 export async function processCoexistenceHistoryFallback(params: {

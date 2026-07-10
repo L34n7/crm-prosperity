@@ -49,3 +49,17 @@ test("encerra com erro quando restam falhas sem retry", () => {
   assert.equal(result.status, "erro");
   assert.equal(result.failed, true);
 });
+
+test("considera itens ignorados como encerrados sem falhar o job", () => {
+  const result = calculateCoexistenceHistoryProgress({
+    total: 100,
+    processed: 98,
+    ignored: 2,
+    fatalErrors: 0,
+    metaCompleted: true,
+  });
+
+  assert.equal(result.status, "concluido");
+  assert.equal(result.completed, true);
+  assert.equal(result.processingProgress, 100);
+});

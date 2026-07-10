@@ -355,6 +355,7 @@ function mapWhatsAppTypeToInternalType(type?: string | null): string {
       return "botao";
     case "unsupported":
     case "media_placeholder":
+    case "errors":
       return "unsupported";
     default:
       return "texto";
@@ -566,7 +567,11 @@ function buildMetadataJson(
     };
   }
 
-  if (tipo === "unsupported" || tipo === "media_placeholder") {
+  if (
+    tipo === "unsupported" ||
+    tipo === "media_placeholder" ||
+    tipo === "errors"
+  ) {
     return {
       tipo_original_whatsapp: tipo,
       media_id: null,

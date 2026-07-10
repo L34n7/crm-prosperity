@@ -11,6 +11,10 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import {
+  CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
+  isConversaHistoricoImportado,
+} from "@/lib/conversas/historico-importado";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -20,6 +24,8 @@ type ConversaRow = {
   setor_id: string | null;
   responsavel_id: string | null;
   status: string | null;
+  origem_atendimento?: string | null;
+  historico_importado?: boolean | null;
 };
 
 type SetorRow = {
@@ -88,7 +94,7 @@ export async function POST(
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
-      .select("id, empresa_id, setor_id, responsavel_id, status")
+      .select("id, empresa_id, setor_id, responsavel_id, status, origem_atendimento, historico_importado")
       .eq("id", id)
       .maybeSingle<ConversaRow>();
 
@@ -110,6 +116,13 @@ export async function POST(
       return NextResponse.json(
         { ok: false, error: "Você não pode transferir esta conversa" },
         { status: 403 }
+      );
+    }
+
+    if (isConversaHistoricoImportado(conversa)) {
+      return NextResponse.json(
+        { ok: false, error: CONVERSA_HISTORICO_IMPORTADO_MENSAGEM },
+        { status: 400 }
       );
     }
 

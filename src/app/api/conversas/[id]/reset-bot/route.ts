@@ -6,6 +6,10 @@ import {
 } from "@/lib/auth/get-usuario-contexto";
 import { isAdministrador } from "@/lib/auth/authorization";
 import { processAutomationEngine } from "@/lib/automacoes/process-automation-engine";
+import {
+  CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
+  isConversaHistoricoImportado,
+} from "@/lib/conversas/historico-importado";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -120,7 +124,7 @@ export async function POST(
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id, contato_id")
+    .select("id, empresa_id, setor_id, responsavel_id, contato_id, origem_atendimento, historico_importado")
     .eq("id", id)
     .maybeSingle();
 
@@ -142,6 +146,13 @@ export async function POST(
     return NextResponse.json(
       { ok: false, error: "Voce nao pode resetar esta conversa" },
       { status: 403 }
+    );
+  }
+
+  if (isConversaHistoricoImportado(conversa)) {
+    return NextResponse.json(
+      { ok: false, error: CONVERSA_HISTORICO_IMPORTADO_MENSAGEM },
+      { status: 400 }
     );
   }
 

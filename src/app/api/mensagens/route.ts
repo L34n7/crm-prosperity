@@ -15,6 +15,10 @@ import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message"
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { encerrarConversaExpirada } from "@/lib/whatsapp/encerrar-conversa-expirada";
 import {
+  CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
+  isConversaHistoricoImportado,
+} from "@/lib/conversas/historico-importado";
+import {
   aplicarAssinaturaWhatsapp,
   normalizarAssinaturaWhatsapp,
 } from "@/lib/whatsapp/message-signature";
@@ -34,6 +38,8 @@ type ConversaAcesso = {
   setor_id: string | null;
   responsavel_id: string | null;
   status?: string | null;
+  origem_atendimento?: string | null;
+  historico_importado?: boolean | null;
   contato_id?: string | null;
   integracao_whatsapp_id?: string | null;
 };
@@ -374,7 +380,7 @@ export async function GET(request: Request) {
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
       .select(
-        "id, empresa_id, setor_id, responsavel_id, status, contato_id, integracao_whatsapp_id"
+        "id, empresa_id, setor_id, responsavel_id, status, origem_atendimento, historico_importado, contato_id, integracao_whatsapp_id"
       )
       .eq("id", conversaId)
       .maybeSingle<ConversaAcesso>();
@@ -770,6 +776,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (isConversaHistoricoImportado(conversa)) {
+    return NextResponse.json(
+      { ok: false, error: CONVERSA_HISTORICO_IMPORTADO_MENSAGEM },
+      { status: 400 }
+    );
+  }
+
   if (!conversa.contato_id) {
     return NextResponse.json(
       { ok: false, error: "A conversa não possui contato vinculado" },
@@ -939,6 +952,7 @@ export async function POST(request: Request) {
 
   const metadataFinal = {
     ...(metadata_json ?? {}),
+    tipo_original_whatsapp: "text",
     ...(assinaturaWhatsapp
       ? {
           assinatura_whatsapp: {
@@ -969,6 +983,10 @@ export async function POST(request: Request) {
         remetente_id,
         conteudo: conteudoFinal,
         tipo_mensagem,
+        tipo_original_meta:
+          typeof metadataFinal.tipo_original_whatsapp === "string"
+            ? metadataFinal.tipo_original_whatsapp
+            : null,
         origem: "enviada",
         status_envio: "enviada",
         mensagem_externa_id: envioWhatsApp.messageId,

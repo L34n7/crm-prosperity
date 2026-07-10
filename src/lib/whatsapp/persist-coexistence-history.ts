@@ -49,6 +49,26 @@ function mapHistoryStatus(value?: string | null) {
   }
 }
 
+function normalizeHistoryMessageType(value?: string | null) {
+  const allowedTypes = new Set([
+    "audio",
+    "botao",
+    "imagem",
+    "template",
+    "texto",
+    "video",
+    "documento",
+    "contato",
+    "localizacao",
+    "lista",
+    "unsupported",
+  ]);
+
+  const normalized = String(value || "").toLowerCase().trim();
+
+  return allowedTypes.has(normalized) ? normalized : "texto";
+}
+
 function chunk<T>(items: T[], size: number) {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -188,6 +208,7 @@ async function loadConversations(params: {
       .eq("empresa_id", params.integration.empresa_id)
       .eq("integracao_whatsapp_id", params.integration.id)
       .eq("canal", "whatsapp")
+      .eq("origem_atendimento", "historico_coexistence")
       .in("contato_id", contactIdChunk)
       .order("created_at", { ascending: false });
 
@@ -240,14 +261,16 @@ async function loadConversations(params: {
         setor_id: null,
         responsavel_id: null,
         integracao_whatsapp_id: params.integration.id,
-        status: "encerrada",
+        status: "encerrado_aut",
         canal: "whatsapp",
         origem_atendimento: "historico_coexistence",
         prioridade: "media",
         assunto: "Histórico importado do WhatsApp Business",
         started_at: bounds?.first || now,
         last_message_at: bounds?.last || bounds?.first || now,
-        closed_at: now,
+        closed_at: bounds?.last || bounds?.first || now,
+        historico_importado: true,
+        historico_importado_em: now,
         bot_ativo: false,
         created_at: now,
         updated_at: now,
@@ -369,10 +392,18 @@ async function markHistoryAsRead(params: {
   );
 
   for (const rowChunk of chunk(rows, 500)) {
-    await supabase.from("conversa_leituras").upsert(rowChunk, {
-      onConflict: "conversa_id,usuario_id",
-      ignoreDuplicates: true,
-    });
+    const { error } = await supabase
+      .from("conversa_leituras")
+      .upsert(rowChunk, {
+        onConflict: "conversa_id,usuario_id",
+        ignoreDuplicates: true,
+      });
+
+    if (error) {
+      throw new Error(
+        `Erro ao marcar histórico Coex como lido: ${error.message}`
+      );
+    }
   }
 }
 
@@ -441,6 +472,15 @@ export async function persistCoexistenceHistoryBatch(params: {
     }
 
     const messageAt = timestampToIso(message.timestamp);
+
+    const conteudoOriginal = String(message.conteudo || "").trim();
+
+    const conteudoNormalizado =
+      conteudoOriginal ||
+      (message.metadataJson?.tipo_original_whatsapp === "errors"
+        ? "⚠️ Mensagem antiga não compatível com a importação do WhatsApp."
+        : "⚠️ Conteúdo da mensagem histórica indisponível.");
+        
     rows.push({
       empresa_id: params.integration.empresa_id,
       conversa_id: conversation.id,
@@ -449,8 +489,12 @@ export async function persistCoexistenceHistoryBatch(params: {
       remetente_tipo:
         message.direction === "inbound" ? "contato" : "usuario",
       remetente_id: null,
-      conteudo: message.conteudo,
-      tipo_mensagem: message.tipoMensagem,
+      conteudo: conteudoNormalizado,
+      tipo_mensagem: normalizeHistoryMessageType(
+        message.tipoMensagem
+      ),
+      tipo_original_meta:
+        message.metadataJson?.tipo_original_whatsapp || message.type || null,
       origem:
         message.direction === "inbound" ? "recebida" : "enviada",
       status_envio: mapHistoryStatus(message.status),
@@ -503,8 +547,16 @@ export async function persistCoexistenceHistoryBatch(params: {
     const { error } = await supabase
       .from("mensagens")
       .update({
-        conteudo: update.message.conteudo,
-        tipo_mensagem: update.message.tipoMensagem,
+        conteudo:
+          String(update.message.conteudo || "").trim() ||
+          "📎 Mídia histórica importada do WhatsApp.",
+        tipo_mensagem: normalizeHistoryMessageType(
+          update.message.tipoMensagem
+        ),
+        tipo_original_meta:
+          update.message.metadataJson?.tipo_original_whatsapp ||
+          update.message.type ||
+          null,
         metadata_json: {
           ...update.previousMetadata,
           ...(update.message.metadataJson || {}),

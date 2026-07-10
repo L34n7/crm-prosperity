@@ -38,6 +38,26 @@ function timestampToIso(value?: string | null) {
   return new Date().toISOString();
 }
 
+function normalizeCoexistenceMessageType(value?: string | null) {
+  const allowedTypes = new Set([
+    "audio",
+    "botao",
+    "imagem",
+    "template",
+    "texto",
+    "video",
+    "documento",
+    "contato",
+    "localizacao",
+    "lista",
+    "unsupported",
+  ]);
+
+  const normalized = String(value || "").toLowerCase().trim();
+
+  return allowedTypes.has(normalized) ? normalized : "texto";
+}
+
 async function findActiveProtocolId(conversationId: string) {
   const { data, error } = await supabase
     .from("conversa_protocolos")
@@ -120,8 +140,16 @@ async function saveCoexistenceMessage(params: {
       conversa_protocolo_id: params.protocolId || null,
       remetente_tipo: "usuario",
       remetente_id: null,
-      conteudo: params.message.conteudo,
-      tipo_mensagem: params.message.tipoMensagem,
+      conteudo:
+        String(params.message.conteudo || "").trim() ||
+        "⚠️ Conteúdo enviado pelo WhatsApp Business indisponível.",
+      tipo_mensagem: normalizeCoexistenceMessageType(
+        params.message.tipoMensagem
+      ),
+      tipo_original_meta:
+        params.message.metadataJson?.tipo_original_whatsapp ||
+        params.message.type ||
+        null,
       origem: "enviada",
       status_envio: "enviada",
       mensagem_externa_id: params.message.messageId,

@@ -1,4 +1,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
+  isConversaHistoricoImportado,
+} from "@/lib/conversas/historico-importado";
 
 type CanSendMessageParams = {
   conversaId: string;
@@ -20,6 +24,27 @@ export async function canSendFreeformWhatsAppMessage({
 
   if (!conversaId) {
     throw new Error("conversaId é obrigatório");
+  }
+
+  const { data: conversa, error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .select("origem_atendimento, historico_importado")
+    .eq("id", conversaId)
+    .maybeSingle();
+
+  if (conversaError) {
+    throw new Error(
+      `Erro ao verificar conversa para envio: ${conversaError.message}`
+    );
+  }
+
+  if (conversa && isConversaHistoricoImportado(conversa)) {
+    return {
+      podeEnviarMensagemLivre: false,
+      ultimaMensagemRecebidaEm: null,
+      janelaExpiraEm: null,
+      motivoBloqueio: CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
+    };
   }
 
   const { data: ultimaRecebida, error } = await supabaseAdmin

@@ -17,6 +17,10 @@ import {
   tipoEventoManualValido,
 } from "@/lib/rastreamento/eventos-manuais";
 import { verificarEEncerrarConversaSe24hExpirada } from "@/lib/whatsapp/verificar-expiracao-conversas";
+import {
+  CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
+  isConversaHistoricoImportado,
+} from "@/lib/conversas/historico-importado";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -49,6 +53,7 @@ type ConversaAtual = {
   bot_ativo: boolean | null;
   canal: string;
   origem_atendimento: string;
+  historico_importado?: boolean | null;
   prioridade: string | null;
   assunto: string | null;
   started_at?: string | null;
@@ -77,7 +82,14 @@ function isCanalValido(canal: string) {
 }
 
 function isOrigemAtendimentoValida(origem: string) {
-  return ["entrada_cliente", "bot", "manual", "reativacao"].includes(origem);
+  return [
+    "entrada_cliente",
+    "bot",
+    "manual",
+    "reativacao",
+    "historico_coexistence",
+    "whatsapp_business_app",
+  ].includes(origem);
 }
 
 function isPrioridadeValida(prioridade: string) {
@@ -403,6 +415,13 @@ export async function PUT(
     return NextResponse.json(
       { ok: false, error: "Você não pode editar esta conversa" },
       { status: 403 }
+    );
+  }
+
+  if (isConversaHistoricoImportado(conversaAtual)) {
+    return NextResponse.json(
+      { ok: false, error: CONVERSA_HISTORICO_IMPORTADO_MENSAGEM },
+      { status: 400 }
     );
   }
 

@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { isConversaHistoricoImportado } from "@/lib/conversas/historico-importado";
 
 export type WhatsAppConversation = {
   id: string;
@@ -21,6 +22,7 @@ export type WhatsAppConversation = {
     | null;
   canal: string | null;
   origem_atendimento: string | null;
+  historico_importado?: boolean | null;
   prioridade: "baixa" | "media" | "alta" | "urgente" | null;
   assunto: string | null;
   started_at: string | null;
@@ -225,6 +227,8 @@ export async function findOrCreateWhatsAppConversation({
     .eq("contato_id", contatoId)
     .eq("integracao_whatsapp_id", integracaoWhatsappId)
     .eq("canal", "whatsapp")
+    .neq("origem_atendimento", "historico_coexistence")
+    .neq("historico_importado", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -235,7 +239,10 @@ export async function findOrCreateWhatsAppConversation({
     );
   }
 
-  if (existingConversation) {
+  if (
+    existingConversation &&
+    !isConversaHistoricoImportado(existingConversation)
+  ) {
     const conversaExistente = existingConversation as WhatsAppConversation;
 
     const statusEncerrados = [
@@ -290,6 +297,8 @@ export async function findOrCreateWhatsAppConversation({
           .eq("contato_id", contatoId)
           .eq("integracao_whatsapp_id", integracaoWhatsappId)
           .eq("canal", "whatsapp")
+          .neq("origem_atendimento", "historico_coexistence")
+          .neq("historico_importado", true)
           .in("status", [
             "aberta",
             "bot",

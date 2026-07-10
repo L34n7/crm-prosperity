@@ -24,10 +24,14 @@ function getConteudoPadraoPorTipo(tipoMensagem: string) {
       return "📄 Documento";
     case "contato":
       return "👤 Contato compartilhado";
+    case "localizacao":
+      return "📍 Localização compartilhada";
     case "botao":
       return "🔘 Botão";
     case "lista":
       return "📋 Interação de lista";
+    case "unsupported":
+      return "⚠️ Mensagem não suportada pela API do WhatsApp";
     default:
       return "Mensagem recebida";
   }
@@ -106,6 +110,10 @@ export async function saveIncomingWhatsAppMessage({
       remetente_id: null,
       conteudo: conteudoFinal,
       tipo_mensagem: tipoMensagem,
+      tipo_original_meta:
+        typeof metadataJson?.tipo_original_whatsapp === "string"
+          ? metadataJson.tipo_original_whatsapp
+          : null,
       origem: "recebida",
       status_envio: statusEnvio,
       mensagem_externa_id: mensagemExternaId,

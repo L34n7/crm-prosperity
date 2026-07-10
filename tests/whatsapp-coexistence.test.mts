@@ -161,6 +161,57 @@ test("reconhece recusa do compartilhamento de histórico", () => {
   assert.equal(countCoexistenceWebhookItems(body).historyStates, 1);
 });
 
+test("preserva mensagens historicas errors como unsupported", () => {
+  const body: WhatsAppWebhookBody = {
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: "waba-1",
+        changes: [
+          {
+            field: "history",
+            value: {
+              metadata: {
+                phone_number_id: phoneNumberId,
+                display_phone_number: businessPhone,
+              },
+              history: [
+                {
+                  threads: [
+                    {
+                      id: contactPhone,
+                      messages: [
+                        {
+                          from: contactPhone,
+                          id: "wamid.history.error",
+                          timestamp: "1750000020",
+                          type: "errors",
+                          errors: [
+                            {
+                              code: 131051,
+                              message: "Message type is not supported",
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  const messages = extractCoexistenceHistoryMessages(body);
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].tipoMensagem, "unsupported");
+  assert.equal(messages[0].metadataJson.tipo_original_whatsapp, "errors");
+});
+
 test("extrai contatos sincronizados sem tratar remoção como exclusão do CRM", () => {
   const body: WhatsAppWebhookBody = {
     object: "whatsapp_business_account",
@@ -255,4 +306,3 @@ test("extrai PARTNER_REMOVED e valida prontidão por modo", () => {
     false
   );
 });
-

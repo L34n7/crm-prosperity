@@ -44,6 +44,8 @@ type Conversa = {
   prioridade: string | null;
   canal: string | null;
   origem_atendimento?: string | null;
+  historico_importado?: boolean | null;
+  historico_importado_em?: string | null;
   integracao_whatsapp_id?: string | null;
   last_message_at: string | null;
   started_at?: string | null;
@@ -785,6 +787,13 @@ function getStatusLabel(status?: string | null) {
     default:
       return status;
   }
+}
+
+function isConversaHistoricoImportadoUi(conversa?: Conversa | null) {
+  return (
+    conversa?.historico_importado === true ||
+    conversa?.origem_atendimento === "historico_coexistence"
+  );
 }
 
 function getMensagemConversaEncerrada(status?: string | null) {
@@ -6695,9 +6704,13 @@ async function baixarConversaPDF() {
   const conversaEncerradaAutomacao =
     conversaSelecionada?.status === "encerrado_aut";
 
+  const conversaHistoricoImportado =
+    isConversaHistoricoImportadoUi(conversaSelecionada);
+
   const podeReabrirConversa =
-    conversaSelecionada?.status === "encerrado_manual" ||
-    conversaSelecionada?.status === "encerrado_aut";
+    !conversaHistoricoImportado &&
+    (conversaSelecionada?.status === "encerrado_manual" ||
+      conversaSelecionada?.status === "encerrado_aut");
 
   const conversaNaFila = conversaSelecionada?.status === "fila";
   const conversaSemResponsavel = !conversaResponsavelId;
@@ -6724,6 +6737,7 @@ async function baixarConversaPDF() {
   const podeAssumirConversa =
     !!conversaSelecionada &&
     !!usuarioLogado &&
+    !conversaHistoricoImportado &&
     !conversaEncerrada &&
     !conversaEhMinha &&
     politicaPodeAssumir &&
@@ -6736,6 +6750,7 @@ async function baixarConversaPDF() {
   const podeAtribuir =
     !!conversaSelecionada &&
     !!usuarioLogado &&
+    !conversaHistoricoImportado &&
     !conversaEncerrada &&
     (ehAdministrador ||
       (podeAtribuirPermissao && conversaEhDeUmDosMeusSetores));
@@ -6743,6 +6758,7 @@ async function baixarConversaPDF() {
   const podeTransferir =
     !!conversaSelecionada &&
     !!usuarioLogado &&
+    !conversaHistoricoImportado &&
     !conversaEncerrada &&
     (ehAdministrador ||
       (podeTransferirPermissao &&
@@ -6751,6 +6767,7 @@ async function baixarConversaPDF() {
   const podeEncerrar =
     !!conversaSelecionada &&
     !!usuarioLogado &&
+    !conversaHistoricoImportado &&
     !conversaEncerrada &&
     (ehAdministrador ||
       (podeEncerrarPermissao &&
@@ -6759,6 +6776,7 @@ async function baixarConversaPDF() {
   const podeEnviarMensagem =
     !!conversaSelecionada &&
     !!usuarioLogado &&
+    !conversaHistoricoImportado &&
     !conversaEncerrada &&
     (ehAdministrador ||
       (podeEnviarMensagemPermissao &&
@@ -6896,6 +6914,7 @@ async function baixarConversaPDF() {
 
   const podeAtivarBotComUltimaMensagem =
     !!conversaSelecionada &&
+    !conversaHistoricoImportado &&
     !conversaEncerrada &&
     !conversaComBotAtivo &&
     !!ultimaMensagemRecebidaDoContato &&
@@ -6989,12 +7008,14 @@ const templateFooterTexto = useMemo(() => {
 
   const mostrarComposerLivre =
     !!conversaSelecionada &&
+    !conversaHistoricoImportado &&
     !conversaComBotAtivo &&
     !conversaEncerrada &&
     janela24hAberta;
 
   const mostrarDisparoIndividual =
     !!conversaSelecionada &&
+    !conversaHistoricoImportado &&
     !conversaComBotAtivo &&
     (!janela24hAberta || !!conversaEncerrada);
 
@@ -7586,7 +7607,7 @@ const templateFooterTexto = useMemo(() => {
 
 
   useEffect(() => {
-    if (!conversaEncerrada) return;
+    if (!conversaEncerrada && !conversaHistoricoImportado) return;
 
     setMenuAnexoAberto(false);
     setEmojiAberto(false);
@@ -7617,7 +7638,7 @@ const templateFooterTexto = useMemo(() => {
     if (legendaEditorRef.current) {
       legendaEditorRef.current.textContent = "";
     }
-  }, [conversaEncerrada]);
+  }, [conversaEncerrada, conversaHistoricoImportado]);
 
 
   useEffect(() => {
@@ -8151,6 +8172,12 @@ const templateFooterTexto = useMemo(() => {
                                 conversaSelecionada.disparo_agendado_pendente?.executar_em
                               )}
                             </Link>
+                          )}
+
+                          {conversaHistoricoImportado && (
+                            <span className={`${styles.alertChip} ${styles.alertChipInfo}`}>
+                              Histórico importado do WhatsApp Business
+                            </span>
                           )}
                           
                           {alertaSemResponsavel && (
@@ -8815,6 +8842,7 @@ const templateFooterTexto = useMemo(() => {
                         <div className={styles.composerArea}>
                           {!podeEnviarMensagem &&
                             !conversaEncerrada &&
+                            !conversaHistoricoImportado &&
                             !conversaComBotAtivo &&
                             janela24hAberta && (
                               <div className={styles.timelineInfoSmall}>
@@ -8948,7 +8976,7 @@ const templateFooterTexto = useMemo(() => {
                             </div>
                           )}
 
-                          {!conversaEncerrada && cameraAberta && (
+                          {!conversaEncerrada && !conversaHistoricoImportado && cameraAberta && (
                             <div className={styles.cameraModal}>
                               <video ref={videoRef} autoPlay playsInline className={styles.cameraVideo} />
 
@@ -8961,7 +8989,7 @@ const templateFooterTexto = useMemo(() => {
                             </div>
                           )}
 
-                          {!conversaEncerrada && gravandoAudio && (
+                          {!conversaEncerrada && !conversaHistoricoImportado && gravandoAudio && (
                             <div className={styles.timelineInfoSmall}>
                               Gravando áudio... <strong>{formatarDuracaoGravacao(duracaoGravacao)}</strong>
                             </div>
@@ -8972,6 +9000,10 @@ const templateFooterTexto = useMemo(() => {
                           <div className={styles.timelineInfoSmall}>
                             Carregando informações da conversa...
                           </div>
+                          ) : conversaHistoricoImportado ? (
+                            <div className={styles.timelineInfoSmall}>
+                              Histórico importado do WhatsApp Business. Esta conversa está disponível somente para leitura.
+                            </div>
                           ) : conversaComBotAtivo ? (
                             <div className={styles.botStopArea}>
                               <div className={styles.botStopCard}>

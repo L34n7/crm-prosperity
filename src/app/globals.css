@@ -109,6 +109,16 @@
   --robotMiniBadge: #e1fef4;
   --headerDropdownItemHover: #f5fbf7;
   --AtivarBotHover: #e7fff3;
+  --chatCampaignBadgeBG: #f6feff;
+  --chatCampaignBadgeColor: #63a5abec;
+  --chatCampaignBadgeBordeer: #c5e6e9ec;
+  --disparoCardBG: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96));
+  --disparoCardBorder: #94a3b829;
+  --disparoCardBS: #94a3b829;
+  --disparoAlertCompactDangerBG: linear-gradient(80deg, #fca8a8f5, #fce3e3f5);
+  --disparoAlertCompactDangerBorder:  #fb6666;
+  --disparoAlertCompactWarningBG: linear-gradient(80deg, #fff3c4f5, #fff8e6f5);
+  --disparoAlertCompactWarningBorder:  #f5b82e;
 }
 
 html[data-theme="dark"] {
@@ -216,6 +226,16 @@ html[data-theme="dark"] {
   --robotMiniBadge: #588575f7;
   --headerDropdownItemHover: #05232a;
   --AtivarBotHover: #012614;
+  --chatCampaignBadgeBG: #105e68;
+  --chatCampaignBadgeColor: #5ac6d0ec;
+  --chatCampaignBadgeBordeer: #208c96ec;
+  --disparoCardBG: linear-gradient(180deg, #111827, #111827);
+  --disparoCardBorder: #272f42;
+  --disparoCardBS: #3b455c;
+  --disparoAlertCompactDangerBG: linear-gradient(80deg, #c15151f5, #f6babaf5);
+  --disparoAlertCompactDangerBorder:  #8e3434;
+  --disparoAlertCompactWarningBG: linear-gradient(80deg, #fff3c4f5, #fff8e6f5);
+  --disparoAlertCompactWarningBorder:  #f5b82e;
 }
 
 html,

@@ -87,7 +87,7 @@ export async function GET() {
     const { data: jobs, error: jobsError } = await supabaseAdmin
       .from("whatsapp_coex_sync_jobs")
       .select(
-        "tipo, status, progresso, processamento_progresso, itens_recebidos, itens_processados, itens_com_erro, erro_codigo, erro_mensagem, solicitado_em, concluido_em, updated_at"
+        "tipo, status, progresso, processamento_progresso, itens_recebidos, itens_processados, itens_ignorados, itens_com_erro, erro_codigo, erro_mensagem, solicitado_em, concluido_em, updated_at"
       )
       .eq("integracao_whatsapp_id", integracao.id)
       .order("tipo", { ascending: true });

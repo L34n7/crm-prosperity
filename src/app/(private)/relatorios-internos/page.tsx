@@ -101,6 +101,10 @@ type OrdenacaoRelatorios = {
   integracoes: "status" | "empresa" | "etapa" | "online" | "created" | "updated";
 };
 
+type DirecaoOrdenacao = "asc" | "desc";
+
+type DirecoesOrdenacaoRelatorios = Record<SortTabela, DirecaoOrdenacao>;
+
 type EmpresaRow = {
   id: string;
   nome_fantasia: string | null;
@@ -112,6 +116,11 @@ type EmpresaRow = {
   assinatura_inicio_em: string | null;
   assinatura_vencimento_em: string | null;
   assinatura_renovada_em: string | null;
+  assinatura_gateway: string | null;
+  assinatura_referencia: string | null;
+  assinatura_metadata_json: unknown | null;
+  administrador_plano?: UsuarioAdministradorRow | null;
+  oferta_plano?: OfertaPlanoRow | null;
   planos:
     | {
         id?: string | null;
@@ -123,6 +132,41 @@ type EmpresaRow = {
         nome?: string | null;
         slug?: string | null;
       }>
+    | null;
+};
+
+type OfertaPlanoRow = {
+  id: string;
+  gateway: string | null;
+  referencia: string | null;
+  tipo: string | null;
+  nome: string | null;
+  plano_id: string | null;
+  empresa_id: string | null;
+  quantidade_tokens: number | null;
+  metadata_json: unknown | null;
+};
+
+type UsuarioAdministradorRow = {
+  id: string;
+  empresa_id: string | null;
+  nome: string | null;
+  email: string | null;
+  status: string | null;
+  created_at: string;
+};
+
+type PerfilEmpresaRelatorioRow = {
+  nome?: string | null;
+  ativo?: boolean | null;
+  empresa_id?: string | null;
+};
+
+type UsuarioPerfilAdministradorRow = {
+  usuario_id: string | null;
+  perfis_empresa:
+    | PerfilEmpresaRelatorioRow
+    | PerfilEmpresaRelatorioRow[]
     | null;
 };
 
@@ -429,6 +473,59 @@ const ordenacaoPadrao: OrdenacaoRelatorios = {
   integracoes: "status",
 };
 
+function getDirecaoOrdenacaoPadrao(
+  tabela: SortTabela,
+  campo: OrdenacaoRelatorios[SortTabela]
+): DirecaoOrdenacao {
+  if (tabela === "conversas") {
+    if (campo === "empresa" || campo === "primeira") return "asc";
+    return "desc";
+  }
+
+  if (tabela === "mensagens") {
+    if (campo === "empresa" || campo === "contato") return "asc";
+    return "desc";
+  }
+
+  if (tabela === "disparos") {
+    return campo === "empresa" ? "asc" : "desc";
+  }
+
+  if (tabela === "contatos") {
+    if (campo === "empresa" || campo === "campanha") return "asc";
+    return "desc";
+  }
+
+  if (tabela === "origens") {
+    if (campo === "empresa" || campo === "origem") return "asc";
+    return "desc";
+  }
+
+  if (tabela === "tokens") {
+    return campo === "empresa" ? "asc" : "desc";
+  }
+
+  if (tabela === "usuarios") {
+    if (campo === "nome" || campo === "empresa") return "asc";
+    return "desc";
+  }
+
+  if (tabela === "planos") {
+    if (campo === "inicio" || campo === "renovacao") return "desc";
+    return "asc";
+  }
+
+  if (tabela === "integracoes") {
+    if (campo === "empresa" || campo === "etapa" || campo === "status") {
+      return "asc";
+    }
+
+    return "desc";
+  }
+
+  return "asc";
+}
+
 const relatoriosDetalhe: RelatorioDetalhe[] = [
   "conversas",
   "mensagens",
@@ -630,6 +727,57 @@ function resolverOrdenacao(params: SearchParams): OrdenacaoRelatorios {
   };
 }
 
+function normalizarDirecaoOrdenacao(valor: string): DirecaoOrdenacao | "" {
+  return valor === "asc" || valor === "desc" ? valor : "";
+}
+
+function getDirecaoOrdenacaoParametro(
+  params: SearchParams,
+  tabela: SortTabela,
+  campo: OrdenacaoRelatorios[SortTabela]
+) {
+  return (
+    normalizarDirecaoOrdenacao(getParametro(params, `sort_dir_${tabela}`)) ||
+    getDirecaoOrdenacaoPadrao(tabela, campo)
+  );
+}
+
+function getProximaDirecaoOrdenacao(
+  params: SearchParams,
+  tabela: SortTabela,
+  campo: OrdenacaoRelatorios[SortTabela],
+  atual: OrdenacaoRelatorios[SortTabela]
+): DirecaoOrdenacao {
+  if (atual !== campo) {
+    return getDirecaoOrdenacaoPadrao(tabela, campo);
+  }
+
+  return getDirecaoOrdenacaoParametro(params, tabela, atual) === "asc"
+    ? "desc"
+    : "asc";
+}
+
+function resolverDirecoesOrdenacao(
+  params: SearchParams,
+  ordenacao: OrdenacaoRelatorios
+): DirecoesOrdenacaoRelatorios {
+  return {
+    conversas: getDirecaoOrdenacaoParametro(params, "conversas", ordenacao.conversas),
+    mensagens: getDirecaoOrdenacaoParametro(params, "mensagens", ordenacao.mensagens),
+    disparos: getDirecaoOrdenacaoParametro(params, "disparos", ordenacao.disparos),
+    contatos: getDirecaoOrdenacaoParametro(params, "contatos", ordenacao.contatos),
+    origens: getDirecaoOrdenacaoParametro(params, "origens", ordenacao.origens),
+    tokens: getDirecaoOrdenacaoParametro(params, "tokens", ordenacao.tokens),
+    usuarios: getDirecaoOrdenacaoParametro(params, "usuarios", ordenacao.usuarios),
+    planos: getDirecaoOrdenacaoParametro(params, "planos", ordenacao.planos),
+    integracoes: getDirecaoOrdenacaoParametro(
+      params,
+      "integracoes",
+      ordenacao.integracoes
+    ),
+  };
+}
+
 function resolverDetalhe(params: SearchParams): RelatorioDetalhe | "" {
   const detalhe = getParametro(params, "detalhe") as RelatorioDetalhe;
   return relatoriosDetalhe.includes(detalhe) ? detalhe : "";
@@ -693,10 +841,12 @@ function hrefAtalho(params: SearchParams, atalho: PeriodoAtalho) {
 function hrefSort(
   params: SearchParams,
   tabela: SortTabela,
-  campo: OrdenacaoRelatorios[SortTabela]
+  campo: OrdenacaoRelatorios[SortTabela],
+  direcao: DirecaoOrdenacao
 ) {
   return hrefComParams(params, {
     [`sort_${tabela}`]: campo,
+    [`sort_dir_${tabela}`]: direcao,
     [`pag_${tabela}`]: "1",
   });
 }
@@ -762,18 +912,25 @@ function SortHeader({
   params: SearchParams;
   tabela: SortTabela;
   campo: OrdenacaoRelatorios[SortTabela];
-  atual: string;
+  atual: OrdenacaoRelatorios[SortTabela];
   children: React.ReactNode;
 }) {
   const ativo = atual === campo;
+  const direcaoAtual = getDirecaoOrdenacaoParametro(params, tabela, atual);
+  const proximaDirecao = getProximaDirecaoOrdenacao(
+    params,
+    tabela,
+    campo,
+    atual
+  );
 
   return (
     <a
       className={`${styles.sortLink} ${ativo ? styles.sortLinkActive : ""}`}
-      href={hrefSort(params, tabela, campo)}
+      href={hrefSort(params, tabela, campo, proximaDirecao)}
     >
       {children}
-      <span>{ativo ? "↓" : "↕"}</span>
+      <span>{ativo ? (direcaoAtual === "asc" ? "↑" : "↓") : "↕"}</span>
     </a>
   );
 }
@@ -1361,6 +1518,38 @@ function normalizarRelacao<T>(valor: T | T[] | null | undefined): T | null {
   return valor ?? null;
 }
 
+function normalizarObjetoJson(valor: unknown): Record<string, unknown> {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) {
+    return {};
+  }
+
+  return valor as Record<string, unknown>;
+}
+
+function getTextoJson(
+  json: Record<string, unknown>,
+  chave: string
+): string {
+  const valor = json[chave];
+
+  if (valor === null || valor === undefined) return "";
+  if (typeof valor === "string") return valor.trim();
+  if (typeof valor === "number" || typeof valor === "boolean") {
+    return String(valor);
+  }
+
+  return "";
+}
+
+function jsonTemValor(json: Record<string, unknown>, chave: string) {
+  const valor = json[chave];
+
+  if (valor === null || valor === undefined) return false;
+  if (typeof valor === "string") return valor.trim().length > 0;
+
+  return true;
+}
+
 function getPlano(empresa: EmpresaRow) {
   return normalizarRelacao(empresa.planos);
 }
@@ -1421,6 +1610,236 @@ function normalizarTextoComparacao(valor: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function getChaveOferta(valor: unknown) {
+  return String(valor ?? "").trim().toLowerCase();
+}
+
+function getOfertaPlanoEmpresa(
+  empresa: EmpresaRow,
+  ofertasPorId: Map<string, OfertaPlanoRow>,
+  ofertasPorReferencia: Map<string, OfertaPlanoRow>
+) {
+  const metadata = normalizarObjetoJson(empresa.assinatura_metadata_json);
+  const ofertaId = getChaveOferta(getTextoJson(metadata, "oferta_id"));
+
+  if (ofertaId && ofertasPorId.has(ofertaId)) {
+    return ofertasPorId.get(ofertaId) ?? null;
+  }
+
+  const referencias = [
+    getTextoJson(metadata, "oferta_referencia"),
+    getTextoJson(metadata, "offer_hash"),
+    getTextoJson(metadata, "product_hash"),
+    empresa.assinatura_referencia,
+  ]
+    .map(getChaveOferta)
+    .filter(Boolean);
+
+  for (const referencia of referencias) {
+    const oferta = ofertasPorReferencia.get(referencia);
+
+    if (oferta) return oferta;
+  }
+
+  return null;
+}
+
+function getAdministradorPlanoLabel(empresa: EmpresaRow) {
+  const administrador = empresa.administrador_plano;
+
+  return (
+    administrador?.nome?.trim() ||
+    administrador?.email?.trim() ||
+    "Sem administrador"
+  );
+}
+
+function getPlanoBaseResumo(empresa: EmpresaRow) {
+  const plano = getPlano(empresa);
+  const ofertaMetadata = normalizarObjetoJson(empresa.oferta_plano?.metadata_json);
+  const assinaturaMetadata = normalizarObjetoJson(
+    empresa.assinatura_metadata_json
+  );
+  const slug = normalizarTextoComparacao(
+    getTextoJson(ofertaMetadata, "plano_slug") ||
+      getTextoJson(assinaturaMetadata, "plano_slug") ||
+      plano?.slug ||
+      ""
+  );
+  const nomeNormalizado = normalizarTextoComparacao(
+    [
+      empresa.oferta_plano?.nome,
+      getTextoJson(assinaturaMetadata, "oferta_nome"),
+      getTextoJson(assinaturaMetadata, "offer_title"),
+      plano?.nome,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  if (slug === "essencial" || nomeNormalizado.includes("essencial")) {
+    return "Essencial";
+  }
+
+  if (
+    slug === "basico" ||
+    slug === "basic" ||
+    nomeNormalizado.includes("basico") ||
+    nomeNormalizado.includes("basic")
+  ) {
+    return "Básico";
+  }
+
+  return plano?.nome?.replace(/^Plano\s+/i, "").trim() || "Sem plano";
+}
+
+function getOfertaPlanoSufixo(empresa: EmpresaRow) {
+  const ofertaMetadata = normalizarObjetoJson(empresa.oferta_plano?.metadata_json);
+  const assinaturaMetadata = normalizarObjetoJson(
+    empresa.assinatura_metadata_json
+  );
+  const tipoOferta = normalizarTextoComparacao(
+    getTextoJson(ofertaMetadata, "tipo_oferta") ||
+      getTextoJson(assinaturaMetadata, "tipo_oferta")
+  );
+  const origem = normalizarTextoComparacao(
+    getTextoJson(ofertaMetadata, "origem") ||
+      getTextoJson(assinaturaMetadata, "origem")
+  );
+  const nome = normalizarTextoComparacao(
+    [
+      empresa.oferta_plano?.nome,
+      getTextoJson(assinaturaMetadata, "oferta_nome"),
+      getTextoJson(assinaturaMetadata, "offer_title"),
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  const referencia = normalizarTextoComparacao(
+    [
+      empresa.oferta_plano?.referencia,
+      getTextoJson(assinaturaMetadata, "oferta_referencia"),
+      getTextoJson(assinaturaMetadata, "offer_hash"),
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  if (
+    tipoOferta === "free" ||
+    origem.includes("free") ||
+    referencia.includes("offer_free") ||
+    nome.includes("free")
+  ) {
+    return "Free";
+  }
+
+  if (
+    origem.includes("beta") ||
+    nome.includes("beta") ||
+    jsonTemValor(ofertaMetadata, "valor_beta_centavos")
+  ) {
+    return "Beta";
+  }
+
+  if (
+    tipoOferta === "af" ||
+    tipoOferta === "afiliado" ||
+    origem.includes("afiliado") ||
+    origem.includes("_af") ||
+    nome.includes("afiliado")
+  ) {
+    return "Af";
+  }
+
+  if (
+    origem.includes("teste") ||
+    nome.includes("teste") ||
+    jsonTemValor(ofertaMetadata, "valor_teste_centavos")
+  ) {
+    return "Teste";
+  }
+
+  if (tipoOferta === "vip") return "Vip";
+  if (tipoOferta === "jv") return "JV";
+
+  return "";
+}
+
+function getPlanoOfertaResumo(empresa: EmpresaRow) {
+  const base = getPlanoBaseResumo(empresa);
+  const sufixo = getOfertaPlanoSufixo(empresa);
+
+  return sufixo ? `${base} (${sufixo})` : base;
+}
+
+function getOfertaPlanoNomeCompleto(empresa: EmpresaRow) {
+  const metadata = normalizarObjetoJson(empresa.assinatura_metadata_json);
+
+  return (
+    empresa.oferta_plano?.nome?.trim() ||
+    getTextoJson(metadata, "oferta_nome") ||
+    getTextoJson(metadata, "offer_title") ||
+    getPlano(empresa)?.nome?.trim() ||
+    "Sem plano"
+  );
+}
+
+async function carregarAdministradoresPlano(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  usuarios: UsuarioAdministradorRow[]
+) {
+  const usuariosPorId = new Map(
+    usuarios
+      .filter((usuario) => usuario.id && usuario.empresa_id)
+      .map((usuario) => [usuario.id, usuario])
+  );
+  const usuarioIds = Array.from(usuariosPorId.keys());
+  const vinculosPerfis: UsuarioPerfilAdministradorRow[] = [];
+
+  for (let index = 0; index < usuarioIds.length; index += 400) {
+    const lote = usuarioIds.slice(index, index + 400);
+    const { data, error } = await supabaseAdmin
+      .from("usuarios_perfis")
+      .select(
+        `
+          usuario_id,
+          perfis_empresa (
+            nome,
+            ativo,
+            empresa_id
+          )
+        `
+      )
+      .in("usuario_id", lote);
+
+    if (error) {
+      throw new Error(`Erro ao buscar administradores: ${error.message}`);
+    }
+
+    vinculosPerfis.push(...((data ?? []) as UsuarioPerfilAdministradorRow[]));
+  }
+
+  const administradoresPorEmpresa = new Map<string, UsuarioAdministradorRow>();
+
+  for (const vinculo of vinculosPerfis) {
+    if (!vinculo.usuario_id) continue;
+
+    const usuario = usuariosPorId.get(vinculo.usuario_id);
+    const perfil = normalizarRelacao(vinculo.perfis_empresa);
+
+    if (!usuario?.empresa_id || !perfil) continue;
+    if (perfil.ativo === false) continue;
+    if (normalizarTextoComparacao(perfil.nome || "") !== "administrador") continue;
+    if (perfil.empresa_id && perfil.empresa_id !== usuario.empresa_id) continue;
+    if (administradoresPorEmpresa.has(usuario.empresa_id)) continue;
+
+    administradoresPorEmpresa.set(usuario.empresa_id, usuario);
+  }
+
+  return administradoresPorEmpresa;
 }
 
 function getOrigemContatoLabel(valor: string | null | undefined) {
@@ -1586,6 +2005,14 @@ function classificarDisparo(status: string | null | undefined) {
 
 function compararTexto(a: string, b: string) {
   return a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+}
+
+function aplicarDirecaoOrdenacao(
+  resultado: number,
+  direcao: DirecaoOrdenacao
+) {
+  if (resultado === 0) return 0;
+  return direcao === "asc" ? resultado : -resultado;
 }
 
 function getTimestamp(valor: string | null | undefined) {
@@ -1817,7 +2244,8 @@ function montarTempoOnlinePorEmpresa({
 async function carregarRelatorios(
   filtros: FiltrosRelatorio,
   filtrosRelatorio: FiltrosPorRelatorio,
-  ordenacao: OrdenacaoRelatorios
+  ordenacao: OrdenacaoRelatorios,
+  direcoes: DirecoesOrdenacaoRelatorios
 ): Promise<RelatoriosDados> {
   const supabaseAdmin = getSupabaseAdmin();
 
@@ -1832,6 +2260,9 @@ async function carregarRelatorios(
     assinatura_inicio_em,
     assinatura_vencimento_em,
     assinatura_renovada_em,
+    assinatura_gateway,
+    assinatura_referencia,
+    assinatura_metadata_json,
     planos (
       id,
       nome,
@@ -1848,6 +2279,21 @@ async function carregarRelatorios(
     .from("usuarios")
     .select("id, empresa_id, nome, email")
     .order("nome", { ascending: true })
+    .limit(MAX_USUARIOS);
+
+  const ofertasPlanoQuery = supabaseAdmin
+    .from("ia_token_ofertas")
+    .select(
+      "id, gateway, referencia, tipo, nome, plano_id, empresa_id, quantidade_tokens, metadata_json"
+    )
+    .eq("tipo", "mensalidade")
+    .eq("ativa", true);
+
+  let administradoresUsuariosQuery = supabaseAdmin
+    .from("usuarios")
+    .select("id, empresa_id, nome, email, status, created_at")
+    .eq("status", "ativo")
+    .order("created_at", { ascending: true })
     .limit(MAX_USUARIOS);
 
   let empresasQuery = supabaseAdmin
@@ -1999,6 +2445,10 @@ async function carregarRelatorios(
 
   if (filtrosRelatorio.planosEmpresaId) {
     empresasQuery = empresasQuery.eq("id", filtrosRelatorio.planosEmpresaId);
+    administradoresUsuariosQuery = administradoresUsuariosQuery.eq(
+      "empresa_id",
+      filtrosRelatorio.planosEmpresaId
+    );
   }
 
   if (filtrosRelatorio.conversasEmpresaId) {
@@ -2089,6 +2539,8 @@ async function carregarRelatorios(
   const [
     empresasOpcoesResult,
     usuariosOpcoesResult,
+    ofertasPlanoResult,
+    administradoresUsuariosResult,
     empresasResult,
     conversasResult,
     disparosOrigemConversasResult,
@@ -2103,6 +2555,8 @@ async function carregarRelatorios(
   ] = await Promise.all([
     empresasOpcoesQuery,
     usuariosOpcoesQuery,
+    ofertasPlanoQuery,
+    administradoresUsuariosQuery,
     empresasQuery,
     conversasQuery,
     disparosOrigemConversasQuery,
@@ -2118,6 +2572,10 @@ async function carregarRelatorios(
 
   if (empresasOpcoesResult.error) throw new Error(empresasOpcoesResult.error.message);
   if (usuariosOpcoesResult.error) throw new Error(usuariosOpcoesResult.error.message);
+  if (ofertasPlanoResult.error) throw new Error(ofertasPlanoResult.error.message);
+  if (administradoresUsuariosResult.error) {
+    throw new Error(administradoresUsuariosResult.error.message);
+  }
   if (empresasResult.error) throw new Error(empresasResult.error.message);
   if (conversasResult.error) throw new Error(conversasResult.error.message);
   if (disparosOrigemConversasResult.error) {
@@ -2138,6 +2596,23 @@ async function carregarRelatorios(
 
   const empresasOpcoes = (empresasOpcoesResult.data ?? []) as EmpresaRow[];
   const usuariosOpcoes = (usuariosOpcoesResult.data ?? []) as UsuarioOpcao[];
+  const ofertasPlano = (ofertasPlanoResult.data ?? []) as OfertaPlanoRow[];
+  const usuariosAdministradores = (administradoresUsuariosResult.data ??
+    []) as UsuarioAdministradorRow[];
+  const ofertasPorId = new Map(
+    ofertasPlano
+      .map((oferta) => [getChaveOferta(oferta.id), oferta] as const)
+      .filter(([id]) => Boolean(id))
+  );
+  const ofertasPorReferencia = new Map(
+    ofertasPlano
+      .map((oferta) => [getChaveOferta(oferta.referencia), oferta] as const)
+      .filter(([referencia]) => Boolean(referencia))
+  );
+  const administradoresPorEmpresa = await carregarAdministradoresPlano(
+    supabaseAdmin,
+    usuariosAdministradores
+  );
   const empresas = ((empresasResult.data ?? []) as EmpresaRow[]).filter((empresa) => {
     if (filtrosRelatorio.planosStatus === "regular") {
       return !empresaEstaInadimplente(empresa);
@@ -2149,6 +2624,15 @@ async function carregarRelatorios(
 
     return true;
   });
+  const empresasComDetalhesPlano = empresas.map((empresa) => ({
+    ...empresa,
+    administrador_plano: administradoresPorEmpresa.get(empresa.id) ?? null,
+    oferta_plano: getOfertaPlanoEmpresa(
+      empresa,
+      ofertasPorId,
+      ofertasPorReferencia
+    ),
+  }));
   const empresasPorId = new Map(
     empresasOpcoes.map((empresa) => [empresa.id, empresa])
   );
@@ -2182,6 +2666,7 @@ async function carregarRelatorios(
     conversasPorId,
     empresasPorId,
     ordenacao: ordenacao.mensagens,
+    direcao: direcoes.mensagens,
   });
 
   const conversaIdsFaltantes = Array.from(
@@ -2247,6 +2732,7 @@ async function carregarRelatorios(
     empresasPorId,
     sessoesRecentes,
     ordenacao: ordenacao.usuarios,
+    direcao: direcoes.usuarios,
     referenciaAgora,
   });
 
@@ -2254,6 +2740,7 @@ async function carregarRelatorios(
     conversas: conversasRelatorio,
     empresasPorId,
     ordenacao: ordenacao.conversas,
+    direcao: direcoes.conversas,
   });
   const mensagensPorConversa = mensagensTop.map((item) => {
     const conversa = conversasPorId.get(item.conversaId);
@@ -2270,31 +2757,37 @@ async function carregarRelatorios(
     disparos,
     empresasPorId,
     ordenacao: ordenacao.disparos,
+    direcao: direcoes.disparos,
   });
   const contatosPorEmpresa = montarContatosPorEmpresa({
     contatos,
     empresasPorId,
     ordenacao: ordenacao.contatos,
+    direcao: direcoes.contatos,
   });
   const contatosOrigemPorEmpresa = montarContatosOrigemPorEmpresa({
     contatos: contatosOrigem,
     empresasPorId,
     ordenacao: ordenacao.origens,
+    direcao: direcoes.origens,
   });
   const tokensPorEmpresa = montarTokensPorEmpresa({
     usos: usosTokens,
     empresasPorId,
     ordenacao: ordenacao.tokens,
+    direcao: direcoes.tokens,
   });
   const integracoesMeta = montarIntegracoesMeta({
     integracoes,
     empresasPorId,
     tempoOnlinePorEmpresa,
     ordenacao: ordenacao.integracoes,
+    direcao: direcoes.integracoes,
   });
   const empresasOrdenadas = ordenarEmpresasPlano({
-    empresas,
+    empresas: empresasComDetalhesPlano,
     ordenacao: ordenacao.planos,
+    direcao: direcoes.planos,
   });
   const contatosNovos = contatosPorEmpresa.reduce(
     (total, empresa) => total + empresa.total,
@@ -2387,10 +2880,12 @@ function montarConversasPorEmpresa({
   conversas,
   empresasPorId,
   ordenacao,
+  direcao,
 }: {
   conversas: ConversaRow[];
   empresasPorId: Map<string, EmpresaRow>;
   ordenacao: OrdenacaoRelatorios["conversas"];
+  direcao: DirecaoOrdenacao;
 }) {
   const mapa = new Map<
     string,
@@ -2442,15 +2937,25 @@ function montarConversasPorEmpresa({
 
   return itens
     .sort((a, b) => {
-      if (ordenacao === "empresa") return compararTexto(a.nome, b.nome);
-      if (ordenacao === "percentual") return b.percentual - a.percentual;
+      if (ordenacao === "empresa") {
+        return aplicarDirecaoOrdenacao(compararTexto(a.nome, b.nome), direcao);
+      }
+      if (ordenacao === "percentual") {
+        return aplicarDirecaoOrdenacao(a.percentual - b.percentual, direcao);
+      }
       if (ordenacao === "primeira") {
-        return getTimestamp(a.primeiraConversaEm) - getTimestamp(b.primeiraConversaEm);
+        return aplicarDirecaoOrdenacao(
+          getTimestamp(a.primeiraConversaEm) - getTimestamp(b.primeiraConversaEm),
+          direcao
+        );
       }
       if (ordenacao === "ultima") {
-        return getTimestamp(b.ultimaConversaEm) - getTimestamp(a.ultimaConversaEm);
+        return aplicarDirecaoOrdenacao(
+          getTimestamp(a.ultimaConversaEm) - getTimestamp(b.ultimaConversaEm),
+          direcao
+        );
       }
-      return b.total - a.total;
+      return aplicarDirecaoOrdenacao(a.total - b.total, direcao);
     })
     .map((item) => ({
       ...item,
@@ -2463,11 +2968,13 @@ function montarMensagensPorConversa({
   conversasPorId,
   empresasPorId,
   ordenacao,
+  direcao,
 }: {
   mensagens: MensagemRow[];
   conversasPorId: Map<string, ConversaRow>;
   empresasPorId: Map<string, EmpresaRow>;
   ordenacao: OrdenacaoRelatorios["mensagens"];
+  direcao: DirecaoOrdenacao;
 }) {
   const mapa = new Map<
     string,
@@ -2537,14 +3044,28 @@ function montarMensagensPorConversa({
       };
     })
     .sort((a, b) => {
-      if (ordenacao === "empresa") return compararTexto(a.empresaNome, b.empresaNome);
-      if (ordenacao === "contato") return compararTexto(a.contato, b.contato);
-      if (ordenacao === "recebidas") return b.recebidas - a.recebidas;
-      if (ordenacao === "enviadas") return b.enviadas - a.enviadas;
-      if (ordenacao === "ultima") {
-        return getTimestamp(b.ultimaMensagemEm) - getTimestamp(a.ultimaMensagemEm);
+      if (ordenacao === "empresa") {
+        return aplicarDirecaoOrdenacao(
+          compararTexto(a.empresaNome, b.empresaNome),
+          direcao
+        );
       }
-      return b.total - a.total;
+      if (ordenacao === "contato") {
+        return aplicarDirecaoOrdenacao(compararTexto(a.contato, b.contato), direcao);
+      }
+      if (ordenacao === "recebidas") {
+        return aplicarDirecaoOrdenacao(a.recebidas - b.recebidas, direcao);
+      }
+      if (ordenacao === "enviadas") {
+        return aplicarDirecaoOrdenacao(a.enviadas - b.enviadas, direcao);
+      }
+      if (ordenacao === "ultima") {
+        return aplicarDirecaoOrdenacao(
+          getTimestamp(a.ultimaMensagemEm) - getTimestamp(b.ultimaMensagemEm),
+          direcao
+        );
+      }
+      return aplicarDirecaoOrdenacao(a.total - b.total, direcao);
     })
     .slice(0, 40);
 }
@@ -2553,10 +3074,12 @@ function montarDisparosPorEmpresa({
   disparos,
   empresasPorId,
   ordenacao,
+  direcao,
 }: {
   disparos: DisparoRow[];
   empresasPorId: Map<string, EmpresaRow>;
   ordenacao: OrdenacaoRelatorios["disparos"];
+  direcao: DirecaoOrdenacao;
 }) {
   const mapa = new Map<
     string,
@@ -2596,11 +3119,19 @@ function montarDisparosPorEmpresa({
       percentual: Math.round((item.total / maximo) * 100),
     }))
     .sort((a, b) => {
-      if (ordenacao === "empresa") return compararTexto(a.nome, b.nome);
-      if (ordenacao === "sucesso") return b.sucesso - a.sucesso;
-      if (ordenacao === "falha") return b.falha - a.falha;
-      if (ordenacao === "processando") return b.processando - a.processando;
-      return b.total - a.total;
+      if (ordenacao === "empresa") {
+        return aplicarDirecaoOrdenacao(compararTexto(a.nome, b.nome), direcao);
+      }
+      if (ordenacao === "sucesso") {
+        return aplicarDirecaoOrdenacao(a.sucesso - b.sucesso, direcao);
+      }
+      if (ordenacao === "falha") {
+        return aplicarDirecaoOrdenacao(a.falha - b.falha, direcao);
+      }
+      if (ordenacao === "processando") {
+        return aplicarDirecaoOrdenacao(a.processando - b.processando, direcao);
+      }
+      return aplicarDirecaoOrdenacao(a.total - b.total, direcao);
     })
     .slice(0, 15);
 }
@@ -2609,10 +3140,12 @@ function montarContatosPorEmpresa({
   contatos,
   empresasPorId,
   ordenacao,
+  direcao,
 }: {
   contatos: ContatoRow[];
   empresasPorId: Map<string, EmpresaRow>;
   ordenacao: OrdenacaoRelatorios["contatos"];
+  direcao: DirecaoOrdenacao;
 }) {
   const mapa = new Map<
     string,
@@ -2670,18 +3203,29 @@ function montarContatosPorEmpresa({
       };
     })
     .sort((a, b) => {
-      if (ordenacao === "empresa") return compararTexto(a.nome, b.nome);
+      if (ordenacao === "empresa") {
+        return aplicarDirecaoOrdenacao(compararTexto(a.nome, b.nome), direcao);
+      }
       if (ordenacao === "campanha") {
-        return (
-          b.campanhaPrincipalTotal - a.campanhaPrincipalTotal ||
-          compararTexto(a.campanhaPrincipal, b.campanhaPrincipal)
+        const resultado =
+          compararTexto(a.campanhaPrincipal, b.campanhaPrincipal) ||
+          a.campanhaPrincipalTotal - b.campanhaPrincipalTotal;
+
+        return aplicarDirecaoOrdenacao(resultado, direcao);
+      }
+      if (ordenacao === "na") {
+        return aplicarDirecaoOrdenacao(
+          a.campanhaNaoInformada - b.campanhaNaoInformada,
+          direcao
         );
       }
-      if (ordenacao === "na") return b.campanhaNaoInformada - a.campanhaNaoInformada;
       if (ordenacao === "percentual") {
-        return b.percentualNaoInformada - a.percentualNaoInformada;
+        return aplicarDirecaoOrdenacao(
+          a.percentualNaoInformada - b.percentualNaoInformada,
+          direcao
+        );
       }
-      return b.total - a.total;
+      return aplicarDirecaoOrdenacao(a.total - b.total, direcao);
     });
 }
 
@@ -2689,10 +3233,12 @@ function montarContatosOrigemPorEmpresa({
   contatos,
   empresasPorId,
   ordenacao,
+  direcao,
 }: {
   contatos: ContatoOrigemRow[];
   empresasPorId: Map<string, EmpresaRow>;
   ordenacao: OrdenacaoRelatorios["origens"];
+  direcao: DirecaoOrdenacao;
 }) {
   const mapa = new Map<
     string,
@@ -2750,17 +3296,26 @@ function montarContatosOrigemPorEmpresa({
       };
     })
     .sort((a, b) => {
-      if (ordenacao === "empresa") return compararTexto(a.nome, b.nome);
-      if (ordenacao === "origem") {
-        return (
-          b.origemPrincipalTotal - a.origemPrincipalTotal ||
-          compararTexto(a.origemPrincipal, b.origemPrincipal)
-        );
+      if (ordenacao === "empresa") {
+        return aplicarDirecaoOrdenacao(compararTexto(a.nome, b.nome), direcao);
       }
-      if (ordenacao === "manual") return b.origemManual - a.origemManual;
-      if (ordenacao === "na") return b.origemNa - a.origemNa;
-      if (ordenacao === "percentual") return b.percentualNa - a.percentualNa;
-      return b.total - a.total;
+      if (ordenacao === "origem") {
+        const resultado =
+          compararTexto(a.origemPrincipal, b.origemPrincipal) ||
+          a.origemPrincipalTotal - b.origemPrincipalTotal;
+
+        return aplicarDirecaoOrdenacao(resultado, direcao);
+      }
+      if (ordenacao === "manual") {
+        return aplicarDirecaoOrdenacao(a.origemManual - b.origemManual, direcao);
+      }
+      if (ordenacao === "na") {
+        return aplicarDirecaoOrdenacao(a.origemNa - b.origemNa, direcao);
+      }
+      if (ordenacao === "percentual") {
+        return aplicarDirecaoOrdenacao(a.percentualNa - b.percentualNa, direcao);
+      }
+      return aplicarDirecaoOrdenacao(a.total - b.total, direcao);
     });
 }
 
@@ -2768,10 +3323,12 @@ function montarTokensPorEmpresa({
   usos,
   empresasPorId,
   ordenacao,
+  direcao,
 }: {
   usos: TokenUsoRow[];
   empresasPorId: Map<string, EmpresaRow>;
   ordenacao: OrdenacaoRelatorios["tokens"];
+  direcao: DirecaoOrdenacao;
 }) {
   const mapa = new Map<
     string,
@@ -2819,14 +3376,25 @@ function montarTokensPorEmpresa({
       nome: getNomeEmpresaPorId(empresasPorId, item.empresaId),
     }))
     .sort((a, b) => {
-      if (ordenacao === "empresa") return compararTexto(a.nome, b.nome);
-      if (ordenacao === "registros") return b.registros - a.registros;
-      if (ordenacao === "input") return b.tokensInput - a.tokensInput;
-      if (ordenacao === "output") return b.tokensOutput - a.tokensOutput;
-      if (ordenacao === "ultima") {
-        return getTimestamp(b.ultimoUsoEm) - getTimestamp(a.ultimoUsoEm);
+      if (ordenacao === "empresa") {
+        return aplicarDirecaoOrdenacao(compararTexto(a.nome, b.nome), direcao);
       }
-      return b.tokensTotal - a.tokensTotal;
+      if (ordenacao === "registros") {
+        return aplicarDirecaoOrdenacao(a.registros - b.registros, direcao);
+      }
+      if (ordenacao === "input") {
+        return aplicarDirecaoOrdenacao(a.tokensInput - b.tokensInput, direcao);
+      }
+      if (ordenacao === "output") {
+        return aplicarDirecaoOrdenacao(a.tokensOutput - b.tokensOutput, direcao);
+      }
+      if (ordenacao === "ultima") {
+        return aplicarDirecaoOrdenacao(
+          getTimestamp(a.ultimoUsoEm) - getTimestamp(b.ultimoUsoEm),
+          direcao
+        );
+      }
+      return aplicarDirecaoOrdenacao(a.tokensTotal - b.tokensTotal, direcao);
     });
 }
 
@@ -2835,11 +3403,13 @@ function montarIntegracoesMeta({
   empresasPorId,
   tempoOnlinePorEmpresa,
   ordenacao,
+  direcao,
 }: {
   integracoes: IntegracaoWhatsappRow[];
   empresasPorId: Map<string, EmpresaRow>;
   tempoOnlinePorEmpresa: Map<string, number>;
   ordenacao: OrdenacaoRelatorios["integracoes"];
+  direcao: DirecaoOrdenacao;
 }) {
   return integracoes
     .map((integracao) => {
@@ -2869,18 +3439,39 @@ function montarIntegracoesMeta({
       };
     })
     .sort((a, b) => {
-      if (ordenacao === "empresa") return compararTexto(a.empresaNome, b.empresaNome);
-      if (ordenacao === "etapa") return compararTexto(a.etapaLabel, b.etapaLabel);
-      if (ordenacao === "online") return b.tempoOnlineMs - a.tempoOnlineMs;
-      if (ordenacao === "created") return getTimestamp(b.criadoEm) - getTimestamp(a.criadoEm);
+      if (ordenacao === "empresa") {
+        return aplicarDirecaoOrdenacao(
+          compararTexto(a.empresaNome, b.empresaNome),
+          direcao
+        );
+      }
+      if (ordenacao === "etapa") {
+        return aplicarDirecaoOrdenacao(
+          compararTexto(a.etapaLabel, b.etapaLabel),
+          direcao
+        );
+      }
+      if (ordenacao === "online") {
+        return aplicarDirecaoOrdenacao(a.tempoOnlineMs - b.tempoOnlineMs, direcao);
+      }
+      if (ordenacao === "created") {
+        return aplicarDirecaoOrdenacao(
+          getTimestamp(a.criadoEm) - getTimestamp(b.criadoEm),
+          direcao
+        );
+      }
       if (ordenacao === "updated") {
-        return getTimestamp(b.atualizadoEm) - getTimestamp(a.atualizadoEm);
+        return aplicarDirecaoOrdenacao(
+          getTimestamp(a.atualizadoEm) - getTimestamp(b.atualizadoEm),
+          direcao
+        );
       }
 
-      return (
+      return aplicarDirecaoOrdenacao(
         getIntegracaoStatusRank(a) - getIntegracaoStatusRank(b) ||
-        compararTexto(a.statusLabel, b.statusLabel) ||
-        compararTexto(a.empresaNome, b.empresaNome)
+          compararTexto(a.statusLabel, b.statusLabel) ||
+          compararTexto(a.empresaNome, b.empresaNome),
+        direcao
       );
     });
 }
@@ -2890,12 +3481,14 @@ function montarUsuariosSessao({
   empresasPorId,
   sessoesRecentes,
   ordenacao,
+  direcao,
   referenciaAgora,
 }: {
   usuarios: UsuarioRow[];
   empresasPorId: Map<string, EmpresaRow>;
   sessoesRecentes: Map<string, UsuarioSessaoRow>;
   ordenacao: OrdenacaoRelatorios["usuarios"];
+  direcao: DirecaoOrdenacao;
   referenciaAgora: number;
 }) {
   const agora = referenciaAgora;
@@ -2939,18 +3532,36 @@ function montarUsuariosSessao({
       };
     })
     .sort((a, b) => {
-      if (ordenacao === "nome") return compararTexto(a.nome, b.nome);
-      if (ordenacao === "empresa") return compararTexto(a.empresa, b.empresa);
-      if (ordenacao === "login") return getTimestamp(b.loginEm) - getTimestamp(a.loginEm);
+      if (ordenacao === "nome") {
+        return aplicarDirecaoOrdenacao(compararTexto(a.nome, b.nome), direcao);
+      }
+      if (ordenacao === "empresa") {
+        return aplicarDirecaoOrdenacao(compararTexto(a.empresa, b.empresa), direcao);
+      }
+      if (ordenacao === "login") {
+        return aplicarDirecaoOrdenacao(
+          getTimestamp(a.loginEm) - getTimestamp(b.loginEm),
+          direcao
+        );
+      }
       if (ordenacao === "logout") {
-        return getTimestamp(b.logoutEm) - getTimestamp(a.logoutEm);
+        return aplicarDirecaoOrdenacao(
+          getTimestamp(a.logoutEm) - getTimestamp(b.logoutEm),
+          direcao
+        );
       }
       if (ordenacao === "ultimo") {
-        return getTimestamp(b.ultimoAcesso) - getTimestamp(a.ultimoAcesso);
+        return aplicarDirecaoOrdenacao(
+          getTimestamp(a.ultimoAcesso) - getTimestamp(b.ultimoAcesso),
+          direcao
+        );
       }
 
-      if (a.online !== b.online) return a.online ? -1 : 1;
-      return getTimestamp(b.ultimoAcesso) - getTimestamp(a.ultimoAcesso);
+      return aplicarDirecaoOrdenacao(
+        Number(a.online) - Number(b.online) ||
+          getTimestamp(a.ultimoAcesso) - getTimestamp(b.ultimoAcesso),
+        direcao
+      );
     })
     .slice(0, 60);
 }
@@ -2958,34 +3569,55 @@ function montarUsuariosSessao({
 function ordenarEmpresasPlano({
   empresas,
   ordenacao,
+  direcao,
 }: {
   empresas: EmpresaRow[];
   ordenacao: OrdenacaoRelatorios["planos"];
+  direcao: DirecaoOrdenacao;
 }) {
   return [...empresas].sort((a, b) => {
     if (ordenacao === "plano") {
-      return compararTexto(getPlano(a)?.nome || "", getPlano(b)?.nome || "");
+      return aplicarDirecaoOrdenacao(
+        compararTexto(getPlanoOfertaResumo(a), getPlanoOfertaResumo(b)),
+        direcao
+      );
     }
     if (ordenacao === "status") {
-      return compararTexto(a.assinatura_status || "", b.assinatura_status || "");
+      return aplicarDirecaoOrdenacao(
+        compararTexto(getSituacaoPlanoLabel(a), getSituacaoPlanoLabel(b)) ||
+          compararTexto(
+            getStatusPlanoLabel(a.assinatura_status),
+            getStatusPlanoLabel(b.assinatura_status)
+          ),
+        direcao
+      );
     }
     if (ordenacao === "inicio") {
-      return (
-        getTimestamp(b.assinatura_inicio_em || b.created_at) -
-        getTimestamp(a.assinatura_inicio_em || a.created_at)
+      return aplicarDirecaoOrdenacao(
+        getTimestamp(a.assinatura_inicio_em || a.created_at) -
+          getTimestamp(b.assinatura_inicio_em || b.created_at),
+        direcao
       );
     }
     if (ordenacao === "renovacao") {
-      return (
-        getTimestamp(b.assinatura_renovada_em) -
-        getTimestamp(a.assinatura_renovada_em)
+      return aplicarDirecaoOrdenacao(
+        getTimestamp(a.assinatura_renovada_em) -
+          getTimestamp(b.assinatura_renovada_em),
+        direcao
       );
     }
     if (ordenacao === "expira") {
-      return getTimestamp(a.assinatura_vencimento_em) - getTimestamp(b.assinatura_vencimento_em);
+      return aplicarDirecaoOrdenacao(
+        getTimestamp(a.assinatura_vencimento_em) -
+          getTimestamp(b.assinatura_vencimento_em),
+        direcao
+      );
     }
 
-    return compararTexto(getNomeEmpresa(a), getNomeEmpresa(b));
+    return aplicarDirecaoOrdenacao(
+      compararTexto(getNomeEmpresa(a), getNomeEmpresa(b)),
+      direcao
+    );
   });
 }
 
@@ -4393,16 +5025,22 @@ function RelatorioDetalheModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {paginacao.itens.map((empresa) => {
-                    const plano = getPlano(empresa);
-
-                    return (
+                  {paginacao.itens.map((empresa) => (
                       <tr key={empresa.id}>
-                        <td>
+                        <td title={empresa.id}>
                           <strong>{getNomeEmpresa(empresa)}</strong>
-                          <span className={styles.secondaryText}>{empresa.id}</span>
+                          <span className={styles.secondaryText}>
+                            {getAdministradorPlanoLabel(empresa)}
+                          </span>
                         </td>
-                        <td>{plano?.nome || "Sem plano"}</td>
+                        <td>
+                          <span
+                            className={styles.primaryText}
+                            title={getOfertaPlanoNomeCompleto(empresa)}
+                          >
+                            {getPlanoOfertaResumo(empresa)}
+                          </span>
+                        </td>
                         <td>
                           <span className={styles.statusWithDot}>
                             <span
@@ -4424,8 +5062,7 @@ function RelatorioDetalheModal({
                         </td>
                         <td>{formatarData(empresa.assinatura_vencimento_em)}</td>
                       </tr>
-                    );
-                  })}
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -4616,14 +5253,16 @@ export default async function RelatoriosInternosPage({
   const filtros = resolverFiltros(params);
   const filtrosRelatorio = resolverFiltrosPorRelatorio(params);
   const ordenacao = resolverOrdenacao(params);
+  const direcoes = resolverDirecoesOrdenacao(params, ordenacao);
   const detalheAberto = resolverDetalhe(params);
   const dados = await carregarRelatorios(
     filtros,
     filtrosPorRelatorioPadrao,
-    ordenacao
+    ordenacao,
+    direcoes
   );
   const dadosDetalhe = detalheAberto
-    ? await carregarRelatorios(filtros, filtrosRelatorio, ordenacao)
+    ? await carregarRelatorios(filtros, filtrosRelatorio, ordenacao, direcoes)
     : dados;
   const empresasOpcoesPorId = new Map(
     dados.empresasOpcoes.map((empresa) => [empresa.id, empresa])
@@ -4930,13 +5569,49 @@ export default async function RelatoriosInternosPage({
                       />
                     </div>
                     <div className={styles.rankMeta}>
-                      <a href={hrefSort(params, "disparos", "sucesso")}>
+                      <a
+                        href={hrefSort(
+                          params,
+                          "disparos",
+                          "sucesso",
+                          getProximaDirecaoOrdenacao(
+                            params,
+                            "disparos",
+                            "sucesso",
+                            ordenacao.disparos
+                          )
+                        )}
+                      >
                         {formatarNumero(empresa.sucesso)} sucesso
                       </a>
-                      <a href={hrefSort(params, "disparos", "falha")}>
+                      <a
+                        href={hrefSort(
+                          params,
+                          "disparos",
+                          "falha",
+                          getProximaDirecaoOrdenacao(
+                            params,
+                            "disparos",
+                            "falha",
+                            ordenacao.disparos
+                          )
+                        )}
+                      >
                         {formatarNumero(empresa.falha)} falha
                       </a>
-                      <a href={hrefSort(params, "disparos", "processando")}>
+                      <a
+                        href={hrefSort(
+                          params,
+                          "disparos",
+                          "processando",
+                          getProximaDirecaoOrdenacao(
+                            params,
+                            "disparos",
+                            "processando",
+                            ordenacao.disparos
+                          )
+                        )}
+                      >
                         {formatarNumero(empresa.processando)} processando
                       </a>
                     </div>
@@ -5388,16 +6063,22 @@ export default async function RelatoriosInternosPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {dados.empresas.map((empresa) => {
-                    const plano = getPlano(empresa);
-
-                    return (
+                  {dados.empresas.map((empresa) => (
                       <tr key={empresa.id}>
-                        <td>
+                        <td title={empresa.id}>
                           <strong>{getNomeEmpresa(empresa)}</strong>
-                          <span className={styles.secondaryText}>{empresa.id}</span>
+                          <span className={styles.secondaryText}>
+                            Administrador: {getAdministradorPlanoLabel(empresa)}
+                          </span>
                         </td>
-                        <td>{plano?.nome || "Sem plano"}</td>
+                        <td>
+                          <span
+                            className={styles.primaryText}
+                            title={getOfertaPlanoNomeCompleto(empresa)}
+                          >
+                            {getPlanoOfertaResumo(empresa)}
+                          </span>
+                        </td>
                         <td>
                           <span className={styles.statusWithDot}>
                             <span
@@ -5421,8 +6102,7 @@ export default async function RelatoriosInternosPage({
                         </td>
                         <td>{formatarData(empresa.assinatura_vencimento_em)}</td>
                       </tr>
-                    );
-                  })}
+                    ))}
                 </tbody>
               </table>
             </div>

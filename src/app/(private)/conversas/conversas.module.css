@@ -615,7 +615,7 @@
   flex-shrink: 0;
   padding: 14px 18px;
   border-bottom: 1px solid var(--crm-border);
-  background: #fbfcfc;
+  background: var(--crm-surface);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -681,10 +681,10 @@
   max-width: 150px;
   min-height: 22px;
   padding: 0 8px;
-  border: 1px solid #c5e6e9ec;
+  border: 1px solid var(--chatCampaignBadgeBordeer);
   border-radius: 999px;
-  color: #63a5abec;
-  background:  #f6feff;
+  color: var(--chatCampaignBadgeColor);
+  background: var(--chatCampaignBadgeBG);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1217,7 +1217,7 @@
 .composerArea {
   flex-shrink: 0;
   border-top: 1px solid var(--crm-border);
-  background: #ffffff;
+  background: var(--crm-surface);
   padding: 12px 18px 0px;
   position: relative;
 }
@@ -1333,7 +1333,7 @@
 }
 
 .backButton:hover {
-  background:  #e9f5ed;
+  background: var(--crm-success-bg);
 }
 
 .rightPanelTitle {
@@ -2606,7 +2606,7 @@
 }
 
 .whatsListActionButton:hover {
-  background:  #eef6f1;
+  background: var(--headerDropdownItemHover);
 }
 .listaCardWrap {
   display: flex;
@@ -4638,11 +4638,11 @@
   gap: 14px;
   padding: 14px;
   border-radius: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96));
+  border: 1px solid var(--disparoCardBorder);
+  background: var(--disparoCardBG);
   box-shadow:
     0 12px 30px rgba(15, 23, 42, 0.05),
-    inset 0 1px 0 rgba(255,255,255,0.75);
+    inset 0 1px 0 var(--disparoCardBS);
 }
 
 .disparoCardResumo {
@@ -4672,13 +4672,13 @@
 }
 
 .disparoAlertCompactDanger {
-  background: linear-gradient(80deg, #fca8a8f5, #fce3e3f5);
-  border-color: rgb(251, 102, 102);
+  background: var(--disparoAlertCompactDangerBG);
+  border-color: var(--disparoAlertCompactDangerBorder);
 }
 
 .disparoAlertCompactWarning {
-  background: linear-gradient(80deg, #fff3c4f5, #fff8e6f5);
-  border-color: #f5b82e;
+  background: var(--disparoAlertCompactWarningBG);
+  border-color: var(--disparoAlertCompactWarningBorder);
 }
 
 .disparoAlertCompactIcon {
@@ -4703,14 +4703,14 @@
 .disparoAlertCompactTitle {
   font-size: 14px;
   line-height: 1.25;
-  color: var(--crm-text-strong);
+  color: #0b0b0b;
 }
 
 .disparoAlertCompactText {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #2f2f2f;
+  color: #0b0b0b;
 }
 
 .disparoExpandButton {

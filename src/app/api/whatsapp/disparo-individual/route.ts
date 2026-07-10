@@ -18,6 +18,10 @@ import {
   telefoneEstaSuprimido,
 } from "@/lib/whatsapp/opt-out";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import {
+  CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
+  isConversaHistoricoImportado,
+} from "@/lib/conversas/historico-importado";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -389,6 +393,8 @@ export async function POST(request: Request) {
         id,
         empresa_id,
         integracao_whatsapp_id,
+        origem_atendimento,
+        historico_importado,
         contatos (
           id,
           nome,
@@ -403,6 +409,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, error: "Conversa não encontrada" },
         { status: 404 }
+      );
+    }
+
+    if (isConversaHistoricoImportado(conversa)) {
+      return NextResponse.json(
+        { ok: false, error: CONVERSA_HISTORICO_IMPORTADO_MENSAGEM },
+        { status: 400 }
       );
     }
 
@@ -864,6 +877,7 @@ export async function POST(request: Request) {
       remetente_id: usuario.id,
       conteudo: conteudoRenderizado,
       tipo_mensagem: "template",
+      tipo_original_meta: "template",
       origem: "enviada",
       status_envio: "enviada",
       mensagem_externa_id: mensagemExternaId,
