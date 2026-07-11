@@ -8204,7 +8204,7 @@ async function seguirParaProximoNo(params: {
       const mensagemRespostaInvalida =
         String(noAtual?.configuracao_json?.mensagem_erro || "").trim() ||
         (noAtual?.tipo_no === "pergunta_livre_ia"
-          ? "Nao consegui identificar a melhor opcao. Pode responder de outro jeito?"
+          ? "Não consegui identificar a melhor opção. Pode responder de outro jeito?"
           : "Opção inválida. Por favor, escolha uma das opções disponíveis.");
 
       await enviarMensagemAutomacao({

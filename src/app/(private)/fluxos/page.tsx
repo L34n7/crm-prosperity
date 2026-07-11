@@ -18,6 +18,9 @@ import {
 } from "@xyflow/react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import AssistenteFluxosPanel, {
+  type AssistenteFluxosFluxoCriado,
+} from "./AssistenteFluxosPanel";
 import TemplateVariableCombobox, {
   type TemplateVariableOption,
 } from "@/components/TemplateVariableCombobox";
@@ -25,9 +28,18 @@ import { useHeaderUser } from "@/components/header-user-context";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
 import { Handle } from "@xyflow/react";
+import { obterConfiguracaoEncerramentoInatividade } from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import { gerarSugestaoDescricaoIAComContexto } from "@/lib/ia/sugestoes-descricao-ia";
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Copy, CopyPlus, Share2, Sparkles } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  CopyPlus,
+  MessageCircle,
+  Share2,
+  Sparkles,
+} from "lucide-react";
 
 type Fluxo = {
   id: string;
@@ -98,6 +110,19 @@ type MidiaOpcao = {
   mime_type: string | null;
   tamanho_bytes: number | null;
   created_at?: string;
+};
+
+type ImpactoExclusaoMidia = {
+  total_blocos_afetados?: number;
+  total_fluxos_afetados?: number;
+  total_fluxos_pausados?: number;
+  fluxos_afetados?: Array<{
+    id: string;
+    nome?: string | null;
+    status_anterior?: string | null;
+    status_atual?: string | null;
+    pausado?: boolean;
+  }>;
 };
 
 type TemplateWhatsappOpcao = {
@@ -442,6 +467,24 @@ const nodeTypes = {
 };
 
 const TIPO_NO_PERGUNTA_LIVRE_IA = "pergunta_livre_ia";
+const TIPOS_NO_MIDIA = new Set([
+  "enviar_imagem",
+  "enviar_video",
+  "enviar_audio",
+]);
+const CHAVES_REFERENCIA_MIDIA_NODE = [
+  "midia_url",
+  "midia_nome",
+  "midia_id",
+  "media_url",
+  "media_nome",
+  "media_id",
+  "arquivo_url",
+  "arquivo_nome",
+  "arquivo_id",
+  "storage_path",
+  "storagePath",
+];
 const TOKENS_SAIDA_MAX_DESCRICAO_IA = 180;
 const TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS = 190;
 
@@ -636,6 +679,96 @@ function urlHttpValida(valor: unknown) {
   } catch {
     return false;
   }
+}
+
+function configuracaoNodeComoObjeto(valor: unknown): Record<string, unknown> {
+  return valor && typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as Record<string, unknown>)
+    : {};
+}
+
+function nodeEhBlocoMidia(node: Node) {
+  return TIPOS_NO_MIDIA.has(String(node.data?.tipo_no || ""));
+}
+
+function nodeUsaMidia(node: Node, midia: MidiaOpcao) {
+  if (!nodeEhBlocoMidia(node)) return false;
+
+  const config = configuracaoNodeComoObjeto(node.data?.configuracao_json);
+
+  return (
+    String(config.midia_url || "").trim() === midia.url ||
+    String(config.media_url || "").trim() === midia.url ||
+    String(config.arquivo_url || "").trim() === midia.url ||
+    String(config.midia_id || "").trim() === midia.id ||
+    String(config.media_id || "").trim() === midia.id ||
+    String(config.arquivo_id || "").trim() === midia.id
+  );
+}
+
+function limparMidiaDoNode(node: Node, midia: MidiaOpcao) {
+  if (!nodeUsaMidia(node, midia)) return node;
+
+  const configuracao = {
+    ...configuracaoNodeComoObjeto(node.data?.configuracao_json),
+  };
+
+  for (const chave of CHAVES_REFERENCIA_MIDIA_NODE) {
+    delete configuracao[chave];
+  }
+
+  configuracao.midia_removida = {
+    id: midia.id,
+    nome: midia.nome,
+    removida_em: new Date().toISOString(),
+    motivo: "midia_excluida_biblioteca",
+  };
+
+  return {
+    ...node,
+    data: {
+      ...node.data,
+      configuracao_json: configuracao,
+    },
+  };
+}
+
+function validarMidiasObrigatoriasNodes(nodesValidacao: Node[]) {
+  for (const node of nodesValidacao) {
+    if (!nodeEhBlocoMidia(node)) continue;
+
+    const config = configuracaoNodeComoObjeto(node.data?.configuracao_json);
+
+    if (!String(config.midia_url || "").trim()) {
+      return `O bloco "${node.data?.titulo}" precisa ter uma midia selecionada.`;
+    }
+  }
+
+  return "";
+}
+
+function mensagemExclusaoMidia(impacto?: ImpactoExclusaoMidia | null) {
+  const totalBlocos = Number(impacto?.total_blocos_afetados || 0);
+  const totalFluxos = Number(impacto?.total_fluxos_afetados || 0);
+  const totalPausados = Number(impacto?.total_fluxos_pausados || 0);
+
+  if (totalBlocos <= 0) {
+    return "Midia excluida definitivamente.";
+  }
+
+  const partes = [
+    `Midia excluida e removida de ${totalBlocos} bloco(s) em ${totalFluxos} fluxo(s).`,
+  ];
+
+  if (totalPausados > 0) {
+    partes.push(
+      `${totalPausados} fluxo(s) ativo(s) foram pausados ate selecionar outra midia.`
+    );
+  }
+
+  partes.push("Os blocos afetados precisam de uma nova midia antes de salvar/ativar.");
+
+  return partes.join(" ");
 }
 
 function normalizarVariavelFluxo(valor: string) {
@@ -1124,6 +1257,731 @@ function NodeCustom({ data, dragging }: any) {
   );
 }
 
+type TipoMensagemPreviaWhatsapp =
+  | "bot"
+  | "contato"
+  | "sistema"
+  | "seletor"
+  | "divisoria";
+
+type OpcaoJornadaPreviaWhatsapp = {
+  edgeId: string;
+  texto: string;
+  selecionada: boolean;
+};
+
+type MensagemPreviaWhatsapp = {
+  id: string;
+  tipo: TipoMensagemPreviaWhatsapp;
+  texto: string;
+  titulo?: string;
+  rodape?: string;
+  botoes?: string[];
+  midiaTipo?: "imagem" | "video" | "audio";
+  delayLabel?: string;
+  sourceNodeId?: string;
+  opcoesJornada?: OpcaoJornadaPreviaWhatsapp[];
+};
+
+type PreviaWhatsappFluxo = {
+  mensagens: MensagemPreviaWhatsapp[];
+  totalBlocos: number;
+  totalRotas: number;
+  truncado: boolean;
+};
+
+type EncerramentoInatividadePreviaWhatsapp = {
+  quantidade: number;
+  unidade: "minutos" | "horas";
+  mensagem: string;
+};
+
+const LIMITE_MENSAGENS_PREVIA_WHATSAPP = 48;
+
+const EXEMPLOS_VARIAVEIS_PREVIA_WHATSAPP: Record<string, string> = {
+  nome: "Ana",
+  nome_contato: "Ana",
+  nome_whatsapp: "Ana",
+  email_contato: "ana@email.com",
+  numero_contato: "(11) 99999-0000",
+  campanha: "Campanha principal",
+  origem: "Instagram",
+  status_lead: "Novo lead",
+  protocolo_atual: "PROTO-1024",
+  ultimo_protocolo: "PROTO-1008",
+  agenda_data: "12/07",
+  agenda_hora: "14:30",
+  agenda_nome: "Agenda principal",
+  agenda_data_nova: "12/07",
+  agenda_preferencia_solicitada: "14h",
+  agenda_data_sugestao_ano: "12/07/2026",
+};
+
+function textoPreviaWhatsapp(valor: unknown, fallback = "") {
+  const texto = String(valor ?? "").trim();
+  return texto || fallback;
+}
+
+function aplicarVariaveisDemoPreviaWhatsapp(texto: string) {
+  return String(texto || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, chave) => {
+    return EXEMPLOS_VARIAVEIS_PREVIA_WHATSAPP[String(chave).toLowerCase()] || match;
+  });
+}
+
+function criarMensagemPreviaWhatsapp(
+  id: string,
+  tipo: TipoMensagemPreviaWhatsapp,
+  texto: string,
+  extras?: Omit<MensagemPreviaWhatsapp, "id" | "tipo" | "texto">
+): MensagemPreviaWhatsapp {
+  return {
+    id,
+    tipo,
+    texto: aplicarVariaveisDemoPreviaWhatsapp(texto),
+    ...extras,
+  };
+}
+
+function formatarDelayPreviaWhatsapp(segundos: unknown) {
+  const totalSegundos = Number(segundos);
+
+  if (!Number.isFinite(totalSegundos) || totalSegundos <= 0) {
+    return "";
+  }
+
+  if (totalSegundos < 60) return `apos ${Math.floor(totalSegundos)}s`;
+
+  const minutos = Math.round(totalSegundos / 60);
+  if (minutos < 60) return `apos ${minutos} min`;
+
+  const horas = Math.round(minutos / 60);
+  return `apos ${horas} h`;
+}
+
+function formatarTempoAgendamentoPreviaWhatsapp(configuracao: Record<string, unknown>) {
+  const quantidade = Math.max(1, Number(configuracao.tempo_quantidade || 1));
+  const unidade = String(configuracao.tempo_unidade || "horas");
+  const unidadeSingular = unidade === "dias" ? "dia" : "hora";
+  const unidadePlural = unidade === "dias" ? "dias" : "horas";
+
+  return `${quantidade} ${quantidade === 1 ? unidadeSingular : unidadePlural}`;
+}
+
+function formatarTempoInatividadePreviaWhatsapp(
+  encerramento: EncerramentoInatividadePreviaWhatsapp
+) {
+  const quantidade = Math.max(1, Number(encerramento.quantidade || 1));
+  const unidadeSingular =
+    encerramento.unidade === "minutos" ? "minuto" : "hora";
+  const unidadePlural =
+    encerramento.unidade === "minutos" ? "minutos" : "horas";
+
+  return `${quantidade} ${quantidade === 1 ? unidadeSingular : unidadePlural}`;
+}
+
+function variaveisTemplatePreviaWhatsapp(valor: unknown) {
+  if (Array.isArray(valor)) {
+    return valor.map((item) => String(item || "").trim()).join("\n");
+  }
+
+  return String(valor || "");
+}
+
+function templatePorIdPreviaWhatsapp(
+  templates: TemplateWhatsappOpcao[],
+  templateId: unknown
+) {
+  const id = String(templateId || "");
+  if (!id) return null;
+
+  return templates.find((template) => template.id === id) || null;
+}
+
+function montarMensagemTemplatePreviaWhatsapp(
+  id: string,
+  template: TemplateWhatsappOpcao | null,
+  variaveis: unknown
+): MensagemPreviaWhatsapp {
+  const preview = montarPreviewTemplateWhatsapp(
+    template,
+    variaveisTemplatePreviaWhatsapp(variaveis)
+  );
+
+  if (!preview) {
+    return criarMensagemPreviaWhatsapp(
+      id,
+      "bot",
+      "Template WhatsApp ainda nao selecionado."
+    );
+  }
+
+  return criarMensagemPreviaWhatsapp(id, "bot", preview.corpo, {
+    titulo: preview.titulo,
+    rodape: preview.rodape,
+    botoes: preview.botoes,
+  });
+}
+
+function botoesTextoPreviaWhatsapp(valor: unknown, campoTitulo = "titulo") {
+  if (!Array.isArray(valor)) return [];
+
+  return valor
+    .map((item) => textoPreviaWhatsapp((item as Record<string, unknown>)?.[campoTitulo]))
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function mensagensDoNodePreviaWhatsapp(
+  node: Node,
+  templatesWhatsapp: TemplateWhatsappOpcao[]
+) {
+  const tipoNo = String(node.data?.tipo_no || "");
+  const configuracao = (node.data?.configuracao_json || {}) as Record<string, unknown>;
+  const delayLabel = formatarDelayPreviaWhatsapp(node.data?.delay_segundos);
+  const tituloNodeAtual = textoPreviaWhatsapp(node.data?.titulo, labelTipoNo(tipoNo));
+  const idBase = node.id;
+
+  const mensagem = textoPreviaWhatsapp(configuracao.mensagem);
+  const mensagemPadrao = (fallback: string) =>
+    textoPreviaWhatsapp(configuracao.mensagem, fallback);
+
+  if (tipoNo === "inicio") return [];
+
+  if (tipoNo === "enviar_texto") {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-texto`,
+        "bot",
+        mensagemPadrao("Digite a mensagem aqui."),
+        { delayLabel }
+      ),
+    ];
+  }
+
+  if (tipoNo === "pergunta_opcoes") {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-pergunta`,
+        "bot",
+        mensagemPadrao("Escolha uma opcao:"),
+        {
+          botoes: botoesTextoPreviaWhatsapp(configuracao.opcoes),
+          delayLabel,
+        }
+      ),
+    ];
+  }
+
+  if (tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA) {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-pergunta-ia`,
+        "bot",
+        mensagemPadrao("Como posso te ajudar?"),
+        { delayLabel }
+      ),
+    ];
+  }
+
+  if (tipoNo === "enviar_botoes") {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-botoes`,
+        "bot",
+        mensagemPadrao("Escolha uma opcao:"),
+        {
+          botoes: botoesTextoPreviaWhatsapp(configuracao.botoes),
+          delayLabel,
+        }
+      ),
+    ];
+  }
+
+  if (tipoNo === "botao_redirect") {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-redirect`,
+        "bot",
+        mensagemPadrao("Clique no botao abaixo para acessar."),
+        {
+          botoes: [textoPreviaWhatsapp(configuracao.botao_texto, "Acessar")],
+          delayLabel,
+        }
+      ),
+    ];
+  }
+
+  if (
+    tipoNo === "enviar_imagem" ||
+    tipoNo === "enviar_video" ||
+    tipoNo === "enviar_audio"
+  ) {
+    const midiaTipo =
+      tipoNo === "enviar_imagem" ? "imagem" : tipoNo === "enviar_video" ? "video" : "audio";
+    const fallback =
+      midiaTipo === "imagem"
+        ? "Imagem enviada pelo atendimento."
+        : midiaTipo === "video"
+        ? "Video enviado pelo atendimento."
+        : "Audio enviado pelo atendimento.";
+
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-midia`,
+        "bot",
+        mensagem || fallback,
+        {
+          titulo: textoPreviaWhatsapp(configuracao.midia_nome, tituloNodeAtual),
+          midiaTipo,
+          delayLabel,
+        }
+      ),
+    ];
+  }
+
+  if (tipoNo === "avaliacao") {
+    const notaMinima = Math.max(0, Number(configuracao.nota_minima ?? 1));
+    const notaMaxima = Math.max(notaMinima, Number(configuracao.nota_maxima ?? 5));
+    const notas = Array.from(
+      { length: Math.min(6, notaMaxima - notaMinima + 1) },
+      (_, index) => String(notaMinima + index)
+    );
+
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-avaliacao`,
+        "bot",
+        mensagemPadrao("De 1 a 5, como voce avalia este atendimento?"),
+        {
+          botoes: notas,
+          delayLabel,
+        }
+      ),
+    ];
+  }
+
+  if (tipoNo === "capturar_resposta") {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-captura`,
+        "bot",
+        mensagemPadrao("Me informe seu nome, por favor."),
+        { delayLabel }
+      ),
+    ];
+  }
+
+  if (tipoNo === "transferir_setor") {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-transferir`,
+        "sistema",
+        "Atendimento transferido para a equipe responsavel."
+      ),
+    ];
+  }
+
+  if (tipoNo === "encerrar") {
+    const mensagens: MensagemPreviaWhatsapp[] = [];
+
+    if (mensagem) {
+      mensagens.push(
+        criarMensagemPreviaWhatsapp(`${idBase}-encerrar-msg`, "bot", mensagem, {
+          delayLabel,
+        })
+      );
+    }
+
+    mensagens.push(
+      criarMensagemPreviaWhatsapp(`${idBase}-encerrar`, "sistema", "Fluxo encerrado.")
+    );
+
+    return mensagens;
+  }
+
+  if (tipoNo === "agendar_disparo") {
+    const template = templatePorIdPreviaWhatsapp(
+      templatesWhatsapp,
+      configuracao.template_id
+    );
+
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-agendamento-info`,
+        "sistema",
+        `Disparo agendado para daqui a ${formatarTempoAgendamentoPreviaWhatsapp(configuracao)}.`
+      ),
+      montarMensagemTemplatePreviaWhatsapp(
+        `${idBase}-template`,
+        template,
+        configuracao.variaveis
+      ),
+    ];
+  }
+
+  if (tipoNo === "agenda_buscar_agendamento") {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-agenda-busca`,
+        "bot",
+        textoPreviaWhatsapp(
+          configuracao.mensagem_encontrado || configuracao.mensagem,
+          "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}."
+        ),
+        { delayLabel }
+      ),
+    ];
+  }
+
+  if (tipoNo === "agenda_escolher_horario") {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-agenda-escolha`,
+        "bot",
+        mensagemPadrao(
+          "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira."
+        ),
+        { delayLabel }
+      ),
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-agenda-horarios`,
+        "bot",
+        textoPreviaWhatsapp(
+          configuracao.mensagem_listar_horarios,
+          "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
+        ),
+        {
+          botoes: ["14:00", "14:30", "15:00"],
+        }
+      ),
+    ];
+  }
+
+  if (
+    tipoNo === "agenda_criar_agendamento" ||
+    tipoNo === "agenda_remarcar_agendamento" ||
+    tipoNo === "agenda_cancelar_agendamento"
+  ) {
+    const mensagens: MensagemPreviaWhatsapp[] = [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-agenda-confirmacao`,
+        "bot",
+        mensagemPadrao(
+          tipoNo === "agenda_cancelar_agendamento"
+            ? "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado."
+            : tipoNo === "agenda_remarcar_agendamento"
+            ? "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}."
+            : "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}."
+        ),
+        { delayLabel }
+      ),
+    ];
+
+    if (
+      tipoNo === "agenda_criar_agendamento" &&
+      configuracao.lembrete_agendamento_ativo &&
+      configuracao.lembrete_agendamento_whatsapp
+    ) {
+      const template = templatePorIdPreviaWhatsapp(
+        templatesWhatsapp,
+        configuracao.lembrete_agendamento_template_id
+      );
+
+      mensagens.push(
+        criarMensagemPreviaWhatsapp(
+          `${idBase}-agenda-lembrete-info`,
+          "sistema",
+          "Lembrete WhatsApp programado para antes do horario."
+        ),
+        montarMensagemTemplatePreviaWhatsapp(
+          `${idBase}-agenda-lembrete-template`,
+          template,
+          configuracao.lembrete_agendamento_variaveis
+        )
+      );
+    }
+
+    return mensagens;
+  }
+
+  if (tipoNo === "interpretar_arquivo_ia") {
+    return [
+      criarMensagemPreviaWhatsapp(
+        `${idBase}-arquivo-ia`,
+        "bot",
+        mensagemPadrao("Envie o arquivo para analise."),
+        { delayLabel }
+      ),
+    ];
+  }
+
+  if (mensagem) {
+    return [
+      criarMensagemPreviaWhatsapp(`${idBase}-mensagem`, "bot", mensagem, {
+        delayLabel,
+      }),
+    ];
+  }
+
+  return [
+    criarMensagemPreviaWhatsapp(
+      `${idBase}-sistema`,
+      "sistema",
+      `${labelTipoNo(tipoNo)}: ${tituloNodeAtual}`
+    ),
+  ];
+}
+
+function condicaoPreviaWhatsapp(edge: Edge, nodeOrigem?: Node | null) {
+  const data = edge.data as
+    | {
+        condicao_json?: Record<string, unknown>;
+        rotulo?: string | null;
+        usar_ia?: boolean;
+      }
+    | undefined;
+  const condicao = data?.condicao_json || {};
+  const tipo = String(condicao.tipo || "");
+
+  if (!tipo || tipo === "sempre") return null;
+
+  if (tipo === "timeout_sem_resposta") {
+    const quantidade = Number(condicao.tempo_quantidade || 0);
+    const unidade = String(condicao.tempo_unidade || "");
+    const texto =
+      quantidade > 0 && unidade
+        ? `Sem resposta em ${quantidade} ${unidade}.`
+        : "Sem resposta do contato.";
+
+    return criarMensagemPreviaWhatsapp(`${edge.id}-timeout`, "sistema", texto);
+  }
+
+  const valor = textoPreviaWhatsapp(condicao.valor);
+  const opcao =
+    valor && nodeOrigem
+      ? opcoesRespostaDoNo(nodeOrigem).find((item) => item.valor === valor)
+      : null;
+  const texto =
+    textoPreviaWhatsapp(opcao?.titulo) ||
+    textoPreviaWhatsapp(data?.rotulo) ||
+    valor ||
+    textoPreviaWhatsapp(typeof edge.label === "string" ? edge.label : "") ||
+    "Resposta do contato";
+
+  return criarMensagemPreviaWhatsapp(`${edge.id}-resposta`, "contato", texto);
+}
+
+function rotuloOpcaoJornadaPreviaWhatsapp(
+  edge: Edge,
+  nodeOrigem: Node | null | undefined,
+  nodeDestino: Node | null | undefined,
+  index: number
+) {
+  const data = edge.data as
+    | {
+        condicao_json?: Record<string, unknown>;
+        rotulo?: string | null;
+      }
+    | undefined;
+  const condicao = data?.condicao_json || {};
+  const tipo = String(condicao.tipo || "");
+
+  if (tipo === "timeout_sem_resposta") {
+    const quantidade = Number(condicao.tempo_quantidade || 0);
+    const unidade = String(condicao.tempo_unidade || "");
+
+    return quantidade > 0 && unidade
+      ? `Sem resposta em ${quantidade} ${unidade}`
+      : "Sem resposta";
+  }
+
+  const valor = textoPreviaWhatsapp(condicao.valor);
+  const opcao =
+    valor && nodeOrigem
+      ? opcoesRespostaDoNo(nodeOrigem).find((item) => item.valor === valor)
+      : null;
+  const destino = nodeDestino ? tituloVisivelCard(nodeDestino.data) : "";
+
+  return (
+    textoPreviaWhatsapp(opcao?.titulo) ||
+    textoPreviaWhatsapp(data?.rotulo) ||
+    valor ||
+    textoPreviaWhatsapp(typeof edge.label === "string" ? edge.label : "") ||
+    destino ||
+    `Caminho ${index + 1}`
+  );
+}
+
+function ordenarNodesPreviaWhatsapp(nodes: Node[]) {
+  return [...nodes].sort((a, b) => {
+    const y = (a.position?.y || 0) - (b.position?.y || 0);
+    if (Math.abs(y) > 20) return y;
+
+    return (a.position?.x || 0) - (b.position?.x || 0);
+  });
+}
+
+function montarPreviaWhatsappFluxo(
+  nodes: Node[],
+  edges: Edge[],
+  templatesWhatsapp: TemplateWhatsappOpcao[],
+  respostasSelecionadas: Record<string, string>,
+  encerramentoInatividade?: EncerramentoInatividadePreviaWhatsapp | null
+): PreviaWhatsappFluxo {
+  const totalBlocos = nodes.filter(
+    (node) => String(node.data?.tipo_no || "") !== "inicio"
+  ).length;
+  const mensagens: MensagemPreviaWhatsapp[] = [];
+  const nodesOrdenados = ordenarNodesPreviaWhatsapp(nodes);
+  const inicio =
+    nodes.find((node) => String(node.data?.tipo_no || "") === "inicio") ||
+    nodesOrdenados[0] ||
+    null;
+  const nodesPorId = new Map(nodes.map((node) => [node.id, node]));
+  const indiceEdge = new Map(edges.map((edge, index) => [edge.id, index]));
+  const edgesPorOrigem = new Map<string, Edge[]>();
+
+  for (const edge of edges) {
+    const lista = edgesPorOrigem.get(edge.source) || [];
+    lista.push(edge);
+    edgesPorOrigem.set(edge.source, lista);
+  }
+
+  for (const [origem, lista] of edgesPorOrigem) {
+    edgesPorOrigem.set(
+      origem,
+      [...lista].sort((a, b) => {
+        const condicaoA = ((a.data as EdgeDataConexao | undefined)?.condicao_json || {})
+          .tipo;
+        const condicaoB = ((b.data as EdgeDataConexao | undefined)?.condicao_json || {})
+          .tipo;
+
+        if (condicaoA === "sempre" && condicaoB !== "sempre") return -1;
+        if (condicaoA !== "sempre" && condicaoB === "sempre") return 1;
+
+        const destinoA = nodesPorId.get(a.target);
+        const destinoB = nodesPorId.get(b.target);
+        const y = (destinoA?.position?.y || 0) - (destinoB?.position?.y || 0);
+        if (Math.abs(y) > 20) return y;
+
+        const x = (destinoA?.position?.x || 0) - (destinoB?.position?.x || 0);
+        if (Math.abs(x) > 20) return x;
+
+        return (indiceEdge.get(a.id) || 0) - (indiceEdge.get(b.id) || 0);
+      })
+    );
+  }
+
+  const visitados = new Set<string>();
+  let truncado = false;
+
+  function adicionarMensagem(mensagem: MensagemPreviaWhatsapp) {
+    if (mensagens.length >= LIMITE_MENSAGENS_PREVIA_WHATSAPP) {
+      truncado = true;
+      return;
+    }
+
+    mensagens.push(mensagem);
+  }
+
+  function caminhar(node: Node | null | undefined, viaEdge?: Edge) {
+    if (!node) return;
+
+    if (viaEdge) {
+      const origem = nodesPorId.get(viaEdge.source) || null;
+      const mensagemCondicao = condicaoPreviaWhatsapp(viaEdge, origem);
+
+      if (mensagemCondicao) {
+        adicionarMensagem(mensagemCondicao);
+      }
+    }
+
+    if (visitados.has(node.id)) {
+      adicionarMensagem(
+        criarMensagemPreviaWhatsapp(
+          `${viaEdge?.id || node.id}-retorno-loop`,
+          "sistema",
+          `Retorna para "${tituloVisivelCard(node.data)}". Esta jornada repete esse trecho ate outra resposta ser selecionada.`
+        )
+      );
+      return;
+    }
+
+    visitados.add(node.id);
+
+    for (const mensagem of mensagensDoNodePreviaWhatsapp(node, templatesWhatsapp)) {
+      adicionarMensagem(mensagem);
+    }
+
+    const saidas = edgesPorOrigem.get(node.id) || [];
+    if (saidas.length === 0) return;
+
+    const edgeSelecionada =
+      saidas.find((edge) => edge.id === respostasSelecionadas[node.id]) ||
+      saidas[0];
+    if (!edgeSelecionada) return;
+
+    if (saidas.length > 1) {
+      adicionarMensagem({
+        id: `${node.id}-seletor-jornada`,
+        tipo: "seletor",
+        texto: "Respostas para visualizar",
+        sourceNodeId: node.id,
+        opcoesJornada: saidas.map((edge, index) => {
+          const destino = nodesPorId.get(edge.target) || null;
+
+          return {
+            edgeId: edge.id,
+            texto: rotuloOpcaoJornadaPreviaWhatsapp(edge, node, destino, index),
+            selecionada: edge.id === edgeSelecionada.id,
+          };
+        }),
+      });
+    }
+
+    caminhar(nodesPorId.get(edgeSelecionada.target), edgeSelecionada);
+  }
+
+  caminhar(inicio);
+
+  if (encerramentoInatividade) {
+    const tempoInatividade =
+      formatarTempoInatividadePreviaWhatsapp(encerramentoInatividade);
+
+    adicionarMensagem({
+      id: "encerramento-inatividade-divisoria",
+      tipo: "divisoria",
+      texto: `Encerramento por inatividade - ${tempoInatividade} sem resposta`,
+    });
+
+    adicionarMensagem(
+      criarMensagemPreviaWhatsapp(
+        "encerramento-inatividade-mensagem",
+        "bot",
+        encerramentoInatividade.mensagem,
+        {
+          delayLabel: `apos ${tempoInatividade}`,
+        }
+      )
+    );
+
+    adicionarMensagem(
+      criarMensagemPreviaWhatsapp(
+        "encerramento-inatividade-fim",
+        "sistema",
+        "Fluxo encerrado por inatividade."
+      )
+    );
+  }
+
+  return {
+    mensagens,
+    totalBlocos,
+    totalRotas: edges.length,
+    truncado,
+  };
+}
+
 function configuracaoMarcada(valor: unknown) {
   return valor === true || valor === "true" || valor === 1 || valor === "1";
 }
@@ -1142,6 +2000,12 @@ function FluxosPageContent() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [assistenteFluxosAberto, setAssistenteFluxosAberto] = useState(false);
+  const [previaWhatsappRecolhida, setPreviaWhatsappRecolhida] =
+    useState(false);
+  const [respostasPreviaWhatsapp, setRespostasPreviaWhatsapp] = useState<
+    Record<string, string>
+  >({});
   const ignorarCliqueNodeAposArrasteRef = useRef(false);
 
   const [carregandoFluxos, setCarregandoFluxos] = useState(true);
@@ -2410,15 +3274,57 @@ function FluxosPageContent() {
           throw new Error(json.error || "Erro ao excluir mídia.");
         }
 
+        const impacto = (json.impacto || null) as ImpactoExclusaoMidia | null;
+        const fluxosAfetados = impacto?.fluxos_afetados || [];
+
         setMidias((atuais) => atuais.filter((item) => item.id !== midia.id));
+        setNodes((atuais) =>
+          atuais.map((node) => limparMidiaDoNode(node, midia))
+        );
 
         if (midiaUrlNode === midia.url) {
           setMidiaUrlNode("");
           setMidiaNomeNode("");
         }
 
+        if (fluxosAfetados.length > 0) {
+          setFluxos((atuais) =>
+            atuais.map((fluxo) => {
+              const fluxoAfetado = fluxosAfetados.find(
+                (item) => item.id === fluxo.id
+              );
+
+              if (!fluxoAfetado?.status_atual) return fluxo;
+
+              return {
+                ...fluxo,
+                status: fluxoAfetado.status_atual as Fluxo["status"],
+              };
+            })
+          );
+
+          setFluxoSelecionado((atual) => {
+            if (!atual) return atual;
+
+            const fluxoAfetado = fluxosAfetados.find(
+              (item) => item.id === atual.id
+            );
+
+            if (!fluxoAfetado?.status_atual) return atual;
+
+            return {
+              ...atual,
+              status: fluxoAfetado.status_atual as Fluxo["status"],
+            };
+          });
+        }
+
         setConfirmandoExclusaoMidiaId(null);
-        setSucesso("Mídia excluída definitivamente.");
+        setSucesso(
+          json.storage_removido === false && json.storage_erro
+            ? `${mensagemExclusaoMidia(impacto)} Aviso: o arquivo no Storage nao foi removido automaticamente.`
+            : mensagemExclusaoMidia(impacto)
+        );
       } catch (error: any) {
         setErro(error?.message || "Erro ao excluir mídia.");
       } finally {
@@ -2568,6 +3474,57 @@ function FluxosPageContent() {
     };
   }
 
+  function normalizarStatusFluxoAssistente(
+    status: string
+  ): Fluxo["status"] {
+    if (
+      status === "ativo" ||
+      status === "pausado" ||
+      status === "arquivado"
+    ) {
+      return status;
+    }
+
+    return "rascunho";
+  }
+
+  function normalizarFluxoCriadoAssistente(
+    fluxoCriado: AssistenteFluxosFluxoCriado
+  ): Fluxo {
+    return {
+      id: fluxoCriado.id,
+      nome: fluxoCriado.nome,
+      descricao: fluxoCriado.descricao || null,
+      status: normalizarStatusFluxoAssistente(fluxoCriado.status),
+      canal: fluxoCriado.canal || "whatsapp",
+      fluxo_padrao: fluxoCriado.fluxo_padrao === true,
+      created_at: fluxoCriado.created_at,
+      configuracao_json: (fluxoCriado.configuracao_json ||
+        {}) as Fluxo["configuracao_json"],
+    };
+  }
+
+  function abrirFluxoCriadoPeloAssistente(
+    fluxoCriado: AssistenteFluxosFluxoCriado
+  ) {
+    const fluxoNormalizado = normalizarFluxoCriadoAssistente(fluxoCriado);
+
+    setFluxos((atuais) => [
+      fluxoNormalizado,
+      ...atuais.filter((item) => item.id !== fluxoNormalizado.id),
+    ]);
+    setFluxoSelecionado(fluxoNormalizado);
+    setEditandoNodeId(null);
+    setEditandoEdgeId(null);
+    setAssistenteFluxosAberto(false);
+    setMenuFluxoAbertoId(null);
+    setErro("");
+    setSucesso(
+      `Fluxo "${fluxoNormalizado.nome}" criado com IA e salvo como rascunho.`
+    );
+    router.push(`/fluxos?fluxo=${encodeURIComponent(fluxoNormalizado.id)}`);
+  }
+
   useEffect(() => {
     carregarFluxos();
     carregarSetores();
@@ -2579,6 +3536,7 @@ function FluxosPageContent() {
 
   useEffect(() => {
     if (fluxoSelecionado?.id) {
+      setRespostasPreviaWhatsapp({});
       carregarEstrutura(fluxoSelecionado.id);
     }
   }, [fluxoSelecionado?.id]);
@@ -4676,6 +5634,12 @@ async function importarFluxoCompartilhado() {
 
       const nodesBase = params?.nodesParaSalvar || nodes;
       const edgesBase = params?.edgesParaSalvar || edges;
+      const erroMidiaObrigatoria = validarMidiasObrigatoriasNodes(nodesBase);
+
+      if (erroMidiaObrigatoria) {
+        setErro(erroMidiaObrigatoria);
+        return;
+      }
 
       const nosParaSalvar = nodesBase.map((node) => {
       const tipoNo = String(node.data?.tipo_no || "");
@@ -5721,6 +6685,306 @@ const nodesRenderizados = useMemo(
   [nodes, edges]
 );
 
+const nodesParaPreviaWhatsapp = useMemo(() => {
+  if (!editandoNodeId || !nodeEditado) return nodes;
+
+  return nodes.map((node) => {
+    if (node.id !== editandoNodeId) return node;
+
+    const tipoAtual = String(node.data?.tipo_no || "enviar_texto");
+    const tipoFinal = tipoAtual === "inicio" ? "inicio" : tipoNodeEdicao || tipoAtual;
+    const configuracao = {
+      ...((node.data?.configuracao_json || {}) as Record<string, unknown>),
+    };
+    const tiposComMensagem = [
+      "enviar_texto",
+      "pergunta_opcoes",
+      TIPO_NO_PERGUNTA_LIVRE_IA,
+      "enviar_botoes",
+      "botao_redirect",
+      "enviar_imagem",
+      "enviar_video",
+      "enviar_audio",
+      "transferir_setor",
+      "encerrar",
+      "avaliacao",
+      "capturar_resposta",
+      "agenda_buscar_agendamento",
+      "agenda_escolher_horario",
+      "agenda_criar_agendamento",
+      "agenda_remarcar_agendamento",
+      "agenda_cancelar_agendamento",
+      "interpretar_arquivo_ia",
+    ];
+
+    if (tiposComMensagem.includes(tipoFinal)) {
+      configuracao.mensagem = mensagemNode;
+    }
+
+    if (tipoFinal === "pergunta_opcoes") {
+      configuracao.opcoes = opcoesNode;
+    }
+
+    if (tipoFinal === "enviar_botoes") {
+      configuracao.botoes = botoesNode;
+    }
+
+    if (tipoFinal === "botao_redirect") {
+      configuracao.botao_texto = redirectBotaoTextoNode.trim() || "Acessar";
+      configuracao.url = redirectUrlNode.trim();
+    }
+
+    if (
+      tipoFinal === "enviar_imagem" ||
+      tipoFinal === "enviar_video" ||
+      tipoFinal === "enviar_audio"
+    ) {
+      configuracao.midia_url = midiaUrlNode;
+      configuracao.midia_nome = midiaNomeNode;
+    }
+
+    if (tipoFinal === "avaliacao") {
+      configuracao.solicitar_comentario = solicitarComentarioNode;
+      configuracao.mensagem_comentario = mensagemComentarioNode;
+      configuracao.nota_minima = Number(notaMinimaNode || 1);
+      configuracao.nota_maxima = Number(notaMaximaNode || 5);
+    }
+
+    if (tipoFinal === "capturar_resposta") {
+      configuracao.variavel = capturaVariavelNode.trim().toLowerCase() || "resposta";
+      configuracao.tipo_captura = capturaTipoNode || "texto";
+    }
+
+    if (tipoFinal === "agendar_disparo") {
+      configuracao.template_id = agendarDisparoTemplateIdNode;
+      configuracao.tempo_quantidade = Math.max(
+        1,
+        Number(agendarDisparoQuantidadeNode || 1)
+      );
+      configuracao.tempo_unidade = agendarDisparoUnidadeNode;
+      configuracao.variaveis = agendarDisparoVariaveisNode
+        .split("\n")
+        .map((item) => normalizarVariavelFluxo(item))
+        .filter(Boolean);
+    }
+
+    if (tipoFinal === "agenda_buscar_agendamento") {
+      configuracao.mensagem_encontrado =
+        mensagemNode.trim() ||
+        "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.";
+      configuracao.mensagem_listar_agendamentos =
+        agendaMensagemListarAgendamentosNode.trim();
+      configuracao.mensagem_nao_encontrado =
+        agendaMensagemSemHorariosNode.trim();
+    }
+
+    if (tipoFinal === "agenda_escolher_horario") {
+      configuracao.mensagem =
+        mensagemNode.trim() ||
+        "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.";
+      configuracao.mensagem_listar_horarios =
+        agendaMensagemListarHorariosNode.trim();
+      configuracao.mensagem_preferencia_indisponivel =
+        agendaMensagemPreferenciaIndisponivelNode.trim();
+      configuracao.mensagem_data_invalida =
+        agendaMensagemDataInvalidaNode.trim();
+      configuracao.mensagem_sem_horarios =
+        agendaMensagemSemHorariosNode.trim();
+      configuracao.mensagem_sem_expediente =
+        agendaMensagemSemExpedienteNode.trim();
+    }
+
+    if (
+      tipoFinal === "agenda_criar_agendamento" ||
+      tipoFinal === "agenda_remarcar_agendamento" ||
+      tipoFinal === "agenda_cancelar_agendamento"
+    ) {
+      configuracao.mensagem = mensagemNode;
+      configuracao.mensagem_conflito = agendaMensagemConflitoNode.trim();
+      configuracao.lembrete_agendamento_ativo = agendaLembreteAtivoNode;
+      configuracao.lembrete_agendamento_whatsapp = agendaLembreteWhatsappNode;
+      configuracao.lembrete_agendamento_template_id =
+        agendaLembreteTemplateIdNode;
+      configuracao.lembrete_agendamento_variaveis =
+        agendaLembreteVariaveisNode
+          .split("\n")
+          .map((item) => normalizarVariavelFluxo(item))
+          .filter(Boolean);
+    }
+
+    if (tipoFinal === "interpretar_arquivo_ia") {
+      configuracao.mensagem_erro = arquivoMensagemErroNode.trim();
+    }
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        tipo_no: tipoFinal,
+        titulo: tituloNode.trim() || tituloPadraoTipoNo(tipoFinal),
+        configuracao_json: configuracao,
+        delay_segundos:
+          tipoFinal === "inicio" ? null : normalizarDelaySegundos(delayNode),
+      },
+    };
+  });
+}, [
+  nodes,
+  editandoNodeId,
+  nodeEditado,
+  tipoNodeEdicao,
+  tituloNode,
+  mensagemNode,
+  delayNode,
+  opcoesNode,
+  botoesNode,
+  redirectBotaoTextoNode,
+  redirectUrlNode,
+  midiaUrlNode,
+  midiaNomeNode,
+  solicitarComentarioNode,
+  mensagemComentarioNode,
+  notaMinimaNode,
+  notaMaximaNode,
+  capturaVariavelNode,
+  capturaTipoNode,
+  agendarDisparoTemplateIdNode,
+  agendarDisparoQuantidadeNode,
+  agendarDisparoUnidadeNode,
+  agendarDisparoVariaveisNode,
+  agendaMensagemListarAgendamentosNode,
+  agendaMensagemSemHorariosNode,
+  agendaMensagemListarHorariosNode,
+  agendaMensagemPreferenciaIndisponivelNode,
+  agendaMensagemDataInvalidaNode,
+  agendaMensagemSemExpedienteNode,
+  agendaMensagemConflitoNode,
+  agendaLembreteAtivoNode,
+  agendaLembreteWhatsappNode,
+  agendaLembreteTemplateIdNode,
+  agendaLembreteVariaveisNode,
+  arquivoMensagemErroNode,
+]);
+
+const edgesParaPreviaWhatsapp = useMemo(() => {
+  if (!editandoEdgeId || !edgeEditada) return edges;
+
+  return edges.map((edge) => {
+    if (edge.id !== editandoEdgeId) return edge;
+
+    const ehSempreSeguir = tipoCondicaoConexao === "sempre";
+    const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
+    const usarIaFinal = usarIaConexao && !ehSempreSeguir && !ehTimeout;
+    const labelBase = ehTimeout
+      ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
+      : rotuloConexao || valorCondicao || "Condicao";
+    let condicaoJson: Record<string, unknown> = {};
+
+    if (ehSempreSeguir) {
+      condicaoJson = { tipo: "sempre" };
+    } else if (ehTimeout) {
+      const quantidade = Math.max(1, Number(timeoutQuantidade || 1));
+      const multiplicador = timeoutUnidade === "horas" ? 3600 : 60;
+
+      condicaoJson = {
+        tipo: "timeout_sem_resposta",
+        timeout_segundos: quantidade * multiplicador,
+        tempo_quantidade: quantidade,
+        tempo_unidade: timeoutUnidade,
+        status_envio: statusEnvioTimeout,
+      };
+    } else {
+      condicaoJson = {
+        tipo: tipoCondicaoConexao,
+      };
+
+      if (valorCondicao) {
+        condicaoJson.valor = valorCondicao;
+      }
+    }
+
+    return {
+      ...edge,
+      label: ehSempreSeguir ? "" : usarIaFinal ? `✨ ${labelBase}` : labelBase,
+      data: {
+        ...(edge.data || {}),
+        rotulo: ehSempreSeguir
+          ? "Sempre seguir"
+          : ehTimeout
+          ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
+          : rotuloConexao,
+        condicao_json: condicaoJson,
+        usar_ia: usarIaFinal,
+        descricao_ia: descricaoIaConexao.trim(),
+      },
+    };
+  });
+}, [
+  edges,
+  editandoEdgeId,
+  edgeEditada,
+  tipoCondicaoConexao,
+  usarIaConexao,
+  timeoutQuantidade,
+  timeoutUnidade,
+  statusEnvioTimeout,
+  rotuloConexao,
+  valorCondicao,
+  descricaoIaConexao,
+]);
+
+const encerramentoInatividadePrevia = useMemo<EncerramentoInatividadePreviaWhatsapp | null>(() => {
+  if (!fluxoSelecionado) return null;
+
+  const configuracaoSalva = obterConfiguracaoEncerramentoInatividade(
+    fluxoSelecionado.configuracao_json
+  );
+
+  if (editandoFluxo && fluxoEmEdicao?.id === fluxoSelecionado.id) {
+    const quantidadeEditada = Number(encerrarInatividadeQuantidade || 0);
+
+    return {
+      quantidade: Number.isFinite(quantidadeEditada) && quantidadeEditada > 0
+        ? quantidadeEditada
+        : configuracaoSalva.quantidade,
+      unidade: encerrarInatividadeUnidade,
+      mensagem:
+        encerrarInatividadeMensagem.trim() || configuracaoSalva.mensagem,
+    };
+  }
+
+  return {
+    quantidade: configuracaoSalva.quantidade,
+    unidade: configuracaoSalva.unidade,
+    mensagem: configuracaoSalva.mensagem,
+  };
+}, [
+  fluxoSelecionado,
+  editandoFluxo,
+  fluxoEmEdicao?.id,
+  encerrarInatividadeQuantidade,
+  encerrarInatividadeUnidade,
+  encerrarInatividadeMensagem,
+]);
+
+const previaWhatsappFluxo = useMemo(
+  () =>
+    montarPreviaWhatsappFluxo(
+      nodesParaPreviaWhatsapp,
+      edgesParaPreviaWhatsapp,
+      templatesWhatsapp,
+      respostasPreviaWhatsapp,
+      encerramentoInatividadePrevia
+    ),
+  [
+    nodesParaPreviaWhatsapp,
+    edgesParaPreviaWhatsapp,
+    templatesWhatsapp,
+    respostasPreviaWhatsapp,
+    encerramentoInatividadePrevia,
+  ]
+);
+
 function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
   const rect = elemento.getBoundingClientRect();
   const larguraTooltip = 280;
@@ -5985,6 +7249,15 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 </>
               ) : (
               <>
+                <button
+                  type="button"
+                  className={`${styles.secondaryButton} ${styles.aiHeaderButton}`}
+                  onClick={() => setAssistenteFluxosAberto(true)}
+                >
+                  <Sparkles size={16} />
+                  Criar com IA
+                </button>
+
                 <button
                   type="button"
                   className={styles.secondaryButton}
@@ -6399,6 +7672,168 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               </ReactFlow>
             )}
           </div>
+
+          {fluxoSelecionado && !previaWhatsappRecolhida && (
+            <aside className={styles.whatsappFlowPreviewPanel}>
+              <div className={styles.whatsappFlowPhone}>
+                <div className={styles.whatsappFlowPhoneHeader}>
+                  <div className={styles.whatsappFlowAvatar}>
+                    <MessageCircle size={16} />
+                  </div>
+
+                  <div className={styles.whatsappFlowPhoneContact}>
+                    <strong>{fluxoSelecionado.nome}</strong>
+                    <span>online</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={styles.whatsappFlowPhoneToggle}
+                    onClick={() => setPreviaWhatsappRecolhida(true)}
+                    title="Recolher previa"
+                    aria-label="Recolher previa do WhatsApp"
+                    aria-expanded="true"
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+
+                <div className={styles.whatsappFlowChat}>
+                  {previaWhatsappFluxo.mensagens.length === 0 ? (
+                    <div className={styles.whatsappFlowEmpty}>
+                      Nenhuma mensagem visivel neste fluxo.
+                    </div>
+                  ) : (
+                    previaWhatsappFluxo.mensagens.map((mensagem) =>
+                      mensagem.tipo === "divisoria" ? (
+                        <div
+                          key={mensagem.id}
+                          className={styles.whatsappFlowDivider}
+                        >
+                          <span>{mensagem.texto}</span>
+                        </div>
+                      ) : mensagem.tipo === "seletor" ? (
+                        <div
+                          key={mensagem.id}
+                          className={styles.whatsappFlowJourneySelector}
+                        >
+                          <span>{mensagem.texto}</span>
+
+                          <div className={styles.whatsappFlowJourneyOptions}>
+                            {(mensagem.opcoesJornada || []).map((opcao) => (
+                              <button
+                                key={opcao.edgeId}
+                                type="button"
+                                className={
+                                  opcao.selecionada
+                                    ? styles.whatsappFlowJourneyOptionActive
+                                    : styles.whatsappFlowJourneyOption
+                                }
+                                onClick={() => {
+                                  if (!mensagem.sourceNodeId) return;
+
+                                  setRespostasPreviaWhatsapp((atuais) => ({
+                                    ...atuais,
+                                    [mensagem.sourceNodeId!]: opcao.edgeId,
+                                  }));
+                                }}
+                              >
+                                {opcao.texto}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : mensagem.tipo === "sistema" ? (
+                        <div
+                          key={mensagem.id}
+                          className={styles.whatsappFlowSystem}
+                        >
+                          {mensagem.texto}
+                        </div>
+                      ) : (
+                        <div
+                          key={mensagem.id}
+                          className={`${styles.whatsappFlowBubbleRow} ${
+                            mensagem.tipo === "contato"
+                              ? styles.whatsappFlowBubbleRowContact
+                              : ""
+                          }`}
+                        >
+                          <div
+                            className={`${styles.whatsappFlowBubble} ${
+                              mensagem.tipo === "contato"
+                                ? styles.whatsappFlowBubbleContact
+                                : styles.whatsappFlowBubbleBot
+                            }`}
+                          >
+                            {mensagem.delayLabel && (
+                              <span className={styles.whatsappFlowDelay}>
+                                {mensagem.delayLabel}
+                              </span>
+                            )}
+
+                            {mensagem.midiaTipo && (
+                              <div className={styles.whatsappFlowMedia}>
+                                <span>{mensagem.midiaTipo}</span>
+                                {mensagem.titulo && <strong>{mensagem.titulo}</strong>}
+                              </div>
+                            )}
+
+                            {mensagem.titulo && !mensagem.midiaTipo && (
+                              <strong className={styles.whatsappFlowBubbleTitle}>
+                                {mensagem.titulo}
+                              </strong>
+                            )}
+
+                            <p>{mensagem.texto}</p>
+
+                            {mensagem.rodape && (
+                              <span className={styles.whatsappFlowFooter}>
+                                {mensagem.rodape}
+                              </span>
+                            )}
+
+                            {mensagem.botoes && mensagem.botoes.length > 0 && (
+                              <div className={styles.whatsappFlowButtons}>
+                                {mensagem.botoes.map((botao, index) => (
+                                  <span key={`${mensagem.id}-${botao}-${index}`}>
+                                    {botao}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <span className={styles.whatsappFlowTime}>09:41</span>
+                          </div>
+                        </div>
+                      )
+                    )
+                  )}
+
+                  {previaWhatsappFluxo.truncado && (
+                    <div className={styles.whatsappFlowSystem}>
+                      Previa interrompida pelo limite de tamanho desta jornada.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </aside>
+          )}
+
+          {fluxoSelecionado && previaWhatsappRecolhida && (
+            <button
+              type="button"
+              className={styles.whatsappFlowPreviewCollapsed}
+              onClick={() => setPreviaWhatsappRecolhida(false)}
+              title="Expandir previa"
+              aria-label="Expandir previa do WhatsApp"
+              aria-expanded="false"
+            >
+              <MessageCircle size={17} />
+              <span>Previa</span>
+              <ChevronLeft size={16} />
+            </button>
+          )}
 
 
           {(nodeEditado || edgeEditada) && (
@@ -10469,6 +11904,24 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               </div>
             </div>
           </div>
+        )}
+
+        {assistenteFluxosAberto && (
+          <AssistenteFluxosPanel
+            fluxoSelecionado={
+              fluxoSelecionado
+                ? {
+                    id: fluxoSelecionado.id,
+                    nome: fluxoSelecionado.nome,
+                    status: fluxoSelecionado.status,
+                  }
+                : null
+            }
+            nodes={nodes}
+            edges={edges}
+            onFechar={() => setAssistenteFluxosAberto(false)}
+            onFluxoCriado={abrirFluxoCriadoPeloAssistente}
+          />
         )}
 
     </main>

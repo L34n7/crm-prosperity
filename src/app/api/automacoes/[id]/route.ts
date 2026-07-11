@@ -7,6 +7,11 @@ import {
 } from "@/lib/auditoria/logs";
 
 const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; // 82800 segundos = 23 horas
+const TIPOS_NO_MIDIA = new Set([
+  "enviar_imagem",
+  "enviar_video",
+  "enviar_audio",
+]);
 
 function normalizarDelaySegundosApi(valor: unknown) {
   if (valor === null || valor === undefined || valor === "") {
@@ -151,6 +156,28 @@ function listarNosAlterados(
         : { id, antes, depois };
     })
     .filter((item): item is AlteracaoNoAuditoria => item !== null);
+}
+
+function validarMidiasObrigatoriasNos(nos: Array<Record<string, unknown>>) {
+  for (const no of nos) {
+    const tipoNo = String(no?.tipo_no || "").trim();
+
+    if (!TIPOS_NO_MIDIA.has(tipoNo)) continue;
+
+    const configuracao: Record<string, unknown> =
+      no?.configuracao_json &&
+      typeof no.configuracao_json === "object" &&
+      !Array.isArray(no.configuracao_json)
+        ? (no.configuracao_json as Record<string, unknown>)
+        : {};
+
+    if (!String(configuracao.midia_url || "").trim()) {
+      const titulo = String(no?.titulo || "Bloco de midia").trim();
+      return `O bloco "${titulo}" precisa ter uma midia selecionada.`;
+    }
+  }
+
+  return "";
 }
 
 export async function GET(
@@ -304,6 +331,15 @@ export async function PUT(
       if (tipoNo !== "inicio") {
         normalizarDelaySegundosApi(no?.delay_segundos);
       }
+    }
+
+    const erroMidiaObrigatoria = validarMidiasObrigatoriasNos(nos);
+
+    if (erroMidiaObrigatoria) {
+      return NextResponse.json(
+        { ok: false, error: erroMidiaObrigatoria },
+        { status: 400 }
+      );
     }
 
     const agora = new Date().toISOString();

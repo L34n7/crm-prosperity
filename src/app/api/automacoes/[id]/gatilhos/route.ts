@@ -17,6 +17,17 @@ type RouteParams = {
 const CONSTRAINT_PALAVRA_CHAVE_UNICA =
   "automacao_gatilhos_empresa_palavra_chave_unique";
 
+type AtualizacaoGatilho = {
+  updated_at: string;
+  valor?: string;
+  condicao?: string;
+  ativo?: boolean;
+};
+
+function obterMensagemErro(error: unknown, fallback = "Erro interno.") {
+  return error instanceof Error ? error.message : fallback;
+}
+
 function erroDePalavraChaveDuplicada(error: unknown) {
   const erro =
     error && typeof error === "object"
@@ -99,6 +110,59 @@ function respostaPalavraChaveDuplicada(params: {
   );
 }
 
+function respostaUltimoGatilhoAtivo() {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "ULTIMO_GATILHO_ATIVO",
+      error:
+        "Fluxos ativos que nao sao padrao precisam manter pelo menos um gatilho ativo.",
+    },
+    { status: 400 }
+  );
+}
+
+async function removerGatilhoDeixariaFluxoAtivoSemGatilho(params: {
+  empresaId: string;
+  fluxoId: string;
+  gatilhoId: string;
+}) {
+  const { data: fluxo, error: fluxoError } = await supabaseAdmin
+    .from("automacao_fluxos")
+    .select("id, status, fluxo_padrao")
+    .eq("id", params.fluxoId)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  if (fluxoError) {
+    throw new Error(`Erro ao validar fluxo: ${fluxoError.message}`);
+  }
+
+  if (
+    !fluxo ||
+    String(fluxo.status || "") !== "ativo" ||
+    fluxo.fluxo_padrao === true
+  ) {
+    return false;
+  }
+
+  const { data: outrosGatilhosAtivos, error: gatilhosError } =
+    await supabaseAdmin
+      .from("automacao_gatilhos")
+      .select("id")
+      .eq("empresa_id", params.empresaId)
+      .eq("fluxo_id", params.fluxoId)
+      .eq("ativo", true)
+      .neq("id", params.gatilhoId)
+      .limit(1);
+
+  if (gatilhosError) {
+    throw new Error(`Erro ao validar gatilhos: ${gatilhosError.message}`);
+  }
+
+  return (outrosGatilhosAtivos || []).length === 0;
+}
+
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const { id: fluxoId } = await params;
@@ -153,9 +217,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       ok: true,
       gatilhos: data || [],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      { ok: false, error: obterMensagemErro(error) },
       { status: 500 }
     );
   }
@@ -295,9 +359,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       ok: true,
       gatilho: data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      { ok: false, error: obterMensagemErro(error) },
       { status: 500 }
     );
   }
@@ -361,7 +425,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const atualizacao: Record<string, any> = {
+    const atualizacao: AtualizacaoGatilho = {
       updated_at: new Date().toISOString(),
     };
 
@@ -415,6 +479,18 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       }
     }
 
+    if (
+      atualizacao.ativo === false &&
+      gatilhoAntes.ativo === true &&
+      (await removerGatilhoDeixariaFluxoAtivoSemGatilho({
+        empresaId: usuario.empresa_id,
+        fluxoId,
+        gatilhoId,
+      }))
+    ) {
+      return respostaUltimoGatilhoAtivo();
+    }
+
     const { data, error } = await supabaseAdmin
       .from("automacao_gatilhos")
       .update(atualizacao)
@@ -463,9 +539,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       ok: true,
       gatilho: data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      { ok: false, error: obterMensagemErro(error) },
       { status: 500 }
     );
   }
@@ -512,6 +588,17 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       .eq("empresa_id", usuario.empresa_id)
       .maybeSingle();
 
+    if (
+      gatilhoAntes?.ativo === true &&
+      (await removerGatilhoDeixariaFluxoAtivoSemGatilho({
+        empresaId: usuario.empresa_id,
+        fluxoId,
+        gatilhoId,
+      }))
+    ) {
+      return respostaUltimoGatilhoAtivo();
+    }
+
     const { error } = await supabaseAdmin
       .from("automacao_gatilhos")
       .delete()
@@ -544,9 +631,9 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       ok: true,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      { ok: false, error: obterMensagemErro(error) },
       { status: 500 }
     );
   }

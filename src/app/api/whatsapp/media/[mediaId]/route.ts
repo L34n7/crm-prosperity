@@ -53,6 +53,8 @@ async function buscarAccessTokenDaMidia(mediaId: string) {
     .from("mensagens")
     .select("id, conversa_id, metadata_json")
     .filter("metadata_json->>media_id", "eq", mediaId)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (mensagemError) {

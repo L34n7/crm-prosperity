@@ -4,6 +4,215 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const BUCKET_MIDIAS = "midias";
 const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 100 * 1024 * 1024; // 100 MB
+const TIPOS_NO_MIDIA = ["enviar_imagem", "enviar_video", "enviar_audio"];
+const CHAVES_REFERENCIA_MIDIA = [
+  "midia_url",
+  "midia_nome",
+  "midia_id",
+  "media_url",
+  "media_nome",
+  "media_id",
+  "arquivo_url",
+  "arquivo_nome",
+  "arquivo_id",
+  "storage_path",
+  "storagePath",
+];
+
+type MidiaParaRemocaoFluxos = {
+  id: string;
+  nome: string | null;
+  url: string | null;
+  storage_path: string | null;
+};
+
+function configuracaoComoObjeto(valor: unknown): Record<string, unknown> {
+  return valor && typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as Record<string, unknown>)
+    : {};
+}
+
+function textoNormalizado(valor: unknown) {
+  return String(valor || "").trim();
+}
+
+function configuracaoUsaMidia(
+  configuracao: unknown,
+  midia: MidiaParaRemocaoFluxos
+) {
+  const config = configuracaoComoObjeto(configuracao);
+  const ids = new Set([midia.id].filter(Boolean));
+  const urls = new Set([midia.url].filter(Boolean));
+  const storagePaths = new Set([midia.storage_path].filter(Boolean));
+
+  return (
+    ids.has(textoNormalizado(config.midia_id)) ||
+    ids.has(textoNormalizado(config.media_id)) ||
+    ids.has(textoNormalizado(config.arquivo_id)) ||
+    urls.has(textoNormalizado(config.midia_url)) ||
+    urls.has(textoNormalizado(config.media_url)) ||
+    urls.has(textoNormalizado(config.arquivo_url)) ||
+    storagePaths.has(textoNormalizado(config.storage_path)) ||
+    storagePaths.has(textoNormalizado(config.storagePath))
+  );
+}
+
+function removerCamposMidiaConfiguracao(
+  configuracao: unknown,
+  midia: MidiaParaRemocaoFluxos,
+  removidaEm: string
+) {
+  const config = {
+    ...configuracaoComoObjeto(configuracao),
+  };
+
+  for (const chave of CHAVES_REFERENCIA_MIDIA) {
+    delete config[chave];
+  }
+
+  config.midia_removida = {
+    id: midia.id,
+    nome: midia.nome,
+    removida_em: removidaEm,
+    motivo: "midia_excluida_biblioteca",
+  };
+
+  return config;
+}
+
+async function removerMidiaDosFluxos(params: {
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>;
+  empresaId: string;
+  usuarioId: string;
+  midia: MidiaParaRemocaoFluxos;
+}) {
+  const { supabaseAdmin, empresaId, usuarioId, midia } = params;
+  const removidaEm = new Date().toISOString();
+
+  const { data: nosMidia, error: nosError } = await supabaseAdmin
+    .from("automacao_nos")
+    .select("id, fluxo_id, titulo, tipo_no, configuracao_json")
+    .eq("empresa_id", empresaId)
+    .eq("ativo", true)
+    .in("tipo_no", TIPOS_NO_MIDIA);
+
+  if (nosError) {
+    throw new Error(
+      `Erro ao buscar blocos que usam a midia: ${nosError.message}`
+    );
+  }
+
+  const nosAfetados = (nosMidia || []).filter((no) =>
+    configuracaoUsaMidia(no.configuracao_json, midia)
+  );
+
+  if (nosAfetados.length === 0) {
+    return {
+      total_blocos_afetados: 0,
+      total_fluxos_afetados: 0,
+      total_fluxos_pausados: 0,
+      blocos_afetados: [],
+      fluxos_afetados: [],
+      fluxos_pausados: [],
+    };
+  }
+
+  const fluxoIds = Array.from(
+    new Set(nosAfetados.map((no) => String(no.fluxo_id)).filter(Boolean))
+  );
+
+  const { data: fluxos, error: fluxosError } =
+    fluxoIds.length > 0
+      ? await supabaseAdmin
+          .from("automacao_fluxos")
+          .select("id, nome, status")
+          .eq("empresa_id", empresaId)
+          .in("id", fluxoIds)
+      : { data: [], error: null };
+
+  if (fluxosError) {
+    throw new Error(
+      `Erro ao buscar fluxos afetados pela midia: ${fluxosError.message}`
+    );
+  }
+
+  const fluxosPorId = new Map(
+    (fluxos || []).map((fluxo) => [String(fluxo.id), fluxo])
+  );
+
+  for (const no of nosAfetados) {
+    const { error: updateNoError } = await supabaseAdmin
+      .from("automacao_nos")
+      .update({
+        configuracao_json: removerCamposMidiaConfiguracao(
+          no.configuracao_json,
+          midia,
+          removidaEm
+        ),
+        updated_at: removidaEm,
+      })
+      .eq("id", no.id)
+      .eq("empresa_id", empresaId);
+
+    if (updateNoError) {
+      throw new Error(
+        `Erro ao remover midia do bloco ${no.titulo || no.id}: ${updateNoError.message}`
+      );
+    }
+  }
+
+  const fluxoIdsPausar = (fluxos || [])
+    .filter((fluxo) => String(fluxo.status || "") === "ativo")
+    .map((fluxo) => String(fluxo.id));
+
+  if (fluxoIdsPausar.length > 0) {
+    const { error: pausarError } = await supabaseAdmin
+      .from("automacao_fluxos")
+      .update({
+        status: "pausado",
+        updated_at: removidaEm,
+        atualizado_por: usuarioId,
+      })
+      .eq("empresa_id", empresaId)
+      .in("id", fluxoIdsPausar);
+
+    if (pausarError) {
+      throw new Error(
+        `Erro ao pausar fluxos afetados pela midia: ${pausarError.message}`
+      );
+    }
+  }
+
+  const fluxoIdsPausados = new Set(fluxoIdsPausar);
+  const fluxosAfetados = fluxoIds.map((fluxoId) => {
+    const fluxo = fluxosPorId.get(fluxoId);
+    const statusAnterior = String(fluxo?.status || "");
+
+    return {
+      id: fluxoId,
+      nome: fluxo?.nome || null,
+      status_anterior: statusAnterior || null,
+      status_atual: fluxoIdsPausados.has(fluxoId)
+        ? "pausado"
+        : statusAnterior || null,
+      pausado: fluxoIdsPausados.has(fluxoId),
+    };
+  });
+
+  return {
+    total_blocos_afetados: nosAfetados.length,
+    total_fluxos_afetados: fluxoIds.length,
+    total_fluxos_pausados: fluxoIdsPausar.length,
+    blocos_afetados: nosAfetados.map((no) => ({
+      id: no.id,
+      fluxo_id: no.fluxo_id,
+      titulo: no.titulo,
+      tipo_no: no.tipo_no,
+    })),
+    fluxos_afetados: fluxosAfetados,
+    fluxos_pausados: fluxosAfetados.filter((fluxo) => fluxo.pausado),
+  };
+}
 
 async function obterContextoUsuario() {
   const supabase = await createClient();
@@ -153,15 +362,12 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    if (midia.storage_path) {
-      const { error: storageError } = await contexto.supabaseAdmin.storage
-        .from(BUCKET_MIDIAS)
-        .remove([midia.storage_path]);
-
-      if (storageError) {
-        throw storageError;
-      }
-    }
+    const impactoFluxos = await removerMidiaDosFluxos({
+      supabaseAdmin: contexto.supabaseAdmin,
+      empresaId: contexto.usuarioSistema.empresa_id,
+      usuarioId: contexto.usuarioSistema.id,
+      midia,
+    });
 
     const { error: deleteError } = await contexto.supabaseAdmin
       .from("midias")
@@ -173,9 +379,34 @@ export async function DELETE(req: NextRequest) {
       throw deleteError;
     }
 
+    let storageRemovido = true;
+    let storageErro: string | null = null;
+
+    if (midia.storage_path) {
+      const { error: storageError } = await contexto.supabaseAdmin.storage
+        .from(BUCKET_MIDIAS)
+        .remove([midia.storage_path]);
+
+      if (storageError) {
+        storageRemovido = false;
+        storageErro = storageError.message;
+        console.error("[MIDIAS] Erro ao remover arquivo do Storage:", {
+          midia_id: midia.id,
+          storage_path: midia.storage_path,
+          error: storageError,
+        });
+      }
+    }
+
     return NextResponse.json({
       ok: true,
-      message: "Mídia excluída definitivamente.",
+      message:
+        impactoFluxos.total_blocos_afetados > 0
+          ? "Midia excluida e removida dos fluxos afetados."
+          : "Mídia excluída definitivamente.",
+      impacto: impactoFluxos,
+      storage_removido: storageRemovido,
+      storage_erro: storageErro,
     });
   } catch (error: any) {
     return NextResponse.json(

@@ -25,6 +25,13 @@ type GatilhoNovoFluxo = {
   ativo: boolean;
 };
 
+type IntegracaoWhatsappMetaRow = {
+  status?: string | null;
+  phone_number_status?: string | null;
+  onboarding_erro?: string | null;
+  config_json?: unknown;
+};
+
 function obterMensagemErro(error: unknown, fallback = "Erro interno.") {
   return error instanceof Error ? error.message : fallback;
 }
@@ -157,6 +164,37 @@ function respostaAssinaturaBloqueada() {
   );
 }
 
+function respostaFluxoAtivoSemGatilho() {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "FLUXO_ATIVO_SEM_GATILHO",
+      error:
+        "Fluxos ativos que nao sao padrao precisam ter pelo menos um gatilho ativo.",
+    },
+    { status: 400 }
+  );
+}
+
+async function fluxoPossuiGatilhoAtivo(params: {
+  empresaId: string;
+  fluxoId: string;
+}) {
+  const { data, error } = await supabaseAdmin
+    .from("automacao_gatilhos")
+    .select("id")
+    .eq("empresa_id", params.empresaId)
+    .eq("fluxo_id", params.fluxoId)
+    .eq("ativo", true)
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Erro ao validar gatilhos do fluxo: ${error.message}`);
+  }
+
+  return (data || []).length > 0;
+}
+
 function respostaWhatsappMetaBloqueado(detalhe?: string | null) {
   return NextResponse.json(
     {
@@ -186,17 +224,17 @@ async function buscarBloqueioWhatsappMeta(empresaId: string) {
     );
   }
 
-  return (data || []).find((integracao: any) => {
+  return ((data || []) as IntegracaoWhatsappMetaRow[]).find((integracao) => {
     const config =
       integracao.config_json &&
       typeof integracao.config_json === "object" &&
       !Array.isArray(integracao.config_json)
-        ? integracao.config_json
+        ? (integracao.config_json as Record<string, unknown>)
         : {};
     const diagnostico = config.whatsapp_meta_diagnostic;
     const motivoDiagnostico =
       diagnostico && typeof diagnostico === "object"
-        ? String(diagnostico.motivo || "")
+        ? String((diagnostico as Record<string, unknown>).motivo || "")
         : "";
 
     return (
@@ -304,7 +342,9 @@ function textoNormalizado(valor: unknown) {
   return String(valor || "").trim().toLowerCase();
 }
 
-function conexaoCombinaComErro(condicao: Record<string, any> | null | undefined) {
+function conexaoCombinaComErro(
+  condicao: Record<string, unknown> | null | undefined
+) {
   if (!condicao?.tipo) return false;
 
   const valor = textoNormalizado(condicao.valor);
@@ -542,6 +582,14 @@ export async function POST(req: NextRequest) {
         { ok: false, error: "Fluxos padrão não podem ter palavras-chave." },
         { status: 400 }
       );
+    }
+
+    if (
+      status === "ativo" &&
+      !fluxoPadrao &&
+      !gatilhos.some((gatilho) => gatilho.ativo)
+    ) {
+      return respostaFluxoAtivoSemGatilho();
     }
 
     const palavrasChave = gatilhos
@@ -790,7 +838,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const atualizacao: Record<string, any> = {
+    const atualizacao: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
       atualizado_por: usuario.id,
     };
@@ -864,6 +912,30 @@ export async function PATCH(req: NextRequest) {
       .eq("id", id)
       .eq("empresa_id", usuario.empresa_id)
       .maybeSingle();
+
+    if (!fluxoAntes) {
+      return NextResponse.json(
+        { ok: false, error: "Fluxo nÃ£o encontrado." },
+        { status: 404 }
+      );
+    }
+
+    const statusFinal = String(atualizacao.status || fluxoAntes.status || "");
+    const fluxoPadraoFinal =
+      atualizacao.fluxo_padrao !== undefined
+        ? atualizacao.fluxo_padrao === true
+        : fluxoAntes.fluxo_padrao === true;
+
+    if (statusFinal === "ativo" && !fluxoPadraoFinal) {
+      const possuiGatilhoAtivo = await fluxoPossuiGatilhoAtivo({
+        empresaId: usuario.empresa_id,
+        fluxoId: id,
+      });
+
+      if (!possuiGatilhoAtivo) {
+        return respostaFluxoAtivoSemGatilho();
+      }
+    }
 
     if (atualizacao.status === "ativo") {
       const canalFinal = String(
