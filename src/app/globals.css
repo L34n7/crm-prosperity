@@ -119,6 +119,18 @@
   --disparoAlertCompactDangerBorder:  #fb6666;
   --disparoAlertCompactWarningBG: linear-gradient(80deg, #fff3c4f5, #fff8e6f5);
   --disparoAlertCompactWarningBorder:  #f5b82e;
+  --smallButtonIA: linear-gradient(
+    135deg,
+    #69d3fa6b 0%,
+    #69f0fa57 50%,
+    #c037fb4a 100%
+  );
+  --smallButtonIAHover: linear-gradient(
+    135deg,
+    #69d3fa87 0%,
+    #69f0fa9a 30%,
+    #c037fb4f 100%
+  );
 }
 
 html[data-theme="dark"] {
@@ -236,6 +248,18 @@ html[data-theme="dark"] {
   --disparoAlertCompactDangerBorder:  #8e3434;
   --disparoAlertCompactWarningBG: linear-gradient(80deg, #fff3c4f5, #fff8e6f5);
   --disparoAlertCompactWarningBorder:  #f5b82e;
+  --smallButtonIA: linear-gradient(
+    135deg,
+    #69d3fa6b 0%,
+    #69f0fa57 50%,
+    #c037fb4a 100%
+  );
+  --smallButtonIAHover: linear-gradient(
+    135deg,
+    #69d3fa87 0%,
+    #69f0fa9a 30%,
+    #c037fb4f 100%
+  );
 }
 
 html,

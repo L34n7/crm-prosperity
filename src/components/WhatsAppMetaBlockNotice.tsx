@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import styles from "./WhatsAppMetaBlockNotice.module.css";
 
 type BloqueioMetaResponse = {
@@ -36,6 +42,7 @@ function safeNow() {
 export default function WhatsAppMetaBlockNotice() {
   const [data, setData] = useState<BloqueioMetaResponse | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+  const bannerRef = useRef<HTMLElement | null>(null);
 
   const bloqueado = data?.ok && data.bloqueado === true;
   const intervaloMs = data?.modal_intervalo_ms || DEFAULT_INTERVAL_MS;
@@ -99,6 +106,43 @@ export default function WhatsAppMetaBlockNotice() {
   }, [carregarStatus]);
 
   useEffect(() => {
+    const root = document.documentElement;
+
+    if (!bloqueado) {
+      root.style.removeProperty("--crm-meta-block-banner-height");
+      return;
+    }
+
+    function atualizarAlturaBanner() {
+      const altura = bannerRef.current?.getBoundingClientRect().height || 0;
+
+      root.style.setProperty(
+        "--crm-meta-block-banner-height",
+        `${altura}px`
+      );
+    }
+
+    atualizarAlturaBanner();
+
+    const banner = bannerRef.current;
+
+    if (!banner) {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(atualizarAlturaBanner);
+
+    resizeObserver.observe(banner);
+    window.addEventListener("resize", atualizarAlturaBanner);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", atualizarAlturaBanner);
+      root.style.removeProperty("--crm-meta-block-banner-height");
+    };
+  }, [bloqueado]);
+
+  useEffect(() => {
     abrirModalSeNecessario();
 
     if (!bloqueado) return;
@@ -129,7 +173,11 @@ export default function WhatsAppMetaBlockNotice() {
 
   return (
     <>
-      <section className={styles.banner} role="status">
+      <section
+        ref={bannerRef}
+        className={styles.banner}
+        role="status"
+      >
         <div>
           <strong>{titulo}</strong>
           <p>

@@ -25,9 +25,9 @@ import { useHeaderUser } from "@/components/header-user-context";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
 import { Handle } from "@xyflow/react";
-import { gerarSugestaoDescricaoIA } from "@/lib/ia/sugestoes-descricao-ia";
+import { gerarSugestaoDescricaoIAComContexto } from "@/lib/ia/sugestoes-descricao-ia";
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Copy, CopyPlus, Share2 } from "lucide-react";
+import { Copy, CopyPlus, Share2, Sparkles } from "lucide-react";
 
 type Fluxo = {
   id: string;
@@ -63,6 +63,18 @@ type AutomacaoConexao = {
   condicao_json: Record<string, any>;
   usar_ia?: boolean;
   descricao_ia?: string | null;
+};
+
+type PreviaGeracaoDescricaoIa = {
+  modo: "conexao" | "bloco";
+  titulo: string;
+  conexoes: Array<{
+    edgeId: string;
+    nome: string;
+    tokensEstimados: number;
+  }>;
+  tokensMin: number;
+  tokensMax: number;
 };
 
 type GatilhoFluxo = {
@@ -429,6 +441,10 @@ const nodeTypes = {
   custom: NodeCustom,
 };
 
+const TIPO_NO_PERGUNTA_LIVRE_IA = "pergunta_livre_ia";
+const TOKENS_SAIDA_MAX_DESCRICAO_IA = 180;
+const TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS = 190;
+
 
 function criarIdTemporario(prefixo: string) {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -442,6 +458,7 @@ function labelTipoNo(tipo: string) {
   if (tipo === "inicio") return "Início";
   if (tipo === "enviar_texto") return "Mensagem";
   if (tipo === "pergunta_opcoes") return "Pergunta";
+  if (tipo === TIPO_NO_PERGUNTA_LIVRE_IA) return "Pergunta IA";
   if (tipo === "transferir_setor") return "Transferir";
   if (tipo === "encerrar") return "Encerrar";
   if (tipo === "enviar_imagem") return "Imagem";
@@ -465,6 +482,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "inicio") return styles.nodeInicio;
   if (tipo === "enviar_texto") return styles.nodeMensagem;
   if (tipo === "pergunta_opcoes") return styles.nodePergunta;
+  if (tipo === TIPO_NO_PERGUNTA_LIVRE_IA) return styles.nodePerguntaIA;
   if (tipo === "transferir_setor") return styles.nodeTransferir;
   if (tipo === "encerrar") return styles.nodeEncerrar;
   if (tipo === "enviar_imagem") return styles.nodeImagem;
@@ -488,6 +506,7 @@ function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "inicio") return "Início";
   if (tipo === "enviar_texto") return "Nova mensagem";
   if (tipo === "pergunta_opcoes") return "Nova pergunta";
+  if (tipo === TIPO_NO_PERGUNTA_LIVRE_IA) return "Pergunta aberta IA";
   if (tipo === "enviar_botoes") return "Pergunta botões";
   if (tipo === "botao_redirect") return "Botão redirect";
   if (tipo === "transferir_setor") return "Transferir setor";
@@ -537,6 +556,7 @@ function tituloVisivelCard(data: any) {
   const mensagensPadrao = [
     "Digite a mensagem aqui.",
     "Escolha uma opção:",
+    "Como posso te ajudar?",
     "",
   ];
 
@@ -560,6 +580,7 @@ function tituloVisivelCard(data: any) {
 function tipoNoEsperaResposta(tipoNo: string) {
   return (
     tipoNo === "pergunta_opcoes" ||
+    tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA ||
     tipoNo === "enviar_botoes" ||
     tipoNo === "capturar_resposta" ||
     tipoNo === "agenda_buscar_agendamento" ||
@@ -749,7 +770,115 @@ function rotuloPadraoPorTipoNo(tipoNo: string) {
     return "Resposta recebida";
   }
 
+  if (tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA) {
+    return "Nova intencao";
+  }
+
   return tipoNoEsperaResposta(tipoNo) ? "Nova condição" : "Sempre seguir";
+}
+
+type OpcaoRespostaConexao = {
+  valor: string;
+  titulo: string;
+};
+
+type EdgeDataConexao = {
+  condicao_json?: Record<string, unknown>;
+};
+
+function opcoesRespostaDoNo(node?: Node | null): OpcaoRespostaConexao[] {
+  const tipoNo = String(node?.data?.tipo_no || "");
+  const configuracao = (node?.data?.configuracao_json || {}) as {
+    opcoes?: Array<Record<string, unknown>>;
+    botoes?: Array<Record<string, unknown>>;
+  };
+
+  if (tipoNo === "pergunta_opcoes") {
+    return Array.isArray(configuracao.opcoes)
+      ? configuracao.opcoes
+          .map((opcao) => ({
+            valor: String(opcao.valor || "").trim(),
+            titulo: String(opcao.titulo || "").trim(),
+          }))
+          .filter((opcao) => Boolean(opcao.valor))
+      : [];
+  }
+
+  if (tipoNo === "enviar_botoes") {
+    return Array.isArray(configuracao.botoes)
+      ? configuracao.botoes
+          .map((botao) => ({
+            valor: String(botao.id || "").trim(),
+            titulo: String(botao.titulo || "").trim(),
+          }))
+          .filter((botao) => Boolean(botao.valor))
+      : [];
+  }
+
+  return [];
+}
+
+function proximaOpcaoRespostaDisponivel(
+  nodeOrigem: Node | undefined,
+  edgesAtuais: Edge[]
+) {
+  const opcoesResposta = opcoesRespostaDoNo(nodeOrigem);
+
+  if (opcoesResposta.length === 0) return null;
+
+  const valoresUsados = new Set(
+    edgesAtuais
+      .filter((edge) => edge.source === nodeOrigem?.id)
+      .map((edge) =>
+        String(
+          ((edge.data as EdgeDataConexao | undefined)?.condicao_json || {})
+            .valor || ""
+        ).trim()
+      )
+      .filter(Boolean)
+  );
+
+  return (
+    opcoesResposta.find((opcao) => !valoresUsados.has(opcao.valor)) || null
+  );
+}
+
+function textoEhGenericoParaConexaoIa(texto: string) {
+  const valor = String(texto || "").trim();
+
+  if (!valor) return true;
+
+  return new Set([
+    "Nova intencao",
+    "Intencao IA",
+    "Nova condição",
+    "Condição",
+    "Nova mensagem",
+    "Mensagem",
+    "Novo bloco",
+    "Digite a mensagem aqui.",
+    "Como posso te ajudar?",
+  ]).has(valor);
+}
+
+function rotuloConexaoIaPorDestino(nodeDestino?: Node | null) {
+  if (!nodeDestino) return "Intencao IA";
+
+  const configuracao = (nodeDestino.data?.configuracao_json || {}) as {
+    mensagem?: string;
+  };
+
+  const candidatos = [
+    String(nodeDestino.data?.titulo || ""),
+    tituloVisivelCard(nodeDestino.data),
+    String(configuracao.mensagem || "").replace(/\s+/g, " ").trim(),
+    labelTipoNo(String(nodeDestino.data?.tipo_no || "")),
+  ];
+
+  return (
+    candidatos.find((texto) => !textoEhGenericoParaConexaoIa(texto)) ||
+    "Intencao IA"
+  );
 }
 
 const AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA =
@@ -1179,6 +1308,12 @@ function FluxosPageContent() {
 
   const [usarIaConexao, setUsarIaConexao] = useState(false);
   const [descricaoIaConexao, setDescricaoIaConexao] = useState("");
+  const [gerandoDescricaoIaConexao, setGerandoDescricaoIaConexao] =
+    useState(false);
+  const [gerandoDescricoesIaBloco, setGerandoDescricoesIaBloco] =
+    useState(false);
+  const [previaGeracaoDescricaoIa, setPreviaGeracaoDescricaoIa] =
+    useState<PreviaGeracaoDescricaoIa | null>(null);
   const [capturaVariavelNode, setCapturaVariavelNode] = useState("nome");
   const [capturaTipoNode, setCapturaTipoNode] = useState("nome");
   const [capturaMensagemErroNode, setCapturaMensagemErroNode] = useState("");
@@ -1297,6 +1432,316 @@ function FluxosPageContent() {
   const edgeEditada = useMemo(() => {
     return edges.find((edge) => edge.id === editandoEdgeId) || null;
   }, [edges, editandoEdgeId]);
+
+  const nodeOrigemEdgeEditada = useMemo(() => {
+    if (!edgeEditada) return null;
+
+    return nodes.find((node) => node.id === edgeEditada.source) || null;
+  }, [nodes, edgeEditada]);
+
+  const edgeEditadaOrigemPerguntaLivreIa =
+    String(nodeOrigemEdgeEditada?.data?.tipo_no || "") ===
+    TIPO_NO_PERGUNTA_LIVRE_IA;
+
+  const tipoNodeEditadoAtual = String(nodeEditado?.data?.tipo_no || "");
+  const nodeEditadoPermiteGerarDescricoesIa =
+    tipoNodeEditadoAtual === "pergunta_opcoes" ||
+    tipoNodeEditadoAtual === TIPO_NO_PERGUNTA_LIVRE_IA ||
+    tipoNodeEditadoAtual === "enviar_botoes";
+  const quantidadeConexoesIaNodeEditado = nodeEditado
+    ? edges.filter(
+        (edge) =>
+          edge.source === nodeEditado.id && conexaoPermiteDescricaoIa(edge)
+      ).length
+    : 0;
+
+  function textoLimpoConexao(valor: unknown) {
+    return String(valor || "").replace(/\s+/g, " ").trim();
+  }
+
+  function conexaoPermiteDescricaoIa(edge: Edge) {
+    const data = edge.data as
+      | {
+          condicao_json?: Record<string, any>;
+        }
+      | undefined;
+    const tipoCondicao = String(data?.condicao_json?.tipo || "");
+
+    return (
+      tipoCondicao !== "sempre" &&
+      tipoCondicao !== "timeout_sem_resposta"
+    );
+  }
+
+  function mensagemDoNodeParaContexto(node?: Node | null) {
+    return textoLimpoConexao(
+      (node?.data?.configuracao_json as Record<string, any> | undefined)
+        ?.mensagem
+    );
+  }
+
+  function textoOpcaoRespostaDaConexao(
+    nodeOrigem?: Node | null,
+    idResposta?: string | null
+  ) {
+    const id = textoLimpoConexao(idResposta);
+    if (!id) return "";
+
+    return (
+      opcoesRespostaDoNo(nodeOrigem).find((opcao) => opcao.valor === id)
+        ?.titulo || ""
+    );
+  }
+
+  function resumoOutraConexaoParaContexto(edge: Edge) {
+    const data = edge.data as
+      | {
+          condicao_json?: Record<string, any>;
+          rotulo?: string | null;
+          descricao_ia?: string | null;
+        }
+      | undefined;
+    const condicao = data?.condicao_json || {};
+    const nodeDestino = nodes.find((node) => node.id === edge.target) || null;
+    const destino = nodeDestino ? tituloVisivelCard(nodeDestino.data) : "";
+    const nome = textoLimpoConexao(
+      data?.rotulo ||
+        condicao.valor ||
+        (typeof edge.label === "string" ? edge.label.replace(/^✨\s*/, "") : "")
+    );
+
+    if (nome && destino && nome !== destino) {
+      return `${nome} -> ${destino}`;
+    }
+
+    return nome || destino || textoLimpoConexao(data?.descricao_ia);
+  }
+
+  function montarContextoDescricaoIaConexao(params?: {
+    edge?: Edge | null;
+    rotulo?: string | null;
+    valor?: string | null;
+    descricaoAtual?: string | null;
+  }) {
+    const edge = params?.edge || edgeEditada;
+    const data = edge?.data as
+      | {
+          condicao_json?: Record<string, any>;
+          rotulo?: string | null;
+          descricao_ia?: string | null;
+        }
+      | undefined;
+    const condicao = data?.condicao_json || {};
+    const nodeOrigem = edge
+      ? nodes.find((node) => node.id === edge.source) || null
+      : nodeOrigemEdgeEditada;
+    const nodeDestino = edge
+      ? nodes.find((node) => node.id === edge.target) || null
+      : null;
+    const idResposta = textoLimpoConexao(
+      params?.valor ?? condicao.valor ?? valorCondicao
+    );
+    const rotuloBase =
+      textoLimpoConexao(params?.rotulo) ||
+      textoLimpoConexao(data?.rotulo) ||
+      textoLimpoConexao(
+        typeof edge?.label === "string" ? edge.label.replace(/^✨\s*/, "") : ""
+      ) ||
+      textoLimpoConexao(rotuloConexao);
+    const destinoTitulo = nodeDestino ? tituloVisivelCard(nodeDestino.data) : "";
+    const destinoTipo = nodeDestino
+      ? labelTipoNo(String(nodeDestino.data?.tipo_no || ""))
+      : "";
+
+    return {
+      pergunta: mensagemDoNodeParaContexto(nodeOrigem),
+      nomeConexao: rotuloBase,
+      idResposta,
+      textoOpcao: textoOpcaoRespostaDaConexao(nodeOrigem, idResposta),
+      destinoTitulo,
+      destinoMensagem: mensagemDoNodeParaContexto(nodeDestino),
+      destinoTipo,
+      outrasConexoes: edge
+        ? edges
+            .filter(
+              (item) => item.source === edge.source && item.id !== edge.id
+            )
+            .map(resumoOutraConexaoParaContexto)
+            .filter(Boolean)
+        : [],
+      descricaoAtual: textoLimpoConexao(
+        params?.descricaoAtual ?? data?.descricao_ia
+      ),
+      blocoOrigem: nodeOrigem
+        ? {
+            id: nodeOrigem.id,
+            tipo: String(nodeOrigem.data?.tipo_no || ""),
+            titulo: tituloVisivelCard(nodeOrigem.data),
+            mensagem: mensagemDoNodeParaContexto(nodeOrigem),
+          }
+        : null,
+      blocoDestino: nodeDestino
+        ? {
+            id: nodeDestino.id,
+            tipo: String(nodeDestino.data?.tipo_no || ""),
+            titulo: destinoTitulo,
+            mensagem: mensagemDoNodeParaContexto(nodeDestino),
+          }
+        : null,
+    };
+  }
+
+  function gerarSugestaoDescricaoIaConexao(params?: {
+    edge?: Edge | null;
+    rotulo?: string | null;
+    valor?: string | null;
+  }) {
+    const contexto = montarContextoDescricaoIaConexao(params);
+
+    return gerarSugestaoDescricaoIAComContexto(contexto);
+  }
+
+  function montarPayloadDescricaoConexaoIa(
+    edge: Edge,
+    contexto: ReturnType<typeof montarContextoDescricaoIaConexao>
+  ) {
+    return {
+      blocoOrigem: contexto.blocoOrigem,
+      conexao: {
+        id: edge.id,
+        nome: contexto.nomeConexao,
+        idResposta: contexto.idResposta,
+        textoOpcao: contexto.textoOpcao,
+        descricaoAtual: contexto.descricaoAtual,
+      },
+      blocoDestino: contexto.blocoDestino,
+      outrasConexoes: contexto.outrasConexoes.map((nome) => ({ nome })),
+    };
+  }
+
+  function estimarTokensDescricaoConexaoIa(
+    payload: ReturnType<typeof montarPayloadDescricaoConexaoIa>
+  ) {
+    const tokensEntrada = Math.ceil(JSON.stringify(payload).length / 3.5);
+    const base =
+      TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS +
+      tokensEntrada +
+      TOKENS_SAIDA_MAX_DESCRICAO_IA;
+
+    return Math.ceil(base * 1.25);
+  }
+
+  function formatarTokens(valor: number) {
+    return new Intl.NumberFormat("pt-BR").format(Math.max(0, Math.round(valor)));
+  }
+
+  function montarPreviaGeracaoDescricaoIa(params: {
+    modo: "conexao" | "bloco";
+    titulo: string;
+    conexoes: Array<{
+      edge: Edge;
+      contexto?: ReturnType<typeof montarContextoDescricaoIaConexao>;
+    }>;
+  }): PreviaGeracaoDescricaoIa {
+    const conexoes = params.conexoes.map((item) => {
+      const contexto =
+        item.contexto || montarContextoDescricaoIaConexao({ edge: item.edge });
+      const edge = item.edge;
+      const payload = montarPayloadDescricaoConexaoIa(edge, contexto);
+
+      return {
+        edgeId: edge.id,
+        nome: rotuloFinalDescricaoIa(contexto),
+        tokensEstimados: estimarTokensDescricaoConexaoIa(payload),
+      };
+    });
+    const totalEstimado = conexoes.reduce(
+      (total, item) => total + item.tokensEstimados,
+      0
+    );
+
+    return {
+      modo: params.modo,
+      titulo: params.titulo,
+      conexoes,
+      tokensMin: Math.ceil(totalEstimado * 0.85),
+      tokensMax: Math.ceil(totalEstimado * 1.15),
+    };
+  }
+
+  async function solicitarDescricaoConexaoIa(
+    edge: Edge,
+    contexto: ReturnType<typeof montarContextoDescricaoIaConexao>
+  ) {
+    if (!fluxoSelecionado) {
+      throw new Error("Selecione um fluxo primeiro.");
+    }
+
+    const res = await fetch("/api/automacoes/descricao-conexao-ia", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fluxoId: fluxoSelecionado.id,
+        conexaoId: edge.id,
+        contexto: montarPayloadDescricaoConexaoIa(edge, contexto),
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || "Erro ao gerar intenção com IA.");
+    }
+
+    const descricao = String(json.descricao || "").trim();
+
+    if (!descricao) {
+      throw new Error("A IA não retornou uma descrição válida.");
+    }
+
+    return descricao;
+  }
+
+  function rotuloFinalDescricaoIa(
+    contexto: ReturnType<typeof montarContextoDescricaoIaConexao>,
+    fallback = "Intencao IA"
+  ) {
+    return (
+      textoLimpoConexao(contexto.nomeConexao) ||
+      textoLimpoConexao(contexto.textoOpcao) ||
+      textoLimpoConexao(contexto.idResposta) ||
+      textoLimpoConexao(contexto.destinoTitulo) ||
+      fallback
+    );
+  }
+
+  function condicaoFinalDescricaoIa(
+    edge: Edge,
+    contexto: ReturnType<typeof montarContextoDescricaoIaConexao>
+  ) {
+    const data = edge.data as
+      | {
+          condicao_json?: Record<string, any>;
+        }
+      | undefined;
+    const condicaoAtual = data?.condicao_json || {};
+    const condicaoJson: Record<string, any> = {
+      ...condicaoAtual,
+      tipo: String(condicaoAtual.tipo || "resposta_contem"),
+    };
+    const idResposta = textoLimpoConexao(
+      condicaoAtual.valor || contexto.idResposta
+    );
+
+    if (idResposta) {
+      condicaoJson.valor = idResposta;
+    } else {
+      delete condicaoJson.valor;
+    }
+
+    return condicaoJson;
+  }
 
   const templateAgendarDisparoSelecionado = useMemo(() => {
     return (
@@ -2070,7 +2515,9 @@ function FluxosPageContent() {
     const usarIA = conexao.usar_ia === true;
 
     const labelConexao =
-      conexao.rotulo || conexao.condicao_json?.valor || "";
+      conexao.rotulo ||
+      conexao.condicao_json?.valor ||
+      (usarIA ? "Intencao IA" : "");
     return {
       id: conexao.id,
       source: conexao.no_origem_id,
@@ -2139,13 +2586,41 @@ function FluxosPageContent() {
   const onConnect = useCallback(
     (connection: Connection) => {
       const nodeOrigem = nodes.find((node) => node.id === connection.source);
+      const nodeDestino = nodes.find((node) => node.id === connection.target);
       const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
+      const usarIaPadrao = tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;
+      const opcaoRespostaPadrao = proximaOpcaoRespostaDisponivel(
+        nodeOrigem,
+        edges
+      );
 
       const tipoCondicaoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);
-      const rotuloPadrao = rotuloPadraoPorTipoNo(tipoOrigem);
+      const rotuloPadrao =
+        opcaoRespostaPadrao?.titulo ||
+        opcaoRespostaPadrao?.valor ||
+        (usarIaPadrao
+          ? rotuloConexaoIaPorDestino(nodeDestino)
+          : rotuloPadraoPorTipoNo(tipoOrigem));
       const ehSempreSeguir = tipoCondicaoPadrao === "sempre";
       const id = criarIdTemporario("edge");
       const offsetY = offsetLabelConexao(id);
+      const descricaoIaPadrao = usarIaPadrao
+        ? gerarSugestaoDescricaoIAComContexto({
+            pergunta: mensagemDoNodeParaContexto(nodeOrigem),
+            nomeConexao: rotuloPadrao,
+            idResposta: opcaoRespostaPadrao?.valor || "",
+            textoOpcao: opcaoRespostaPadrao?.titulo || "",
+            destinoTitulo: nodeDestino ? tituloVisivelCard(nodeDestino.data) : "",
+            destinoMensagem: mensagemDoNodeParaContexto(nodeDestino),
+            destinoTipo: nodeDestino
+              ? labelTipoNo(String(nodeDestino.data?.tipo_no || ""))
+              : "",
+            outrasConexoes: edges
+              .filter((edge) => edge.source === connection.source)
+              .map(resumoOutraConexaoParaContexto)
+              .filter(Boolean),
+          })
+        : "";
       const novaConexao: Edge = {
         ...connection,
         id,
@@ -2154,7 +2629,11 @@ function FluxosPageContent() {
           curvature: 0.75,
         },
         animated: true,
-        label: ehSempreSeguir ? "" : "Nova condição",
+        label: ehSempreSeguir
+          ? ""
+          : usarIaPadrao
+          ? `✨ ${rotuloPadrao}`
+          : rotuloPadrao,
         labelShowBg: true,
 
         labelStyle: {
@@ -2181,17 +2660,22 @@ function FluxosPageContent() {
 
         data: {
           rotulo: rotuloPadrao,
-          condicao_json: {
-            tipo: tipoCondicaoPadrao,
-          },
-          usar_ia: false,
-          descricao_ia: "",
+          condicao_json: opcaoRespostaPadrao
+            ? {
+                tipo: tipoCondicaoPadrao,
+                valor: opcaoRespostaPadrao.valor,
+              }
+            : {
+                tipo: tipoCondicaoPadrao,
+              },
+          usar_ia: usarIaPadrao,
+          descricao_ia: descricaoIaPadrao,
         },
       } as Edge;
 
       setEdges((eds) => addEdge(novaConexao, eds));
     },
-    [nodes, setEdges]
+    [nodes, edges, setEdges]
   );
 
 async function criarFluxoRapido() {
@@ -2337,6 +2821,18 @@ function abrirFluxo(fluxo: Fluxo) {
       configuracao_json:
       tipoNo === "enviar_texto"
         ? { mensagem: "Digite a mensagem aqui.", delay_segundos: 3 }
+          : tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA
+          ? {
+              mensagem: "Como posso te ajudar?",
+              delay_segundos: 3,
+              max_tentativas_invalidas: 3,
+              max_tentativas_sem_resposta: 3,
+              acao_excesso_tentativas: "transferir_atendimento",
+              mensagem_excesso_tentativas:
+                "Nao consegui continuar o atendimento automatico. Vou te encaminhar para um atendente.",
+              notificar_excesso_tentativas: true,
+              notificar_email_excesso_tentativas: true,
+            }
           : tipoNo === "pergunta_opcoes"
           ? {
               mensagem: "Escolha uma opção:",
@@ -2950,12 +3446,11 @@ function abrirEdicaoConexao(edge: Edge) {
 
   if (!data?.descricao_ia) {
     setDescricaoIaConexao(
-      gerarSugestaoDescricaoIA(
-        respostaEsperada ||
-          data?.rotulo ||
-          edge.label?.toString() ||
-          ""
-      )
+      gerarSugestaoDescricaoIaConexao({
+        edge,
+        rotulo: data?.rotulo || edge.label?.toString() || "",
+        valor: respostaEsperada,
+      })
     );
   } else {
     setDescricaoIaConexao(String(data.descricao_ia || ""));
@@ -2964,8 +3459,15 @@ function abrirEdicaoConexao(edge: Edge) {
   const nodeOrigem = nodes.find((node) => node.id === edge.source);
   const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
   const tipoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);
+  const tipoCondicaoAtual = String(condicao.tipo || tipoPadrao);
+  const origemPerguntaLivreIa = tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;
+  const usarIaPadrao =
+    origemPerguntaLivreIa &&
+    tipoCondicaoAtual !== "sempre" &&
+    tipoCondicaoAtual !== "timeout_sem_resposta";
 
-  setTipoCondicaoConexao(String(condicao.tipo || tipoPadrao));
+  setUsarIaConexao(Boolean(data?.usar_ia) || usarIaPadrao);
+  setTipoCondicaoConexao(tipoCondicaoAtual);
 }
 
 function adicionarOpcaoPergunta() {
@@ -3192,6 +3694,7 @@ async function aplicarEdicaoNoInterno() {
       if (
         tipoFinal === "enviar_texto" ||
         tipoFinal === "pergunta_opcoes" ||
+        tipoFinal === TIPO_NO_PERGUNTA_LIVRE_IA ||
         tipoFinal === "enviar_botoes" ||
         tipoFinal === "botao_redirect" ||
         tipoFinal === "enviar_imagem" ||
@@ -3379,6 +3882,7 @@ async function aplicarEdicaoNoInterno() {
 
       if (
         tipoFinal === "pergunta_opcoes" ||
+        tipoFinal === TIPO_NO_PERGUNTA_LIVRE_IA ||
         tipoFinal === "enviar_botoes" ||
         tipoFinal === "capturar_resposta" ||
         tipoFinal === "agenda_buscar_agendamento" ||
@@ -3550,12 +4054,14 @@ async function aplicarEdicaoConexao() {
   const edgesAtualizados = edges.map((edge) => {
     if (edge.id !== editandoEdgeId) return edge;
 
+    const usarIaFinal = usarIaConexao && !ehSempreSeguir && !ehTimeout;
+
     const labelBase = ehTimeout
       ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
       : rotuloConexao || valorCondicao || "Condição";
 
     const labelFinal =
-      usarIaConexao && !ehSempreSeguir
+      usarIaFinal
         ? `✨ ${labelBase}`
         : labelBase;
 
@@ -3577,11 +4083,14 @@ async function aplicarEdicaoConexao() {
         tempo_unidade: timeoutUnidade,
         status_envio: statusEnvioTimeout,
       };
-    } else if (valorCondicao) {
+    } else if (valorCondicao || usarIaFinal) {
       condicaoJson = {
         tipo: tipoCondicaoConexao,
-        valor: valorCondicao,
       };
+
+      if (valorCondicao) {
+        condicaoJson.valor = valorCondicao;
+      }
     }
 
     return {
@@ -3597,7 +4106,7 @@ async function aplicarEdicaoConexao() {
           : rotuloConexao,
 
         condicao_json: condicaoJson,
-        usar_ia: usarIaConexao,
+        usar_ia: usarIaFinal,
         descricao_ia: descricaoIaConexao.trim(),
       },
     };
@@ -3612,6 +4121,227 @@ async function aplicarEdicaoConexao() {
   });
 
   fecharPainelEdicao();
+}
+
+function gerarDescricaoConexaoComIa() {
+  if (!edgeEditada) return;
+
+  const ehSempreSeguir = tipoCondicaoConexao === "sempre";
+  const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
+
+  if (ehSempreSeguir || ehTimeout) {
+    setErro("Esta condição não usa interpretação por IA.");
+    return;
+  }
+
+  if (!fluxoSelecionado) {
+    setErro("Selecione um fluxo primeiro.");
+    return;
+  }
+
+  const contexto = montarContextoDescricaoIaConexao({
+    edge: edgeEditada,
+    rotulo: rotuloConexao,
+    valor: valorCondicao,
+    descricaoAtual: descricaoIaConexao,
+  });
+
+  setErro("");
+  setPreviaGeracaoDescricaoIa(
+    montarPreviaGeracaoDescricaoIa({
+      modo: "conexao",
+      titulo: "Gerar intenção com IA",
+      conexoes: [{ edge: edgeEditada, contexto }],
+    })
+  );
+}
+
+async function executarGeracaoDescricaoConexaoComIa() {
+  if (!edgeEditada) return;
+
+  const ehSempreSeguir = tipoCondicaoConexao === "sempre";
+  const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
+
+  if (ehSempreSeguir || ehTimeout) {
+    setErro("Esta condição não usa interpretação por IA.");
+    return;
+  }
+
+  if (!fluxoSelecionado) {
+    setErro("Selecione um fluxo primeiro.");
+    return;
+  }
+
+  try {
+    setGerandoDescricaoIaConexao(true);
+    setErro("");
+    setSucesso("");
+    setPreviaGeracaoDescricaoIa(null);
+
+    const contexto = montarContextoDescricaoIaConexao({
+      edge: edgeEditada,
+      rotulo: rotuloConexao,
+      valor: valorCondicao,
+      descricaoAtual: descricaoIaConexao,
+    });
+
+    const descricao = await solicitarDescricaoConexaoIa(edgeEditada, contexto);
+    const rotuloFinal =
+      textoLimpoConexao(rotuloConexao) ||
+      rotuloFinalDescricaoIa(contexto);
+    const condicaoJson = condicaoFinalDescricaoIa(edgeEditada, {
+      ...contexto,
+      idResposta: valorCondicao || contexto.idResposta,
+    });
+
+    condicaoJson.tipo = tipoCondicaoConexao || condicaoJson.tipo;
+
+    const edgesAtualizados = edges.map((edge) => {
+      if (edge.id !== edgeEditada.id) return edge;
+
+      return {
+        ...edge,
+        label: `✨ ${rotuloFinal}`,
+        data: {
+          ...(edge.data || {}),
+          rotulo: rotuloFinal,
+          condicao_json: condicaoJson,
+          usar_ia: true,
+          descricao_ia: descricao,
+        },
+      };
+    });
+
+    setUsarIaConexao(true);
+    setDescricaoIaConexao(descricao);
+    setRotuloConexao(rotuloFinal);
+    setEdges(edgesAtualizados);
+
+    await salvarEstrutura({
+      nodesParaSalvar: nodes,
+      edgesParaSalvar: edgesAtualizados,
+      mensagemSucesso: "Intenção gerada com IA e fluxo salvo com sucesso.",
+    });
+  } catch (error: unknown) {
+    setErro(mensagemErroFluxo(error, "Erro ao gerar intenção com IA."));
+  } finally {
+    setGerandoDescricaoIaConexao(false);
+  }
+}
+
+function gerarDescricoesConexoesDoBlocoComIa() {
+  if (!nodeEditado || !nodeEditadoPermiteGerarDescricoesIa) return;
+
+  if (!fluxoSelecionado) {
+    setErro("Selecione um fluxo primeiro.");
+    return;
+  }
+
+  const conexoesAlvo = edges.filter(
+    (edge) => edge.source === nodeEditado.id && conexaoPermiteDescricaoIa(edge)
+  );
+
+  if (conexoesAlvo.length === 0) {
+    setErro("Este bloco não possui conexões de resposta para gerar intenção com IA.");
+    return;
+  }
+
+  setErro("");
+  setPreviaGeracaoDescricaoIa(
+    montarPreviaGeracaoDescricaoIa({
+      modo: "bloco",
+      titulo: "Gerar intenções com IA",
+      conexoes: conexoesAlvo.map((edge) => ({ edge })),
+    })
+  );
+}
+
+async function executarGeracaoDescricoesConexoesDoBlocoComIa() {
+  if (!nodeEditado || !nodeEditadoPermiteGerarDescricoesIa) return;
+
+  if (!fluxoSelecionado) {
+    setErro("Selecione um fluxo primeiro.");
+    return;
+  }
+
+  const conexoesAlvo = edges.filter(
+    (edge) => edge.source === nodeEditado.id && conexaoPermiteDescricaoIa(edge)
+  );
+
+  if (conexoesAlvo.length === 0) {
+    setErro("Este bloco não possui conexões de resposta para gerar intenção com IA.");
+    return;
+  }
+
+  try {
+    setGerandoDescricoesIaBloco(true);
+    setErro("");
+    setSucesso("");
+    setPreviaGeracaoDescricaoIa(null);
+
+    let edgesAtualizados = edges;
+    let totalGerado = 0;
+
+    for (const edgeAlvo of conexoesAlvo) {
+      const edgeAtual =
+        edgesAtualizados.find((edge) => edge.id === edgeAlvo.id) || edgeAlvo;
+      const contexto = montarContextoDescricaoIaConexao({
+        edge: edgeAtual,
+      });
+      const descricao = await solicitarDescricaoConexaoIa(edgeAtual, contexto);
+      const rotuloFinal = rotuloFinalDescricaoIa(contexto);
+      const condicaoJson = condicaoFinalDescricaoIa(edgeAtual, contexto);
+
+      edgesAtualizados = edgesAtualizados.map((edge) => {
+        if (edge.id !== edgeAtual.id) return edge;
+
+        return {
+          ...edge,
+          label: `✨ ${rotuloFinal}`,
+          data: {
+            ...(edge.data || {}),
+            rotulo: rotuloFinal,
+            condicao_json: condicaoJson,
+            usar_ia: true,
+            descricao_ia: descricao,
+          },
+        };
+      });
+      totalGerado += 1;
+    }
+
+    setEdges(edgesAtualizados);
+
+    await salvarEstrutura({
+      nodesParaSalvar: nodes,
+      edgesParaSalvar: edgesAtualizados,
+      mensagemSucesso:
+        totalGerado === 1
+          ? "1 intenção gerada com IA e fluxo salvo com sucesso."
+          : `${totalGerado} intenções geradas com IA e fluxo salvo com sucesso.`,
+    });
+  } catch (error: unknown) {
+    setErro(mensagemErroFluxo(error, "Erro ao gerar intenções com IA."));
+  } finally {
+    setGerandoDescricoesIaBloco(false);
+  }
+}
+
+function cancelarPreviaGeracaoDescricaoIa() {
+  if (gerandoDescricaoIaConexao || gerandoDescricoesIaBloco) return;
+
+  setPreviaGeracaoDescricaoIa(null);
+}
+
+async function confirmarPreviaGeracaoDescricaoIa() {
+  if (!previaGeracaoDescricaoIa) return;
+
+  if (previaGeracaoDescricaoIa.modo === "conexao") {
+    await executarGeracaoDescricaoConexaoComIa();
+    return;
+  }
+
+  await executarGeracaoDescricoesConexoesDoBlocoComIa();
 }
 
 function obterFluxoAlvoEdicao() {
@@ -4438,6 +5168,41 @@ function validarFluxoAntesDeAtivar(params?: {
 
       if (!Array.isArray(config.opcoes) || config.opcoes.length === 0) {
         return `O bloco "${node.data?.titulo}" precisa ter pelo menos uma opção.`;
+      }
+    }
+
+    if (tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA) {
+      if (!String(config.mensagem || "").trim()) {
+        return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
+      }
+
+      const conexoesIa = edgesValidacao.filter((edge) => {
+        const data = edge.data as
+          | {
+              usar_ia?: boolean;
+              descricao_ia?: string | null;
+            }
+          | undefined;
+
+        return edge.source === node.id && data?.usar_ia === true;
+      });
+
+      if (conexoesIa.length === 0) {
+        return `O bloco "${node.data?.titulo}" precisa ter pelo menos uma conexão com IA.`;
+      }
+
+      const temConexaoIaSemDescricao = conexoesIa.some((edge) => {
+        const data = edge.data as
+          | {
+              descricao_ia?: string | null;
+            }
+          | undefined;
+
+        return !String(data?.descricao_ia || "").trim();
+      });
+
+      if (temConexaoIaSemDescricao) {
+        return `Todas as conexões com IA do bloco "${node.data?.titulo}" precisam ter descrição para IA.`;
       }
     }
 
@@ -5300,6 +6065,17 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         className={styles.headerDropdownItem}
                         onClick={() => {
                           setMenuHeaderAberto(false);
+                          adicionarNo(TIPO_NO_PERGUNTA_LIVRE_IA);
+                        }}
+                      >
+                        + Pergunta IA
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
                           adicionarNo("capturar_resposta");
                         }}
                       >
@@ -5703,6 +6479,16 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             setBotoesNode([]);
                           }
 
+                          if (novoTipo === TIPO_NO_PERGUNTA_LIVRE_IA) {
+                            setSetorDestino("");
+                            setOpcoesNode([]);
+                            setBotoesNode([]);
+
+                            if (!mensagemNode.trim()) {
+                              setMensagemNode("Como posso te ajudar?");
+                            }
+                          }
+
                           if (novoTipo === "enviar_botoes") {
                             setSetorDestino("");
                             setOpcoesNode([]);
@@ -5815,6 +6601,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       >
                         <option value="enviar_texto">Mensagem</option>
                         <option value="pergunta_opcoes">Pergunta</option>
+                        <option value={TIPO_NO_PERGUNTA_LIVRE_IA}>Pergunta aberta IA</option>
                         <option value="capturar_resposta">Capturar resposta</option>
                         <option value="transferir_setor">Transferir</option>
                         <option value="encerrar">Encerrar</option>
@@ -5854,6 +6641,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   {[
                     "enviar_texto",
                     "pergunta_opcoes",
+                    TIPO_NO_PERGUNTA_LIVRE_IA,
                     "enviar_botoes",
                     "botao_redirect",
                     "enviar_imagem",
@@ -5874,6 +6662,8 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       <span className={styles.label}>
                         {tipoNodeEdicao === "pergunta_opcoes"
                           ? "Pergunta"
+                          : tipoNodeEdicao === TIPO_NO_PERGUNTA_LIVRE_IA
+                          ? "Pergunta aberta"
                           : tipoNodeEdicao === "enviar_botoes"
                           ? "Pergunta dos botões"
                           : tipoNodeEdicao === "botao_redirect"
@@ -7552,6 +8342,34 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   )}
 
+                  {nodeEditadoPermiteGerarDescricoesIa && (
+                    <div className={styles.IABox}>
+                      <div className={styles.optionsHeader}>
+                        <span className={styles.label}>Intenções das conexões</span>
+
+                        <button
+                          type="button"
+                          className={`${styles.smallButtonIA} ${styles.generateIaButton}`}
+                          onClick={gerarDescricoesConexoesDoBlocoComIa}
+                          disabled={
+                            gerandoDescricoesIaBloco ||
+                            salvando ||
+                            quantidadeConexoesIaNodeEditado === 0
+                          }
+                        >
+                          <Sparkles size={14} />
+                          {gerandoDescricoesIaBloco
+                            ? "Gerando..."
+                            : "Gerar IA para conexões"}
+                        </button>
+                      </div>
+
+                      <p className={styles.help}>
+                        Gera uma intenção com IA para cada conexão de resposta deste bloco e salva o fluxo ao finalizar.
+                      </p>
+                    </div>
+                  )}
+
                   {tipoNodeEdicao === "transferir_setor" && (
                     <label className={styles.field}>
                       <span className={styles.label}>Setor destino</span>
@@ -7689,6 +8507,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                   {[
                     "pergunta_opcoes",
+                    TIPO_NO_PERGUNTA_LIVRE_IA,
                     "enviar_botoes",
                     "capturar_resposta",
                     "agenda_buscar_agendamento",
@@ -7916,6 +8735,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             if (novoTipo === "sempre") {
                               setValorCondicao("");
                               setRotuloConexao("Sempre seguir");
+                              setUsarIaConexao(false);
+                            }
+
+                            if (novoTipo === "timeout_sem_resposta") {
+                              setUsarIaConexao(false);
                             }
                           }}
                         >
@@ -7986,10 +8810,27 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     )}
 
                     <div className={styles.IABox}>
+                      {edgeEditadaOrigemPerguntaLivreIa &&
+                        tipoCondicaoConexao !== "sempre" &&
+                        tipoCondicaoConexao !== "timeout_sem_resposta" && (
+                          <p className={styles.help}>
+                            Nesta origem, cada conexao com IA representa uma
+                            intencao possivel para a resposta livre do cliente.
+                          </p>
+                        )}
+
                       <label className={styles.IAField}>
                         <input
                           type="checkbox"
-                          checked={usarIaConexao}
+                          checked={
+                            usarIaConexao &&
+                            tipoCondicaoConexao !== "sempre" &&
+                            tipoCondicaoConexao !== "timeout_sem_resposta"
+                          }
+                          disabled={
+                            tipoCondicaoConexao === "sempre" ||
+                            tipoCondicaoConexao === "timeout_sem_resposta"
+                          }
                           onChange={(e) => {
                             const ativo = e.target.checked;
 
@@ -8000,12 +8841,12 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               return;
                             }
 
-                            const respostaEsperada = String(
-                              valorCondicao || ""
-                            ).trim();
-
                             setDescricaoIaConexao(
-                              gerarSugestaoDescricaoIA(respostaEsperada)
+                              gerarSugestaoDescricaoIaConexao({
+                                edge: edgeEditada,
+                                rotulo: rotuloConexao,
+                                valor: valorCondicao,
+                              })
                             );
                           }}
                         />
@@ -8034,10 +8875,26 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           </span>
                         </label>
                       )}
+
+                      {tipoCondicaoConexao !== "sempre" &&
+                        tipoCondicaoConexao !== "timeout_sem_resposta" && (
+                          <button
+                            type="button"
+                            className={`${styles.smallButtonIA} ${styles.generateIaButton}`}
+                            onClick={gerarDescricaoConexaoComIa}
+                            disabled={gerandoDescricaoIaConexao || salvando}
+                          >
+                            <Sparkles size={14} />
+                            {gerandoDescricaoIaConexao
+                              ? "Gerando..."
+                              : "Gerar descrição com IA"}
+                          </button>
+                        )}
                     </div>
 
                     {tipoCondicaoConexao !== "sempre" &&
-                      tipoCondicaoConexao !== "timeout_sem_resposta" && (
+                      tipoCondicaoConexao !== "timeout_sem_resposta" &&
+                      !usarIaConexao && (
                       <label className={styles.field}>
                         <span className={styles.label}>ID da resposta 
                         </span>
@@ -8055,7 +8912,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                             if (!descricaoIaConexao.trim()) {
                               setDescricaoIaConexao(
-                                gerarSugestaoDescricaoIA(novoValor)
+                                gerarSugestaoDescricaoIaConexao({
+                                  edge: edgeEditada,
+                                  rotulo: nomeConexaoEditadoManual
+                                    ? rotuloConexao
+                                    : novoValor,
+                                  valor: novoValor,
+                                })
                               );
                             }
                           }}
@@ -9436,6 +10299,86 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {previaGeracaoDescricaoIa && (
+          <div className={styles.modalOverlay}>
+            <div className={styles.modalCard}>
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Prévia de tokens</p>
+                  <h3 className={styles.modalTitle}>
+                    {previaGeracaoDescricaoIa.titulo}
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.closePanelButton}
+                  onClick={cancelarPreviaGeracaoDescricaoIa}
+                  disabled={gerandoDescricaoIaConexao || gerandoDescricoesIaBloco}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className={styles.modalBody}>
+                <div className={styles.tokenEstimateBox}>
+                  <span>Consumo estimado</span>
+                  <strong>
+                    {formatarTokens(previaGeracaoDescricaoIa.tokensMin)} ~{" "}
+                    {formatarTokens(previaGeracaoDescricaoIa.tokensMax)} tokens
+                  </strong>
+                  <small>
+                    {previaGeracaoDescricaoIa.conexoes.length === 1
+                      ? "1 conexão será gerada."
+                      : `${previaGeracaoDescricaoIa.conexoes.length} conexões serão geradas.`}
+                  </small>
+                </div>
+
+                <div className={styles.warningBox}>
+                  <strong>Essa é uma estimativa antes da chamada à IA.</strong>
+                  <p>
+                    O consumo real pode variar e será registrado automaticamente
+                    após a geração. A geração só começa depois da confirmação.
+                  </p>
+                </div>
+
+                <div className={styles.tokenEstimateList}>
+                  {previaGeracaoDescricaoIa.conexoes.map((conexao) => (
+                    <div key={conexao.edgeId} className={styles.tokenEstimateItem}>
+                      <span>{conexao.nome}</span>
+                      <strong>
+                        ~{formatarTokens(conexao.tokensEstimados)} tokens
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.modalFooter}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={cancelarPreviaGeracaoDescricaoIa}
+                  disabled={gerandoDescricaoIaConexao || gerandoDescricoesIaBloco}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={confirmarPreviaGeracaoDescricaoIa}
+                  disabled={gerandoDescricaoIaConexao || gerandoDescricoesIaBloco}
+                >
+                  {gerandoDescricaoIaConexao || gerandoDescricoesIaBloco
+                    ? "Gerando..."
+                    : "Confirmar geração"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

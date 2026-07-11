@@ -3601,15 +3601,15 @@ export async function executarNo(params: {
       : (
           await supabaseAdmin
             .from("automacao_conexoes")
-            .select("id, condicao_json")
+            .select("id, condicao_json, usar_ia")
             .eq("empresa_id", empresaId)
             .eq("fluxo_id", fluxoId)
             .eq("no_origem_id", no.id)
             .eq("ativo", true)
         ).data || [];
 
-    const precisaAguardarResposta = conexoesDoNo.some((c) =>
-      condicaoPrecisaDeResposta(c.condicao_json)
+    const precisaAguardarResposta = conexoesDoNo.some(
+      (c) => condicaoPrecisaDeResposta(c.condicao_json) || c.usar_ia === true
     );
 
     if (precisaAguardarResposta) {
@@ -3643,6 +3643,78 @@ export async function executarNo(params: {
       noAtualId: no.id,
       numeroDestino,
       runtimeCache,
+    });
+
+    return;
+  }
+
+  if (no.tipo_no === "pergunta_livre_ia") {
+    const mensagem =
+      String(no.configuracao_json?.mensagem || "").trim() ||
+      "Como posso te ajudar?";
+
+    const envio = await enviarMensagemAutomacao({
+      empresaId,
+      conversaId,
+      numeroDestino,
+      conteudo: mensagem,
+      execucaoId,
+      noId: no.id,
+    });
+
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envio,
+        tipoEnvio: "pergunta_livre_ia",
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "aguardando_pergunta_livre_ia",
+      descricao: "Automacao aguardando resposta livre para roteamento por IA.",
+      entrada: no.configuracao_json,
+      saida: { mensagem },
+    });
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        no_atual_id: no.id,
+        status: "aguardando",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
+
+    await agendarTimeoutSemRespostaSeExistir({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      numeroDestino,
+    });
+
+    await agendarEncerramentoInatividadeFluxoSeAtivo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      numeroDestino,
     });
 
     return;
@@ -7971,6 +8043,10 @@ async function seguirParaProximoNo(params: {
     condicaoPrecisaDeResposta(conexao.condicao_json)
   );
 
+  const conexoesComIA = conexoes.filter(
+    (conexao) => conexao.usar_ia === true
+  );
+
   const conexoesSempre = conexoes.filter(
     (conexao) => conexao.condicao_json?.tipo === "sempre"
   );
@@ -7979,17 +8055,16 @@ async function seguirParaProximoNo(params: {
     (conexao) => !conexao.condicao_json?.tipo
   );
 
-  if (mensagemTexto && conexoesComCondicaoDeResposta.length > 0) {
+  if (
+    mensagemTexto &&
+    (conexoesComCondicaoDeResposta.length > 0 || conexoesComIA.length > 0)
+  ) {
     conexaoEscolhida =
       conexoesComCondicaoDeResposta.find((conexao) =>
         condicaoCombinaComMensagem(conexao.condicao_json, mensagemTexto)
       ) || null;
 
     if (!conexaoEscolhida) {
-      const conexoesComIA = conexoes.filter(
-        (conexao) => conexao.usar_ia === true
-      );
-
       if (conexoesComIA.length > 0) {
         try {
           const resultadoIA = await interpretarConexaoComIA({
@@ -8126,14 +8201,28 @@ async function seguirParaProximoNo(params: {
         }
       }
 
+      const mensagemRespostaInvalida =
+        String(noAtual?.configuracao_json?.mensagem_erro || "").trim() ||
+        (noAtual?.tipo_no === "pergunta_livre_ia"
+          ? "Nao consegui identificar a melhor opcao. Pode responder de outro jeito?"
+          : "Opção inválida. Por favor, escolha uma das opções disponíveis.");
+
       await enviarMensagemAutomacao({
         empresaId,
         conversaId,
         numeroDestino,
-        conteudo:
-          "Opção inválida. Por favor, escolha uma das opções disponíveis.",
+        conteudo: mensagemRespostaInvalida,
         execucaoId,
         noId: noAtualId,
+      });
+
+      await agendarTimeoutSemRespostaSeExistir({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noId: noAtualId,
+        numeroDestino,
       });
 
       await agendarEncerramentoInatividadeFluxoSeAtivo({
@@ -8155,13 +8244,23 @@ async function seguirParaProximoNo(params: {
           "Cliente enviou uma resposta que não corresponde a nenhuma conexão.",
         entrada: {
           mensagemTexto,
-          conexoes_avaliadas: conexoesComCondicaoDeResposta.map((c) => ({
+          conexoes_avaliadas: [
+            ...conexoesComCondicaoDeResposta,
+            ...conexoesComIA.filter(
+              (conexaoIA) =>
+                !conexoesComCondicaoDeResposta.some(
+                  (conexaoCondicao) => conexaoCondicao.id === conexaoIA.id
+                )
+            ),
+          ].map((c) => ({
             id: c.id,
             condicao_json: c.condicao_json,
+            usar_ia: c.usar_ia === true,
+            descricao_ia: c.descricao_ia || null,
           })),
         },
         saida: {
-          mensagem: "Opção inválida enviada ao cliente.",
+          mensagem: mensagemRespostaInvalida,
         },
       });
 

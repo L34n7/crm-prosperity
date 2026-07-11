@@ -783,6 +783,16 @@
   );
 }
 
+.nodePerguntaIA {
+  border-color: #fcc3ff;
+  background: linear-gradient(
+    135deg,
+    #80f7ffd7 0%,
+    #b1fbc6a8 50%,
+    #f4b8ff 90%
+  );
+}
+
 .nodePadrao {
   border-color: var(--crm-border);
   background: var(--crm-surface);
@@ -1015,6 +1025,7 @@
 }
 
 .smallButton,
+.smallButtonIA,
 .dangerSmallButton {
   border-radius: 12px;
   min-height: 38px;
@@ -1034,6 +1045,26 @@
 .smallButton:hover {
   background: var(--crm-surface-soft);
   border-color: var(--crm-border-strong);
+}
+
+.smallButtonIA {
+  border: 1px solid var(--crm-border-strong);
+  background: var(--smallButtonIA);
+  color: var(--crm-text-strong);
+}
+
+.smallButtonIA:hover {
+  background: var(--smallButtonIAHover);
+  border-color: var(--crm-border-strong);
+}
+
+
+.generateIaButton {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .dangerSmallButton {
@@ -2161,6 +2192,68 @@
   color: var(--crm-text);
   font-size: 12px;
   font-weight: 700;
+}
+
+.tokenEstimateBox {
+  border: 1px solid var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  border-radius: 16px;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.tokenEstimateBox span {
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--crm-text);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tokenEstimateBox strong {
+  font-size: 24px;
+  color: var(--crm-text-strong);
+}
+
+.tokenEstimateBox small {
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tokenEstimateList {
+  display: grid;
+  gap: 8px;
+}
+
+.tokenEstimateItem {
+  min-width: 0;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tokenEstimateItem span {
+  min-width: 0;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tokenEstimateItem strong {
+  flex-shrink: 0;
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .sectionBlock {
