@@ -7,6 +7,8 @@ import { listMetaTemplates } from "@/lib/whatsapp/templates";
 import { salvarTemplateWhatsappLocalIdempotente } from "@/lib/whatsapp/templates-local";
 import { templatePossuiInstrucaoOptOut } from "@/lib/whatsapp/opt-out-policy";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 type UsuarioSistema = {
   id: string;
@@ -83,6 +85,27 @@ export async function POST(req: NextRequest) {
     }
 
     const supabaseAdmin = getSupabaseAdmin();
+    const contexto = await getUsuarioContexto();
+
+    if (!contexto.ok) {
+      return NextResponse.json(
+        { ok: false, error: contexto.error },
+        { status: contexto.status }
+      );
+    }
+
+    const podeUsarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario: contexto.usuario,
+      empresaId: usuario.empresa_id,
+      integracaoId: integracaoWhatsAppId,
+    });
+
+    if (!podeUsarIntegracao) {
+      return NextResponse.json(
+        { ok: false, error: "Sem acesso a esta integração WhatsApp." },
+        { status: 403 }
+      );
+    }
 
     const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import { listarIntegracoesWhatsappPermitidas } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -136,7 +137,12 @@ function traduzirErroMetaWhatsApp(
   }
 }
 
-async function buscarCampanhasFiltroHistorico(empresaId: string) {
+async function buscarCampanhasFiltroHistorico(
+  empresaId: string,
+  integracaoIds: string[]
+) {
+  if (integracaoIds.length === 0) return [];
+
   const { data, error } = await supabaseAdmin
     .from("whatsapp_disparo_campanhas")
     .select(
@@ -151,6 +157,7 @@ async function buscarCampanhasFiltroHistorico(empresaId: string) {
       `
     )
     .eq("empresa_id", empresaId)
+    .in("integracao_whatsapp_id", integracaoIds)
     .order("created_at", { ascending: false })
     .limit(150);
 
@@ -220,6 +227,51 @@ export async function GET(req: NextRequest) {
     const incluirTotais = searchParams.get("incluir_totais") === "true";
     const incluirCampanhas =
       searchParams.get("incluir_campanhas") === "true";
+    const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
+      usuario,
+      empresaId: usuario.empresa_id,
+    });
+
+    if (acessoIntegracoes.idsPermitidos.length === 0) {
+      return NextResponse.json(
+        {
+          ok: true,
+          resultados: [],
+          tem_mais: false,
+          proximo_cursor: null,
+          totais: incluirTotais
+            ? { total: 0, sucesso: 0, processando: 0, falha: 0 }
+            : null,
+          ...(incluirCampanhas ? { campanhas: [] } : {}),
+        },
+        {
+          headers: {
+            "Cache-Control": "private, no-store",
+          },
+        }
+      );
+    }
+
+    if (campanhaId) {
+      const { data: campanhaFiltro } = await supabaseAdmin
+        .from("whatsapp_disparo_campanhas")
+        .select("id, integracao_whatsapp_id")
+        .eq("id", campanhaId)
+        .eq("empresa_id", usuario.empresa_id)
+        .maybeSingle();
+
+      if (
+        campanhaFiltro?.integracao_whatsapp_id &&
+        !acessoIntegracoes.idsPermitidos.includes(
+          campanhaFiltro.integracao_whatsapp_id
+        )
+      ) {
+        return NextResponse.json(
+          { ok: false, error: "Sem acesso a esta integracao WhatsApp." },
+          { status: 403 }
+        );
+      }
+    }
 
     const consultaPagina = supabaseAdmin.rpc(
       "buscar_whatsapp_disparo_historico_paginado",
@@ -243,7 +295,10 @@ export async function GET(req: NextRequest) {
       : Promise.resolve({ data: null, error: null });
 
     const consultaCampanhas = incluirCampanhas
-      ? buscarCampanhasFiltroHistorico(usuario.empresa_id)
+      ? buscarCampanhasFiltroHistorico(
+          usuario.empresa_id,
+          acessoIntegracoes.idsPermitidos
+        )
       : Promise.resolve(null);
 
     const [
@@ -333,7 +388,11 @@ export async function GET(req: NextRequest) {
         total_cancelados: item.total_cancelados || 0,
         pausa_motivo: motivoCampanha || item.pausa_motivo || null,
       };
-    });
+    }).filter((item) =>
+      item.integracao_whatsapp_id
+        ? acessoIntegracoes.idsPermitidos.includes(item.integracao_whatsapp_id)
+        : true
+    );
 
     const ultimo = pagina[pagina.length - 1];
     const proximoCursor =

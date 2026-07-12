@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import { listarIntegracoesWhatsappPermitidas } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -132,6 +133,30 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
+      usuario,
+      empresaId: usuario.empresa_id,
+    });
+
+    if (integracaoId && !acessoIntegracoes.idsPermitidos.includes(integracaoId)) {
+      return NextResponse.json(
+        { ok: false, error: "Sem acesso a esta integracao WhatsApp." },
+        { status: 403 }
+      );
+    }
+
+    if (!integracaoId && acessoIntegracoes.idsPermitidos.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        usuario_id: usuario.id,
+        empresa_id: usuario.empresa_id,
+        integracao_id: null,
+        bloquear_disparos: false,
+        bloqueio_escopo: escopoEmpresa ? "empresa" : "usuario",
+        campanha: null,
+      });
+    }
+
     const campos = `
       id,
       nome,
@@ -165,8 +190,14 @@ export async function GET(request: NextRequest) {
         "integracao_whatsapp_id",
         integracaoId
       );
-    } else if (!escopoEmpresa) {
+    } else {
+      queryCampanhaAtiva = queryCampanhaAtiva.in(
+        "integracao_whatsapp_id",
+        acessoIntegracoes.idsPermitidos
+      );
+      if (!escopoEmpresa) {
       queryCampanhaAtiva = queryCampanhaAtiva.eq("usuario_id", usuario.id);
+      }
     }
 
     const { data: campanhaAtiva, error: campanhaAtivaError } =
@@ -215,8 +246,14 @@ export async function GET(request: NextRequest) {
         "integracao_whatsapp_id",
         integracaoId
       );
-    } else if (!escopoEmpresa) {
+    } else {
+      queryCampanhaRecente = queryCampanhaRecente.in(
+        "integracao_whatsapp_id",
+        acessoIntegracoes.idsPermitidos
+      );
+      if (!escopoEmpresa) {
       queryCampanhaRecente = queryCampanhaRecente.eq("usuario_id", usuario.id);
+      }
     }
 
     const { data: campanhaRecente, error: campanhaRecenteError } =

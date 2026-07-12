@@ -18,6 +18,11 @@ import {
   templatePossuiInstrucaoOptOut,
 } from "@/lib/whatsapp/opt-out-policy";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import {
+  listarIntegracoesWhatsappPermitidas,
+  usuarioPodeAcessarIntegracaoWhatsapp,
+} from "@/lib/whatsapp/integracoes-multiplas";
 
 type UsuarioSistema = {
   id: string;
@@ -114,6 +119,27 @@ export async function POST(req: NextRequest) {
     }
 
     const supabaseAdmin = getSupabaseAdmin();
+    const contexto = await getUsuarioContexto();
+
+    if (!contexto.ok) {
+      return NextResponse.json(
+        { ok: false, error: contexto.error },
+        { status: contexto.status }
+      );
+    }
+
+    const podeUsarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario: contexto.usuario,
+      empresaId: usuario.empresa_id!,
+      integracaoId: integracaoWhatsAppId,
+    });
+
+    if (!podeUsarIntegracao) {
+      return NextResponse.json(
+        { ok: false, error: "Sem acesso a esta integração WhatsApp." },
+        { status: 403 }
+      );
+    }
 
     const { data: integracao, error: integracaoError } = await supabaseAdmin
       .from("integracoes_whatsapp")
@@ -288,6 +314,20 @@ export async function GET(req: NextRequest) {
     const status = String(searchParams.get("status") || "").trim();
 
     const supabaseAdmin = getSupabaseAdmin();
+    const contexto = await getUsuarioContexto();
+
+    if (!contexto.ok) {
+      return NextResponse.json(
+        { ok: false, error: contexto.error },
+        { status: contexto.status }
+      );
+    }
+
+    const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
+      usuario: contexto.usuario,
+      empresaId: usuario.empresa_id,
+    });
+    const idsPermitidos = acessoIntegracoes.idsPermitidos;
 
     let query = supabaseAdmin
       .from("whatsapp_templates")
@@ -296,7 +336,21 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (integracaoWhatsAppId) {
+      if (!idsPermitidos.includes(integracaoWhatsAppId)) {
+        return NextResponse.json(
+          { ok: false, error: "Sem acesso a esta integração WhatsApp." },
+          { status: 403 }
+        );
+      }
+
       query = query.eq("integracao_whatsapp_id", integracaoWhatsAppId);
+    } else if (idsPermitidos.length > 0) {
+      query = query.in("integracao_whatsapp_id", idsPermitidos);
+    } else {
+      return NextResponse.json({
+        ok: true,
+        data: [],
+      });
     }
 
     if (status) {

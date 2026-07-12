@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./configurar-ambiente.module.css";
 import { t } from "@/i18n";
 import FeedbackToast from "@/components/FeedbackToast";
@@ -82,6 +82,12 @@ type Nicho = {
 
 type TemaVisual = "light" | "dark";
 
+type NovaIntegracaoPendenteStorage = {
+  integracao_id?: string;
+  posicao?: number | null;
+  wabas_anteriores?: string[];
+};
+
 type Etapa = {
   numero: number;
   titulo: string;
@@ -108,6 +114,7 @@ const AJUDA_PERMISSOES_META_URL = montarWhatsappUrl(
 );
 
 const THEME_STORAGE_KEY = "crm-theme";
+const NOVA_INTEGRACAO_STORAGE_KEY = "crm_nova_integracao_whatsapp_pendente";
 
 const ETAPAS: Etapa[] = [
   {
@@ -207,11 +214,17 @@ export default function ConfigurarAmbientePage() {
   const [configurandoWebhook, setConfigurandoWebhook] = useState(false);
   const [selecionandoModo, setSelecionandoModo] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const integracaoIdParam = searchParams.get("integracao_id") || "";
   const numeroValido =
     !!integracao?.numero && !integracao.numero.startsWith("pendente_");
   const [toastSucesso, setToastSucesso] = useState("");
   const [toastErro, setToastErro] = useState("");
   const [erroPin, setErroPin] = useState("");
+  const [modalNovaIntegracaoAberto, setModalNovaIntegracaoAberto] =
+    useState(false);
+  const [novaIntegracaoWabaDiferente, setNovaIntegracaoWabaDiferente] =
+    useState(false);
 
   const [etapaQuiz, setEtapaQuiz] = useState(0);
   const [nichos, setNichos] = useState<Nicho[]>([]);
@@ -262,6 +275,36 @@ export default function ConfigurarAmbientePage() {
     setToastErro(mensagem);
   }
 
+  function abrirAvisoNovaIntegracaoSeNecessario(
+    integracaoConcluida: IntegracaoWhatsapp | null | undefined
+  ) {
+    if (!integracaoConcluida?.id || typeof window === "undefined") return;
+
+    const bruto = window.localStorage.getItem(NOVA_INTEGRACAO_STORAGE_KEY);
+    if (!bruto) return;
+
+    try {
+      const dados = JSON.parse(bruto) as NovaIntegracaoPendenteStorage;
+
+      if (dados.integracao_id !== integracaoConcluida.id) return;
+
+      const wabasAnteriores = new Set(
+        (dados.wabas_anteriores || [])
+          .map((wabaId) => String(wabaId || "").trim())
+          .filter(Boolean)
+      );
+      const wabaAtual = String(integracaoConcluida.waba_id || "").trim();
+
+      setNovaIntegracaoWabaDiferente(
+        Boolean(wabaAtual && wabasAnteriores.size > 0 && !wabasAnteriores.has(wabaAtual))
+      );
+      setModalNovaIntegracaoAberto(true);
+      window.localStorage.removeItem(NOVA_INTEGRACAO_STORAGE_KEY);
+    } catch {
+      window.localStorage.removeItem(NOVA_INTEGRACAO_STORAGE_KEY);
+    }
+  }
+
   function aplicarTemaVisual(tema: TemaVisual) {
     document.documentElement.dataset.theme = tema;
     document.documentElement.style.colorScheme = tema;
@@ -299,7 +342,10 @@ export default function ConfigurarAmbientePage() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(dadosEmbeddedSignup),
+      body: JSON.stringify({
+        ...dadosEmbeddedSignup,
+        integracao_id: integracao?.id || integracaoIdParam || null,
+      }),
     });
 
     const data = await response.json();
@@ -402,7 +448,17 @@ export default function ConfigurarAmbientePage() {
 
       setErro(null);
 
-      let response = await fetch("/api/integracoes-whatsapp", {
+      const params = new URLSearchParams();
+
+      if (integracaoIdParam) {
+        params.set("integracao_id", integracaoIdParam);
+      }
+
+      const urlIntegracao = `/api/integracoes-whatsapp${
+        params.toString() ? `?${params}` : ""
+      }`;
+
+      let response = await fetch(urlIntegracao, {
         method: "GET",
         cache: "no-store",
       });
@@ -416,7 +472,7 @@ export default function ConfigurarAmbientePage() {
         );
 
       if (conflitoDeCriacaoConcorrente) {
-        response = await fetch("/api/integracoes-whatsapp", {
+        response = await fetch(urlIntegracao, {
           method: "GET",
           cache: "no-store",
         });
@@ -444,7 +500,7 @@ export default function ConfigurarAmbientePage() {
           console.warn("[CONFIGURAR AMBIENTE] Erro ao sincronizar Meta:", syncError);
         }
 
-        const responseAtualizada = await fetch("/api/integracoes-whatsapp", {
+        const responseAtualizada = await fetch(urlIntegracao, {
           method: "GET",
           cache: "no-store",
         });
@@ -983,6 +1039,8 @@ async function handleConcluirConfiguracao() {
     if (data.integracao) {
       setIntegracao(data.integracao);
     }
+
+    abrirAvisoNovaIntegracaoSeNecessario(data.integracao || integracao);
 
     window.sessionStorage.setItem("crm_ambiente_configurado", "true");
     window.dispatchEvent(new Event("crm_ambiente_configurado"));
@@ -1969,6 +2027,85 @@ return (
           </section>
         )}
       </div>
+
+      {modalNovaIntegracaoAberto && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => setModalNovaIntegracaoAberto(false)}
+        >
+          <div
+            className={`${styles.modalCard} ${styles.novaIntegracaoModal}`}
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-nova-integracao"
+          >
+            <div className={styles.novaIntegracaoHeader}>
+              <div>
+                <span>WhatsApp conectado</span>
+                <h2 id="titulo-nova-integracao">Novo número cadastrado</h2>
+                <p>
+                  O ambiente agora pode receber conversas e executar fluxos por
+                  mais de uma integração.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.novaIntegracaoClose}
+                onClick={() => setModalNovaIntegracaoAberto(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className={styles.novaIntegracaoGrid}>
+              <div>
+                <strong>Conversas omnichannel</strong>
+                <p>
+                  As conversas dos números liberados aparecem juntas, mantendo a
+                  identificação visual por integração.
+                </p>
+              </div>
+
+              <div>
+                <strong>Fluxos continuam ativos</strong>
+                <p>
+                  Fluxos configurados para todas as integrações seguem
+                  funcionando também para o novo número.
+                </p>
+              </div>
+
+              <div className={novaIntegracaoWabaDiferente ? styles.novaIntegracaoWarning : ""}>
+                <strong>Templates por WABA</strong>
+                <p>
+                  {novaIntegracaoWabaDiferente
+                    ? "A nova WABA precisa de templates próprios nos blocos Agendar disparo."
+                    : "Se futuramente usar outra WABA, revise templates dos blocos Agendar disparo."}
+                </p>
+              </div>
+            </div>
+
+            <div className={styles.novaIntegracaoActions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setModalNovaIntegracaoAberto(false)}
+              >
+                Entendi
+              </button>
+
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => router.push("/fluxos")}
+              >
+                Revisar fluxos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <aside
         className={`${styles.metaGuideDrawer} ${

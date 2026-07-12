@@ -10,6 +10,7 @@ import {
   CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
   isConversaHistoricoImportado,
 } from "@/lib/conversas/historico-importado";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -83,6 +84,7 @@ function usuarioPodeResetarConversa(
     empresa_id: string;
     setor_id: string | null;
     responsavel_id: string | null;
+    integracao_whatsapp_id?: string | null;
   }
 ) {
   if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
@@ -124,7 +126,7 @@ export async function POST(
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id, contato_id, origem_atendimento, historico_importado")
+    .select("id, empresa_id, setor_id, responsavel_id, contato_id, origem_atendimento, historico_importado, integracao_whatsapp_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -145,6 +147,19 @@ export async function POST(
   if (!usuarioPodeResetarConversa(usuario, conversa)) {
     return NextResponse.json(
       { ok: false, error: "Voce nao pode resetar esta conversa" },
+      { status: 403 }
+    );
+  }
+
+  const podeAcessarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+    usuario,
+    empresaId: conversa.empresa_id,
+    integracaoId: conversa.integracao_whatsapp_id,
+  });
+
+  if (!podeAcessarIntegracao) {
+    return NextResponse.json(
+      { ok: false, error: "Sem acesso a esta integracao WhatsApp." },
       { status: 403 }
     );
   }
@@ -247,6 +262,7 @@ export async function POST(
       contatoId: conversa.contato_id,
       mensagemTexto,
       numeroDestino: contato.telefone,
+      integracaoWhatsappId: conversa.integracao_whatsapp_id,
       mensagemTipo: tipoMensagemParaAutomacao(
         ultimaMensagemRecebida.tipo_mensagem
       ),

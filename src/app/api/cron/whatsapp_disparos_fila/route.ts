@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarFilaDisparosWhatsapp } from "@/lib/whatsapp/disparo-fila";
 
 export const runtime = "nodejs";
@@ -14,10 +15,32 @@ function obterLimite(request: Request) {
   return Math.max(1, Math.min(50, Math.floor(limit)));
 }
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
+function encontrouTrabalho(resultado: {
+  buscados: number;
+  enviados: number;
+  falhas: number;
+  reagendados: number;
+  ignorados: number;
+}) {
+  return (
+    resultado.buscados > 0 ||
+    resultado.enviados > 0 ||
+    resultado.falhas > 0 ||
+    resultado.reagendados > 0 ||
+    resultado.ignorados > 0
+  );
+}
 
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+export async function GET(request: Request) {
+  const auth = validarChamadaCron(request, { exigirVercelCron: true });
+
+  if (!auth.ok) {
+    console.warn("[CRON WHATSAPP DISPAROS FILA] Chamada recusada:", {
+      userAgent: auth.userAgent,
+      temAuthorization: auth.temAuthorization,
+      chamadaVercelCron: auth.chamadaVercelCron,
+    });
+
     return NextResponse.json(
       {
         ok: false,
@@ -32,6 +55,17 @@ export async function GET(request: Request) {
       limite: obterLimite(request),
       apenasSemQstash: true,
     });
+
+    if (encontrouTrabalho(resultado)) {
+      console.log("[CRON WHATSAPP DISPAROS FILA] Fallback executado:", {
+        buscados: resultado.buscados,
+        enviados: resultado.enviados,
+        falhas: resultado.falhas,
+        reagendados: resultado.reagendados,
+        ignorados: resultado.ignorados,
+        limite: resultado.limite,
+      });
+    }
 
     return NextResponse.json(resultado);
   } catch (error) {

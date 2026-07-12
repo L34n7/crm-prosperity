@@ -30,6 +30,10 @@ import {
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
 import { buscarTelefonesEmCooldownDisparo } from "@/lib/whatsapp/disparo-cooldown";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import {
+  listarIntegracoesWhatsappPermitidas,
+  usuarioPodeAcessarIntegracaoWhatsapp,
+} from "@/lib/whatsapp/integracoes-multiplas";
 
 type DestinatarioEntrada = {
   numero: string;
@@ -411,6 +415,17 @@ export async function GET(req: NextRequest) {
     const limit = Number.isFinite(limitParam)
       ? Math.min(Math.max(limitParam, 1), 100)
       : 50;
+    const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
+      usuario,
+      empresaId: usuario.empresa_id,
+    });
+
+    if (acessoIntegracoes.idsPermitidos.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        campanhas: [],
+      });
+    }
 
     const { data, error } = await supabaseAdmin
       .from("whatsapp_disparo_campanhas")
@@ -437,6 +452,7 @@ export async function GET(req: NextRequest) {
         `
       )
       .eq("empresa_id", usuario.empresa_id)
+      .in("integracao_whatsapp_id", acessoIntegracoes.idsPermitidos)
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -501,6 +517,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Integracao WhatsApp e obrigatoria." },
         { status: 400 }
+      );
+    }
+
+    const podeUsarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId,
+      integracaoId: integracaoWhatsappId,
+    });
+
+    if (!podeUsarIntegracao) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Voce nao tem acesso a esta integracao WhatsApp.",
+        },
+        { status: 403 }
       );
     }
 

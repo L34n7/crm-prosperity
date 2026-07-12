@@ -15,6 +15,7 @@ import {
   CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
   isConversaHistoricoImportado,
 } from "@/lib/conversas/historico-importado";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -93,6 +94,19 @@ export async function POST(
     if (conversa.empresa_id !== usuario.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Sem acesso a essa conversa" },
+        { status: 403 }
+      );
+    }
+
+    const podeAcessarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: conversa.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id,
+    });
+
+    if (!podeAcessarIntegracao) {
+      return NextResponse.json(
+        { ok: false, error: "Sem acesso a esta integraÃ§Ã£o WhatsApp." },
         { status: 403 }
       );
     }

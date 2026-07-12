@@ -4,6 +4,7 @@ export type AutomationEngineInput = {
   contatoId: string;
   mensagemTexto: string;
   numeroDestino: string;
+  integracaoWhatsappId?: string | null;
 
   mensagemTipo?: "texto" | "imagem" | "documento" | "audio" | "video";
   mediaId?: string | null;
@@ -18,6 +19,7 @@ export type AutomacaoFluxo = {
   nome: string;
   status: string;
   canal: string;
+  configuracao_json?: Record<string, any> | null;
 };
 
 export type AutomacaoGatilho = {

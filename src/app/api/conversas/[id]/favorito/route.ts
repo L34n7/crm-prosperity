@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
 type ConversaBase = {
   id: string;
   empresa_id: string;
+  integracao_whatsapp_id?: string | null;
 };
 
 export async function POST(
@@ -36,7 +38,7 @@ export async function POST(
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
-      .select("id, empresa_id")
+      .select("id, empresa_id, integracao_whatsapp_id")
       .eq("id", id)
       .maybeSingle<ConversaBase>();
 
@@ -57,6 +59,19 @@ export async function POST(
     if (conversa.empresa_id !== usuario.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Você não pode favoritar esta conversa" },
+        { status: 403 }
+      );
+    }
+
+    const podeAcessarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: usuario.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id,
+    });
+
+    if (!podeAcessarIntegracao) {
+      return NextResponse.json(
+        { ok: false, error: "Voce nao pode acessar esta integracao" },
         { status: 403 }
       );
     }
@@ -110,6 +125,46 @@ export async function DELETE(
     }
 
     const { usuario } = resultado;
+
+    if (!usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "UsuÃ¡rio sem empresa vinculada" },
+        { status: 400 }
+      );
+    }
+
+    const { data: conversa, error: conversaError } = await supabaseAdmin
+      .from("conversas")
+      .select("id, empresa_id, integracao_whatsapp_id")
+      .eq("id", id)
+      .maybeSingle<ConversaBase>();
+
+    if (conversaError) {
+      return NextResponse.json(
+        { ok: false, error: conversaError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!conversa || conversa.empresa_id !== usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "VocÃª nÃ£o pode desfavoritar esta conversa" },
+        { status: 403 }
+      );
+    }
+
+    const podeAcessarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: usuario.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id,
+    });
+
+    if (!podeAcessarIntegracao) {
+      return NextResponse.json(
+        { ok: false, error: "Voce nao pode acessar esta integracao" },
+        { status: 403 }
+      );
+    }
 
     const { error: deleteError } = await supabaseAdmin
       .from("conversas_favoritas")

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import styles from "./whatsapp-perfil.module.css";
 
 type Integracao = {
@@ -27,6 +28,8 @@ type Integracao = {
   onboarding_erro?: string | null;
   modo_integracao?: "cloud_api" | "coexistence";
   coex_status?: string | null;
+  posicao?: number | null;
+  waba_id?: string | null;
 };
 
 type LimiteMeta = {
@@ -83,6 +86,10 @@ const categorias = [
   { value: "TRAVEL", label: "Viagem" },
   { value: "OTHER", label: "Outro" },
 ];
+
+const COTACAO_ENTERPRISE_URL = montarWhatsappUrl(
+  "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity para usar mais números de WhatsApp."
+);
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -279,6 +286,14 @@ export default function WhatsappPerfilPage() {
     useState(false);
   const [onboardingRedirect, setOnboardingRedirect] =
     useState("/configurar-ambiente");
+  const [limiteIntegracoesWhatsapp, setLimiteIntegracoesWhatsapp] =
+    useState(1);
+  const [proximaPosicaoIntegracao, setProximaPosicaoIntegracao] =
+    useState<number | null>(null);
+  const [podeCadastrarNovaIntegracao, setPodeCadastrarNovaIntegracao] =
+    useState(false);
+  const [cadastrandoIntegracao, setCadastrandoIntegracao] = useState(false);
+  const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
 
   const [modalNomeAberto, setModalNomeAberto] = useState(false);
   const [novoNomeExibicao, setNovoNomeExibicao] = useState("");
@@ -318,6 +333,10 @@ export default function WhatsappPerfilPage() {
   const qualidadeNumero = obterQualidadeNumero(
     integracaoSelecionada?.quality_rating
   );
+  const proximaPosicaoVisual = Math.min(integracoes.length + 1, 3);
+  const deveMostrarControlesMultiIntegracao =
+    limiteIntegracoesWhatsapp > 1 || integracoes.length > 1;
+  const labelAdicionarNumero = `Add número ${proximaPosicaoIntegracao || proximaPosicaoVisual}`;
 
   const textoStatusIntegracao = obterTextoStatusIntegracao(
     integracaoSelecionada?.status,
@@ -401,6 +420,13 @@ export default function WhatsappPerfilPage() {
       setIntegracoes(listaComNomeAtualizado);
       setLimiteMeta(json.limite_meta || null);
       setAdministrador(json.administrador || null);
+      setLimiteIntegracoesWhatsapp(
+        Number(json.limite_integracoes_whatsapp || 1)
+      );
+      setProximaPosicaoIntegracao(
+        typeof json.proxima_posicao === "number" ? json.proxima_posicao : null
+      );
+      setPodeCadastrarNovaIntegracao(json.pode_cadastrar_nova === true);
 
       const novaIntegracaoId = integracaoAtualizada?.id || "";
 
@@ -422,6 +448,59 @@ export default function WhatsappPerfilPage() {
       setErro(getErrorMessage(error, "Erro ao carregar perfil."));
     } finally {
       setCarregando(false);
+    }
+  }
+
+  async function cadastrarNovaIntegracao() {
+    if (cadastrandoIntegracao) return;
+
+    if (!podeCadastrarNovaIntegracao) {
+      setModalUpgradeAberto(true);
+      return;
+    }
+
+    try {
+      setCadastrandoIntegracao(true);
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch("/api/integracoes-whatsapp", {
+        method: "POST",
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok || !json.integracao?.id) {
+        throw new Error(
+          json.error || "Nao foi possivel criar a nova integracao."
+        );
+      }
+
+      window.localStorage.setItem(
+        "crm_nova_integracao_whatsapp_pendente",
+        JSON.stringify({
+          integracao_id: json.integracao.id,
+          posicao: json.posicao || proximaPosicaoIntegracao || null,
+          wabas_anteriores: Array.from(
+            new Set(
+              integracoes
+                .map((item) => String(item.waba_id || "").trim())
+                .filter(Boolean)
+            )
+          ),
+          criado_em: new Date().toISOString(),
+        })
+      );
+
+      window.location.href = `/configurar-ambiente?integracao_id=${encodeURIComponent(
+        json.integracao.id
+      )}`;
+    } catch (error: unknown) {
+      setErro(
+        getErrorMessage(error, "Nao foi possivel cadastrar outro numero.")
+      );
+    } finally {
+      setCadastrandoIntegracao(false);
     }
   }
 
@@ -820,6 +899,46 @@ export default function WhatsappPerfilPage() {
                 ))
               )}
             </div>
+
+            <div className={styles.newConnectionArea}>
+              <button
+                type="button"
+                className={styles.newConnectionButton}
+                onClick={cadastrarNovaIntegracao}
+                disabled={cadastrandoIntegracao}
+              >
+                {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
+              </button>
+
+              {deveMostrarControlesMultiIntegracao && (
+                <span>
+                  {integracoes.length} de {limiteIntegracoesWhatsapp} integração
+                  {limiteIntegracoesWhatsapp === 1 ? "" : "es"} liberada
+                  {limiteIntegracoesWhatsapp === 1 ? "" : "s"}.
+                </span>
+              )}
+            </div>
+
+            <div className={`${styles.newConnectionArea} ${styles.hiddenLegacyConnectionArea}`}>
+              <button
+                type="button"
+                className={styles.newConnectionButton}
+                onClick={cadastrarNovaIntegracao}
+                disabled={cadastrandoIntegracao}
+              >
+                {cadastrandoIntegracao
+                  ? "Criando..."
+                  : proximaPosicaoIntegracao
+                  ? `Cadastrar nÃºmero ${proximaPosicaoIntegracao}`
+                  : "Limite de nÃºmeros atingido"}
+              </button>
+
+              <span>
+                {integracoes.length} de {limiteIntegracoesWhatsapp} integraÃ§Ã£o
+                {limiteIntegracoesWhatsapp === 1 ? "" : "es"} liberada
+                {limiteIntegracoesWhatsapp === 1 ? "" : "s"}.
+              </span>
+            </div>
           </aside>
 
           <section className={styles.previewPanel}>
@@ -1004,7 +1123,7 @@ export default function WhatsappPerfilPage() {
             >
 
             <div className={styles.profileHero}>
-              {integracoes.length > 1 && (
+              {deveMostrarControlesMultiIntegracao && integracoes.length > 1 && (
                 <div className={styles.integracaoSwitcher}>
                   <select
                     className={styles.integracaoSelect}
@@ -1023,6 +1142,49 @@ export default function WhatsappPerfilPage() {
                   </select>
                 </div>
               )}
+              {deveMostrarControlesMultiIntegracao && (
+              <div className={styles.newConnectionArea}>
+                <button
+                  type="button"
+                  className={styles.newConnectionButton}
+                  onClick={cadastrarNovaIntegracao}
+                  disabled={cadastrandoIntegracao}
+                >
+                  {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
+                </button>
+
+                {limiteIntegracoesWhatsapp > 1 && (
+                  <span>
+                    {integracoes.length} de {limiteIntegracoesWhatsapp} integração
+                    {limiteIntegracoesWhatsapp === 1 ? "" : "es"} liberada
+                    {limiteIntegracoesWhatsapp === 1 ? "" : "s"}.
+                  </span>
+                )}
+              </div>
+              )}
+
+              <div className={`${styles.newConnectionArea} ${styles.hiddenLegacyConnectionArea}`}>
+                <button
+                  type="button"
+                  className={styles.newConnectionButton}
+                  onClick={cadastrarNovaIntegracao}
+                  disabled={
+                    cadastrandoIntegracao || !podeCadastrarNovaIntegracao
+                  }
+                >
+                  {cadastrandoIntegracao
+                    ? "Criando..."
+                    : proximaPosicaoIntegracao
+                    ? `Cadastrar nÃºmero ${proximaPosicaoIntegracao}`
+                    : "Limite de nÃºmeros atingido"}
+                </button>
+
+                <span>
+                  {integracoes.length} de {limiteIntegracoesWhatsapp} integraÃ§Ã£o
+                  {limiteIntegracoesWhatsapp === 1 ? "" : "es"} liberada
+                  {limiteIntegracoesWhatsapp === 1 ? "" : "s"}.
+                </span>
+              </div>
             <label className={styles.photoUpload}>
                 <input
                 type="file"
@@ -1221,9 +1383,29 @@ export default function WhatsappPerfilPage() {
             )}
 
             <div className={styles.saveArea}>
+              <div className={styles.saveLeftActions}>
+                <button
+                  type="button"
+                  className={styles.disconnectButton}
+                  onClick={abrirModalDesconexao}
+                  disabled={!integracaoId || carregando || desconectando}
+                >
+                  Desconectar integração
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.addNumberButton}
+                  onClick={cadastrarNovaIntegracao}
+                  disabled={cadastrandoIntegracao}
+                >
+                  {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
+                </button>
+              </div>
+
               <button
                 type="button"
-                className={styles.disconnectButton}
+                className={`${styles.disconnectButton} ${styles.hiddenLegacyConnectionArea}`}
                 onClick={abrirModalDesconexao}
                 disabled={!integracaoId || carregando || desconectando}
               >
@@ -1421,6 +1603,82 @@ export default function WhatsappPerfilPage() {
             >
               {salvandoNome ? "Enviando..." : "Solicitar alteração"}
             </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {modalUpgradeAberto && (
+      <div
+        className={styles.modalOverlay}
+        onClick={() => setModalUpgradeAberto(false)}
+      >
+        <div
+          className={`${styles.modalCard} ${styles.upgradeModal}`}
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-upgrade-integracoes"
+        >
+          <div className={styles.modalHeader}>
+            <div>
+              <h2
+                id="titulo-upgrade-integracoes"
+                className={styles.modalTitle}
+              >
+                Mais números no WhatsApp
+              </h2>
+              <p className={styles.modalSubtitle}>
+                Seu plano atual não possui outra integração liberada.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className={styles.closeButton}
+              onClick={() => setModalUpgradeAberto(false)}
+            >
+              Fechar
+            </button>
+          </div>
+
+          <div className={styles.upgradeGrid}>
+            <div className={styles.upgradeItem}>
+              <span>1</span>
+              <strong>Plano Profissional Enterprise</strong>
+              <p>Libera operação com mais números oficiais no mesmo ambiente.</p>
+            </div>
+
+            <div className={styles.upgradeItem}>
+              <span>2</span>
+              <strong>Configuração assistida</strong>
+              <p>A liberação é feita no banco após a contratação ou cotação aprovada.</p>
+            </div>
+
+            <div className={styles.upgradeItem}>
+              <span>3</span>
+              <strong>Fluxos e templates</strong>
+              <p>Ao adicionar outra WABA, revise blocos de disparo agendado.</p>
+            </div>
+          </div>
+
+          <div className={styles.modalActions}>
+            <button
+              type="button"
+              className={styles.ghostButton}
+              onClick={() => setModalUpgradeAberto(false)}
+            >
+              Agora não
+            </button>
+
+            <a
+              className={styles.primaryButton}
+              href={COTACAO_ENTERPRISE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Solicitar cotação
+            </a>
           </div>
         </div>
       </div>

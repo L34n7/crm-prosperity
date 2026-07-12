@@ -21,6 +21,8 @@ export type ContarConversasNaoLidasParams = {
   busca?: string | null;
   canal?: string | null;
   listaId?: string | null;
+  integracaoWhatsappId?: string | null;
+  integracoesWhatsappIdsPermitidos?: string[];
 };
 
 export async function contarConversasNaoLidas(
@@ -43,6 +45,8 @@ export async function contarConversasNaoLidas(
       params.busca,
       params.canal,
       params.listaId,
+      params.integracaoWhatsappId,
+      [...(params.integracoesWhatsappIdsPermitidos ?? [])].sort().join(","),
     ]),
     CONVERSAS_NAO_LIDAS_CACHE_TTL_MS,
     async () => {
@@ -62,6 +66,9 @@ export async function contarConversasNaoLidas(
           p_busca: params.busca || null,
           p_canal: params.canal || null,
           p_lista_id: params.listaId || null,
+          p_integracao_whatsapp_id: params.integracaoWhatsappId || null,
+          p_integracoes_whatsapp_ids:
+            params.integracoesWhatsappIdsPermitidos ?? [],
         }
       );
 

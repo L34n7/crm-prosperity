@@ -137,6 +137,47 @@
   box-shadow: var(--crm-focus-ring);
 }
 
+.newConnectionArea {
+  width: 100%;
+  max-width: 340px;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.newConnectionButton {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 12px;
+  background: var(--crm-primary);
+  color: var(--crm-text-inverse);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.newConnectionButton:hover:not(:disabled) {
+  background: var(--crm-primary-strong);
+}
+
+.newConnectionButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.newConnectionArea span {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.hiddenLegacyConnectionArea {
+  display: none !important;
+}
+
 .formGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -429,6 +470,13 @@
   gap: 10px;
 }
 
+.saveLeftActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .saveActions {
   display: inline-flex;
   align-items: center;
@@ -714,6 +762,58 @@
   background: #000000;
 }
 
+.upgradeModal {
+  max-width: 760px;
+}
+
+.upgradeGrid {
+  padding: 22px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.upgradeItem {
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.upgradeItem span {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--crm-primary);
+  color: var(--crm-text-inverse);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.upgradeItem strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.upgradeItem p {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.primaryButton {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 
 .nameRow {
   display: grid;
@@ -875,6 +975,7 @@
 }
 
 .disconnectButton,
+.addNumberButton,
 .confirmDisconnectButton {
   flex: 0 0 auto;
   border: 1px solid var(--crm-danger-strong);
@@ -890,17 +991,24 @@
 }
 
 .disconnectButton:hover,
+.addNumberButton:hover,
 .confirmDisconnectButton:hover {
   filter: brightness(0.9);
   transform: translateY(-1px);
 }
 
 .disconnectButton:disabled,
+.addNumberButton:disabled,
 .confirmDisconnectButton:disabled {
   opacity: 0.65;
   cursor: not-allowed;
   filter: none;
   transform: none;
+}
+
+.addNumberButton {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary);
 }
 
 .disconnectModal {
@@ -1108,8 +1216,17 @@
     flex-direction: column;
   }
 
-  .disconnectButton {
+  .disconnectButton,
+  .addNumberButton {
     width: 100%;
+  }
+
+  .saveLeftActions {
+    width: 100%;
+  }
+
+  .upgradeGrid {
+    grid-template-columns: 1fr;
   }
 
   .modalActions {
@@ -1119,7 +1236,8 @@
   .ghostButton,
   .primaryButton,
   .secondaryButton,
-  .confirmDisconnectButton {
+  .confirmDisconnectButton,
+  .addNumberButton {
     width: 100%;
   }
 }

@@ -101,6 +101,14 @@ type Conversa = {
   } | null;
 };
 
+type IntegracaoWhatsappOpcao = {
+  id: string;
+  nome_conexao: string | null;
+  numero: string | null;
+  status: string | null;
+  posicao?: number | null;
+};
+
 type Mensagem = {
   id: string;
   conversa_id: string;
@@ -616,6 +624,13 @@ function limitarPreviewMacro(texto: string, limite = 96) {
   return `${valor.slice(0, Math.max(0, limite - 3)).trim()}...`;
 }
 
+type ResultadoProtocoloConversa =
+  | "em_andamento"
+  | "qualificado"
+  | "convertido"
+  | "perdido"
+  | "neutro";
+
 type ProtocoloConversa = {
   id: string;
   conversa_id: string;
@@ -623,6 +638,7 @@ type ProtocoloConversa = {
   protocolo: string;
   tipo: "abertura" | "reabertura";
   ativo: boolean;
+  resultado?: ResultadoProtocoloConversa | null;
   started_at: string | null;
   closed_at: string | null;
   created_at: string;
@@ -856,6 +872,22 @@ function getMensagemConversaEncerrada(status?: string | null) {
         icone: "⛔",
         variante: "danger" as const,
       };
+  }
+}
+
+function getCategoriaLeadProtocoloLabel(resultado?: string | null) {
+  switch (String(resultado || "").trim().toLowerCase()) {
+    case "convertido":
+      return "Convertido";
+    case "perdido":
+      return "Perdido";
+    case "qualificado":
+    case "neutro":
+      return "Qualificado";
+    case "em_andamento":
+      return "Em andamento";
+    default:
+      return "Não informado";
   }
 }
 
@@ -1998,6 +2030,9 @@ function ConversasPageContent() {
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioOpcao[]>([]);
+  const [integracoesWhatsapp, setIntegracoesWhatsapp] = useState<
+    IntegracaoWhatsappOpcao[]
+  >([]);
 
   const [busca, setBusca] = useState("");
   const [buscaDebounced, setBuscaDebounced] = useState("");
@@ -2005,6 +2040,8 @@ function ConversasPageContent() {
   const [canalFiltro, setCanalFiltro] = useState("todos");
   const [setorFiltro, setSetorFiltro] = useState("todos");
   const [responsavelFiltro, setResponsavelFiltro] = useState("todos");
+  const [integracaoWhatsappFiltro, setIntegracaoWhatsappFiltro] =
+    useState("todos");
   const [chipRapido, setChipRapido] = useState<ChipRapido>("Todas");
   const [totaisChipsRapidos, setTotaisChipsRapidos] =
     useState<TotaisChipsRapidos>(TOTAIS_CHIPS_RAPIDOS_INICIAIS);
@@ -2078,6 +2115,30 @@ function ConversasPageContent() {
   const mensagensFavoritas = painelFavoritasCarregado
     ? mensagensFavoritasPainel
     : mensagensFavoritasCarregadas;
+
+  const integracoesWhatsappPorId = useMemo(() => {
+    return new Map(integracoesWhatsapp.map((item) => [item.id, item]));
+  }, [integracoesWhatsapp]);
+
+  function obterIntegracaoConversa(conversa?: Conversa | null) {
+    if (!conversa?.integracao_whatsapp_id) return null;
+    return integracoesWhatsappPorId.get(conversa.integracao_whatsapp_id) || null;
+  }
+
+  function obterPosicaoIntegracaoConversa(conversa?: Conversa | null) {
+    const integracao = obterIntegracaoConversa(conversa);
+    const posicao = Number(integracao?.posicao || 1);
+    return posicao >= 1 && posicao <= 3 ? posicao : 1;
+  }
+
+  function getClasseCorIntegracao(conversa: Conversa) {
+    const posicao = obterPosicaoIntegracaoConversa(conversa);
+
+    if (posicao === 2) return styles.conversationItemIntegration2;
+    if (posicao === 3) return styles.conversationItemIntegration3;
+
+    return "";
+  }
 
   function abrirConversa(conversa: Conversa) {
     setMensagemSucesso("");
@@ -2581,11 +2642,30 @@ function ConversasPageContent() {
     observacoes: "",
   });
 
+  const protocoloAtualConversa = useMemo(() => {
+    return (
+      protocolosConversa.find((protocolo) => protocolo.ativo) ||
+      protocolosConversa.find(
+        (protocolo) =>
+          protocolo.protocolo === conversaSelecionada?.protocolo
+      ) ||
+      null
+    );
+  }, [conversaSelecionada?.protocolo, protocolosConversa]);
+
+  const categoriaLeadProtocoloAtual = useMemo(() => {
+    if (carregandoProtocolos && !protocoloAtualConversa) {
+      return "Carregando...";
+    }
+
+    return getCategoriaLeadProtocoloLabel(protocoloAtualConversa?.resultado);
+  }, [carregandoProtocolos, protocoloAtualConversa]);
+
   const variaveisMacroDisponiveis = useMemo(() => {
     const mapa = new Map<string, string>();
     const contato = conversaSelecionada?.contatos;
     const protocoloAtual =
-      protocolosConversa.find((protocolo) => protocolo.ativo)?.protocolo ||
+      protocoloAtualConversa?.protocolo ||
       conversaSelecionada?.protocolo ||
       "";
     const ultimoProtocolo = protocolosConversa[0]?.protocolo || protocoloAtual;
@@ -2630,6 +2710,7 @@ function ConversasPageContent() {
     return mapa;
   }, [
     conversaSelecionada,
+    protocoloAtualConversa,
     protocolosConversa,
     usuarioLogado,
     variaveisGlobais,
@@ -3799,6 +3880,19 @@ function ConversasPageContent() {
     } catch {}
   }
 
+  async function carregarIntegracoesWhatsapp() {
+    try {
+      const res = await fetch("/api/integracoes-whatsapp/listar", {
+        cache: "no-store",
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) return;
+
+      setIntegracoesWhatsapp(data.data || []);
+    } catch {}
+  }
+
   function montarQueryConversas(
     cursor: string | null,
     limit: number,
@@ -3842,6 +3936,10 @@ function ConversasPageContent() {
 
     if (listaFiltroId) {
       params.set("lista_id", listaFiltroId);
+    }
+
+    if (integracaoWhatsappFiltro !== "todos") {
+      params.set("integracao_whatsapp_id", integracaoWhatsappFiltro);
     }
 
     return params.toString();
@@ -7123,6 +7221,7 @@ const templateFooterTexto = useMemo(() => {
   useEffect(() => {
     carregarUsuarioLogado();
     carregarPoliticaAtendimento();
+    carregarIntegracoesWhatsapp();
     carregarSetores();
     carregarListasEmpresa();
     carregarEtiquetasEmpresa();
@@ -7141,6 +7240,7 @@ const templateFooterTexto = useMemo(() => {
     canalFiltro,
     setorFiltro,
     responsavelFiltro,
+    integracaoWhatsappFiltro,
     chipRapido,
     listaFiltroId,
   ]);
@@ -7891,6 +7991,26 @@ const templateFooterTexto = useMemo(() => {
                 </>
               )}
               
+              {integracoesWhatsapp.length > 1 && (
+                <div className={styles.integrationFilterRow}>
+                  <select
+                    className={styles.integrationFilterSelect}
+                    value={integracaoWhatsappFiltro}
+                    onChange={(event) =>
+                      setIntegracaoWhatsappFiltro(event.target.value)
+                    }
+                  >
+                    <option value="todos">Todos os nÃºmeros</option>
+                    {integracoesWhatsapp.map((integracao) => (
+                      <option key={integracao.id} value={integracao.id}>
+                        {integracao.nome_conexao || `NÃºmero ${integracao.posicao || ""}`}{" "}
+                        â€¢ {integracao.numero || "pendente"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className={styles.quickFilters}>
 
                 <button
@@ -7995,7 +8115,7 @@ const templateFooterTexto = useMemo(() => {
                         return (
                             <button
                               onClick={() => abrirConversa(c)}
-                              className={`${styles.conversationItem} ${
+                              className={`${styles.conversationItem} ${getClasseCorIntegracao(c)} ${
                                 ativo ? styles.conversationItemActive : ""
                               }`}
                     >
@@ -8040,6 +8160,13 @@ const templateFooterTexto = useMemo(() => {
                         </div>
 
                         <div className={styles.conversationBottomLine}>
+                          {obterIntegracaoConversa(c) && (
+                            <span className={styles.integrationMiniBadge}>
+                              {obterIntegracaoConversa(c)?.nome_conexao ||
+                                `NÃºmero ${obterPosicaoIntegracaoConversa(c)}`}
+                            </span>
+                          )}
+
                           <span
                             className={`${styles.statusMiniBadge} ${
                               ["encerrado_manual", "encerrado_24h", "encerrado_aut"].includes(c.status)
@@ -8156,6 +8283,12 @@ const templateFooterTexto = useMemo(() => {
                               </div>
                               <p className={styles.chatSubtitle}>
                                 {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                                {obterIntegracaoConversa(conversaSelecionada)
+                                  ? ` â€¢ ${
+                                      obterIntegracaoConversa(conversaSelecionada)
+                                        ?.nome_conexao || "WhatsApp"
+                                    }`
+                                  : ""}
                               </p>
                             </div>
                           </button>
@@ -10077,6 +10210,15 @@ const templateFooterTexto = useMemo(() => {
                                 onCancelar={() => setEditandoCampo(null)}
                                 onSalvar={(valor) => salvarContatoCampo("empresa", valor)}
                               />
+
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>
+                                  Categoria do lead
+                                </span>
+                                <strong className={styles.whatsInfoValue}>
+                                  {categoriaLeadProtocoloAtual}
+                                </strong>
+                              </div>
 
                               <CampanhaContatoEditavel
                                 valorInicial={obterNomeCampanhaContato(

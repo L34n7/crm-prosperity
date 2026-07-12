@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/whatsapp_coex_history?limit=3",
-      "schedule": "* * * * *"
+      "schedule": "7,22,37,52 * * * *"
     },
     {
       "path": "/api/cron/feedback_agendamentos?limit=100",
@@ -21,8 +21,20 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/emails_agendados?limit=25",
+      "schedule": "1-59/5 * * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp_nomes_pendentes?limit=10",
+      "schedule": "2-59/5 * * * *"
+    },
+    {
       "path": "/api/cron/timeout_sem_resposta",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/fila_processamento_auto?limit=50",
+      "schedule": "3-59/5 * * * *"
     }
   ]
 }

@@ -29,6 +29,7 @@ import {
   WHATSAPP_META_MANAGER_URL,
 } from "@/lib/whatsapp/meta-block";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -308,6 +309,16 @@ async function usuarioPodeAcessarConversa(
   conversa: ConversaAcesso
 ) {
   if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
+    return false;
+  }
+
+  if (
+    !(await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: conversa.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id,
+    }))
+  ) {
     return false;
   }
 

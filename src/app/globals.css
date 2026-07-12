@@ -91,8 +91,16 @@
   --headerNotificItemHover: #e9f1ee;
   --headerDropdownHover: #e6efec;
   --headerAvatar: linear-gradient(80deg, #3ec992 0%, #a2ffda 100%);
+  --conversationItem: #fcfffecc;
   --crm-bottom-Hover: linear-gradient(135deg, #ffffff 0%, #e4f6f1 100%);
   --crm-bottom-Active: linear-gradient(135deg, #fcfffe 10%, #cff8e1 100%);
+  --conversationItem2: #fcfeffcc;
+  --crm-bottom-Hover2: linear-gradient(135deg, #ffffff 0%, #e4f2f6 100%);
+  --crm-bottom-Active2: linear-gradient(135deg, #fcffffa3 10%, #cfeff8 100%);
+  --conversationItem3: #fffffccc;
+  --crm-bottom-Hover3: linear-gradient(135deg, #ffffff 0%, #f6f5e4 100%);
+  --crm-bottom-Active3: linear-gradient(135deg, #fffffcac 10%, #f8f7cf 100%);
+
   --header: #fafeff;
   --timelineArea: #efeae2;
   --background-image:

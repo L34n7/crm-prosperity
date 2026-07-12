@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -41,7 +42,7 @@ export async function PUT(
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id")
+    .select("id, empresa_id, integracao_whatsapp_id")
     .eq("id", conversaId)
     .maybeSingle();
 
@@ -56,6 +57,19 @@ export async function PUT(
     return NextResponse.json(
       { ok: false, error: "Conversa não encontrada" },
       { status: 404 }
+    );
+  }
+
+  const podeAcessarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+    usuario,
+    empresaId: usuario.empresa_id,
+    integracaoId: conversa.integracao_whatsapp_id,
+  });
+
+  if (!podeAcessarIntegracao) {
+    return NextResponse.json(
+      { ok: false, error: "Voce nao pode acessar esta integracao" },
+      { status: 403 }
     );
   }
 

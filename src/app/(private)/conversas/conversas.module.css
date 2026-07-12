@@ -372,7 +372,7 @@
   width: 100%;
   border: none;
   border-bottom: 1px solid var(--crm-border-soft);
-  background: var(--crm-surface);
+  background: var(--conversationItem);
   padding: 14px 16px;
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
@@ -389,6 +389,67 @@
 
 .conversationItemActive {
   background: var(--crm-bottom-Active);
+}
+
+.conversationItemIntegration2 {
+  background: var(--conversationItem2);
+}
+
+.conversationItemIntegration2:hover {
+  background: var(--crm-bottom-Hover2);
+}
+
+.conversationItemIntegration2.conversationItemActive {
+  background: var(--crm-bottom-Active2);
+}
+
+.conversationItemIntegration3 {
+  background: var(--conversationItem3);
+}
+
+.conversationItemIntegration3:hover {
+  background: var(--crm-bottom-Hover3);
+}
+
+.conversationItemIntegration3.conversationItemActive {
+  background: var(--crm-bottom-Active3);
+}
+
+.integrationFilterRow {
+  padding: 0 12px 10px;
+}
+
+.integrationFilterSelect {
+  width: 100%;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.integrationFilterSelect:focus {
+  box-shadow: var(--crm-focus-ring);
+}
+
+.integrationMiniBadge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 130px;
+  min-height: 20px;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conversationAvatar,

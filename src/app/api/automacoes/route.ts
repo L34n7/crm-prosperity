@@ -5,13 +5,18 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
-import { normalizarConfiguracaoFluxo } from "@/lib/automacoes/normalizar-configuracao-fluxo";
+import {
+  normalizarConfiguracaoFluxo,
+  normalizarEscopoIntegracoesWhatsappFluxo,
+  type EscopoIntegracoesWhatsappFluxo,
+} from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import {
   statusWhatsappMetaBloqueado,
   WHATSAPP_META_BLOCK_DESCRIPTION,
   WHATSAPP_META_BLOCK_HELP_URL,
   WHATSAPP_META_MANAGER_URL,
 } from "@/lib/whatsapp/meta-block";
+import { listarIntegracoesWhatsappPermitidas } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -26,6 +31,7 @@ type GatilhoNovoFluxo = {
 };
 
 type IntegracaoWhatsappMetaRow = {
+  id?: string | null;
   status?: string | null;
   phone_number_status?: string | null;
   onboarding_erro?: string | null;
@@ -71,6 +77,78 @@ function normalizarGatilhosNovoFluxo(valor: unknown): GatilhoNovoFluxo[] {
       ativo: gatilho.ativo !== false,
     };
   });
+}
+
+function escoposIntegracaoConflitam(
+  atual: EscopoIntegracoesWhatsappFluxo,
+  existente: EscopoIntegracoesWhatsappFluxo
+) {
+  if (atual.modo !== "selecionadas" || existente.modo !== "selecionadas") {
+    return true;
+  }
+
+  const idsExistentes = new Set(existente.ids);
+  return atual.ids.some((id) => idsExistentes.has(id));
+}
+
+async function validarEscopoIntegracoesWhatsappFluxo(params: {
+  empresaId: string;
+  usuario: any;
+  configuracao: unknown;
+}) {
+  const escopo = normalizarEscopoIntegracoesWhatsappFluxo(params.configuracao);
+
+  if (escopo.modo !== "selecionadas") {
+    return { ok: true as const, escopo };
+  }
+
+  const acesso = await listarIntegracoesWhatsappPermitidas({
+    usuario: params.usuario,
+    empresaId: params.empresaId,
+  });
+  const idsPermitidos = new Set(acesso.idsPermitidos);
+  const idsInvalidos = escopo.ids.filter((id) => !idsPermitidos.has(id));
+
+  if (idsInvalidos.length > 0) {
+    return {
+      ok: false as const,
+      escopo,
+      error:
+        "Uma ou mais integrações selecionadas não existem ou não estão liberadas para este usuário.",
+    };
+  }
+
+  return { ok: true as const, escopo };
+}
+
+async function buscarFluxoPadraoConflitante(params: {
+  empresaId: string;
+  escopo: EscopoIntegracoesWhatsappFluxo;
+  excluirFluxoId?: string;
+}) {
+  let query = supabaseAdmin
+    .from("automacao_fluxos")
+    .select("id, nome, configuracao_json")
+    .eq("empresa_id", params.empresaId)
+    .eq("fluxo_padrao", true)
+    .neq("status", "arquivado");
+
+  if (params.excluirFluxoId) {
+    query = query.neq("id", params.excluirFluxoId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(`Erro ao validar fluxo padrão: ${error.message}`);
+  }
+
+  return (data || []).find((fluxo) =>
+    escoposIntegracaoConflitam(
+      params.escopo,
+      normalizarEscopoIntegracoesWhatsappFluxo(fluxo.configuracao_json)
+    )
+  );
 }
 
 async function buscarConflitoPalavraChave(params: {
@@ -170,7 +248,7 @@ function respostaFluxoAtivoSemGatilho() {
       ok: false,
       code: "FLUXO_ATIVO_SEM_GATILHO",
       error:
-        "Fluxos ativos que nao sao padrao precisam ter pelo menos um gatilho ativo.",
+        "Fluxos que não são \"Padrão\" precisam ter pelo menos um gatilho ativo.",
     },
     { status: 400 }
   );
@@ -211,12 +289,21 @@ function respostaWhatsappMetaBloqueado(detalhe?: string | null) {
   );
 }
 
-async function buscarBloqueioWhatsappMeta(empresaId: string) {
-  const { data, error } = await supabaseAdmin
+async function buscarBloqueioWhatsappMeta(
+  empresaId: string,
+  integracaoIds?: string[] | null
+) {
+  let query = supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("status, phone_number_status, onboarding_erro, config_json")
+    .select("id, status, phone_number_status, onboarding_erro, config_json")
     .eq("empresa_id", empresaId)
     .eq("provider", "meta_official");
+
+  if (integracaoIds?.length) {
+    query = query.in("id", integracaoIds);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(
@@ -255,9 +342,27 @@ function configuracaoMarcada(valor: unknown) {
   return valor === true || valor === "true" || valor === 1 || valor === "1";
 }
 
+function normalizarTemplatesPorIntegracao(
+  valor: unknown
+): Record<string, string> {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(valor as Record<string, unknown>)
+      .map(([integracaoId, templateId]) => [
+        String(integracaoId || "").trim(),
+        String(templateId || "").trim(),
+      ])
+      .filter(([integracaoId, templateId]) => integracaoId && templateId)
+  );
+}
+
 async function validarTemplatesWhatsappFluxo(params: {
   empresaId: string;
   fluxoId: string;
+  escopoIntegracoes: EscopoIntegracoesWhatsappFluxo;
 }) {
   const { data: nos, error: nosError } = await supabaseAdmin
     .from("automacao_nos")
@@ -272,15 +377,83 @@ async function validarTemplatesWhatsappFluxo(params: {
     );
   }
 
+  const { data: integracoes, error: integracoesError } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select("id, nome_conexao, numero, posicao, waba_id")
+    .eq("empresa_id", params.empresaId)
+    .eq("provider", "meta_official")
+    .order("posicao", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
+
+  if (integracoesError) {
+    throw new Error(
+      `Erro ao validar integracoes WhatsApp do fluxo: ${integracoesError.message}`
+    );
+  }
+
+  const integracoesEscopo =
+    params.escopoIntegracoes.modo === "selecionadas"
+      ? (integracoes || []).filter((integracao) =>
+          params.escopoIntegracoes.ids.includes(String(integracao.id))
+        )
+      : integracoes || [];
+  const wabasEscopo = new Set(
+    integracoesEscopo.map((integracao) =>
+      String(integracao.waba_id || "").trim() || `integracao:${integracao.id}`
+    )
+  );
+  const exigeTemplatePorIntegracao = wabasEscopo.size > 1;
   const mensagensPorTemplateId = new Map<string, string>();
+  const exigenciasPorTemplateId = new Map<
+    string,
+    Array<{ integracaoId: string; wabaId: string; mensagem: string }>
+  >();
 
   for (const no of nos || []) {
     const config = configuracaoComoObjeto(no.configuracao_json);
 
     if (no.tipo_no === "agendar_disparo") {
-      const templateId = String(config.template_id || "").trim();
       const mensagem =
         `O bloco "${no.titulo || "Agendar disparo"}" precisa ter um template WhatsApp.`;
+
+      if (exigeTemplatePorIntegracao) {
+        const templatesPorIntegracao = normalizarTemplatesPorIntegracao(
+          config.templates_por_integracao
+        );
+
+        for (const integracao of integracoesEscopo) {
+          const integracaoId = String(integracao.id || "").trim();
+          const templateId = String(
+            templatesPorIntegracao[integracaoId] || ""
+          ).trim();
+          const wabaId =
+            String(integracao.waba_id || "").trim() ||
+            `integracao:${integracaoId}`;
+          const rotuloIntegracao =
+            String(integracao.nome_conexao || "").trim() ||
+            String(integracao.numero || "").trim() ||
+            `numero ${integracao.posicao || ""}`.trim() ||
+            "numero";
+          const mensagemIntegracao =
+            `O bloco "${no.titulo || "Agendar disparo"}" precisa ter um template WhatsApp para ${rotuloIntegracao}.`;
+
+          if (!templateId) return mensagemIntegracao;
+
+          mensagensPorTemplateId.set(templateId, mensagemIntegracao);
+
+          const exigencias = exigenciasPorTemplateId.get(templateId) || [];
+          exigencias.push({
+            integracaoId,
+            wabaId,
+            mensagem: mensagemIntegracao,
+          });
+          exigenciasPorTemplateId.set(templateId, exigencias);
+        }
+
+        continue;
+      }
+
+      const templateId = String(config.template_id || "").trim();
 
       if (!templateId) return mensagem;
 
@@ -315,7 +488,7 @@ async function validarTemplatesWhatsappFluxo(params: {
 
   const { data: templates, error: templatesError } = await supabaseAdmin
     .from("whatsapp_templates")
-    .select("id")
+    .select("id, integracao_whatsapp_id, waba_id, status")
     .eq("empresa_id", params.empresaId)
     .in("id", Array.from(mensagensPorTemplateId.keys()));
 
@@ -328,14 +501,82 @@ async function validarTemplatesWhatsappFluxo(params: {
   const templateIdsEncontrados = new Set(
     (templates || []).map((template) => String(template.id))
   );
+  const templatesPorId = new Map(
+    (templates || []).map((template) => [String(template.id), template])
+  );
   const templateAusente = Array.from(mensagensPorTemplateId.keys()).find(
     (templateId) => !templateIdsEncontrados.has(templateId)
   );
 
-  return templateAusente
-    ? mensagensPorTemplateId.get(templateAusente) ||
-        "Selecione um template WhatsApp."
-    : null;
+  if (templateAusente) {
+    return (
+      mensagensPorTemplateId.get(templateAusente) ||
+      "Selecione um template WhatsApp."
+    );
+  }
+
+  const templateNaoAprovado = Array.from(mensagensPorTemplateId.keys()).find(
+    (templateId) =>
+      String(templatesPorId.get(templateId)?.status || "").toUpperCase() !==
+      "APPROVED"
+  );
+
+  if (templateNaoAprovado) {
+    return (
+      mensagensPorTemplateId.get(templateNaoAprovado) ||
+      "Selecione um template WhatsApp aprovado."
+    );
+  }
+
+  if (exigeTemplatePorIntegracao) {
+    for (const [templateId, exigencias] of exigenciasPorTemplateId) {
+      const template = templatesPorId.get(templateId);
+      const templateWabaId =
+        String(template?.waba_id || "").trim() ||
+        `integracao:${String(template?.integracao_whatsapp_id || "").trim()}`;
+
+      const exigenciaIncompativel = exigencias.find(
+        (exigencia) => exigencia.wabaId !== templateWabaId
+      );
+
+      if (exigenciaIncompativel) {
+        return (
+          exigenciaIncompativel.mensagem ||
+          "O template selecionado pertence a outra WABA."
+        );
+      }
+    }
+  } else if (params.escopoIntegracoes.modo === "selecionadas") {
+    const idsPermitidos = new Set(params.escopoIntegracoes.ids);
+    const wabasPermitidas = new Set(
+      integracoesEscopo.map((integracao) =>
+        String(integracao.waba_id || "").trim()
+      )
+    );
+    const templateForaDoEscopo = Array.from(mensagensPorTemplateId.keys()).find(
+      (templateId) => {
+        const template = templatesPorId.get(templateId);
+        const integracaoTemplate = String(
+          template?.integracao_whatsapp_id || ""
+        ).trim();
+        const wabaTemplate = String(template?.waba_id || "").trim();
+
+        return (
+          (!integracaoTemplate || !idsPermitidos.has(integracaoTemplate)) &&
+          (!wabaTemplate || !wabasPermitidas.has(wabaTemplate))
+        );
+      }
+    );
+
+    if (templateForaDoEscopo) {
+      return (
+        mensagensPorTemplateId.get(templateForaDoEscopo) ||
+        "O template selecionado pertence a uma integração fora do escopo deste fluxo."
+      );
+    }
+  }
+
+  return null;
 }
 
 function textoNormalizado(valor: unknown) {
@@ -562,6 +803,21 @@ export async function POST(req: NextRequest) {
       "webhook",
       "manual",
     ]);
+    const configuracaoFluxo = normalizarConfiguracaoFluxo(
+      body?.configuracao_json
+    );
+    const validacaoEscopo = await validarEscopoIntegracoesWhatsappFluxo({
+      empresaId: usuario.empresa_id,
+      usuario,
+      configuracao: configuracaoFluxo,
+    });
+
+    if (!validacaoEscopo.ok) {
+      return NextResponse.json(
+        { ok: false, error: validacaoEscopo.error },
+        { status: 400 }
+      );
+    }
 
     const gatilhoInvalido = gatilhos.find(
       (gatilho) =>
@@ -618,7 +874,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (canal.toLowerCase() === "whatsapp" && status === "ativo") {
-      const bloqueioMeta = await buscarBloqueioWhatsappMeta(usuario.empresa_id);
+      const bloqueioMeta = await buscarBloqueioWhatsappMeta(
+        usuario.empresa_id,
+        validacaoEscopo.escopo.modo === "selecionadas"
+          ? validacaoEscopo.escopo.ids
+          : null
+      );
 
       if (bloqueioMeta) {
         return respostaWhatsappMetaBloqueado(bloqueioMeta.onboarding_erro);
@@ -626,13 +887,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (fluxoPadrao) {
-      const { data: fluxoPadraoExistente } = await supabaseAdmin
-        .from("automacao_fluxos")
-        .select("id")
-        .eq("empresa_id", usuario.empresa_id)
-        .eq("fluxo_padrao", true)
-        .neq("status", "arquivado")
-        .maybeSingle();
+      const fluxoPadraoExistente = await buscarFluxoPadraoConflitante({
+        empresaId: usuario.empresa_id,
+        escopo: validacaoEscopo.escopo,
+      });
 
       if (fluxoPadraoExistente) {
         return NextResponse.json(
@@ -676,9 +934,7 @@ export async function POST(req: NextRequest) {
         criado_por: usuario.id,
         atualizado_por: usuario.id,
         fluxo_padrao: fluxoPadrao,
-        configuracao_json: normalizarConfiguracaoFluxo(
-          body?.configuracao_json
-        ),
+        configuracao_json: configuracaoFluxo,
       })
       .select("*")
       .single();
@@ -873,7 +1129,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    if (Boolean(body?.fluxo_padrao)) {
+    if (body?.fluxo_padrao === "__validacao_legada_desativada__") {
       const { data: fluxoPadraoExistente } = await supabaseAdmin
         .from("automacao_fluxos")
         .select("id")
@@ -920,11 +1176,47 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    const configuracaoFinal =
+      atualizacao.configuracao_json !== undefined
+        ? atualizacao.configuracao_json
+        : normalizarConfiguracaoFluxo(fluxoAntes.configuracao_json);
+    const validacaoEscopo = await validarEscopoIntegracoesWhatsappFluxo({
+      empresaId: usuario.empresa_id,
+      usuario,
+      configuracao: configuracaoFinal,
+    });
+
+    if (!validacaoEscopo.ok) {
+      return NextResponse.json(
+        { ok: false, error: validacaoEscopo.error },
+        { status: 400 }
+      );
+    }
+
     const statusFinal = String(atualizacao.status || fluxoAntes.status || "");
     const fluxoPadraoFinal =
       atualizacao.fluxo_padrao !== undefined
         ? atualizacao.fluxo_padrao === true
         : fluxoAntes.fluxo_padrao === true;
+
+    if (fluxoPadraoFinal) {
+      const fluxoPadraoExistente = await buscarFluxoPadraoConflitante({
+        empresaId: usuario.empresa_id,
+        escopo: validacaoEscopo.escopo,
+        excluirFluxoId: id,
+      });
+
+      if (fluxoPadraoExistente) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Já existe um fluxo padrão cadastrado para este escopo de integração.",
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     if (statusFinal === "ativo" && !fluxoPadraoFinal) {
       const possuiGatilhoAtivo = await fluxoPossuiGatilhoAtivo({
@@ -937,7 +1229,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    if (atualizacao.status === "ativo") {
+    if (statusFinal === "ativo") {
       const canalFinal = String(
         atualizacao.canal || fluxoAntes?.canal || "whatsapp"
       ).trim();
@@ -946,6 +1238,7 @@ export async function PATCH(req: NextRequest) {
         const erroTemplateWhatsapp = await validarTemplatesWhatsappFluxo({
           empresaId: usuario.empresa_id,
           fluxoId: id,
+          escopoIntegracoes: validacaoEscopo.escopo,
         });
 
         if (erroTemplateWhatsapp) {
@@ -959,7 +1252,12 @@ export async function PATCH(req: NextRequest) {
           );
         }
 
-        const bloqueioMeta = await buscarBloqueioWhatsappMeta(usuario.empresa_id);
+        const bloqueioMeta = await buscarBloqueioWhatsappMeta(
+          usuario.empresa_id,
+          validacaoEscopo.escopo.modo === "selecionadas"
+            ? validacaoEscopo.escopo.ids
+            : null
+        );
 
         if (bloqueioMeta) {
           return respostaWhatsappMetaBloqueado(bloqueioMeta.onboarding_erro);

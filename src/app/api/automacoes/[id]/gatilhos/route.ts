@@ -116,7 +116,7 @@ function respostaUltimoGatilhoAtivo() {
       ok: false,
       code: "ULTIMO_GATILHO_ATIVO",
       error:
-        "Fluxos ativos que nao sao padrao precisam manter pelo menos um gatilho ativo.",
+        "Fluxos que não são \"Padrão\" precisam ter pelo menos um gatilho ativo.",
     },
     { status: 400 }
   );

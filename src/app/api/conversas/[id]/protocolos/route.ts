@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { podeVisualizarConversas } from "@/lib/auth/authorization";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -12,6 +13,14 @@ type ProtocoloRow = {
   protocolo: string;
   tipo: "abertura" | "reabertura";
   ativo: boolean;
+  resultado?:
+    | "em_andamento"
+    | "qualificado"
+    | "convertido"
+    | "perdido"
+    | "neutro";
+  resultado_em?: string | null;
+  valor_convertido?: number | null;
   started_at: string | null;
   closed_at: string | null;
   created_at: string;
@@ -44,7 +53,7 @@ export async function GET(
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id")
+    .select("id, empresa_id, integracao_whatsapp_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -65,6 +74,19 @@ export async function GET(
   if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
     return NextResponse.json(
       { ok: false, error: "Você não pode acessar esta conversa" },
+      { status: 403 }
+    );
+  }
+
+  const podeAcessarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+    usuario,
+    empresaId: usuario.empresa_id,
+    integracaoId: conversa.integracao_whatsapp_id,
+  });
+
+  if (!podeAcessarIntegracao) {
+    return NextResponse.json(
+      { ok: false, error: "Voce nao pode acessar esta integracao" },
       { status: 403 }
     );
   }

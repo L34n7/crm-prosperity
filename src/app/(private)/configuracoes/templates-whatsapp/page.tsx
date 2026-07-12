@@ -576,6 +576,7 @@ export default function TemplatesWhatsAppPage() {
               <div className={styles.creatorGrid}>
                   <div className={styles.formFields}>
                       <div className={styles.topGrid}>
+                        {integracoes.length !== 1 && (
                         <div className={styles.field}>
                           <label className={styles.label}>Integração WhatsApp</label>
                           <select
@@ -597,6 +598,7 @@ export default function TemplatesWhatsAppPage() {
                             ))}
                           </select>
                         </div>
+                        )}
 
                         <div className={styles.field}>
                           <label className={styles.label}>Idioma</label>
@@ -946,6 +948,7 @@ export default function TemplatesWhatsAppPage() {
 
               <div className={styles.inlineBlock}>
                 <div className={styles.searchRow}>
+                  {integracoes.length !== 1 && (
                   <div className={styles.field}>
                     <label className={styles.label}>Filtrar por integração</label>
                     <select
@@ -966,6 +969,7 @@ export default function TemplatesWhatsAppPage() {
                       ))}
                     </select>
                   </div>
+                  )}
 
                   <div className={styles.inlineActions}>
                     <button

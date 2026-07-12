@@ -132,7 +132,24 @@ type TemplateWhatsappOpcao = {
   status: string;
   categoria?: string | null;
   integracao_whatsapp_id: string;
+  waba_id?: string | null;
   payload?: any;
+};
+
+type IntegracaoWhatsappOpcao = {
+  id: string;
+  nome_conexao?: string | null;
+  numero?: string | null;
+  status?: string | null;
+  posicao?: number | null;
+  waba_id?: string | null;
+};
+
+type EscopoIntegracoesModo = "todas" | "selecionadas";
+
+type EscopoIntegracoesFluxo = {
+  modo: EscopoIntegracoesModo;
+  ids: string[];
 };
 
 type PreviewTemplateWhatsapp = {
@@ -155,6 +172,119 @@ type AlvoVariavelFluxo = "mensagem" | "agendar_disparo" | "agenda_lembrete";
 
 function templateWhatsappAprovado(template?: TemplateWhatsappOpcao | null) {
   return String(template?.status || "").trim().toUpperCase() === "APPROVED";
+}
+
+function normalizarEscopoIntegracoesFluxo(
+  configuracao?: Record<string, any> | null
+): EscopoIntegracoesFluxo {
+  const escopo = configuracao?.integracoes_whatsapp || {};
+  const idsLegados = [
+    ...(Array.isArray(configuracao?.integracoes_whatsapp_ids)
+      ? configuracao?.integracoes_whatsapp_ids
+      : []),
+    configuracao?.integracao_whatsapp_id,
+  ];
+  const ids = Array.from(
+    new Set(
+      [
+        ...(Array.isArray(escopo?.ids) ? escopo.ids : []),
+        ...idsLegados,
+      ]
+        .map((id) => String(id || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const modo =
+    String(escopo?.modo || configuracao?.integracoes_whatsapp_modo || "") ===
+      "selecionadas" && ids.length > 0
+      ? "selecionadas"
+      : "todas";
+
+  return {
+    modo,
+    ids: modo === "selecionadas" ? ids : [],
+  };
+}
+
+function montarEscopoIntegracoesFluxo(
+  modo: EscopoIntegracoesModo,
+  ids: string[]
+): EscopoIntegracoesFluxo {
+  const idsUnicos = Array.from(
+    new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))
+  );
+
+  return modo === "selecionadas" && idsUnicos.length > 0
+    ? { modo: "selecionadas", ids: idsUnicos }
+    : { modo: "todas", ids: [] };
+}
+
+function escoposIntegracaoConflitam(
+  atual: EscopoIntegracoesFluxo,
+  existente: EscopoIntegracoesFluxo
+) {
+  if (atual.modo !== "selecionadas" || existente.modo !== "selecionadas") {
+    return true;
+  }
+
+  const idsExistentes = new Set(existente.ids);
+  return atual.ids.some((id) => idsExistentes.has(id));
+}
+
+function rotuloIntegracaoWhatsapp(integracao: IntegracaoWhatsappOpcao) {
+  const posicao = integracao.posicao ? `Numero ${integracao.posicao}` : "Numero";
+  const nome =
+    String(integracao.nome_conexao || "").trim() ||
+    String(integracao.numero || "").trim() ||
+    "WhatsApp";
+
+  return `${posicao} - ${nome}`;
+}
+
+function normalizarTemplatesPorIntegracao(valor: unknown) {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(valor as Record<string, unknown>)
+      .map(([integracaoId, templateId]) => [
+        String(integracaoId || "").trim(),
+        String(templateId || "").trim(),
+      ])
+      .filter(([integracaoId, templateId]) => integracaoId && templateId)
+  );
+}
+
+function obterIntegracoesDoEscopoFluxo(
+  escopo: EscopoIntegracoesFluxo,
+  integracoes: IntegracaoWhatsappOpcao[]
+) {
+  if (escopo.modo !== "selecionadas") return integracoes;
+
+  const ids = new Set(escopo.ids);
+  return integracoes.filter((integracao) => ids.has(integracao.id));
+}
+
+function chaveWabaIntegracao(integracao: IntegracaoWhatsappOpcao) {
+  return String(integracao.waba_id || "").trim() || `integracao:${integracao.id}`;
+}
+
+function usaTemplatesPorIntegracao(integracoes: IntegracaoWhatsappOpcao[]) {
+  return new Set(integracoes.map(chaveWabaIntegracao)).size > 1;
+}
+
+function templateCompativelComIntegracao(
+  template: TemplateWhatsappOpcao | null | undefined,
+  integracao: IntegracaoWhatsappOpcao
+) {
+  if (!template) return false;
+  if (template.integracao_whatsapp_id === integracao.id) return true;
+
+  const templateWabaId = String(template.waba_id || "").trim();
+  const integracaoWabaId = String(integracao.waba_id || "").trim();
+
+  return Boolean(templateWabaId && integracaoWabaId && templateWabaId === integracaoWabaId);
 }
 
 function contarVariaveisTextoTemplate(texto?: string | null) {
@@ -1020,6 +1150,9 @@ const AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA =
 const AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA =
   "Este bloco precisa de uma CONEXÃO com palavra 'ERRO' em RESPOSTA ESPERADA para tratar falhas de IA e tokens esgotados.";
 
+const AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO =
+  "Este fluxo atende WABAs diferentes. Selecione um template aprovado para cada número neste bloco.";
+
 function normalizarTextoComparacao(valor: unknown) {
   return String(valor || "").trim().toLowerCase();
 }
@@ -1058,6 +1191,37 @@ function nodeArquivoIaSemConexaoErro(node: Node, edgesAtuais: Edge[]) {
     return (
       edge.source === node.id &&
       condicaoCombinaComErroArquivoIa(data?.condicao_json)
+    );
+  });
+}
+
+function nodeAgendarDisparoPrecisaTemplatePorWaba(
+  node: Node,
+  integracoesEscopo: IntegracaoWhatsappOpcao[],
+  templates: TemplateWhatsappOpcao[]
+) {
+  if (String(node.data?.tipo_no || "") !== "agendar_disparo") {
+    return false;
+  }
+
+  if (!usaTemplatesPorIntegracao(integracoesEscopo)) {
+    return false;
+  }
+
+  const config = configuracaoNodeComoObjeto(node.data?.configuracao_json);
+  const templatesPorIntegracao = normalizarTemplatesPorIntegracao(
+    config.templates_por_integracao
+  );
+
+  return integracoesEscopo.some((integracao) => {
+    const templateId = String(templatesPorIntegracao[integracao.id] || "").trim();
+    const template = templates.find((item) => item.id === templateId);
+
+    return (
+      !templateId ||
+      !template ||
+      !templateWhatsappAprovado(template) ||
+      !templateCompativelComIntegracao(template, integracao)
     );
   });
 }
@@ -1196,6 +1360,8 @@ function dbNoParaReactFlow(no: AutomacaoNo): Node {
 
 function NodeCustom({ data, dragging }: any) {
   const temAlertaConexaoErro = data?.arquivo_ia_sem_conexao_erro === true;
+  const temAlertaTemplateWaba =
+    data?.agendar_disparo_template_waba_alerta === true;
 
   return (
     <div
@@ -1237,6 +1403,18 @@ function NodeCustom({ data, dragging }: any) {
               data-tooltip={AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA}
               title={AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA}
               aria-label={AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA}
+              role="img"
+            >
+              i
+            </span>
+          )}
+
+          {temAlertaTemplateWaba && (
+            <span
+              className={`${styles.infoAlertIcon} ${styles.infoAlertIconNode} ${styles.infoAlertIconWarning}`}
+              data-tooltip={AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO}
+              title={AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO}
+              aria-label={AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO}
               role="img"
             >
               i
@@ -2044,10 +2222,38 @@ function FluxosPageContent() {
 
   const [novoFluxoNome, setNovoFluxoNome] = useState("");
   const [novoFluxoPadrao, setNovoFluxoPadrao] = useState(false);
+  const [integracoesWhatsapp, setIntegracoesWhatsapp] = useState<
+    IntegracaoWhatsappOpcao[]
+  >([]);
+  const [limiteIntegracoesWhatsappFluxos, setLimiteIntegracoesWhatsappFluxos] =
+    useState(1);
+  const [carregandoIntegracoesWhatsapp, setCarregandoIntegracoesWhatsapp] =
+    useState(false);
+  const [novoFluxoEscopoIntegracoesModo, setNovoFluxoEscopoIntegracoesModo] =
+    useState<EscopoIntegracoesModo>("todas");
+  const [novoFluxoIntegracoesIds, setNovoFluxoIntegracoesIds] = useState<
+    string[]
+  >([]);
+  const deveMostrarEscopoIntegracoesFluxo =
+    limiteIntegracoesWhatsappFluxos > 1 || integracoesWhatsapp.length > 1;
   const jaExisteFluxoPadrao = fluxos.some(
-    (fluxo) =>
-      fluxo.fluxo_padrao &&
-      fluxo.status !== "arquivado"
+    (fluxo) => {
+      const escopoNovo = montarEscopoIntegracoesFluxo(
+        deveMostrarEscopoIntegracoesFluxo
+          ? novoFluxoEscopoIntegracoesModo
+          : "todas",
+        deveMostrarEscopoIntegracoesFluxo ? novoFluxoIntegracoesIds : []
+      );
+
+      return (
+        fluxo.fluxo_padrao &&
+        fluxo.status !== "arquivado" &&
+        escoposIntegracaoConflitam(
+          escopoNovo,
+          normalizarEscopoIntegracoesFluxo(fluxo.configuracao_json)
+        )
+      );
+    }
   );
 
   const [editandoNodeId, setEditandoNodeId] = useState<string | null>(null);
@@ -2081,6 +2287,11 @@ function FluxosPageContent() {
   const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
   const [erroEdicaoFluxo, setErroEdicaoFluxo] = useState("");
   const [fluxoPadraoEdicao, setFluxoPadraoEdicao] = useState(false);
+  const [fluxoEscopoIntegracoesModoEdicao, setFluxoEscopoIntegracoesModoEdicao] =
+    useState<EscopoIntegracoesModo>("todas");
+  const [fluxoIntegracoesIdsEdicao, setFluxoIntegracoesIdsEdicao] = useState<
+    string[]
+  >([]);
   
   const [encerrarInatividadeQuantidade, setEncerrarInatividadeQuantidade] = useState("23");
   const [encerrarInatividadeUnidade, setEncerrarInatividadeUnidade] =
@@ -2211,6 +2422,10 @@ function FluxosPageContent() {
   const [arquivoMensagemErroNode, setArquivoMensagemErroNode] = useState("");
 
   const [agendarDisparoTemplateIdNode, setAgendarDisparoTemplateIdNode] = useState("");
+  const [
+    agendarDisparoTemplatesPorIntegracaoNode,
+    setAgendarDisparoTemplatesPorIntegracaoNode,
+  ] = useState<Record<string, string>>({});
   const [agendarDisparoQuantidadeNode, setAgendarDisparoQuantidadeNode] = useState("32");
   const [agendarDisparoUnidadeNode, setAgendarDisparoUnidadeNode] =
     useState<"horas" | "dias">("horas");
@@ -2615,6 +2830,60 @@ function FluxosPageContent() {
     );
   }, [templatesWhatsapp, agendarDisparoTemplateIdNode]);
 
+  const escopoIntegracoesFluxoSelecionado = useMemo(() => {
+    return normalizarEscopoIntegracoesFluxo(
+      fluxoSelecionado?.configuracao_json
+    );
+  }, [fluxoSelecionado?.configuracao_json]);
+
+  const integracoesEscopoFluxoSelecionado = useMemo(() => {
+    return obterIntegracoesDoEscopoFluxo(
+      escopoIntegracoesFluxoSelecionado,
+      integracoesWhatsapp
+    );
+  }, [escopoIntegracoesFluxoSelecionado, integracoesWhatsapp]);
+
+  const agendarDisparoUsaTemplatesPorIntegracao = useMemo(() => {
+    return usaTemplatesPorIntegracao(integracoesEscopoFluxoSelecionado);
+  }, [integracoesEscopoFluxoSelecionado]);
+
+  const templatesAgendarDisparoSelecionados = useMemo(() => {
+    if (!agendarDisparoUsaTemplatesPorIntegracao) {
+      return templateAgendarDisparoSelecionado
+        ? [templateAgendarDisparoSelecionado]
+        : [];
+    }
+
+    return integracoesEscopoFluxoSelecionado
+      .map((integracao) => {
+        const templateId =
+          agendarDisparoTemplatesPorIntegracaoNode[integracao.id] || "";
+
+        return (
+          templatesWhatsapp.find((template) => template.id === templateId) ||
+          null
+        );
+      })
+      .filter((template): template is TemplateWhatsappOpcao => Boolean(template));
+  }, [
+    agendarDisparoUsaTemplatesPorIntegracao,
+    agendarDisparoTemplatesPorIntegracaoNode,
+    integracoesEscopoFluxoSelecionado,
+    templateAgendarDisparoSelecionado,
+    templatesWhatsapp,
+  ]);
+
+  const templateAgendarDisparoPreview = useMemo(() => {
+    return (
+      templateAgendarDisparoSelecionado ||
+      templatesAgendarDisparoSelecionados[0] ||
+      null
+    );
+  }, [
+    templateAgendarDisparoSelecionado,
+    templatesAgendarDisparoSelecionados,
+  ]);
+
   const templateAgendaLembreteSelecionado = useMemo(() => {
     return (
       templatesWhatsapp.find(
@@ -2736,10 +3005,10 @@ function FluxosPageContent() {
 
   const previewTemplateAgendarDisparo = useMemo(() => {
     return montarPreviewTemplateWhatsapp(
-      templateAgendarDisparoSelecionado,
+      templateAgendarDisparoPreview,
       agendarDisparoVariaveisNode
     );
-  }, [templateAgendarDisparoSelecionado, agendarDisparoVariaveisNode]);
+  }, [templateAgendarDisparoPreview, agendarDisparoVariaveisNode]);
 
   const previewTemplateAgendaLembrete = useMemo(() => {
     return montarPreviewTemplateWhatsapp(
@@ -2749,8 +3018,8 @@ function FluxosPageContent() {
   }, [templateAgendaLembreteSelecionado, agendaLembreteVariaveisNode]);
 
   const totalVariaveisTemplateAgendarDisparo = useMemo(() => {
-    return contarVariaveisTemplateWhatsapp(templateAgendarDisparoSelecionado);
-  }, [templateAgendarDisparoSelecionado]);
+    return contarVariaveisTemplateWhatsapp(templateAgendarDisparoPreview);
+  }, [templateAgendarDisparoPreview]);
 
   const totalVariaveisTemplateAgendaLembrete = useMemo(() => {
     return contarVariaveisTemplateWhatsapp(templateAgendaLembreteSelecionado);
@@ -2828,6 +3097,52 @@ function FluxosPageContent() {
     } finally {
       setCarregandoTemplatesWhatsapp(false);
     }
+  }
+
+  async function carregarIntegracoesWhatsapp() {
+    try {
+      setCarregandoIntegracoesWhatsapp(true);
+
+      const res = await fetch("/api/integracoes-whatsapp/listar", {
+        cache: "no-store",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao carregar integrações WhatsApp.");
+      }
+
+      const lista = Array.isArray(json.data)
+        ? json.data
+        : Array.isArray(json.integracoes)
+        ? json.integracoes
+        : [];
+
+      setIntegracoesWhatsapp(lista);
+      setLimiteIntegracoesWhatsappFluxos(
+        Math.max(1, Number(json.limite_integracoes_whatsapp || 1))
+      );
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao carregar integrações WhatsApp.");
+    } finally {
+      setCarregandoIntegracoesWhatsapp(false);
+    }
+  }
+
+  function alternarIntegracaoEscopoNovoFluxo(integracaoId: string) {
+    setNovoFluxoIntegracoesIds((atuais) =>
+      atuais.includes(integracaoId)
+        ? atuais.filter((id) => id !== integracaoId)
+        : [...atuais, integracaoId]
+    );
+  }
+
+  function alternarIntegracaoEscopoEdicao(integracaoId: string) {
+    setFluxoIntegracoesIdsEdicao((atuais) =>
+      atuais.includes(integracaoId)
+        ? atuais.filter((id) => id !== integracaoId)
+        : [...atuais, integracaoId]
+    );
   }
 
   async function carregarAgendasOpcoes() {
@@ -3529,6 +3844,7 @@ function FluxosPageContent() {
     carregarFluxos();
     carregarSetores();
     carregarMidias();
+    carregarIntegracoesWhatsapp();
     carregarTemplatesWhatsapp();
     carregarAgendasOpcoes();
     carregarVariaveisPersonalizadas();
@@ -3685,6 +4001,22 @@ async function criarFluxoRapido() {
       return;
     }
 
+    const escopoIntegracoes = montarEscopoIntegracoesFluxo(
+      deveMostrarEscopoIntegracoesFluxo
+        ? novoFluxoEscopoIntegracoesModo
+        : "todas",
+      deveMostrarEscopoIntegracoesFluxo ? novoFluxoIntegracoesIds : []
+    );
+
+    if (
+      deveMostrarEscopoIntegracoesFluxo &&
+      novoFluxoEscopoIntegracoesModo === "selecionadas" &&
+      escopoIntegracoes.ids.length === 0
+    ) {
+      setErroCriacaoFluxo("Selecione pelo menos uma integração WhatsApp.");
+      return;
+    }
+
     const res = await fetch("/api/automacoes", {
       method: "POST",
       headers: {
@@ -3705,6 +4037,7 @@ async function criarFluxoRapido() {
               ativo: gatilho.ativo !== false,
             })),
         configuracao_json: {
+          integracoes_whatsapp: escopoIntegracoes,
           encerramento_inatividade: {
             ativo: true,
             tempo_quantidade: quantidadeInformada,
@@ -3727,6 +4060,8 @@ async function criarFluxoRapido() {
     setDescricaoNovoFluxo("");
     setGatilhosNovoFluxo([]);
     setNovoFluxoPadrao(false);
+    setNovoFluxoEscopoIntegracoesModo("todas");
+    setNovoFluxoIntegracoesIds([]);
     setNovoGatilhoValor("");
     setNovoGatilhoCondicao("contem");
     resetarEncerramentoInatividadePadrao();
@@ -4183,6 +4518,11 @@ function offsetLabelConexao(edgeId: string) {
     setAgendarDisparoTemplateIdNode(
       String(configuracaoJson?.template_id || "")
     );
+    setAgendarDisparoTemplatesPorIntegracaoNode(
+      normalizarTemplatesPorIntegracao(
+        configuracaoJson?.templates_por_integracao
+      )
+    );
 
     setAgendarDisparoQuantidadeNode(
       String(configuracaoJson?.tempo_quantidade || 32)
@@ -4522,6 +4862,7 @@ async function aplicarEdicaoNoInterno() {
 
   if (
     tipoNodeEdicao === "agendar_disparo" &&
+    !agendarDisparoUsaTemplatesPorIntegracao &&
     (!templateAgendarDisparoSelecionado ||
       !templateWhatsappAprovado(templateAgendarDisparoSelecionado))
   ) {
@@ -4529,34 +4870,72 @@ async function aplicarEdicaoNoInterno() {
     return;
   }
 
-  if (tipoNodeEdicao === "agendar_disparo" && templateAgendarDisparoSelecionado) {
-    if (templateWhatsappTemCabecalhoMidia(templateAgendarDisparoSelecionado)) {
-      setErro(
-        "O template selecionado possui cabecalho de midia. Use um template aprovado apenas com texto para agendar disparos."
-      );
-      return;
-    }
+  if (tipoNodeEdicao === "agendar_disparo") {
+    const templatesParaValidar = agendarDisparoUsaTemplatesPorIntegracao
+      ? integracoesEscopoFluxoSelecionado.map((integracao) => {
+          const templateId =
+            agendarDisparoTemplatesPorIntegracaoNode[integracao.id] || "";
+          const template =
+            templatesWhatsapp.find((item) => item.id === templateId) || null;
 
-    const totalVariaveisTemplate = contarVariaveisTemplateWhatsapp(
-      templateAgendarDisparoSelecionado
-    );
-    const totalVariaveisConfiguradas = contarVariaveisObrigatoriasPreenchidas(
-      agendarDisparoVariaveisNode,
-      totalVariaveisTemplate
-    );
+          return { integracao, template };
+        })
+      : [
+          {
+            integracao: integracoesEscopoFluxoSelecionado[0] || null,
+            template: templateAgendarDisparoSelecionado,
+          },
+        ];
 
-    if (totalVariaveisTemplate > 3) {
-      setErro(
-        "O template selecionado exige mais de 3 variaveis. Use um template com ate 3 variaveis para este bloco."
-      );
-      return;
-    }
+    for (const item of templatesParaValidar) {
+      const template = item.template;
+      const rotuloIntegracao = item.integracao
+        ? rotuloIntegracaoWhatsapp(item.integracao)
+        : "integracao";
 
-    if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
-      setErro(
-        `O template selecionado exige ${totalVariaveisTemplate} variavel(is). Preencha os campos Variavel 1, 2 e 3 antes de salvar o bloco.`
+      if (!template || !templateWhatsappAprovado(template)) {
+        setErro(
+          agendarDisparoUsaTemplatesPorIntegracao
+            ? `Selecione um template WhatsApp aprovado para ${rotuloIntegracao}.`
+            : "Selecione um template WhatsApp aprovado."
+        );
+        return;
+      }
+
+      if (
+        item.integracao &&
+        !templateCompativelComIntegracao(template, item.integracao)
+      ) {
+        setErro(`O template selecionado nao pertence a WABA de ${rotuloIntegracao}.`);
+        return;
+      }
+
+      if (templateWhatsappTemCabecalhoMidia(template)) {
+        setErro(
+          "O template selecionado possui cabecalho de midia. Use um template aprovado apenas com texto para agendar disparos."
+        );
+        return;
+      }
+
+      const totalVariaveisTemplate = contarVariaveisTemplateWhatsapp(template);
+      const totalVariaveisConfiguradas = contarVariaveisObrigatoriasPreenchidas(
+        agendarDisparoVariaveisNode,
+        totalVariaveisTemplate
       );
-      return;
+
+      if (totalVariaveisTemplate > 3) {
+        setErro(
+          "O template selecionado exige mais de 3 variaveis. Use um template com ate 3 variaveis para este bloco."
+        );
+        return;
+      }
+
+      if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
+        setErro(
+          `O template selecionado exige ${totalVariaveisTemplate} variavel(is). Preencha os campos Variavel 1, 2 e 3 antes de salvar o bloco.`
+        );
+        return;
+      }
     }
   }
 
@@ -4696,6 +5075,8 @@ async function aplicarEdicaoNoInterno() {
 
       if (tipoFinal === "agendar_disparo") {
         configuracao_json.template_id = agendarDisparoTemplateIdNode;
+        configuracao_json.templates_por_integracao =
+          agendarDisparoTemplatesPorIntegracaoNode;
         configuracao_json.tempo_quantidade = Math.max(
           1,
           Number(agendarDisparoQuantidadeNode || 1)
@@ -5311,11 +5692,22 @@ function existeOutroFluxoPadraoNaEmpresa() {
 
   if (!fluxoParaEditar) return false;
 
+  const escopoEdicao = montarEscopoIntegracoesFluxo(
+    deveMostrarEscopoIntegracoesFluxo
+      ? fluxoEscopoIntegracoesModoEdicao
+      : "todas",
+    deveMostrarEscopoIntegracoesFluxo ? fluxoIntegracoesIdsEdicao : []
+  );
+
   return fluxos.some(
     (fluxo) =>
       fluxo.fluxo_padrao &&
       fluxo.status !== "arquivado" &&
-      fluxo.id !== fluxoParaEditar.id
+      fluxo.id !== fluxoParaEditar.id &&
+      escoposIntegracaoConflitam(
+        escopoEdicao,
+        normalizarEscopoIntegracoesFluxo(fluxo.configuracao_json)
+      )
   );
 }
 
@@ -5340,6 +5732,9 @@ function abrirEdicaoFluxo(fluxoAlvo?: Fluxo) {
   setFluxoPadraoEdicao(Boolean(fluxoParaEditar.fluxo_padrao));
 
   const config = fluxoParaEditar.configuracao_json || {};
+  const escopoIntegracoes = normalizarEscopoIntegracoesFluxo(config);
+  setFluxoEscopoIntegracoesModoEdicao(escopoIntegracoes.modo);
+  setFluxoIntegracoesIdsEdicao(escopoIntegracoes.ids);
   const encerramento = config.encerramento_inatividade || {};
   const unidadeEncerramento =
     encerramento.tempo_unidade === "minutos" ? "minutos" : "horas";
@@ -5396,6 +5791,22 @@ async function salvarEdicaoFluxo() {
     return;
   }
 
+  const escopoIntegracoes = montarEscopoIntegracoesFluxo(
+    deveMostrarEscopoIntegracoesFluxo
+      ? fluxoEscopoIntegracoesModoEdicao
+      : "todas",
+    deveMostrarEscopoIntegracoesFluxo ? fluxoIntegracoesIdsEdicao : []
+  );
+
+  if (
+    deveMostrarEscopoIntegracoesFluxo &&
+    fluxoEscopoIntegracoesModoEdicao === "selecionadas" &&
+    escopoIntegracoes.ids.length === 0
+  ) {
+    setErroEdicaoFluxo("Selecione pelo menos uma integração WhatsApp.");
+    return;
+  }
+
   try {
     setErro("");
     setSucesso("");
@@ -5412,6 +5823,7 @@ async function salvarEdicaoFluxo() {
         fluxo_padrao: fluxoPadraoEdicao,
         configuracao_json: {
           ...(fluxoParaEditar.configuracao_json || {}),
+          integracoes_whatsapp: escopoIntegracoes,
           encerramento_inatividade: {
             ativo: true,
             tempo_quantidade: quantidadeInformada,
@@ -6061,6 +6473,16 @@ function validarFluxoAntesDeAtivar(params?: {
   const fluxoValidacao = params?.fluxo ?? fluxoSelecionado;
   const nodesValidacao = params?.nodesValidacao ?? nodes;
   const edgesValidacao = params?.edgesValidacao ?? edges;
+  const escopoIntegracoesValidacao = normalizarEscopoIntegracoesFluxo(
+    fluxoValidacao?.configuracao_json
+  );
+  const integracoesEscopoValidacao = obterIntegracoesDoEscopoFluxo(
+    escopoIntegracoesValidacao,
+    integracoesWhatsapp
+  );
+  const usaTemplatesPorIntegracaoValidacao = usaTemplatesPorIntegracao(
+    integracoesEscopoValidacao
+  );
 
   if (!fluxoValidacao) {
     return "Selecione um fluxo.";
@@ -6243,22 +6665,66 @@ function validarFluxoAntesDeAtivar(params?: {
     }
 
     if (tipoNo === "agendar_disparo") {
-      const templateId = String(config.template_id || "").trim();
-      const templateSelecionado = templatesWhatsapp.find(
-        (template) => template.id === templateId
+      const templatesPorIntegracao = normalizarTemplatesPorIntegracao(
+        config.templates_por_integracao
       );
+      const templatesParaValidar = usaTemplatesPorIntegracaoValidacao
+        ? integracoesEscopoValidacao.map((integracao) => {
+            const templateId = String(
+              templatesPorIntegracao[integracao.id] || ""
+            ).trim();
 
-      if (!templateId || !templateSelecionado) {
-        return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp aprovado.`;
-      }
+            return {
+              integracao,
+              templateId,
+              template: templatesWhatsapp.find(
+                (template) => template.id === templateId
+              ),
+            };
+          })
+        : [
+            {
+              integracao: null,
+              templateId: String(config.template_id || "").trim(),
+              template: templatesWhatsapp.find(
+                (template) => template.id === String(config.template_id || "").trim()
+              ),
+            },
+          ];
 
-      if (templateWhatsappTemCabecalhoMidia(templateSelecionado)) {
-        return `O bloco "${node.data?.titulo}" usa um template com cabecalho de midia. Use um template apenas com texto para disparos agendados.`;
-      }
+      for (const item of templatesParaValidar) {
+        const rotuloIntegracao = item.integracao
+          ? ` para ${rotuloIntegracaoWhatsapp(item.integracao)}`
+          : "";
 
-      if (templateSelecionado) {
+        if (!item.templateId || !item.template) {
+          return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp aprovado${rotuloIntegracao}.`;
+        }
+
+        if (
+          item.integracao &&
+          !templateCompativelComIntegracao(item.template, item.integracao)
+        ) {
+          return `O bloco "${node.data?.titulo}" usa um template de outra WABA${rotuloIntegracao}.`;
+        }
+
+        if (
+          !usaTemplatesPorIntegracaoValidacao &&
+          item.template &&
+          integracoesEscopoValidacao.length > 0 &&
+          !integracoesEscopoValidacao.some((integracao) =>
+            templateCompativelComIntegracao(item.template, integracao)
+          )
+        ) {
+          return `O bloco "${node.data?.titulo}" usa um template fora do escopo do fluxo.`;
+        }
+
+        if (templateWhatsappTemCabecalhoMidia(item.template)) {
+          return `O bloco "${node.data?.titulo}" usa um template com cabecalho de midia. Use um template apenas com texto para disparos agendados.`;
+        }
+
         const totalVariaveisTemplate =
-          contarVariaveisTemplateWhatsapp(templateSelecionado);
+          contarVariaveisTemplateWhatsapp(item.template);
         const totalVariaveisConfiguradas =
           contarVariaveisObrigatoriasPreenchidas(
             Array.isArray(config.variaveis) ? config.variaveis : [],
@@ -6397,7 +6863,7 @@ function validarFluxoAntesDeAtivar(params?: {
         ) &&
       !String(config.midia_url || "").trim()
     ) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma URL de mídia.`;
+      return `O bloco "${node.data?.titulo}" precisa ter uma mídia selecionada.`;
     }
   }
 
@@ -6650,7 +7116,7 @@ useEffect(() => {
 
   const templateSelecionado =
     tipoNodeEdicao === "agendar_disparo"
-      ? templateAgendarDisparoSelecionado
+      ? templateAgendarDisparoPreview
       : templateAgendaLembreteSelecionado;
 
   const categoria = String(
@@ -6667,10 +7133,8 @@ useEffect(() => {
   tipoNodeEdicao,
   agendaLembreteAtivoNode,
   agendaLembreteWhatsappNode,
-  templateAgendarDisparoSelecionado?.id,
-  templateAgendarDisparoSelecionado?.categoria,
-  templateAgendaLembreteSelecionado?.id,
-  templateAgendaLembreteSelecionado?.categoria,
+  templateAgendarDisparoPreview,
+  templateAgendaLembreteSelecionado,
 ]);
 
 const nodesRenderizados = useMemo(
@@ -6680,9 +7144,15 @@ const nodesRenderizados = useMemo(
       data: {
         ...node.data,
         arquivo_ia_sem_conexao_erro: nodeArquivoIaSemConexaoErro(node, edges),
+        agendar_disparo_template_waba_alerta:
+          nodeAgendarDisparoPrecisaTemplatePorWaba(
+            node,
+            integracoesEscopoFluxoSelecionado,
+            templatesWhatsapp
+          ),
       },
     })),
-  [nodes, edges]
+  [nodes, edges, integracoesEscopoFluxoSelecionado, templatesWhatsapp]
 );
 
 const nodesParaPreviaWhatsapp = useMemo(() => {
@@ -6757,6 +7227,8 @@ const nodesParaPreviaWhatsapp = useMemo(() => {
 
     if (tipoFinal === "agendar_disparo") {
       configuracao.template_id = agendarDisparoTemplateIdNode;
+      configuracao.templates_por_integracao =
+        agendarDisparoTemplatesPorIntegracaoNode;
       configuracao.tempo_quantidade = Math.max(
         1,
         Number(agendarDisparoQuantidadeNode || 1)
@@ -6849,6 +7321,7 @@ const nodesParaPreviaWhatsapp = useMemo(() => {
   capturaVariavelNode,
   capturaTipoNode,
   agendarDisparoTemplateIdNode,
+  agendarDisparoTemplatesPorIntegracaoNode,
   agendarDisparoQuantidadeNode,
   agendarDisparoUnidadeNode,
   agendarDisparoVariaveisNode,
@@ -7254,8 +7727,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   className={`${styles.secondaryButton} ${styles.aiHeaderButton}`}
                   onClick={() => setAssistenteFluxosAberto(true)}
                 >
-                  <Sparkles size={16} />
-                  Criar com IA
+                  ✨ Assistente IA
                 </button>
 
                 <button
@@ -7829,7 +8301,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               aria-label="Expandir previa do WhatsApp"
               aria-expanded="false"
             >
-              <MessageCircle size={17} />
+              <MessageCircle size={16} />
               <span>Previa</span>
               <ChevronLeft size={16} />
             </button>
@@ -8792,7 +9264,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         </p>
                       </div>
 
-                      <label className={styles.field}>
+                      <label
+                        className={`${styles.field} ${
+                          agendarDisparoUsaTemplatesPorIntegracao
+                            ? styles.hiddenField
+                            : ""
+                        }`}
+                      >
                         <span className={styles.label}>Template WhatsApp</span>
 
                         <select
@@ -8818,6 +9296,76 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           Apenas templates aprovados devem ser usados para disparos após 24h.
                         </span>
                       </label>
+
+                      {agendarDisparoUsaTemplatesPorIntegracao && (
+                        <div className={styles.field}>
+                          <span className={styles.label}>
+                            Templates por numero
+                          </span>
+                          <span className={styles.help}>
+                            Este fluxo atende numeros de WABAs diferentes.
+                            Selecione um template aprovado para cada numero.
+                          </span>
+
+                          <div className={styles.integrationTemplateList}>
+                            {integracoesEscopoFluxoSelecionado.map((integracao) => {
+                              const templatesCompativeis = templatesWhatsapp.filter(
+                                (template) =>
+                                  templateCompativelComIntegracao(
+                                    template,
+                                    integracao
+                                  )
+                              );
+
+                              return (
+                                <label
+                                  key={integracao.id}
+                                  className={styles.integrationTemplateItem}
+                                >
+                                  <span>
+                                    <strong>
+                                      {rotuloIntegracaoWhatsapp(integracao)}
+                                    </strong>
+                                    <small>
+                                      WABA {integracao.waba_id || "nao informada"}
+                                    </small>
+                                  </span>
+
+                                  <select
+                                    className={styles.input}
+                                    value={
+                                      agendarDisparoTemplatesPorIntegracaoNode[
+                                        integracao.id
+                                      ] || ""
+                                    }
+                                    onChange={(e) =>
+                                      setAgendarDisparoTemplatesPorIntegracaoNode(
+                                        (atual) => ({
+                                          ...atual,
+                                          [integracao.id]: e.target.value,
+                                        })
+                                      )
+                                    }
+                                    disabled={carregandoTemplatesWhatsapp}
+                                  >
+                                    <option value="">
+                                      {carregandoTemplatesWhatsapp
+                                        ? "Carregando templates..."
+                                        : "Selecione um template"}
+                                    </option>
+
+                                    {templatesCompativeis.map((template) => (
+                                      <option key={template.id} value={template.id}>
+                                        {template.nome} - {template.idioma}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       <div className={styles.optionRow}>
                         <label className={styles.field}>
@@ -10249,8 +10797,8 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         tipoCondicaoConexao !== "sempre" &&
                         tipoCondicaoConexao !== "timeout_sem_resposta" && (
                           <p className={styles.help}>
-                            Nesta origem, cada conexao com IA representa uma
-                            intencao possivel para a resposta livre do cliente.
+                            Nesta origem, cada conexão com IA representa uma
+                            intenção possível para a resposta livre do cliente.
                           </p>
                         )}
 
@@ -10837,6 +11385,70 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   />
                 </label>
 
+                {deveMostrarEscopoIntegracoesFluxo && (
+                <div className={styles.sectionBlock}>
+                  <div>
+                    <p className={styles.modalSectionTitle}>Integrações WhatsApp</p>
+                    <p className={styles.helperText}>
+                      Defina em quais números este fluxo poderá iniciar.
+                    </p>
+                  </div>
+
+                  <label className={styles.field}>
+                    <span className={styles.label}>Escopo do fluxo</span>
+                    <select
+                      className={styles.input}
+                      value={fluxoEscopoIntegracoesModoEdicao}
+                      onChange={(e) => {
+                        const modo =
+                          e.target.value === "selecionadas"
+                            ? "selecionadas"
+                            : "todas";
+
+                        setFluxoEscopoIntegracoesModoEdicao(modo);
+
+                        if (modo === "todas") {
+                          setFluxoIntegracoesIdsEdicao([]);
+                        }
+                      }}
+                    >
+                      <option value="todas">Todas as integrações</option>
+                      <option value="selecionadas">Integrações selecionadas</option>
+                    </select>
+                  </label>
+
+                  {fluxoEscopoIntegracoesModoEdicao === "selecionadas" && (
+                    <div className={styles.integrationCheckboxList}>
+                      {integracoesWhatsapp.map((integracao) => (
+                        <label
+                          key={integracao.id}
+                          className={styles.integrationCheckboxItem}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={fluxoIntegracoesIdsEdicao.includes(
+                              integracao.id
+                            )}
+                            onChange={() =>
+                              alternarIntegracaoEscopoEdicao(integracao.id)
+                            }
+                          />
+                          <span>{rotuloIntegracaoWhatsapp(integracao)}</span>
+                        </label>
+                      ))}
+
+                      {integracoesWhatsapp.length === 0 && (
+                        <p className={styles.helperText}>
+                          {carregandoIntegracoesWhatsapp
+                            ? "Carregando integrações..."
+                            : "Nenhuma integração disponível para este usuário."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                )}
+
                 <label className={styles.switchField}>
                   <input
                     type="checkbox"
@@ -11397,6 +12009,70 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   />
                 </label>
 
+                {deveMostrarEscopoIntegracoesFluxo && (
+                <div className={styles.sectionBlock}>
+                  <div>
+                    <p className={styles.modalSectionTitle}>Integrações WhatsApp</p>
+                    <p className={styles.helperText}>
+                      Defina em quais números este fluxo poderá iniciar.
+                    </p>
+                  </div>
+
+                  <label className={styles.field}>
+                    <span className={styles.label}>Escopo do fluxo</span>
+                    <select
+                      className={styles.input}
+                      value={novoFluxoEscopoIntegracoesModo}
+                      onChange={(e) => {
+                        const modo =
+                          e.target.value === "selecionadas"
+                            ? "selecionadas"
+                            : "todas";
+
+                        setNovoFluxoEscopoIntegracoesModo(modo);
+
+                        if (modo === "todas") {
+                          setNovoFluxoIntegracoesIds([]);
+                        }
+                      }}
+                    >
+                      <option value="todas">Todas as integrações</option>
+                      <option value="selecionadas">Integrações selecionadas</option>
+                    </select>
+                  </label>
+
+                  {novoFluxoEscopoIntegracoesModo === "selecionadas" && (
+                    <div className={styles.integrationCheckboxList}>
+                      {integracoesWhatsapp.map((integracao) => (
+                        <label
+                          key={integracao.id}
+                          className={styles.integrationCheckboxItem}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={novoFluxoIntegracoesIds.includes(
+                              integracao.id
+                            )}
+                            onChange={() =>
+                              alternarIntegracaoEscopoNovoFluxo(integracao.id)
+                            }
+                          />
+                          <span>{rotuloIntegracaoWhatsapp(integracao)}</span>
+                        </label>
+                      ))}
+
+                      {integracoesWhatsapp.length === 0 && (
+                        <p className={styles.helperText}>
+                          {carregandoIntegracoesWhatsapp
+                            ? "Carregando integrações..."
+                            : "Nenhuma integração disponível para este usuário."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                )}
+
                 <div className={styles.sectionBlock}>
                   <div>
                     <p className={styles.modalSectionTitle}>Encerramento por inatividade</p>
@@ -11742,7 +12418,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             <div className={styles.modalCard}>
               <div className={styles.modalHeader}>
                 <div>
-                  <p className={styles.eyebrow}>Prévia de tokens</p>
+                  <p className={styles.eyebrow}>Custo de tokens</p>
                   <h3 className={styles.modalTitle}>
                     {previaGeracaoDescricaoIa.titulo}
                   </h3>

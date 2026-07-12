@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validarChamadaCron } from "@/lib/cron/auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -12,12 +13,15 @@ function obterLimite(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
+  const auth = validarChamadaCron(request, { exigirVercelCron: true });
 
-  if (
-    !process.env.CRON_SECRET ||
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  if (!auth.ok) {
+    console.warn("[CRON EXPIRACAO CONVERSAS] Chamada recusada:", {
+      userAgent: auth.userAgent,
+      temAuthorization: auth.temAuthorization,
+      chamadaVercelCron: auth.chamadaVercelCron,
+    });
+
     return NextResponse.json(
       {
         ok: false,
@@ -42,12 +46,22 @@ export async function GET(request: Request) {
     }
 
     const conversas = Array.isArray(data) ? data : [];
+    const processadas = conversas.length;
+    const possuiMais = processadas === limite;
+
+    if (processadas > 0) {
+      console.log("[CRON EXPIRACAO CONVERSAS] Processamento concluido:", {
+        processadas,
+        limite,
+        possui_mais: possuiMais,
+      });
+    }
 
     return NextResponse.json({
       ok: true,
-      processadas: conversas.length,
+      processadas,
       limite,
-      possui_mais: conversas.length === limite,
+      possui_mais: possuiMais,
       conversas,
     });
   } catch (error) {

@@ -21,6 +21,7 @@ import {
   CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
   isConversaHistoricoImportado,
 } from "@/lib/conversas/historico-importado";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -285,6 +286,16 @@ async function usuarioPodeEditarConversa(
     return false;
   }
 
+  if (
+    !(await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: conversa.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id,
+    }))
+  ) {
+    return false;
+  }
+
   if (isAdministrador(usuario)) return true;
 
   const podeTransferir = await podeTransferirConversas(usuario);
@@ -305,6 +316,16 @@ async function usuarioPodeTransferir(
   }
 
   if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
+    return false;
+  }
+
+  if (
+    !(await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: conversa.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id,
+    }))
+  ) {
     return false;
   }
 
@@ -331,6 +352,16 @@ async function usuarioPodeAtribuir(
     return false;
   }
 
+  if (
+    !(await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: conversa.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id,
+    }))
+  ) {
+    return false;
+  }
+
   if (isAdministrador(usuario)) return true;
 
   return await usuarioPertenceAoSetor(usuario.id, conversa.setor_id);
@@ -345,6 +376,16 @@ async function usuarioPodeEncerrar(
   }
 
   if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
+    return false;
+  }
+
+  if (
+    !(await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: conversa.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id,
+    }))
+  ) {
     return false;
   }
 
@@ -749,6 +790,20 @@ export async function PUT(
       return NextResponse.json(
         { ok: false, error: "A integração não pertence à empresa selecionada" },
         { status: 400 }
+      );
+    }
+
+    const podeAcessarNovaIntegracao =
+      await usuarioPodeAcessarIntegracaoWhatsapp({
+        usuario,
+        empresaId: empresa_id,
+        integracaoId: integracao_whatsapp_id,
+      });
+
+    if (!podeAcessarNovaIntegracao) {
+      return NextResponse.json(
+        { ok: false, error: "Voce nao pode acessar esta integracao" },
+        { status: 403 }
       );
     }
   }

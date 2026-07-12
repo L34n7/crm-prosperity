@@ -19,6 +19,8 @@ export type FiltrosContadoresConversas = {
   busca: string;
   canal: string;
   listaId: string | null;
+  integracaoWhatsappId?: string | null;
+  integracoesWhatsappIdsPermitidos?: string[];
 };
 
 export type TotaisChipsRapidos = {
@@ -79,6 +81,8 @@ export async function obterContadoresConversas({
     filtros.busca,
     filtros.canal,
     filtros.listaId,
+    filtros.integracaoWhatsappId,
+    [...(filtros.integracoesWhatsappIdsPermitidos ?? [])].sort().join(","),
   ]);
 
   return await getOrSetTtlCache(
@@ -99,6 +103,8 @@ export async function obterContadoresConversas({
         p_busca: filtros.busca || null,
         p_canal: filtros.canal || null,
         p_lista_id: filtros.listaId,
+        p_integracao_whatsapp_id: filtros.integracaoWhatsappId || null,
+        p_integracoes_whatsapp_ids: filtros.integracoesWhatsappIdsPermitidos ?? [],
       };
 
       const [agregadosResult, naoLidas] = await Promise.all([
@@ -117,6 +123,9 @@ export async function obterContadoresConversas({
           busca: filtros.busca,
           canal: filtros.canal,
           listaId: filtros.listaId,
+          integracaoWhatsappId: filtros.integracaoWhatsappId,
+          integracoesWhatsappIdsPermitidos:
+            filtros.integracoesWhatsappIdsPermitidos ?? [],
         }),
       ]);
 

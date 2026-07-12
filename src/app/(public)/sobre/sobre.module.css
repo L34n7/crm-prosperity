@@ -178,12 +178,35 @@
 }
 
 .hero {
+  position: relative;
   min-height: 820px;
   display: flex;
   align-items: center;
   flex-direction: column;
   padding: 78px 0 88px;
   text-align: center;
+  isolation: isolate;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  width: min(920px, 70vw);
+  height: 620px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(48, 137, 224, 0.2) 0%,
+    rgba(81, 150, 219, 0.13) 26%,
+    rgba(27, 91, 160, 0.07) 48%,
+    rgba(7, 17, 31, 0) 74%
+  );
+  filter: blur(24px);
+  pointer-events: none;
+  z-index: -1;
 }
 
 .heroBadge {
@@ -194,11 +217,11 @@
   padding: 8px 14px;
   border: 1px solid rgba(96, 165, 250, 0.28);
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(59, 131, 246, 0.163);
   color: #64aff9;
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
 }
 
 .heroBadge span {
@@ -216,6 +239,8 @@
   font-size: clamp(62px, 7vw, 92px);
   line-height: 0.98;
   letter-spacing: -0.065em;
+  position: relative;
+  z-index: 1;
 }
 
 .hero h1 span {
@@ -228,10 +253,11 @@
 }
 
 .hero > p {
-  max-width: 610px;
+  max-width: 550px;
   margin: 36px 0 0;
-  color: #a6b4c8;
-  font-size: 18px;
+  color: #8894a2;
+  font-size: 20px;
+  font-weight: 500;
   line-height: 1.75;
 }
 
@@ -245,7 +271,8 @@
   min-height: 54px;
   border-radius: 13px;
   padding-inline: 26px;
-  font-size: 14px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .stats {
@@ -293,9 +320,9 @@
   padding: 0 14px;
   border: 1px solid rgba(148, 163, 184, 0.15);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(196, 224, 255, 0.092);
   color: #7f8da2;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -322,10 +349,24 @@
   top: 0;
   left: 50%;
   width: 100vw;
-  border-top: 1px solid rgba(96, 165, 250, 0.14);
+  height: 1px;
   transform: translateX(-50%);
   pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    #60a5fa00 0%,
+    #60a5fa0a 8%,
+    #60a5fa1f 22%,
+    #60a5fa47 38%,
+    #016d9fbf 50%,
+    #60a5fa47 62%,
+    #60a5fa1f 78%,
+    #60a5fa0a 92%,
+    #60a5fa00 100%
+  );
 }
+
+
 
 .sectionHeading {
   margin-inline: auto;
@@ -342,7 +383,7 @@
 }
 
 .sectionHeading h2 {
-  max-width: 920px;
+  max-width: 1020px;
   margin: 18px auto 0;
   color: #ffffff;
   font-size: clamp(38px, 5vw, 54px);
@@ -429,7 +470,7 @@
   margin: 46px 0 0;
   color: #8393a9;
   text-align: center;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .painFooter strong {
@@ -457,6 +498,14 @@
     rgba(9, 37, 62, 0.84);
 }
 
+.featureGrid h3 {
+  font-size: 18px;
+}
+
+.featureGrid p {
+  font-size: 14px;
+}
+
 .featureLabel {
   display: block;
   width: fit-content;
@@ -465,8 +514,8 @@
   border-radius: 6px;
   background: rgba(59, 130, 246, 0.19);
   color: #65adf5;
-  font-size: 9px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -490,7 +539,7 @@
   border-radius: 999px;
   background: rgba(59, 130, 246, 0.09);
   color: #71b4f5;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -505,6 +554,10 @@
     linear-gradient(90deg, #2c8ee7, #20b68e) top / 100% 2px no-repeat,
     rgba(15, 34, 59, 0.82);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.2);
+}
+
+.calculator p {
+  font-size: 14px;
 }
 
 .calculator label {
@@ -901,7 +954,11 @@
   }
 
   .loginButton {
-    display: none;
+    display: inline-flex;
+    min-height: 38px;
+    padding-inline: 10px;
+    font-size: 11px;
+    border-radius: 10px;
   }
 
   .primaryButton {

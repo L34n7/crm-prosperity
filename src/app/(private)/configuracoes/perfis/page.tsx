@@ -25,6 +25,15 @@ type Perfil = {
   } | null;
 };
 
+type IntegracaoWhatsappPerfil = {
+  id: string;
+  nome_conexao?: string | null;
+  numero?: string | null;
+  status?: string | null;
+  posicao?: number | null;
+  permitido?: boolean;
+};
+
 type PerfilForm = {
   nome: string;
   descricao: string;
@@ -49,6 +58,18 @@ function formatarData(data?: string) {
   });
 }
 
+function rotuloIntegracaoWhatsapp(integracao: IntegracaoWhatsappPerfil) {
+  const posicao = integracao.posicao
+    ? `Numero ${integracao.posicao}`
+    : "Numero";
+  const nome =
+    integracao.nome_conexao?.trim() ||
+    integracao.numero?.trim() ||
+    "WhatsApp";
+
+  return `${posicao} - ${nome}`;
+}
+
 export default function PerfisPage() {
   const { permissoes } = useHeaderUser();
   const podeCriarPerfis = permissoes.includes("perfis.criar");
@@ -68,6 +89,21 @@ export default function PerfisPage() {
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null);
   const [form, setForm] = useState<PerfilForm>(formInicial);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
+  const [modalIntegracoesAberto, setModalIntegracoesAberto] = useState(false);
+  const [perfilIntegracoesEditando, setPerfilIntegracoesEditando] =
+    useState<Perfil | null>(null);
+  const [integracoesPerfil, setIntegracoesPerfil] = useState<
+    IntegracaoWhatsappPerfil[]
+  >([]);
+  const [acessoLivreIntegracoes, setAcessoLivreIntegracoes] = useState(true);
+  const [idsIntegracoesPerfil, setIdsIntegracoesPerfil] = useState<string[]>(
+    []
+  );
+  const [carregandoIntegracoesPerfil, setCarregandoIntegracoesPerfil] =
+    useState(false);
+  const [salvandoIntegracoesPerfil, setSalvandoIntegracoesPerfil] =
+    useState(false);
+  const [erroIntegracoesPerfil, setErroIntegracoesPerfil] = useState("");
 
   async function carregarPerfis() {
     try {
@@ -136,6 +172,119 @@ export default function PerfisPage() {
     setModalAberto(false);
     setPerfilEditando(null);
     setForm(formInicial);
+  }
+
+  async function abrirIntegracoesPerfil(perfil: Perfil) {
+    try {
+      setPerfilIntegracoesEditando(perfil);
+      setModalIntegracoesAberto(true);
+      setErro("");
+      setErroIntegracoesPerfil("");
+      setCarregandoIntegracoesPerfil(true);
+      setIntegracoesPerfil([]);
+      setIdsIntegracoesPerfil([]);
+      setAcessoLivreIntegracoes(true);
+
+      const res = await fetch(
+        `/api/perfis/${perfil.id}/integracoes-whatsapp`,
+        { cache: "no-store" }
+      );
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(
+          data.error || "Erro ao carregar integracoes WhatsApp do perfil."
+        );
+      }
+
+      const integracoes = Array.isArray(data.integracoes)
+        ? data.integracoes
+        : [];
+
+      setIntegracoesPerfil(integracoes);
+      setAcessoLivreIntegracoes(data.acesso_livre !== false);
+      setIdsIntegracoesPerfil(
+        Array.isArray(data.integracoes_whatsapp_ids)
+          ? data.integracoes_whatsapp_ids
+          : []
+      );
+    } catch (error) {
+      setErroIntegracoesPerfil(
+        error instanceof Error
+          ? error.message
+          : "Erro ao carregar integracoes WhatsApp do perfil."
+      );
+    } finally {
+      setCarregandoIntegracoesPerfil(false);
+    }
+  }
+
+  function fecharModalIntegracoes() {
+    if (salvandoIntegracoesPerfil || carregandoIntegracoesPerfil) return;
+
+    setModalIntegracoesAberto(false);
+    setPerfilIntegracoesEditando(null);
+    setIntegracoesPerfil([]);
+    setIdsIntegracoesPerfil([]);
+    setAcessoLivreIntegracoes(true);
+    setErroIntegracoesPerfil("");
+  }
+
+  function alternarIntegracaoPerfil(integracaoId: string) {
+    setIdsIntegracoesPerfil((atuais) =>
+      atuais.includes(integracaoId)
+        ? atuais.filter((id) => id !== integracaoId)
+        : [...atuais, integracaoId]
+    );
+  }
+
+  async function salvarIntegracoesPerfil() {
+    if (!perfilIntegracoesEditando) return;
+
+    if (!acessoLivreIntegracoes && idsIntegracoesPerfil.length === 0) {
+      setErroIntegracoesPerfil("Selecione pelo menos um numero.");
+      return;
+    }
+
+    try {
+      setSalvandoIntegracoesPerfil(true);
+      setErroIntegracoesPerfil("");
+
+      const res = await fetch(
+        `/api/perfis/${perfilIntegracoesEditando.id}/integracoes-whatsapp`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            integracoes_whatsapp_ids: acessoLivreIntegracoes
+              ? []
+              : idsIntegracoesPerfil,
+          }),
+        }
+      );
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(
+          data.error || "Erro ao salvar integracoes WhatsApp do perfil."
+        );
+      }
+
+      setSucesso(
+        data.message || "Restricao de integracoes atualizada com sucesso."
+      );
+      fecharModalIntegracoes();
+    } catch (error) {
+      setErroIntegracoesPerfil(
+        error instanceof Error
+          ? error.message
+          : "Erro ao salvar integracoes WhatsApp do perfil."
+      );
+    } finally {
+      setSalvandoIntegracoesPerfil(false);
+    }
   }
 
   async function salvarPerfil() {
@@ -319,6 +468,15 @@ export default function PerfisPage() {
                         >
                           Permissões
                         </Link>}
+
+                        {podeAlterarPermissoesPerfis && (
+                          <button
+                            className={styles.secondaryButton}
+                            onClick={() => abrirIntegracoesPerfil(perfil)}
+                          >
+                            Integracoes
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -456,6 +614,122 @@ export default function PerfisPage() {
                   : perfilEditando
                   ? "Salvar alterações"
                   : "Criar perfil"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalIntegracoesAberto && (
+        <div className={styles.modalOverlay} onClick={fecharModalIntegracoes}>
+          <div
+            className={styles.modalCard}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 className={styles.modalTitle}>Integracoes WhatsApp</h2>
+                <p className={styles.modalSubtitle}>
+                  {perfilIntegracoesEditando?.nome || "Perfil selecionado"}
+                </p>
+              </div>
+
+              <button
+                className={styles.closeButton}
+                onClick={fecharModalIntegracoes}
+                disabled={salvandoIntegracoesPerfil}
+              >
+                Fechar
+              </button>
+            </div>
+
+            {erroIntegracoesPerfil && (
+              <div className={styles.errorAlert}>{erroIntegracoesPerfil}</div>
+            )}
+
+            {carregandoIntegracoesPerfil ? (
+              <div className={styles.emptyCard}>Carregando integracoes...</div>
+            ) : (
+              <div className={styles.formGrid}>
+                <label className={styles.switchField}>
+                  <div>
+                    <span className={styles.label}>
+                      Acessar todos os numeros
+                    </span>
+                    <p className={styles.switchHint}>
+                      Quando ativo, o perfil visualiza conversas de todas as
+                      integracoes WhatsApp.
+                    </p>
+                  </div>
+
+                  <span className={styles.switchWrap}>
+                    <input
+                      type="checkbox"
+                      checked={acessoLivreIntegracoes}
+                      onChange={(e) =>
+                        setAcessoLivreIntegracoes(e.target.checked)
+                      }
+                      className={styles.switchInput}
+                    />
+                    <span className={styles.switchSlider} />
+                  </span>
+                </label>
+
+                {!acessoLivreIntegracoes && (
+                  <div className={styles.integrationList}>
+                    {integracoesPerfil.length === 0 ? (
+                      <div className={styles.integrationEmpty}>
+                        Nenhuma integracao WhatsApp cadastrada.
+                      </div>
+                    ) : (
+                      integracoesPerfil.map((integracao) => (
+                        <label
+                          key={integracao.id}
+                          className={styles.integrationOption}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={idsIntegracoesPerfil.includes(
+                              integracao.id
+                            )}
+                            onChange={() =>
+                              alternarIntegracaoPerfil(integracao.id)
+                            }
+                          />
+                          <span>
+                            <strong>
+                              {rotuloIntegracaoWhatsapp(integracao)}
+                            </strong>
+                            <small>
+                              {integracao.numero || "Numero pendente"} -{" "}
+                              {integracao.status || "sem status"}
+                            </small>
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.ghostButton}
+                onClick={fecharModalIntegracoes}
+                disabled={salvandoIntegracoesPerfil}
+              >
+                Cancelar
+              </button>
+
+              <button
+                className={styles.primaryButton}
+                onClick={salvarIntegracoesPerfil}
+                disabled={
+                  salvandoIntegracoesPerfil || carregandoIntegracoesPerfil
+                }
+              >
+                {salvandoIntegracoesPerfil ? "Salvando..." : "Salvar"}
               </button>
             </div>
           </div>

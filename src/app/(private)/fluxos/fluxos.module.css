@@ -496,6 +496,16 @@
   display: none;
 }
 
+.infoAlertIconWarning {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+.infoAlertIconWarning::after {
+  border-color: #f59e0b;
+  background: #92400eed;
+}
+
 .flowAlertTooltipPortal {
   position: fixed;
   z-index: 1000;
@@ -1371,11 +1381,11 @@
 
 .whatsappFlowPreviewCollapsed {
   position: absolute;
-  top: 28px;
+  top: 26px;
   right: 28px;
   z-index: 18;
   min-width: 108px;
-  height: 42px;
+  height: 36px;
   padding: 0 10px;
   border: 1px solid rgba(7, 94, 84, 0.24);
   border-radius: 999px;
@@ -1549,7 +1559,7 @@
 
 .assistantPanel {
   position: fixed;
-  top: 72px;
+  top: 60px;
   right: 24px;
   bottom: 24px;
   z-index: 80;
@@ -2923,6 +2933,71 @@
   margin-top: 1px;
   accent-color: var(--crm-text-strong);
   flex-shrink: 0;
+}
+
+.integrationCheckboxList {
+  display: grid;
+  gap: 8px;
+}
+
+.integrationCheckboxItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.integrationCheckboxItem input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--crm-primary-text);
+  flex-shrink: 0;
+}
+
+.hiddenField {
+  display: none;
+}
+
+.integrationTemplateList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.integrationTemplateItem {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1.2fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  background: var(--crm-surface);
+}
+
+.integrationTemplateItem span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.integrationTemplateItem strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.integrationTemplateItem small {
+  color: var(--crm-text-muted);
+  font-size: 12px;
 }
 
 .helperText {

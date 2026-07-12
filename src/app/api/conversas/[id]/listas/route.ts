@@ -1,13 +1,77 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import {
+  getUsuarioContexto,
+  type UsuarioContexto,
+} from "@/lib/auth/get-usuario-contexto";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
 type ConversaBase = {
   id: string;
   empresa_id: string;
+  integracao_whatsapp_id?: string | null;
 };
+
+async function buscarConversaPermitida(
+  conversaId: string,
+  usuario: UsuarioContexto
+) {
+  if (!usuario.empresa_id) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Usuario sem empresa vinculada" },
+        { status: 400 }
+      ),
+    };
+  }
+
+  const { data: conversa, error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .select("id, empresa_id, integracao_whatsapp_id")
+    .eq("id", conversaId)
+    .maybeSingle<ConversaBase>();
+
+  if (conversaError) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: conversaError.message },
+        { status: 500 }
+      ),
+    };
+  }
+
+  if (!conversa || conversa.empresa_id !== usuario.empresa_id) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Conversa nao encontrada" },
+        { status: 404 }
+      ),
+    };
+  }
+
+  const podeAcessarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+    usuario,
+    empresaId: usuario.empresa_id,
+    integracaoId: conversa.integracao_whatsapp_id,
+  });
+
+  if (!podeAcessarIntegracao) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "Voce nao pode acessar esta integracao" },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { ok: true as const, conversa };
+}
 
 export async function GET(
   _request: Request,
@@ -25,38 +89,18 @@ export async function GET(
   }
 
   const { usuario } = resultado;
+  const conversaPermitida = await buscarConversaPermitida(id, usuario);
 
-  if (!usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Usuário sem empresa vinculada" },
-      { status: 400 }
-    );
+  if (!conversaPermitida.ok) {
+    return conversaPermitida.response;
   }
 
-  const { data: conversa, error: conversaError } = await supabaseAdmin
-    .from("conversas")
-    .select("id, empresa_id")
-    .eq("id", id)
-    .maybeSingle<ConversaBase>();
-
-  if (conversaError) {
-    return NextResponse.json(
-      { ok: false, error: conversaError.message },
-      { status: 500 }
-    );
-  }
-
-  if (!conversa || conversa.empresa_id !== usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Conversa não encontrada" },
-      { status: 404 }
-    );
-  }
+  const empresaId = conversaPermitida.conversa.empresa_id;
 
   const { data: listas, error: listasError } = await supabaseAdmin
     .from("conversas_listas")
     .select("id, nome")
-    .eq("empresa_id", usuario.empresa_id)
+    .eq("empresa_id", empresaId)
     .order("nome", { ascending: true });
 
   if (listasError) {
@@ -69,7 +113,7 @@ export async function GET(
   const { data: itens, error: itensError } = await supabaseAdmin
     .from("conversas_listas_itens")
     .select("lista_id")
-    .eq("empresa_id", usuario.empresa_id)
+    .eq("empresa_id", empresaId)
     .eq("conversa_id", id);
 
   if (itensError) {
@@ -80,7 +124,6 @@ export async function GET(
   }
 
   const listasMarcadas = new Set((itens ?? []).map((item) => item.lista_id));
-
   const resultadoListas = (listas ?? []).map((lista) => ({
     ...lista,
     marcada: listasMarcadas.has(lista.id),
@@ -108,46 +151,33 @@ export async function POST(
   }
 
   const { usuario } = resultado;
-
-  if (!usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Usuário sem empresa vinculada" },
-      { status: 400 }
-    );
-  }
-
   const body = await request.json();
-  const lista_id = body?.lista_id;
+  const listaId = body?.lista_id;
 
-  if (!lista_id) {
+  if (!listaId) {
     return NextResponse.json(
-      { ok: false, error: "lista_id é obrigatório" },
+      { ok: false, error: "lista_id e obrigatorio" },
       { status: 400 }
     );
   }
 
-  const { data: conversa } = await supabaseAdmin
-    .from("conversas")
-    .select("id, empresa_id")
-    .eq("id", id)
-    .maybeSingle<ConversaBase>();
+  const conversaPermitida = await buscarConversaPermitida(id, usuario);
 
-  if (!conversa || conversa.empresa_id !== usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Conversa não encontrada" },
-      { status: 404 }
-    );
+  if (!conversaPermitida.ok) {
+    return conversaPermitida.response;
   }
+
+  const empresaId = conversaPermitida.conversa.empresa_id;
 
   const { data: lista } = await supabaseAdmin
     .from("conversas_listas")
     .select("id, empresa_id")
-    .eq("id", lista_id)
+    .eq("id", listaId)
     .maybeSingle();
 
-  if (!lista || lista.empresa_id !== usuario.empresa_id) {
+  if (!lista || lista.empresa_id !== empresaId) {
     return NextResponse.json(
-      { ok: false, error: "Lista não encontrada" },
+      { ok: false, error: "Lista nao encontrada" },
       { status: 404 }
     );
   }
@@ -156,8 +186,8 @@ export async function POST(
     .from("conversas_listas_itens")
     .upsert(
       {
-        empresa_id: usuario.empresa_id,
-        lista_id,
+        empresa_id: empresaId,
+        lista_id: listaId,
         conversa_id: id,
         criado_por: usuario.id,
       },
@@ -173,7 +203,7 @@ export async function POST(
 
   return NextResponse.json({
     ok: true,
-    message: "Conversa adicionada à lista com sucesso",
+    message: "Conversa adicionada a lista com sucesso",
   });
 }
 
@@ -194,28 +224,29 @@ export async function DELETE(
 
   const { usuario } = resultado;
   const body = await request.json();
-  const lista_id = body?.lista_id;
+  const listaId = body?.lista_id;
 
-  if (!usuario.empresa_id) {
+  if (!listaId) {
     return NextResponse.json(
-      { ok: false, error: "Usuário sem empresa vinculada" },
+      { ok: false, error: "lista_id e obrigatorio" },
       { status: 400 }
     );
   }
 
-  if (!lista_id) {
-    return NextResponse.json(
-      { ok: false, error: "lista_id é obrigatório" },
-      { status: 400 }
-    );
+  const conversaPermitida = await buscarConversaPermitida(id, usuario);
+
+  if (!conversaPermitida.ok) {
+    return conversaPermitida.response;
   }
+
+  const empresaId = conversaPermitida.conversa.empresa_id;
 
   const { error } = await supabaseAdmin
     .from("conversas_listas_itens")
     .delete()
-    .eq("empresa_id", usuario.empresa_id)
+    .eq("empresa_id", empresaId)
     .eq("conversa_id", id)
-    .eq("lista_id", lista_id);
+    .eq("lista_id", listaId);
 
   if (error) {
     return NextResponse.json(

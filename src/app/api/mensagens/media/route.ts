@@ -22,6 +22,7 @@ import {
   CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
   isConversaHistoricoImportado,
 } from "@/lib/conversas/historico-importado";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -50,6 +51,16 @@ async function usuarioPodeAcessarConversa(
   conversa: ConversaAcesso
 ) {
   if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
+    return false;
+  }
+
+  if (
+    !(await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: conversa.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id,
+    }))
+  ) {
     return false;
   }
 

@@ -9,11 +9,15 @@ import {
 } from "@/lib/auditoria/logs";
 import { cancelarCampanhaDisparo } from "@/lib/whatsapp/disparo-fila";
 import { podeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 type UsuarioCancelamento = Pick<
   UsuarioContexto,
   "assinatura" | "permissoes"
 >;
+
+const supabaseAdmin = getSupabaseAdmin();
 
 function podeCancelarDisparo(usuario: UsuarioCancelamento) {
   if (usuario.assinatura?.status === "bloqueada") return false;
@@ -69,6 +73,28 @@ export async function PATCH(
       motivo = String(body?.motivo || "").trim().slice(0, 500);
     } catch {
       motivo = "";
+    }
+
+    const { data: campanha } = await supabaseAdmin
+      .from("whatsapp_disparo_campanhas")
+      .select("id, integracao_whatsapp_id")
+      .eq("id", id)
+      .eq("empresa_id", usuario.empresa_id)
+      .maybeSingle();
+
+    if (campanha?.integracao_whatsapp_id) {
+      const podeUsarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+        usuario,
+        empresaId: usuario.empresa_id,
+        integracaoId: campanha.integracao_whatsapp_id,
+      });
+
+      if (!podeUsarIntegracao) {
+        return NextResponse.json(
+          { ok: false, error: "Sem acesso a esta integracao WhatsApp." },
+          { status: 403 }
+        );
+      }
     }
 
     const resultado = await cancelarCampanhaDisparo({

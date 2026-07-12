@@ -40,6 +40,7 @@ async function getUsuarioLogado() {
 }
 
 type FinishPayload = {
+  integracao_id?: string | null;
   event?: string;
   waba_id?: string | null;
   phone_number_id?: string | null;
@@ -78,13 +79,23 @@ export async function POST(request: NextRequest) {
     }
 
     const supabaseAdmin = getSupabaseAdmin();
+    const integracaoId = String(body.integracao_id || "").trim();
 
-    const { data: integracao, error: integracaoError } = await supabaseAdmin
+    let integracaoQuery = supabaseAdmin
       .from("integracoes_whatsapp")
       .select("*")
       .eq("empresa_id", usuario.empresa_id)
-      .eq("provider", "meta_official")
-      .order("created_at", { ascending: false })
+      .eq("provider", "meta_official");
+
+    if (integracaoId) {
+      integracaoQuery = integracaoQuery.eq("id", integracaoId);
+    } else {
+      integracaoQuery = integracaoQuery.eq("posicao", 1);
+    }
+
+    const { data: integracao, error: integracaoError } = await integracaoQuery
+      .order("posicao", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle();
 

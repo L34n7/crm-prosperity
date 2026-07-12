@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validarChamadaCron } from "@/lib/cron/auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   executarNo,
@@ -7,10 +8,27 @@ import {
   enviarMensagemAutomacao,
   registrarEventoRastreamentoFluxo,
   validarExecucaoAutomacaoAtiva,
-  processarFilaProcessamentoAutoPendentes,
 } from "@/lib/automacoes/process-automation-engine";
 
 const supabaseAdmin = getSupabaseAdmin();
+
+function obterLimite(request: Request) {
+  const valor = Number(new URL(request.url).searchParams.get("limit") || 50);
+
+  if (!Number.isFinite(valor)) return 50;
+
+  return Math.min(Math.max(Math.floor(valor), 1), 100);
+}
+
+function obterLockTimeoutMinutos(request: Request) {
+  const valor = Number(
+    new URL(request.url).searchParams.get("lockTimeoutMinutos") || 10
+  );
+
+  if (!Number.isFinite(valor)) return 10;
+
+  return Math.min(Math.max(Math.floor(valor), 1), 60);
+}
 
 function statusMensagemAtendeCondicao(
   statusAtual: string,
@@ -34,9 +52,9 @@ function statusMensagemAtendeCondicao(
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
+  const auth = validarChamadaCron(request);
 
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!auth.ok) {
     return NextResponse.json(
       {
         ok: false,
@@ -49,18 +67,13 @@ export async function GET(request: Request) {
   try {
     const agora = new Date().toISOString();
 
-    const { data: agendamentos, error } = await supabaseAdmin
-      .from("automacao_agendamentos")
-      .select("*")
-      .eq("status", "pendente")
-      .in("tipo_agendamento", [
-        "timeout_sem_resposta",
-        "encerramento_inatividade_fluxo",
-        "delay_bloco",
-      ])
-      .lte("executar_em", agora)
-      .order("executar_em", { ascending: true })
-      .limit(50);
+    const { data, error } = await supabaseAdmin.rpc(
+      "reivindicar_automacao_agendamentos_timeout",
+      {
+        p_limite: obterLimite(request),
+        p_lock_timeout_minutos: obterLockTimeoutMinutos(request),
+      }
+    );
 
     if (error) {
       console.error("[CRON TIMEOUT] Erro ao buscar agendamentos:", error);
@@ -74,25 +87,12 @@ export async function GET(request: Request) {
       );
     }
 
+    const agendamentos = Array.isArray(data) ? data : [];
+
     for (const agendamento of agendamentos || []) {
       try {
 
         const payload = agendamento.payload_json || {};
-
-        const { data: agendamentoTravado, error: lockError } = await supabaseAdmin
-          .from("automacao_agendamentos")
-          .update({
-            status: "executando",
-          })
-          .eq("id", agendamento.id)
-          .eq("empresa_id", agendamento.empresa_id)
-          .eq("status", "pendente")
-          .select("id")
-          .maybeSingle();
-
-        if (lockError || !agendamentoTravado) {
-          continue;
-        }
 
         if (agendamento.tipo_agendamento === "delay_bloco") {
           if (
@@ -725,35 +725,24 @@ export async function GET(request: Request) {
       }
     }
 
-    let filaProcessamentoAuto:
-      | Awaited<ReturnType<typeof processarFilaProcessamentoAutoPendentes>>
-      | { erro: string }
-      | null = null;
-
-    try {
-      filaProcessamentoAuto = await processarFilaProcessamentoAutoPendentes(50);
-    } catch (filaError) {
-      console.error("[CRON TIMEOUT] Erro na fila_processamento_auto:", filaError);
-      filaProcessamentoAuto = {
-        erro:
-          filaError instanceof Error
-            ? filaError.message
-            : String(filaError),
-      };
+    if (agendamentos.length > 0) {
+      console.log("[CRON TIMEOUT] Processamento concluido:", {
+        agora,
+        processados: agendamentos.length,
+      });
     }
 
     return NextResponse.json({
       ok: true,
-      processados: agendamentos?.length || 0,
-      fila_processamento_auto: filaProcessamentoAuto,
+      processados: agendamentos.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[CRON TIMEOUT] Erro geral:", error);
 
     return NextResponse.json(
       {
         ok: false,
-        error: error.message,
+        error: error instanceof Error ? error.message : "Erro geral no cron.",
       },
       { status: 500 }
     );

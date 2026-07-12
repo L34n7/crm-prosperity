@@ -15,7 +15,10 @@ import { interpretarConexaoComIA } from "@/lib/ia/interpretar-conexao";
 import { interpretarArquivoComIA } from "@/lib/ia/interpretar-arquivo";
 import { baixarMidiaWhatsapp } from "@/lib/whatsapp/download-arquivo";
 import { salvarArquivoAnaliseStorage } from "@/lib/automacoes/salvar-arquivo-analise";
-import { obterConfiguracaoEncerramentoInatividade } from "@/lib/automacoes/normalizar-configuracao-fluxo";
+import {
+  fluxoPermiteIntegracaoWhatsapp,
+  obterConfiguracaoEncerramentoInatividade,
+} from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import {
   chaveEhVariavelFixaContato,
   chaveEhVariavelNomeWhatsapp,
@@ -1611,6 +1614,37 @@ function calcularSegundosAgendamentoDisparo(config: Record<string, any>) {
   return quantidade * 60 * 60;
 }
 
+function normalizarTemplatesPorIntegracao(
+  valor: unknown
+): Record<string, string> {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(valor as Record<string, unknown>)
+      .map(([integracaoId, templateId]) => [
+        String(integracaoId || "").trim(),
+        String(templateId || "").trim(),
+      ])
+      .filter(([integracaoId, templateId]) => integracaoId && templateId)
+  );
+}
+
+function obterTemplateIdAgendarDisparo(
+  config: Record<string, unknown>,
+  integracaoWhatsappId?: string | null
+) {
+  const templatesPorIntegracao = normalizarTemplatesPorIntegracao(
+    config.templates_por_integracao
+  );
+  const templatePorIntegracao = integracaoWhatsappId
+    ? templatesPorIntegracao[integracaoWhatsappId]
+    : "";
+
+  return String(templatePorIntegracao || config.template_id || "").trim();
+}
+
 function calcularSegundosAntecedenciaAgendamento(config: Record<string, any>) {
   const quantidade = Math.max(
     1,
@@ -2196,7 +2230,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
 
   const { data: conversaAtual, error: conversaAtualError } = await supabaseAdmin
     .from("conversas")
-    .select("id, status, responsavel_id, bot_ativo")
+    .select("id, status, responsavel_id, bot_ativo, integracao_whatsapp_id")
     .eq("empresa_id", empresaId)
     .eq("id", conversaId)
     .maybeSingle();
@@ -2209,6 +2243,11 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
 
     return { ok: false, error: "Erro ao buscar conversa." };
   }
+
+  const integracaoWhatsappIdConversa =
+    input.integracaoWhatsappId ||
+    conversaAtual?.integracao_whatsapp_id ||
+    null;
 
   const conversaEmAtendimentoHumano =
     conversaAtual?.status === "em_atendimento" &&
@@ -2833,7 +2872,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
 
   const { data: fluxosAtivos, error: fluxosAtivosError } = await supabaseAdmin
     .from("automacao_fluxos")
-    .select("id")
+    .select("id, configuracao_json")
     .eq("empresa_id", empresaId)
     .eq("status", "ativo")
     .eq("canal", "whatsapp");
@@ -2846,7 +2885,13 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     return { ok: false, error: "Erro ao buscar fluxos ativos." };
   }
 
-  const fluxoIdsAtivos = (fluxosAtivos || []).map((fluxo) => fluxo.id);
+  const fluxosAtivosPermitidos = (fluxosAtivos || []).filter((fluxo) =>
+    fluxoPermiteIntegracaoWhatsapp(
+      fluxo.configuracao_json,
+      integracaoWhatsappIdConversa
+    )
+  );
+  const fluxoIdsAtivos = fluxosAtivosPermitidos.map((fluxo) => fluxo.id);
   const { data: gatilhos, error: gatilhosError } =
     fluxoIdsAtivos.length > 0
       ? await supabaseAdmin
@@ -2876,19 +2921,26 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   } else {
     console.log("[AUTOMATION_ENGINE] Nenhum gatilho encontrado. Buscando fluxo padrão.");
 
-    const { data: fluxoPadrao, error: fluxoPadraoError } = await supabaseAdmin
+    const { data: fluxosPadrao, error: fluxoPadraoError } = await supabaseAdmin
       .from("automacao_fluxos")
       .select("*")
       .eq("empresa_id", empresaId)
       .eq("status", "ativo")
       .eq("fluxo_padrao", true)
       .eq("canal", "whatsapp")
-      .maybeSingle();
+      .order("created_at", { ascending: true });
 
     if (fluxoPadraoError) {
       console.error("[AUTOMATION_ENGINE] Erro ao buscar fluxo padrão:", fluxoPadraoError);
       return { ok: false, error: "Erro ao buscar fluxo padrão." };
     }
+
+    const fluxoPadrao = (fluxosPadrao || []).find((fluxo) =>
+      fluxoPermiteIntegracaoWhatsapp(
+        fluxo.configuracao_json,
+        integracaoWhatsappIdConversa
+      )
+    );
 
     if (!fluxoPadrao) {
       console.log("[AUTOMATION_ENGINE] Nenhum fluxo padrão ativo encontrado.");
@@ -2983,6 +3035,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         gatilho_id: gatilhoIdParaMetadata,
         tipo_inicio: tipoInicioExecucao,
         mensagem_inicial: mensagemTexto,
+        integracao_whatsapp_id: integracaoWhatsappIdConversa,
         visitas_nos: {
           [noInicial.id]: 1,
         },
@@ -3026,6 +3079,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
       mensagemTexto,
       gatilho: gatilhoEncontrado || null,
       tipo_inicio: tipoInicioExecucao,
+      integracao_whatsapp_id: integracaoWhatsappIdConversa,
     },
     saida: {
       execucaoId: execucaoCriada.id,
@@ -3258,34 +3312,6 @@ export async function executarNo(params: {
   if (no.tipo_no === "agendar_disparo") {
     const config = no.configuracao_json || {};
 
-    const templateId = String(config.template_id || "").trim();
-
-    if (!templateId) {
-      await registrarLog({
-        empresaId,
-        execucaoId,
-        fluxoId,
-        noId: no.id,
-        tipoEvento: "agendar_disparo_erro",
-        descricao: "Bloco Agendar disparo sem template configurado.",
-        entrada: config,
-        saida: {},
-      });
-
-      await seguirParaProximoNo({
-        empresaId,
-        conversaId,
-        execucaoId,
-        fluxoId,
-        noAtualId: no.id,
-        mensagemTexto,
-        numeroDestino,
-        runtimeCache,
-      });
-
-      return;
-    }
-
     const segundosParaAgendar = calcularSegundosAgendamentoDisparo(config);
 
     const executarEm = new Date(
@@ -3322,6 +3348,41 @@ export async function executarNo(params: {
       .eq("empresa_id", empresaId)
       .maybeSingle();
 
+    const integracaoWhatsappIdConversa =
+      String(conversa?.integracao_whatsapp_id || "").trim() || null;
+    const templateId = obterTemplateIdAgendarDisparo(
+      config,
+      integracaoWhatsappIdConversa
+    );
+
+    if (!templateId) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agendar_disparo_erro",
+        descricao: "Bloco Agendar disparo sem template configurado.",
+        entrada: config,
+        saida: {
+          conversa_integracao_whatsapp_id: integracaoWhatsappIdConversa,
+        },
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        mensagemTexto,
+        numeroDestino,
+        runtimeCache,
+      });
+
+      return;
+    }
+
     const { data: template } = await supabaseAdmin
       .from("whatsapp_templates")
       .select(`
@@ -3330,6 +3391,7 @@ export async function executarNo(params: {
         idioma,
         status,
         integracao_whatsapp_id,
+        waba_id,
         payload
       `)
       .eq("id", templateId)
@@ -3395,7 +3457,63 @@ export async function executarNo(params: {
     }
 
     const integracaoWhatsappId =
-      conversa?.integracao_whatsapp_id || template.integracao_whatsapp_id || null;
+      integracaoWhatsappIdConversa || template.integracao_whatsapp_id || null;
+
+    const { data: integracaoConversa } = integracaoWhatsappIdConversa
+      ? await supabaseAdmin
+          .from("integracoes_whatsapp")
+          .select("id, waba_id")
+          .eq("id", integracaoWhatsappIdConversa)
+          .eq("empresa_id", empresaId)
+          .maybeSingle()
+      : { data: null };
+
+    const templateIntegracaoId = String(
+      template.integracao_whatsapp_id || ""
+    ).trim();
+    const templateWabaId = String(template.waba_id || "").trim();
+    const integracaoConversaWabaId = String(
+      integracaoConversa?.waba_id || ""
+    ).trim();
+    const templateIncompativel =
+      Boolean(integracaoWhatsappIdConversa && templateIntegracaoId) &&
+      templateIntegracaoId !== integracaoWhatsappIdConversa &&
+      (!templateWabaId ||
+        !integracaoConversaWabaId ||
+        templateWabaId !== integracaoConversaWabaId);
+
+    if (templateIncompativel) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agendar_disparo_template_integracao_incompativel",
+        descricao:
+          "Template configurado no bloco Agendar disparo pertence a outra integração WhatsApp.",
+        entrada: config,
+        saida: {
+          template_id: template.id,
+          template_integracao_whatsapp_id: template.integracao_whatsapp_id,
+          template_waba_id: template.waba_id,
+          conversa_integracao_whatsapp_id: integracaoWhatsappId,
+          conversa_waba_id: integracaoConversaWabaId,
+        },
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        mensagemTexto,
+        numeroDestino,
+        runtimeCache,
+      });
+
+      return;
+    }
 
     const { error: insertAgendamentoError } = await supabaseAdmin
       .from("automacao_agendamentos")
@@ -5368,6 +5486,32 @@ async function agendarLembretesAgendamento(params: {
           },
         });
       } else {
+        const integracaoWhatsappId =
+          conversa?.integracao_whatsapp_id ||
+          template.integracao_whatsapp_id ||
+          null;
+
+        if (
+          integracaoWhatsappId &&
+          template.integracao_whatsapp_id &&
+          template.integracao_whatsapp_id !== integracaoWhatsappId
+        ) {
+          await registrarLog({
+            empresaId,
+            execucaoId,
+            fluxoId,
+            noId,
+            tipoEvento: "agenda_lembrete_template_integracao_incompativel",
+            descricao:
+              "Template do lembrete pertence a outra integração WhatsApp.",
+            entrada: configLembrete,
+            saida: {
+              template_id: template.id,
+              template_integracao_whatsapp_id: template.integracao_whatsapp_id,
+              conversa_integracao_whatsapp_id: integracaoWhatsappId,
+            },
+          });
+        } else {
         registrosWhatsapp.push({
           empresa_id: empresaId,
           execucao_id: execucaoId,
@@ -5383,15 +5527,13 @@ async function agendarLembretesAgendamento(params: {
             template_nome: template.nome,
             template_idioma: template.idioma,
             template_payload: template.payload || null,
-            integracao_whatsapp_id:
-              conversa?.integracao_whatsapp_id ||
-              template.integracao_whatsapp_id ||
-              null,
+            integracao_whatsapp_id: integracaoWhatsappId,
             variaveis: configLembrete.variaveis,
             tempo_quantidade: configLembrete.quantidade,
             tempo_unidade: configLembrete.unidade,
           },
         });
+        }
       }
     }
   }

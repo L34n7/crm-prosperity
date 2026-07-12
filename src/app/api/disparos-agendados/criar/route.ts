@@ -12,6 +12,7 @@ import {
   validarPoliticaListaDisparo,
 } from "@/lib/whatsapp/disparo-politica-lista";
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
@@ -148,6 +149,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Selecione uma integração WhatsApp." },
         { status: 400 }
+      );
+    }
+
+    const podeUsarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: usuario.empresa_id,
+      integracaoId: integracaoWhatsappId,
+    });
+
+    if (!podeUsarIntegracao) {
+      return NextResponse.json(
+        { ok: false, error: "Sem acesso a esta integraÃ§Ã£o WhatsApp." },
+        { status: 403 }
       );
     }
 

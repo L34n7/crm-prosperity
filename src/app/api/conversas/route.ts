@@ -7,6 +7,7 @@ import {
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { obterContadoresConversas } from "@/lib/conversas/contadores";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { listarIntegracoesWhatsappPermitidas } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -207,12 +208,18 @@ export async function GET(request: Request) {
   let setorId: string | null;
   let responsavelId: string | null;
   let listaId: string | null;
+  let integracaoWhatsappId: string | null;
 
   try {
     contatoId = getUuidParam(searchParams, "contato_id");
     setorId = getUuidParam(searchParams, "setor_id", true);
     responsavelId = getUuidParam(searchParams, "responsavel_id", true);
     listaId = getUuidParam(searchParams, "lista_id");
+    integracaoWhatsappId = getUuidParam(
+      searchParams,
+      "integracao_whatsapp_id",
+      true
+    );
   } catch (error) {
     return NextResponse.json(
       {
@@ -225,6 +232,27 @@ export async function GET(request: Request) {
   }
 
   const usuarioPodeAtribuir = await podeAtribuirConversas(usuario);
+  const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
+    usuario,
+    empresaId: usuario.empresa_id,
+  });
+
+  if (
+    integracaoWhatsappId &&
+    !acessoIntegracoes.idsPermitidos.includes(integracaoWhatsappId)
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Sem acesso a esta integraÃ§Ã£o WhatsApp" },
+      { status: 403 }
+    );
+  }
+
+  const idsIntegracoesPermitidas = new Set(acessoIntegracoes.idsPermitidos);
+  const precisaFiltrarIntegracao =
+    Boolean(integracaoWhatsappId) || acessoIntegracoes.acessoRestrito;
+  const limiteConsulta = precisaFiltrarIntegracao
+    ? Math.min(limite * 5 + 1, 250)
+    : limite + 1;
   const filtrosComuns = {
     status,
     prioridade,
@@ -234,6 +262,10 @@ export async function GET(request: Request) {
     busca,
     canal,
     listaId,
+    integracaoWhatsappId,
+    integracoesWhatsappIdsPermitidos: acessoIntegracoes.acessoRestrito
+      ? acessoIntegracoes.idsPermitidos
+      : [],
   };
 
   try {
@@ -255,7 +287,7 @@ export async function GET(request: Request) {
       p_cursor_last_message_at: cursor?.lastMessageAt || null,
       p_cursor_created_at: cursor?.createdAt || null,
       p_cursor_id: cursor?.id || null,
-      p_limite: limite + 1,
+      p_limite: limiteConsulta,
     });
 
     const totaisPromise = incluirTotais
@@ -275,9 +307,22 @@ export async function GET(request: Request) {
       throw new Error(listaResult.error.message);
     }
 
-    const recebidas = (
+    const recebidasRaw = (
       Array.isArray(listaResult.data) ? listaResult.data : []
     ) as ConversaResumo[];
+    const recebidas = recebidasRaw.filter((conversa) => {
+      const integracaoConversa = String(
+        conversa.integracao_whatsapp_id || ""
+      );
+
+      if (integracaoWhatsappId && integracaoConversa !== integracaoWhatsappId) {
+        return false;
+      }
+
+      if (!integracaoConversa) return true;
+
+      return idsIntegracoesPermitidas.has(integracaoConversa);
+    });
     const hasMore = recebidas.length > limite;
     const conversas = hasMore ? recebidas.slice(0, limite) : recebidas;
     const ultimaConversa = conversas[conversas.length - 1] || null;

@@ -14,6 +14,12 @@ import {
 } from "@/lib/whatsapp/meta-limites";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { isWhatsAppProfileMetaAvailable } from "@/lib/whatsapp/profile-availability";
+import {
+  calcularProximaPosicaoLivre,
+  listarIntegracoesWhatsappDaEmpresa,
+  listarIntegracoesWhatsappPermitidas,
+  obterLimiteIntegracoesWhatsapp,
+} from "@/lib/whatsapp/integracoes-multiplas";
 
 const GRAPH_VERSION = "v23.0";
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
@@ -45,6 +51,7 @@ type IntegracaoWhatsapp = {
   onboarding_erro: string | null;
   modo_integracao?: "cloud_api" | "coexistence" | string | null;
   coex_status?: string | null;
+  posicao?: number | null;
   config_json: ConfigJson;
   token_ref: string | null;
 };
@@ -66,11 +73,12 @@ async function buscarIntegracao(
   let query = supabase
     .from("integracoes_whatsapp")
     .select(
-      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, phone_number_status, quality_rating, meta_messaging_limit_tier, meta_messaging_limit, meta_account_mode, meta_saude_ultima_verificacao_em, setup_completed_at, onboarding_status, onboarding_erro, modo_integracao, coex_status, config_json, token_ref"
+      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, phone_number_status, quality_rating, meta_messaging_limit_tier, meta_messaging_limit, meta_account_mode, meta_saude_ultima_verificacao_em, setup_completed_at, onboarding_status, onboarding_erro, modo_integracao, coex_status, posicao, config_json, token_ref"
     )
     .eq("empresa_id", empresaId)
     .eq("provider", "meta_official")
-    .order("created_at", { ascending: false });
+    .order("posicao", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
 
   if (integracaoId) {
     query = query.eq("id", integracaoId);
@@ -289,6 +297,7 @@ function montarIntegracaoResposta(
       overrides.modo_integracao ?? integracao.modo_integracao ?? "cloud_api",
     coex_status:
       overrides.coex_status ?? integracao.coex_status ?? null,
+    posicao: overrides.posicao ?? integracao.posicao ?? null,
   };
 }
 
@@ -558,10 +567,31 @@ export async function GET(req: NextRequest) {
       return jsonErro("Usuário sem empresa vinculada.", 403);
     }
 
+    const [limiteIntegracoesWhatsapp, todasIntegracoesWhatsapp] =
+      await Promise.all([
+        obterLimiteIntegracoesWhatsapp(empresaId),
+        listarIntegracoesWhatsappDaEmpresa(empresaId),
+      ]);
+    const proximaPosicaoIntegracao = calcularProximaPosicaoLivre(
+      todasIntegracoesWhatsapp,
+      limiteIntegracoesWhatsapp
+    );
+
     const { searchParams } = new URL(req.url);
     const integracaoId = searchParams.get("integracao_id");
 
-    const integracoes = await buscarIntegracao(empresaId, null);
+    const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
+      usuario: contexto.usuario,
+      empresaId,
+    });
+    const idsIntegracoesPermitidas = new Set(acessoIntegracoes.idsPermitidos);
+    const integracoes = (await buscarIntegracao(empresaId, null)).filter(
+      (item) => idsIntegracoesPermitidas.has(item.id)
+    );
+
+    if (integracaoId && !idsIntegracoesPermitidas.has(integracaoId)) {
+      return jsonErro("Sem acesso a esta integraÃ§Ã£o WhatsApp.", 403);
+    }
 
     const integracaoSelecionada =
       integracoes.find((item) => item.id === integracaoId) ||
@@ -580,6 +610,10 @@ export async function GET(req: NextRequest) {
           "Conclua a configuração do WhatsApp para liberar o perfil.",
         integracoes: [],
         integracao: null,
+        limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
+        total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
+        proxima_posicao: proximaPosicaoIntegracao,
+        pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
         administrador: await buscarAdministradorEmpresa(empresaId),
         limite_meta: null,
         perfil: null,
@@ -597,6 +631,10 @@ export async function GET(req: NextRequest) {
           montarIntegracaoResposta(item)
         ),
         integracao: montarIntegracaoResposta(integracaoSelecionada),
+        limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
+        total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
+        proxima_posicao: proximaPosicaoIntegracao,
+        pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
         administrador: await buscarAdministradorEmpresa(empresaId),
         limite_meta: null,
         perfil: null,
@@ -670,6 +708,10 @@ export async function GET(req: NextRequest) {
             integracaoSelecionada,
             overridesBloqueio
           ),
+          limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
+          total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
+          proxima_posicao: proximaPosicaoIntegracao,
+          pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
           perfil: null,
         });
       }
@@ -765,6 +807,10 @@ export async function GET(req: NextRequest) {
         integracaoSelecionada,
         overridesResposta
       ),
+      limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
+      total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
+      proxima_posicao: proximaPosicaoIntegracao,
+      pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
       administrador,
       limite_meta: limiteMeta,
       perfil,
