@@ -804,6 +804,149 @@
   margin-top: 28px;
 }
 
+.coexSyncPanel {
+  width: 100%;
+  margin: 20px 0 4px;
+  padding: 18px;
+  border: 1px solid var(--crm-border);
+  border-radius: 20px;
+  background: var(--crm-surface);
+}
+
+.coexSyncHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.coexSyncHeader strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.coexSyncHeader p {
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.coexLiveBadge {
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 999px;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.coexSyncGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.coexSyncCard {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+}
+
+.coexSyncCard > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.coexSyncCard > strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.coexSyncCard > p {
+  margin: 6px 0 0;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.coexSyncCardDone {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+}
+
+.coexSyncCardWarning {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+}
+
+.coexSyncCardPending {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.coexSyncNotice {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 14px;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.coexSyncRecovery {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--crm-border);
+}
+
+.coexSyncRecovery p {
+  margin: 0;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.coexSyncRecovery button {
+  min-height: 38px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 13px;
+  background: var(--crm-primary);
+  color: var(--crm-text-inverse);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.coexSyncRecovery button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .successBadge {
   width: fit-content;
   padding: 8px 14px;
@@ -1575,6 +1718,19 @@
 
   .quizInfoGrid {
     grid-template-columns: 1fr;
+  }
+
+  .coexSyncHeader,
+  .coexSyncRecovery {
+    flex-direction: column;
+  }
+
+  .coexSyncGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .coexSyncRecovery button {
+    width: 100%;
   }
 
   .integrationModeGrid {

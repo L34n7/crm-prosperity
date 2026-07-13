@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./configurar-ambiente.module.css";
 import { t } from "@/i18n";
@@ -65,6 +65,38 @@ type ApiResponse = {
   created?: boolean;
   integracao?: IntegracaoWhatsapp;
   error?: string;
+};
+
+type CoexSyncJob = {
+  tipo: "contacts" | "history";
+  status:
+    | "pendente"
+    | "solicitado"
+    | "processando"
+    | "concluido"
+    | "recusado_usuario"
+    | "erro";
+  request_id?: string | null;
+  progresso?: number | null;
+  processamento_progresso?: number | null;
+  itens_recebidos?: number | null;
+  itens_processados?: number | null;
+  itens_ignorados?: number | null;
+  itens_com_erro?: number | null;
+  erro_codigo?: string | null;
+  erro_mensagem?: string | null;
+  metadata_json?: Record<string, unknown> | null;
+  solicitado_em?: string | null;
+  concluido_em?: string | null;
+  updated_at?: string | null;
+};
+
+type CoexActivationResponse = ApiResponse & {
+  operational?: boolean;
+  sync?: {
+    jobs?: CoexSyncJob[];
+    warnings?: string[];
+  };
 };
 
 type PerfilOnboarding = {
@@ -148,6 +180,156 @@ const ETAPAS: Etapa[] = [
   },
 ];
 
+function getCoexSyncPresentation(job?: CoexSyncJob) {
+  if (!job) {
+    return {
+      label: "Aguardando solicitação",
+      detail: "A importação será preparada após a ativação do número.",
+      tone: "pending" as const,
+    };
+  }
+
+  const progress = Math.max(
+    0,
+    Math.min(
+      100,
+      Number(job.processamento_progresso ?? job.progresso ?? 0)
+    )
+  );
+
+  if (job.status === "concluido") {
+    return {
+      label: "Importação concluída",
+      detail:
+        job.tipo === "history" && Number(job.itens_recebidos || 0) > 0
+          ? `${Number(job.itens_processados || 0)} de ${Number(
+              job.itens_recebidos || 0
+            )} itens processados.`
+          : "Os dados disponibilizados pela Meta foram recebidos.",
+      tone: "done" as const,
+    };
+  }
+
+  if (job.status === "recusado_usuario") {
+    return {
+      label: "Não compartilhado",
+      detail:
+        "O compartilhamento dos dados anteriores não foi autorizado no WhatsApp Business.",
+      tone: "warning" as const,
+    };
+  }
+
+  if (job.status === "erro") {
+    return {
+      label: "Importação indisponível",
+      detail:
+        job.erro_mensagem ||
+        "A Meta não disponibilizou esta importação. A conexão ao vivo continua funcionando.",
+      tone: "warning" as const,
+    };
+  }
+
+  if (job.status === "processando") {
+    return {
+      label: `Importando${progress ? ` — ${progress}%` : ""}`,
+      detail:
+        "Os dados recebidos da Meta estão sendo processados em segundo plano.",
+      tone: "pending" as const,
+    };
+  }
+
+  return {
+    label:
+      job.status === "solicitado"
+        ? "Solicitado à Meta"
+        : "Preparando importação",
+    detail:
+      "A conexão já está ativa enquanto aguardamos o envio dos dados anteriores.",
+    tone: "pending" as const,
+  };
+}
+
+function CoexistenceSyncPanel({
+  jobs,
+  loaded,
+  preparing,
+  onPrepareMissing,
+}: {
+  jobs: CoexSyncJob[];
+  loaded: boolean;
+  preparing: boolean;
+  onPrepareMissing: () => void;
+}) {
+  const contacts = jobs.find((job) => job.tipo === "contacts");
+  const history = jobs.find((job) => job.tipo === "history");
+  const items = [
+    { key: "contacts", title: "Contatos", job: contacts },
+    { key: "history", title: "Conversas anteriores", job: history },
+  ];
+  const hasWarning = jobs.some((job) =>
+    ["erro", "recusado_usuario"].includes(job.status)
+  );
+  const hasMissingJob = loaded && (!contacts || !history);
+
+  return (
+    <section className={styles.coexSyncPanel}>
+      <div className={styles.coexSyncHeader}>
+        <div>
+          <strong>Importação inicial</strong>
+          <p>Este processo não bloqueia mensagens novas no CRM.</p>
+        </div>
+        <span className={styles.coexLiveBadge}>Conexão ao vivo ativa</span>
+      </div>
+
+      <div className={styles.coexSyncGrid}>
+        {items.map((item) => {
+          const presentation = getCoexSyncPresentation(item.job);
+
+          return (
+            <div
+              key={item.key}
+              className={`${styles.coexSyncCard} ${
+                presentation.tone === "done"
+                  ? styles.coexSyncCardDone
+                  : presentation.tone === "warning"
+                    ? styles.coexSyncCardWarning
+                    : styles.coexSyncCardPending
+              }`}
+            >
+              <span>{item.title}</span>
+              <strong>{presentation.label}</strong>
+              <p>{presentation.detail}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {hasWarning && (
+        <div className={styles.coexSyncNotice}>
+          A falha acima afeta somente a importação de dados anteriores. O
+          número permanece conectado para enviar e receber mensagens novas.
+        </div>
+      )}
+
+      {hasMissingJob && (
+        <div className={styles.coexSyncRecovery}>
+          <p>
+            Existe uma importação que ainda não foi preparada para este
+            onboarding.
+          </p>
+          <button
+            type="button"
+            onClick={onPrepareMissing}
+            disabled={preparing}
+          >
+            {preparing ? "Preparando..." : "Preparar importação pendente"}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function obterIndiceEtapaAtual(integracao: IntegracaoWhatsapp | null) {
   if (!integracao) return 0;
 
@@ -157,9 +339,7 @@ function obterIndiceEtapaAtual(integracao: IntegracaoWhatsapp | null) {
       ? integracao.is_on_biz_app === true &&
         String(integracao.platform_type || "").toUpperCase() ===
           "CLOUD_API" &&
-        ["onboarded", "sincronizando", "ativo"].includes(
-          String(integracao.coex_status || "")
-        )
+        String(integracao.coex_status || "") === "ativo"
       : !!integracao.phone_registered;
   const webhookConfigurado =
     !!integracao.webhook_verificado && !!integracao.app_assigned;
@@ -204,6 +384,8 @@ function formatarStatus(valor?: string | null) {
 
 export default function ConfigurarAmbientePage() {
   const [integracao, setIntegracao] = useState<IntegracaoWhatsapp | null>(null);
+  const [coexSyncJobs, setCoexSyncJobs] = useState<CoexSyncJob[]>([]);
+  const [coexSyncCarregado, setCoexSyncCarregado] = useState(false);
   const [loading, setLoading] = useState(true);
   const [recarregando, setRecarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -247,6 +429,39 @@ export default function ConfigurarAmbientePage() {
   const [menuContaAberto, setMenuContaAberto] = useState(false);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
   const onboardingMenuRef = useRef<HTMLDivElement | null>(null);
+  const coexSyncPollingAtivo = coexSyncJobs.some((job) =>
+    ["pendente", "solicitado", "processando"].includes(job.status)
+  );
+
+  const carregarSincronizacaoCoex = useCallback(
+    async (integracaoId: string) => {
+      try {
+        const params = new URLSearchParams({
+          integracao_id: integracaoId,
+        });
+        const response = await fetch(
+          `/api/integracoes-whatsapp/status?${params.toString()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) return;
+        setCoexSyncJobs(
+          Array.isArray(data.coex_sync) ? data.coex_sync : []
+        );
+        setCoexSyncCarregado(true);
+      } catch (error) {
+        console.warn(
+          "[CONFIGURAR AMBIENTE] Erro ao carregar sincronização Coex:",
+          error
+        );
+      }
+    },
+    []
+  );
 
 
   function recolherGuiaMeta() {
@@ -330,7 +545,7 @@ export default function ConfigurarAmbientePage() {
       }),
     });
 
-    const data = await response.json();
+    const data = (await response.json()) as ApiResponse;
 
     if (!response.ok || !data.ok) {
       throw new Error(data.error || "Erro ao sincronizar dados da Meta.");
@@ -535,6 +750,13 @@ export default function ConfigurarAmbientePage() {
       }
 
       setIntegracao(integracaoAtualizada);
+      if (integracaoAtualizada.modo_integracao === "coexistence") {
+        setCoexSyncCarregado(false);
+        await carregarSincronizacaoCoex(integracaoAtualizada.id);
+      } else {
+        setCoexSyncJobs([]);
+        setCoexSyncCarregado(false);
+      }
     } catch (error) {
       console.error("[CONFIGURAR AMBIENTE] Erro ao carregar integração:", error);
 
@@ -575,6 +797,8 @@ export default function ConfigurarAmbientePage() {
       }
 
       setIntegracao(data.integracao);
+      setCoexSyncJobs([]);
+      setCoexSyncCarregado(false);
       mostrarSucessoToast(
         modo === "coexistence"
           ? "Modo WhatsApp Business + CRM selecionado."
@@ -945,7 +1169,7 @@ async function handleAtivarCoexistencia() {
         }),
       }
     );
-    const data = await response.json();
+    const data = (await response.json()) as CoexActivationResponse;
 
     if (!response.ok || !data.ok) {
       throw new Error(
@@ -958,8 +1182,16 @@ async function handleAtivarCoexistencia() {
       setIntegracao(data.integracao);
     }
 
+    if (Array.isArray(data.sync?.jobs)) {
+      setCoexSyncJobs(data.sync.jobs);
+      setCoexSyncCarregado(true);
+    }
+
+    const possuiAvisos = Boolean(data.sync?.warnings?.length);
     mostrarSucessoToast(
-      "Coexistência ativada. Contatos e histórico estão sendo sincronizados."
+      possuiAvisos
+        ? "Coexistência ativada. As mensagens novas estão disponíveis; confira o status da importação inicial."
+        : "Coexistência ativada. Contatos e histórico foram solicitados à Meta."
     );
     await carregarIntegracao(false);
   } catch (error) {
@@ -1173,6 +1405,29 @@ async function salvarNichoEAvancar() {
   }, []);
 
   useEffect(() => {
+    if (
+      !integracao?.id ||
+      integracao.modo_integracao !== "coexistence" ||
+      !coexSyncPollingAtivo
+    ) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void carregarSincronizacaoCoex(integracao.id);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    carregarSincronizacaoCoex,
+    coexSyncPollingAtivo,
+    integracao?.id,
+    integracao?.modo_integracao,
+  ]);
+
+  useEffect(() => {
     function receberCallbackMeta(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
 
@@ -1277,9 +1532,7 @@ async function salvarNichoEAvancar() {
     ? integracao?.is_on_biz_app === true &&
       String(integracao?.platform_type || "").toUpperCase() ===
         "CLOUD_API" &&
-      ["onboarded", "sincronizando", "ativo"].includes(
-        String(integracao?.coex_status || "")
-      )
+      String(integracao?.coex_status || "") === "ativo"
     : !!integracao?.phone_registered;
   const webhookConfigurado =
     !!integracao?.webhook_verificado && !!integracao?.app_assigned;
@@ -1767,7 +2020,7 @@ return (
 
                   <p className={styles.quizText}>
                     {modoCoexistencia
-                      ? "Vamos validar o vínculo com o WhatsApp Business App, configurar o webhook e iniciar a sincronização de contatos e conversas."
+                      ? "Vamos validar o vínculo com o WhatsApp Business App, configurar o webhook e solicitar uma única vez a importação dos dados anteriores. Essa importação não bloqueia mensagens novas."
                       : "Agora vamos concluir o registro técnico do número para que ele possa enviar e receber mensagens pela Cloud API oficial."}
                   </p>
 
@@ -1808,9 +2061,7 @@ return (
                       <strong>
                         {numeroRegistrado
                           ? modoCoexistencia
-                            ? integracao?.coex_status === "sincronizando"
-                              ? "Ativa — sincronização em andamento"
-                              : "Coexistência ativa"
+                            ? "Coexistência ativa"
                             : "Número ativado"
                           : "Aguardando ativação"}
                       </strong>
@@ -1818,6 +2069,17 @@ return (
 
                     {numeroRegistrado && <div className={styles.quizCheckIcon}>✓</div>}
                   </div>
+
+                  {modoCoexistencia && numeroRegistrado && (
+                    <CoexistenceSyncPanel
+                      jobs={coexSyncJobs}
+                      loaded={coexSyncCarregado}
+                      preparing={registrandoNumero}
+                      onPrepareMissing={() => {
+                        void handleAtivarCoexistencia();
+                      }}
+                    />
+                  )}
 
                   <div className={styles.quizActions}>
                     <button
@@ -1844,7 +2106,11 @@ return (
                         setErroPin("");
                         setModalPinAberto(true);
                       }}
-                      disabled={!metaConectado || registrandoNumero}
+                      disabled={
+                        !metaConectado ||
+                        registrandoNumero ||
+                        numeroRegistrado
+                      }
                     >
                       {registrandoNumero
                         ? "Ativando..."
@@ -1892,13 +2158,17 @@ return (
                   {!ambienteConcluido ? (
                     <>
                       <h3 className={styles.quizHeadline}>
-                        {fluxoNumeroAdicional
+                        {modoCoexistencia
+                          ? "Revise a conexão e conclua a ativação"
+                          : fluxoNumeroAdicional
                           ? "Configure o webhook e finalize o novo número"
                           : "Configure o webhook e conclua a ativação"}
                       </h3>
 
                       <p className={styles.quizText}>
-                        {fluxoNumeroAdicional
+                        {modoCoexistencia
+                          ? "A conexão ao vivo e o webhook já estão configurados. A importação de contatos e conversas anteriores continuará separadamente, sem impedir a conclusão."
+                          : fluxoNumeroAdicional
                           ? "O webhook permite que o CRM receba as mensagens e os eventos deste número em tempo real. Essa configuração não altera o segmento nem as preferências gerais da empresa."
                           : "O webhook permite que o CRM receba mensagens, status e eventos do WhatsApp em tempo real. Depois disso, basta concluir a configuração do ambiente."}
                       </p>
@@ -1935,6 +2205,17 @@ return (
                         </div>
                       </div>
 
+                      {modoCoexistencia && (
+                        <CoexistenceSyncPanel
+                          jobs={coexSyncJobs}
+                          loaded={coexSyncCarregado}
+                          preparing={registrandoNumero}
+                          onPrepareMissing={() => {
+                            void handleAtivarCoexistencia();
+                          }}
+                        />
+                      )}
+
                       {erroWebhook && (
                         <div className={styles.alertError}>
                           <strong>Permissão de webhook necessária</strong>
@@ -1959,7 +2240,11 @@ return (
                               : styles.disabledButton
                           }
                           onClick={handleConfigurarWebhook}
-                          disabled={!numeroRegistrado || configurandoWebhook}
+                          disabled={
+                            !numeroRegistrado ||
+                            configurandoWebhook ||
+                            webhookConfigurado
+                          }
                         >
                           {configurandoWebhook
                             ? "Configurando..."
@@ -2072,6 +2357,17 @@ return (
                           )}
                         </div>
                       </div>
+
+                      {modoCoexistencia && (
+                        <CoexistenceSyncPanel
+                          jobs={coexSyncJobs}
+                          loaded={coexSyncCarregado}
+                          preparing={registrandoNumero}
+                          onPrepareMissing={() => {
+                            void handleAtivarCoexistencia();
+                          }}
+                        />
+                      )}
 
                       <p className={styles.quizTextfim}>
                         {fluxoNumeroAdicional

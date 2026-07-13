@@ -294,6 +294,15 @@ test("extrai PARTNER_REMOVED e valida prontidão por modo", () => {
       platform_type: "CLOUD_API",
       coex_status: "sincronizando",
     }),
+    false
+  );
+  assert.equal(
+    isCoexistencePhoneReady({
+      modo_integracao: "coexistence",
+      is_on_biz_app: true,
+      platform_type: "CLOUD_API",
+      coex_status: "ativo",
+    }),
     true
   );
   assert.equal(

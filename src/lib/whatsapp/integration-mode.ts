@@ -34,9 +34,6 @@ export function isCoexistencePhoneReady(integration: {
   return (
     integration.is_on_biz_app === true &&
     String(integration.platform_type || "").toUpperCase() === "CLOUD_API" &&
-    ["onboarded", "sincronizando", "ativo"].includes(
-      String(integration.coex_status || "")
-    )
+    String(integration.coex_status || "") === "ativo"
   );
 }
-

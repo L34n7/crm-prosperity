@@ -12,6 +12,7 @@ import {
 import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
 import { persistCoexistenceHistoryBatch } from "@/lib/whatsapp/persist-coexistence-history";
 import { calculateCoexistenceHistoryProgress } from "@/lib/whatsapp/coexistence-history-state";
+import { isCoexistenceSyncTerminalStatus } from "@/lib/whatsapp/coexistence-sync-policy";
 
 const supabase = getSupabaseAdmin();
 
@@ -144,21 +145,13 @@ export async function finishCoexistenceIntegrationIfReady(
   if (error || jobs?.length !== 2) return;
 
   const terminal = jobs.every((job) =>
-    ["concluido", "recusado_usuario"].includes(job.status)
+    isCoexistenceSyncTerminalStatus(job.status)
   );
   if (!terminal) return;
-
-  const { data: integration } = await supabase
-    .from("integracoes_whatsapp")
-    .select("status")
-    .eq("id", integrationId)
-    .maybeSingle();
 
   await supabase
     .from("integracoes_whatsapp")
     .update({
-      coex_status:
-        integration?.status === "ativa" ? "ativo" : "onboarded",
       coex_sync_completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -709,7 +702,7 @@ export async function processCoexistenceHistoryFallback(params: {
     .from("whatsapp_coex_sync_jobs")
     .select("integracao_whatsapp_id")
     .eq("tipo", "history")
-    .in("status", ["solicitado", "processando", "erro"])
+    .in("status", ["solicitado", "processando"])
     .or(
       `worker_agendado_em.is.null,worker_agendado_em.lt.${staleBefore}`
     )

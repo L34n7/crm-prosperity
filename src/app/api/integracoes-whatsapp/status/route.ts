@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -13,12 +13,12 @@ type IntegracaoWhatsappStatus = IntegracaoWhatsappAmbiente & {
 };
 
 const STATUS_HEADERS = {
-  "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
+  "Cache-Control": "private, no-store, max-age=0",
 };
 
 const supabaseAdmin = getSupabaseAdmin();
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const resultado = await getUsuarioBasico();
 
   if (!resultado.ok) {
@@ -37,7 +37,10 @@ export async function GET() {
     );
   }
 
-  const { data: integracao, error } = await supabaseAdmin
+  const integracaoId = String(
+    request.nextUrl.searchParams.get("integracao_id") || ""
+  ).trim();
+  let integracaoQuery = supabaseAdmin
     .from("integracoes_whatsapp")
     .select(
       `
@@ -68,10 +71,18 @@ export async function GET() {
       `
     )
     .eq("empresa_id", usuario.empresa_id)
-    .eq("provider", "meta_official")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<IntegracaoWhatsappStatus>();
+    .eq("provider", "meta_official");
+
+  if (integracaoId) {
+    integracaoQuery = integracaoQuery.eq("id", integracaoId);
+  } else {
+    integracaoQuery = integracaoQuery
+      .order("created_at", { ascending: false })
+      .limit(1);
+  }
+
+  const { data: integracao, error } =
+    await integracaoQuery.maybeSingle<IntegracaoWhatsappStatus>();
 
   if (error) {
     return NextResponse.json(
@@ -87,7 +98,7 @@ export async function GET() {
     const { data: jobs, error: jobsError } = await supabaseAdmin
       .from("whatsapp_coex_sync_jobs")
       .select(
-        "tipo, status, progresso, processamento_progresso, itens_recebidos, itens_processados, itens_ignorados, itens_com_erro, erro_codigo, erro_mensagem, solicitado_em, concluido_em, updated_at"
+        "tipo, status, request_id, progresso, processamento_progresso, itens_recebidos, itens_processados, itens_ignorados, itens_com_erro, erro_codigo, erro_mensagem, metadata_json, solicitado_em, concluido_em, updated_at"
       )
       .eq("integracao_whatsapp_id", integracao.id)
       .order("tipo", { ascending: true });

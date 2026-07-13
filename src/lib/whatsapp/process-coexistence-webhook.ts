@@ -15,6 +15,7 @@ import {
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
 import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
+import { isCoexistenceSyncTerminalStatus } from "@/lib/whatsapp/coexistence-sync-policy";
 import {
   enqueueCoexistenceHistory,
   finishCoexistenceIntegrationIfReady,
@@ -387,21 +388,13 @@ async function updateHistorySyncState(body: WhatsAppWebhookBody) {
     const terminal =
       jobs?.length === 2 &&
       jobs.every((job) =>
-        ["concluido", "recusado_usuario"].includes(job.status)
+        isCoexistenceSyncTerminalStatus(job.status)
       );
 
     if (terminal) {
-      const { data: integration } = await supabase
-        .from("integracoes_whatsapp")
-        .select("status")
-        .eq("id", integrationId)
-        .maybeSingle();
-
       await supabase
         .from("integracoes_whatsapp")
         .update({
-          coex_status:
-            integration?.status === "ativa" ? "ativo" : "onboarded",
           coex_sync_completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
