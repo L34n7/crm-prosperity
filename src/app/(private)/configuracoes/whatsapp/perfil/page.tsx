@@ -506,7 +506,7 @@ export default function WhatsappPerfilPage() {
 
       window.location.href = `/configurar-ambiente?integracao_id=${encodeURIComponent(
         json.integracao.id
-      )}`;
+      )}&fluxo=novo-numero`;
     } catch (error: unknown) {
       setErro(
         getErrorMessage(error, "Nao foi possivel cadastrar outro numero.")

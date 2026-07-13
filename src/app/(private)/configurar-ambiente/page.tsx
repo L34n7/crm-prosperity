@@ -20,6 +20,7 @@ declare global {
 type IntegracaoWhatsapp = {
   id: string;
   empresa_id: string;
+  posicao?: number | null;
   nome_conexao: string;
   numero: string;
   provider: "meta_official";
@@ -216,6 +217,8 @@ export default function ConfigurarAmbientePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const integracaoIdParam = searchParams.get("integracao_id") || "";
+  const fluxoNovoNumeroParam =
+    searchParams.get("fluxo") === "novo-numero";
   const numeroValido =
     !!integracao?.numero && !integracao.numero.startsWith("pendente_");
   const [toastSucesso, setToastSucesso] = useState("");
@@ -514,6 +517,21 @@ export default function ConfigurarAmbientePage() {
         ) {
           integracaoAtualizada = dataAtualizada.integracao;
         }
+      }
+
+      if (
+        fluxoNovoNumeroParam ||
+        Number(integracaoAtualizada.posicao || 1) > 1
+      ) {
+        const indiceAtual = obterIndiceEtapaAtual(integracaoAtualizada);
+        const etapaSugerida = Math.min(
+          4,
+          Math.max(2, indiceAtual + 1)
+        );
+
+        setEtapaQuiz((etapaAtual) =>
+          Math.max(etapaAtual, etapaSugerida)
+        );
       }
 
       setIntegracao(integracaoAtualizada);
@@ -1251,6 +1269,8 @@ async function salvarNichoEAvancar() {
   const metaConectado = !!integracao?.waba_id && !!integracao?.phone_number_id;
   const modoCoexistencia =
     integracao?.modo_integracao === "coexistence";
+  const fluxoNumeroAdicional =
+    fluxoNovoNumeroParam || Number(integracao?.posicao || 1) > 1;
   const modoIntegracaoEscolhido =
     !!integracao?.modo_integracao_escolhido_em;
   const numeroRegistrado = modoCoexistencia
@@ -1271,14 +1291,27 @@ async function salvarNichoEAvancar() {
     numeroRegistrado &&
     webhookConfigurado;
 
-  const progressoQuiz = Math.round((etapaQuiz / 4) * 100);
+  const totalEtapasQuiz = fluxoNumeroAdicional ? 3 : 4;
+  const etapaVisualQuiz = fluxoNumeroAdicional
+    ? Math.max(1, etapaQuiz - 1)
+    : etapaQuiz;
+  const progressoQuiz = Math.round(
+    (etapaVisualQuiz / totalEtapasQuiz) * 100
+  );
 
   function avancarEtapaQuiz() {
     setEtapaQuiz((etapaAtual) => Math.min(etapaAtual + 1, 4));
   }
 
   function voltarEtapaQuiz() {
-    setEtapaQuiz((etapaAtual) => Math.max(etapaAtual - 1, 0));
+    if (fluxoNumeroAdicional && etapaQuiz <= 2) {
+      router.push("/configuracoes/whatsapp/perfil");
+      return;
+    }
+
+    setEtapaQuiz((etapaAtual) =>
+      Math.max(etapaAtual - 1, fluxoNumeroAdicional ? 2 : 0)
+    );
   }
   
   const textoBotaoAtualizarStatus =
@@ -1287,7 +1320,9 @@ async function salvarNichoEAvancar() {
     : etapaQuiz === 3
     ? "Verificar número"
     : etapaQuiz === 4
-    ? "Verificar ambiente"
+    ? fluxoNumeroAdicional
+      ? "Verificar webhook"
+      : "Verificar ambiente"
     : "Atualizar status";
 
   const nomeConta = perfilOnboarding.nomeUsuario || "Usuário";
@@ -1381,9 +1416,15 @@ return (
           <section className={styles.loadingCard}>
             <div className={styles.spinner} />
             <div>
-              <h2 className={styles.loadingTitle}>Preparando sua configuração</h2>
+              <h2 className={styles.loadingTitle}>
+                {fluxoNovoNumeroParam
+                  ? "Preparando o novo número"
+                  : "Preparando sua configuração"}
+              </h2>
               <p className={styles.loadingText}>
-                Estamos verificando se sua empresa já possui uma integração criada.
+                {fluxoNovoNumeroParam
+                  ? "Estamos carregando a nova integração sem alterar as configurações gerais da empresa."
+                  : "Estamos verificando se sua empresa já possui uma integração criada."}
               </p>
             </div>
           </section>
@@ -1406,18 +1447,29 @@ return (
               <div className={styles.quizTop}>
                 <div>
                   <span className={styles.sectionEyebrow}>
-                    Configuração guiada
+                    {fluxoNumeroAdicional
+                      ? "Adicionar número"
+                      : "Configuração guiada"}
                   </span>
 
                   <h2 className={styles.quizTitle}>
-                    {etapaQuiz === 0 && "Configuração do ambiente oficial do WhatsApp"}
+                    {etapaQuiz === 0 &&
+                      "Configuração do ambiente oficial do WhatsApp"}
                     {etapaQuiz === 1 && "Segmento da empresa"}
-                    {etapaQuiz === 2 && "Conectar conta Meta"}
+                    {etapaQuiz === 2 &&
+                      (fluxoNumeroAdicional
+                        ? "Conectar novo número do WhatsApp"
+                        : "Conectar conta Meta")}
                     {etapaQuiz === 3 &&
-                      (modoCoexistencia
+                      (fluxoNumeroAdicional
+                        ? "Ativar novo número do WhatsApp"
+                        : modoCoexistencia
                         ? "Ativar WhatsApp Business + CRM"
                         : "Ativar número do WhatsApp")}
-                    {etapaQuiz === 4 && "Finalizar ambiente oficial"}
+                    {etapaQuiz === 4 &&
+                      (fluxoNumeroAdicional
+                        ? "Finalizar novo número"
+                        : "Finalizar ambiente oficial")}
                   </h2>
                 </div>
 
@@ -1438,7 +1490,7 @@ return (
                   <span>
                     {etapaQuiz === 0
                       ? "Introdução"
-                      : `Etapa ${etapaQuiz} de 4`}
+                      : `Etapa ${etapaVisualQuiz} de ${totalEtapasQuiz}`}
                   </span>
                   <span>{progressoQuiz}%</span>
                 </div>
@@ -1451,7 +1503,7 @@ return (
                 </div>
               </div>
 
-              {etapaQuiz === 0 && (
+              {!fluxoNumeroAdicional && etapaQuiz === 0 && (
                 <div className={styles.quizContent}>
                   <div className={styles.quizIcon}>👋</div>
 
@@ -1482,7 +1534,7 @@ return (
                 </div>
               )}
 
-              {etapaQuiz === 1 && (
+              {!fluxoNumeroAdicional && etapaQuiz === 1 && (
                 <div className={styles.quizContent}>
                   <div className={styles.quizStatusIcon}>1</div>
 
@@ -1560,18 +1612,19 @@ return (
                       metaConectado ? styles.quizStatusDone : ""
                     }`}
                   >
-                    {metaConectado ? "✓" : "2"}
+                    {metaConectado ? "✓" : etapaVisualQuiz}
                   </div>
 
                   <h3 className={styles.quizHeadline}>
-                    Conecte sua conta empresarial da Meta
+                    {fluxoNumeroAdicional
+                      ? "Conecte a conta Meta do novo número"
+                      : "Conecte sua conta empresarial da Meta"}
                   </h3>
 
                   <p className={styles.quizText}>
-                    Nesta etapa, vamos conectar o CRM à sua conta Meta
-                    para configurar o WhatsApp Business da sua empresa
-                    com segurança. Os dados técnicos da integração serão
-                    identificados automaticamente.
+                    {fluxoNumeroAdicional
+                      ? "O segmento e as configurações gerais da empresa serão mantidos. Agora escolha como o novo número será usado e conecte a conta Meta responsável por ele."
+                      : "Nesta etapa, vamos conectar o CRM à sua conta Meta para configurar o WhatsApp Business da sua empresa com segurança. Os dados técnicos da integração serão identificados automaticamente."}
                   </p>
 
                   <div className={styles.integrationModeGrid}>
@@ -1703,7 +1756,7 @@ return (
                       numeroRegistrado ? styles.quizStatusDone : ""
                     }`}
                   >
-                    {numeroRegistrado ? "✓" : "3"}
+                    {numeroRegistrado ? "✓" : etapaVisualQuiz}
                   </div>
 
                   <h3 className={styles.quizHeadline}>
@@ -1826,7 +1879,7 @@ return (
                         ambienteConcluido ? styles.quizStatusDone : ""
                       }`}
                     >
-                      {ambienteConcluido ? "✓" : "4"}
+                      {ambienteConcluido ? "✓" : etapaVisualQuiz}
                     </div>
 
                     {ambienteConcluido && (
@@ -1839,13 +1892,15 @@ return (
                   {!ambienteConcluido ? (
                     <>
                       <h3 className={styles.quizHeadline}>
-                        Configure o webhook e conclua a ativação
+                        {fluxoNumeroAdicional
+                          ? "Configure o webhook e finalize o novo número"
+                          : "Configure o webhook e conclua a ativação"}
                       </h3>
 
                       <p className={styles.quizText}>
-                        O webhook permite que o CRM receba mensagens, status e
-                        eventos do WhatsApp em tempo real. Depois disso, basta
-                        concluir a configuração do ambiente.
+                        {fluxoNumeroAdicional
+                          ? "O webhook permite que o CRM receba as mensagens e os eventos deste número em tempo real. Essa configuração não altera o segmento nem as preferências gerais da empresa."
+                          : "O webhook permite que o CRM receba mensagens, status e eventos do WhatsApp em tempo real. Depois disso, basta concluir a configuração do ambiente."}
                       </p>
 
                       <div className={styles.quizInfoGrid}>
@@ -1868,7 +1923,11 @@ return (
                           }`}
                         >
                           <div>
-                            <span>Ambiente</span>
+                            <span>
+                              {fluxoNumeroAdicional
+                                ? "Nova integração"
+                                : "Ambiente"}
+                            </span>
                             <strong>{ambienteConcluido ? "Concluído" : "Pendente"}</strong>
                           </div>
 
@@ -1919,21 +1978,37 @@ return (
                           onClick={handleConcluirConfiguracao}
                           disabled={!webhookConfigurado}
                         >
-                          Concluir configuração
+                          {fluxoNumeroAdicional
+                            ? "Concluir novo número"
+                            : "Concluir configuração"}
                         </button>
                       </div>
                     </>
                   ) : (
                     <>
                       <h3 className={styles.quizHeadline}>
-                        Tudo certo {perfilOnboarding.nomeUsuario}! O ambiente oficial do WhatsApp está ativo.
+                        {fluxoNumeroAdicional
+                          ? `Tudo certo ${perfilOnboarding.nomeUsuario}! O novo número está conectado.`
+                          : `Tudo certo ${perfilOnboarding.nomeUsuario}! O ambiente oficial do WhatsApp está ativo.`}
                       </h3>
 
                       <p className={styles.quizText}>
-                        A integração da{" "}
-                        <strong>{perfilOnboarding.nomeEmpresa}</strong> foi
-                        concluída com sucesso. Agora você pode personalizar as
-                        permissões, políticas e regras internas da empresa.
+                        {fluxoNumeroAdicional ? (
+                          <>
+                            A nova integração foi adicionada à{" "}
+                            <strong>{perfilOnboarding.nomeEmpresa}</strong> sem
+                            alterar o segmento ou as configurações gerais já
+                            existentes.
+                          </>
+                        ) : (
+                          <>
+                            A integração da{" "}
+                            <strong>{perfilOnboarding.nomeEmpresa}</strong> foi
+                            concluída com sucesso. Agora você pode personalizar
+                            as permissões, políticas e regras internas da
+                            empresa.
+                          </>
+                        )}
                       </p>
 
                       <div className={styles.quizInfoGrid}>
@@ -1999,24 +2074,36 @@ return (
                       </div>
 
                       <p className={styles.quizTextfim}>
-                        Deseja personalizar agora as políticas da empresa?
+                        {fluxoNumeroAdicional
+                          ? "Você já pode gerenciar o novo número junto com as demais integrações."
+                          : "Deseja personalizar agora as políticas da empresa?"}
                       </p>
 
                       <div className={styles.quizActions}>
-                        <button
-                          type="button"
-                          className={styles.secondaryButton}
-                          onClick={voltarEtapaQuiz}
-                        >
-                          Voltar
-                        </button>
+                        {!fluxoNumeroAdicional && (
+                          <button
+                            type="button"
+                            className={styles.secondaryButton}
+                            onClick={voltarEtapaQuiz}
+                          >
+                            Voltar
+                          </button>
+                        )}
 
                         <button
                           type="button"
                           className={styles.primaryButton}
-                          onClick={() => router.push("/configuracoes/permissoes")}
+                          onClick={() =>
+                            router.push(
+                              fluxoNumeroAdicional
+                                ? "/configuracoes/whatsapp/perfil"
+                                : "/configuracoes/permissoes"
+                            )
+                          }
                         >
-                          Avançar
+                          {fluxoNumeroAdicional
+                            ? "Gerenciar números"
+                            : "Avançar"}
                         </button>
                       </div>
                     </>
