@@ -4022,7 +4022,6 @@ export default function DisparosWhatsAppPage() {
               ) : (
               <form onSubmit={handleSubmit} className={styles.form}>
                     <div className={styles.setupColumn}>
-                      {integracoes.length !== 1 && (
                       <div className={styles.field}>
                         <label className={styles.label}>Integração WhatsApp</label>
                         <select
@@ -4034,6 +4033,7 @@ export default function DisparosWhatsAppPage() {
                           }}
                           className={styles.input}
                           disabled={integracoes.length <= 1}
+                          required
                         >
                           <option value="">Selecione uma conexão</option>
                           {integracoes.map((item) => (
@@ -4043,7 +4043,6 @@ export default function DisparosWhatsAppPage() {
                           ))}
                         </select>
                       </div>
-                      )}
 
                       <div className={styles.field}>
                         <label className={styles.label}>Template aprovado</label>

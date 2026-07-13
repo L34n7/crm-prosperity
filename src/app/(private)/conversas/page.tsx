@@ -8000,11 +8000,11 @@ const templateFooterTexto = useMemo(() => {
                       setIntegracaoWhatsappFiltro(event.target.value)
                     }
                   >
-                    <option value="todos">Todos os nÃºmeros</option>
+                    <option value="todos">Todos os números</option>
                     {integracoesWhatsapp.map((integracao) => (
                       <option key={integracao.id} value={integracao.id}>
-                        {integracao.nome_conexao || `NÃºmero ${integracao.posicao || ""}`}{" "}
-                        â€¢ {integracao.numero || "pendente"}
+                        {integracao.nome_conexao || `Número ${integracao.posicao || ""}`}
+                        {integracao.numero ? ` - ${integracao.numero}` : " - pendente"}
                       </option>
                     ))}
                   </select>
@@ -8160,10 +8160,10 @@ const templateFooterTexto = useMemo(() => {
                         </div>
 
                         <div className={styles.conversationBottomLine}>
-                          {obterIntegracaoConversa(c) && (
+                          {integracoesWhatsapp.length > 1 && obterIntegracaoConversa(c) && (
                             <span className={styles.integrationMiniBadge}>
                               {obterIntegracaoConversa(c)?.nome_conexao ||
-                                `NÃºmero ${obterPosicaoIntegracaoConversa(c)}`}
+                                `Número ${obterPosicaoIntegracaoConversa(c)}`}
                             </span>
                           )}
 
@@ -8284,7 +8284,7 @@ const templateFooterTexto = useMemo(() => {
                               <p className={styles.chatSubtitle}>
                                 {conversaSelecionada.contatos?.telefone || "Sem telefone"}
                                 {obterIntegracaoConversa(conversaSelecionada)
-                                  ? ` â€¢ ${
+                                  ? ` - ${
                                       obterIntegracaoConversa(conversaSelecionada)
                                         ?.nome_conexao || "WhatsApp"
                                     }`

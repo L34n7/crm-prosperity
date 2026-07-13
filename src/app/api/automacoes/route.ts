@@ -369,6 +369,7 @@ async function validarTemplatesWhatsappFluxo(params: {
     .select("tipo_no, titulo, configuracao_json")
     .eq("empresa_id", params.empresaId)
     .eq("fluxo_id", params.fluxoId)
+    .eq("ativo", true)
     .in("tipo_no", ["agendar_disparo", "agenda_criar_agendamento"]);
 
   if (nosError) {

@@ -301,6 +301,11 @@ export default function WhatsappPerfilPage() {
   const [erroNomeExibicao, setErroNomeExibicao] = useState("");
   const [sucessoNomeExibicao, setSucessoNomeExibicao] = useState("");
   const [modalDesconectarAberto, setModalDesconectarAberto] = useState(false);
+  const [
+    modalEscolherDesconexaoAberto,
+    setModalEscolherDesconexaoAberto,
+  ] = useState(false);
+  const [integracaoDesconexaoId, setIntegracaoDesconexaoId] = useState("");
   const [desconectando, setDesconectando] = useState(false);
   const [erroDesconexao, setErroDesconexao] = useState("");
   const [
@@ -311,6 +316,13 @@ export default function WhatsappPerfilPage() {
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
   }, [integracoes, integracaoId]);
+
+  const integracaoDesconexaoSelecionada = useMemo(() => {
+    return (
+      integracoes.find((item) => item.id === integracaoDesconexaoId) ||
+      integracaoSelecionada
+    );
+  }, [integracoes, integracaoDesconexaoId, integracaoSelecionada]);
 
   const perfilEditavelNoCrm =
     integracaoSelecionada?.modo_integracao !== "coexistence";
@@ -658,18 +670,46 @@ export default function WhatsappPerfilPage() {
   function abrirModalDesconexao() {
     setErroDesconexao("");
     setConfirmouDesconexaoCoexNoApp(false);
+
+    if (integracoes.length > 1) {
+      setIntegracaoDesconexaoId("");
+      setModalEscolherDesconexaoAberto(true);
+      return;
+    }
+
+    setIntegracaoDesconexaoId(integracaoId);
     setModalDesconectarAberto(true);
+  }
+
+  function abrirConfirmacaoDesconexao(id: string) {
+    setErroDesconexao("");
+    setConfirmouDesconexaoCoexNoApp(false);
+    setIntegracaoDesconexaoId(id);
+    setModalEscolherDesconexaoAberto(false);
+    setModalDesconectarAberto(true);
+  }
+
+  function fecharModalEscolherDesconexao() {
+    if (desconectando) return;
+    setModalEscolherDesconexaoAberto(false);
+    setErroDesconexao("");
   }
 
   function fecharModalDesconexao() {
     if (desconectando) return;
     setModalDesconectarAberto(false);
+    setIntegracaoDesconexaoId("");
     setErroDesconexao("");
     setConfirmouDesconexaoCoexNoApp(false);
   }
 
   async function desconectarIntegracao() {
-    if (!integracaoId || desconectando) return;
+    const alvoIntegracaoId = integracaoDesconexaoId || integracaoId;
+    const integracaoAlvo =
+      integracoes.find((item) => item.id === alvoIntegracaoId) ||
+      integracaoSelecionada;
+
+    if (!alvoIntegracaoId || desconectando) return;
 
     let redirecionando = false;
 
@@ -678,7 +718,7 @@ export default function WhatsappPerfilPage() {
       setErroDesconexao("");
 
       const response = await fetch(
-        `/api/integracoes-whatsapp/${encodeURIComponent(integracaoId)}`,
+        `/api/integracoes-whatsapp/${encodeURIComponent(alvoIntegracaoId)}`,
         {
           method: "DELETE",
           headers: {
@@ -687,7 +727,7 @@ export default function WhatsappPerfilPage() {
           body: JSON.stringify({
             confirmar_desconexao: true,
             confirmar_desconexao_coex_no_app:
-              integracaoSelecionada?.modo_integracao ===
+              integracaoAlvo?.modo_integracao ===
                 "coexistence" &&
               confirmouDesconexaoCoexNoApp,
           }),
@@ -900,7 +940,7 @@ export default function WhatsappPerfilPage() {
               )}
             </div>
 
-            <div className={styles.newConnectionArea}>
+            <div className={`${styles.newConnectionArea} ${styles.hiddenLegacyConnectionArea}`}>
               <button
                 type="button"
                 className={styles.newConnectionButton}
@@ -1135,56 +1175,13 @@ export default function WhatsappPerfilPage() {
                       <option key={item.id} value={item.id}>
                         {item.phone_number_display_name ||
                           item.verified_name ||
-                          item.nome_conexao}{" "}
-                        • {item.numero}
+                          item.nome_conexao}
+                        {item.numero ? ` - ${item.numero}` : ""}
                       </option>
                     ))}
                   </select>
                 </div>
               )}
-              {deveMostrarControlesMultiIntegracao && (
-              <div className={styles.newConnectionArea}>
-                <button
-                  type="button"
-                  className={styles.newConnectionButton}
-                  onClick={cadastrarNovaIntegracao}
-                  disabled={cadastrandoIntegracao}
-                >
-                  {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
-                </button>
-
-                {limiteIntegracoesWhatsapp > 1 && (
-                  <span>
-                    {integracoes.length} de {limiteIntegracoesWhatsapp} integração
-                    {limiteIntegracoesWhatsapp === 1 ? "" : "es"} liberada
-                    {limiteIntegracoesWhatsapp === 1 ? "" : "s"}.
-                  </span>
-                )}
-              </div>
-              )}
-
-              <div className={`${styles.newConnectionArea} ${styles.hiddenLegacyConnectionArea}`}>
-                <button
-                  type="button"
-                  className={styles.newConnectionButton}
-                  onClick={cadastrarNovaIntegracao}
-                  disabled={
-                    cadastrandoIntegracao || !podeCadastrarNovaIntegracao
-                  }
-                >
-                  {cadastrandoIntegracao
-                    ? "Criando..."
-                    : proximaPosicaoIntegracao
-                    ? `Cadastrar nÃºmero ${proximaPosicaoIntegracao}`
-                    : "Limite de nÃºmeros atingido"}
-                </button>
-
-                <span>
-                  {integracoes.length} de {limiteIntegracoesWhatsapp} integraÃ§Ã£o
-                  {limiteIntegracoesWhatsapp === 1 ? "" : "es"} liberada
-                  {limiteIntegracoesWhatsapp === 1 ? "" : "s"}.
-                </span>
-              </div>
             <label className={styles.photoUpload}>
                 <input
                 type="file"
@@ -1684,6 +1681,78 @@ export default function WhatsappPerfilPage() {
       </div>
     )}
 
+    {modalEscolherDesconexaoAberto && (
+      <div
+        className={styles.modalOverlay}
+        onClick={fecharModalEscolherDesconexao}
+        role="presentation"
+      >
+        <div
+          className={`${styles.modalCard} ${styles.disconnectChoiceModal}`}
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-escolher-desconexao"
+        >
+          <div className={styles.modalHeader}>
+            <div>
+              <h2
+                id="titulo-escolher-desconexao"
+                className={styles.modalTitle}
+              >
+                Qual número deseja desconectar?
+              </h2>
+              <p className={styles.modalSubtitle}>
+                Escolha apenas a integração que deve parar de operar no CRM.
+              </p>
+            </div>
+          </div>
+
+          <div className={styles.disconnectChoiceGrid}>
+            {integracoes.map((item) => (
+              <div key={item.id} className={styles.disconnectChoiceCard}>
+                <div className={styles.disconnectChoiceTop}>
+                  <div className={styles.connectionAvatar}>
+                    {item.nome_conexao?.charAt(0)?.toUpperCase() || "W"}
+                  </div>
+
+                  <div>
+                    <strong>{item.nome_conexao || "WhatsApp"}</strong>
+                    <span>{item.numero || "Número pendente"}</span>
+                  </div>
+                </div>
+
+                <div className={styles.disconnectChoiceMeta}>
+                  <span>Integração {item.posicao || "-"}</span>
+                  <span>{formatarStatusConexao(item.status)}</span>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.disconnectChoiceButton}
+                  onClick={() => abrirConfirmacaoDesconexao(item.id)}
+                  disabled={desconectando}
+                >
+                  Desconectar este número
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className={styles.modalActions}>
+            <button
+              type="button"
+              className={styles.ghostButton}
+              onClick={fecharModalEscolherDesconexao}
+              disabled={desconectando}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {modalDesconectarAberto && (
       <div
         className={styles.modalOverlay}
@@ -1716,6 +1785,14 @@ export default function WhatsappPerfilPage() {
               >
                 Esta ação interrompe a operação deste número no CRM.
               </p>
+              {integracaoDesconexaoSelecionada && (
+                <span className={styles.disconnectTarget}>
+                  {integracaoDesconexaoSelecionada.nome_conexao || "WhatsApp"}
+                  {integracaoDesconexaoSelecionada.numero
+                    ? ` - ${integracaoDesconexaoSelecionada.numero}`
+                    : ""}
+                </span>
+              )}
             </div>
           </div>
 
@@ -1760,7 +1837,7 @@ export default function WhatsappPerfilPage() {
               </span>
             </div>
 
-            {integracaoSelecionada?.modo_integracao ===
+            {integracaoDesconexaoSelecionada?.modo_integracao ===
               "coexistence" && (
               <div className={styles.coexDisconnectNotice}>
                 <strong>Desconecte primeiro no celular</strong>
@@ -1807,7 +1884,7 @@ export default function WhatsappPerfilPage() {
               onClick={desconectarIntegracao}
               disabled={
                 desconectando ||
-                (integracaoSelecionada?.modo_integracao ===
+                (integracaoDesconexaoSelecionada?.modo_integracao ===
                   "coexistence" &&
                   !confirmouDesconexaoCoexNoApp)
               }

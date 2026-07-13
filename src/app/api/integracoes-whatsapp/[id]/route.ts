@@ -126,6 +126,25 @@ export async function DELETE(
       );
     }
 
+    const { count: totalIntegracoesRestantes, error: totalError } =
+      await supabase
+        .from("integracoes_whatsapp")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("provider", "meta_official");
+
+    if (totalError) {
+      console.warn(
+        "[WHATSAPP] Nao foi possivel contar integracoes restantes apos desconexao:",
+        totalError
+      );
+    }
+
+    const redirectTo =
+      !totalError && (totalIntegracoesRestantes || 0) > 0
+        ? "/configuracoes/whatsapp/perfil"
+        : "/configurar-ambiente";
+
     const auditMeta = getRequestAuditMetadata(request);
 
     await registrarLogAuditoriaSeguro({
@@ -142,7 +161,7 @@ export async function DELETE(
       depois: null,
       detalhes: {
         backup_id: backupId,
-        destino: "/configurar-ambiente",
+        destino: redirectTo,
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
@@ -151,7 +170,7 @@ export async function DELETE(
     return NextResponse.json({
       ok: true,
       message: "Integração desconectada com sucesso.",
-      redirect_to: "/configurar-ambiente",
+      redirect_to: redirectTo,
     });
   } catch (error) {
     console.error("[WHATSAPP] Erro inesperado ao desconectar integração:", error);

@@ -178,6 +178,19 @@
   display: none !important;
 }
 
+.connectionAvatar {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 14px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-strong);
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 900;
+}
+
 .formGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1015,6 +1028,96 @@
   border-color: var(--crm-danger-border);
 }
 
+.disconnectChoiceModal {
+  max-width: 920px;
+}
+
+.disconnectChoiceGrid {
+  padding: 22px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.disconnectChoiceCard {
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.disconnectChoiceTop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.disconnectChoiceTop strong,
+.disconnectChoiceTop span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disconnectChoiceTop strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.disconnectChoiceTop span {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.disconnectChoiceMeta {
+  display: grid;
+  gap: 5px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.disconnectChoiceButton {
+  width: 100%;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 12px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  min-height: 38px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.disconnectChoiceButton:hover:not(:disabled) {
+  background: var(--crm-danger-bg-strong);
+}
+
+.disconnectChoiceButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.disconnectTarget {
+  display: inline-block;
+  margin-top: 8px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--crm-danger-text);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .disconnectModalHeader {
   padding: 22px;
   border-bottom: 1px solid var(--crm-danger-border);
@@ -1226,6 +1329,10 @@
   }
 
   .upgradeGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .disconnectChoiceGrid {
     grid-template-columns: 1fr;
   }
 
