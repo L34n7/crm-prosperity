@@ -25,7 +25,7 @@ type Contato = {
   campanha_exibicao?: string | null;
   campanha_status?: "ativo" | "inativo" | null;
   campanha_origem_nome?: string | null;
-  opt_in_whatsapp?: boolean;
+  opt_in_whatsapp?: boolean | null;
   whatsapp_opt_out?: boolean;
   whatsapp_opt_out_geral?: boolean;
   whatsapp_opt_out_marketing?: boolean;
@@ -42,6 +42,12 @@ type Contato = {
   finalizado_por_tipo?: "bot" | "atendente" | "sistema" | null;
   finalizado_por_usuario_id?: string | null;
   finalizado_por_usuario_nome?: string | null;
+  contexto_integracao_whatsapp_id?: string | null;
+  contexto_integracao_nome?: string | null;
+  contexto_integracao_numero?: string | null;
+  ultima_mensagem_contato_em?: string | null;
+  ultimo_atendente_id?: string | null;
+  ultimo_atendente_nome?: string | null;
   rastreamento_campanha_id?: string | null;
   created_at: string;
   updated_at?: string;
@@ -53,6 +59,19 @@ type CampanhaRastreamento = {
   codigo: string | null;
   status: "ativo" | "inativo";
   rastreamento_origens?: { id: string; nome: string } | null;
+};
+
+type IntegracaoWhatsappFiltro = {
+  id: string;
+  nome_conexao: string | null;
+  numero: string | null;
+  status: string | null;
+  posicao: number | null;
+};
+
+type AtendenteFiltro = {
+  id: string;
+  nome: string;
 };
 
 type ItemPreviewImportacao = {
@@ -165,6 +184,13 @@ function getLabelCampanhaRastreamento(campanha: CampanhaRastreamento) {
     : `${campanha.nome}${status}`;
 }
 
+function getLabelIntegracaoWhatsapp(integracao: IntegracaoWhatsappFiltro) {
+  const nome = integracao.nome_conexao?.trim() || "WhatsApp";
+  const numero = integracao.numero?.trim();
+
+  return numero ? `${nome} · ${numero}` : nome;
+}
+
 export default function ContatosPage() {
   const [contatos, setContatos] = useState<Contato[]>([]);
 
@@ -217,8 +243,19 @@ export default function ContatosPage() {
   const [campanhasRastreamento, setCampanhasRastreamento] = useState<
     CampanhaRastreamento[]
   >([]);
+  const [integracoesWhatsapp, setIntegracoesWhatsapp] = useState<
+    IntegracaoWhatsappFiltro[]
+  >([]);
+  const [atendentes, setAtendentes] = useState<AtendenteFiltro[]>([]);
   const [filtroOrigem, setFiltroOrigem] = useState("");
   const [filtroCampanha, setFiltroCampanha] = useState("");
+  const [filtroIntegracaoWhatsappId, setFiltroIntegracaoWhatsappId] =
+    useState("");
+  const [filtroMensagemDataInicio, setFiltroMensagemDataInicio] =
+    useState("");
+  const [filtroMensagemDataFim, setFiltroMensagemDataFim] = useState("");
+  const [filtroUltimoAtendenteId, setFiltroUltimoAtendenteId] =
+    useState("");
   const [filtroOptIn, setFiltroOptIn] = useState("");
   const [filtroOptOut, setFiltroOptOut] = useState("");
   const [filtroTelefoneRevisar, setFiltroTelefoneRevisar] = useState(false);
@@ -361,11 +398,28 @@ export default function ContatosPage() {
       params.set("telefone_revisar", "true");
     }
 
-    if (filtroOptIn) {
+    if (filtroIntegracaoWhatsappId) {
+      params.set("integracao_whatsapp_id", filtroIntegracaoWhatsappId);
+      params.set("filtrar_por_integracao", "true");
+    }
+
+    if (filtroMensagemDataInicio) {
+      params.set("mensagem_data_inicio", filtroMensagemDataInicio);
+    }
+
+    if (filtroMensagemDataFim) {
+      params.set("mensagem_data_fim", filtroMensagemDataFim);
+    }
+
+    if (filtroUltimoAtendenteId) {
+      params.set("ultimo_atendente_id", filtroUltimoAtendenteId);
+    }
+
+    if (filtroIntegracaoWhatsappId && filtroOptIn) {
       params.set("opt_in", filtroOptIn);
     }
 
-    if (filtroOptOut) {
+    if (filtroIntegracaoWhatsappId && filtroOptOut) {
       params.set("opt_out", filtroOptOut);
     }
 
@@ -581,11 +635,28 @@ export default function ContatosPage() {
         params.set("telefone_revisar", "true");
       }
 
-      if (filtroOptIn) {
+      if (filtroIntegracaoWhatsappId) {
+        params.set("integracao_whatsapp_id", filtroIntegracaoWhatsappId);
+        params.set("filtrar_por_integracao", "true");
+      }
+
+      if (filtroMensagemDataInicio) {
+        params.set("mensagem_data_inicio", filtroMensagemDataInicio);
+      }
+
+      if (filtroMensagemDataFim) {
+        params.set("mensagem_data_fim", filtroMensagemDataFim);
+      }
+
+      if (filtroUltimoAtendenteId) {
+        params.set("ultimo_atendente_id", filtroUltimoAtendenteId);
+      }
+
+      if (filtroIntegracaoWhatsappId && filtroOptIn) {
         params.set("opt_in", filtroOptIn);
       }
 
-      if (filtroOptOut) {
+      if (filtroIntegracaoWhatsappId && filtroOptOut) {
         params.set("opt_out", filtroOptOut);
       }
 
@@ -779,10 +850,16 @@ export default function ContatosPage() {
       const campanhasRastreamento = Array.isArray(data.campanhas_rastreamento)
         ? data.campanhas_rastreamento
         : [];
+      const integracoesWhatsapp = Array.isArray(data.integracoes_whatsapp)
+        ? data.integracoes_whatsapp
+        : [];
+      const atendentes = Array.isArray(data.atendentes) ? data.atendentes : [];
 
       setOpcoesOrigem(origens);
       setOpcoesCampanha(campanhas);
       setCampanhasRastreamento(campanhasRastreamento);
+      setIntegracoesWhatsapp(integracoesWhatsapp);
+      setAtendentes(atendentes);
     } catch {
       // pode deixar silencioso
     }
@@ -966,6 +1043,10 @@ export default function ContatosPage() {
     filtroApenasNovos,
     filtroOrigem,
     filtroCampanha,
+    filtroIntegracaoWhatsappId,
+    filtroMensagemDataInicio,
+    filtroMensagemDataFim,
+    filtroUltimoAtendenteId,
     filtroOptIn,
     filtroOptOut,
     filtroTelefoneRevisar,
@@ -1003,6 +1084,10 @@ export default function ContatosPage() {
     filtroApenasNovos,
     filtroOrigem,
     filtroCampanha,
+    filtroIntegracaoWhatsappId,
+    filtroMensagemDataInicio,
+    filtroMensagemDataFim,
+    filtroUltimoAtendenteId,
     filtroOptIn,
     filtroOptOut,
     filtroTelefoneRevisar,
@@ -1042,8 +1127,30 @@ export default function ContatosPage() {
             <p className={styles.eyebrow}>Filtros</p>
             <h2 className={styles.cardTitle}>Buscar contatos</h2>
             <p className={styles.cardDescription}>
-              Use a busca rápida ou expanda para ver mais filtros.
+              Selecione um número para consultar opt-in, opt-out e conversas
+              daquela integração.
             </p>
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Integração WhatsApp</label>
+            <select
+              className={styles.select}
+              value={filtroIntegracaoWhatsappId}
+              onChange={(e) => {
+                setFiltroIntegracaoWhatsappId(e.target.value);
+                setFiltroOptIn("");
+                setFiltroOptOut("");
+                setPaginaAtual(1);
+              }}
+            >
+              <option value="">Todos os contatos</option>
+              {integracoesWhatsapp.map((integracao) => (
+                <option key={integracao.id} value={integracao.id}>
+                  {getLabelIntegracaoWhatsapp(integracao)}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -1121,16 +1228,59 @@ export default function ContatosPage() {
           </div>
 
           <div className={styles.field}>
+            <label className={styles.label}>Contato enviou de</label>
+            <input
+              type="date"
+              className={styles.input}
+              value={filtroMensagemDataInicio}
+              max={filtroMensagemDataFim || undefined}
+              onChange={(e) => setFiltroMensagemDataInicio(e.target.value)}
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Contato enviou até</label>
+            <input
+              type="date"
+              className={styles.input}
+              value={filtroMensagemDataFim}
+              min={filtroMensagemDataInicio || undefined}
+              onChange={(e) => setFiltroMensagemDataFim(e.target.value)}
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Último atendente</label>
+            <select
+              className={styles.select}
+              value={filtroUltimoAtendenteId}
+              onChange={(e) => setFiltroUltimoAtendenteId(e.target.value)}
+            >
+              <option value="">Todos</option>
+              {atendentes.map((atendente) => (
+                <option key={atendente.id} value={atendente.id}>
+                  {atendente.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.field}>
             <label className={styles.label}>Opt-in</label>
             <select
               className={styles.select}
               value={filtroOptIn}
+              disabled={!filtroIntegracaoWhatsappId}
               onChange={(e) => {
                 setFiltroOptIn(e.target.value);
                 setPaginaAtual(1);
               }}
             >
-              <option value="">Todos</option>
+              <option value="">
+                {filtroIntegracaoWhatsappId
+                  ? "Todos"
+                  : "Selecione uma integração"}
+              </option>
               <option value="true">Com opt-in</option>
               <option value="false">Sem opt-in (lista fria)</option>
             </select>
@@ -1141,12 +1291,17 @@ export default function ContatosPage() {
             <select
               className={styles.select}
               value={filtroOptOut}
+              disabled={!filtroIntegracaoWhatsappId}
               onChange={(e) => {
                 setFiltroOptOut(e.target.value);
                 setPaginaAtual(1);
               }}
             >
-              <option value="">Todos</option>
+              <option value="">
+                {filtroIntegracaoWhatsappId
+                  ? "Todos"
+                  : "Selecione uma integração"}
+              </option>
               <option value="true">Com opt-out</option>
               <option value="false">Sem opt-out</option>
             </select>
@@ -1299,6 +1454,10 @@ export default function ContatosPage() {
               setFiltroStatusConversa([]);
               setFiltroApenasNovos(false);
               setFiltroOrigem("");
+              setFiltroIntegracaoWhatsappId("");
+              setFiltroMensagemDataInicio("");
+              setFiltroMensagemDataFim("");
+              setFiltroUltimoAtendenteId("");
               setFiltroOptIn("");
               setFiltroOptOut("");
               setFiltroTelefoneRevisar(false);
@@ -1565,32 +1724,50 @@ export default function ContatosPage() {
                           </div>
 
                           <div className={styles.sheetCell}>
-                            <span
-                              className={`${styles.statusBadge} ${
-                                contato.opt_in_whatsapp === true
-                                  ? styles.statusCliente
-                                  : styles.statusPadrao
-                              }`}
-                            >
-                              {contato.opt_in_whatsapp === true ? "Sim" : "Não"}
-                            </span>
+                            {filtroIntegracaoWhatsappId ? (
+                              <span
+                                className={`${styles.statusBadge} ${
+                                  contato.opt_in_whatsapp === true
+                                    ? styles.statusCliente
+                                    : styles.statusPadrao
+                                }`}
+                              >
+                                {contato.opt_in_whatsapp === true ? "Sim" : "Não"}
+                              </span>
+                            ) : (
+                              <span
+                                className={styles.mutedCell}
+                                title="Selecione uma integração para consultar o opt-in"
+                              >
+                                —
+                              </span>
+                            )}
                           </div>
 
                           <div className={styles.sheetCell}>
-                            <span
-                              className={`${styles.statusBadge} ${
-                                contato.whatsapp_opt_out === true
-                                  ? styles.statusPerdido
-                                  : styles.statusPadrao
-                              }`}
-                              title={
-                                contato.whatsapp_opt_out === true
-                                  ? `Opt-out: ${getOptOutLabel(contato)}`
-                                  : "Sem opt-out"
-                              }
-                            >
-                              {getOptOutLabel(contato)}
-                            </span>
+                            {filtroIntegracaoWhatsappId ? (
+                              <span
+                                className={`${styles.statusBadge} ${
+                                  contato.whatsapp_opt_out === true
+                                    ? styles.statusPerdido
+                                    : styles.statusPadrao
+                                }`}
+                                title={
+                                  contato.whatsapp_opt_out === true
+                                    ? `Opt-out: ${getOptOutLabel(contato)}`
+                                    : "Sem opt-out"
+                                }
+                              >
+                                {getOptOutLabel(contato)}
+                              </span>
+                            ) : (
+                              <span
+                                className={styles.mutedCell}
+                                title="Selecione uma integração para consultar o opt-out"
+                              >
+                                —
+                              </span>
+                            )}
                           </div>
 
                           <span
@@ -1761,18 +1938,58 @@ export default function ContatosPage() {
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>Opt-in</span>
                               <span className={styles.infoValue}>
-                                {contato.opt_in_whatsapp === true
-                                  ? "Contato com opt-in"
-                                  : "Sem opt-in (lista fria)"}
+                                {!filtroIntegracaoWhatsappId
+                                  ? "Selecione uma integração"
+                                  : contato.opt_in_whatsapp === true
+                                    ? "Contato com opt-in"
+                                    : "Sem opt-in (lista fria)"}
                               </span>
                             </div>
 
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>Opt-out</span>
                               <span className={styles.infoValue}>
-                                {contato.whatsapp_opt_out === true
-                                  ? getOptOutLabel(contato)
-                                  : "Sem opt-out"}
+                                {!filtroIntegracaoWhatsappId
+                                  ? "Selecione uma integração"
+                                  : contato.whatsapp_opt_out === true
+                                    ? getOptOutLabel(contato)
+                                    : "Sem opt-out"}
+                              </span>
+                            </div>
+
+                            {filtroIntegracaoWhatsappId && (
+                              <div className={styles.infoBlock}>
+                                <span className={styles.infoLabel}>
+                                  Integração WhatsApp
+                                </span>
+                                <span className={styles.infoValue}>
+                                  {contato.contexto_integracao_nome ||
+                                    contato.contexto_integracao_numero ||
+                                    "Integração selecionada"}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>
+                                Último atendente
+                              </span>
+                              <span className={styles.infoValue}>
+                                {contato.ultimo_atendente_nome ||
+                                  "Sem atendente identificado"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>
+                                Última mensagem do contato
+                              </span>
+                              <span className={styles.infoValue}>
+                                {contato.ultima_mensagem_contato_em
+                                  ? new Date(
+                                      contato.ultima_mensagem_contato_em
+                                    ).toLocaleString("pt-BR")
+                                  : "Sem mensagem recebida"}
                               </span>
                             </div>
 

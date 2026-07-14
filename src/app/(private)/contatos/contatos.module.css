@@ -45,6 +45,10 @@
   max-width: 820px;
 }
 
+.cardHeader > .field {
+  min-width: min(360px, 100%);
+}
+
 .formGrid,
 .filterGrid,
 .editGrid,
@@ -104,6 +108,12 @@
 .textarea:focus {
   border-color: var(--crm-primary-strong);
   box-shadow: var(--crm-focus-ring);
+}
+
+.select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  background: var(--crm-surface-soft);
 }
 
 .actionsRow,
@@ -960,6 +970,10 @@
   .listHeader {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .cardHeader > .field {
+    width: 100%;
   }
 
   .itemSummary {

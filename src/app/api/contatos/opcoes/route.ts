@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { listarIntegracoesWhatsappPermitidas } from "@/lib/whatsapp/integracoes-multiplas";
 
 export async function GET() {
   try {
@@ -24,16 +25,39 @@ export async function GET() {
 
     const supabase = getSupabaseAdmin();
 
-    const { data, error } = await supabase.rpc(
-      "listar_opcoes_filtros_contatos",
-      {
-        p_empresa_id: usuario.empresa_id,
-      }
-    );
+    const [opcoesResult, integracoesResult, atendentesResult] =
+      await Promise.all([
+        supabase.rpc("listar_opcoes_filtros_contatos", {
+          p_empresa_id: usuario.empresa_id,
+        }),
+        listarIntegracoesWhatsappPermitidas({
+          usuario,
+          empresaId: usuario.empresa_id,
+        }),
+        supabase
+          .from("usuarios")
+          .select("id, nome")
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("status", "ativo")
+          .order("nome", { ascending: true }),
+      ]);
+
+    const { data, error } = opcoesResult;
 
     if (error) {
       return NextResponse.json(
         { ok: false, error: error.message || "Erro ao buscar opcoes." },
+        { status: 400 }
+      );
+    }
+
+    if (atendentesResult.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            atendentesResult.error.message || "Erro ao buscar atendentes.",
+        },
         { status: 400 }
       );
     }
@@ -50,10 +74,23 @@ export async function GET() {
       campanhas_rastreamento: Array.isArray(opcoes.campanhas_rastreamento)
         ? opcoes.campanhas_rastreamento
         : [],
+      integracoes_whatsapp: integracoesResult.integracoes.map(
+        (integracao) => ({
+          id: integracao.id,
+          nome_conexao: integracao.nome_conexao,
+          numero: integracao.numero,
+          status: integracao.status,
+          posicao: integracao.posicao,
+        })
+      ),
+      atendentes: atendentesResult.data || [],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Erro interno.",
+      },
       { status: 500 }
     );
   }

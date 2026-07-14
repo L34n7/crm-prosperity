@@ -8,12 +8,30 @@ import {
 } from "@/lib/auditoria/logs";
 import { classificarDestinatariosPorOptIn } from "@/lib/whatsapp/disparo-politica-lista";
 import { buscarCooldownsDisparoPorTelefone } from "@/lib/whatsapp/disparo-cooldown";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 type ContatoLista = {
   id: unknown;
   telefone: unknown;
   [chave: string]: unknown;
 };
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function dataIsoValida(valor: string) {
+  if (!DATA_REGEX.test(valor)) return false;
+
+  const [ano, mes, dia] = valor.split("-").map(Number);
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+
+  return (
+    data.getUTCFullYear() === ano &&
+    data.getUTCMonth() === mes - 1 &&
+    data.getUTCDate() === dia
+  );
+}
 
 function podeGerenciarContatos(usuario: UsuarioContexto) {
   const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
@@ -100,6 +118,14 @@ export async function GET(request: Request) {
     searchParams.get("disparo_anterior_id")?.trim() || "";
   const integracaoWhatsappId =
     searchParams.get("integracao_whatsapp_id")?.trim() || "";
+  const mensagemDataInicio =
+    searchParams.get("mensagem_data_inicio")?.trim() || "";
+  const mensagemDataFim =
+    searchParams.get("mensagem_data_fim")?.trim() || "";
+  const ultimoAtendenteId =
+    searchParams.get("ultimo_atendente_id")?.trim() || "";
+  const filtrarPorIntegracao =
+    searchParams.get("filtrar_por_integracao") === "true";
   const telefoneRevisar = searchParams.get("telefone_revisar");
   const optIn = searchParams.get("opt_in");
   const optOut = searchParams.get("opt_out");
@@ -140,6 +166,68 @@ export async function GET(request: Request) {
   const to = from + limite - 1;
 
   const supabaseAdmin = getSupabaseAdmin();
+
+  if (integracaoWhatsappId && !UUID_REGEX.test(integracaoWhatsappId)) {
+    return NextResponse.json(
+      { ok: false, error: "Integração WhatsApp inválida." },
+      { status: 400 }
+    );
+  }
+
+  if (ultimoAtendenteId && !UUID_REGEX.test(ultimoAtendenteId)) {
+    return NextResponse.json(
+      { ok: false, error: "Atendente inválido." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    (mensagemDataInicio && !dataIsoValida(mensagemDataInicio)) ||
+    (mensagemDataFim && !dataIsoValida(mensagemDataFim))
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Período de mensagens inválido." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    mensagemDataInicio &&
+    mensagemDataFim &&
+    mensagemDataInicio > mensagemDataFim
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "A data inicial não pode ser posterior à data final.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if ((optIn || optOut) && !integracaoWhatsappId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Selecione uma integração para filtrar opt-in ou opt-out.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (
+    integracaoWhatsappId &&
+    !(await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: usuario.empresa_id,
+      integracaoId: integracaoWhatsappId,
+    }))
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Sem acesso à integração selecionada." },
+      { status: 403 }
+    );
+  }
 
   if (
     disparoAnteriorId &&
@@ -199,6 +287,16 @@ export async function GET(request: Request) {
         updated_at
       `;
 
+  const camposContatosContexto = `
+        ${camposContatos},
+        contexto_integracao_whatsapp_id,
+        contexto_integracao_nome,
+        contexto_integracao_numero,
+        ultima_mensagem_contato_em,
+        ultimo_atendente_id,
+        ultimo_atendente_nome
+      `;
+
   let query = disparoAnteriorId
     ? supabaseAdmin
         .rpc(
@@ -211,8 +309,20 @@ export async function GET(request: Request) {
         )
         .select(camposContatos)
     : supabaseAdmin
-        .from("contatos_visao_operacional")
-        .select(camposContatos, { count: "exact" });
+        .rpc(
+          "listar_contatos_operacionais_contexto",
+          {
+            p_empresa_id: usuario.empresa_id,
+            p_integracao_whatsapp_id: integracaoWhatsappId || null,
+            p_mensagem_data_inicio: mensagemDataInicio || null,
+            p_mensagem_data_fim: mensagemDataFim || null,
+            p_ultimo_atendente_id: ultimoAtendenteId || null,
+            p_filtrar_por_integracao:
+              Boolean(integracaoWhatsappId) && filtrarPorIntegracao,
+          },
+          { count: "exact" }
+        )
+        .select(camposContatosContexto);
 
   query = query.eq("empresa_id", usuario.empresa_id);
 
@@ -305,7 +415,7 @@ export async function GET(request: Request) {
     Array.isArray(data) ? data : data ? [data] : []
   ) as ContatoLista[];
 
-  if (integracaoWhatsappId && contatos.length > 0) {
+  if (disparoAnteriorId && integracaoWhatsappId && contatos.length > 0) {
     try {
       const classificacao = await classificarDestinatariosPorOptIn({
         supabase: supabaseAdmin,
@@ -332,7 +442,7 @@ export async function GET(request: Request) {
           error:
             optInError instanceof Error
               ? optInError.message
-              : "Erro ao validar o opt-in por numero.",
+              : "Erro ao validar o opt-in por número.",
         },
         { status: 500 }
       );

@@ -4,6 +4,24 @@ import {
   getUsuarioContexto,
   type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function dataIsoValida(valor: string) {
+  if (!DATA_REGEX.test(valor)) return false;
+
+  const [ano, mes, dia] = valor.split("-").map(Number);
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+
+  return (
+    data.getUTCFullYear() === ano &&
+    data.getUTCMonth() === mes - 1 &&
+    data.getUTCDate() === dia
+  );
+}
 
 function podeGerenciarContatos(usuario: UsuarioContexto) {
   const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
@@ -59,6 +77,14 @@ export async function GET(request: Request) {
   const telefoneRevisar = searchParams.get("telefone_revisar");
   const optIn = searchParams.get("opt_in");
   const optOut = searchParams.get("opt_out");
+  const integracaoWhatsappId =
+    searchParams.get("integracao_whatsapp_id")?.trim() || "";
+  const mensagemDataInicio =
+    searchParams.get("mensagem_data_inicio")?.trim() || "";
+  const mensagemDataFim =
+    searchParams.get("mensagem_data_fim")?.trim() || "";
+  const ultimoAtendenteId =
+    searchParams.get("ultimo_atendente_id")?.trim() || "";
   const classificacoes = (searchParams.get("classificacoes") || "")
     .split(",")
     .map((item) => item.trim())
@@ -85,10 +111,80 @@ export async function GET(request: Request) {
 
   const supabaseAdmin = getSupabaseAdmin();
 
+  if (integracaoWhatsappId && !UUID_REGEX.test(integracaoWhatsappId)) {
+    return NextResponse.json(
+      { ok: false, error: "Integração WhatsApp inválida." },
+      { status: 400 }
+    );
+  }
+
+  if (ultimoAtendenteId && !UUID_REGEX.test(ultimoAtendenteId)) {
+    return NextResponse.json(
+      { ok: false, error: "Atendente inválido." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    (mensagemDataInicio && !dataIsoValida(mensagemDataInicio)) ||
+    (mensagemDataFim && !dataIsoValida(mensagemDataFim))
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Período de mensagens inválido." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    mensagemDataInicio &&
+    mensagemDataFim &&
+    mensagemDataInicio > mensagemDataFim
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "A data inicial não pode ser posterior à data final.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if ((optIn || optOut) && !integracaoWhatsappId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Selecione uma integração para filtrar opt-in ou opt-out.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (
+    integracaoWhatsappId &&
+    !(await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: usuario.empresa_id,
+      integracaoId: integracaoWhatsappId,
+    }))
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Sem acesso à integração selecionada." },
+      { status: 403 }
+    );
+  }
+
   const carregarPagina = async (inicio: number, fim: number) => {
     let query = supabaseAdmin
-      .from("contatos_visao_operacional")
+      .rpc("listar_contatos_operacionais_contexto", {
+        p_empresa_id: usuario.empresa_id,
+        p_integracao_whatsapp_id: integracaoWhatsappId || null,
+        p_mensagem_data_inicio: mensagemDataInicio || null,
+        p_mensagem_data_fim: mensagemDataFim || null,
+        p_ultimo_atendente_id: ultimoAtendenteId || null,
+        p_filtrar_por_integracao: Boolean(integracaoWhatsappId),
+      })
       .select(`
+        id,
         nome,
         whatsapp_profile_name,
         telefone,
@@ -111,6 +207,12 @@ export async function GET(request: Request) {
         finalizado_com_bot,
         finalizado_por_tipo,
         finalizado_por_usuario_nome,
+        contexto_integracao_whatsapp_id,
+        contexto_integracao_nome,
+        contexto_integracao_numero,
+        ultima_mensagem_contato_em,
+        ultimo_atendente_id,
+        ultimo_atendente_nome,
         observacoes,
         telefone_revisar,
         created_at,
@@ -205,9 +307,15 @@ export async function GET(request: Request) {
       );
     }
 
-    contatos.push(...((data || []) as Array<Record<string, unknown>>));
+    const registros = (Array.isArray(data)
+      ? data
+      : data
+        ? [data]
+        : []) as Array<Record<string, unknown>>;
 
-    if (!data || data.length < tamanhoPagina) {
+    contatos.push(...registros);
+
+    if (registros.length < tamanhoPagina) {
       break;
     }
   }
@@ -221,6 +329,8 @@ export async function GET(request: Request) {
     "campanha",
     "classificacao",
     "contato_novo",
+    "integracao_whatsapp",
+    "numero_integracao",
     "opt_in_whatsapp",
     "opt_out_whatsapp",
     "opt_out_geral",
@@ -234,6 +344,8 @@ export async function GET(request: Request) {
     "finalizado_com_bot",
     "finalizado_por_tipo",
     "finalizado_por",
+    "ultimo_atendente",
+    "ultima_mensagem_do_contato",
     "observacoes",
     "telefone_revisar",
     "created_at",
@@ -250,7 +362,14 @@ export async function GET(request: Request) {
       contato.campanha_exibicao,
       contato.classificacao,
       contato.contato_novo ? "sim" : "nao",
-      contato.opt_in_whatsapp ? "sim" : "nao",
+      contato.contexto_integracao_nome,
+      contato.contexto_integracao_numero,
+      contato.opt_in_whatsapp === null ||
+      contato.opt_in_whatsapp === undefined
+        ? ""
+        : contato.opt_in_whatsapp
+          ? "sim"
+          : "nao",
       contato.whatsapp_opt_out ? "sim" : "nao",
       contato.whatsapp_opt_out_geral ? "sim" : "nao",
       contato.whatsapp_opt_out_marketing ? "sim" : "nao",
@@ -267,6 +386,8 @@ export async function GET(request: Request) {
           : "nao",
       contato.finalizado_por_tipo,
       contato.finalizado_por_usuario_nome,
+      contato.ultimo_atendente_nome,
+      contato.ultima_mensagem_contato_em,
       contato.observacoes,
       contato.telefone_revisar ? "sim" : "nao",
       contato.created_at,
