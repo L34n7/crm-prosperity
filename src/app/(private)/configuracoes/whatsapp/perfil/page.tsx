@@ -1190,6 +1190,16 @@ export default function WhatsappPerfilPage() {
               </div>
             )}
 
+            {!perfilEditavelNoCrm && (
+              <div className={styles.noticeBox}>
+                Este número está conectado por coexistência. Os dados do perfil
+                são gerenciados pelo WhatsApp Business e ficam bloqueados no CRM.
+                Somente o <strong>Nome da integração</strong> pode ser alterado aqui.
+                Para editar os demais dados, use <strong>Ajustar no Meta</strong> ou
+                o WhatsApp Business App.
+              </div>
+            )}
+
             {diagnosticoWhatsapp && (
               <div className={styles.diagnosticAlert}>
                 <div className={styles.diagnosticHeader}>
@@ -1412,7 +1422,6 @@ export default function WhatsappPerfilPage() {
             >
               <span className={styles.integrationNameLabelRow}>
                 Nome da integração
-                {!perfilEditavelNoCrm && <b>Editável no CRM</b>}
               </span>
               <input
                 className={styles.input}
@@ -1501,16 +1510,6 @@ export default function WhatsappPerfilPage() {
                 />
             </label>
             </div>
-
-            {!perfilEditavelNoCrm && (
-              <div className={styles.noticeBox}>
-                Este número está conectado por coexistência. Os dados do perfil
-                são gerenciados pelo WhatsApp Business e ficam bloqueados no CRM.
-                Somente o <strong>Nome da integração</strong> pode ser alterado aqui.
-                Para editar os demais dados, use <strong>Ajustar no Meta</strong> ou
-                o WhatsApp Business App.
-              </div>
-            )}
 
             {(erro || sucesso) && (
               <div className={styles.alertArea}>

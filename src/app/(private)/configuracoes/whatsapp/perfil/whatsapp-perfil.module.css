@@ -324,6 +324,7 @@
   color: var(--crm-warning-text);
   border-radius: 16px;
   padding: 14px;
+  margin: 12px 28px 0;
   font-size: 14px;
   line-height: 1.6;
 }
