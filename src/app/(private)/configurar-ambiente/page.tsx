@@ -1194,6 +1194,9 @@ async function handleAtivarCoexistencia() {
         : "Coexistência ativada. Contatos e histórico foram solicitados à Meta."
     );
     await carregarIntegracao(false);
+    // Mantém o usuário nesta etapa para que ele veja os avisos e o status
+    // individual das importações antes de avançar manualmente.
+    setEtapaQuiz(3);
   } catch (error) {
     mostrarErroToast(
       error instanceof Error
