@@ -621,10 +621,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (!isWhatsAppProfileMetaAvailable(integracaoSelecionada)) {
+      const onboardingRedirect = `/configurar-ambiente?integracao_id=${encodeURIComponent(
+        integracaoSelecionada.id
+      )}&retomar=1`;
+
       return NextResponse.json({
         ok: true,
         onboarding_incompleto: true,
-        onboarding_redirect: "/configurar-ambiente",
+        onboarding_redirect: onboardingRedirect,
         message:
           "Esta conexão ainda não concluiu o onboarding do WhatsApp.",
         integracoes: integracoes.map((item) =>

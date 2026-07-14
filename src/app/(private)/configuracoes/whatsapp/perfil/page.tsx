@@ -266,6 +266,9 @@ export default function WhatsappPerfilPage() {
   const [vertical, setVertical] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
   const [previewFoto, setPreviewFoto] = useState("");
+  const [fotosIntegracoes, setFotosIntegracoes] = useState<
+    Record<string, string>
+  >({});
   const [cropAberto, setCropAberto] = useState(false);
   const [imagemOriginal, setImagemOriginal] = useState("");
   const [zoom, setZoom] = useState(1);
@@ -463,6 +466,12 @@ export default function WhatsappPerfilPage() {
       setWebsite2(novoPerfil?.websites?.[1] || "");
       setVertical(novoPerfil?.vertical || "");
       setPreviewFoto(novoPerfil?.profile_picture_url || "");
+      if (novaIntegracaoId && novoPerfil?.profile_picture_url) {
+        setFotosIntegracoes((atuais) => ({
+          ...atuais,
+          [novaIntegracaoId]: novoPerfil.profile_picture_url,
+        }));
+      }
       setFoto(null);
     } catch (error: unknown) {
       setErro(getErrorMessage(error, "Erro ao carregar perfil."));
@@ -699,6 +708,34 @@ export default function WhatsappPerfilPage() {
     }
   }
 
+  async function carregarFotosIntegracoesParaDesconexao() {
+    const integracoesSemFoto = integracoes.filter(
+      (item) => item.phone_number_id && !fotosIntegracoes[item.id]
+    );
+
+    if (!integracoesSemFoto.length) return;
+
+    const fotos = await Promise.all(
+      integracoesSemFoto.map(async (item) => {
+        try {
+          const response = await fetch(
+            `/api/whatsapp/perfil?integracao_id=${encodeURIComponent(item.id)}`,
+            { cache: "no-store" }
+          );
+          const data = await response.json();
+          return [item.id, data?.perfil?.profile_picture_url || ""] as const;
+        } catch {
+          return [item.id, ""] as const;
+        }
+      })
+    );
+
+    setFotosIntegracoes((atuais) => ({
+      ...atuais,
+      ...Object.fromEntries(fotos.filter(([, fotoPerfil]) => fotoPerfil)),
+    }));
+  }
+
   function abrirModalDesconexao() {
     setErroDesconexao("");
     setConfirmouDesconexaoCoexNoApp(false);
@@ -706,6 +743,7 @@ export default function WhatsappPerfilPage() {
     if (integracoes.length > 1) {
       setIntegracaoDesconexaoId("");
       setModalEscolherDesconexaoAberto(true);
+      void carregarFotosIntegracoesParaDesconexao();
       return;
     }
 
@@ -1755,10 +1793,26 @@ export default function WhatsappPerfilPage() {
 
           <div className={styles.disconnectChoiceGrid}>
             {integracoes.map((item) => (
-              <div key={item.id} className={styles.disconnectChoiceCard}>
+              <div
+                key={item.id}
+                className={`${styles.disconnectChoiceCard} ${
+                  Number(item.posicao || 1) === 2
+                    ? styles.disconnectChoiceCardIntegration2
+                    : Number(item.posicao || 1) === 3
+                    ? styles.disconnectChoiceCardIntegration3
+                    : styles.disconnectChoiceCardIntegration1
+                }`}
+              >
                 <div className={styles.disconnectChoiceTop}>
                   <div className={styles.connectionAvatar}>
-                    {item.nome_conexao?.charAt(0)?.toUpperCase() || "W"}
+                    {fotosIntegracoes[item.id] ? (
+                      <img
+                        src={fotosIntegracoes[item.id]}
+                        alt={`Foto de ${item.nome_conexao || "WhatsApp"}`}
+                      />
+                    ) : (
+                      item.nome_conexao?.charAt(0)?.toUpperCase() || "W"
+                    )}
                   </div>
 
                   <div>

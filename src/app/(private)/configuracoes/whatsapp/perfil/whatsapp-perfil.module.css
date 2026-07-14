@@ -1049,6 +1049,30 @@
   min-width: 0;
 }
 
+.disconnectChoiceCardIntegration1 {
+  background: var(--conversationItem);
+}
+
+.disconnectChoiceCardIntegration2 {
+  background: var(--conversationItem2);
+}
+
+.disconnectChoiceCardIntegration3 {
+  background: var(--conversationItem3);
+}
+
+.disconnectChoiceCard .connectionAvatar {
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.disconnectChoiceCard .connectionAvatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
 .disconnectChoiceTop {
   display: flex;
   align-items: center;

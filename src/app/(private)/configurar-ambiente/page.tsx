@@ -401,6 +401,7 @@ export default function ConfigurarAmbientePage() {
   const integracaoIdParam = searchParams.get("integracao_id") || "";
   const fluxoNovoNumeroParam =
     searchParams.get("fluxo") === "novo-numero";
+  const retomarOnboardingParam = searchParams.get("retomar") === "1";
   const numeroValido =
     !!integracao?.numero && !integracao.numero.startsWith("pendente_");
   const [toastSucesso, setToastSucesso] = useState("");
@@ -753,6 +754,9 @@ export default function ConfigurarAmbientePage() {
         setNomeIntegracao(
           nomeJaDefinido ? integracaoAtualizada.nome_conexao || "" : ""
         );
+      } else if (retomarOnboardingParam) {
+        const indiceAtual = obterIndiceEtapaAtual(integracaoAtualizada);
+        setEtapaQuiz(Math.min(4, Math.max(2, indiceAtual + 1)));
       }
 
       setIntegracao(integracaoAtualizada);
