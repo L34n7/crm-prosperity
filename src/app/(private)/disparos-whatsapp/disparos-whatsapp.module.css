@@ -125,6 +125,34 @@
   color: var(--crm-text-muted);
 }
 
+.contactsFilterActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.advancedFiltersToggle {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.advancedFiltersToggle:hover {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
 .clearFiltersButton {
   border: none;
   background: transparent;
@@ -160,6 +188,26 @@
 
 .searchFilters .field {
   min-width: 0;
+}
+
+.advancedContactFilters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--crm-border-soft);
+  min-width: 0;
+  align-items: end;
+}
+
+.advancedContactFilters .field {
+  min-width: 0;
+}
+
+.contactsFilterCard .input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  background: var(--crm-surface-soft);
 }
 
 .contactsFilterCard .label {
@@ -2950,6 +2998,7 @@
 
   .searchRow,
   .searchFilters,
+  .advancedContactFilters,
   .historyFilters,
   .historySearchBar,
   .conflictGroup,
@@ -2964,6 +3013,15 @@
   .disparoCardExpandido,
   .disparoQuickTopRow {
     grid-template-columns: 1fr;
+  }
+
+  .contactsFilterHeader {
+    flex-direction: column;
+  }
+
+  .contactsFilterActions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .historySearchBar {

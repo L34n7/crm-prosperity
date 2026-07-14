@@ -195,7 +195,7 @@ type ContatoOpcao = {
   origem_exibicao?: string | null;
   campanha_exibicao?: string | null;
   status_lead: string | null;
-  opt_in_whatsapp?: boolean;
+  opt_in_whatsapp?: boolean | null;
   whatsapp_opt_out?: boolean;
   whatsapp_opt_out_geral?: boolean;
   whatsapp_opt_out_marketing?: boolean;
@@ -205,8 +205,32 @@ type ContatoOpcao = {
   whatsapp_disparo_cooldown_expira_em?: string | null;
   whatsapp_disparo_cooldown_ocorrencias?: number | null;
   whatsapp_disparo_cooldown_horas?: number | null;
+  contexto_integracao_whatsapp_id?: string | null;
+  contexto_integracao_nome?: string | null;
+  contexto_integracao_numero?: string | null;
+  ultima_mensagem_contato_em?: string | null;
+  ultimo_atendente_id?: string | null;
+  ultimo_atendente_nome?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+type AtendenteFiltro = {
+  id: string;
+  nome: string;
+};
+
+type FiltrosConsultaContatos = {
+  busca?: string;
+  origem?: string;
+  campanha?: string;
+  disparoAnteriorId?: string;
+  mensagemDataInicio?: string;
+  mensagemDataFim?: string;
+  ultimoAtendenteId?: string;
+  optIn?: string;
+  optOut?: string;
+  somenteIntegracao?: boolean;
 };
 
 function obterOrigemContato(contato: ContatoOpcao) {
@@ -1769,6 +1793,16 @@ export default function DisparosWhatsAppPage() {
   const [campanhasDisponiveis, setCampanhasDisponiveis] = useState<string[]>([]);
   const [disparoAnteriorFiltroContatos, setDisparoAnteriorFiltroContatos] =
     useState("");
+  const [atendentesDisponiveis, setAtendentesDisponiveis] = useState<
+    AtendenteFiltro[]
+  >([]);
+  const [mensagemDataInicioFiltro, setMensagemDataInicioFiltro] = useState("");
+  const [mensagemDataFimFiltro, setMensagemDataFimFiltro] = useState("");
+  const [ultimoAtendenteFiltro, setUltimoAtendenteFiltro] = useState("");
+  const [optInFiltro, setOptInFiltro] = useState("");
+  const [optOutFiltro, setOptOutFiltro] = useState("");
+  const [somenteIntegracaoFiltro, setSomenteIntegracaoFiltro] = useState(false);
+  const [filtrosAvancadosAbertos, setFiltrosAvancadosAbertos] = useState(false);
 
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
@@ -2000,73 +2034,106 @@ export default function DisparosWhatsAppPage() {
     }
   }
 
-  async function carregarContatos(
-    busca = "",
-    origem = "",
-    campanha = "",
-    disparoAnteriorId = ""
-  ) {
-    const requisicaoId = ++contatosConsultaAtivaRef.current;
+  const carregarContatos = useCallback(
+    async (filtros: FiltrosConsultaContatos = {}) => {
+      const requisicaoId = ++contatosConsultaAtivaRef.current;
+      const {
+        busca = "",
+        origem = "",
+        campanha = "",
+        disparoAnteriorId = "",
+        mensagemDataInicio = "",
+        mensagemDataFim = "",
+        ultimoAtendenteId = "",
+        optIn = "",
+        optOut = "",
+        somenteIntegracao = false,
+      } = filtros;
 
-    try {
-      setLoadingContatos(true);
-      setErro("");
+      try {
+        setLoadingContatos(true);
+        setErro("");
 
-      const params = new URLSearchParams();
+        const params = new URLSearchParams();
 
-      if (busca.trim()) {
-        params.set("busca", busca.trim());
+        if (busca.trim()) {
+          params.set("busca", busca.trim());
+        }
+
+        if (origem.trim()) {
+          params.set("origem", origem.trim());
+        }
+
+        if (campanha.trim()) {
+          params.set("campanha", campanha.trim());
+        }
+
+        if (disparoAnteriorId.trim()) {
+          params.set("disparo_anterior_id", disparoAnteriorId.trim());
+        }
+
+        if (integracaoId) {
+          params.set("integracao_whatsapp_id", integracaoId);
+        }
+
+        if (integracaoId && somenteIntegracao) {
+          params.set("filtrar_por_integracao", "true");
+        }
+
+        if (mensagemDataInicio) {
+          params.set("mensagem_data_inicio", mensagemDataInicio);
+        }
+
+        if (mensagemDataFim) {
+          params.set("mensagem_data_fim", mensagemDataFim);
+        }
+
+        if (ultimoAtendenteId) {
+          params.set("ultimo_atendente_id", ultimoAtendenteId);
+        }
+
+        if (integracaoId && optIn) {
+          params.set("opt_in", optIn);
+        }
+
+        if (integracaoId && optOut) {
+          params.set("opt_out", optOut);
+        }
+
+        params.set("pagina", "1");
+        params.set("limite", "2000");
+
+        const res = await fetch(`/api/contatos?${params.toString()}`, {
+          cache: "no-store",
+        });
+
+        const json = await res.json();
+
+        if (!res.ok) {
+          throw new Error(json.error || "Erro ao carregar contatos.");
+        }
+
+        if (contatosConsultaAtivaRef.current !== requisicaoId) return;
+
+        const lista = Array.isArray(json.contatos) ? json.contatos : [];
+        setContatos(lista);
+        setTotalContatosDisponiveis(Number(json.total || 0));
+      } catch (error: any) {
+        if (contatosConsultaAtivaRef.current !== requisicaoId) return;
+
+        setErro(error?.message || "Erro ao carregar contatos.");
+        if (disparoAnteriorId) {
+          setContatos([]);
+          setTotalContatosDisponiveis(0);
+        }
+      } finally {
+        if (contatosConsultaAtivaRef.current === requisicaoId) {
+          setLoadingContatos(false);
+        }
       }
-
-      if (origem.trim()) {
-        params.set("origem", origem.trim());
-      }
-
-      if (campanha.trim()) {
-        params.set("campanha", campanha.trim());
-      }
-
-      if (disparoAnteriorId.trim()) {
-        params.set("disparo_anterior_id", disparoAnteriorId.trim());
-      }
-
-      if (integracaoId) {
-        params.set("integracao_whatsapp_id", integracaoId);
-      }
-
-      params.set("pagina", "1");
-      params.set("limite", "2000");
-
-      const res = await fetch(`/api/contatos?${params.toString()}`, {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json.error || "Erro ao carregar contatos.");
-      }
-
-      if (contatosConsultaAtivaRef.current !== requisicaoId) return;
-
-      const lista = Array.isArray(json.contatos) ? json.contatos : [];
-      setContatos(lista);
-      setTotalContatosDisponiveis(Number(json.total || 0));
-
-    } catch (error: any) {
-      if (contatosConsultaAtivaRef.current !== requisicaoId) return;
-
-      setErro(error?.message || "Erro ao carregar contatos.");
-      if (disparoAnteriorId) {
-        setContatos([]);
-        setTotalContatosDisponiveis(0);
-      }
-    } finally {
-      if (contatosConsultaAtivaRef.current === requisicaoId) {
-        setLoadingContatos(false);
-      }
-    }
-  }
+    },
+    [integracaoId]
+  );
 
   async function carregarOpcoesContatos() {
     try {
@@ -2084,6 +2151,9 @@ export default function DisparosWhatsAppPage() {
       );
       setCampanhasDisponiveis(
         Array.isArray(json.campanhas) ? json.campanhas : []
+      );
+      setAtendentesDisponiveis(
+        Array.isArray(json.atendentes) ? json.atendentes : []
       );
     } catch (error) {
       console.warn(
@@ -2474,7 +2544,6 @@ export default function DisparosWhatsAppPage() {
   useEffect(() => {
     carregarUsuarioLogado();
     carregarIntegracoes();
-    carregarContatos("", "", "");
     carregarOpcoesContatos();
     carregarBloqueioDisparoEmMassa();
     carregarCampanhaPagina();
@@ -2497,12 +2566,18 @@ export default function DisparosWhatsAppPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      carregarContatos(
-        buscaContato,
-        origemFiltro,
-        campanhaFiltro,
-        disparoAnteriorFiltroContatos
-      );
+      carregarContatos({
+        busca: buscaContato,
+        origem: origemFiltro,
+        campanha: campanhaFiltro,
+        disparoAnteriorId: disparoAnteriorFiltroContatos,
+        mensagemDataInicio: mensagemDataInicioFiltro,
+        mensagemDataFim: mensagemDataFimFiltro,
+        ultimoAtendenteId: ultimoAtendenteFiltro,
+        optIn: optInFiltro,
+        optOut: optOutFiltro,
+        somenteIntegracao: somenteIntegracaoFiltro,
+      });
     }, 300);
 
     return () => clearTimeout(timer);
@@ -2512,6 +2587,13 @@ export default function DisparosWhatsAppPage() {
     campanhaFiltro,
     disparoAnteriorFiltroContatos,
     integracaoId,
+    mensagemDataInicioFiltro,
+    mensagemDataFimFiltro,
+    ultimoAtendenteFiltro,
+    optInFiltro,
+    optOutFiltro,
+    somenteIntegracaoFiltro,
+    carregarContatos,
   ]);
 
   useEffect(() => {
@@ -2807,6 +2889,38 @@ export default function DisparosWhatsAppPage() {
     return montarPreviewTemplateDisparo(templateSelecionado, variaveisTemplate);
   }, [templateSelecionado, variaveisTemplate]);
 
+  const quantidadeFiltrosAvancadosAtivos = [
+    mensagemDataInicioFiltro,
+    mensagemDataFimFiltro,
+    ultimoAtendenteFiltro,
+    optInFiltro,
+    optOutFiltro,
+    somenteIntegracaoFiltro,
+  ].filter(Boolean).length;
+
+  const temFiltrosContatosAtivos = Boolean(
+    buscaContato ||
+      origemFiltro ||
+      campanhaFiltro ||
+      disparoAnteriorFiltroContatos ||
+      quantidadeFiltrosAvancadosAtivos > 0
+  );
+
+  const filtrosServidorContatosAtivos = Boolean(
+    disparoAnteriorFiltroContatos ||
+      mensagemDataInicioFiltro ||
+      mensagemDataFimFiltro ||
+      ultimoAtendenteFiltro ||
+      optInFiltro ||
+      optOutFiltro ||
+      somenteIntegracaoFiltro
+  );
+
+  const idsContatosConsulta = useMemo(
+    () => new Set(contatos.map((contato) => contato.id)),
+    [contatos]
+  );
+
   const contatosDisponiveis = useMemo(() => {
     const idsSelecionados = new Set(contatosSelecionados.map((item) => item.id));
     return contatos.filter((item) => !idsSelecionados.has(item.id));
@@ -2834,6 +2948,13 @@ export default function DisparosWhatsAppPage() {
 
   const contatoPassaFiltrosSelecionados = useCallback(
     (contato: ContatoOpcao) => {
+      if (
+        filtrosServidorContatosAtivos &&
+        !idsContatosConsulta.has(contato.id)
+      ) {
+        return false;
+      }
+
       const busca = normalizarTextoBusca(buscaContato);
 
       if (busca) {
@@ -2874,7 +2995,9 @@ export default function DisparosWhatsAppPage() {
     [
       buscaContato,
       campanhaFiltro,
-      conflitosPorContato,
+      filtrosServidorContatosAtivos,
+      idsContatosConsulta,
+      obterHistoricoDisparosDoContato,
       origemFiltro,
     ]
   );
@@ -4027,9 +4150,15 @@ export default function DisparosWhatsAppPage() {
                         <select
                           value={integracaoId} 
                           onChange={(e) => {
-                            setIntegracaoId(e.target.value);
+                            const proximaIntegracaoId = e.target.value;
+                            setIntegracaoId(proximaIntegracaoId);
                             setContatosSelecionados([]);
                             setConfirmacaoResponsabilidadeListaFria(false);
+                            setOptInFiltro("");
+                            setOptOutFiltro("");
+                            if (!proximaIntegracaoId) {
+                              setSomenteIntegracaoFiltro(false);
+                            }
                           }}
                           className={styles.input}
                           disabled={integracoes.length <= 1}
@@ -4271,24 +4400,41 @@ export default function DisparosWhatsAppPage() {
                       <p>Selecione quem receberá o disparo.</p>
                     </div>
 
-                    <button
-                      type="button"
-                      className={styles.clearFiltersButton}
-                      onClick={() => {
-                        setBuscaContato("");
-                        setOrigemFiltro("");
-                        setCampanhaFiltro("");
-                        setDisparoAnteriorFiltroContatos("");
-                      }}
-                      disabled={
-                        !buscaContato &&
-                        !origemFiltro &&
-                        !campanhaFiltro &&
-                        !disparoAnteriorFiltroContatos
-                      }
-                    >
-                      Limpar filtros
-                    </button>
+                    <div className={styles.contactsFilterActions}>
+                      <button
+                        type="button"
+                        className={styles.advancedFiltersToggle}
+                        aria-expanded={filtrosAvancadosAbertos}
+                        onClick={() =>
+                          setFiltrosAvancadosAbertos((aberto) => !aberto)
+                        }
+                      >
+                        {filtrosAvancadosAbertos ? "Menos filtros" : "Mais filtros"}
+                        {quantidadeFiltrosAvancadosAtivos > 0
+                          ? ` (${quantidadeFiltrosAvancadosAtivos})`
+                          : ""}
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.clearFiltersButton}
+                        onClick={() => {
+                          setBuscaContato("");
+                          setOrigemFiltro("");
+                          setCampanhaFiltro("");
+                          setDisparoAnteriorFiltroContatos("");
+                          setMensagemDataInicioFiltro("");
+                          setMensagemDataFimFiltro("");
+                          setUltimoAtendenteFiltro("");
+                          setOptInFiltro("");
+                          setOptOutFiltro("");
+                          setSomenteIntegracaoFiltro(false);
+                        }}
+                        disabled={!temFiltrosContatosAtivos}
+                      >
+                        Limpar filtros
+                      </button>
+                    </div>
                   </div>
 
                   <div className={styles.searchFilters}>
@@ -4374,6 +4520,97 @@ export default function DisparosWhatsAppPage() {
                       </select>
                     </div>
                   </div>
+
+                  {filtrosAvancadosAbertos ? (
+                    <div className={styles.advancedContactFilters}>
+                      <div className={styles.field}>
+                        <label className={styles.label}>Vínculo da integração</label>
+                        <select
+                          value={somenteIntegracaoFiltro ? "true" : "false"}
+                          onChange={(e) =>
+                            setSomenteIntegracaoFiltro(e.target.value === "true")
+                          }
+                          className={styles.input}
+                          disabled={!integracaoId}
+                        >
+                          <option value="false">Todos os contatos</option>
+                          <option value="true">Somente desta integração</option>
+                        </select>
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.label}>Contato enviou de</label>
+                        <input
+                          type="date"
+                          value={mensagemDataInicioFiltro}
+                          max={mensagemDataFimFiltro || undefined}
+                          onChange={(e) =>
+                            setMensagemDataInicioFiltro(e.target.value)
+                          }
+                          className={styles.input}
+                        />
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.label}>Contato enviou até</label>
+                        <input
+                          type="date"
+                          value={mensagemDataFimFiltro}
+                          min={mensagemDataInicioFiltro || undefined}
+                          onChange={(e) => setMensagemDataFimFiltro(e.target.value)}
+                          className={styles.input}
+                        />
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.label}>Último atendente</label>
+                        <select
+                          value={ultimoAtendenteFiltro}
+                          onChange={(e) => setUltimoAtendenteFiltro(e.target.value)}
+                          className={styles.input}
+                        >
+                          <option value="">Todos os atendentes</option>
+                          {atendentesDisponiveis.map((atendente) => (
+                            <option key={atendente.id} value={atendente.id}>
+                              {atendente.nome}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.label}>Opt-in</label>
+                        <select
+                          value={optInFiltro}
+                          onChange={(e) => setOptInFiltro(e.target.value)}
+                          className={styles.input}
+                          disabled={!integracaoId}
+                        >
+                          <option value="">
+                            {integracaoId ? "Todos" : "Selecione uma integração"}
+                          </option>
+                          <option value="true">Com opt-in</option>
+                          <option value="false">Sem opt-in (lista fria)</option>
+                        </select>
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.label}>Opt-out</label>
+                        <select
+                          value={optOutFiltro}
+                          onChange={(e) => setOptOutFiltro(e.target.value)}
+                          className={styles.input}
+                          disabled={!integracaoId}
+                        >
+                          <option value="">
+                            {integracaoId ? "Todos" : "Selecione uma integração"}
+                          </option>
+                          <option value="true">Com opt-out</option>
+                          <option value="false">Sem opt-out</option>
+                        </select>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className={styles.contactsSection}>
@@ -4397,10 +4634,7 @@ export default function DisparosWhatsAppPage() {
                         <span className={styles.contactsCount}>
                           {loadingContatos
                             ? "..."
-                            : buscaContato ||
-                              origemFiltro ||
-                              campanhaFiltro ||
-                              disparoAnteriorFiltroContatos
+                            : temFiltrosContatosAtivos
                             ? `${contatosDisponiveisFiltrados.length}/${totalContatosDisponiveis}`
                             : totalContatosDisponiveis}
                         </span>

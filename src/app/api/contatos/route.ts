@@ -6,7 +6,6 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
-import { classificarDestinatariosPorOptIn } from "@/lib/whatsapp/disparo-politica-lista";
 import { buscarCooldownsDisparoPorTelefone } from "@/lib/whatsapp/disparo-cooldown";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
@@ -300,14 +299,20 @@ export async function GET(request: Request) {
   let query = disparoAnteriorId
     ? supabaseAdmin
         .rpc(
-          "listar_contatos_operacionais_por_disparo_anterior",
+          "listar_contatos_operacionais_contexto_disparo_anterior",
           {
             p_empresa_id: usuario.empresa_id,
             p_campanha_id: disparoAnteriorId,
+            p_integracao_whatsapp_id: integracaoWhatsappId || null,
+            p_mensagem_data_inicio: mensagemDataInicio || null,
+            p_mensagem_data_fim: mensagemDataFim || null,
+            p_ultimo_atendente_id: ultimoAtendenteId || null,
+            p_filtrar_por_integracao:
+              Boolean(integracaoWhatsappId) && filtrarPorIntegracao,
           },
           { count: "exact" }
         )
-        .select(camposContatos)
+        .select(camposContatosContexto)
     : supabaseAdmin
         .rpc(
           "listar_contatos_operacionais_contexto",
@@ -414,40 +419,6 @@ export async function GET(request: Request) {
   let contatos = (
     Array.isArray(data) ? data : data ? [data] : []
   ) as ContatoLista[];
-
-  if (disparoAnteriorId && integracaoWhatsappId && contatos.length > 0) {
-    try {
-      const classificacao = await classificarDestinatariosPorOptIn({
-        supabase: supabaseAdmin,
-        empresaId: usuario.empresa_id,
-        integracaoWhatsappId,
-        destinatariosJaCarregadosDoBanco: true,
-        destinatarios: contatos.map((contato) => ({
-          contatoId: String(contato.id || "").trim() || null,
-          telefone: String(contato.telefone || "").trim() || null,
-        })),
-      });
-
-      contatos = contatos.map((contato) => ({
-        ...contato,
-        opt_in_whatsapp: classificacao.contatosComOptIn.has(
-          String(contato.id)
-        ),
-        opt_in_whatsapp_integracao_id: integracaoWhatsappId,
-      }));
-    } catch (optInError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            optInError instanceof Error
-              ? optInError.message
-              : "Erro ao validar o opt-in por número.",
-        },
-        { status: 500 }
-      );
-    }
-  }
 
   if (contatos.length > 0) {
     try {
