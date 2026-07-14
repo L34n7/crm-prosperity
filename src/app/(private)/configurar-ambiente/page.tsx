@@ -1863,19 +1863,21 @@ return (
 
               {etapaQuiz === 2 && (
                 <div className={styles.quizContent}>
-                  <div
-                    className={`${styles.quizStatusIcon} ${
-                      metaConectado ? styles.quizStatusDone : ""
-                    }`}
-                  >
-                    {metaConectado ? "✓" : etapaVisualQuiz}
-                  </div>
+                  <div className={styles.quizStepHeadingRow}>
+                    <div
+                      className={`${styles.quizStatusIcon} ${
+                        metaConectado ? styles.quizStatusDone : ""
+                      }`}
+                    >
+                      {metaConectado ? "✓" : etapaVisualQuiz}
+                    </div>
 
-                  <h3 className={styles.quizHeadline}>
-                    {fluxoNumeroAdicional
-                      ? "Conecte a conta Meta do novo número"
-                      : "Conecte sua conta empresarial da Meta"}
-                  </h3>
+                    <h3 className={styles.quizHeadline}>
+                      {fluxoNumeroAdicional
+                        ? "Conecte a conta Meta do novo número"
+                        : "Conecte sua conta empresarial da Meta"}
+                    </h3>
+                  </div>
 
                   <p className={styles.quizText}>
                     {fluxoNumeroAdicional

@@ -611,6 +611,22 @@
   margin-bottom: 14px;
 }
 
+.quizStepHeadingRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.quizStepHeadingRow .quizStatusIcon,
+.quizStepHeadingRow .quizHeadline {
+  margin-bottom: 0;
+}
+
+.quizStepHeadingRow .quizStatusIcon {
+  flex-shrink: 0;
+}
+
 .quizStatusDone {
   background: var(--crm-success-bg-strong);
   color: var(--crm-success-text);
