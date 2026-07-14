@@ -227,6 +227,8 @@ export async function POST(
 
     const updateData: Record<string, unknown> = {
       setor_id: novoSetorId,
+      bot_ativo: false,
+      aguardando_atendente: true,
       updated_at: new Date().toISOString(),
     };
 

@@ -2230,7 +2230,9 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
 
   const { data: conversaAtual, error: conversaAtualError } = await supabaseAdmin
     .from("conversas")
-    .select("id, status, responsavel_id, bot_ativo, integracao_whatsapp_id")
+    .select(
+      "id, status, responsavel_id, bot_ativo, aguardando_atendente, integracao_whatsapp_id"
+    )
     .eq("empresa_id", empresaId)
     .eq("id", conversaId)
     .maybeSingle();
@@ -2254,8 +2256,14 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     !!conversaAtual?.responsavel_id &&
     conversaAtual?.bot_ativo !== true;
 
-  if (conversaEmAtendimentoHumano) {
+  const conversaAguardandoAtendente =
+    conversaAtual?.aguardando_atendente === true;
+
+  if (conversaEmAtendimentoHumano || conversaAguardandoAtendente) {
     const agora = new Date().toISOString();
+    const motivoCancelamento = conversaAguardandoAtendente
+      ? "conversa_aguardando_atendente"
+      : "atendimento_humano_assumiu_conversa";
 
     const { data: execucoesParaCancelar } = await supabaseAdmin
       .from("automacao_execucoes")
@@ -2274,7 +2282,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           finished_at: agora,
           updated_at: agora,
           metadata_json: {
-            motivo_cancelamento: "atendimento_humano_assumiu_conversa",
+            motivo_cancelamento: motivoCancelamento,
             cancelado_em: agora,
           },
         })
@@ -2293,18 +2301,21 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     }
 
     console.log(
-      "[AUTOMATION_ENGINE] Automação ignorada/cancelada: conversa em atendimento humano.",
+      "[AUTOMATION_ENGINE] Automação ignorada/cancelada: conversa sob atendimento humano.",
       {
         conversaId,
         status: conversaAtual.status,
         responsavelId: conversaAtual.responsavel_id,
+        aguardandoAtendente: conversaAtual.aguardando_atendente,
         execucoesCanceladas: execucaoIds.length,
       }
     );
 
     return {
       ok: true,
-      status: "ignorado_atendimento_humano",
+      status: conversaAguardandoAtendente
+        ? "ignorado_aguardando_atendente"
+        : "ignorado_atendimento_humano",
     };
   }  
 
@@ -2995,6 +3006,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     .update({
       status: "bot",
       bot_ativo: true,
+      aguardando_atendente: false,
       origem_atendimento: "bot",
       responsavel_id: null,
       closed_at: null,
@@ -4565,6 +4577,7 @@ export async function executarNo(params: {
       .update({
         status: "encerrado_aut",
         bot_ativo: false,
+        aguardando_atendente: false,
         closed_at: dataEncerramento,
         updated_at: dataEncerramento,
       })
@@ -4695,6 +4708,7 @@ export async function executarNo(params: {
         status: "fila",
         responsavel_id: null,
         bot_ativo: false,
+        aguardando_atendente: true,
         updated_at: new Date().toISOString(),
       })
       .eq("id", conversaId)
@@ -7814,6 +7828,7 @@ async function transferirArquivoIaSemConexaoErro(params: {
       setor_id: null,
       responsavel_id: null,
       bot_ativo: false,
+      aguardando_atendente: true,
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversaId)
@@ -7988,6 +8003,7 @@ export async function executarAcaoExcessoTentativas(params: {
       .update({
         status: "encerrado_aut",
         bot_ativo: false,
+        aguardando_atendente: false,
         closed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -8049,6 +8065,7 @@ export async function executarAcaoExcessoTentativas(params: {
       setor_id: setorExcessoTentativas,
       responsavel_id: null,
       bot_ativo: false,
+      aguardando_atendente: true,
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversaId)
@@ -9213,6 +9230,7 @@ async function finalizarExecucao(execucaoId: string, empresaId: string) {
       .update({
         status: "encerrado_aut",
         bot_ativo: false,
+        aguardando_atendente: false,
         closed_at: agora,
         updated_at: agora,
       })

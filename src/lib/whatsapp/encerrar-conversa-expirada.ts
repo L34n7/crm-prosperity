@@ -35,6 +35,8 @@ export async function encerrarConversaExpirada({
     .from("conversas")
     .update({
       status: "encerrado_24h",
+      bot_ativo: false,
+      aguardando_atendente: false,
       closed_at: agora,
       updated_at: agora,
     })

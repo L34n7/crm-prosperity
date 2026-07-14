@@ -36,6 +36,7 @@ import {
   ChevronRight,
   Copy,
   CopyPlus,
+  LoaderCircle,
   MessageCircle,
   Share2,
   Sparkles,
@@ -2351,6 +2352,9 @@ function FluxosPageContent() {
     useState(false);
   const [fluxoParaApagarDefinitivo, setFluxoParaApagarDefinitivo] =
     useState<Fluxo | null>(null);
+  const [apagandoFluxoDefinitivo, setApagandoFluxoDefinitivo] =
+    useState(false);
+  const apagandoFluxoDefinitivoRef = useRef(false);
   const [modalCompartilharAberto, setModalCompartilharAberto] = useState(false);
   const [fluxoParaCompartilhar, setFluxoParaCompartilhar] =
     useState<Fluxo | null>(null);
@@ -6372,58 +6376,19 @@ async function restaurarFluxo(fluxo: Fluxo) {
 }
   
 
-async function apagarFluxoDefinitivo(fluxo: Fluxo) {
-  const confirmar = window.confirm(
-    `Tem certeza que deseja apagar DEFINITIVAMENTE o fluxo "${fluxo.nome}"?\n\nEssa ação não poderá ser desfeita.`
-  );
-
-  if (!confirmar) return;
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxo.id,
-        definitivo: true,
-      }),
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao apagar definitivamente.");
-    }
-
-    setSucesso("Fluxo apagado definitivamente.");
-
-    if (fluxoSelecionado?.id === fluxo.id) {
-      setFluxoSelecionado(null);
-      setNodes([]);
-      setEdges([]);
-      setEditandoNodeId(null);
-      setEditandoEdgeId(null);
-    }
-
-    await carregarFluxos();
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao apagar definitivamente.");
-  }
-}
-
 function abrirModalApagarDefinitivo(fluxo: Fluxo) {
+  if (apagandoFluxoDefinitivoRef.current) return;
+
   setFluxoParaApagarDefinitivo(fluxo);
   setModalApagarDefinitivoAberto(true);
 }
 
 async function confirmarApagarDefinitivo() {
-  if (!fluxoParaApagarDefinitivo) return;
+  if (!fluxoParaApagarDefinitivo || apagandoFluxoDefinitivoRef.current) return;
+
+  const fluxoAlvo = fluxoParaApagarDefinitivo;
+  apagandoFluxoDefinitivoRef.current = true;
+  setApagandoFluxoDefinitivo(true);
 
   try {
     setErro("");
@@ -6435,7 +6400,7 @@ async function confirmarApagarDefinitivo() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        id: fluxoParaApagarDefinitivo.id,
+        id: fluxoAlvo.id,
         definitivo: true,
       }),
     });
@@ -6450,7 +6415,7 @@ async function confirmarApagarDefinitivo() {
     setSucesso("Fluxo apagado definitivamente.");
     setModalApagarDefinitivoAberto(false);
 
-    if (fluxoSelecionado?.id === fluxoParaApagarDefinitivo.id) {
+    if (fluxoSelecionado?.id === fluxoAlvo.id) {
       setFluxoSelecionado(null);
       setNodes([]);
       setEdges([]);
@@ -6462,6 +6427,9 @@ async function confirmarApagarDefinitivo() {
     await carregarFluxos();
   } catch (error: any) {
     setErro(error?.message || "Erro ao apagar definitivamente.");
+  } finally {
+    apagandoFluxoDefinitivoRef.current = false;
+    setApagandoFluxoDefinitivo(false);
   }
 }
 
@@ -11753,6 +11721,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 <button
                 type="button"
                 className={styles.closePanelButton}
+                disabled={apagandoFluxoDefinitivo}
                 onClick={() => {
                     setModalApagarDefinitivoAberto(false);
                     setFluxoParaApagarDefinitivo(null);
@@ -11770,6 +11739,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     do banco de dados junto com seus blocos, conexões e gatilhos
                     relacionados. Essa ação não poderá ser desfeita.
                 </p>
+                {apagandoFluxoDefinitivo && (
+                    <p className={styles.deletionProgress} role="status" aria-live="polite">
+                    Aguarde enquanto removemos o fluxo e seus dados relacionados.
+                    </p>
+                )}
                 </div>
             </div>
 
@@ -11777,6 +11751,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 <button
                 type="button"
                 className={styles.secondaryButton}
+                disabled={apagandoFluxoDefinitivo}
                 onClick={() => {
                     setModalApagarDefinitivoAberto(false);
                     setFluxoParaApagarDefinitivo(null);
@@ -11789,8 +11764,21 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 type="button"
                 className={styles.dangerButton}
                 onClick={confirmarApagarDefinitivo}
+                disabled={apagandoFluxoDefinitivo}
+                aria-busy={apagandoFluxoDefinitivo}
                 >
-                Apagar definitivamente
+                {apagandoFluxoDefinitivo ? (
+                    <>
+                    <LoaderCircle
+                        aria-hidden="true"
+                        className={styles.buttonSpinner}
+                        size={17}
+                    />
+                    Apagando...
+                    </>
+                ) : (
+                    "Apagar definitivamente"
+                )}
                 </button>
             </div>
             </div>

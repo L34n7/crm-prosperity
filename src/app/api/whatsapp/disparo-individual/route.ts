@@ -237,6 +237,7 @@ async function reabrirConversaAposDisparo(params: {
     responsavel_id: params.usuarioId,
     status: "em_atendimento",
     bot_ativo: false,
+    aguardando_atendente: true,
     origem_atendimento: "manual",
     closed_at: null,
     started_at: now,

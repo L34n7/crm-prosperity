@@ -321,6 +321,7 @@ export async function GET(request: Request) {
             .update({
               status: "encerrado_aut",
               bot_ativo: false,
+              aguardando_atendente: false,
               closed_at: agoraExecucao,
               updated_at: agoraExecucao,
             })

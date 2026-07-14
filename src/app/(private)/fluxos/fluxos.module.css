@@ -1798,6 +1798,10 @@
   font-weight: 800;
   cursor: pointer;
   transition: 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .dangerButton:hover {
@@ -1809,6 +1813,22 @@
   opacity: 0.65;
   cursor: not-allowed;
   transform: none;
+}
+
+.buttonSpinner {
+  flex: 0 0 auto;
+  animation: buttonSpin 0.8s linear infinite;
+}
+
+.deletionProgress {
+  margin-top: 10px;
+  font-weight: 700;
+}
+
+@keyframes buttonSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .modalOverlay {

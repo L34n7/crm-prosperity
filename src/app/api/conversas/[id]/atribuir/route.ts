@@ -195,6 +195,8 @@ export async function POST(
       .update({
         responsavel_id: novoResponsavelId,
         status: "em_atendimento",
+        bot_ativo: false,
+        aguardando_atendente: true,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

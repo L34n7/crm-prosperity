@@ -250,6 +250,7 @@ export async function encerrarConversaPor24h({
     .update({
       status: "encerrado_24h",
       bot_ativo: false,
+      aguardando_atendente: false,
       closed_at: agoraISO,
       updated_at: agoraISO,
     })

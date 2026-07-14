@@ -1412,8 +1412,20 @@ export async function DELETE(req: NextRequest) {
         .eq("status", "arquivado");
 
       if (error) {
+        const exclusaoExcedeuTempoLimite =
+          error.code === "57014" ||
+          error.message.toLowerCase().includes("statement timeout");
+
         return NextResponse.json(
-          { ok: false, error: `Erro ao apagar definitivamente: ${error.message}` },
+          {
+            ok: false,
+            code: exclusaoExcedeuTempoLimite
+              ? "EXCLUSAO_FLUXO_TIMEOUT"
+              : "EXCLUSAO_FLUXO_FALHOU",
+            error: exclusaoExcedeuTempoLimite
+              ? "A exclusão do fluxo levou mais tempo que o permitido. Aguarde alguns instantes e tente novamente."
+              : `Erro ao apagar definitivamente: ${error.message}`,
+          },
           { status: 500 }
         );
       }

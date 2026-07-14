@@ -52,6 +52,7 @@ type ConversaAtual = {
   integracao_whatsapp_id: string | null;
   status: string;
   bot_ativo: boolean | null;
+  aguardando_atendente?: boolean | null;
   canal: string;
   origem_atendimento: string;
   historico_importado?: boolean | null;
@@ -815,6 +816,7 @@ export async function PUT(
     integracao_whatsapp_id,
     status,
     bot_ativo,
+    aguardando_atendente: conversaAtual.aguardando_atendente ?? false,
     canal,
     origem_atendimento,
     prioridade,
@@ -850,11 +852,34 @@ export async function PUT(
     }
   }
 
+  const statusFinal = String(updateData.status || "");
+  const transicaoParaAtendimentoHumano =
+    !novoStatusEhEncerrado &&
+    (mudouSetor ||
+      mudouResponsavel ||
+      statusFinal === "em_atendimento" ||
+      statusFinal === "aguardando_cliente" ||
+      (statusFinal === "fila" && conversaAtual.status !== "fila"));
+
+  if (transicaoParaAtendimentoHumano) {
+    updateData.bot_ativo = false;
+    updateData.aguardando_atendente = true;
+  }
+
+  if (
+    novoStatusEhEncerrado ||
+    statusFinal === "bot" ||
+    updateData.bot_ativo === true
+  ) {
+    updateData.aguardando_atendente = false;
+  }
+
   if (parandoAutomacaoEEncerrando) {
     updateData.status = "encerrado_manual";
     updateData.bot_ativo = false;
     updateData.responsavel_id = null;
     updateData.origem_atendimento = "manual";
+    updateData.aguardando_atendente = false;
   }
 
   let dataFechamento: string | null = null;

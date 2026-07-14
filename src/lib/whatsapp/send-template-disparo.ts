@@ -357,6 +357,7 @@ async function reativarConversaParaDisparo(params: {
     status: "aberta",
     origem_atendimento: "manual",
     bot_ativo: false,
+    aguardando_atendente: Boolean(params.usuarioId),
     closed_at: null,
     updated_at: now,
   };
