@@ -1761,11 +1761,13 @@ return (
 
               {!fluxoNumeroAdicional && etapaQuiz === 0 && (
                 <div className={styles.quizContent}>
-                  <div className={styles.quizIcon}>👋</div>
+                  <div className={styles.quizStepHeadingRow}>
+                    <div className={styles.quizIcon}>👋</div>
 
-                  <h3 className={styles.quizHeadline}>
-                    {perfilOnboarding.nomeUsuario}, seja bem-vindo ao CRM Prosperity. Tudo bem?
-                  </h3>
+                    <h3 className={styles.quizHeadline}>
+                      {perfilOnboarding.nomeUsuario}, seja bem-vindo ao CRM Prosperity. Tudo bem?
+                    </h3>
+                  </div>
 
                   <p className={styles.quizText}>
                     Vamos iniciar a configuração do ambiente oficial da{" "}
@@ -1792,11 +1794,13 @@ return (
 
               {!fluxoNumeroAdicional && etapaQuiz === 1 && (
                 <div className={styles.quizContent}>
-                  <div className={styles.quizStatusIcon}>1</div>
+                  <div className={styles.quizStepHeadingRow}>
+                    <div className={styles.quizStatusIcon}>1</div>
 
-                  <h3 className={styles.quizHeadline}>
-                    Qual é o segmento de atuação da sua empresa?
-                  </h3>
+                    <h3 className={styles.quizHeadline}>
+                      Qual é o segmento de atuação da sua empresa?
+                    </h3>
+                  </div>
 
                   <p className={styles.quizText}>
                     O sistema será configurado com os recursos mais adequados
@@ -2009,19 +2013,21 @@ return (
 
               {etapaQuiz === 3 && (
                 <div className={styles.quizContent}>
-                  <div
-                    className={`${styles.quizStatusIcon} ${
-                      numeroRegistrado ? styles.quizStatusDone : ""
-                    }`}
-                  >
-                    {numeroRegistrado ? "✓" : etapaVisualQuiz}
-                  </div>
+                  <div className={styles.quizStepHeadingRow}>
+                    <div
+                      className={`${styles.quizStatusIcon} ${
+                        numeroRegistrado ? styles.quizStatusDone : ""
+                      }`}
+                    >
+                      {numeroRegistrado ? "✓" : etapaVisualQuiz}
+                    </div>
 
-                  <h3 className={styles.quizHeadline}>
-                    {modoCoexistencia
-                      ? "Confirme o uso simultâneo do número"
-                      : "Ative o número oficial do WhatsApp"}
-                  </h3>
+                    <h3 className={styles.quizHeadline}>
+                      {modoCoexistencia
+                        ? "Confirme o uso simultâneo do número"
+                        : "Ative o número oficial do WhatsApp"}
+                    </h3>
+                  </div>
 
                   <p className={styles.quizText}>
                     {modoCoexistencia
@@ -2043,36 +2049,38 @@ return (
                       </p>
                     </div>
                   )}
-                  <div
-                    className={`${styles.quizInfoBox} ${
-                      numeroValido ? styles.quizInfoBoxDone : ""
-                    }`}
-                  >
-                    <div>
-                      <span>Número vinculado</span>
-                      <strong>{numeroValido ? integracao?.numero : "Ainda não definido"}</strong>
+                  <div className={styles.quizInfoGrid}>
+                    <div
+                      className={`${styles.quizInfoBox} ${
+                        numeroValido ? styles.quizInfoBoxDone : ""
+                      }`}
+                    >
+                      <div>
+                        <span>Número vinculado</span>
+                        <strong>{numeroValido ? integracao?.numero : "Ainda não definido"}</strong>
+                      </div>
+
+                      {numeroValido && <div className={styles.quizCheckIcon}>✓</div>}
                     </div>
 
-                    {numeroValido && <div className={styles.quizCheckIcon}>✓</div>}
-                  </div>
+                    <div
+                      className={`${styles.quizInfoBox} ${
+                        numeroRegistrado ? styles.quizInfoBoxDone : ""
+                      }`}
+                    >
+                      <div>
+                        <span>Status da etapa</span>
+                        <strong>
+                          {numeroRegistrado
+                            ? modoCoexistencia
+                              ? "Coexistência ativa"
+                              : "Número ativado"
+                            : "Aguardando ativação"}
+                        </strong>
+                      </div>
 
-                  <div
-                    className={`${styles.quizInfoBox} ${
-                      numeroRegistrado ? styles.quizInfoBoxDone : ""
-                    }`}
-                  >
-                    <div>
-                      <span>Status da etapa</span>
-                      <strong>
-                        {numeroRegistrado
-                          ? modoCoexistencia
-                            ? "Coexistência ativa"
-                            : "Número ativado"
-                          : "Aguardando ativação"}
-                      </strong>
+                      {numeroRegistrado && <div className={styles.quizCheckIcon}>✓</div>}
                     </div>
-
-                    {numeroRegistrado && <div className={styles.quizCheckIcon}>✓</div>}
                   </div>
 
                   {modoCoexistencia && numeroRegistrado && (
@@ -2144,31 +2152,21 @@ return (
 
               {etapaQuiz === 4 && (
                 <div className={styles.quizContent}>
-                  <div className={styles.quizStatusRow}>
-                    <div
-                      className={`${styles.quizStatusIcon} ${
-                        ambienteConcluido ? styles.quizStatusDone : ""
-                      }`}
-                    >
-                      {ambienteConcluido ? "✓" : etapaVisualQuiz}
-                    </div>
-
-                    {ambienteConcluido && (
-                      <div className={styles.quizStatusTextDone}>
-                        Ambiente configurado
-                      </div>
-                    )}
-                  </div>
-
                   {!ambienteConcluido ? (
                     <>
-                      <h3 className={styles.quizHeadline}>
-                        {modoCoexistencia
-                          ? "Revise a conexão e conclua a ativação"
-                          : fluxoNumeroAdicional
-                          ? "Configure o webhook e finalize o novo número"
-                          : "Configure o webhook e conclua a ativação"}
-                      </h3>
+                      <div className={styles.quizStepHeadingRow}>
+                        <div className={styles.quizStatusIcon}>
+                          {etapaVisualQuiz}
+                        </div>
+
+                        <h3 className={styles.quizHeadline}>
+                          {modoCoexistencia
+                            ? "Revise a conexão e conclua a ativação"
+                            : fluxoNumeroAdicional
+                            ? "Configure o webhook e finalize o novo número"
+                            : "Configure o webhook e conclua a ativação"}
+                        </h3>
+                      </div>
 
                       <p className={styles.quizText}>
                         {modoCoexistencia
@@ -2276,11 +2274,23 @@ return (
                     </>
                   ) : (
                     <>
-                      <h3 className={styles.quizHeadline}>
-                        {fluxoNumeroAdicional
-                          ? `Tudo certo ${perfilOnboarding.nomeUsuario}! O novo número está conectado.`
-                          : `Tudo certo ${perfilOnboarding.nomeUsuario}! O ambiente oficial do WhatsApp está ativo.`}
-                      </h3>
+                      <div className={styles.quizStepHeadingRow}>
+                        <div
+                          className={`${styles.quizStatusIcon} ${styles.quizStatusDone}`}
+                        >
+                          ✓
+                        </div>
+
+                        <h3 className={styles.quizHeadline}>
+                          {fluxoNumeroAdicional
+                            ? `Tudo certo ${perfilOnboarding.nomeUsuario}! O novo número está conectado.`
+                            : `Tudo certo ${perfilOnboarding.nomeUsuario}! O ambiente oficial do WhatsApp está ativo.`}
+                        </h3>
+
+                        <div className={styles.quizStatusTextDone}>
+                          Ambiente configurado
+                        </div>
+                      </div>
 
                       <p className={styles.quizText}>
                         {fluxoNumeroAdicional ? (

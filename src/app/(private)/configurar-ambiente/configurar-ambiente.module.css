@@ -613,18 +613,30 @@
 
 .quizStepHeadingRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   margin-bottom: 14px;
 }
 
 .quizStepHeadingRow .quizStatusIcon,
+.quizStepHeadingRow .quizIcon,
 .quizStepHeadingRow .quizHeadline {
   margin-bottom: 0;
 }
 
-.quizStepHeadingRow .quizStatusIcon {
+.quizStepHeadingRow .quizStatusIcon,
+.quizStepHeadingRow .quizIcon {
   flex-shrink: 0;
+}
+
+.quizStepHeadingRow .quizHeadline {
+  flex: 1;
+}
+
+.quizStepHeadingRow .quizStatusTextDone {
+  flex-shrink: 0;
+  margin: 0;
 }
 
 .quizStatusDone {
