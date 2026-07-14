@@ -87,8 +87,8 @@ const categorias = [
   { value: "OTHER", label: "Outro" },
 ];
 
-const COTACAO_ENTERPRISE_URL = montarWhatsappUrl(
-  "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity para usar mais números de WhatsApp."
+const CONTRATAR_NUMERO_ADICIONAL_URL = montarWhatsappUrl(
+  "Olá! Quero contratar um número adicional de WhatsApp no CRM Prosperity pelo valor recorrente de R$ 60 por mês."
 );
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -1709,7 +1709,8 @@ export default function WhatsappPerfilPage() {
                 Mais números no WhatsApp
               </h2>
               <p className={styles.modalSubtitle}>
-                Seu plano atual não possui outra integração liberada.
+                Adicione outro número oficial e amplie sua operação sem separar
+                o atendimento em sistemas diferentes.
               </p>
             </div>
 
@@ -1722,25 +1723,49 @@ export default function WhatsappPerfilPage() {
             </button>
           </div>
 
+          <div className={styles.upgradeOffer}>
+            <div>
+              <span className={styles.upgradeOfferEyebrow}>Número adicional</span>
+              <strong>
+                <small>R$</small> 60 <small>/mês</small>
+              </strong>
+              <p>por número adicional ativo</p>
+            </div>
+
+            <div className={styles.upgradeOfferMessage}>
+              <strong>Expanda sua equipe de atendimento agora</strong>
+              <p>
+                O valor é adicional à mensalidade do seu plano e será cobrado
+                todos os meses enquanto o novo número permanecer contratado.
+              </p>
+              <span>Não é uma cobrança única</span>
+            </div>
+          </div>
+
           <div className={styles.upgradeGrid}>
             <div className={styles.upgradeItem}>
               <span>1</span>
-              <strong>Plano Profissional Enterprise</strong>
-              <p>Libera operação com mais números oficiais no mesmo ambiente.</p>
+              <strong>Um CRM, vários números</strong>
+              <p>Centralize as conversas de todos os números no mesmo ambiente.</p>
             </div>
 
             <div className={styles.upgradeItem}>
               <span>2</span>
-              <strong>Configuração assistida</strong>
-              <p>A liberação é feita no banco após a contratação ou cotação aprovada.</p>
+              <strong>Identificação visual</strong>
+              <p>Reconheça rapidamente qual integração recebeu cada conversa.</p>
             </div>
 
             <div className={styles.upgradeItem}>
               <span>3</span>
               <strong>Fluxos e templates</strong>
-              <p>Ao adicionar outra WABA, revise blocos de disparo agendado.</p>
+              <p>Configure automações e templates para operar com os dois números.</p>
             </div>
           </div>
+
+          <p className={styles.upgradeCheckoutNotice}>
+            A contratação online estará disponível em breve. Por enquanto,
+            solicite a ativação pelo nosso WhatsApp.
+          </p>
 
           <div className={styles.modalActions}>
             <button
@@ -1752,12 +1777,12 @@ export default function WhatsappPerfilPage() {
             </button>
 
             <a
-              className={styles.primaryButton}
-              href={COTACAO_ENTERPRISE_URL}
+              className={`${styles.primaryButton} ${styles.upgradeCta}`}
+              href={CONTRATAR_NUMERO_ADICIONAL_URL}
               target="_blank"
               rel="noopener noreferrer"
             >
-              Solicitar cotação
+              Contratar número adicional — R$ 60/mês
             </a>
           </div>
         </div>

@@ -2657,16 +2657,24 @@ return (
                     <div><b>3</b><span>Salve e publique novamente o fluxo</span></div>
                   </div>
 
-                  {novaIntegracaoWabaDiferente && (
-                    <div className={styles.novaIntegracaoWabaAlert}>
+                  <div
+                    className={`${styles.novaIntegracaoWabaAlert} ${
+                      novaIntegracaoWabaDiferente
+                        ? ""
+                        : styles.novaIntegracaoWabaAlertSame
+                    }`}
+                  >
+                    {novaIntegracaoWabaDiferente ? (
                       <AlertTriangle size={18} />
-                      <span>
-                        Este número utiliza outra WABA. Os templates da conta
-                        anterior não são compartilhados automaticamente; use o
-                        template equivalente cadastrado na nova WABA.
-                      </span>
-                    </div>
-                  )}
+                    ) : (
+                      <CheckCircle2 size={18} />
+                    )}
+                    <span>
+                      {novaIntegracaoWabaDiferente
+                        ? "Este número utiliza outra WABA. Os templates da conta anterior não são compartilhados automaticamente; use o template equivalente cadastrado na nova WABA."
+                        : "Os dois números pertencem à mesma WABA. Os templates já aprovados nessa conta podem ser reutilizados; revise apenas qual integração executará cada envio."}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

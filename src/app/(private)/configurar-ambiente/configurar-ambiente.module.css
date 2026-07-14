@@ -655,6 +655,12 @@
   margin-top: 1px;
 }
 
+.novaIntegracaoWabaAlertSame {
+  color: var(--crm-success-text);
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-success-bg);
+}
+
 .novaIntegracaoActions {
   padding: 16px 24px 20px;
   border-top: 1px solid var(--crm-border);

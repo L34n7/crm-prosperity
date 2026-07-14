@@ -776,7 +776,76 @@
 }
 
 .upgradeModal {
-  max-width: 760px;
+  max-width: 780px;
+  overflow: hidden;
+}
+
+.upgradeOffer {
+  margin: 22px 22px 0;
+  padding: 20px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 8% 15%, rgba(20, 184, 166, 0.18), transparent 34%),
+    var(--crm-primary-soft);
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1.3fr);
+  gap: 24px;
+  align-items: center;
+}
+
+.upgradeOffer > div:first-child {
+  padding-right: 22px;
+  border-right: 1px solid var(--crm-primary-border);
+}
+
+.upgradeOfferEyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.upgradeOffer > div:first-child > strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.upgradeOffer > div:first-child > strong small {
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.upgradeOffer > div:first-child > p,
+.upgradeOfferMessage p {
+  margin: 6px 0 0;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.upgradeOfferMessage strong {
+  color: var(--crm-text-strong);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.upgradeOfferMessage > span {
+  display: inline-flex;
+  margin-top: 9px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .upgradeGrid {
@@ -818,6 +887,23 @@
   color: var(--crm-text-muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.upgradeCheckoutNotice {
+  margin: -7px 22px 18px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.upgradeCta {
+  min-height: 44px;
+  padding-inline: 20px;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.22);
 }
 
 .primaryButton {
@@ -1354,6 +1440,17 @@
 
   .upgradeGrid {
     grid-template-columns: 1fr;
+  }
+
+  .upgradeOffer {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .upgradeOffer > div:first-child {
+    padding: 0 0 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--crm-primary-border);
   }
 
   .disconnectChoiceGrid {
