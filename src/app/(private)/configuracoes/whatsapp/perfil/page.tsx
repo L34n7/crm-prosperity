@@ -346,6 +346,8 @@ export default function WhatsappPerfilPage() {
     ["banned", "blocked"].includes(
       normalizarStatus(integracaoSelecionada?.phone_number_status)
     );
+  const camposPerfilMetaBloqueados =
+    integracaoBloqueada || !perfilEditavelNoCrm;
 
   const qualidadeNumero = obterQualidadeNumero(
     integracaoSelecionada?.quality_rating
@@ -1257,11 +1259,15 @@ export default function WhatsappPerfilPage() {
             <aside className={styles.profileSummaryColumn}>
 
             <div className={styles.profileHero}>
-            <label className={styles.photoUpload}>
+            <label
+              className={`${styles.photoUpload} ${
+                camposPerfilMetaBloqueados ? styles.photoUploadBlocked : ""
+              }`}
+            >
                 <input
                 type="file"
                 accept="image/png,image/jpeg"
-                disabled={integracaoBloqueada}
+                disabled={camposPerfilMetaBloqueados}
                 onChange={(e) => handleSelecionarFoto(e.target.files?.[0] || null)}
                 />
 
@@ -1269,7 +1275,11 @@ export default function WhatsappPerfilPage() {
                 {previewFoto ? <img src={previewFoto} alt="" /> : "📷"}
                 </div>
 
-                <strong>Alterar foto</strong>
+                <strong>
+                  {perfilEditavelNoCrm
+                    ? "Alterar foto"
+                    : "Foto gerenciada no WhatsApp Business"}
+                </strong>
                 <div className={styles.numeroIntegracao}>
                   {integracaoSelecionada?.display_phone_number ||
                     integracaoSelecionada?.numero ||
@@ -1375,6 +1385,7 @@ export default function WhatsappPerfilPage() {
                   className={styles.input}
                   value={nomePerfil}
                   readOnly
+                  disabled={!perfilEditavelNoCrm}
                   title="O nome de exibição do WhatsApp passa por revisão do Meta."
                 />
 
@@ -1387,15 +1398,22 @@ export default function WhatsappPerfilPage() {
                     setNovoNomeExibicao(nomePerfil === "Empresa" ? "" : nomePerfil);
                     setModalNomeAberto(true);
                   }}
-                  disabled={!integracaoId || integracaoBloqueada}
+                  disabled={!integracaoId || camposPerfilMetaBloqueados}
                 >
                   Alterar nome
                 </button>
               </div>
             </label>
 
-            <label className={styles.fieldLabel}>
-              Nome da integração
+            <label
+              className={`${styles.fieldLabel} ${
+                !perfilEditavelNoCrm ? styles.integrationNameHighlight : ""
+              }`}
+            >
+              <span className={styles.integrationNameLabelRow}>
+                Nome da integração
+                {!perfilEditavelNoCrm && <b>Editável no CRM</b>}
+              </span>
               <input
                 className={styles.input}
                 value={nomeIntegracao}
@@ -1413,7 +1431,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={integracaoBloqueada}
+                disabled={camposPerfilMetaBloqueados}
                 placeholder="Insira o email comercial"
                 />
             </label>
@@ -1424,7 +1442,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={vertical}
                 onChange={(e) => setVertical(e.target.value)}
-                disabled={integracaoBloqueada}
+                disabled={camposPerfilMetaBloqueados}
                 >
                 {categorias.map((item) => (
                     <option key={item.value} value={item.value}>
@@ -1441,7 +1459,7 @@ export default function WhatsappPerfilPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 maxLength={256}
-                disabled={integracaoBloqueada}
+                disabled={camposPerfilMetaBloqueados}
                 placeholder="Descreva sua empresa."
                 />
             </label>
@@ -1452,7 +1470,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                disabled={integracaoBloqueada}
+                disabled={camposPerfilMetaBloqueados}
                 placeholder="Insira o edenreço comercial"
                 />
             </label>
@@ -1466,7 +1484,7 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={website1}
                 onChange={(e) => setWebsite1(e.target.value)}
-                disabled={integracaoBloqueada}
+                disabled={camposPerfilMetaBloqueados}
                 />
             </label>
 
@@ -1479,17 +1497,18 @@ export default function WhatsappPerfilPage() {
                 className={styles.input}
                 value={website2}
                 onChange={(e) => setWebsite2(e.target.value)}
-                disabled={integracaoBloqueada}
+                disabled={camposPerfilMetaBloqueados}
                 />
             </label>
             </div>
 
             {!perfilEditavelNoCrm && (
               <div className={styles.noticeBox}>
-                Este número está conectado por coexistência. Alguns dados do perfil não
-                podem ser editados pelo CRM. Use o botão <strong>Ajustar no Meta</strong>{" "}
-                para alterar o perfil diretamente no Gerenciador do WhatsApp ou no
-                WhatsApp Business App.
+                Este número está conectado por coexistência. Os dados do perfil
+                são gerenciados pelo WhatsApp Business e ficam bloqueados no CRM.
+                Somente o <strong>Nome da integração</strong> pode ser alterado aqui.
+                Para editar os demais dados, use <strong>Ajustar no Meta</strong> ou
+                o WhatsApp Business App.
               </div>
             )}
 

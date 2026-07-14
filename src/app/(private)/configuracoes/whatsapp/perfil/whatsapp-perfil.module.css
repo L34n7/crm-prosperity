@@ -131,6 +131,16 @@
   font-weight: 800;
 }
 
+.photoUploadBlocked {
+  cursor: default;
+}
+
+.photoUploadBlocked strong {
+  max-width: 240px;
+  color: var(--crm-text-muted);
+  text-align: center;
+}
+
 .numeroIntegracao {
   color: var(--crm-text-muted);
   font-size: 17px;
@@ -263,6 +273,49 @@
 .textarea:focus {
   border-color: var(--crm-primary-strong);
   box-shadow: var(--crm-focus-ring);
+}
+
+.input:disabled,
+.textarea:disabled {
+  border-color: var(--crm-border);
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-muted);
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.integrationNameHighlight {
+  margin: -10px;
+  padding: 10px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 16px;
+  background: var(--crm-primary-soft);
+  box-shadow: 0 8px 22px rgba(15, 118, 110, 0.08);
+}
+
+.integrationNameHighlight .input {
+  border-color: var(--crm-primary-strong);
+  background: var(--crm-surface);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.integrationNameLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.integrationNameLabelRow b {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .noticeBox {
