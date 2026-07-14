@@ -8004,7 +8004,7 @@ const templateFooterTexto = useMemo(() => {
                     {integracoesWhatsapp.map((integracao) => (
                       <option key={integracao.id} value={integracao.id}>
                         {integracao.nome_conexao || `Número ${integracao.posicao || ""}`}
-                        {integracao.numero ? ` - ${integracao.numero}` : " - pendente"}
+                        {integracao.numero ? ` ${integracao.numero}` : " pendente"}
                       </option>
                     ))}
                   </select>

@@ -4038,7 +4038,7 @@ export default function DisparosWhatsAppPage() {
                           <option value="">Selecione uma conexão</option>
                           {integracoes.map((item) => (
                             <option key={item.id} value={item.id}>
-                              {item.nome_conexao} {item.numero ? `- ${item.numero}` : ""}
+                              {item.nome_conexao} {item.numero || ""}
                             </option>
                           ))}
                         </select>

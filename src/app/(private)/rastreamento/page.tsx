@@ -979,7 +979,7 @@ export default function RastreamentoPage() {
                         <option value="">Informar numero manualmente</option>
                         {integracoes.map((integracao) => (
                           <option key={integracao.id} value={integracao.id}>
-                            {integracao.nome_conexao} - {integracao.numero}
+                            {integracao.nome_conexao} {integracao.numero}
                           </option>
                         ))}
                       </select>

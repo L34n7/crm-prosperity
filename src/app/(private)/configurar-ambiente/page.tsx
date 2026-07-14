@@ -417,6 +417,9 @@ export default function ConfigurarAmbientePage() {
   const [carregandoNichos, setCarregandoNichos] = useState(true);
   const [salvandoNicho, setSalvandoNicho] = useState(false);
   const [erroNicho, setErroNicho] = useState("");
+  const [nomeIntegracao, setNomeIntegracao] = useState("");
+  const [salvandoNomeIntegracao, setSalvandoNomeIntegracao] = useState(false);
+  const [erroNomeIntegracao, setErroNomeIntegracao] = useState("");
   const [guiaMetaAberto, setGuiaMetaAberto] = useState(false);
   const [guiaMetaFechandoRapido, setGuiaMetaFechandoRapido] = useState(false);
   const [cuidadosMetaAbertos, setCuidadosMetaAbertos] = useState(false);
@@ -739,13 +742,16 @@ export default function ConfigurarAmbientePage() {
         Number(integracaoAtualizada.posicao || 1) > 1
       ) {
         const indiceAtual = obterIndiceEtapaAtual(integracaoAtualizada);
-        const etapaSugerida = Math.min(
-          4,
-          Math.max(2, indiceAtual + 1)
-        );
+        const nomeJaDefinido =
+          Boolean(integracaoAtualizada.config_json?.nome_conexao_definido_em) ||
+          indiceAtual > 0;
+        const etapaSugerida = nomeJaDefinido
+          ? Math.min(4, Math.max(2, indiceAtual + 1))
+          : 1;
 
-        setEtapaQuiz((etapaAtual) =>
-          Math.max(etapaAtual, etapaSugerida)
+        setEtapaQuiz(etapaSugerida);
+        setNomeIntegracao(
+          nomeJaDefinido ? integracaoAtualizada.nome_conexao || "" : ""
         );
       }
 
@@ -1547,10 +1553,8 @@ async function salvarNichoEAvancar() {
     numeroRegistrado &&
     webhookConfigurado;
 
-  const totalEtapasQuiz = fluxoNumeroAdicional ? 3 : 4;
-  const etapaVisualQuiz = fluxoNumeroAdicional
-    ? Math.max(1, etapaQuiz - 1)
-    : etapaQuiz;
+  const totalEtapasQuiz = 4;
+  const etapaVisualQuiz = etapaQuiz;
   const progressoQuiz = Math.round(
     (etapaVisualQuiz / totalEtapasQuiz) * 100
   );
@@ -1560,14 +1564,56 @@ async function salvarNichoEAvancar() {
   }
 
   function voltarEtapaQuiz() {
-    if (fluxoNumeroAdicional && etapaQuiz <= 2) {
+    if (fluxoNumeroAdicional && etapaQuiz <= 1) {
       router.push("/configuracoes/whatsapp/perfil");
       return;
     }
 
     setEtapaQuiz((etapaAtual) =>
-      Math.max(etapaAtual - 1, fluxoNumeroAdicional ? 2 : 0)
+      Math.max(etapaAtual - 1, fluxoNumeroAdicional ? 1 : 0)
     );
+  }
+
+  async function salvarNomeIntegracaoEAvancar() {
+    const nome = nomeIntegracao.trim();
+
+    if (!integracao?.id || nome.length < 3 || nome.length > 80) {
+      setErroNomeIntegracao(
+        "Informe um nome entre 3 e 80 caracteres para identificar a integração."
+      );
+      return;
+    }
+
+    try {
+      setSalvandoNomeIntegracao(true);
+      setErroNomeIntegracao("");
+
+      const response = await fetch("/api/integracoes-whatsapp", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          integracao_id: integracao.id,
+          nome_conexao: nome,
+        }),
+      });
+      const data: ApiResponse = await response.json();
+
+      if (!response.ok || !data.ok || !data.integracao) {
+        throw new Error(data.error || "Não foi possível salvar o nome da integração.");
+      }
+
+      setIntegracao(data.integracao);
+      setNomeIntegracao(data.integracao.nome_conexao);
+      setEtapaQuiz(2);
+    } catch (error) {
+      setErroNomeIntegracao(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar o nome da integração."
+      );
+    } finally {
+      setSalvandoNomeIntegracao(false);
+    }
   }
   
   const textoBotaoAtualizarStatus =
@@ -1711,7 +1757,10 @@ return (
                   <h2 className={styles.quizTitle}>
                     {etapaQuiz === 0 &&
                       "Configuração do ambiente oficial do WhatsApp"}
-                    {etapaQuiz === 1 && "Segmento da empresa"}
+                    {etapaQuiz === 1 &&
+                      (fluxoNumeroAdicional
+                        ? "Identificar nova integração"
+                        : "Segmento da empresa")}
                     {etapaQuiz === 2 &&
                       (fluxoNumeroAdicional
                         ? "Conectar novo número do WhatsApp"
@@ -1860,6 +1909,75 @@ return (
                       }
                     >
                       {salvandoNicho ? "Salvando..." : "Avançar"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {fluxoNumeroAdicional && etapaQuiz === 1 && (
+                <div className={styles.quizContent}>
+                  <div className={styles.quizStepHeadingRow}>
+                    <div className={styles.quizStatusIcon}>1</div>
+
+                    <h3 className={styles.quizHeadline}>
+                      Como deseja identificar esta integração?
+                    </h3>
+                  </div>
+
+                  <p className={styles.quizText}>
+                    Use um nome fácil de reconhecer nos seletores do CRM, como
+                    Comercial, Suporte ou Unidade Centro.
+                  </p>
+
+                  <div className={styles.nichoSelectField}>
+                    <label htmlFor="nome-integracao-onboarding">
+                      Nome da integração
+                    </label>
+                    <input
+                      id="nome-integracao-onboarding"
+                      type="text"
+                      value={nomeIntegracao}
+                      maxLength={80}
+                      placeholder="Ex.: WhatsApp Comercial"
+                      onChange={(event) => {
+                        setNomeIntegracao(event.target.value);
+                        setErroNomeIntegracao("");
+                      }}
+                      disabled={salvandoNomeIntegracao}
+                      autoFocus
+                    />
+
+                    {erroNomeIntegracao && (
+                      <p className={styles.nichoSelectError}>
+                        {erroNomeIntegracao}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className={styles.quizActions}>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={voltarEtapaQuiz}
+                      disabled={salvandoNomeIntegracao}
+                    >
+                      Voltar
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        nomeIntegracao.trim().length >= 3
+                          ? styles.primaryButton
+                          : styles.disabledButton
+                      }
+                      onClick={salvarNomeIntegracaoEAvancar}
+                      disabled={
+                        salvandoNomeIntegracao ||
+                        nomeIntegracao.trim().length < 3
+                      }
+                    >
+                      {salvandoNomeIntegracao ? "Salvando..." : "Avançar"}
                     </button>
                   </div>
                 </div>

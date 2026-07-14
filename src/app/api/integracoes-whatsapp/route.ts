@@ -401,6 +401,7 @@ export async function POST() {
 type PatchIntegrationPayload = {
   integracao_id?: string;
   modo_integracao?: WhatsAppIntegrationMode;
+  nome_conexao?: string;
 };
 
 export async function PATCH(request: NextRequest) {
@@ -426,10 +427,27 @@ export async function PATCH(request: NextRequest) {
       | null;
     const integracaoId = String(body?.integracao_id || "").trim();
     const modoIntegracao = body?.modo_integracao;
+    const deveAtualizarModo = modoIntegracao !== undefined;
+    const deveAtualizarNome = body?.nome_conexao !== undefined;
+    const nomeConexao = String(body?.nome_conexao || "").trim();
 
-    if (!integracaoId || !isWhatsAppIntegrationMode(modoIntegracao)) {
+    if (
+      !integracaoId ||
+      (!deveAtualizarModo && !deveAtualizarNome) ||
+      (deveAtualizarModo && !isWhatsAppIntegrationMode(modoIntegracao))
+    ) {
       return NextResponse.json(
-        { ok: false, error: "Integração ou modo de integração inválido." },
+        { ok: false, error: "Dados da integração inválidos." },
+        { status: 400 }
+      );
+    }
+
+    if (deveAtualizarNome && (nomeConexao.length < 3 || nomeConexao.length > 80)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "O nome da integração deve ter entre 3 e 80 caracteres.",
+        },
         { status: 400 }
       );
     }
@@ -458,9 +476,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (
-      integracao.status === "ativa" ||
-      integracao.waba_id ||
-      integracao.phone_number_id
+      (deveAtualizarModo && integracao.status === "ativa") ||
+      (deveAtualizarModo && integracao.waba_id) ||
+      (deveAtualizarModo && integracao.phone_number_id)
     ) {
       if (integracao.modo_integracao === modoIntegracao) {
         return NextResponse.json({
@@ -480,18 +498,33 @@ export async function PATCH(request: NextRequest) {
     }
 
     const agora = new Date().toISOString();
+    const atualizacoes: Record<string, unknown> = {
+      updated_at: agora,
+    };
+
+    if (deveAtualizarNome) {
+      atualizacoes.nome_conexao = nomeConexao;
+      atualizacoes.config_json = {
+        ...(integracao.config_json && typeof integracao.config_json === "object"
+          ? integracao.config_json
+          : {}),
+        nome_conexao_definido_em: agora,
+      };
+    }
+
+    if (deveAtualizarModo) {
+      atualizacoes.modo_integracao = modoIntegracao;
+      atualizacoes.modo_integracao_escolhido_em = agora;
+      atualizacoes.coex_status =
+        modoIntegracao === "coexistence" ? "pendente" : null;
+      atualizacoes.is_on_biz_app = null;
+      atualizacoes.platform_type = null;
+      atualizacoes.onboarding_erro = null;
+    }
+
     const { data: atualizada, error: updateError } = await supabaseAdmin
       .from("integracoes_whatsapp")
-      .update({
-        modo_integracao: modoIntegracao,
-        modo_integracao_escolhido_em: agora,
-        coex_status:
-          modoIntegracao === "coexistence" ? "pendente" : null,
-        is_on_biz_app: null,
-        platform_type: null,
-        onboarding_erro: null,
-        updated_at: agora,
-      })
+      .update(atualizacoes)
       .eq("id", integracao.id)
       .eq("empresa_id", auth.usuario.empresa_id)
       .select("*")

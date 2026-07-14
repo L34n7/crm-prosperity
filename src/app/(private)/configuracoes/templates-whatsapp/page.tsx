@@ -592,7 +592,7 @@ export default function TemplatesWhatsAppPage() {
                             {integracoes.map((item) => (
                               <option key={item.id} value={item.id}>
                                 {item.nome_conexao}
-                                {item.numero ? ` - ${item.numero}` : ""}
+                                {item.numero ? ` ${item.numero}` : ""}
                               </option>
                             ))}
                           </select>
@@ -961,7 +961,7 @@ export default function TemplatesWhatsAppPage() {
                       {integracoes.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.nome_conexao}
-                          {item.numero ? ` - ${item.numero}` : ""}
+                          {item.numero ? ` ${item.numero}` : ""}
                         </option>
                       ))}
                     </select>

@@ -254,6 +254,8 @@ export default function WhatsappPerfilPage() {
   const [integracoes, setIntegracoes] = useState<Integracao[]>([]);
   const [integracaoId, setIntegracaoId] = useState("");
   const [perfil, setPerfil] = useState<PerfilWhatsapp | null>(null);
+  const [nomeIntegracao, setNomeIntegracao] = useState("");
+  const [nomeIntegracaoOriginal, setNomeIntegracaoOriginal] = useState("");
 
   const [about, setAbout] = useState("");
   const [address, setAddress] = useState("");
@@ -355,7 +357,7 @@ export default function WhatsappPerfilPage() {
     integracaoSelecionada?.phone_number_status
   );
 
-  const haAlteracoesPerfil = dadosPerfilForamAlterados({
+  const haAlteracoesMeta = dadosPerfilForamAlterados({
     perfil,
     about,
     address,
@@ -366,6 +368,9 @@ export default function WhatsappPerfilPage() {
     vertical,
     foto,
   });
+  const nomeIntegracaoAlterado =
+    nomeIntegracao.trim() !== nomeIntegracaoOriginal.trim();
+  const haAlteracoesPerfil = haAlteracoesMeta || nomeIntegracaoAlterado;
 
   async function carregarPerfil(
     id?: string,
@@ -443,6 +448,9 @@ export default function WhatsappPerfilPage() {
       const novaIntegracaoId = integracaoAtualizada?.id || "";
 
       setIntegracaoId(novaIntegracaoId);
+      const novoNomeIntegracao = integracaoAtualizada?.nome_conexao || "";
+      setNomeIntegracao(novoNomeIntegracao);
+      setNomeIntegracaoOriginal(novoNomeIntegracao);
 
       const novoPerfil = json.perfil || null;
       setPerfil(novoPerfil);
@@ -530,9 +538,16 @@ export default function WhatsappPerfilPage() {
       setErro("");
       setSucesso("");
 
-      const formData = new FormData();
+      const nomeConexao = nomeIntegracao.trim();
 
-      formData.delete("display_name");
+      if (nomeIntegracaoAlterado && (nomeConexao.length < 3 || nomeConexao.length > 80)) {
+        throw new Error("O nome da integração deve ter entre 3 e 80 caracteres.");
+      }
+
+      if (haAlteracoesMeta) {
+        const formData = new FormData();
+
+        formData.delete("display_name");
       formData.delete("verified_name");
       formData.delete("nome_exibicao");
       formData.delete("nome");
@@ -588,19 +603,36 @@ export default function WhatsappPerfilPage() {
         );
       }
 
-      const res = await fetch("/api/whatsapp/perfil", {
-        method: "PATCH",
-        body: formData,
-      });
+        const res = await fetch("/api/whatsapp/perfil", {
+          method: "PATCH",
+          body: formData,
+        });
 
-      const json = await res.json();
+        const json = await res.json();
 
-      if (!res.ok || !json.ok) {
-        setDiagnosticoWhatsapp(json.diagnostico || null);
-        throw new Error(json.error || "Erro ao salvar perfil.");
+        if (!res.ok || !json.ok) {
+          setDiagnosticoWhatsapp(json.diagnostico || null);
+          throw new Error(json.error || "Erro ao salvar perfil.");
+        }
       }
 
-      setSucesso(json.message || "Perfil do WhatsApp atualizado com sucesso.");
+      if (nomeIntegracaoAlterado) {
+        const resNome = await fetch("/api/integracoes-whatsapp", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            integracao_id: integracaoId,
+            nome_conexao: nomeConexao,
+          }),
+        });
+        const jsonNome = await resNome.json();
+
+        if (!resNome.ok || !jsonNome.ok) {
+          throw new Error(jsonNome.error || "Erro ao salvar o nome da integração.");
+        }
+      }
+
+      setSucesso("Alterações salvas com sucesso.");
       await carregarPerfil(integracaoId, { preservarMensagens: true });
     } catch (error: unknown) {
       setErro(getErrorMessage(error, "Erro ao salvar perfil."));
@@ -1173,10 +1205,10 @@ export default function WhatsappPerfilPage() {
                   >
                     {integracoes.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.phone_number_display_name ||
-                          item.verified_name ||
-                          item.nome_conexao}
-                        {item.numero ? ` - ${item.numero}` : ""}
+                        {item.nome_conexao ||
+                          item.phone_number_display_name ||
+                          item.verified_name}
+                        {item.numero ? ` ${item.numero}` : ""}
                       </option>
                     ))}
                   </select>
@@ -1261,7 +1293,7 @@ export default function WhatsappPerfilPage() {
             )}
 
             <div className={styles.formGrid}>
-            <label className={styles.fieldLabelFull}>
+            <label className={styles.fieldLabel}>
               Nome de exibição
               <div className={styles.nameRow}>
                 <input
@@ -1285,6 +1317,19 @@ export default function WhatsappPerfilPage() {
                   Alterar nome
                 </button>
               </div>
+            </label>
+
+            <label className={styles.fieldLabel}>
+              Nome da integração
+              <input
+                className={styles.input}
+                value={nomeIntegracao}
+                minLength={3}
+                maxLength={80}
+                onChange={(e) => setNomeIntegracao(e.target.value)}
+                placeholder="Ex.: WhatsApp Comercial"
+                disabled={!integracaoId || carregando}
+              />
             </label>
 
             <label className={styles.fieldLabel}>
@@ -1428,7 +1473,7 @@ export default function WhatsappPerfilPage() {
                     !integracaoId ||
                     integracaoBloqueada ||
                     !haAlteracoesPerfil ||
-                    !perfilEditavelNoCrm
+                    (haAlteracoesMeta && !perfilEditavelNoCrm)
                   }
                 >
                   {salvando ? "Salvando..." : "Salvar alterações"}
