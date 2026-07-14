@@ -48,20 +48,17 @@ type UsuarioPerfilRow = {
   perfis_empresa: PerfilDinamicoRow | PerfilDinamicoRow[] | null;
 };
 
+type PlanoRelacionadoRow = {
+  id?: string;
+  nome?: string | null;
+  slug?: string | null;
+  limite_usuarios?: number | null;
+};
+
 type PlanoEmpresaRow = {
   id: string;
-  planos:
-    | {
-        id?: string;
-        nome?: string | null;
-        slug?: string | null;
-      }
-    | Array<{
-        id?: string;
-        nome?: string | null;
-        slug?: string | null;
-      }>
-    | null;
+  limite_usuarios?: number | null;
+  planos: PlanoRelacionadoRow | PlanoRelacionadoRow[] | null;
 };
 
 type EmpresaConviteRow = {
@@ -399,16 +396,22 @@ function obterLimitesPlanoEmpresa(plano: PlanoEmpresaRow["planos"]) {
   );
 }
 
+function obterPlanoRelacionado(plano: PlanoEmpresaRow["planos"]) {
+  return Array.isArray(plano) ? plano[0] ?? null : plano;
+}
+
 async function validarLimiteUsuariosDoPlano(empresaId: string) {
-  const { data: empresa, error: empresaError } = await supabaseAdmin
+  const { data: empresaData, error: empresaError } = await supabaseAdmin
     .from("empresas")
     .select(
       `
       id,
+      limite_usuarios,
       planos (
         id,
         nome,
-        slug
+        slug,
+        limite_usuarios
       )
     `
     )
@@ -418,25 +421,44 @@ async function validarLimiteUsuariosDoPlano(empresaId: string) {
   if (empresaError) {
     return {
       ok: false as const,
-      error: `Erro ao validar plano da empresa: ${empresaError.message}`,
+      error: `Erro ao validar limite de usuários: ${empresaError.message}`,
       status: 500 as const,
     };
   }
 
-  if (!empresa) {
+  if (!empresaData) {
     return {
       ok: false as const,
-      error: "Empresa nao encontrada",
+      error: "Empresa não encontrada",
       status: 404 as const,
     };
   }
 
-  const limitesPlano = obterLimitesPlanoEmpresa(
-    (empresa as PlanoEmpresaRow).planos
-  );
+  const empresa = empresaData as PlanoEmpresaRow;
+  const planoRelacionado = obterPlanoRelacionado(empresa.planos);
 
-  if (!limitesPlano?.limiteUsuarios) {
-    return { ok: true as const };
+  const limitesFixosDoCodigo = obterLimitesPlanoEmpresa(empresa.planos);
+
+  const limiteUsuariosDoPlano =
+    planoRelacionado?.limite_usuarios ??
+    limitesFixosDoCodigo?.limiteUsuarios ??
+    null;
+
+  const limiteUsuariosEfetivo =
+    empresa.limite_usuarios ??
+    limiteUsuariosDoPlano;
+
+  /*
+   * Se nenhum limite foi definido no banco nem no código,
+   * permite criar o usuário.
+   */
+  if (limiteUsuariosEfetivo === null) {
+    return {
+      ok: true as const,
+      limiteUsuariosEfetivo: null,
+      limiteUsuariosDoPlano,
+      limiteUsuariosPersonalizado: empresa.limite_usuarios ?? null,
+    };
   }
 
   const { count, error: usuariosError } = await supabaseAdmin
@@ -448,24 +470,33 @@ async function validarLimiteUsuariosDoPlano(empresaId: string) {
   if (usuariosError) {
     return {
       ok: false as const,
-      error: `Erro ao validar limite de usuarios: ${usuariosError.message}`,
+      error: `Erro ao contar usuários ativos: ${usuariosError.message}`,
       status: 500 as const,
     };
   }
 
-  if ((count ?? 0) >= limitesPlano.limiteUsuarios) {
-    const nomePlano =
-      limitesPlano.limiteUsuarios === 2 ? "Basic" : "Essencial";
+  const quantidadeUsuariosAtivos = count ?? 0;
+
+  if (quantidadeUsuariosAtivos >= limiteUsuariosEfetivo) {
+    const usaLimitePersonalizado =
+      empresa.limite_usuarios !== null &&
+      empresa.limite_usuarios !== undefined;
 
     return {
       ok: false as const,
-      error:
-        `Limite do plano ${nomePlano} atingido: este plano permite no maximo ${limitesPlano.limiteUsuarios} usuarios ativos.`,
+      error: usaLimitePersonalizado
+        ? `Limite de usuários atingido. Esta empresa permite no máximo ${limiteUsuariosEfetivo} usuários ativos.`
+        : `Limite do plano atingido. O plano atual permite no máximo ${limiteUsuariosEfetivo} usuários ativos.`,
       status: 403 as const,
     };
   }
 
-  return { ok: true as const };
+  return {
+    ok: true as const,
+    limiteUsuariosEfetivo,
+    limiteUsuariosDoPlano,
+    limiteUsuariosPersonalizado: empresa.limite_usuarios ?? null,
+  };
 }
 
 export async function GET() {
@@ -521,15 +552,17 @@ export async function GET() {
   }
 
   const usuariosBase = data ?? [];
-  const { data: empresa, error: empresaError } = await supabaseAdmin
+  const { data: empresaData, error: empresaError } = await supabaseAdmin
     .from("empresas")
     .select(
       `
       id,
+      limite_usuarios,
       planos (
         id,
         nome,
-        slug
+        slug,
+        limite_usuarios
       )
     `
     )
@@ -543,9 +576,30 @@ export async function GET() {
     );
   }
 
-  const limitesPlano = empresa
-    ? obterLimitesPlanoEmpresa((empresa as PlanoEmpresaRow).planos)
+  const empresa = empresaData
+    ? (empresaData as PlanoEmpresaRow)
     : null;
+
+  const planoRelacionado = empresa
+    ? obterPlanoRelacionado(empresa.planos)
+    : null;
+
+  const limitesFixosDoCodigo = empresa
+    ? obterLimitesPlanoEmpresa(empresa.planos)
+    : null;
+
+  const limiteUsuariosDoPlano =
+    planoRelacionado?.limite_usuarios ??
+    limitesFixosDoCodigo?.limiteUsuarios ??
+    null;
+
+  const limiteUsuariosPersonalizado =
+    empresa?.limite_usuarios ?? null;
+
+  const limiteUsuariosEfetivo =
+    limiteUsuariosPersonalizado ??
+    limiteUsuariosDoPlano;
+
   const quantidadeUsuariosAtivos = usuariosBase.filter(
     (item) => item.status === "ativo"
   ).length;
@@ -597,7 +651,15 @@ export async function GET() {
     ok: true,
     usuarios: usuariosFiltrados,
     quantidade_usuarios_ativos: quantidadeUsuariosAtivos,
-    limite_usuarios_plano: limitesPlano?.limiteUsuarios ?? null,
+
+    // Limite original definido pelo plano.
+    limite_usuarios_plano: limiteUsuariosDoPlano,
+
+    // Limite especial definido diretamente para esta empresa.
+    limite_usuarios_personalizado: limiteUsuariosPersonalizado,
+
+    // Limite que realmente deve aparecer e ser utilizado.
+    limite_usuarios_efetivo: limiteUsuariosEfetivo,
   });
 }
 
