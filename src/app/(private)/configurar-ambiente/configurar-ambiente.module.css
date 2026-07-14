@@ -793,7 +793,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(260px, 1fr));
   gap: 16px;
-  margin: 24px 0 20;
+  margin: 5px 0 20;
 }
 
 .quizInfoBox {
@@ -837,7 +837,7 @@
 
 .coexSyncPanel {
   width: 100%;
-  margin: 20px 0 4px;
+  margin: 0px 0 4px;
   padding: 18px;
   border: 1px solid var(--crm-border);
   border-radius: 20px;

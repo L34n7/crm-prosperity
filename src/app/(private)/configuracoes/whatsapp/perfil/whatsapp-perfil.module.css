@@ -1050,15 +1050,15 @@
 }
 
 .disconnectChoiceCardIntegration1 {
-  background: var(--conversationItem);
+  background: var(--crm-bottom-Hover);
 }
 
 .disconnectChoiceCardIntegration2 {
-  background: var(--conversationItem2);
+  background: var(--crm-bottom-Hover2);
 }
 
 .disconnectChoiceCardIntegration3 {
-  background: var(--conversationItem3);
+  background: var(--crm-bottom-Hover3);
 }
 
 .disconnectChoiceCard .connectionAvatar {
