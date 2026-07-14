@@ -1231,6 +1231,8 @@ export default function WhatsappPerfilPage() {
               className={styles.formArea}
               onSubmit={salvarPerfil}
             >
+            <div className={styles.profileDesktopGrid}>
+            <aside className={styles.profileSummaryColumn}>
 
             <div className={styles.profileHero}>
               {deveMostrarControlesMultiIntegracao && integracoes.length > 1 && (
@@ -1329,6 +1331,38 @@ export default function WhatsappPerfilPage() {
                 </div>
               </div>
             )}
+
+            <a
+              className={`${styles.metaButton} ${styles.summaryMetaButton}`}
+              href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ajustar no Meta
+            </a>
+
+            <div className={styles.summaryConnectionActions}>
+              <button
+                type="button"
+                className={styles.disconnectButton}
+                onClick={abrirModalDesconexao}
+                disabled={!integracaoId || carregando || desconectando}
+              >
+                Desconectar integração
+              </button>
+
+              <button
+                type="button"
+                className={styles.addNumberButton}
+                onClick={cadastrarNovaIntegracao}
+                disabled={cadastrandoIntegracao}
+              >
+                {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
+              </button>
+            </div>
+            </aside>
+
+            <section className={styles.profileFieldsColumn}>
 
             <div className={styles.formGrid}>
             <label className={styles.fieldLabel}>
@@ -1463,45 +1497,7 @@ export default function WhatsappPerfilPage() {
             )}
 
             <div className={styles.saveArea}>
-              <div className={styles.saveLeftActions}>
-                <button
-                  type="button"
-                  className={styles.disconnectButton}
-                  onClick={abrirModalDesconexao}
-                  disabled={!integracaoId || carregando || desconectando}
-                >
-                  Desconectar integração
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.addNumberButton}
-                  onClick={cadastrarNovaIntegracao}
-                  disabled={cadastrandoIntegracao}
-                >
-                  {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
-                </button>
-              </div>
-
-              <button
-                type="button"
-                className={`${styles.disconnectButton} ${styles.hiddenLegacyConnectionArea}`}
-                onClick={abrirModalDesconexao}
-                disabled={!integracaoId || carregando || desconectando}
-              >
-                Desconectar integração
-              </button>
-
               <div className={styles.saveActions}>
-                <a
-                  className={styles.metaButton}
-                  href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Ajustar no Meta
-                </a>
-
                 <button
                   type="submit"
                   className={styles.saveButton}
@@ -1517,6 +1513,8 @@ export default function WhatsappPerfilPage() {
                   {salvando ? "Salvando..." : "Salvar alterações"}
                 </button>
               </div>
+            </div>
+            </section>
             </div>
             </form>
           </aside>
