@@ -7894,6 +7894,26 @@ const templateFooterTexto = useMemo(() => {
 
               {filtrosAbertos && (
                 <>
+                  {integracoesWhatsapp.length > 1 && (
+                    <div className={styles.integrationFilterRow}>
+                      <select
+                        className={styles.integrationFilterSelect}
+                        value={integracaoWhatsappFiltro}
+                        onChange={(event) =>
+                          setIntegracaoWhatsappFiltro(event.target.value)
+                        }
+                      >
+                        <option value="todos">Todos os números</option>
+                        {integracoesWhatsapp.map((integracao) => (
+                          <option key={integracao.id} value={integracao.id}>
+                            {integracao.nome_conexao || `Número ${integracao.posicao || ""}`}
+                            {integracao.numero ? ` ${integracao.numero}` : " pendente"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  
                   <div className={styles.filtersGrid}>
                     <select
                       value={statusFiltro}
@@ -7989,26 +8009,6 @@ const templateFooterTexto = useMemo(() => {
                     </button>
                   </div>
                 </>
-              )}
-              
-              {integracoesWhatsapp.length > 1 && (
-                <div className={styles.integrationFilterRow}>
-                  <select
-                    className={styles.integrationFilterSelect}
-                    value={integracaoWhatsappFiltro}
-                    onChange={(event) =>
-                      setIntegracaoWhatsappFiltro(event.target.value)
-                    }
-                  >
-                    <option value="todos">Todos os números</option>
-                    {integracoesWhatsapp.map((integracao) => (
-                      <option key={integracao.id} value={integracao.id}>
-                        {integracao.nome_conexao || `Número ${integracao.posicao || ""}`}
-                        {integracao.numero ? ` ${integracao.numero}` : " pendente"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               )}
 
               <div className={styles.quickFilters}>

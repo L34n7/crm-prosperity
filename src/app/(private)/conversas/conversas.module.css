@@ -215,8 +215,8 @@
 .filtersGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px 10px;
-  margin-top: 12px;
+  gap: 10px 10px;
+  margin-top: 4px;
   padding-top: 8px;
 }
 
@@ -416,7 +416,7 @@
 }
 
 .integrationFilterRow {
-  padding: 0 12px 10px;
+  padding: 10px 0px 0px;
 }
 
 .integrationFilterSelect {

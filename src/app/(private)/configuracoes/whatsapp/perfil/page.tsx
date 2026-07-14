@@ -1173,14 +1173,13 @@ export default function WhatsappPerfilPage() {
             {onboardingIncompleto && (
               <div className={styles.diagnosticAlert}>
                 <div className={styles.diagnosticHeader}>
-                  <span>WhatsApp</span>
                   <strong>Configuração ainda não concluída</strong>
-                </div>
 
-                <p>
-                  Conclua o onboarding para consultar e editar o perfil
-                  comercial na Meta.
-                </p>
+                  <p>
+                    Conclua o onboarding para consultar e editar o perfil
+                    comercial na Meta.
+                  </p>
+                </div>
 
                 <div className={styles.diagnosticActions}>
                   <a href={onboardingRedirect}>

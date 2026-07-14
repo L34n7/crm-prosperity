@@ -4,7 +4,7 @@
 }
 
 .whatsappShell {
-  max-width: 1320px;
+  max-width: 1420px;
   margin: 0 auto;
   background: var(--crm-surface);
   border: 1px solid var(--crm-border);
@@ -44,7 +44,7 @@
 }
 
 .formArea {
-  padding: 18px 28px 28px;
+  padding: 28px 28px 28px;
 }
 
 .profileDesktopGrid {
@@ -355,7 +355,8 @@
   border: 1px solid var(--crm-danger-border);
 }
 
-.diagnosticAlert {
+.diagnosticAlert {  grid-template-columns: repeat(2, minmax(0, 1fr));
+
   margin: 12px 28px 0;
   border: 1px solid var(--crm-danger-border);
   background: var(--crm-danger-bg);
@@ -391,16 +392,17 @@
 }
 
 .diagnosticActions {
-  display: flex;
+  display: inline-flex;
+  align-items: center;
+  justify-content: right;
   flex-wrap: wrap;
-  gap: 8px;
 }
 
 .diagnosticActions a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
+  height: 34px;
   border: 1px solid var(--crm-danger-border);
   border-radius: 8px;
   background: var(--crm-danger-strong);
