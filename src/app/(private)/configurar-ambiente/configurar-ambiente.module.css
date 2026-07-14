@@ -395,19 +395,41 @@
 }
 
 .novaIntegracaoModal {
-  max-width: 820px;
+  max-width: 880px;
   padding: 0;
   overflow: hidden;
 }
 
 .novaIntegracaoHeader {
-  padding: 22px;
+  padding: 24px 26px;
   border-bottom: 1px solid var(--crm-border);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  background: var(--crm-surface);
+  background:
+    radial-gradient(circle at 8% 20%, rgba(16, 185, 129, 0.14), transparent 32%),
+    var(--crm-surface);
+}
+
+.novaIntegracaoHeaderContent {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.novaIntegracaoSuccessIcon {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--crm-success-text);
+  background: var(--crm-success-bg);
+  border: 1px solid var(--crm-success-border);
+  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.13);
 }
 
 .novaIntegracaoHeader span {
@@ -419,10 +441,11 @@
 }
 
 .novaIntegracaoHeader h2 {
-  margin: 4px 0 6px;
+  margin: 3px 0 5px;
   color: var(--crm-text-strong);
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 900;
+  letter-spacing: -0.025em;
 }
 
 .novaIntegracaoHeader p {
@@ -445,10 +468,55 @@
   cursor: pointer;
 }
 
-.novaIntegracaoGrid {
-  padding: 22px;
+.novaIntegracaoBody {
+  padding: 20px 24px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.novaIntegracaoReadyBanner {
+  padding: 14px 16px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 16px;
+  background: var(--crm-success-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.novaIntegracaoReadyBanner strong,
+.novaIntegracaoReadyBanner p {
+  color: var(--crm-success-text);
+}
+
+.novaIntegracaoReadyBanner strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.novaIntegracaoReadyBanner p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.novaIntegracaoReadyBanner > span {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--crm-success-text);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.novaIntegracaoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -456,9 +524,10 @@
   border: 1px solid var(--crm-border);
   border-radius: 16px;
   background: var(--crm-surface-soft);
-  padding: 15px;
-  display: grid;
-  gap: 8px;
+  padding: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .novaIntegracaoGrid strong {
@@ -474,22 +543,132 @@
   line-height: 1.5;
 }
 
-.novaIntegracaoWarning {
-  border-color: var(--crm-warning-border) !important;
-  background: var(--crm-warning-bg) !important;
+.novaIntegracaoFeatureIcon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
 }
 
-.novaIntegracaoWarning strong,
-.novaIntegracaoWarning p {
+.novaIntegracaoFlowAlert {
+  padding: 18px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 96% 12%, rgba(245, 158, 11, 0.13), transparent 34%),
+    var(--crm-warning-bg);
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.novaIntegracaoFlowIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
   color: var(--crm-warning-text);
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-warning-border);
+}
+
+.novaIntegracaoFlowContent > span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--crm-warning-text);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.novaIntegracaoFlowContent h3 {
+  margin: 0 0 5px;
+  color: var(--crm-text-strong);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.novaIntegracaoFlowContent > p {
+  margin: 0;
+  color: var(--crm-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.novaIntegracaoChecklist {
+  margin-top: 13px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.novaIntegracaoChecklist > div {
+  padding: 9px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--crm-surface) 82%, transparent);
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.novaIntegracaoChecklist b {
+  width: 21px;
+  height: 21px;
+  flex: 0 0 21px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--crm-warning-text);
+  color: var(--crm-surface);
+  font-size: 10px;
+}
+
+.novaIntegracaoChecklist span {
+  color: var(--crm-text);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.novaIntegracaoWabaAlert {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-warning-text);
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.novaIntegracaoWabaAlert svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 .novaIntegracaoActions {
-  padding: 0 22px 22px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.novaIntegracaoActions .primaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 
@@ -1839,7 +2018,44 @@
     grid-template-columns: 1fr;
   }
 
+  .novaIntegracaoHeader {
+    padding: 18px;
+  }
+
+  .novaIntegracaoHeaderContent {
+    align-items: flex-start;
+  }
+
+  .novaIntegracaoSuccessIcon {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+    border-radius: 14px;
+  }
+
+  .novaIntegracaoHeader h2 {
+    font-size: 21px;
+  }
+
+  .novaIntegracaoBody {
+    padding: 16px;
+  }
+
+  .novaIntegracaoReadyBanner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .novaIntegracaoFlowAlert {
+    grid-template-columns: 1fr;
+  }
+
+  .novaIntegracaoChecklist {
+    grid-template-columns: 1fr;
+  }
+
   .novaIntegracaoActions {
+    padding: 14px 16px 18px;
     flex-direction: column-reverse;
   }
 

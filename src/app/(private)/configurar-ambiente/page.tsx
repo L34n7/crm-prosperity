@@ -8,7 +8,17 @@ import FeedbackToast from "@/components/FeedbackToast";
 import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
-import { AlertTriangle, ChevronDown, Moon, Sun, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  MessagesSquare,
+  Moon,
+  Route,
+  Sun,
+  Workflow,
+  X,
+} from "lucide-react";
 
 declare global {
   interface Window {
@@ -2561,48 +2571,103 @@ return (
             aria-labelledby="titulo-nova-integracao"
           >
             <div className={styles.novaIntegracaoHeader}>
-              <div>
-                <span>WhatsApp conectado</span>
-                <h2 id="titulo-nova-integracao">Novo número cadastrado</h2>
-                <p>
-                  O ambiente agora pode receber conversas e executar fluxos por
-                  mais de uma integração.
-                </p>
+              <div className={styles.novaIntegracaoHeaderContent}>
+                <div className={styles.novaIntegracaoSuccessIcon}>
+                  <CheckCircle2 size={28} />
+                </div>
+
+                <div>
+                  <span>WhatsApp conectado com sucesso</span>
+                  <h2 id="titulo-nova-integracao">Novo número cadastrado</h2>
+                  <p>
+                    A nova integração já está pronta para receber conversas e
+                    trabalhar junto com o número anterior.
+                  </p>
+                </div>
               </div>
 
               <button
                 type="button"
                 className={styles.novaIntegracaoClose}
                 onClick={() => setModalNovaIntegracaoAberto(false)}
+                aria-label="Fechar"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className={styles.novaIntegracaoGrid}>
-              <div>
-                <strong>Conversas omnichannel</strong>
-                <p>
-                  As conversas dos números liberados aparecem juntas, mantendo a
-                  identificação visual por integração.
-                </p>
+            <div className={styles.novaIntegracaoBody}>
+              <div className={styles.novaIntegracaoReadyBanner}>
+                <div>
+                  <strong>Seus dois números estão disponíveis no CRM</strong>
+                  <p>
+                    As conversas permanecem organizadas e identificadas pela
+                    cor de cada integração.
+                  </p>
+                </div>
+                <span>2 canais ativos</span>
               </div>
 
-              <div>
-                <strong>Fluxos continuam ativos</strong>
-                <p>
-                  Fluxos configurados para todas as integrações seguem
-                  funcionando também para o novo número.
-                </p>
+              <div className={styles.novaIntegracaoGrid}>
+                <div>
+                  <span className={styles.novaIntegracaoFeatureIcon}>
+                    <MessagesSquare size={20} />
+                  </span>
+                  <div>
+                    <strong>Conversas centralizadas</strong>
+                    <p>
+                      Mensagens dos dois números aparecem na mesma página de
+                      atendimento.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <span className={styles.novaIntegracaoFeatureIcon}>
+                    <Route size={20} />
+                  </span>
+                  <div>
+                    <strong>Identificação por integração</strong>
+                    <p>
+                      Você consegue reconhecer rapidamente por qual número cada
+                      conversa foi recebida.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className={novaIntegracaoWabaDiferente ? styles.novaIntegracaoWarning : ""}>
-                <strong>Templates por WABA</strong>
-                <p>
-                  {novaIntegracaoWabaDiferente
-                    ? "A nova WABA precisa de templates próprios nos blocos Agendar disparo."
-                    : "Se futuramente usar outra WABA, revise templates dos blocos Agendar disparo."}
-                </p>
+              <div className={styles.novaIntegracaoFlowAlert}>
+                <div className={styles.novaIntegracaoFlowIcon}>
+                  <Workflow size={24} />
+                </div>
+
+                <div className={styles.novaIntegracaoFlowContent}>
+                  <span>Ação importante</span>
+                  <h3>Revise os templates e destinos dos seus fluxos</h3>
+                  <p>
+                    Os fluxos existentes podem continuar vinculados somente ao
+                    número anterior. Para disparar pelos dois números, abra cada
+                    fluxo e confira a integração e o template selecionados nos
+                    blocos de envio ou agendamento.
+                  </p>
+
+                  <div className={styles.novaIntegracaoChecklist}>
+                    <div><b>1</b><span>Escolha quais integrações executarão o fluxo</span></div>
+                    <div><b>2</b><span>Selecione o template correspondente em cada número</span></div>
+                    <div><b>3</b><span>Salve e publique novamente o fluxo</span></div>
+                  </div>
+
+                  {novaIntegracaoWabaDiferente && (
+                    <div className={styles.novaIntegracaoWabaAlert}>
+                      <AlertTriangle size={18} />
+                      <span>
+                        Este número utiliza outra WABA. Os templates da conta
+                        anterior não são compartilhados automaticamente; use o
+                        template equivalente cadastrado na nova WABA.
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2612,7 +2677,7 @@ return (
                 className={styles.secondaryButton}
                 onClick={() => setModalNovaIntegracaoAberto(false)}
               >
-                Entendi
+                Revisar depois
               </button>
 
               <button
@@ -2620,7 +2685,8 @@ return (
                 className={styles.primaryButton}
                 onClick={() => router.push("/fluxos")}
               >
-                Revisar fluxos
+                <Workflow size={17} />
+                Revisar fluxos agora
               </button>
             </div>
           </div>
