@@ -597,7 +597,7 @@
 .novaIntegracaoFlowContent > p {
   margin: 0;
   color: var(--crm-text);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -631,7 +631,7 @@
 
 .novaIntegracaoChecklist span {
   color: var(--crm-text);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 750;
   line-height: 1.35;
 }
