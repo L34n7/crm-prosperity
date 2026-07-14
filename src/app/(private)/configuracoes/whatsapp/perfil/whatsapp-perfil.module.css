@@ -49,7 +49,7 @@
 
 .profileDesktopGrid {
   display: grid;
-  grid-template-columns: minmax(400px, 450px) minmax(0, 1fr);
+  grid-template-columns: minmax(550px, 450px) minmax(0, 1fr);
   gap: 24px;
   align-items: stretch;
 }
@@ -99,8 +99,8 @@
 }
 
 .photoUploadPreview {
-  width: 150px;
-  height: 150px;
+  width: 200px;
+  height: 200px;
   border-radius: 999px;
   overflow: hidden;
   background: var(--crm-primary-soft);
