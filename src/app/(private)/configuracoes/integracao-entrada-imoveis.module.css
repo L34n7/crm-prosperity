@@ -1,0 +1,11 @@
+.sectionWrap {
+  width: min(1080px, calc(100% - 40px));
+  margin: -24px auto 42px;
+}
+
+@media (max-width: 720px) {
+  .sectionWrap {
+    width: min(100% - 24px, 1080px);
+    margin-top: -24px;
+  }
+}
