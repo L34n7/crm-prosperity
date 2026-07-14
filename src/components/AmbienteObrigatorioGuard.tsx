@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   isAmbienteConfigurado,
   type IntegracaoWhatsappAmbiente,
@@ -11,6 +11,7 @@ import styles from "./AmbienteObrigatorioGuard.module.css";
 type ApiResponse = {
   ok: boolean;
   configurado?: boolean;
+  possui_integracao_configurada?: boolean;
   integracao?: IntegracaoWhatsappAmbiente | null;
   error?: string;
 };
@@ -38,6 +39,7 @@ function salvarAmbienteConfiguradoEmCache(configurado: boolean) {
 export default function AmbienteObrigatorioGuard() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [carregando, setCarregando] = useState(true);
   const [recarregando, setRecarregando] = useState(false);
@@ -45,6 +47,9 @@ export default function AmbienteObrigatorioGuard() {
     useState<IntegracaoWhatsappAmbiente | null>(null);
 
   const estaNaPaginaConfiguracao = pathname === "/configurar-ambiente";
+  const fluxoNovoNumero =
+    searchParams.get("fluxo") === "novo-numero" ||
+    Boolean(searchParams.get("integracao_id"));
   const [ambienteConfiguradoLocal, setAmbienteConfiguradoLocal] = useState(false);
 
   const ambienteConfigurado = useMemo(() => {
@@ -62,26 +67,30 @@ export default function AmbienteObrigatorioGuard() {
 
         const response = await fetch("/api/integracoes-whatsapp/status", {
           method: "GET",
-          cache: modoManual ? "no-store" : "default",
+          cache: "no-store",
         });
 
         const data = (await response.json()) as ApiResponse;
 
         if (!response.ok || !data.ok) {
           setIntegracao(null);
-          return;
+          return false;
         }
 
         const proximaIntegracao = data.integracao || null;
         setIntegracao(proximaIntegracao);
 
         const proximoConfigurado =
-          data.configurado === true || isAmbienteConfigurado(proximaIntegracao);
+          data.possui_integracao_configurada === true ||
+          data.configurado === true ||
+          isAmbienteConfigurado(proximaIntegracao);
 
         salvarAmbienteConfiguradoEmCache(proximoConfigurado);
         setAmbienteConfiguradoLocal(proximoConfigurado);
+        return proximoConfigurado;
       } catch (error) {
         console.warn("[AMBIENTE GUARD] Erro ao verificar ambiente:", error);
+        return false;
       } finally {
         setCarregando(false);
         setRecarregando(false);
@@ -110,7 +119,16 @@ export default function AmbienteObrigatorioGuard() {
 
   useEffect(() => {
     if (estaNaPaginaConfiguracao) {
-      setCarregando(false);
+      if (fluxoNovoNumero) {
+        setCarregando(false);
+        return;
+      }
+
+      void verificarAmbiente(false, true).then((configurado) => {
+        if (configurado) {
+          router.replace("/configuracoes/whatsapp/perfil");
+        }
+      });
       return;
     }
 
@@ -123,8 +141,14 @@ export default function AmbienteObrigatorioGuard() {
       return;
     }
 
-    verificarAmbiente(false);
-  }, [ambienteConfiguradoLocal, estaNaPaginaConfiguracao, verificarAmbiente]);
+    void verificarAmbiente(false);
+  }, [
+    ambienteConfiguradoLocal,
+    estaNaPaginaConfiguracao,
+    fluxoNovoNumero,
+    router,
+    verificarAmbiente,
+  ]);
 
   useEffect(() => {
     if (carregando) return;
@@ -156,7 +180,7 @@ export default function AmbienteObrigatorioGuard() {
           <button
             type="button"
             className={styles.refreshButton}
-            onClick={() => verificarAmbiente(true)}
+            onClick={() => void verificarAmbiente(true)}
             disabled={recarregando}
             title="Atualizar status"
           >
