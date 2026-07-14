@@ -53,6 +53,20 @@ test("bloqueia conversa fora da fila, processada ou com execução ativa", () =>
   );
 });
 
+test("bloqueia conversa na fila que já foi entregue ao atendimento humano", () => {
+  assert.equal(
+    avaliarElegibilidadeRecuperacaoFluxo({
+      conversaStatus: "fila",
+      aguardandoAtendente: true,
+      mensagemRecebidaEm: "2026-07-02T19:00:00.000Z",
+      automacaoProcessada: false,
+      possuiExecucaoAtiva: false,
+      agora,
+    }).motivo,
+    "conversa_aguardando_atendente"
+  );
+});
+
 test("bloqueia recuperação fora da janela de 24 horas", () => {
   assert.equal(
     avaliarElegibilidadeRecuperacaoFluxo({

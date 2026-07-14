@@ -68,7 +68,7 @@ export async function recuperarFluxoConversaPorUltimaMensagem(params: {
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
     .select(
-      "id, empresa_id, contato_id, status, bot_ativo, last_inbound_message_at"
+      "id, empresa_id, contato_id, status, bot_ativo, aguardando_atendente, last_inbound_message_at"
     )
     .eq("id", params.conversaId)
     .maybeSingle();
@@ -159,6 +159,7 @@ export async function recuperarFluxoConversaPorUltimaMensagem(params: {
     : {};
   const elegibilidade = avaliarElegibilidadeRecuperacaoFluxo({
     conversaStatus: conversa.status,
+    aguardandoAtendente: conversa.aguardando_atendente,
     mensagemRecebidaEm: mensagem.created_at,
     automacaoProcessada: metadataAtual.automacao_processada === true,
     possuiExecucaoAtiva: !!execucaoAtiva,

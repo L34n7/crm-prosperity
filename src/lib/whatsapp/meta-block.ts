@@ -74,6 +74,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
       .update({
         status: "encerrado_aut",
         bot_ativo: false,
+        aguardando_atendente: false,
         closed_at: agora,
         updated_at: agora,
       })

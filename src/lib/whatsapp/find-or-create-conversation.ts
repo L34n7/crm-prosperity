@@ -31,6 +31,7 @@ export type WhatsAppConversation = {
   created_at: string;
   updated_at: string;
   bot_ativo: boolean;
+  aguardando_atendente: boolean;
 };
 
 type FindOrCreateConversationParams = {
@@ -147,6 +148,7 @@ async function reabrirConversaEncerrada(
       last_message_at: now,
       closed_at: null,
       bot_ativo: false,
+      aguardando_atendente: false,
     })
     .eq("id", conversa.id)
     .select("*")
@@ -283,6 +285,7 @@ export async function findOrCreateWhatsAppConversation({
       last_message_at: now,
       closed_at: null,
       bot_ativo: false,
+      aguardando_atendente: false,
     })
     .select("*")
     .single();

@@ -219,6 +219,7 @@ export async function POST(
       status: "aberta",
       origem_atendimento: "entrada_cliente",
       bot_ativo: false,
+      aguardando_atendente: false,
       closed_at: null,
       last_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

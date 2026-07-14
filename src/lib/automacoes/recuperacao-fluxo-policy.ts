@@ -3,6 +3,7 @@ const TOLERANCIA_DATA_FUTURA_MS = 5 * 60 * 1000;
 
 export type ElegibilidadeRecuperacaoFluxoInput = {
   conversaStatus?: string | null;
+  aguardandoAtendente?: boolean | null;
   mensagemRecebidaEm?: string | null;
   automacaoProcessada: boolean;
   possuiExecucaoAtiva: boolean;
@@ -16,6 +17,13 @@ export function avaliarElegibilidadeRecuperacaoFluxo(
     return {
       elegivel: false as const,
       motivo: "conversa_nao_esta_na_fila",
+    };
+  }
+
+  if (input.aguardandoAtendente === true) {
+    return {
+      elegivel: false as const,
+      motivo: "conversa_aguardando_atendente",
     };
   }
 

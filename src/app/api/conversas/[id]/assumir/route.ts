@@ -174,6 +174,7 @@ type ConversaRow = {
   historico_importado?: boolean | null;
   closed_at?: string | null;
   bot_ativo?: boolean | null;
+  aguardando_atendente?: boolean | null;
   last_inbound_message_at?: string | null;
   integracao_whatsapp_id?: string | null;
 };
@@ -231,7 +232,7 @@ export async function POST(
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
-      .select("id, empresa_id, setor_id, responsavel_id, status, origem_atendimento, historico_importado, closed_at, bot_ativo, last_inbound_message_at, integracao_whatsapp_id")
+      .select("id, empresa_id, setor_id, responsavel_id, status, origem_atendimento, historico_importado, closed_at, bot_ativo, aguardando_atendente, last_inbound_message_at, integracao_whatsapp_id")
       .eq("id", id)
       .maybeSingle<ConversaRow>();
 
@@ -396,6 +397,7 @@ export async function POST(
         responsavel_id: usuario.id,
         status: "em_atendimento",
         bot_ativo: false,
+        aguardando_atendente: true,
         closed_at: null,
         origem_atendimento: "manual",
         updated_at: agora,
@@ -480,6 +482,7 @@ export async function POST(
             responsavel_id: conversa.responsavel_id,
             status: conversa.status,
             bot_ativo: conversa.bot_ativo ?? false,
+            aguardando_atendente: conversa.aguardando_atendente ?? false,
             closed_at: conversa.closed_at,
             updated_at: agora,
           })
