@@ -4,7 +4,7 @@
 }
 
 .whatsappShell {
-  max-width: 1240px;
+  max-width: 1320px;
   margin: 0 auto;
   background: var(--crm-surface);
   border: 1px solid var(--crm-border);
@@ -49,9 +49,9 @@
 
 .profileDesktopGrid {
   display: grid;
-  grid-template-columns: minmax(330px, 390px) minmax(0, 1fr);
+  grid-template-columns: minmax(400px, 450px) minmax(0, 1fr);
   gap: 24px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .profileSummaryColumn {
@@ -62,6 +62,7 @@
   background: var(--crm-surface-soft);
   display: grid;
   gap: 16px;
+  align-content: space-between;
 }
 
 .profileFieldsColumn {
@@ -72,6 +73,10 @@
   background: var(--crm-surface);
   display: grid;
   gap: 16px;
+}
+
+.topIntegracaoSwitcher {
+  margin: 20px auto 2px;
 }
 
 .profileHero {
@@ -457,6 +462,18 @@
   white-space: nowrap;
 }
 
+.profileSummaryColumn .integrationInfoItem {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+
+.profileSummaryColumn .integrationInfoItem strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .qualityBadge {
   width: fit-content;
   display: inline-flex;
@@ -506,6 +523,7 @@
   align-items: center;
   padding-top: 14px;
   gap: 10px;
+  margin-top: auto;
 }
 
 .summaryMetaButton {

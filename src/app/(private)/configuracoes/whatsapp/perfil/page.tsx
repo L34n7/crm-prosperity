@@ -1146,6 +1146,28 @@ export default function WhatsappPerfilPage() {
               </div>
             </div>
 
+            {deveMostrarControlesMultiIntegracao && integracoes.length > 1 && (
+              <div
+                className={`${styles.integracaoSwitcher} ${styles.topIntegracaoSwitcher}`}
+              >
+                <select
+                  className={styles.integracaoSelect}
+                  value={integracaoId}
+                  onChange={(e) => carregarPerfil(e.target.value)}
+                  disabled={carregando}
+                >
+                  {integracoes.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.nome_conexao ||
+                        item.phone_number_display_name ||
+                        item.verified_name}
+                      {item.numero ? ` ${item.numero}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {onboardingIncompleto && (
               <div className={styles.diagnosticAlert}>
                 <div className={styles.diagnosticHeader}>
@@ -1235,25 +1257,6 @@ export default function WhatsappPerfilPage() {
             <aside className={styles.profileSummaryColumn}>
 
             <div className={styles.profileHero}>
-              {deveMostrarControlesMultiIntegracao && integracoes.length > 1 && (
-                <div className={styles.integracaoSwitcher}>
-                  <select
-                    className={styles.integracaoSelect}
-                    value={integracaoId}
-                    onChange={(e) => carregarPerfil(e.target.value)}
-                    disabled={carregando}
-                  >
-                    {integracoes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.nome_conexao ||
-                          item.phone_number_display_name ||
-                          item.verified_name}
-                        {item.numero ? ` ${item.numero}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
             <label className={styles.photoUpload}>
                 <input
                 type="file"
