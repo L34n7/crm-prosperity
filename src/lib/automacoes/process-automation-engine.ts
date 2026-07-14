@@ -36,6 +36,13 @@ import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calen
 import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { Client as QstashClient } from "@upstash/qstash";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import {
+  condicaoCombinaComCandidatos,
+  condicaoCombinaComMensagem,
+  condicaoPrecisaDeResposta,
+  normalizarTexto,
+  resolverRespostaInterativa,
+} from "./resposta-conexao-policy";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -1709,64 +1716,6 @@ function normalizarConfigLembreteAgendamento(config: Record<string, any>) {
       : [],
   };
 }
-
-function normalizarTexto(texto: string) {
-  return String(texto || "").trim().toLowerCase();
-}
-
-function condicaoPrecisaDeResposta(condicao: Record<string, any> | null | undefined) {
-  if (!condicao?.tipo) return false;
-
-  return [
-    "resposta_igual",
-    "resposta_contem",
-    "resposta_inicia_com",
-    "resposta_regex",
-  ].includes(condicao.tipo);
-}
-
-function condicaoCombinaComMensagem(
-  condicao: Record<string, any> | null | undefined,
-  mensagemTexto?: string
-) {
-  if (!condicao?.tipo) return false;
-
-  if (condicao.tipo === "sempre") {
-    return true;
-  }
-
-  const mensagemOriginal = String(mensagemTexto || "").trim();
-  const valorOriginal = String(condicao.valor || "").trim();
-
-  const mensagem = normalizarTexto(mensagemOriginal);
-  const valor = normalizarTexto(valorOriginal);
-
-  if (!mensagem || !valor) return false;
-
-  if (condicao.tipo === "resposta_igual") {
-    return mensagem === valor;
-  }
-
-  if (condicao.tipo === "resposta_contem") {
-    return mensagem.includes(valor);
-  }
-
-  if (condicao.tipo === "resposta_inicia_com") {
-    return mensagem.startsWith(valor);
-  }
-
-  if (condicao.tipo === "resposta_regex") {
-    try {
-      const regex = new RegExp(valorOriginal, "i");
-      return regex.test(mensagemOriginal);
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-}
-
 
 type FluxoRuntimeCache = {
   nosPorId: Map<string, AutomacaoNo>;
@@ -8214,20 +8163,50 @@ async function seguirParaProximoNo(params: {
     (conexao) => !conexao.condicao_json?.tipo
   );
 
+  let noAtualParaResposta: AutomacaoNo | null =
+    runtimeCache?.nosPorId.get(noAtualId) || null;
+
+  if (
+    mensagemTexto &&
+    !noAtualParaResposta &&
+    (conexoesComCondicaoDeResposta.length > 0 || conexoesComIA.length > 0)
+  ) {
+    const { data } = await supabaseAdmin
+      .from("automacao_nos")
+      .select("*")
+      .eq("id", noAtualId)
+      .eq("empresa_id", empresaId)
+      .eq("fluxo_id", fluxoId)
+      .maybeSingle();
+
+    noAtualParaResposta = data || null;
+  }
+
+  const respostaInterativa = resolverRespostaInterativa(
+    noAtualParaResposta,
+    mensagemTexto
+  );
+  const candidatosResposta = respostaInterativa.candidatos;
+  const mensagemParaInterpretacao =
+    respostaInterativa.textoSemantico || String(mensagemTexto || "");
+
   if (
     mensagemTexto &&
     (conexoesComCondicaoDeResposta.length > 0 || conexoesComIA.length > 0)
   ) {
     conexaoEscolhida =
       conexoesComCondicaoDeResposta.find((conexao) =>
-        condicaoCombinaComMensagem(conexao.condicao_json, mensagemTexto)
+        condicaoCombinaComCandidatos(
+          conexao.condicao_json,
+          candidatosResposta
+        )
       ) || null;
 
     if (!conexaoEscolhida) {
       if (conexoesComIA.length > 0) {
         try {
           const resultadoIA = await interpretarConexaoComIA({
-            mensagemCliente: mensagemTexto,
+            mensagemCliente: mensagemParaInterpretacao,
             conexoesDisponiveis: conexoesComIA.map((conexao) => ({
               id: conexao.id,
               nome:
@@ -8266,6 +8245,8 @@ async function seguirParaProximoNo(params: {
               descricao: "IA interpretou a resposta do cliente e escolheu uma conexão.",
               entrada: {
                 mensagemTexto,
+                mensagemInterpretada: mensagemParaInterpretacao,
+                resposta_interativa: respostaInterativa,
                 conexoes_avaliadas: conexoesComIA.map((c) => ({
                   id: c.id,
                   nome: c.nome_conexao || c.nome || c.titulo || null,
@@ -8284,6 +8265,8 @@ async function seguirParaProximoNo(params: {
               descricao: "IA não escolheu uma conexão com confiança suficiente.",
               entrada: {
                 mensagemTexto,
+                mensagemInterpretada: mensagemParaInterpretacao,
+                resposta_interativa: respostaInterativa,
               },
               saida: resultadoIA,
             });
@@ -8317,12 +8300,18 @@ async function seguirParaProximoNo(params: {
         .eq("empresa_id", empresaId)
         .maybeSingle();
 
-      const { data: noAtual } = await supabaseAdmin
-        .from("automacao_nos")
-        .select("*")
-        .eq("id", noAtualId)
-        .eq("empresa_id", empresaId)
-        .maybeSingle();
+      let noAtual = noAtualParaResposta;
+
+      if (!noAtual) {
+        const { data } = await supabaseAdmin
+          .from("automacao_nos")
+          .select("*")
+          .eq("id", noAtualId)
+          .eq("empresa_id", empresaId)
+          .maybeSingle();
+
+        noAtual = data || null;
+      }
 
       if (execucaoAtual && noAtual) {
         const transferiuArquivoIa = await transferirArquivoIaSemConexaoErro({
@@ -8403,6 +8392,7 @@ async function seguirParaProximoNo(params: {
           "Cliente enviou uma resposta que não corresponde a nenhuma conexão.",
         entrada: {
           mensagemTexto,
+          resposta_interativa: respostaInterativa,
           conexoes_avaliadas: [
             ...conexoesComCondicaoDeResposta,
             ...conexoesComIA.filter(
@@ -8565,6 +8555,7 @@ async function seguirParaProximoNo(params: {
     descricao: "Motor seguiu para o próximo bloco.",
     entrada: {
       mensagemTexto,
+      resposta_interativa: respostaInterativa,
       condicao_json: conexaoEscolhida.condicao_json,
     },
     saida: {
