@@ -352,7 +352,10 @@ export default function WhatsappPerfilPage() {
   const qualidadeNumero = obterQualidadeNumero(
     integracaoSelecionada?.quality_rating
   );
-  const proximaPosicaoVisual = Math.min(integracoes.length + 1, 4);
+  const proximaPosicaoVisual = Math.min(
+    integracoes.length + 1,
+    limiteIntegracoesWhatsapp
+  );
   const deveMostrarControlesMultiIntegracao =
     limiteIntegracoesWhatsapp > 1 || integracoes.length > 1;
   const labelAdicionarNumero = `Add número ${proximaPosicaoIntegracao || proximaPosicaoVisual}`;

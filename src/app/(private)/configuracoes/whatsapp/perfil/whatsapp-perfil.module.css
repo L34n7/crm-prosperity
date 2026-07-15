@@ -784,10 +784,14 @@
   inset: 0;
   z-index: 90;
   background: var(--crm-overlay);
+
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+
   padding: 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .modalCard {
@@ -1078,17 +1082,6 @@
   cursor: not-allowed;
 }
 
-.modalOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: var(--crm-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
 .modalCard {
   width: 100%;
   max-width: 620px;
@@ -1231,14 +1224,22 @@
 }
 
 .disconnectChoiceModal {
-  max-width: 920px;
+  width: fit-content;
+  min-width: 320px;
+  max-width: min(920px, calc(100vw - 48px));
+
+  margin: auto;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .disconnectChoiceGrid {
   padding: 22px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 200px));
+  justify-content: center;
+  gap: 24px;
 }
 
 .disconnectChoiceCard {
@@ -1251,21 +1252,35 @@
   min-width: 0;
 }
 
+.disconnectChoiceModal .modalHeader,
+.disconnectChoiceModal .modalActions {
+  flex: 0 0 auto;
+}
+
+.disconnectChoiceModal .disconnectChoiceGrid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .disconnectChoiceCardIntegration1 {
   background: var(--crm-bottom-Hover);
 }
 
 .disconnectChoiceCardIntegration2 {
-  background: var(--crm-bottom-Hover2);
+  background: var(--conversationItem2);
 }
 
 .disconnectChoiceCardIntegration3 {
-  background: var(--crm-bottom-Hover3);
+  background: var(--conversationItem3);
 }
 
 .disconnectChoiceCard .connectionAvatar {
+  width: 76px;
+  height: 76px;
+  min-width: 76px;
+  flex: 0 0 56px;
+  border-radius: 14px;
   overflow: hidden;
-  flex: 0 0 auto;
 }
 
 .disconnectChoiceCard .connectionAvatar img {
@@ -1293,12 +1308,12 @@
 
 .disconnectChoiceTop strong {
   color: var(--crm-text-strong);
-  font-size: 14px;
+  font-size: 18px;
 }
 
 .disconnectChoiceTop span {
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 14px;
   margin-top: 3px;
 }
 

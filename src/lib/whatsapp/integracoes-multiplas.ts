@@ -2,7 +2,7 @@ import { isAdministrador } from "@/lib/auth/authorization";
 import type { UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export const MAX_INTEGRACOES_WHATSAPP = 3;
+export const MAX_INTEGRACOES_WHATSAPP = 10;
 
 const supabaseAdmin = getSupabaseAdmin();
 
