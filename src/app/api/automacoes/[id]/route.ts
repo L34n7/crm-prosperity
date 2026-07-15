@@ -11,6 +11,7 @@ const TIPOS_NO_MIDIA = new Set([
   "enviar_imagem",
   "enviar_video",
   "enviar_audio",
+  "enviar_arquivo",
 ]);
 
 function normalizarDelaySegundosApi(valor: unknown) {

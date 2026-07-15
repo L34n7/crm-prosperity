@@ -21,7 +21,7 @@ type VideoCodecInfo = {
 };
 
 
-type TipoMidia = "imagem" | "video" | "audio";
+type TipoMidia = "imagem" | "video" | "audio" | "arquivo";
 
 type UsuarioSistema = {
   id: string;
@@ -32,12 +32,26 @@ const BUCKET_MIDIAS = "midias";
 const LIMITE_IMAGEM = 5 * 1024 * 1024;
 const LIMITE_VIDEO = 16 * 1024 * 1024;
 const LIMITE_AUDIO = 16 * 1024 * 1024;
+const LIMITE_ARQUIVO = 50 * 1024 * 1024;
 const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 50 * 1024 * 1024; // 50 MB
 
-function tipoMidiaPorMime(mimeType: string): TipoMidia | "" {
+const MIME_ARQUIVO_POR_EXTENSAO: Record<string, string> = {
+  pdf: "application/pdf",
+  txt: "text/plain",
+  csv: "text/csv",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+};
+
+function tipoMidiaPorArquivo(mimeType: string, nome: string): TipoMidia | "" {
   if (mimeType.startsWith("image/")) return "imagem";
   if (mimeType.startsWith("video/")) return "video";
   if (mimeType.startsWith("audio/")) return "audio";
+  if (MIME_ARQUIVO_POR_EXTENSAO[extensaoPorNome(nome)]) return "arquivo";
   return "";
 }
 
@@ -250,7 +264,7 @@ function validarMetadadosArquivo(params: {
   tamanhoBytes: number;
 }) {
   const nomeArquivoOriginal = params.nome.trim();
-  const mimeType = params.mimeType.trim();
+  const mimeTypeInformado = params.mimeType.trim().toLowerCase();
   const tamanhoBytes = params.tamanhoBytes;
 
   if (!nomeArquivoOriginal) {
@@ -273,13 +287,22 @@ function validarMetadadosArquivo(params: {
     };
   }
 
-  const tipo = tipoMidiaPorMime(mimeType);
+  const extensao = extensaoPorNome(nomeArquivoOriginal);
+  const tipo = tipoMidiaPorArquivo(mimeTypeInformado, nomeArquivoOriginal);
+  const mimeType =
+    tipo === "arquivo"
+      ? MIME_ARQUIVO_POR_EXTENSAO[extensao]
+      : mimeTypeInformado;
 
   if (!tipo) {
     return {
       ok: false as const,
       response: NextResponse.json(
-        { ok: false, error: "Envie apenas imagem, vídeo ou áudio." },
+        {
+          ok: false,
+          error:
+            "Formato não permitido. Envie imagem, vídeo, áudio, PDF, TXT, CSV, Word, Excel ou PowerPoint.",
+        },
         { status: 400 }
       ),
     };
@@ -333,6 +356,16 @@ function validarMetadadosArquivo(params: {
       ok: false as const,
       response: NextResponse.json(
         { ok: false, error: "O áudio deve ter no máximo 16MB." },
+        { status: 400 }
+      ),
+    };
+  }
+
+  if (tipo === "arquivo" && tamanhoBytes > LIMITE_ARQUIVO) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { ok: false, error: "O arquivo deve ter no máximo 50MB." },
         { status: 400 }
       ),
     };

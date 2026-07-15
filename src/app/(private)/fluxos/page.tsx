@@ -1,10705 +1,803 @@
-"use client";
-
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import {
-  addEdge,
-  Background,
-  Controls,
-  MiniMap,
-  ReactFlow,
-  Position,
-  MarkerType,
-  useEdgesState,
-  useNodesState,
-  type Connection,
-  type Edge,
-  type Node,
-} from "@xyflow/react";
-import FeedbackToast from "@/components/FeedbackToast";
-import Header from "@/components/Header";
-import AssistenteFluxosPanel, {
-  type AssistenteFluxosFluxoCriado,
-} from "./AssistenteFluxosPanel";
-import TemplateVariableCombobox, {
-  type TemplateVariableOption,
-} from "@/components/TemplateVariableCombobox";
-import { useHeaderUser } from "@/components/header-user-context";
-import "@xyflow/react/dist/style.css";
-import styles from "./fluxos.module.css";
-import { Handle } from "@xyflow/react";
-import { obterConfiguracaoEncerramentoInatividade } from "@/lib/automacoes/normalizar-configuracao-fluxo";
-import { gerarSugestaoDescricaoIAComContexto } from "@/lib/ia/sugestoes-descricao-ia";
-import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  CopyPlus,
-  LoaderCircle,
-  MessageCircle,
-  Share2,
-  Sparkles,
-} from "lucide-react";
-
-type Fluxo = {
-  id: string;
-  nome: string;
-  descricao: string | null;
-  status: "rascunho" | "ativo" | "pausado" | "arquivado";
-  canal: string;
-  fluxo_padrao?: boolean;
-  created_at?: string;
-  configuracao_json?: Record<string, any>;
-  alertas_configuracao?: {
-    interpretar_arquivo_ia_sem_conexao_erro?: number;
-  };
-};
-
-type AutomacaoNo = {
-  id: string;
-  tipo_no: string;
-  titulo: string;
-  descricao: string | null;
-  posicao_x: number;
-  posicao_y: number;
-  configuracao_json: Record<string, any>;
-  delay_segundos: number | null;
-};
-
-type AutomacaoConexao = {
-  id: string;
-  no_origem_id: string;
-  no_destino_id: string;
-  rotulo: string | null;
-  ordem: number;
-  condicao_json: Record<string, any>;
-  usar_ia?: boolean;
-  descricao_ia?: string | null;
-};
-
-type PreviaGeracaoDescricaoIa = {
-  modo: "conexao" | "bloco";
-  titulo: string;
-  conexoes: Array<{
-    edgeId: string;
-    nome: string;
-    tokensEstimados: number;
-  }>;
-  tokensMin: number;
-  tokensMax: number;
-};
-
-type GatilhoFluxo = {
-  id: string;
-  tipo_gatilho: string;
-  valor: string;
-  condicao: "contem" | "exata" | "inicia_com" | "regex";
-  ativo: boolean;
-};
-
-type SetorOpcao = {
-  id: string;
-  nome: string;
-};
-
-type MidiaOpcao = {
-  id: string;
-  nome: string;
-  tipo: "imagem" | "video" | "audio";
-  url: string;
-  mime_type: string | null;
-  tamanho_bytes: number | null;
-  created_at?: string;
-};
-
-type ImpactoExclusaoMidia = {
-  total_blocos_afetados?: number;
-  total_fluxos_afetados?: number;
-  total_fluxos_pausados?: number;
-  fluxos_afetados?: Array<{
-    id: string;
-    nome?: string | null;
-    status_anterior?: string | null;
-    status_atual?: string | null;
-    pausado?: boolean;
-  }>;
-};
-
-type TemplateWhatsappOpcao = {
-  id: string;
-  nome: string;
-  idioma: string;
-  status: string;
-  categoria?: string | null;
-  integracao_whatsapp_id: string;
-  waba_id?: string | null;
-  payload?: any;
-};
-
-type IntegracaoWhatsappOpcao = {
-  id: string;
-  nome_conexao?: string | null;
-  numero?: string | null;
-  status?: string | null;
-  posicao?: number | null;
-  waba_id?: string | null;
-};
-
-type EscopoIntegracoesModo = "todas" | "selecionadas";
-
-type EscopoIntegracoesFluxo = {
-  modo: EscopoIntegracoesModo;
-  ids: string[];
-};
-
-type PreviewTemplateWhatsapp = {
-  titulo: string;
-  corpo: string;
-  rodape: string;
-  botoes: string[];
-};
-
-type VariavelPersonalizada = {
-  id: string;
-  chave: string;
-  valor: string;
-  descricao: string | null;
-  escopo: "global" | "disparos" | "fluxos";
-  ativo: boolean;
-};
-
-type AlvoVariavelFluxo = "mensagem" | "agendar_disparo" | "agenda_lembrete";
-
-function templateWhatsappAprovado(template?: TemplateWhatsappOpcao | null) {
-  return String(template?.status || "").trim().toUpperCase() === "APPROVED";
-}
-
-function normalizarEscopoIntegracoesFluxo(
-  configuracao?: Record<string, any> | null
-): EscopoIntegracoesFluxo {
-  const escopo = configuracao?.integracoes_whatsapp || {};
-  const idsLegados = [
-    ...(Array.isArray(configuracao?.integracoes_whatsapp_ids)
-      ? configuracao?.integracoes_whatsapp_ids
-      : []),
-    configuracao?.integracao_whatsapp_id,
-  ];
-  const ids = Array.from(
-    new Set(
-      [
-        ...(Array.isArray(escopo?.ids) ? escopo.ids : []),
-        ...idsLegados,
-      ]
-        .map((id) => String(id || "").trim())
-        .filter(Boolean)
-    )
-  );
-  const modo =
-    String(escopo?.modo || configuracao?.integracoes_whatsapp_modo || "") ===
-      "selecionadas" && ids.length > 0
-      ? "selecionadas"
-      : "todas";
-
-  return {
-    modo,
-    ids: modo === "selecionadas" ? ids : [],
-  };
-}
-
-function montarEscopoIntegracoesFluxo(
-  modo: EscopoIntegracoesModo,
-  ids: string[]
-): EscopoIntegracoesFluxo {
-  const idsUnicos = Array.from(
-    new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))
-  );
-
-  return modo === "selecionadas" && idsUnicos.length > 0
-    ? { modo: "selecionadas", ids: idsUnicos }
-    : { modo: "todas", ids: [] };
-}
-
-function escoposIntegracaoConflitam(
-  atual: EscopoIntegracoesFluxo,
-  existente: EscopoIntegracoesFluxo
-) {
-  if (atual.modo !== "selecionadas" || existente.modo !== "selecionadas") {
-    return true;
-  }
-
-  const idsExistentes = new Set(existente.ids);
-  return atual.ids.some((id) => idsExistentes.has(id));
-}
-
-function rotuloIntegracaoWhatsapp(integracao: IntegracaoWhatsappOpcao) {
-  const posicao = integracao.posicao ? `Numero ${integracao.posicao}` : "Numero";
-  const nome =
-    String(integracao.nome_conexao || "").trim() ||
-    String(integracao.numero || "").trim() ||
-    "WhatsApp";
-
-  return `${posicao} - ${nome}`;
-}
-
-function normalizarTemplatesPorIntegracao(valor: unknown) {
-  if (!valor || typeof valor !== "object" || Array.isArray(valor)) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    Object.entries(valor as Record<string, unknown>)
-      .map(([integracaoId, templateId]) => [
-        String(integracaoId || "").trim(),
-        String(templateId || "").trim(),
-      ])
-      .filter(([integracaoId, templateId]) => integracaoId && templateId)
-  );
-}
-
-function obterIntegracoesDoEscopoFluxo(
-  escopo: EscopoIntegracoesFluxo,
-  integracoes: IntegracaoWhatsappOpcao[]
-) {
-  if (escopo.modo !== "selecionadas") return integracoes;
-
-  const ids = new Set(escopo.ids);
-  return integracoes.filter((integracao) => ids.has(integracao.id));
-}
-
-function chaveWabaIntegracao(integracao: IntegracaoWhatsappOpcao) {
-  return String(integracao.waba_id || "").trim() || `integracao:${integracao.id}`;
-}
-
-function usaTemplatesPorIntegracao(integracoes: IntegracaoWhatsappOpcao[]) {
-  return new Set(integracoes.map(chaveWabaIntegracao)).size > 1;
-}
-
-function templateCompativelComIntegracao(
-  template: TemplateWhatsappOpcao | null | undefined,
-  integracao: IntegracaoWhatsappOpcao
-) {
-  if (!template) return false;
-  if (template.integracao_whatsapp_id === integracao.id) return true;
-
-  const templateWabaId = String(template.waba_id || "").trim();
-  const integracaoWabaId = String(integracao.waba_id || "").trim();
-
-  return Boolean(templateWabaId && integracaoWabaId && templateWabaId === integracaoWabaId);
-}
-
-function contarVariaveisTextoTemplate(texto?: string | null) {
-  const matches = String(texto || "").match(/\{\{\d+\}\}/g) || [];
-  const numeros = matches
-    .map((item) => Number(item.replace(/[{}]/g, "")))
-    .filter((numero) => Number.isFinite(numero));
-
-  return numeros.length > 0 ? Math.max(...numeros) : 0;
-}
-
-function contarVariaveisTemplateWhatsapp(template?: TemplateWhatsappOpcao | null) {
-  const components = Array.isArray(template?.payload?.components)
-    ? template?.payload?.components
-    : [];
-
-  const header = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "HEADER"
-  );
-  const body = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BODY"
-  );
-  const buttons = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BUTTONS"
-  );
-
-  const totalHeader = contarVariaveisTextoTemplate(header?.text);
-  const totalBody = contarVariaveisTextoTemplate(body?.text);
-  const totalButtons = (buttons?.buttons || []).reduce(
-    (total: number, button: any) => {
-      if (String(button?.type || "").toUpperCase() !== "URL") return total;
-      return total + contarVariaveisTextoTemplate(button?.url);
-    },
-    0
-  );
-
-  return totalHeader + totalBody + totalButtons;
-}
-
-function templateWhatsappTemCabecalhoMidia(template?: TemplateWhatsappOpcao | null) {
-  const components = Array.isArray(template?.payload?.components)
-    ? template?.payload?.components
-    : [];
-  const header = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "HEADER"
-  );
-  const formatoHeader = String(header?.format || "").toUpperCase();
-
-  return ["IMAGE", "VIDEO", "DOCUMENT"].includes(formatoHeader);
-}
-
-function contarVariaveisObrigatoriasPreenchidas(
-  variaveis: string[] | string,
-  totalObrigatorio: number
-) {
-  const linhas = Array.isArray(variaveis)
-    ? variaveis
-    : obterLinhasVariaveisTemplate(variaveis);
-
-  return linhas
-    .slice(0, totalObrigatorio)
-    .map((item) => String(item || "").trim())
-    .filter(Boolean).length;
-}
-
-function obterLinhasVariaveisTemplate(valor: string) {
-  const linhas = String(valor || "").split("\n");
-  return [linhas[0] || "", linhas[1] || "", linhas[2] || ""];
-}
-
-function normalizarEntradaVariavelTemplate(valor: string) {
-  return String(valor || "")
-    .replace(/[{}]/g, "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9_]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+/g, "");
-}
-
-function atualizarLinhaVariavelTemplate(
-  valorAtual: string,
-  index: number,
-  novoValor: string
-) {
-  const linhas = obterLinhasVariaveisTemplate(valorAtual);
-  linhas[index] = normalizarEntradaVariavelTemplate(novoValor);
-  return linhas.join("\n");
-}
-
-function preencherPrimeiraLinhaVariavelTemplate(valorAtual: string, novoValor: string) {
-  const linhas = obterLinhasVariaveisTemplate(valorAtual);
-  const indiceVazio = linhas.findIndex((item) => !item.trim());
-  linhas[indiceVazio >= 0 ? indiceVazio : 0] =
-    normalizarEntradaVariavelTemplate(novoValor);
-  return linhas.join("\n");
-}
-
-function substituirVariaveisPreviewTemplate(
-  texto: string,
-  variaveis: string[],
-  offset: number
-) {
-  return String(texto || "").replace(/\{\{(\d+)\}\}/g, (_, numero) => {
-    const index = offset + Number(numero) - 1;
-    return variaveis[index]?.trim() || `{{${numero}}}`;
-  });
-}
-
-function montarPreviewTemplateWhatsapp(
-  template: TemplateWhatsappOpcao | null,
-  variaveisRaw: string
-): PreviewTemplateWhatsapp | null {
-  if (!template) return null;
-
-  const variaveis = obterLinhasVariaveisTemplate(variaveisRaw);
-  const components = Array.isArray(template.payload?.components)
-    ? template.payload.components
-    : [];
-  const header = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "HEADER"
-  );
-  const body = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BODY"
-  );
-  const footer = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "FOOTER"
-  );
-  const buttons = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BUTTONS"
-  );
-
-  let offset = 0;
-  const headerText = substituirVariaveisPreviewTemplate(
-    header?.text || "",
-    variaveis,
-    offset
-  ).trim();
-  offset += contarVariaveisTextoTemplate(header?.text);
-
-  const bodyText = substituirVariaveisPreviewTemplate(
-    body?.text || "",
-    variaveis,
-    offset
-  ).trim();
-
-  const quickReplies =
-    buttons?.buttons
-      ?.filter((button: any) => button?.type === "QUICK_REPLY" && button?.text)
-      .map((button: any) => String(button.text || "").trim())
-      .filter(Boolean) || [];
-
-  return {
-    titulo: headerText || template.nome || "Template WhatsApp",
-    corpo: bodyText || "Template sem texto para previsualizacao.",
-    rodape: String(footer?.text || "").trim() || "Equipe de atendimento",
-    botoes: quickReplies,
-  };
-}
-
-type AgendaOpcao = {
-  id: string;
-  nome: string;
-  timezone: string;
-  duracao_minutos: number;
-  intervalo_minutos: number;
-  janela_dias: number;
-  status: string;
-};
-
-type ResultadoEncerramentoFluxo = "positivo" | "negativo" | "neutro";
-type TipoValorConversao = "sem_valor" | "valor_fixo" | "variavel";
-
-const RESULTADOS_ENCERRAMENTO: ResultadoEncerramentoFluxo[] = [
-  "positivo",
-  "negativo",
-  "neutro",
-];
-
-const TIPOS_VALOR_CONVERSAO: TipoValorConversao[] = [
-  "sem_valor",
-  "valor_fixo",
-  "variavel",
-];
-
-const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 50 * 1024 * 1024; // 50 MB
-const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
-const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
-const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
-const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; 
-const VARIAVEIS_FIXAS_CONTATO_HELP =
-    "Variaveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
-const VARIAVEIS_FIXAS_SISTEMA = [
-  {
-    chave: "nome_contato",
-    exemplo: "{{nome_contato}}",
-    descricao: "Nome salvo no cadastro do contato.",
-  },
-  {
-    chave: "nome",
-    exemplo: "{{nome}}",
-    descricao: "Nome do contato.",
-  },
-  {
-    chave: "nome_whatsapp",
-    exemplo: "{{nome_whatsapp}}",
-    descricao:
-      "Nome do perfil do WhatsApp quando existir; se n√£o existir, usa o nome salvo no contato.",
-  },
-  {
-    chave: "email_contato",
-    exemplo: "{{email_contato}}",
-    descricao: "E-mail salvo no cadastro do contato.",
-  },
-  {
-    chave: "numero_contato",
-    exemplo: "{{numero_contato}}",
-    descricao: "N√∫mero/telefone salvo no cadastro do contato.",
-  },
-  {
-    chave: "campanha",
-    exemplo: "{{campanha}}",
-    descricao: "Campanha vinculada ao contato.",
-  },
-  {
-    chave: "origem",
-    exemplo: "{{origem}}",
-    descricao: "Origem do contato.",
-  },
-  {
-    chave: "status_lead",
-    exemplo: "{{status_lead}}",
-    descricao: "Status atual do lead.",
-  },
-  {
-    chave: "protocolo_atual",
-    exemplo: "{{protocolo_atual}}",
-    descricao: "Protocolo ativo da conversa atual do contato.",
-  },
-  {
-    chave: "ultimo_protocolo",
-    exemplo: "{{ultimo_protocolo}}",
-    descricao: "√öltimo protocolo encerrado/inativo do contato.",
-  },
-];
-const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
-  "nome",
-  "nome_contato",
-  "contato_nome",
-  "nome_whatsapp",
-  "whatsapp_nome",
-  "nome_perfil_whatsapp",
-  "perfil_whatsapp_nome",
-
-  "email",
-  "email_contato",
-  "contato_email",
-
-  "telefone",
-  "numero",
-  "numero_contato",
-  "contato_numero",
-  "telefone_contato",
-  "contato_telefone",
-
-  "campanha",
-  "origem",
-  "status",
-  "status_lead",
-
-  "protocolo_atual",
-  "ultimo_protocolo",
-];
-
-async function lerRespostaApi(res: Response, mensagemPadrao: string) {
-  const contentType = res.headers.get("content-type") || "";
-  const text = await res.text();
-
-  if (contentType.includes("application/json")) {
-    try {
-      return text ? JSON.parse(text) : {};
-    } catch {
-      throw new Error(mensagemPadrao);
-    }
-  }
-
-  if (!res.ok) {
-    if (
-      res.status === 413 ||
-      /request entity too large|payload too large|function_payload_too_large/i.test(text)
-    ) {
-      throw new Error(
-        "O arquivo excede o limite de upload aceito pelo servidor. Tente reduzir o tamanho e envie novamente."
-      );
-    }
-
-    throw new Error(text || mensagemPadrao);
-  }
-
-  try {
-    return text ? JSON.parse(text) : {};
-  } catch {
-    return {};
-  }
-}
-
-const nodeTypes = {
-  custom: NodeCustom,
-};
-
-const TIPO_NO_PERGUNTA_LIVRE_IA = "pergunta_livre_ia";
-const TIPOS_NO_MIDIA = new Set([
-  "enviar_imagem",
-  "enviar_video",
-  "enviar_audio",
-]);
-const CHAVES_REFERENCIA_MIDIA_NODE = [
-  "midia_url",
-  "midia_nome",
-  "midia_id",
-  "media_url",
-  "media_nome",
-  "media_id",
-  "arquivo_url",
-  "arquivo_nome",
-  "arquivo_id",
-  "storage_path",
-  "storagePath",
-];
-const TOKENS_SAIDA_MAX_DESCRICAO_IA = 180;
-const TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS = 190;
-
-
-function criarIdTemporario(prefixo: string) {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-
-  return `${prefixo}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-function labelTipoNo(tipo: string) {
-  if (tipo === "inicio") return "In√≠cio";
-  if (tipo === "enviar_texto") return "Mensagem";
-  if (tipo === "pergunta_opcoes") return "Pergunta";
-  if (tipo === TIPO_NO_PERGUNTA_LIVRE_IA) return "Pergunta IA";
-  if (tipo === "transferir_setor") return "Transferir";
-  if (tipo === "encerrar") return "Encerrar";
-  if (tipo === "enviar_imagem") return "Imagem";
-  if (tipo === "enviar_video") return "V√≠deo";
-  if (tipo === "enviar_audio") return "√Åudio";
-  if (tipo === "enviar_botoes") return "Bot√µes";
-  if (tipo === "botao_redirect") return "Bot√£o redirect";
-  if (tipo === "avaliacao") return "Avalia√ß√£o";
-  if (tipo === "capturar_resposta") return "Captura";
-  if (tipo === "agendar_disparo") return "Agendar disparo";
-  if (tipo === "agenda_buscar_agendamento") return "Buscar agenda";
-  if (tipo === "agenda_escolher_horario") return "Escolher hor√°rio";
-  if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
-  if (tipo === "agenda_remarcar_agendamento") return "Remarcar";
-  if (tipo === "agenda_cancelar_agendamento") return "Cancelar agenda";
-  if (tipo === "interpretar_arquivo_ia") return "Interp. arquivo IA";
-  return tipo;
-}
-
-function corTipoNo(tipo: string) {
-  if (tipo === "inicio") return styles.nodeInicio;
-  if (tipo === "enviar_texto") return styles.nodeMensagem;
-  if (tipo === "pergunta_opcoes") return styles.nodePergunta;
-  if (tipo === TIPO_NO_PERGUNTA_LIVRE_IA) return styles.nodePerguntaIA;
-  if (tipo === "transferir_setor") return styles.nodeTransferir;
-  if (tipo === "encerrar") return styles.nodeEncerrar;
-  if (tipo === "enviar_imagem") return styles.nodeImagem;
-  if (tipo === "enviar_video") return styles.nodeVideo;
-  if (tipo === "enviar_audio") return styles.nodeAudio;
-  if (tipo === "enviar_botoes") return styles.nodeBotoes;
-  if (tipo === "botao_redirect") return styles.nodeRedirect;
-  if (tipo === "avaliacao") return styles.nodeAvaliacao;
-  if (tipo === "capturar_resposta") return styles.nodeCaptura;
-  if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
-  if (tipo === "agenda_buscar_agendamento") return styles.nodeAgendaBuscar;
-  if (tipo === "agenda_escolher_horario") return styles.nodeAgendaEscolher;
-  if (tipo === "agenda_criar_agendamento") return styles.nodeAgendaCriar;
-  if (tipo === "agenda_remarcar_agendamento") return styles.nodeAgendaRemarcar;
-  if (tipo === "agenda_cancelar_agendamento") return styles.nodeAgendaCancelar;
-  if (tipo === "interpretar_arquivo_ia") return styles.nodeArquivoIA;
-  return styles.nodePadrao;
-}
-
-function tituloPadraoTipoNo(tipo: string) {
-  if (tipo === "inicio") return "In√≠cio";
-  if (tipo === "enviar_texto") return "Nova mensagem";
-  if (tipo === "pergunta_opcoes") return "Nova pergunta";
-  if (tipo === TIPO_NO_PERGUNTA_LIVRE_IA) return "Pergunta aberta IA";
-  if (tipo === "enviar_botoes") return "Pergunta bot√µes";
-  if (tipo === "botao_redirect") return "Bot√£o redirect";
-  if (tipo === "transferir_setor") return "Transferir setor";
-  if (tipo === "encerrar") return "Encerrar";
-  if (tipo === "enviar_imagem") return "Nova imagem";
-  if (tipo === "enviar_video") return "Novo v√≠deo";
-  if (tipo === "enviar_audio") return "Novo √°udio";
-  if (tipo === "avaliacao") return "Avalia√ß√£o";
-  if (tipo === "capturar_resposta") return "Capturar resposta";
-  if (tipo === "agendar_disparo") return "Agendar disparo";
-  if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";
-  if (tipo === "agenda_escolher_horario") return "Escolher hor√°rio";
-  if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
-  if (tipo === "agenda_remarcar_agendamento") return "Remarcar agendamento";
-  if (tipo === "agenda_cancelar_agendamento") return "Cancelar agendamento";
-  if (tipo === "interpretar_arquivo_ia") return "Interpretar arquivo IA";
-  return "Novo bloco";
-}
-
-function tituloEhPadraoDoSistema(titulo: string, tipoNoAtual: string) {
-  const tituloLimpo = String(titulo || "").trim();
-
-  if (!tituloLimpo) return true;
-
-  return (
-    tituloLimpo === tituloPadraoTipoNo(tipoNoAtual) ||
-    tituloLimpo === labelTipoNo(tipoNoAtual)
-  );
-}
-
-function cortarTextoCard(texto: string, limite = 34) {
-  const textoLimpo = String(texto || "").replace(/\s+/g, " ").trim();
-
-  if (!textoLimpo) return "";
-
-  return textoLimpo.length > limite
-    ? `${textoLimpo.slice(0, limite)}...`
-    : textoLimpo;
-}
-
-function tituloVisivelCard(data: any) {
-  const tipoNo = String(data?.tipo_no || "");
-  const titulo = String(data?.titulo || "").trim();
-  const tituloPadrao = tituloPadraoTipoNo(tipoNo);
-  const labelPadrao = labelTipoNo(tipoNo);
-
-  const mensagensPadrao = [
-    "Digite a mensagem aqui.",
-    "Escolha uma op√ß√£o:",
-    "Como posso te ajudar?",
-    "",
-  ];
-
-  const mensagem = String(data?.configuracao_json?.mensagem || "").trim();
-  const mensagemEhPadrao = mensagensPadrao.includes(mensagem);
-
-  const tituloEhPadrao =
-    !titulo || titulo === tituloPadrao || titulo === labelPadrao;
-
-  if (!tituloEhPadrao) {
-    return titulo;
-  }
-
-  if (mensagem && !mensagemEhPadrao) {
-    return cortarTextoCard(mensagem);
-  }
-
-  return tituloPadrao;
-}
-
-function tipoNoEsperaResposta(tipoNo: string) {
-  return (
-    tipoNo === "pergunta_opcoes" ||
-    tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA ||
-    tipoNo === "enviar_botoes" ||
-    tipoNo === "capturar_resposta" ||
-    tipoNo === "agenda_buscar_agendamento" ||
-    tipoNo === "agenda_escolher_horario" ||
-    tipoNo === "interpretar_arquivo_ia"
-  );
-}
-
-function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {
-  if (tipoNo === "capturar_resposta") return "sempre";
-
-  return tipoNoEsperaResposta(tipoNo) ? "resposta_contem" : "sempre";
-}
-
-function resultadoEncerramentoValido(
-  valor: unknown
-): valor is ResultadoEncerramentoFluxo {
-  return RESULTADOS_ENCERRAMENTO.includes(
-    valor as ResultadoEncerramentoFluxo
-  );
-}
-
-function tipoValorConversaoValido(
-  valor: unknown
-): valor is TipoValorConversao {
-  return TIPOS_VALOR_CONVERSAO.includes(valor as TipoValorConversao);
-}
-
-function normalizarValorMonetario(valor: unknown) {
-  const texto = String(valor ?? "").replace(/[R$\s]/g, "").trim();
-
-  if (!texto) return null;
-
-  const normalizado = texto.includes(",")
-    ? texto.replace(/\./g, "").replace(",", ".")
-    : texto;
-
-  const numero = Number(normalizado);
-
-  if (!Number.isFinite(numero) || numero < 0) return null;
-
-  return Math.round(numero * 100) / 100;
-}
-
-function urlHttpValida(valor: unknown) {
-  const texto = String(valor || "").trim();
-
-  if (!texto) return false;
-
-  try {
-    const url = new URL(texto);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function configuracaoNodeComoObjeto(valor: unknown): Record<string, unknown> {
-  return valor && typeof valor === "object" && !Array.isArray(valor)
-    ? (valor as Record<string, unknown>)
-    : {};
-}
-
-function nodeEhBlocoMidia(node: Node) {
-  return TIPOS_NO_MIDIA.has(String(node.data?.tipo_no || ""));
-}
-
-function nodeUsaMidia(node: Node, midia: MidiaOpcao) {
-  if (!nodeEhBlocoMidia(node)) return false;
-
-  const config = configuracaoNodeComoObjeto(node.data?.configuracao_json);
-
-  return (
-    String(config.midia_url || "").trim() === midia.url ||
-    String(config.media_url || "").trim() === midia.url ||
-    String(config.arquivo_url || "").trim() === midia.url ||
-    String(config.midia_id || "").trim() === midia.id ||
-    String(config.media_id || "").trim() === midia.id ||
-    String(config.arquivo_id || "").trim() === midia.id
-  );
-}
-
-function limparMidiaDoNode(node: Node, midia: MidiaOpcao) {
-  if (!nodeUsaMidia(node, midia)) return node;
-
-  const configuracao = {
-    ...configuracaoNodeComoObjeto(node.data?.configuracao_json),
-  };
-
-  for (const chave of CHAVES_REFERENCIA_MIDIA_NODE) {
-    delete configuracao[chave];
-  }
-
-  configuracao.midia_removida = {
-    id: midia.id,
-    nome: midia.nome,
-    removida_em: new Date().toISOString(),
-    motivo: "midia_excluida_biblioteca",
-  };
-
-  return {
-    ...node,
-    data: {
-      ...node.data,
-      configuracao_json: configuracao,
-    },
-  };
-}
-
-function validarMidiasObrigatoriasNodes(nodesValidacao: Node[]) {
-  for (const node of nodesValidacao) {
-    if (!nodeEhBlocoMidia(node)) continue;
-
-    const config = configuracaoNodeComoObjeto(node.data?.configuracao_json);
-
-    if (!String(config.midia_url || "").trim()) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma midia selecionada.`;
-    }
-  }
-
-  return "";
-}
-
-function mensagemExclusaoMidia(impacto?: ImpactoExclusaoMidia | null) {
-  const totalBlocos = Number(impacto?.total_blocos_afetados || 0);
-  const totalFluxos = Number(impacto?.total_fluxos_afetados || 0);
-  const totalPausados = Number(impacto?.total_fluxos_pausados || 0);
-
-  if (totalBlocos <= 0) {
-    return "Midia excluida definitivamente.";
-  }
-
-  const partes = [
-    `Midia excluida e removida de ${totalBlocos} bloco(s) em ${totalFluxos} fluxo(s).`,
-  ];
-
-  if (totalPausados > 0) {
-    partes.push(
-      `${totalPausados} fluxo(s) ativo(s) foram pausados ate selecionar outra midia.`
-    );
-  }
-
-  partes.push("Os blocos afetados precisam de uma nova midia antes de salvar/ativar.");
-
-  return partes.join(" ");
-}
-
-function normalizarVariavelFluxo(valor: string) {
-  return String(valor || "")
-    .replace(/[{}]/g, "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9_]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "");
-}
-
-function normalizarDelaySegundos(valor: string | number | null | undefined) {
-  if (valor === null || valor === undefined || valor === "") {
-    return null;
-  }
-
-  const numero = Number(valor);
-
-  if (!Number.isFinite(numero)) {
-    return null;
-  }
-
-  return Math.max(0, Math.min(LIMITE_DELAY_SEGUNDOS, Math.floor(numero)));
-}
-
-function formatarTamanhoArquivo(bytes?: number | null) {
-  const valor = Number(bytes || 0);
-
-  if (!Number.isFinite(valor) || valor <= 0) {
-    return "Tamanho n√£o informado";
-  }
-
-  if (valor < 1024) {
-    return `${valor} B`;
-  }
-
-  if (valor < 1024 * 1024) {
-    return `${(valor / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(valor / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function formatarStorageMidiasMb(bytes?: number | null) {
-  const valor = Number(bytes || 0);
-
-  if (!Number.isFinite(valor) || valor <= 0) {
-    return "0";
-  }
-
-  return (valor / 1024 / 1024).toFixed(1);
-}
-
-function formatarUltimoSalvamento(data: Date | null) {
-  if (!data) return "Ainda n√£o salvo nesta sess√£o";
-
-  const agora = new Date();
-
-  const mesmoDia =
-    data.getDate() === agora.getDate() &&
-    data.getMonth() === agora.getMonth() &&
-    data.getFullYear() === agora.getFullYear();
-
-  const hora = data.toLocaleTimeString("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  if (mesmoDia) {
-    return `Salvo hoje, √†s ${hora}`;
-  }
-
-  const diaMes = data.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-
-  return `Salvo em ${diaMes}, √†s ${hora}`;
-}
-
-function formatarDataMidia(data?: string | null) {
-  if (!data) return "Data n√£o informada";
-
-  try {
-    return new Date(data).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "Data n√£o informada";
-  }
-}
-
-function labelTipoMidia(tipo: string) {
-  if (tipo === "imagem") return "Imagem";
-  if (tipo === "video") return "V√≠deo";
-  if (tipo === "audio") return "√Åudio";
-  return "M√≠dia";
-}
-
-function iconeTipoMidia(tipo: string) {
-  if (tipo === "imagem") return "üñºÔ∏è";
-  if (tipo === "video") return "üé¨";
-  if (tipo === "audio") return "üéß";
-  return "üìé";
-}
-
-function classeUsoStorageMidias(usadoBytes: number, limiteBytes: number) {
-  if (!limiteBytes || limiteBytes <= 0) return "";
-
-  const percentual = (Number(usadoBytes || 0) / limiteBytes) * 100;
-
-  if (percentual >= 90) {
-    return styles.mediaLimitPremiumCardRed;
-  }
-
-  if (percentual >= 70) {
-    return styles.mediaLimitPremiumCardYellow;
-  }
-
-  return styles.mediaLimitPremiumCardGreen;
-}
-
-function rotuloPadraoPorTipoNo(tipoNo: string) {
-  if (tipoNo === "capturar_resposta") {
-    return "Resposta recebida";
-  }
-
-  if (tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA) {
-    return "Nova intencao";
-  }
-
-  return tipoNoEsperaResposta(tipoNo) ? "Nova condi√ß√£o" : "Sempre seguir";
-}
-
-type OpcaoRespostaConexao = {
-  valor: string;
-  titulo: string;
-};
-
-type EdgeDataConexao = {
-  condicao_json?: Record<string, unknown>;
-};
-
-function opcoesRespostaDoNo(node?: Node | null): OpcaoRespostaConexao[] {
-  const tipoNo = String(node?.data?.tipo_no || "");
-  const configuracao = (node?.data?.configuracao_json || {}) as {
-    opcoes?: Array<Record<string, unknown>>;
-    botoes?: Array<Record<string, unknown>>;
-  };
-
-  if (tipoNo === "pergunta_opcoes") {
-    return Array.isArray(configuracao.opcoes)
-      ? configuracao.opcoes
-          .map((opcao) => ({
-            valor: String(opcao.valor || "").trim(),
-            titulo: String(opcao.titulo || "").trim(),
-          }))
-          .filter((opcao) => Boolean(opcao.valor))
-      : [];
-  }
-
-  if (tipoNo === "enviar_botoes") {
-    return Array.isArray(configuracao.botoes)
-      ? configuracao.botoes
-          .map((botao) => ({
-            valor: String(botao.id || "").trim(),
-            titulo: String(botao.titulo || "").trim(),
-          }))
-          .filter((botao) => Boolean(botao.valor))
-      : [];
-  }
-
-  return [];
-}
-
-function proximaOpcaoRespostaDisponivel(
-  nodeOrigem: Node | undefined,
-  edgesAtuais: Edge[]
-) {
-  const opcoesResposta = opcoesRespostaDoNo(nodeOrigem);
-
-  if (opcoesResposta.length === 0) return null;
-
-  const valoresUsados = new Set(
-    edgesAtuais
-      .filter((edge) => edge.source === nodeOrigem?.id)
-      .map((edge) =>
-        String(
-          ((edge.data as EdgeDataConexao | undefined)?.condicao_json || {})
-            .valor || ""
-        ).trim()
-      )
-      .filter(Boolean)
-  );
-
-  return (
-    opcoesResposta.find((opcao) => !valoresUsados.has(opcao.valor)) || null
-  );
-}
-
-function textoEhGenericoParaConexaoIa(texto: string) {
-  const valor = String(texto || "").trim();
-
-  if (!valor) return true;
-
-  return new Set([
-    "Nova intencao",
-    "Intencao IA",
-    "Nova condi√ß√£o",
-    "Condi√ß√£o",
-    "Nova mensagem",
-    "Mensagem",
-    "Novo bloco",
-    "Digite a mensagem aqui.",
-    "Como posso te ajudar?",
-  ]).has(valor);
-}
-
-function rotuloConexaoIaPorDestino(nodeDestino?: Node | null) {
-  if (!nodeDestino) return "Intencao IA";
-
-  const configuracao = (nodeDestino.data?.configuracao_json || {}) as {
-    mensagem?: string;
-  };
-
-  const candidatos = [
-    String(nodeDestino.data?.titulo || ""),
-    tituloVisivelCard(nodeDestino.data),
-    String(configuracao.mensagem || "").replace(/\s+/g, " ").trim(),
-    labelTipoNo(String(nodeDestino.data?.tipo_no || "")),
-  ];
-
-  return (
-    candidatos.find((texto) => !textoEhGenericoParaConexaoIa(texto)) ||
-    "Intencao IA"
-  );
-}
-
-const AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA =
-  "Este fluxo possui um ou mais blocos Interp. arquivo IA sem a sa√≠da erro. Revise os blocos sinalizados no canvas.";
-
-const AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA =
-  "Este bloco precisa de uma CONEX√ÉO com palavra 'ERRO' em RESPOSTA ESPERADA para tratar falhas de IA e tokens esgotados.";
-
-const AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO =
-  "Este fluxo atende WABAs diferentes. Selecione um template aprovado para cada n√∫mero neste bloco.";
-
-function normalizarTextoComparacao(valor: unknown) {
-  return String(valor || "").trim().toLowerCase();
-}
-
-function condicaoCombinaComErroArquivoIa(
-  condicao: Record<string, any> | null | undefined
-) {
-  if (!condicao?.tipo) return false;
-
-  const valor = normalizarTextoComparacao(condicao.valor);
-
-  if (!valor) return false;
-
-  if (condicao.tipo === "resposta_igual") return valor === "erro";
-  if (condicao.tipo === "resposta_contem") return "erro".includes(valor);
-  if (condicao.tipo === "resposta_inicia_com") return "erro".startsWith(valor);
-
-  if (condicao.tipo === "resposta_regex") {
-    try {
-      return new RegExp(String(condicao.valor), "i").test("erro");
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-}
-
-function nodeArquivoIaSemConexaoErro(node: Node, edgesAtuais: Edge[]) {
-  if (String(node.data?.tipo_no || "") !== "interpretar_arquivo_ia") {
-    return false;
-  }
-
-  return !edgesAtuais.some((edge) => {
-    const data = edge.data as { condicao_json?: Record<string, any> } | undefined;
-    return (
-      edge.source === node.id &&
-      condicaoCombinaComErroArquivoIa(data?.condicao_json)
-    );
-  });
-}
-
-function nodeAgendarDisparoPrecisaTemplatePorWaba(
-  node: Node,
-  integracoesEscopo: IntegracaoWhatsappOpcao[],
-  templates: TemplateWhatsappOpcao[]
-) {
-  if (String(node.data?.tipo_no || "") !== "agendar_disparo") {
-    return false;
-  }
-
-  if (!usaTemplatesPorIntegracao(integracoesEscopo)) {
-    return false;
-  }
-
-  const config = configuracaoNodeComoObjeto(node.data?.configuracao_json);
-  const templatesPorIntegracao = normalizarTemplatesPorIntegracao(
-    config.templates_por_integracao
-  );
-
-  return integracoesEscopo.some((integracao) => {
-    const templateId = String(templatesPorIntegracao[integracao.id] || "").trim();
-    const template = templates.find((item) => item.id === templateId);
-
-    return (
-      !templateId ||
-      !template ||
-      !templateWhatsappAprovado(template) ||
-      !templateCompativelComIntegracao(template, integracao)
-    );
-  });
-}
-
-const NODE_CARD_WIDTH = 160;
-const NODE_CARD_HEIGHT = 95;
-const NODE_GAP_X = 70;
-const NODE_GAP_Y = 40;
-
-function posicoesSobrepostas(
-  a: { x: number; y: number },
-  b: { x: number; y: number }
-) {
-  return (
-    Math.abs(a.x - b.x) < NODE_CARD_WIDTH + NODE_GAP_X &&
-    Math.abs(a.y - b.y) < NODE_CARD_HEIGHT + NODE_GAP_Y
-  );
-}
-
-function calcularPosicaoLivreNovoNo(nodesAtuais: Node[]) {
-  if (nodesAtuais.length === 0) {
-    return {
-      x: 180,
-      y: 220,
-    };
-  }
-
-  const nodeReferencia = nodesAtuais.reduce((maisADireita, nodeAtual) =>
-    nodeAtual.position.x > maisADireita.position.x ? nodeAtual : maisADireita
-  );
-
-  const passoX = NODE_CARD_WIDTH + NODE_GAP_X;
-  const passoY = NODE_CARD_HEIGHT + NODE_GAP_Y;
-  const posicaoBase = {
-    x: Math.round(nodeReferencia.position.x + passoX),
-    y: Math.round(nodeReferencia.position.y),
-  };
-
-  const deslocamentos = [
-    { x: 0, y: 0 },
-    { x: 0, y: passoY },
-    { x: 0, y: -passoY },
-    { x: passoX, y: 0 },
-    { x: passoX, y: passoY },
-    { x: passoX, y: -passoY },
-  ];
-
-  for (let coluna = 0; coluna < 8; coluna += 1) {
-    for (const deslocamento of deslocamentos) {
-      const candidato = {
-        x: posicaoBase.x + coluna * passoX + deslocamento.x,
-        y: posicaoBase.y + deslocamento.y,
-      };
-
-      const colide = nodesAtuais.some((node) =>
-        posicoesSobrepostas(candidato, node.position)
-      );
-
-      if (!colide) {
-        return candidato;
-      }
-    }
-  }
-
-  return {
-    x: posicaoBase.x + nodesAtuais.length * passoX,
-    y: posicaoBase.y,
-  };
-}
-
-function calcularPosicaoLivreDuplicacaoNo(
-  nodeOrigem: Node,
-  nodesAtuais: Node[]
-) {
-  const passoX = NODE_CARD_WIDTH + NODE_GAP_X;
-  const passoY = NODE_CARD_HEIGHT + NODE_GAP_Y;
-
-  const posicaoBase = {
-    x: Math.round(nodeOrigem.position.x + passoX),
-    y: Math.round(nodeOrigem.position.y),
-  };
-
-  const deslocamentos = [
-    { x: 0, y: 0 },
-    { x: 0, y: passoY },
-    { x: 0, y: -passoY },
-    { x: passoX, y: 0 },
-    { x: passoX, y: passoY },
-    { x: passoX, y: -passoY },
-    { x: passoX * 2, y: 0 },
-    { x: passoX * 2, y: passoY },
-    { x: passoX * 2, y: -passoY },
-  ];
-
-  for (const deslocamento of deslocamentos) {
-    const candidato = {
-      x: posicaoBase.x + deslocamento.x,
-      y: posicaoBase.y + deslocamento.y,
-    };
-
-    const colide = nodesAtuais.some((node) =>
-      posicoesSobrepostas(candidato, node.position)
-    );
-
-    if (!colide) {
-      return candidato;
-    }
-  }
-
-  return calcularPosicaoLivreNovoNo(nodesAtuais);
-}
-
-function dbNoParaReactFlow(no: AutomacaoNo): Node {
-  const configuracaoJson = no.configuracao_json || {};
-
-  return {
-    id: no.id,
-    position: {
-      x: no.posicao_x || 0,
-      y: no.posicao_y || 0,
-    },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    type: "custom",
-
-    data: {
-      tipo_no: no.tipo_no,
-      titulo: no.titulo,
-      descricao: no.descricao,
-      configuracao_json: configuracaoJson,
-      delay_segundos: no.delay_segundos ?? null,
-      isSelecionado: false,
-    },
-  };
-}
-
-function NodeCustom({ data, dragging }: any) {
-  const temAlertaConexaoErro = data?.arquivo_ia_sem_conexao_erro === true;
-  const temAlertaTemplateWaba =
-    data?.agendar_disparo_template_waba_alerta === true;
-
-  return (
-    <div
-        className={`${styles.nodeBox} ${corTipoNo(data.tipo_no)} ${
-          !dragging && data.isSelecionado ? styles.nodeSelecionado : ""
-        }`}
-      >
-      <Handle
-        type="target"
-        position={Position.Left}
-        className={styles.nodeHandle}
-        isConnectable={true}
-        onClick={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-      />
-
-      <div className={styles.nodeHeader}>
-        <div className={styles.nodeTypeRow}>
-          <span className={styles.nodeType}>
-            {labelTipoNo(data.tipo_no)}
-          </span>
-
-          {data?.delay_segundos != null &&
-            Number(data.delay_segundos) > 0 && (
-              <span className={styles.nodeDelayBadge}>
-                ‚è± {data.delay_segundos}s
-              </span>
-            )}
-        </div>
-      </div>
-
-      <div className={styles.nodeContent}>
-        <div className={styles.nodeTitleRow}>
-          <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>
-
-          {temAlertaConexaoErro && (
-            <span
-              className={`${styles.infoAlertIcon} ${styles.infoAlertIconNode}`}
-              data-tooltip={AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA}
-              title={AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA}
-              aria-label={AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA}
-              role="img"
-            >
-              i
-            </span>
-          )}
-
-          {temAlertaTemplateWaba && (
-            <span
-              className={`${styles.infoAlertIcon} ${styles.infoAlertIconNode} ${styles.infoAlertIconWarning}`}
-              data-tooltip={AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO}
-              title={AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO}
-              aria-label={AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO}
-              role="img"
-            >
-              i
-            </span>
-          )}
-        </div>
-      </div>
-
-      <Handle
-        type="source"
-        position={Position.Right}
-        className={styles.nodeHandle}
-        isConnectable={true}
-        onClick={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-      />
-    </div>
-  );
-}
-
-type TipoMensagemPreviaWhatsapp =
-  | "bot"
-  | "contato"
-  | "sistema"
-  | "seletor"
-  | "divisoria";
-
-type OpcaoJornadaPreviaWhatsapp = {
-  edgeId: string;
-  texto: string;
-  selecionada: boolean;
-};
-
-type MensagemPreviaWhatsapp = {
-  id: string;
-  tipo: TipoMensagemPreviaWhatsapp;
-  texto: string;
-  titulo?: string;
-  rodape?: string;
-  botoes?: string[];
-  midiaTipo?: "imagem" | "video" | "audio";
-  delayLabel?: string;
-  sourceNodeId?: string;
-  opcoesJornada?: OpcaoJornadaPreviaWhatsapp[];
-};
-
-type PreviaWhatsappFluxo = {
-  mensagens: MensagemPreviaWhatsapp[];
-  totalBlocos: number;
-  totalRotas: number;
-  truncado: boolean;
-};
-
-type EncerramentoInatividadePreviaWhatsapp = {
-  quantidade: number;
-  unidade: "minutos" | "horas";
-  mensagem: string;
-};
-
-const LIMITE_MENSAGENS_PREVIA_WHATSAPP = 48;
-
-const EXEMPLOS_VARIAVEIS_PREVIA_WHATSAPP: Record<string, string> = {
-  nome: "Ana",
-  nome_contato: "Ana",
-  nome_whatsapp: "Ana",
-  email_contato: "ana@email.com",
-  numero_contato: "(11) 99999-0000",
-  campanha: "Campanha principal",
-  origem: "Instagram",
-  status_lead: "Novo lead",
-  protocolo_atual: "PROTO-1024",
-  ultimo_protocolo: "PROTO-1008",
-  agenda_data: "12/07",
-  agenda_hora: "14:30",
-  agenda_nome: "Agenda principal",
-  agenda_data_nova: "12/07",
-  agenda_preferencia_solicitada: "14h",
-  agenda_data_sugestao_ano: "12/07/2026",
-};
-
-function textoPreviaWhatsapp(valor: unknown, fallback = "") {
-  const texto = String(valor ?? "").trim();
-  return texto || fallback;
-}
-
-function aplicarVariaveisDemoPreviaWhatsapp(texto: string) {
-  return String(texto || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, chave) => {
-    return EXEMPLOS_VARIAVEIS_PREVIA_WHATSAPP[String(chave).toLowerCase()] || match;
-  });
-}
-
-function criarMensagemPreviaWhatsapp(
-  id: string,
-  tipo: TipoMensagemPreviaWhatsapp,
-  texto: string,
-  extras?: Omit<MensagemPreviaWhatsapp, "id" | "tipo" | "texto">
-): MensagemPreviaWhatsapp {
-  return {
-    id,
-    tipo,
-    texto: aplicarVariaveisDemoPreviaWhatsapp(texto),
-    ...extras,
-  };
-}
-
-function formatarDelayPreviaWhatsapp(segundos: unknown) {
-  const totalSegundos = Number(segundos);
-
-  if (!Number.isFinite(totalSegundos) || totalSegundos <= 0) {
-    return "";
-  }
-
-  if (totalSegundos < 60) return `apos ${Math.floor(totalSegundos)}s`;
-
-  const minutos = Math.round(totalSegundos / 60);
-  if (minutos < 60) return `apos ${minutos} min`;
-
-  const horas = Math.round(minutos / 60);
-  return `apos ${horas} h`;
-}
-
-function formatarTempoAgendamentoPreviaWhatsapp(configuracao: Record<string, unknown>) {
-  const quantidade = Math.max(1, Number(configuracao.tempo_quantidade || 1));
-  const unidade = String(configuracao.tempo_unidade || "horas");
-  const unidadeSingular = unidade === "dias" ? "dia" : "hora";
-  const unidadePlural = unidade === "dias" ? "dias" : "horas";
-
-  return `${quantidade} ${quantidade === 1 ? unidadeSingular : unidadePlural}`;
-}
-
-function formatarTempoInatividadePreviaWhatsapp(
-  encerramento: EncerramentoInatividadePreviaWhatsapp
-) {
-  const quantidade = Math.max(1, Number(encerramento.quantidade || 1));
-  const unidadeSingular =
-    encerramento.unidade === "minutos" ? "minuto" : "hora";
-  const unidadePlural =
-    encerramento.unidade === "minutos" ? "minutos" : "horas";
-
-  return `${quantidade} ${quantidade === 1 ? unidadeSingular : unidadePlural}`;
-}
-
-function variaveisTemplatePreviaWhatsapp(valor: unknown) {
-  if (Array.isArray(valor)) {
-    return valor.map((item) => String(item || "").trim()).join("\n");
-  }
-
-  return String(valor || "");
-}
-
-function templatePorIdPreviaWhatsapp(
-  templates: TemplateWhatsappOpcao[],
-  templateId: unknown
-) {
-  const id = String(templateId || "");
-  if (!id) return null;
-
-  return templates.find((template) => template.id === id) || null;
-}
-
-function montarMensagemTemplatePreviaWhatsapp(
-  id: string,
-  template: TemplateWhatsappOpcao | null,
-  variaveis: unknown
-): MensagemPreviaWhatsapp {
-  const preview = montarPreviewTemplateWhatsapp(
-    template,
-    variaveisTemplatePreviaWhatsapp(variaveis)
-  );
-
-  if (!preview) {
-    return criarMensagemPreviaWhatsapp(
-      id,
-      "bot",
-      "Template WhatsApp ainda nao selecionado."
-    );
-  }
-
-  return criarMensagemPreviaWhatsapp(id, "bot", preview.corpo, {
-    titulo: preview.titulo,
-    rodape: preview.rodape,
-    botoes: preview.botoes,
-  });
-}
-
-function botoesTextoPreviaWhatsapp(valor: unknown, campoTitulo = "titulo") {
-  if (!Array.isArray(valor)) return [];
-
-  return valor
-    .map((item) => textoPreviaWhatsapp((item as Record<string, unknown>)?.[campoTitulo]))
-    .filter(Boolean)
-    .slice(0, 6);
-}
-
-function mensagensDoNodePreviaWhatsapp(
-  node: Node,
-  templatesWhatsapp: TemplateWhatsappOpcao[]
-) {
-  const tipoNo = String(node.data?.tipo_no || "");
-  const configuracao = (node.data?.configuracao_json || {}) as Record<string, unknown>;
-  const delayLabel = formatarDelayPreviaWhatsapp(node.data?.delay_segundos);
-  const tituloNodeAtual = textoPreviaWhatsapp(node.data?.titulo, labelTipoNo(tipoNo));
-  const idBase = node.id;
-
-  const mensagem = textoPreviaWhatsapp(configuracao.mensagem);
-  const mensagemPadrao = (fallback: string) =>
-    textoPreviaWhatsapp(configuracao.mensagem, fallback);
-
-  if (tipoNo === "inicio") return [];
-
-  if (tipoNo === "enviar_texto") {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-texto`,
-        "bot",
-        mensagemPadrao("Digite a mensagem aqui."),
-        { delayLabel }
-      ),
-    ];
-  }
-
-  if (tipoNo === "pergunta_opcoes") {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-pergunta`,
-        "bot",
-        mensagemPadrao("Escolha uma opcao:"),
-        {
-          botoes: botoesTextoPreviaWhatsapp(configuracao.opcoes),
-          delayLabel,
-        }
-      ),
-    ];
-  }
-
-  if (tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA) {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-pergunta-ia`,
-        "bot",
-        mensagemPadrao("Como posso te ajudar?"),
-        { delayLabel }
-      ),
-    ];
-  }
-
-  if (tipoNo === "enviar_botoes") {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-botoes`,
-        "bot",
-        mensagemPadrao("Escolha uma opcao:"),
-        {
-          botoes: botoesTextoPreviaWhatsapp(configuracao.botoes),
-          delayLabel,
-        }
-      ),
-    ];
-  }
-
-  if (tipoNo === "botao_redirect") {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-redirect`,
-        "bot",
-        mensagemPadrao("Clique no botao abaixo para acessar."),
-        {
-          botoes: [textoPreviaWhatsapp(configuracao.botao_texto, "Acessar")],
-          delayLabel,
-        }
-      ),
-    ];
-  }
-
-  if (
-    tipoNo === "enviar_imagem" ||
-    tipoNo === "enviar_video" ||
-    tipoNo === "enviar_audio"
-  ) {
-    const midiaTipo =
-      tipoNo === "enviar_imagem" ? "imagem" : tipoNo === "enviar_video" ? "video" : "audio";
-    const fallback =
-      midiaTipo === "imagem"
-        ? "Imagem enviada pelo atendimento."
-        : midiaTipo === "video"
-        ? "Video enviado pelo atendimento."
-        : "Audio enviado pelo atendimento.";
-
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-midia`,
-        "bot",
-        mensagem || fallback,
-        {
-          titulo: textoPreviaWhatsapp(configuracao.midia_nome, tituloNodeAtual),
-          midiaTipo,
-          delayLabel,
-        }
-      ),
-    ];
-  }
-
-  if (tipoNo === "avaliacao") {
-    const notaMinima = Math.max(0, Number(configuracao.nota_minima ?? 1));
-    const notaMaxima = Math.max(notaMinima, Number(configuracao.nota_maxima ?? 5));
-    const notas = Array.from(
-      { length: Math.min(6, notaMaxima - notaMinima + 1) },
-      (_, index) => String(notaMinima + index)
-    );
-
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-avaliacao`,
-        "bot",
-        mensagemPadrao("De 1 a 5, como voce avalia este atendimento?"),
-        {
-          botoes: notas,
-          delayLabel,
-        }
-      ),
-    ];
-  }
-
-  if (tipoNo === "capturar_resposta") {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-captura`,
-        "bot",
-        mensagemPadrao("Me informe seu nome, por favor."),
-        { delayLabel }
-      ),
-    ];
-  }
-
-  if (tipoNo === "transferir_setor") {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-transferir`,
-        "sistema",
-        "Atendimento transferido para a equipe responsavel."
-      ),
-    ];
-  }
-
-  if (tipoNo === "encerrar") {
-    const mensagens: MensagemPreviaWhatsapp[] = [];
-
-    if (mensagem) {
-      mensagens.push(
-        criarMensagemPreviaWhatsapp(`${idBase}-encerrar-msg`, "bot", mensagem, {
-          delayLabel,
-        })
-      );
-    }
-
-    mensagens.push(
-      criarMensagemPreviaWhatsapp(`${idBase}-encerrar`, "sistema", "Fluxo encerrado.")
-    );
-
-    return mensagens;
-  }
-
-  if (tipoNo === "agendar_disparo") {
-    const template = templatePorIdPreviaWhatsapp(
-      templatesWhatsapp,
-      configuracao.template_id
-    );
-
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-agendamento-info`,
-        "sistema",
-        `Disparo agendado para daqui a ${formatarTempoAgendamentoPreviaWhatsapp(configuracao)}.`
-      ),
-      montarMensagemTemplatePreviaWhatsapp(
-        `${idBase}-template`,
-        template,
-        configuracao.variaveis
-      ),
-    ];
-  }
-
-  if (tipoNo === "agenda_buscar_agendamento") {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-agenda-busca`,
-        "bot",
-        textoPreviaWhatsapp(
-          configuracao.mensagem_encontrado || configuracao.mensagem,
-          "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}."
-        ),
-        { delayLabel }
-      ),
-    ];
-  }
-
-  if (tipoNo === "agenda_escolher_horario") {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-agenda-escolha`,
-        "bot",
-        mensagemPadrao(
-          "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira."
-        ),
-        { delayLabel }
-      ),
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-agenda-horarios`,
-        "bot",
-        textoPreviaWhatsapp(
-          configuracao.mensagem_listar_horarios,
-          "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
-        ),
-        {
-          botoes: ["14:00", "14:30", "15:00"],
-        }
-      ),
-    ];
-  }
-
-  if (
-    tipoNo === "agenda_criar_agendamento" ||
-    tipoNo === "agenda_remarcar_agendamento" ||
-    tipoNo === "agenda_cancelar_agendamento"
-  ) {
-    const mensagens: MensagemPreviaWhatsapp[] = [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-agenda-confirmacao`,
-        "bot",
-        mensagemPadrao(
-          tipoNo === "agenda_cancelar_agendamento"
-            ? "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado."
-            : tipoNo === "agenda_remarcar_agendamento"
-            ? "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}."
-            : "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}."
-        ),
-        { delayLabel }
-      ),
-    ];
-
-    if (
-      tipoNo === "agenda_criar_agendamento" &&
-      configuracao.lembrete_agendamento_ativo &&
-      configuracao.lembrete_agendamento_whatsapp
-    ) {
-      const template = templatePorIdPreviaWhatsapp(
-        templatesWhatsapp,
-        configuracao.lembrete_agendamento_template_id
-      );
-
-      mensagens.push(
-        criarMensagemPreviaWhatsapp(
-          `${idBase}-agenda-lembrete-info`,
-          "sistema",
-          "Lembrete WhatsApp programado para antes do horario."
-        ),
-        montarMensagemTemplatePreviaWhatsapp(
-          `${idBase}-agenda-lembrete-template`,
-          template,
-          configuracao.lembrete_agendamento_variaveis
-        )
-      );
-    }
-
-    return mensagens;
-  }
-
-  if (tipoNo === "interpretar_arquivo_ia") {
-    return [
-      criarMensagemPreviaWhatsapp(
-        `${idBase}-arquivo-ia`,
-        "bot",
-        mensagemPadrao("Envie o arquivo para analise."),
-        { delayLabel }
-      ),
-    ];
-  }
-
-  if (mensagem) {
-    return [
-      criarMensagemPreviaWhatsapp(`${idBase}-mensagem`, "bot", mensagem, {
-        delayLabel,
-      }),
-    ];
-  }
-
-  return [
-    criarMensagemPreviaWhatsapp(
-      `${idBase}-sistema`,
-      "sistema",
-      `${labelTipoNo(tipoNo)}: ${tituloNodeAtual}`
-    ),
-  ];
-}
-
-function condicaoPreviaWhatsapp(edge: Edge, nodeOrigem?: Node | null) {
-  const data = edge.data as
-    | {
-        condicao_json?: Record<string, unknown>;
-        rotulo?: string | null;
-        usar_ia?: boolean;
-      }
-    | undefined;
-  const condicao = data?.condicao_json || {};
-  const tipo = String(condicao.tipo || "");
-
-  if (!tipo || tipo === "sempre") return null;
-
-  if (tipo === "timeout_sem_resposta") {
-    const quantidade = Number(condicao.tempo_quantidade || 0);
-    const unidade = String(condicao.tempo_unidade || "");
-    const texto =
-      quantidade > 0 && unidade
-        ? `Sem resposta em ${quantidade} ${unidade}.`
-        : "Sem resposta do contato.";
-
-    return criarMensagemPreviaWhatsapp(`${edge.id}-timeout`, "sistema", texto);
-  }
-
-  const valor = textoPreviaWhatsapp(condicao.valor);
-  const opcao =
-    valor && nodeOrigem
-      ? opcoesRespostaDoNo(nodeOrigem).find((item) => item.valor === valor)
-      : null;
-  const texto =
-    textoPreviaWhatsapp(opcao?.titulo) ||
-    textoPreviaWhatsapp(data?.rotulo) ||
-    valor ||
-    textoPreviaWhatsapp(typeof edge.label === "string" ? edge.label : "") ||
-    "Resposta do contato";
-
-  return criarMensagemPreviaWhatsapp(`${edge.id}-resposta`, "contato", texto);
-}
-
-function rotuloOpcaoJornadaPreviaWhatsapp(
-  edge: Edge,
-  nodeOrigem: Node | null | undefined,
-  nodeDestino: Node | null | undefined,
-  index: number
-) {
-  const data = edge.data as
-    | {
-        condicao_json?: Record<string, unknown>;
-        rotulo?: string | null;
-      }
-    | undefined;
-  const condicao = data?.condicao_json || {};
-  const tipo = String(condicao.tipo || "");
-
-  if (tipo === "timeout_sem_resposta") {
-    const quantidade = Number(condicao.tempo_quantidade || 0);
-    const unidade = String(condicao.tempo_unidade || "");
-
-    return quantidade > 0 && unidade
-      ? `Sem resposta em ${quantidade} ${unidade}`
-      : "Sem resposta";
-  }
-
-  const valor = textoPreviaWhatsapp(condicao.valor);
-  const opcao =
-    valor && nodeOrigem
-      ? opcoesRespostaDoNo(nodeOrigem).find((item) => item.valor === valor)
-      : null;
-  const destino = nodeDestino ? tituloVisivelCard(nodeDestino.data) : "";
-
-  return (
-    textoPreviaWhatsapp(opcao?.titulo) ||
-    textoPreviaWhatsapp(data?.rotulo) ||
-    valor ||
-    textoPreviaWhatsapp(typeof edge.label === "string" ? edge.label : "") ||
-    destino ||
-    `Caminho ${index + 1}`
-  );
-}
-
-function ordenarNodesPreviaWhatsapp(nodes: Node[]) {
-  return [...nodes].sort((a, b) => {
-    const y = (a.position?.y || 0) - (b.position?.y || 0);
-    if (Math.abs(y) > 20) return y;
-
-    return (a.position?.x || 0) - (b.position?.x || 0);
-  });
-}
-
-function montarPreviaWhatsappFluxo(
-  nodes: Node[],
-  edges: Edge[],
-  templatesWhatsapp: TemplateWhatsappOpcao[],
-  respostasSelecionadas: Record<string, string>,
-  encerramentoInatividade?: EncerramentoInatividadePreviaWhatsapp | null
-): PreviaWhatsappFluxo {
-  const totalBlocos = nodes.filter(
-    (node) => String(node.data?.tipo_no || "") !== "inicio"
-  ).length;
-  const mensagens: MensagemPreviaWhatsapp[] = [];
-  const nodesOrdenados = ordenarNodesPreviaWhatsapp(nodes);
-  const inicio =
-    nodes.find((node) => String(node.data?.tipo_no || "") === "inicio") ||
-    nodesOrdenados[0] ||
-    null;
-  const nodesPorId = new Map(nodes.map((node) => [node.id, node]));
-  const indiceEdge = new Map(edges.map((edge, index) => [edge.id, index]));
-  const edgesPorOrigem = new Map<string, Edge[]>();
-
-  for (const edge of edges) {
-    const lista = edgesPorOrigem.get(edge.source) || [];
-    lista.push(edge);
-    edgesPorOrigem.set(edge.source, lista);
-  }
-
-  for (const [origem, lista] of edgesPorOrigem) {
-    edgesPorOrigem.set(
-      origem,
-      [...lista].sort((a, b) => {
-        const condicaoA = ((a.data as EdgeDataConexao | undefined)?.condicao_json || {})
-          .tipo;
-        const condicaoB = ((b.data as EdgeDataConexao | undefined)?.condicao_json || {})
-          .tipo;
-
-        if (condicaoA === "sempre" && condicaoB !== "sempre") return -1;
-        if (condicaoA !== "sempre" && condicaoB === "sempre") return 1;
-
-        const destinoA = nodesPorId.get(a.target);
-        const destinoB = nodesPorId.get(b.target);
-        const y = (destinoA?.position?.y || 0) - (destinoB?.position?.y || 0);
-        if (Math.abs(y) > 20) return y;
-
-        const x = (destinoA?.position?.x || 0) - (destinoB?.position?.x || 0);
-        if (Math.abs(x) > 20) return x;
-
-        return (indiceEdge.get(a.id) || 0) - (indiceEdge.get(b.id) || 0);
-      })
-    );
-  }
-
-  const visitados = new Set<string>();
-  let truncado = false;
-
-  function adicionarMensagem(mensagem: MensagemPreviaWhatsapp) {
-    if (mensagens.length >= LIMITE_MENSAGENS_PREVIA_WHATSAPP) {
-      truncado = true;
-      return;
-    }
-
-    mensagens.push(mensagem);
-  }
-
-  function caminhar(node: Node | null | undefined, viaEdge?: Edge) {
-    if (!node) return;
-
-    if (viaEdge) {
-      const origem = nodesPorId.get(viaEdge.source) || null;
-      const mensagemCondicao = condicaoPreviaWhatsapp(viaEdge, origem);
-
-      if (mensagemCondicao) {
-        adicionarMensagem(mensagemCondicao);
-      }
-    }
-
-    if (visitados.has(node.id)) {
-      adicionarMensagem(
-        criarMensagemPreviaWhatsapp(
-          `${viaEdge?.id || node.id}-retorno-loop`,
-          "sistema",
-          `Retorna para "${tituloVisivelCard(node.data)}". Esta jornada repete esse trecho ate outra resposta ser selecionada.`
-        )
-      );
-      return;
-    }
-
-    visitados.add(node.id);
-
-    for (const mensagem of mensagensDoNodePreviaWhatsapp(node, templatesWhatsapp)) {
-      adicionarMensagem(mensagem);
-    }
-
-    const saidas = edgesPorOrigem.get(node.id) || [];
-    if (saidas.length === 0) return;
-
-    const edgeSelecionada =
-      saidas.find((edge) => edge.id === respostasSelecionadas[node.id]) ||
-      saidas[0];
-    if (!edgeSelecionada) return;
-
-    if (saidas.length > 1) {
-      adicionarMensagem({
-        id: `${node.id}-seletor-jornada`,
-        tipo: "seletor",
-        texto: "Respostas para visualizar",
-        sourceNodeId: node.id,
-        opcoesJornada: saidas.map((edge, index) => {
-          const destino = nodesPorId.get(edge.target) || null;
-
-          return {
-            edgeId: edge.id,
-            texto: rotuloOpcaoJornadaPreviaWhatsapp(edge, node, destino, index),
-            selecionada: edge.id === edgeSelecionada.id,
-          };
-        }),
-      });
-    }
-
-    caminhar(nodesPorId.get(edgeSelecionada.target), edgeSelecionada);
-  }
-
-  caminhar(inicio);
-
-  if (encerramentoInatividade) {
-    const tempoInatividade =
-      formatarTempoInatividadePreviaWhatsapp(encerramentoInatividade);
-
-    adicionarMensagem({
-      id: "encerramento-inatividade-divisoria",
-      tipo: "divisoria",
-      texto: `Encerramento por inatividade - ${tempoInatividade} sem resposta`,
-    });
-
-    adicionarMensagem(
-      criarMensagemPreviaWhatsapp(
-        "encerramento-inatividade-mensagem",
-        "bot",
-        encerramentoInatividade.mensagem,
-        {
-          delayLabel: `apos ${tempoInatividade}`,
-        }
-      )
-    );
-
-    adicionarMensagem(
-      criarMensagemPreviaWhatsapp(
-        "encerramento-inatividade-fim",
-        "sistema",
-        "Fluxo encerrado por inatividade."
-      )
-    );
-  }
-
-  return {
-    mensagens,
-    totalBlocos,
-    totalRotas: edges.length,
-    truncado,
-  };
-}
-
-function configuracaoMarcada(valor: unknown) {
-  return valor === true || valor === "true" || valor === 1 || valor === "1";
-}
-
-function FluxosPageContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const fluxoParam = searchParams.get("fluxo");
-  const mobileDetailActive = Boolean(fluxoParam);
-
-  const headerUser = useHeaderUser();
-  const [fluxos, setFluxos] = useState<Fluxo[]>([]);
-  const [fluxoSelecionado, setFluxoSelecionado] = useState<Fluxo | null>(null);
-  const [abrirCriacao, setAbrirCriacao] = useState(false);
-  const [descricaoNovoFluxo, setDescricaoNovoFluxo] = useState("");
-
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [assistenteFluxosAberto, setAssistenteFluxosAberto] = useState(false);
-  const [previaWhatsappRecolhida, setPreviaWhatsappRecolhida] =
-    useState(false);
-  const [respostasPreviaWhatsapp, setRespostasPreviaWhatsapp] = useState<
-    Record<string, string>
-  >({});
-  const ignorarCliqueNodeAposArrasteRef = useRef(false);
-
-  const [carregandoFluxos, setCarregandoFluxos] = useState(true);
-  const [carregandoEstrutura, setCarregandoEstrutura] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [ultimoSalvamento, setUltimoSalvamento] = useState<Date | null>(null);
-  const [solicitarComentarioNode, setSolicitarComentarioNode] =
-    useState(false);
-
-  const [mensagemComentarioNode, setMensagemComentarioNode] =
-    useState("");
-
-  const [notaMinimaNode, setNotaMinimaNode] = useState("1");
-  const [notaMaximaNode, setNotaMaximaNode] = useState("5");
-
-  const [erro, setErro] = useState("");
-  const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
-  const [sucesso, setSucesso] = useState("");
-  const [modalVariaveisAberto, setModalVariaveisAberto] = useState(false);
-  const [variaveisPersonalizadas, setVariaveisPersonalizadas] = useState<
-    VariavelPersonalizada[]
-  >([]);
-  const [loadingVariaveis, setLoadingVariaveis] = useState(false);
-  const [salvandoVariavel, setSalvandoVariavel] = useState(false);
-  const [erroVariavelModal, setErroVariavelModal] = useState("");
-  const [novaVariavelChave, setNovaVariavelChave] = useState("");
-  const [novaVariavelValor, setNovaVariavelValor] = useState("");
-  const [novaVariavelDescricao, setNovaVariavelDescricao] = useState("");
-  const [alvoVariavelFluxo, setAlvoVariavelFluxo] =
-    useState<AlvoVariavelFluxo>("mensagem");
-  const [tooltipAlertaFluxo, setTooltipAlertaFluxo] = useState<{
-    texto: string;
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const [novoFluxoNome, setNovoFluxoNome] = useState("");
-  const [novoFluxoPadrao, setNovoFluxoPadrao] = useState(false);
-  const [integracoesWhatsapp, setIntegracoesWhatsapp] = useState<
-    IntegracaoWhatsappOpcao[]
-  >([]);
-  const [limiteIntegracoesWhatsappFluxos, setLimiteIntegracoesWhatsappFluxos] =
-    useState(1);
-  const [carregandoIntegracoesWhatsapp, setCarregandoIntegracoesWhatsapp] =
-    useState(false);
-  const [novoFluxoEscopoIntegracoesModo, setNovoFluxoEscopoIntegracoesModo] =
-    useState<EscopoIntegracoesModo>("todas");
-  const [novoFluxoIntegracoesIds, setNovoFluxoIntegracoesIds] = useState<
-    string[]
-  >([]);
-  const deveMostrarEscopoIntegracoesFluxo =
-    limiteIntegracoesWhatsappFluxos > 1 || integracoesWhatsapp.length > 1;
-  const jaExisteFluxoPadrao = fluxos.some(
-    (fluxo) => {
-      const escopoNovo = montarEscopoIntegracoesFluxo(
-        deveMostrarEscopoIntegracoesFluxo
-          ? novoFluxoEscopoIntegracoesModo
-          : "todas",
-        deveMostrarEscopoIntegracoesFluxo ? novoFluxoIntegracoesIds : []
-      );
-
-      return (
-        fluxo.fluxo_padrao &&
-        fluxo.status !== "arquivado" &&
-        escoposIntegracaoConflitam(
-          escopoNovo,
-          normalizarEscopoIntegracoesFluxo(fluxo.configuracao_json)
-        )
-      );
-    }
-  );
-
-  const [editandoNodeId, setEditandoNodeId] = useState<string | null>(null);
-  const [tituloNode, setTituloNode] = useState("");
-  const [mensagemNode, setMensagemNode] = useState("");
-  const [delayNode, setDelayNode] = useState<string>("");
-
-  const [midiaUrlNode, setMidiaUrlNode] = useState("");
-  const [midiaNomeNode, setMidiaNomeNode] = useState("");
-  const [buscaFluxo, setBuscaFluxo] = useState("");
-  const [menuFluxoAbertoId, setMenuFluxoAbertoId] = useState<string | null>(null);
-  const [tipoNodeEdicao, setTipoNodeEdicao] = useState("");
-
-  const [midias, setMidias] = useState<MidiaOpcao[]>([]);
-  const [carregandoMidias, setCarregandoMidias] = useState(false);
-  const [enviandoMidia, setEnviandoMidia] = useState(false);
-  const [timeoutQuantidade, setTimeoutQuantidade] = useState("2");
-  const [modalMidiasAberto, setModalMidiasAberto] = useState(false);
-  const [abaMidias, setAbaMidias] = useState<"todas" | "imagem" | "video" | "audio">("todas");
-  const [midiaExcluindoId, setMidiaExcluindoId] = useState<string | null>(null);
-  const [confirmandoExclusaoMidiaId, setConfirmandoExclusaoMidiaId] = useState<string | null>(null);
-
-  const [timeoutUnidade, setTimeoutUnidade] =
-    useState<"minutos" | "horas">("horas");
-  const [statusEnvioTimeout, setStatusEnvioTimeout] =
-    useState<"qualquer" | "entregue" | "lida">("qualquer");
-
-  const [editandoFluxo, setEditandoFluxo] = useState(false);
-  const [fluxoEmEdicao, setFluxoEmEdicao] = useState<Fluxo | null>(null);
-  const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
-  const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
-  const [erroEdicaoFluxo, setErroEdicaoFluxo] = useState("");
-  const [fluxoPadraoEdicao, setFluxoPadraoEdicao] = useState(false);
-  const [fluxoEscopoIntegracoesModoEdicao, setFluxoEscopoIntegracoesModoEdicao] =
-    useState<EscopoIntegracoesModo>("todas");
-  const [fluxoIntegracoesIdsEdicao, setFluxoIntegracoesIdsEdicao] = useState<
-    string[]
-  >([]);
-  
-  const [encerrarInatividadeQuantidade, setEncerrarInatividadeQuantidade] = useState("23");
-  const [encerrarInatividadeUnidade, setEncerrarInatividadeUnidade] =
-    useState<"minutos" | "horas">("horas");
-  const [encerrarInatividadeMensagem, setEncerrarInatividadeMensagem] = useState(
-    "Como n√£o tivemos retorno, este atendimento ser√° encerrado. Caso precise de ajuda, envie uma nova mensagem."
-  );
-
-  function resetarEncerramentoInatividadePadrao() {
-    setEncerrarInatividadeQuantidade("23");
-    setEncerrarInatividadeUnidade("horas");
-    setEncerrarInatividadeMensagem(
-      "Como n√£o tivemos retorno, este atendimento ser√° encerrado. Caso precise de ajuda, envie uma nova mensagem."
-    );
-  }
-
-  const [setorDestino, setSetorDestino] = useState("");
-  const fluxo = fluxoSelecionado;
-  const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);
-  const [confirmandoExclusaoConexao, setConfirmandoExclusaoConexao] =
-    useState(false);
-  
-  const [mostrarModalCustoAgendamento, setMostrarModalCustoAgendamento] =
-    useState(false);
-
-  const [acaoPendenteAplicarNo, setAcaoPendenteAplicarNo] =
-    useState<(() => void) | null>(null);
-
-  const [setores, setSetores] = useState<SetorOpcao[]>([]);
-  const [carregandoSetores, setCarregandoSetores] = useState(false);
-  const [menuHeaderAberto, setMenuHeaderAberto] = useState(false);
-  const [menuFluxo, setMenuFluxo] = useState<{
-    fluxo: Fluxo | null;
-    x: number;
-    y: number;
-    buttonTop: number;
-    buttonBottom: number;
-  } | null>(null);
-
-  const [gatilhosFluxo, setGatilhosFluxo] = useState<GatilhoFluxo[]>([]);
-  const [novoGatilhoValor, setNovoGatilhoValor] = useState("");
-  const [novoGatilhoCondicao, setNovoGatilhoCondicao] =
-    useState<GatilhoFluxo["condicao"]>("contem");
-  
-  const [filtroStatusFluxo, setFiltroStatusFluxo] = useState<
-    "todos" | "rascunho" | "ativo" | "pausado" | "arquivado"
-  >("todos");
-
-  const [modalArquivarAberto, setModalArquivarAberto] = useState(false);
-  const [fluxoParaArquivar, setFluxoParaArquivar] = useState<Fluxo | null>(null);
-
-  const [gatilhosNovoFluxo, setGatilhosNovoFluxo] = useState<
-    { valor: string; condicao: GatilhoFluxo["condicao"]; ativo?: boolean }[]
-  >([]);
-
-  const [modalApagarDefinitivoAberto, setModalApagarDefinitivoAberto] =
-    useState(false);
-  const [fluxoParaApagarDefinitivo, setFluxoParaApagarDefinitivo] =
-    useState<Fluxo | null>(null);
-  const [apagandoFluxoDefinitivo, setApagandoFluxoDefinitivo] =
-    useState(false);
-  const apagandoFluxoDefinitivoRef = useRef(false);
-  const [modalCompartilharAberto, setModalCompartilharAberto] = useState(false);
-  const [fluxoParaCompartilhar, setFluxoParaCompartilhar] =
-    useState<Fluxo | null>(null);
-  const [codigoCompartilhamento, setCodigoCompartilhamento] = useState("");
-  const [carregandoCodigoCompartilhamento, setCarregandoCodigoCompartilhamento] =
-    useState(false);
-  const [erroCompartilhamento, setErroCompartilhamento] = useState("");
-  const [modalImportarAberto, setModalImportarAberto] = useState(false);
-  const [codigoImportacao, setCodigoImportacao] = useState("");
-  const [importandoFluxo, setImportandoFluxo] = useState(false);
-  const [erroImportacao, setErroImportacao] = useState("");
-
-  const [opcoesNode, setOpcoesNode] = useState<
-    { valor: string; titulo: string }[]
-  >([]);
-
-  const [botoesNode, setBotoesNode] = useState<
-    { id: string; titulo: string }[]
-  >([]);
-  const [redirectBotaoTextoNode, setRedirectBotaoTextoNode] =
-    useState("Acessar");
-  const [redirectUrlNode, setRedirectUrlNode] = useState("");
-
-  const [editandoEdgeId, setEditandoEdgeId] = useState<string | null>(null);
-  const [rotuloConexao, setRotuloConexao] = useState("");
-  const [valorCondicao, setValorCondicao] = useState("");
-  const [tipoCondicaoConexao, setTipoCondicaoConexao] =
-    useState("resposta_contem");
-  const [nomeConexaoEditadoManual, setNomeConexaoEditadoManual] = useState(false);
-
-  const [usarIaConexao, setUsarIaConexao] = useState(false);
-  const [descricaoIaConexao, setDescricaoIaConexao] = useState("");
-  const [gerandoDescricaoIaConexao, setGerandoDescricaoIaConexao] =
-    useState(false);
-  const [gerandoDescricoesIaBloco, setGerandoDescricoesIaBloco] =
-    useState(false);
-  const [previaGeracaoDescricaoIa, setPreviaGeracaoDescricaoIa] =
-    useState<PreviaGeracaoDescricaoIa | null>(null);
-  const [capturaVariavelNode, setCapturaVariavelNode] = useState("nome");
-  const [capturaTipoNode, setCapturaTipoNode] = useState("nome");
-  const [capturaMensagemErroNode, setCapturaMensagemErroNode] = useState("");
-  const [capturaMaxTentativasNode, setCapturaMaxTentativasNode] = useState("3");
-  const [arquivoCamposExtracaoNode, setArquivoCamposExtracaoNode] = useState("");
-
-  const [maxTentativasInvalidasNode, setMaxTentativasInvalidasNode] = useState("3");
-  const [maxTentativasSemRespostaNode, setMaxTentativasSemRespostaNode] = useState("3");
-  const [acaoExcessoTentativasNode, setAcaoExcessoTentativasNode] =
-    useState("transferir_atendimento");
-  const [setorExcessoTentativasNode, setSetorExcessoTentativasNode] =
-    useState("");
-  const [mensagemExcessoTentativasNode, setMensagemExcessoTentativasNode] =
-    useState("N√£o consegui continuar o atendimento autom√°tico. Vou te encaminhar para um atendente.");
-  const [notificarExcessoTentativasNode, setNotificarExcessoTentativasNode] =
-    useState(true);
-  const [notificarEmailExcessoTentativasNode, setNotificarEmailExcessoTentativasNode] =
-    useState(true);
-
-  const [notificarAoChegarNode, setNotificarAoChegarNode] = useState(false);
-  const [notificacaoTituloNode, setNotificacaoTituloNode] = useState("");
-  const [notificacaoMensagemNode, setNotificacaoMensagemNode] = useState("");
-  const [notificarEmailNode, setNotificarEmailNode] = useState(false);
-
-  const [templatesWhatsapp, setTemplatesWhatsapp] = useState<TemplateWhatsappOpcao[]>([]);
-  const [carregandoTemplatesWhatsapp, setCarregandoTemplatesWhatsapp] = useState(false);
-  const [agendasOpcoes, setAgendasOpcoes] = useState<AgendaOpcao[]>([]);
-  const [carregandoAgendasOpcoes, setCarregandoAgendasOpcoes] = useState(false);
-
-  const [arquivoInstrucaoIaNode, setArquivoInstrucaoIaNode] = useState("");
-  const [arquivoMensagemErroNode, setArquivoMensagemErroNode] = useState("");
-
-  const [agendarDisparoTemplateIdNode, setAgendarDisparoTemplateIdNode] = useState("");
-  const [
-    agendarDisparoTemplatesPorIntegracaoNode,
-    setAgendarDisparoTemplatesPorIntegracaoNode,
-  ] = useState<Record<string, string>>({});
-  const [agendarDisparoQuantidadeNode, setAgendarDisparoQuantidadeNode] = useState("32");
-  const [agendarDisparoUnidadeNode, setAgendarDisparoUnidadeNode] =
-    useState<"horas" | "dias">("horas");
-  const [agendarDisparoVariaveisNode, setAgendarDisparoVariaveisNode] = useState("");
-  const [agendaIdNode, setAgendaIdNode] = useState("");
-  const [agendaListarAgendamentosNode, setAgendaListarAgendamentosNode] =
-    useState(false);
-  const [agendaQuantidadeOpcoesNode, setAgendaQuantidadeOpcoesNode] = useState("6");
-  const [agendaJanelaDiasNode, setAgendaJanelaDiasNode] = useState("14");
-  const [agendaMensagemSemHorariosNode, setAgendaMensagemSemHorariosNode] =
-    useState("No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.");
-  const [agendaMensagemSemExpedienteNode, setAgendaMensagemSemExpedienteNode] =
-    useState("Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis.");
-  const [agendaMensagemDataInvalidaNode, setAgendaMensagemDataInvalidaNode] =
-    useState("Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.");
-  const [agendaMensagemListarAgendamentosNode, setAgendaMensagemListarAgendamentosNode] =
-    useState("Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:");
-  const [agendaMensagemListarHorariosNode, setAgendaMensagemListarHorariosNode] =
-    useState("Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:");
-  const [
-    agendaMensagemPreferenciaIndisponivelNode,
-    setAgendaMensagemPreferenciaIndisponivelNode,
-  ] = useState(
-    "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
-  );
-  const [agendaMensagemConflitoNode, setAgendaMensagemConflitoNode] =
-    useState("Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.");
-  const [agendaStatusAgendamentoNode, setAgendaStatusAgendamentoNode] =
-    useState("agendado");
-  const [agendaEnviarEmailNode, setAgendaEnviarEmailNode] = useState(true);
-  const [agendaEmailOrigemNode, setAgendaEmailOrigemNode] =
-    useState<"contato" | "variavel">("contato");
-  const [agendaEmailVariavelNode, setAgendaEmailVariavelNode] =
-    useState("email");
-  const [agendaLembreteAtivoNode, setAgendaLembreteAtivoNode] =
-    useState(false);
-  const [agendaLembreteQuantidadeNode, setAgendaLembreteQuantidadeNode] =
-    useState("2");
-  const [agendaLembreteUnidadeNode, setAgendaLembreteUnidadeNode] =
-    useState<"minutos" | "horas" | "dias">("horas");
-  const [agendaLembreteWhatsappNode, setAgendaLembreteWhatsappNode] =
-    useState(true);
-  const [agendaLembreteEmailNode, setAgendaLembreteEmailNode] =
-    useState(false);
-  const [agendaLembreteTemplateIdNode, setAgendaLembreteTemplateIdNode] =
-    useState("");
-  const [agendaLembreteVariaveisNode, setAgendaLembreteVariaveisNode] =
-    useState("");
-  const [agendaMotivoCancelamentoNode, setAgendaMotivoCancelamentoNode] =
-    useState("Cancelado pelo cliente via automacao");
-  const [encerrarResultadoNode, setEncerrarResultadoNode] =
-    useState<ResultadoEncerramentoFluxo>("positivo");
-  const [encerrarValorTipoNode, setEncerrarValorTipoNode] =
-    useState<TipoValorConversao>("sem_valor");
-  const [encerrarValorFixoNode, setEncerrarValorFixoNode] = useState("");
-  const [encerrarValorVariavelNode, setEncerrarValorVariavelNode] =
-    useState("");
-  const [previewCustoAgendarDisparo, setPreviewCustoAgendarDisparo] = useState<{
-    categoria: string;
-    totalSelecionados: number;
-    totalIsentos: number;
-    totalCobrados: number;
-    valorUnitarioUsd: number;
-    valorTotalUsd: number;
-    cotacaoUsdBrl: number;
-    valorTotalBrlEstimado: number;
-    valorTotalBrlMin: number;
-    valorTotalBrlMax: number;
-    margemMinPercent: number;
-    margemMaxPercent: number;
-    fonteCotacao?: string;
-    cotacaoDataHora?: string | null;
-    cotacaoFallback?: boolean;
-  } | null>(null);
-
-  const [loadingPreviewCustoAgendarDisparo, setLoadingPreviewCustoAgendarDisparo] =
-    useState(false);
-
-  const nodeEditado = useMemo(() => {
-    return nodes.find((node) => node.id === editandoNodeId) || null;
-  }, [nodes, editandoNodeId]);
-
-  const edgeEditada = useMemo(() => {
-    return edges.find((edge) => edge.id === editandoEdgeId) || null;
-  }, [edges, editandoEdgeId]);
-
-  const nodeOrigemEdgeEditada = useMemo(() => {
-    if (!edgeEditada) return null;
-
-    return nodes.find((node) => node.id === edgeEditada.source) || null;
-  }, [nodes, edgeEditada]);
-
-  const edgeEditadaOrigemPerguntaLivreIa =
-    String(nodeOrigemEdgeEditada?.data?.tipo_no || "") ===
-    TIPO_NO_PERGUNTA_LIVRE_IA;
-
-  const tipoNodeEditadoAtual = String(nodeEditado?.data?.tipo_no || "");
-  const nodeEditadoPermiteGerarDescricoesIa =
-    tipoNodeEditadoAtual === "pergunta_opcoes" ||
-    tipoNodeEditadoAtual === TIPO_NO_PERGUNTA_LIVRE_IA ||
-    tipoNodeEditadoAtual === "enviar_botoes";
-  const quantidadeConexoesIaNodeEditado = nodeEditado
-    ? edges.filter(
-        (edge) =>
-          edge.source === nodeEditado.id && conexaoPermiteDescricaoIa(edge)
-      ).length
-    : 0;
-
-  function textoLimpoConexao(valor: unknown) {
-    return String(valor || "").replace(/\s+/g, " ").trim();
-  }
-
-  function conexaoPermiteDescricaoIa(edge: Edge) {
-    const data = edge.data as
-      | {
-          condicao_json?: Record<string, any>;
-        }
-      | undefined;
-    const tipoCondicao = String(data?.condicao_json?.tipo || "");
-
-    return (
-      tipoCondicao !== "sempre" &&
-      tipoCondicao !== "timeout_sem_resposta"
-    );
-  }
-
-  function mensagemDoNodeParaContexto(node?: Node | null) {
-    return textoLimpoConexao(
-      (node?.data?.configuracao_json as Record<string, any> | undefined)
-        ?.mensagem
-    );
-  }
-
-  function textoOpcaoRespostaDaConexao(
-    nodeOrigem?: Node | null,
-    idResposta?: string | null
-  ) {
-    const id = textoLimpoConexao(idResposta);
-    if (!id) return "";
-
-    return (
-      opcoesRespostaDoNo(nodeOrigem).find((opcao) => opcao.valor === id)
-        ?.titulo || ""
-    );
-  }
-
-  function resumoOutraConexaoParaContexto(edge: Edge) {
-    const data = edge.data as
-      | {
-          condicao_json?: Record<string, any>;
-          rotulo?: string | null;
-          descricao_ia?: string | null;
-        }
-      | undefined;
-    const condicao = data?.condicao_json || {};
-    const nodeDestino = nodes.find((node) => node.id === edge.target) || null;
-    const destino = nodeDestino ? tituloVisivelCard(nodeDestino.data) : "";
-    const nome = textoLimpoConexao(
-      data?.rotulo ||
-        condicao.valor ||
-        (typeof edge.label === "string" ? edge.label.replace(/^‚ú®\s*/, "") : "")
-    );
-
-    if (nome && destino && nome !== destino) {
-      return `${nome} -> ${destino}`;
-    }
-
-    return nome || destino || textoLimpoConexao(data?.descricao_ia);
-  }
-
-  function montarContextoDescricaoIaConexao(params?: {
-    edge?: Edge | null;
-    rotulo?: string | null;
-    valor?: string | null;
-    descricaoAtual?: string | null;
-  }) {
-    const edge = params?.edge || edgeEditada;
-    const data = edge?.data as
-      | {
-          condicao_json?: Record<string, any>;
-          rotulo?: string | null;
-          descricao_ia?: string | null;
-        }
-      | undefined;
-    const condicao = data?.condicao_json || {};
-    const nodeOrigem = edge
-      ? nodes.find((node) => node.id === edge.source) || null
-      : nodeOrigemEdgeEditada;
-    const nodeDestino = edge
-      ? nodes.find((node) => node.id === edge.target) || null
-      : null;
-    const idResposta = textoLimpoConexao(
-      params?.valor ?? condicao.valor ?? valorCondicao
-    );
-    const rotuloBase =
-      textoLimpoConexao(params?.rotulo) ||
-      textoLimpoConexao(data?.rotulo) ||
-      textoLimpoConexao(
-        typeof edge?.label === "string" ? edge.label.replace(/^‚ú®\s*/, "") : ""
-      ) ||
-      textoLimpoConexao(rotuloConexao);
-    const destinoTitulo = nodeDestino ? tituloVisivelCard(nodeDestino.data) : "";
-    const destinoTipo = nodeDestino
-      ? labelTipoNo(String(nodeDestino.data?.tipo_no || ""))
-      : "";
-
-    return {
-      pergunta: mensagemDoNodeParaContexto(nodeOrigem),
-      nomeConexao: rotuloBase,
-      idResposta,
-      textoOpcao: textoOpcaoRespostaDaConexao(nodeOrigem, idResposta),
-      destinoTitulo,
-      destinoMensagem: mensagemDoNodeParaContexto(nodeDestino),
-      destinoTipo,
-      outrasConexoes: edge
-        ? edges
-            .filter(
-              (item) => item.source === edge.source && item.id !== edge.id
-            )
-            .map(resumoOutraConexaoParaContexto)
-            .filter(Boolean)
-        : [],
-      descricaoAtual: textoLimpoConexao(
-        params?.descricaoAtual ?? data?.descricao_ia
-      ),
-      blocoOrigem: nodeOrigem
-        ? {
-            id: nodeOrigem.id,
-            tipo: String(nodeOrigem.data?.tipo_no || ""),
-            titulo: tituloVisivelCard(nodeOrigem.data),
-            mensagem: mensagemDoNodeParaContexto(nodeOrigem),
-          }
-        : null,
-      blocoDestino: nodeDestino
-        ? {
-            id: nodeDestino.id,
-            tipo: String(nodeDestino.data?.tipo_no || ""),
-            titulo: destinoTitulo,
-            mensagem: mensagemDoNodeParaContexto(nodeDestino),
-          }
-        : null,
-    };
-  }
-
-  function gerarSugestaoDescricaoIaConexao(params?: {
-    edge?: Edge | null;
-    rotulo?: string | null;
-    valor?: string | null;
-  }) {
-    const contexto = montarContextoDescricaoIaConexao(params);
-
-    return gerarSugestaoDescricaoIAComContexto(contexto);
-  }
-
-  function montarPayloadDescricaoConexaoIa(
-    edge: Edge,
-    contexto: ReturnType<typeof montarContextoDescricaoIaConexao>
-  ) {
-    return {
-      blocoOrigem: contexto.blocoOrigem,
-      conexao: {
-        id: edge.id,
-        nome: contexto.nomeConexao,
-        idResposta: contexto.idResposta,
-        textoOpcao: contexto.textoOpcao,
-        descricaoAtual: contexto.descricaoAtual,
-      },
-      blocoDestino: contexto.blocoDestino,
-      outrasConexoes: contexto.outrasConexoes.map((nome) => ({ nome })),
-    };
-  }
-
-  function estimarTokensDescricaoConexaoIa(
-    payload: ReturnType<typeof montarPayloadDescricaoConexaoIa>
-  ) {
-    const tokensEntrada = Math.ceil(JSON.stringify(payload).length / 3.5);
-    const base =
-      TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS +
-      tokensEntrada +
-      TOKENS_SAIDA_MAX_DESCRICAO_IA;
-
-    return Math.ceil(base * 1.25);
-  }
-
-  function formatarTokens(valor: number) {
-    return new Intl.NumberFormat("pt-BR").format(Math.max(0, Math.round(valor)));
-  }
-
-  function montarPreviaGeracaoDescricaoIa(params: {
-    modo: "conexao" | "bloco";
-    titulo: string;
-    conexoes: Array<{
-      edge: Edge;
-      contexto?: ReturnType<typeof montarContextoDescricaoIaConexao>;
-    }>;
-  }): PreviaGeracaoDescricaoIa {
-    const conexoes = params.conexoes.map((item) => {
-      const contexto =
-        item.contexto || montarContextoDescricaoIaConexao({ edge: item.edge });
-      const edge = item.edge;
-      const payload = montarPayloadDescricaoConexaoIa(edge, contexto);
-
-      return {
-        edgeId: edge.id,
-        nome: rotuloFinalDescricaoIa(contexto),
-        tokensEstimados: estimarTokensDescricaoConexaoIa(payload),
-      };
-    });
-    const totalEstimado = conexoes.reduce(
-      (total, item) => total + item.tokensEstimados,
-      0
-    );
-
-    return {
-      modo: params.modo,
-      titulo: params.titulo,
-      conexoes,
-      tokensMin: Math.ceil(totalEstimado * 0.85),
-      tokensMax: Math.ceil(totalEstimado * 1.15),
-    };
-  }
-
-  async function solicitarDescricaoConexaoIa(
-    edge: Edge,
-    contexto: ReturnType<typeof montarContextoDescricaoIaConexao>
-  ) {
-    if (!fluxoSelecionado) {
-      throw new Error("Selecione um fluxo primeiro.");
-    }
-
-    const res = await fetch("/api/automacoes/descricao-conexao-ia", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        fluxoId: fluxoSelecionado.id,
-        conexaoId: edge.id,
-        contexto: montarPayloadDescricaoConexaoIa(edge, contexto),
-      }),
-    });
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao gerar inten√ß√£o com IA.");
-    }
-
-    const descricao = String(json.descricao || "").trim();
-
-    if (!descricao) {
-      throw new Error("A IA n√£o retornou uma descri√ß√£o v√°lida.");
-    }
-
-    return descricao;
-  }
-
-  function rotuloFinalDescricaoIa(
-    contexto: ReturnType<typeof montarContextoDescricaoIaConexao>,
-    fallback = "Intencao IA"
-  ) {
-    return (
-      textoLimpoConexao(contexto.nomeConexao) ||
-      textoLimpoConexao(contexto.textoOpcao) ||
-      textoLimpoConexao(contexto.idResposta) ||
-      textoLimpoConexao(contexto.destinoTitulo) ||
-      fallback
-    );
-  }
-
-  function condicaoFinalDescricaoIa(
-    edge: Edge,
-    contexto: ReturnType<typeof montarContextoDescricaoIaConexao>
-  ) {
-    const data = edge.data as
-      | {
-          condicao_json?: Record<string, any>;
-        }
-      | undefined;
-    const condicaoAtual = data?.condicao_json || {};
-    const condicaoJson: Record<string, any> = {
-      ...condicaoAtual,
-      tipo: String(condicaoAtual.tipo || "resposta_contem"),
-    };
-    const idResposta = textoLimpoConexao(
-      condicaoAtual.valor || contexto.idResposta
-    );
-
-    if (idResposta) {
-      condicaoJson.valor = idResposta;
-    } else {
-      delete condicaoJson.valor;
-    }
-
-    return condicaoJson;
-  }
-
-  const templateAgendarDisparoSelecionado = useMemo(() => {
-    return (
-      templatesWhatsapp.find(
-        (template) => template.id === agendarDisparoTemplateIdNode
-      ) || null
-    );
-  }, [templatesWhatsapp, agendarDisparoTemplateIdNode]);
-
-  const escopoIntegracoesFluxoSelecionado = useMemo(() => {
-    return normalizarEscopoIntegracoesFluxo(
-      fluxoSelecionado?.configuracao_json
-    );
-  }, [fluxoSelecionado?.configuracao_json]);
-
-  const integracoesEscopoFluxoSelecionado = useMemo(() => {
-    return obterIntegracoesDoEscopoFluxo(
-      escopoIntegracoesFluxoSelecionado,
-      integracoesWhatsapp
-    );
-  }, [escopoIntegracoesFluxoSelecionado, integracoesWhatsapp]);
-
-  const agendarDisparoUsaTemplatesPorIntegracao = useMemo(() => {
-    return usaTemplatesPorIntegracao(integracoesEscopoFluxoSelecionado);
-  }, [integracoesEscopoFluxoSelecionado]);
-
-  const templatesAgendarDisparoSelecionados = useMemo(() => {
-    if (!agendarDisparoUsaTemplatesPorIntegracao) {
-      return templateAgendarDisparoSelecionado
-        ? [templateAgendarDisparoSelecionado]
-        : [];
-    }
-
-    return integracoesEscopoFluxoSelecionado
-      .map((integracao) => {
-        const templateId =
-          agendarDisparoTemplatesPorIntegracaoNode[integracao.id] || "";
-
-        return (
-          templatesWhatsapp.find((template) => template.id === templateId) ||
-          null
-        );
-      })
-      .filter((template): template is TemplateWhatsappOpcao => Boolean(template));
-  }, [
-    agendarDisparoUsaTemplatesPorIntegracao,
-    agendarDisparoTemplatesPorIntegracaoNode,
-    integracoesEscopoFluxoSelecionado,
-    templateAgendarDisparoSelecionado,
-    templatesWhatsapp,
-  ]);
-
-  const templateAgendarDisparoPreview = useMemo(() => {
-    return (
-      templateAgendarDisparoSelecionado ||
-      templatesAgendarDisparoSelecionados[0] ||
-      null
-    );
-  }, [
-    templateAgendarDisparoSelecionado,
-    templatesAgendarDisparoSelecionados,
-  ]);
-
-  const templateAgendaLembreteSelecionado = useMemo(() => {
-    return (
-      templatesWhatsapp.find(
-        (template) => template.id === agendaLembreteTemplateIdNode
-      ) || null
-    );
-  }, [templatesWhatsapp, agendaLembreteTemplateIdNode]);
-
-  const opcoesVariaveisTemplate = useMemo<TemplateVariableOption[]>(() => {
-    const chavesAdicionadas = new Set<string>();
-    const opcoes: TemplateVariableOption[] = [];
-
-    for (const variavel of VARIAVEIS_FIXAS_SISTEMA) {
-      if (chavesAdicionadas.has(variavel.chave)) continue;
-
-      chavesAdicionadas.add(variavel.chave);
-      opcoes.push({
-        key: variavel.chave,
-        description: variavel.descricao,
-        category: "Fixa",
-      });
-    }
-
-    for (const variavel of variaveisPersonalizadas) {
-      const chave = normalizarEntradaVariavelTemplate(variavel.chave);
-      if (!variavel.ativo || !chave || chavesAdicionadas.has(chave)) continue;
-
-      chavesAdicionadas.add(chave);
-      opcoes.push({
-        key: chave,
-        description:
-          variavel.descricao?.trim() ||
-          "Vari√°vel personalizada cadastrada pela empresa.",
-        category: "Personalizada",
-      });
-    }
-
-    return opcoes;
-  }, [variaveisPersonalizadas]);
-
-  const opcoesVariaveisFluxo = useMemo<TemplateVariableOption[]>(() => {
-    const opcoes = [...opcoesVariaveisTemplate];
-    const chavesAdicionadas = new Set(opcoes.map((opcao) => opcao.key));
-
-    for (const node of nodes) {
-      if (String(node.data?.tipo_no || "") !== "capturar_resposta") continue;
-
-      const configuracao = (node.data?.configuracao_json || {}) as Record<
-        string,
-        unknown
-      >;
-      const chave = normalizarEntradaVariavelTemplate(
-        String(configuracao.variavel || "")
-      );
-
-      if (!chave || chavesAdicionadas.has(chave)) continue;
-
-      const titulo = String(node.data?.titulo || "Capturar resposta").trim();
-      chavesAdicionadas.add(chave);
-      opcoes.push({
-        key: chave,
-        description: `Resposta armazenada pelo bloco "${titulo}".`,
-        category: "Fluxo",
-      });
-    }
-
-    return opcoes;
-  }, [nodes, opcoesVariaveisTemplate]);
-
-  const opcoesVariaveisAgendamento = useMemo<TemplateVariableOption[]>(() => {
-    const opcoes = [...opcoesVariaveisFluxo];
-    const chavesAdicionadas = new Set(opcoes.map((opcao) => opcao.key));
-    const variaveisAgendamento: TemplateVariableOption[] = [
-      {
-        key: "agenda_data",
-        description: "Data do agendamento formatada para exibi√ß√£o.",
-        category: "Agendamento",
-      },
-      {
-        key: "agenda_hora",
-        description: "Hora do agendamento formatada para exibi√ß√£o.",
-        category: "Agendamento",
-      },
-      {
-        key: "agenda_nome",
-        description: "Nome da agenda em que o hor√°rio foi reservado.",
-        category: "Agendamento",
-      },
-      {
-        key: "agenda_inicio_at",
-        description: "Data e hora inicial completas do agendamento.",
-        category: "Agendamento",
-      },
-      {
-        key: "agenda_fim_at",
-        description: "Data e hora final completas do agendamento.",
-        category: "Agendamento",
-      },
-      {
-        key: "agenda_agendamento_id",
-        description: "Identificador √∫nico do agendamento criado.",
-        category: "Agendamento",
-      },
-      {
-        key: "agenda_id",
-        description: "Identificador da agenda utilizada.",
-        category: "Agendamento",
-      },
-    ];
-
-    for (const variavel of variaveisAgendamento) {
-      if (chavesAdicionadas.has(variavel.key)) continue;
-      chavesAdicionadas.add(variavel.key);
-      opcoes.push(variavel);
-    }
-
-    return opcoes;
-  }, [opcoesVariaveisFluxo]);
-
-  const previewTemplateAgendarDisparo = useMemo(() => {
-    return montarPreviewTemplateWhatsapp(
-      templateAgendarDisparoPreview,
-      agendarDisparoVariaveisNode
-    );
-  }, [templateAgendarDisparoPreview, agendarDisparoVariaveisNode]);
-
-  const previewTemplateAgendaLembrete = useMemo(() => {
-    return montarPreviewTemplateWhatsapp(
-      templateAgendaLembreteSelecionado,
-      agendaLembreteVariaveisNode
-    );
-  }, [templateAgendaLembreteSelecionado, agendaLembreteVariaveisNode]);
-
-  const totalVariaveisTemplateAgendarDisparo = useMemo(() => {
-    return contarVariaveisTemplateWhatsapp(templateAgendarDisparoPreview);
-  }, [templateAgendarDisparoPreview]);
-
-  const totalVariaveisTemplateAgendaLembrete = useMemo(() => {
-    return contarVariaveisTemplateWhatsapp(templateAgendaLembreteSelecionado);
-  }, [templateAgendaLembreteSelecionado]);
-
-  const indicesVariaveisTemplateAgendarDisparo = useMemo(() => {
-    return Array.from(
-      { length: Math.min(totalVariaveisTemplateAgendarDisparo, 3) },
-      (_, index) => index
-    );
-  }, [totalVariaveisTemplateAgendarDisparo]);
-
-  const indicesVariaveisTemplateAgendaLembrete = useMemo(() => {
-    return Array.from(
-      { length: Math.min(totalVariaveisTemplateAgendaLembrete, 3) },
-      (_, index) => index
-    );
-  }, [totalVariaveisTemplateAgendaLembrete]);
-
-    const resumoMidias = useMemo(() => {
-      const imagens = midias.filter((midia) => midia.tipo === "imagem");
-      const videos = midias.filter((midia) => midia.tipo === "video");
-      const audios = midias.filter((midia) => midia.tipo === "audio");
-
-      const tamanhoTotal = midias.reduce(
-        (total, midia) => total + Number(midia.tamanho_bytes || 0),
-        0
-      );
-
-      return {
-        total: midias.length,
-        imagens: imagens.length,
-        videos: videos.length,
-        audios: audios.length,
-        tamanhoTotal,
-      };
-    }, [midias]);
-
-    const midiasFiltradasModal = useMemo(() => {
-      if (abaMidias === "todas") return midias;
-
-      return midias.filter((midia) => midia.tipo === abaMidias);
-    }, [midias, abaMidias]);
-
-    const limiteStorageMidiasAtingido =
-      resumoMidias.tamanhoTotal >= LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES;
-
-  async function carregarTemplatesWhatsapp() {
-    try {
-      setCarregandoTemplatesWhatsapp(true);
-
-      const res = await fetch("/api/whatsapp/templates?status=APPROVED", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar templates.");
-      }
-
-      const templatesRecebidos = Array.isArray(json.templates)
-        ? json.templates
-        : Array.isArray(json.data)
-        ? json.data
-        : [];
-
-      setTemplatesWhatsapp(
-        templatesRecebidos.filter((template: TemplateWhatsappOpcao) =>
-          templateWhatsappAprovado(template)
-        )
-      );
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar templates.");
-    } finally {
-      setCarregandoTemplatesWhatsapp(false);
-    }
-  }
-
-  async function carregarIntegracoesWhatsapp() {
-    try {
-      setCarregandoIntegracoesWhatsapp(true);
-
-      const res = await fetch("/api/integracoes-whatsapp/listar", {
-        cache: "no-store",
-      });
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar integra√ß√µes WhatsApp.");
-      }
-
-      const lista = Array.isArray(json.data)
-        ? json.data
-        : Array.isArray(json.integracoes)
-        ? json.integracoes
-        : [];
-
-      setIntegracoesWhatsapp(lista);
-      setLimiteIntegracoesWhatsappFluxos(
-        Math.max(1, Number(json.limite_integracoes_whatsapp || 1))
-      );
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar integra√ß√µes WhatsApp.");
-    } finally {
-      setCarregandoIntegracoesWhatsapp(false);
-    }
-  }
-
-  function alternarIntegracaoEscopoNovoFluxo(integracaoId: string) {
-    setNovoFluxoIntegracoesIds((atuais) =>
-      atuais.includes(integracaoId)
-        ? atuais.filter((id) => id !== integracaoId)
-        : [...atuais, integracaoId]
-    );
-  }
-
-  function alternarIntegracaoEscopoEdicao(integracaoId: string) {
-    setFluxoIntegracoesIdsEdicao((atuais) =>
-      atuais.includes(integracaoId)
-        ? atuais.filter((id) => id !== integracaoId)
-        : [...atuais, integracaoId]
-    );
-  }
-
-  async function carregarAgendasOpcoes() {
-    try {
-      setCarregandoAgendasOpcoes(true);
-
-      const res = await fetch("/api/agendas/opcoes", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar agendas.");
-      }
-
-      setAgendasOpcoes(json.agendas || []);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar agendas.");
-    } finally {
-      setCarregandoAgendasOpcoes(false);
-    }
-  }
-
-  async function carregarVariaveisPersonalizadas(
-    options: { erroNoModal?: boolean } = {}
-  ) {
-    try {
-      setLoadingVariaveis(true);
-
-      const res = await fetch("/api/variaveis", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar variaveis.");
-      }
-
-      setVariaveisPersonalizadas(
-        Array.isArray(json.variaveis) ? json.variaveis : []
-      );
-    } catch (error: unknown) {
-      const mensagem =
-        error instanceof Error ? error.message : "Erro ao carregar variaveis.";
-
-      if (options.erroNoModal) {
-        setErroVariavelModal(mensagem);
-      } else {
-        setErro(mensagem);
-      }
-    } finally {
-      setLoadingVariaveis(false);
-    }
-  }
-
-  async function abrirModalGerenciarVariaveis(
-    alvo: AlvoVariavelFluxo = "mensagem"
-  ) {
-    setAlvoVariavelFluxo(alvo);
-    setNovaVariavelChave("");
-    setNovaVariavelValor("");
-    setNovaVariavelDescricao("");
-    setErroVariavelModal("");
-    setModalVariaveisAberto(true);
-    await carregarVariaveisPersonalizadas({ erroNoModal: true });
-  }
-
-  function fecharModalGerenciarVariaveis() {
-    setModalVariaveisAberto(false);
-    setNovaVariavelChave("");
-    setNovaVariavelValor("");
-    setNovaVariavelDescricao("");
-    setErroVariavelModal("");
-  }
-
-  async function salvarVariavelPersonalizada() {
-    try {
-      setErro("");
-      setErroVariavelModal("");
-      setSucesso("");
-
-      const chave = normalizarEntradaVariavelTemplate(novaVariavelChave);
-      const valor = novaVariavelValor.trim();
-
-      if (!chave) {
-        setErroVariavelModal("Informe o nome da variavel.");
-        return;
-      }
-
-      if (!valor) {
-        setErroVariavelModal("Informe o valor da variavel.");
-        return;
-      }
-
-      setSalvandoVariavel(true);
-
-      const res = await fetch("/api/variaveis", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          chave,
-          valor,
-          descricao: novaVariavelDescricao.trim(),
-        }),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao salvar variavel.");
-      }
-
-      setNovaVariavelChave("");
-      setNovaVariavelValor("");
-      setNovaVariavelDescricao("");
-
-      setSucesso("Variavel salva com sucesso.");
-      await carregarVariaveisPersonalizadas({ erroNoModal: true });
-    } catch (error: unknown) {
-      setErroVariavelModal(
-        error instanceof Error ? error.message : "Erro ao salvar variavel."
-      );
-    } finally {
-      setSalvandoVariavel(false);
-    }
-  }
-
-  async function removerVariavelPersonalizada(id: string) {
-    try {
-      setErro("");
-      setErroVariavelModal("");
-      setSucesso("");
-
-      const res = await fetch("/api/variaveis", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id }),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao remover variavel.");
-      }
-
-      setSucesso("Variavel removida com sucesso.");
-      await carregarVariaveisPersonalizadas({ erroNoModal: true });
-    } catch (error: unknown) {
-      setErroVariavelModal(
-        error instanceof Error ? error.message : "Erro ao remover variavel."
-      );
-    }
-  }
-
-  function aplicarVariavelNoBloco(chave: string) {
-    const valor = normalizarEntradaVariavelTemplate(chave);
-
-    if (!valor) return;
-
-    if (alvoVariavelFluxo === "agendar_disparo") {
-      setAgendarDisparoVariaveisNode((atual) =>
-        preencherPrimeiraLinhaVariavelTemplate(atual, valor)
-      );
-      return;
-    }
-
-    if (alvoVariavelFluxo === "agenda_lembrete") {
-      setAgendaLembreteVariaveisNode((atual) =>
-        preencherPrimeiraLinhaVariavelTemplate(atual, valor)
-      );
-      return;
-    }
-
-    const token = `{{${valor}}}`;
-
-    setMensagemNode((atual) => {
-      const texto = atual.trimEnd();
-      return texto ? `${texto} ${token}` : token;
-    });
-  }
-
-  async function calcularPreviewCustoAgendarDisparo(categoria: string) {
-    try {
-      const categoriaFinal = String(categoria || "").trim();
-
-      if (!categoriaFinal) {
-        setPreviewCustoAgendarDisparo(null);
-        return;
-      }
-
-      setLoadingPreviewCustoAgendarDisparo(true);
-
-      const res = await fetch("/api/whatsapp/disparos/custo-preview", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          categoria: categoriaFinal,
-          contatos: [
-            {
-              id: "estimativa-agendamento-fluxo",
-              telefone: "5500000000000",
-            },
-          ],
-        }),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao calcular custo estimado.");
-      }
-
-      setPreviewCustoAgendarDisparo({
-        categoria: String(json.categoria || ""),
-        totalSelecionados: Number(json.totalSelecionados || 0),
-        totalIsentos: Number(json.totalIsentos || 0),
-        totalCobrados: Number(json.totalCobrados || 0),
-        valorUnitarioUsd: Number(json.valorUnitarioUsd || 0),
-        valorTotalUsd: Number(json.valorTotalUsd || 0),
-        cotacaoUsdBrl: Number(json.cotacaoUsdBrl || 0),
-        valorTotalBrlEstimado: Number(json.valorTotalBrlEstimado || 0),
-        valorTotalBrlMin: Number(json.valorTotalBrlMin || 0),
-        valorTotalBrlMax: Number(json.valorTotalBrlMax || 0),
-        margemMinPercent: Number(json.margemMinPercent || 0),
-        margemMaxPercent: Number(json.margemMaxPercent || 0),
-        fonteCotacao: json.fonteCotacao || "",
-        cotacaoDataHora: json.cotacaoDataHora || null,
-        cotacaoFallback: Boolean(json.cotacaoFallback),
-      });
-    } catch (error: any) {
-      setPreviewCustoAgendarDisparo(null);
-      setErro(error?.message || "Erro ao calcular custo estimado.");
-    } finally {
-      setLoadingPreviewCustoAgendarDisparo(false);
-    }
-  }
-
-  async function carregarSetores() {
-    try {
-      setCarregandoSetores(true);
-
-      const res = await fetch("/api/setores/opcoes", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar setores.");
-      }
-
-      setSetores(json.setores || []);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar setores.");
-    } finally {
-      setCarregandoSetores(false);
-    }
-  }
-
-
-  function excedeLimiteStorageMidias(tamanhoArquivoBytes: number) {
-    return (
-      resumoMidias.tamanhoTotal + Number(tamanhoArquivoBytes || 0) >
-      LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
-    );
-  }
-
-
-  async function enviarNovaMidia(arquivo: File) {
-    try {
-      setEnviandoMidia(true);
-      setErro("");
-      setSucesso("");
-
-      if (excedeLimiteStorageMidias(arquivo.size)) {
-        throw new Error(
-          `Limite de ${formatarTamanhoArquivo(
-            LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
-          )} de m√≠dias atingido. Exclua uma m√≠dia antes de enviar outra.`
-        );
-      }
-
-      const preparacaoRes = await fetch("/api/automacoes/midias/upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          acao: "preparar_upload",
-          nome: arquivo.name,
-          mimeType: arquivo.type,
-          tamanhoBytes: arquivo.size,
-        }),
-      });
-
-      const preparacaoJson = await lerRespostaApi(
-        preparacaoRes,
-        "Erro ao preparar envio da m√≠dia."
-      );
-
-      if (!preparacaoRes.ok || !preparacaoJson.ok) {
-        throw new Error(
-          preparacaoJson.error || "Erro ao preparar envio da m√≠dia."
-        );
-      }
-
-      const upload = preparacaoJson.upload;
-
-      if (!upload?.bucket || !upload?.path || !upload?.token) {
-        throw new Error("Dados de upload inv√°lidos.");
-      }
-
-      const supabase = createSupabaseBrowserClient();
-
-      const { error: uploadError } = await supabase.storage
-        .from(upload.bucket)
-        .uploadToSignedUrl(upload.path, upload.token, arquivo, {
-          contentType: arquivo.type || "application/octet-stream",
-          upsert: false,
-        });
-
-      if (uploadError) {
-        throw new Error(
-          uploadError.message || "Erro ao enviar m√≠dia para o Storage."
-        );
-      }
-
-      const conclusaoRes = await fetch("/api/automacoes/midias/upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          acao: "concluir_upload",
-          nome: arquivo.name,
-          mimeType: arquivo.type,
-          tamanhoBytes: arquivo.size,
-          storagePath: upload.path,
-        }),
-      });
-
-      const conclusaoJson = await lerRespostaApi(
-        conclusaoRes,
-        "Erro ao concluir envio da m√≠dia."
-      );
-
-      if (!conclusaoRes.ok || !conclusaoJson.ok) {
-        throw new Error(
-          conclusaoJson.error || "Erro ao concluir envio da m√≠dia."
-        );
-      }
-
-      const midiaEnviada: MidiaOpcao = conclusaoJson.midia;
-
-      if (!midiaEnviada?.id || !midiaEnviada?.url) {
-        throw new Error("A API n√£o retornou os dados da m√≠dia enviada.");
-      }
-
-      setMidiaUrlNode(midiaEnviada.url);
-      setMidiaNomeNode(midiaEnviada.nome);
-
-      setMidias((atuais) => {
-        const jaExiste = atuais.some(
-          (midia) => midia.id === midiaEnviada.id
-        );
-
-        if (jaExiste) {
-          return atuais;
-        }
-
-        return [midiaEnviada, ...atuais];
-      });
-
-      setSucesso(
-        arquivo.type.startsWith("video/")
-          ? "V√≠deo enviado com sucesso."
-          : "M√≠dia enviada com sucesso."
-      );
-
-      await carregarMidias();
-    } catch (error: unknown) {
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Erro ao enviar m√≠dia."
-      );
-    } finally {
-      setEnviandoMidia(false);
-    }
-  }
-
-
-  async function carregarMidias(tipo?: "imagem" | "video" | "audio") {
-    try {
-      setCarregandoMidias(true);
-
-      const params = tipo ? `?tipo=${tipo}` : "";
-
-      const res = await fetch(`/api/automacoes/midias${params}`, {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar m√≠dias.");
-      }
-
-      setMidias(json.midias || []);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar m√≠dias.");
-    } finally {
-      setCarregandoMidias(false);
-    }
-  }
-
-    async function excluirMidiaDefinitivamente(midia: MidiaOpcao) {
-      try {
-        setErro("");
-        setSucesso("");
-        setMidiaExcluindoId(midia.id);
-
-        const res = await fetch("/api/automacoes/midias", {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id: midia.id,
-          }),
-        });
-
-        const json = await res.json();
-
-        if (!res.ok || !json.ok) {
-          throw new Error(json.error || "Erro ao excluir m√≠dia.");
-        }
-
-        const impacto = (json.impacto || null) as ImpactoExclusaoMidia | null;
-        const fluxosAfetados = impacto?.fluxos_afetados || [];
-
-        setMidias((atuais) => atuais.filter((item) => item.id !== midia.id));
-        setNodes((atuais) =>
-          atuais.map((node) => limparMidiaDoNode(node, midia))
-        );
-
-        if (midiaUrlNode === midia.url) {
-          setMidiaUrlNode("");
-          setMidiaNomeNode("");
-        }
-
-        if (fluxosAfetados.length > 0) {
-          setFluxos((atuais) =>
-            atuais.map((fluxo) => {
-              const fluxoAfetado = fluxosAfetados.find(
-                (item) => item.id === fluxo.id
-              );
-
-              if (!fluxoAfetado?.status_atual) return fluxo;
-
-              return {
-                ...fluxo,
-                status: fluxoAfetado.status_atual as Fluxo["status"],
-              };
-            })
-          );
-
-          setFluxoSelecionado((atual) => {
-            if (!atual) return atual;
-
-            const fluxoAfetado = fluxosAfetados.find(
-              (item) => item.id === atual.id
-            );
-
-            if (!fluxoAfetado?.status_atual) return atual;
-
-            return {
-              ...atual,
-              status: fluxoAfetado.status_atual as Fluxo["status"],
-            };
-          });
-        }
-
-        setConfirmandoExclusaoMidiaId(null);
-        setSucesso(
-          json.storage_removido === false && json.storage_erro
-            ? `${mensagemExclusaoMidia(impacto)} Aviso: o arquivo no Storage nao foi removido automaticamente.`
-            : mensagemExclusaoMidia(impacto)
-        );
-      } catch (error: any) {
-        setErro(error?.message || "Erro ao excluir m√≠dia.");
-      } finally {
-        setMidiaExcluindoId(null);
-      }
-    }
-
-  async function carregarFluxos() {
-    try {
-      setCarregandoFluxos(true);
-      setErro("");
-
-      const res = await fetch("/api/automacoes", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar fluxos.");
-      }
-
-      const listaFluxos = json.fluxos || [];
-      setFluxos(listaFluxos);
-
-      const fluxoDaUrl = fluxoParam
-        ? listaFluxos.find((item: Fluxo) => item.id === fluxoParam)
-        : null;
-
-      if (fluxoDaUrl) {
-        setFluxoSelecionado(fluxoDaUrl);
-      } else if (!fluxoSelecionado && listaFluxos.length > 0) {
-        setFluxoSelecionado(listaFluxos[0]);
-      }
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar fluxos.");
-    } finally {
-      setCarregandoFluxos(false);
-    }
-  }
-
-  async function carregarEstrutura(fluxoId: string) {
-    try {
-      setCarregandoEstrutura(true);
-      setErro("");
-      setSucesso("");
-      setEditandoNodeId(null);
-
-      const res = await fetch(`/api/automacoes/${fluxoId}`, {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar estrutura.");
-      }
-
-      const nosDb: AutomacaoNo[] = json.nos || [];
-      const conexoesDb: AutomacaoConexao[] = json.conexoes || [];
-
-      setNodes(nosDb.map(dbNoParaReactFlow));
-      setEdges(conexoesDb.map(dbConexaoParaReactFlow));
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar estrutura.");
-    } finally {
-      setCarregandoEstrutura(false);
-    }
-  }
-
-  async function carregarEstruturaParaValidacao(fluxoId: string) {
-    const res = await fetch(`/api/automacoes/${fluxoId}`, {
-      cache: "no-store",
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao carregar estrutura.");
-    }
-
-    const nosDb: AutomacaoNo[] = json.nos || [];
-    const conexoesDb: AutomacaoConexao[] = json.conexoes || [];
-
-    return {
-      nodesValidacao: nosDb.map(dbNoParaReactFlow),
-      edgesValidacao: conexoesDb.map(dbConexaoParaReactFlow),
-    };
-  }
-
-  function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {
-    const ehSempreSeguir = conexao.condicao_json?.tipo === "sempre";
-    const offsetY = offsetLabelConexao(conexao.id);
-    const usarIA = conexao.usar_ia === true;
-
-    const labelConexao =
-      conexao.rotulo ||
-      conexao.condicao_json?.valor ||
-      (usarIA ? "Intencao IA" : "");
-    return {
-      id: conexao.id,
-      source: conexao.no_origem_id,
-      target: conexao.no_destino_id,
-      type: "default",
-      ...( {
-        pathOptions: {
-        curvature: 0.55,
-        },
-      } as any ),
-      animated: true,
-      label: ehSempreSeguir
-        ? ""
-        : usarIA
-        ? `‚ú® ${labelConexao}`
-        : labelConexao,
-
-      labelStyle: {
-        fill: "#0f172a",
-        fontSize: 10,
-        fontWeight: 700,
-        transform: `translateY(${offsetY}px)`,
-      },
-
-      labelBgStyle: {
-        fill: "#ffffff",
-        fillOpacity: 0.92,
-        transform: `translateY(${offsetY}px)`,
-      },
-
-      labelBgPadding: [4, 2],
-
-
-      labelBgBorderRadius: 6,
-      labelShowBg: true,
-      style: {
-        stroke: "#cbd5e1",
-        strokeWidth: 2,
-        strokeDasharray: "6 6",
-      },
-
-      data: {
-        condicao_json: conexao.condicao_json || {},
-        rotulo: ehSempreSeguir ? "Sempre seguir" : conexao.rotulo || "",
-        usar_ia: conexao.usar_ia === true,
-        descricao_ia: conexao.descricao_ia || "",
-      },
-    };
-  }
-
-  function normalizarStatusFluxoAssistente(
-    status: string
-  ): Fluxo["status"] {
-    if (
-      status === "ativo" ||
-      status === "pausado" ||
-      status === "arquivado"
-    ) {
-      return status;
-    }
-
-    return "rascunho";
-  }
-
-  function normalizarFluxoCriadoAssistente(
-    fluxoCriado: AssistenteFluxosFluxoCriado
-  ): Fluxo {
-    return {
-      id: fluxoCriado.id,
-      nome: fluxoCriado.nome,
-      descricao: fluxoCriado.descricao || null,
-      status: normalizarStatusFluxoAssistente(fluxoCriado.status),
-      canal: fluxoCriado.canal || "whatsapp",
-      fluxo_padrao: fluxoCriado.fluxo_padrao === true,
-      created_at: fluxoCriado.created_at,
-      configuracao_json: (fluxoCriado.configuracao_json ||
-        {}) as Fluxo["configuracao_json"],
-    };
-  }
-
-  function abrirFluxoCriadoPeloAssistente(
-    fluxoCriado: AssistenteFluxosFluxoCriado
-  ) {
-    const fluxoNormalizado = normalizarFluxoCriadoAssistente(fluxoCriado);
-
-    setFluxos((atuais) => [
-      fluxoNormalizado,
-      ...atuais.filter((item) => item.id !== fluxoNormalizado.id),
-    ]);
-    setFluxoSelecionado(fluxoNormalizado);
-    setEditandoNodeId(null);
-    setEditandoEdgeId(null);
-    setAssistenteFluxosAberto(false);
-    setMenuFluxoAbertoId(null);
-    setErro("");
-    setSucesso(
-      `Fluxo "${fluxoNormalizado.nome}" criado com IA e salvo como rascunho.`
-    );
-    router.push(`/fluxos?fluxo=${encodeURIComponent(fluxoNormalizado.id)}`);
-  }
-
-  useEffect(() => {
-    carregarFluxos();
-    carregarSetores();
-    carregarMidias();
-    carregarIntegracoesWhatsapp();
-    carregarTemplatesWhatsapp();
-    carregarAgendasOpcoes();
-    carregarVariaveisPersonalizadas();
-  }, []);
-
-  useEffect(() => {
-    if (fluxoSelecionado?.id) {
-      setRespostasPreviaWhatsapp({});
-      carregarEstrutura(fluxoSelecionado.id);
-    }
-  }, [fluxoSelecionado?.id]);
-
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      const nodeOrigem = nodes.find((node) => node.id === connection.source);
-      const nodeDestino = nodes.find((node) => node.id === connection.target);
-      const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
-      const usarIaPadrao = tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;
-      const opcaoRespostaPadrao = proximaOpcaoRespostaDisponivel(
-        nodeOrigem,
-        edges
-      );
-
-      const tipoCondicaoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);
-      const rotuloPadrao =
-        opcaoRespostaPadrao?.titulo ||
-        opcaoRespostaPadrao?.valor ||
-        (usarIaPadrao
-          ? rotuloConexaoIaPorDestino(nodeDestino)
-          : rotuloPadraoPorTipoNo(tipoOrigem));
-      const ehSempreSeguir = tipoCondicaoPadrao === "sempre";
-      const id = criarIdTemporario("edge");
-      const offsetY = offsetLabelConexao(id);
-      const descricaoIaPadrao = usarIaPadrao
-        ? gerarSugestaoDescricaoIAComContexto({
-            pergunta: mensagemDoNodeParaContexto(nodeOrigem),
-            nomeConexao: rotuloPadrao,
-            idResposta: opcaoRespostaPadrao?.valor || "",
-            textoOpcao: opcaoRespostaPadrao?.titulo || "",
-            destinoTitulo: nodeDestino ? tituloVisivelCard(nodeDestino.data) : "",
-            destinoMensagem: mensagemDoNodeParaContexto(nodeDestino),
-            destinoTipo: nodeDestino
-              ? labelTipoNo(String(nodeDestino.data?.tipo_no || ""))
-              : "",
-            outrasConexoes: edges
-              .filter((edge) => edge.source === connection.source)
-              .map(resumoOutraConexaoParaContexto)
-              .filter(Boolean),
-          })
-        : "";
-      const novaConexao: Edge = {
-        ...connection,
-        id,
-        type: "default",
-        pathOptions: {
-          curvature: 0.75,
-        },
-        animated: true,
-        label: ehSempreSeguir
-          ? ""
-          : usarIaPadrao
-          ? `‚ú® ${rotuloPadrao}`
-          : rotuloPadrao,
-        labelShowBg: true,
-
-        labelStyle: {
-          fill: "#0f172a",
-          fontSize: 10,
-          fontWeight: 700,
-          transform: `translateY(${offsetY}px)`,
-        },
-
-        labelBgStyle: {
-          fill: "#ffffff",
-          fillOpacity: 0.92,
-          transform: `translateY(${offsetY}px)`,
-        },
-
-        labelBgPadding: [4, 2],
-        labelBgBorderRadius: 6,
-
-        style: {
-          stroke: "#cbd5e1",
-          strokeWidth: 2,
-          strokeDasharray: "6 6"
-        },
-
-        data: {
-          rotulo: rotuloPadrao,
-          condicao_json: opcaoRespostaPadrao
-            ? {
-                tipo: tipoCondicaoPadrao,
-                valor: opcaoRespostaPadrao.valor,
-              }
-            : {
-                tipo: tipoCondicaoPadrao,
-              },
-          usar_ia: usarIaPadrao,
-          descricao_ia: descricaoIaPadrao,
-        },
-      } as Edge;
-
-      setEdges((eds) => addEdge(novaConexao, eds));
-    },
-    [nodes, edges, setEdges]
-  );
-
-async function criarFluxoRapido() {
-  try {
-    setErro("");
-    setErroEdicaoFluxo("");
-    setSucesso("");
-    setErroCriacaoFluxo("");
-
-    const nome = novoFluxoNome.trim();
-
-    if (!nome) {
-      setErroCriacaoFluxo("Informe o nome do fluxo.");
-      return;
-    }
-
-    const fluxoPadraoFinal = !jaExisteFluxoPadrao && novoFluxoPadrao;
-
-    const gatilhosValidos = gatilhosNovoFluxo.filter((gatilho) =>
-      String(gatilho.valor || "").trim()
-    );
-
-    if (!fluxoPadraoFinal && gatilhosValidos.length === 0) {
-      setErroCriacaoFluxo(
-        "Adicione pelo menos uma palavra-chave para iniciar o fluxo."
-      );
-      return;
-    }
-
-    const quantidadeInformada = Number(encerrarInatividadeQuantidade || 0);
-
-    const segundosInatividade =
-      encerrarInatividadeUnidade === "horas"
-        ? quantidadeInformada * 60 * 60
-        : quantidadeInformada * 60;
-
-    if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
-      setErroCriacaoFluxo("Informe um tempo v√°lido para o encerramento por inatividade.");
-      return;
-    }
-
-    if (segundosInatividade < 5 * 60) {
-      setErroCriacaoFluxo("O tempo m√≠nimo para encerramento por inatividade √© de 5 minutos.");
-      return;
-    }
-
-    if (segundosInatividade > 23 * 60 * 60) {
-      setErroCriacaoFluxo("O tempo m√°ximo para encerramento por inatividade √© de 23 horas.");
-      return;
-    }
-
-    const escopoIntegracoes = montarEscopoIntegracoesFluxo(
-      deveMostrarEscopoIntegracoesFluxo
-        ? novoFluxoEscopoIntegracoesModo
-        : "todas",
-      deveMostrarEscopoIntegracoesFluxo ? novoFluxoIntegracoesIds : []
-    );
-
-    if (
-      deveMostrarEscopoIntegracoesFluxo &&
-      novoFluxoEscopoIntegracoesModo === "selecionadas" &&
-      escopoIntegracoes.ids.length === 0
-    ) {
-      setErroCriacaoFluxo("Selecione pelo menos uma integra√ß√£o WhatsApp.");
-      return;
-    }
-
-    const res = await fetch("/api/automacoes", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        nome,
-        descricao: descricaoNovoFluxo,
-        canal: "whatsapp",
-        status: "rascunho",
-        fluxo_padrao: fluxoPadraoFinal,
-        gatilhos: fluxoPadraoFinal
-          ? []
-          : gatilhosValidos.map((gatilho) => ({
-              tipo_gatilho: "palavra_chave",
-              valor: gatilho.valor,
-              condicao: gatilho.condicao,
-              ativo: gatilho.ativo !== false,
-            })),
-        configuracao_json: {
-          integracoes_whatsapp: escopoIntegracoes,
-          encerramento_inatividade: {
-            ativo: true,
-            tempo_quantidade: quantidadeInformada,
-            tempo_unidade: encerrarInatividadeUnidade,
-            mensagem: encerrarInatividadeMensagem.trim(),
-          },
-        },
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao criar fluxo.");
-    }
-
-    const fluxoCriado = json.fluxo;
-
-    setNovoFluxoNome("");
-    setDescricaoNovoFluxo("");
-    setGatilhosNovoFluxo([]);
-    setNovoFluxoPadrao(false);
-    setNovoFluxoEscopoIntegracoesModo("todas");
-    setNovoFluxoIntegracoesIds([]);
-    setNovoGatilhoValor("");
-    setNovoGatilhoCondicao("contem");
-    resetarEncerramentoInatividadePadrao();
-    setAbrirCriacao(false);
-
-    setSucesso("Fluxo criado com sucesso.");
-    await carregarFluxos();
-    setFluxoSelecionado(fluxoCriado);
-    router.push(`/fluxos?fluxo=${encodeURIComponent(fluxoCriado.id)}`);
-  } catch (error: any) {
-    setErroCriacaoFluxo(error?.message || "Erro ao criar fluxo.");
-  }
-}
-
-function abrirFluxo(fluxo: Fluxo) {
-  setFluxoSelecionado(fluxo);
-  setMenuFluxoAbertoId(null);
-  router.push(`/fluxos?fluxo=${encodeURIComponent(fluxo.id)}`);
-}
-
-  function adicionarNo(tipoNo: string) {
-    if (tipoNo === "inicio") {
-        const jaExiste = nodes.some(
-        (n) => n.data?.tipo_no === "inicio"
-        );
-
-        if (jaExiste) {
-        setErro("J√° existe um bloco de in√≠cio.");
-        return;
-        }
-    }
-
-    if (!fluxoSelecionado) {
-      setErro("Selecione um fluxo primeiro.");
-      return;
-    }
-
-    const id = criarIdTemporario("node");
-
-    const tituloPadrao = tituloPadraoTipoNo(tipoNo);
-    const posicaoNovoNo = calcularPosicaoLivreNovoNo(nodes);
-
-    const novoNoDb: AutomacaoNo = {
-      id,
-      tipo_no: tipoNo,
-      titulo: tituloPadrao,
-      descricao: null,
-      posicao_x: posicaoNovoNo.x,
-      posicao_y: posicaoNovoNo.y,
-      configuracao_json:
-      tipoNo === "enviar_texto"
-        ? { mensagem: "Digite a mensagem aqui.", delay_segundos: 3 }
-          : tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA
-          ? {
-              mensagem: "Como posso te ajudar?",
-              delay_segundos: 3,
-              max_tentativas_invalidas: 3,
-              max_tentativas_sem_resposta: 3,
-              acao_excesso_tentativas: "transferir_atendimento",
-              mensagem_excesso_tentativas:
-                "Nao consegui continuar o atendimento automatico. Vou te encaminhar para um atendente.",
-              notificar_excesso_tentativas: true,
-              notificar_email_excesso_tentativas: true,
-            }
-          : tipoNo === "pergunta_opcoes"
-          ? {
-              mensagem: "Escolha uma op√ß√£o:",
-              delay_segundos: 3,
-              opcoes: [
-                { valor: "1", titulo: "Op√ß√£o 1" },
-                { valor: "2", titulo: "Op√ß√£o 2" },
-              ],
-              max_tentativas_invalidas: 3,
-              max_tentativas_sem_resposta: 3,
-              acao_excesso_tentativas: "transferir_atendimento",
-              mensagem_excesso_tentativas:
-                "N√£o consegui continuar o atendimento autom√°tico. Vou te encaminhar para um atendente.",
-              notificar_excesso_tentativas: true,
-              notificar_email_excesso_tentativas: true,
-            }
-          : tipoNo === "enviar_botoes"
-          ? {
-              mensagem: "Escolha uma op√ß√£o:",
-              delay_segundos: 3,
-              botoes: [
-                { id: "sim", titulo: "Sim" },
-                { id: "nao", titulo: "N√£o" },
-              ],
-              max_tentativas_invalidas: 3,
-              max_tentativas_sem_resposta: 3,
-              acao_excesso_tentativas: "transferir_atendimento",
-              mensagem_excesso_tentativas:
-                "N√£o consegui continuar o atendimento autom√°tico. Vou te encaminhar para um atendente.",
-              notificar_excesso_tentativas: true,
-              notificar_email_excesso_tentativas: true,
-            }
-          : tipoNo === "botao_redirect"
-          ? {
-              mensagem: "Clique no bot√£o abaixo para acessar.",
-              botao_texto: "Acessar",
-              url: "https://",
-              delay_segundos: 3,
-            }
-          : tipoNo === "avaliacao"
-          ? {
-              mensagem: "De 1 a 5, como voc√™ avalia este atendimento?",
-              nota_minima: 1,
-              nota_maxima: 5,
-              solicitar_comentario: false,
-              mensagem_comentario: "Obrigado! Agora escreva um coment√°rio sobre seu atendimento.",
-              mensagem_erro: "Por favor, responda com uma nota de 1 a 5.",
-            }
-          : tipoNo === "capturar_resposta"
-          ? {
-              mensagem: "Me informe seu nome, por favor.",
-              variavel: "nome",
-              tipo_captura: "nome",
-              obrigatorio: true,
-              mensagem_erro: "N√£o consegui identificar essa informa√ß√£o. Por favor, envie novamente.",
-              max_tentativas: 3,
-              notificar_excesso_tentativas: true,
-              notificar_email_excesso_tentativas: true,
-            }
-          : tipoNo === "agendar_disparo"
-          ? {
-              template_id: "",
-              tempo_quantidade: 32,
-              tempo_unidade: "horas",
-              variaveis: [],
-            }
-          : tipoNo === "agenda_buscar_agendamento"
-          ? {
-              agenda_id: "",
-              status_busca: ["agendado", "confirmado"],
-              listar_para_escolha: true,
-              quantidade_opcoes: 6,
-              mensagem_encontrado:
-                "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.",
-              mensagem_listar_agendamentos:
-                "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:",
-              mensagem_nao_encontrado:
-                "Nao encontrei nenhum agendamento futuro no seu contato.",
-            }
-          : tipoNo === "agenda_escolher_horario"
-          ? {
-              agenda_id: "",
-              mensagem:
-                "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.",
-              mensagem_listar_horarios:
-                "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:",
-              mensagem_preferencia_indisponivel:
-                "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:",
-              quantidade_opcoes: 6,
-              janela_dias: 14,
-              mensagem_data_invalida:
-                "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.",
-              mensagem_sem_horarios:
-                "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.",
-              mensagem_sem_expediente:
-                "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis.",
-              max_tentativas_invalidas: 3,
-              max_tentativas_sem_resposta: 3,
-              acao_excesso_tentativas: "transferir_atendimento",
-              mensagem_excesso_tentativas:
-                "Nao consegui continuar o agendamento automatico. Vou te encaminhar para um atendente.",
-              notificar_excesso_tentativas: true,
-              notificar_email_excesso_tentativas: true,
-            }
-          : tipoNo === "agenda_criar_agendamento"
-          ? {
-              agenda_id: "",
-              status_inicial: "agendado",
-              mensagem:
-                "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato.",
-              mensagem_conflito:
-                "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.",
-              enviar_email_agendamento: true,
-              email_agendamento_origem: "contato",
-              email_agendamento_variavel: "email",
-              lembrete_agendamento_ativo: false,
-              lembrete_agendamento_quantidade: 2,
-              lembrete_agendamento_unidade: "horas",
-              lembrete_agendamento_whatsapp: true,
-              lembrete_agendamento_email: false,
-              lembrete_agendamento_template_id: "",
-              lembrete_agendamento_variaveis: [],
-            }
-          : tipoNo === "agenda_remarcar_agendamento"
-          ? {
-              status_final: "agendado",
-              mensagem:
-                "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}.",
-              mensagem_conflito:
-                "Esse novo horario acabou de ficar indisponivel. Vamos escolher outro horario.",
-              enviar_email_agendamento: true,
-              email_agendamento_origem: "contato",
-              email_agendamento_variavel: "email",
-            }
-          : tipoNo === "agenda_cancelar_agendamento"
-          ? {
-              status_final: "cancelado",
-              motivo: "Cancelado pelo cliente via automacao",
-              mensagem:
-                "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar.",
-              enviar_email_agendamento: true,
-              email_agendamento_origem: "contato",
-              email_agendamento_variavel: "email",
-            }
-          : tipoNo === "encerrar"
-          ? {
-              mensagem: "",
-              resultado_fluxo: "positivo",
-              valor_conversao_tipo: "sem_valor",
-            }
-          : tipoNo === "interpretar_arquivo_ia"
-          ? {
-              mensagem: "Envie o arquivo para an√°lise.",
-              instrucao_ia:
-                "Analise o arquivo enviado e responda se ele atende ao crit√©rio solicitado.",
-              tipos_aceitos: ["imagem", "documento"],
-              salvar_variavel: "analise_arquivo",
-              max_tentativas_invalidas: 3,
-              max_tentativas_sem_resposta: 3,
-              acao_excesso_tentativas: "transferir_atendimento",
-              mensagem_erro:
-                "N√£o consegui interpretar o arquivo. Envie uma imagem ou PDF leg√≠vel.",
-              mensagem_excesso_tentativas:
-                "N√£o consegui validar o arquivo automaticamente. Vou te encaminhar para um atendente.",
-              notificar_excesso_tentativas: true,
-              notificar_email_excesso_tentativas: true,
-            }
-          : {},
-          delay_segundos: null,
-    };
-
-    const novoNodeBase = dbNoParaReactFlow(novoNoDb);
-
-    const novoNode = novoNodeBase;
-
-    setNodes((atuais) => [...atuais, novoNode]);
-
-    abrirEdicaoNo(novoNode);
-
-    if (tipoNo !== "inicio") {
-    const inicio = nodes.find((n) => n.data?.tipo_no === "inicio");
-
-    const jaExisteConexaoSaindoDoInicio = edges.some(
-        (e) => e.source === inicio?.id
-    );
-
-    if (inicio && !jaExisteConexaoSaindoDoInicio) {
-      const novaConexao: Edge = {
-        id: criarIdTemporario("edge"),
-        source: inicio.id,
-        target: id,
-        type: "default",
-        animated: true,
-        label: "",
-
-        style: {
-          stroke: "#cbd5e1",
-          strokeWidth: 2,
-          strokeDasharray: "6 6",
-        },
-
-        data: {
-          rotulo: "Sempre seguir",
-          condicao_json: {
-            tipo: "sempre",
-          },
-        },
-      };
-
-        setEdges((atuais) => [...atuais, novaConexao]);
-    }
-    }
-
-    return;
-  }
-
-  function adicionarBotaoResposta() {
-    setBotoesNode((atuais) => {
-      if (atuais.length >= 3) {
-        setErro("O WhatsApp permite no m√°ximo 3 bot√µes.");
-        return atuais;
-      }
-
-      return [
-        ...atuais,
-        {
-          id: `opcao_${atuais.length + 1}`,
-          titulo: `Op√ß√£o ${atuais.length + 1}`,
-        },
-      ];
-    });
-  }
-  
-function offsetLabelConexao(edgeId: string) {
-  let hash = 0;
-
-  for (let i = 0; i < edgeId.length; i++) {
-    hash = edgeId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-
-  const offsets = [-20, 0, 20];
-
-  return offsets[Math.abs(hash) % offsets.length];
-}
-
-  function atualizarBotaoResposta(
-    index: number,
-    campo: "id" | "titulo",
-    valor: string
-  ) {
-    setBotoesNode((atuais) =>
-      atuais.map((botao, i) =>
-        i === index ? { ...botao, [campo]: valor } : botao
-      )
-    );
-  }
-
-  function removerBotaoResposta(index: number) {
-    setBotoesNode((atuais) => atuais.filter((_, i) => i !== index));
-  }
-
-  function marcarNodeSelecionado(nodeId: string | null) {
-    setNodes((atuais) =>
-      atuais.map((node) => ({
-        ...node,
-        selected: nodeId ? node.id === nodeId : false,
-        data: {
-          ...(node.data || {}),
-          isSelecionado: nodeId ? node.id === nodeId : false,
-        },
-      }))
-    );
-
-    if (nodeId) {
-      setEdges((atuais) =>
-        atuais.map((edge) => ({
-          ...edge,
-          selected: false,
-          style: {
-            ...(edge.style || {}),
-            stroke: "#cbd5e1",
-            strokeWidth: 2,
-            strokeDasharray: "6 6",
-          },
-        }))
-      );
-    }
-  }
-
-  function abrirEdicaoNo(node: Node) {
-    const configuracaoJson = node.data?.configuracao_json as
-      | Record<string, any>
-      | undefined;
-
-    marcarNodeSelecionado(node.id);
-    setEditandoNodeId(node.id);
-    setTipoNodeEdicao(String(node.data?.tipo_no || ""));
-    setEditandoEdgeId(null);
-
-    setTituloNode(String(node.data?.titulo || ""));
-    setMensagemNode(
-      String(
-        String(node.data?.tipo_no || "") === "agenda_buscar_agendamento"
-          ? configuracaoJson?.mensagem_encontrado || configuracaoJson?.mensagem || ""
-          : configuracaoJson?.mensagem || ""
-      )
-    );
-    setDelayNode(
-      node.data?.delay_segundos !== null &&
-      node.data?.delay_segundos !== undefined
-        ? String(node.data.delay_segundos)
-        : ""
-    );
-    setSolicitarComentarioNode(
-      Boolean(configuracaoJson?.solicitar_comentario)
-    );
-
-    setMensagemComentarioNode(
-      String(configuracaoJson?.mensagem_comentario || "")
-    );
-
-    setNotaMinimaNode(
-      String(configuracaoJson?.nota_minima ?? 1)
-    );
-
-    setNotaMaximaNode(
-      String(configuracaoJson?.nota_maxima ?? 5)
-    );
-
-    setMidiaUrlNode(String(configuracaoJson?.midia_url || ""));
-    setMidiaNomeNode(String(configuracaoJson?.midia_nome || ""));
-    setRedirectBotaoTextoNode(
-      String(configuracaoJson?.botao_texto || "Acessar")
-    );
-    setRedirectUrlNode(String(configuracaoJson?.url || ""));
-    setSetorDestino(configuracaoJson?.setor_id || "");
-    setConfirmandoExclusaoNo(false);
-    
-    setCapturaVariavelNode(String(configuracaoJson?.variavel || "nome"));
-    setCapturaTipoNode(String(configuracaoJson?.tipo_captura || "nome"));
-    setCapturaMensagemErroNode(
-      String(
-        configuracaoJson?.mensagem_erro ||
-          "N√£o consegui identificar essa informa√ß√£o. Por favor, envie novamente."
-      )
-    );
-    setCapturaMaxTentativasNode(String(configuracaoJson?.max_tentativas || 3));
-    setMaxTentativasInvalidasNode(
-      String(configuracaoJson?.max_tentativas_invalidas || 3)
-    );
-
-    setMaxTentativasSemRespostaNode(
-      String(configuracaoJson?.max_tentativas_sem_resposta || 3)
-    );
-
-    setAcaoExcessoTentativasNode(
-      String(configuracaoJson?.acao_excesso_tentativas || "transferir_atendimento")
-    );
-    setSetorExcessoTentativasNode(
-      String(configuracaoJson?.setor_excesso_tentativas || "")
-    );
-
-    setMensagemExcessoTentativasNode(
-      String(
-        configuracaoJson?.mensagem_excesso_tentativas ||
-          "N√£o consegui continuar o atendimento autom√°tico. Vou te encaminhar para um atendente."
-      )
-    );
-
-    setNotificarExcessoTentativasNode(
-      configuracaoJson?.notificar_excesso_tentativas !== false
-    );
-
-    setNotificarEmailExcessoTentativasNode(
-      configuracaoJson?.notificar_email_excesso_tentativas !== false
-    );
-    
-    setNotificarAoChegarNode(Boolean(configuracaoJson?.notificar_ao_chegar));
-
-    setNotificacaoTituloNode(
-      String(configuracaoJson?.notificacao_titulo || "")
-    );
-
-    setNotificacaoMensagemNode(
-      String(configuracaoJson?.notificacao_mensagem || "")
-    );
-
-    setNotificarEmailNode(Boolean(configuracaoJson?.notificar_email));
-
-    setAgendarDisparoTemplateIdNode(
-      String(configuracaoJson?.template_id || "")
-    );
-    setAgendarDisparoTemplatesPorIntegracaoNode(
-      normalizarTemplatesPorIntegracao(
-        configuracaoJson?.templates_por_integracao
-      )
-    );
-
-    setAgendarDisparoQuantidadeNode(
-      String(configuracaoJson?.tempo_quantidade || 32)
-    );
-
-    setAgendarDisparoUnidadeNode(
-      configuracaoJson?.tempo_unidade === "dias" ? "dias" : "horas"
-    );
-
-    setAgendarDisparoVariaveisNode(
-      Array.isArray(configuracaoJson?.variaveis)
-        ? configuracaoJson.variaveis
-            .map((item: any) => normalizarVariavelFluxo(String(item || "")))
-            .filter(Boolean)
-            .join("\n")
-        : ""
-    );
-
-    setAgendaIdNode(String(configuracaoJson?.agenda_id || ""));
-    setAgendaListarAgendamentosNode(
-      configuracaoJson?.listar_para_escolha === true
-    );
-    setAgendaQuantidadeOpcoesNode(
-      String(configuracaoJson?.quantidade_opcoes || 6)
-    );
-    setAgendaJanelaDiasNode(String(configuracaoJson?.janela_dias || 14));
-    setAgendaMensagemSemHorariosNode(
-      String(
-        configuracaoJson?.mensagem_sem_horarios ||
-          "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente."
-      )
-    );
-    setAgendaMensagemSemExpedienteNode(
-      String(
-        configuracaoJson?.mensagem_sem_expediente ||
-          "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis."
-      )
-    );
-    setAgendaMensagemDataInvalidaNode(
-      String(
-        configuracaoJson?.mensagem_data_invalida ||
-          "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}."
-      )
-    );
-    setAgendaMensagemListarAgendamentosNode(
-      String(
-        configuracaoJson?.mensagem_listar_agendamentos ||
-          "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:"
-      )
-    );
-    setAgendaMensagemListarHorariosNode(
-      String(
-        configuracaoJson?.mensagem_listar_horarios ||
-          "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
-      )
-    );
-    setAgendaMensagemPreferenciaIndisponivelNode(
-      String(
-        configuracaoJson?.mensagem_preferencia_indisponivel ||
-          "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
-      )
-    );
-    setAgendaMensagemConflitoNode(
-      String(
-        configuracaoJson?.mensagem_conflito ||
-          "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario."
-      )
-    );
-    setAgendaStatusAgendamentoNode(
-      String(
-        configuracaoJson?.status_inicial ||
-          configuracaoJson?.status_final ||
-          "agendado"
-      )
-    );
-    setAgendaEnviarEmailNode(configuracaoJson?.enviar_email_agendamento !== false);
-    setAgendaEmailOrigemNode(
-      configuracaoJson?.email_agendamento_origem === "variavel"
-        ? "variavel"
-        : "contato"
-    );
-    setAgendaEmailVariavelNode(
-      String(configuracaoJson?.email_agendamento_variavel || "email")
-    );
-    setAgendaLembreteAtivoNode(
-      configuracaoJson?.lembrete_agendamento_ativo === true
-    );
-    setAgendaLembreteQuantidadeNode(
-      String(configuracaoJson?.lembrete_agendamento_quantidade || 2)
-    );
-    setAgendaLembreteUnidadeNode(
-      configuracaoJson?.lembrete_agendamento_unidade === "minutos"
-        ? "minutos"
-        : configuracaoJson?.lembrete_agendamento_unidade === "dias"
-        ? "dias"
-        : "horas"
-    );
-    setAgendaLembreteWhatsappNode(
-      configuracaoJson?.lembrete_agendamento_whatsapp !== false
-    );
-    setAgendaLembreteEmailNode(
-      configuracaoJson?.lembrete_agendamento_email === true
-    );
-    setAgendaLembreteTemplateIdNode(
-      String(configuracaoJson?.lembrete_agendamento_template_id || "")
-    );
-    setAgendaLembreteVariaveisNode(
-      Array.isArray(configuracaoJson?.lembrete_agendamento_variaveis)
-        ? configuracaoJson.lembrete_agendamento_variaveis
-            .map((item: any) => normalizarVariavelFluxo(String(item || "")))
-            .filter(Boolean)
-            .join("\n")
-        : ""
-    );
-    setAgendaMotivoCancelamentoNode(
-      String(
-        configuracaoJson?.motivo ||
-          "Cancelado pelo cliente via automacao"
-      )
-    );
-
-    setEncerrarResultadoNode(
-      resultadoEncerramentoValido(configuracaoJson?.resultado_fluxo)
-        ? configuracaoJson.resultado_fluxo
-        : "positivo"
-    );
-
-    setEncerrarValorTipoNode(
-      tipoValorConversaoValido(configuracaoJson?.valor_conversao_tipo)
-        ? configuracaoJson.valor_conversao_tipo
-        : "sem_valor"
-    );
-
-    setEncerrarValorFixoNode(
-      configuracaoJson?.valor_conversao != null
-        ? String(configuracaoJson.valor_conversao)
-        : ""
-    );
-
-    setEncerrarValorVariavelNode(
-      String(configuracaoJson?.valor_conversao_variavel || "")
-    );
-
-    setArquivoInstrucaoIaNode(
-      String(configuracaoJson?.instrucao_ia || "")
-    );
-
-    setArquivoMensagemErroNode(
-      String(
-        configuracaoJson?.mensagem_erro ||
-          "N√£o consegui interpretar o arquivo. Envie uma imagem ou PDF leg√≠vel."
-      )
-    );
-
-    setArquivoCamposExtracaoNode(
-      Array.isArray(configuracaoJson?.campos_extracao)
-        ? configuracaoJson.campos_extracao.join("\n")
-        : ""
-    );
-
-    if (Array.isArray(configuracaoJson?.opcoes)) {
-      setOpcoesNode(configuracaoJson.opcoes);
-    } else {
-      setOpcoesNode([]);
-    }
-    if (Array.isArray(configuracaoJson?.botoes)) {
-      setBotoesNode(configuracaoJson.botoes);
-    } else {
-      setBotoesNode([]);
-    }
-  }
-
-function abrirEdicaoConexao(edge: Edge) {
-    const data = edge.data as
-      | {
-          condicao_json?: Record<string, any>;
-          rotulo?: string;
-          usar_ia?: boolean;
-          descricao_ia?: string;
-        }
-      | undefined;
-
-  const condicao = data?.condicao_json || {};
-  const timeoutSegundos = Number(condicao.timeout_segundos || 7200);
-
-  if (timeoutSegundos % 3600 === 0) {
-    setTimeoutQuantidade(String(timeoutSegundos / 3600));
-    setTimeoutUnidade("horas");
-  } else {
-    setTimeoutQuantidade(String(Math.max(1, Math.round(timeoutSegundos / 60))));
-    setTimeoutUnidade("minutos");
-  }
-
-  setStatusEnvioTimeout(
-    condicao.status_envio || "qualquer"
-  );
-
-  marcarNodeSelecionado(null);
-  setEditandoEdgeId(edge.id);
-  setEditandoNodeId(null);
-
-  setRotuloConexao(String(data?.rotulo || ""));
-  setValorCondicao(String(condicao.valor || ""));
-  setConfirmandoExclusaoConexao(false);
-
-  const rotuloAtual = String(data?.rotulo || "").trim();
-  const valorAtual = String(condicao.valor || "").trim();
-
-  setNomeConexaoEditadoManual(
-    !!rotuloAtual &&
-      rotuloAtual !== "Nova condi√ß√£o" &&
-      rotuloAtual !== valorAtual
-  );
-
-  setUsarIaConexao(Boolean(data?.usar_ia));
-  setDescricaoIaConexao(String(data?.descricao_ia || ""));
-
-  const respostaEsperada = String(condicao.valor || "").trim();
-
-  if (!data?.descricao_ia) {
-    setDescricaoIaConexao(
-      gerarSugestaoDescricaoIaConexao({
-        edge,
-        rotulo: data?.rotulo || edge.label?.toString() || "",
-        valor: respostaEsperada,
-      })
-    );
-  } else {
-    setDescricaoIaConexao(String(data.descricao_ia || ""));
-  }
-  
-  const nodeOrigem = nodes.find((node) => node.id === edge.source);
-  const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
-  const tipoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);
-  const tipoCondicaoAtual = String(condicao.tipo || tipoPadrao);
-  const origemPerguntaLivreIa = tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;
-  const usarIaPadrao =
-    origemPerguntaLivreIa &&
-    tipoCondicaoAtual !== "sempre" &&
-    tipoCondicaoAtual !== "timeout_sem_resposta";
-
-  setUsarIaConexao(Boolean(data?.usar_ia) || usarIaPadrao);
-  setTipoCondicaoConexao(tipoCondicaoAtual);
-}
-
-function adicionarOpcaoPergunta() {
-  setOpcoesNode((atuais) => [
-    ...atuais,
-    {
-      valor: String(atuais.length + 1),
-      titulo: `Op√ß√£o ${atuais.length + 1}`,
-    },
-  ]);
-}
-
-function atualizarOpcaoPergunta(
-  index: number,
-  campo: "valor" | "titulo",
-  valor: string
-) {
-  setOpcoesNode((atuais) =>
-    atuais.map((opcao, i) =>
-      i === index ? { ...opcao, [campo]: valor } : opcao
-    )
-  );
-}
-
-function removerOpcaoPergunta(index: number) {
-  setOpcoesNode((atuais) => atuais.filter((_, i) => i !== index));
-}
-
-function aplicarEdicaoNo() {
-  const deveExibirAvisoDisparo =
-    tipoNodeEdicao === "agendar_disparo" ||
-    (tipoNodeEdicao === "agenda_criar_agendamento" &&
-      agendaLembreteAtivoNode &&
-      agendaLembreteWhatsappNode);
-
-  if (deveExibirAvisoDisparo) {
-    setAcaoPendenteAplicarNo(() => () => {
-      aplicarEdicaoNoInterno();
-    });
-
-    setMostrarModalCustoAgendamento(true);
-    return;
-  }
-
-  aplicarEdicaoNoInterno();
-}
-
-async function aplicarEdicaoNoInterno() {
-  if (!editandoNodeId) return;
-
-  const valorFixoEncerramento = normalizarValorMonetario(encerrarValorFixoNode);
-  const variavelEncerramento = normalizarVariavelFluxo(
-    encerrarValorVariavelNode
-  );
-
-  if (
-    tipoNodeEdicao === "encerrar" &&
-    encerrarResultadoNode === "positivo" &&
-    encerrarValorTipoNode === "valor_fixo" &&
-    valorFixoEncerramento == null
-  ) {
-    setErro("Informe um valor fixo valido para a conversao.");
-    return;
-  }
-
-  if (
-    tipoNodeEdicao === "encerrar" &&
-    encerrarResultadoNode === "positivo" &&
-    encerrarValorTipoNode === "variavel" &&
-    !variavelEncerramento
-  ) {
-    setErro("Informe a variavel que contem o valor da conversao.");
-    return;
-  }
-
-  if (tipoNodeEdicao === "botao_redirect") {
-    if (!mensagemNode.trim()) {
-      setErro("Informe a mensagem do Botao redirect.");
-      return;
-    }
-
-    const textoBotaoRedirect = redirectBotaoTextoNode.trim();
-
-    if (!textoBotaoRedirect || textoBotaoRedirect.length > 20) {
-      setErro("Informe um texto de botao com ate 20 caracteres.");
-      return;
-    }
-
-    if (!urlHttpValida(redirectUrlNode)) {
-      setErro("Informe uma URL iniciando com http:// ou https://.");
-      return;
-    }
-  }
-
-  if (
-    tipoNodeEdicao === "agendar_disparo" &&
-    !agendarDisparoUsaTemplatesPorIntegracao &&
-    (!templateAgendarDisparoSelecionado ||
-      !templateWhatsappAprovado(templateAgendarDisparoSelecionado))
-  ) {
-    setErro("Selecione um template WhatsApp aprovado.");
-    return;
-  }
-
-  if (tipoNodeEdicao === "agendar_disparo") {
-    const templatesParaValidar = agendarDisparoUsaTemplatesPorIntegracao
-      ? integracoesEscopoFluxoSelecionado.map((integracao) => {
-          const templateId =
-            agendarDisparoTemplatesPorIntegracaoNode[integracao.id] || "";
-          const template =
-            templatesWhatsapp.find((item) => item.id === templateId) || null;
-
-          return { integracao, template };
-        })
-      : [
-          {
-            integracao: integracoesEscopoFluxoSelecionado[0] || null,
-            template: templateAgendarDisparoSelecionado,
-          },
-        ];
-
-    for (const item of templatesParaValidar) {
-      const template = item.template;
-      const rotuloIntegracao = item.integracao
-        ? rotuloIntegracaoWhatsapp(item.integracao)
-        : "integracao";
-
-      if (!template || !templateWhatsappAprovado(template)) {
-        setErro(
-          agendarDisparoUsaTemplatesPorIntegracao
-            ? `Selecione um template WhatsApp aprovado para ${rotuloIntegracao}.`
-            : "Selecione um template WhatsApp aprovado."
-        );
-        return;
-      }
-
-      if (
-        item.integracao &&
-        !templateCompativelComIntegracao(template, item.integracao)
-      ) {
-        setErro(`O template selecionado nao pertence a WABA de ${rotuloIntegracao}.`);
-        return;
-      }
-
-      if (templateWhatsappTemCabecalhoMidia(template)) {
-        setErro(
-          "O template selecionado possui cabecalho de midia. Use um template aprovado apenas com texto para agendar disparos."
-        );
-        return;
-      }
-
-      const totalVariaveisTemplate = contarVariaveisTemplateWhatsapp(template);
-      const totalVariaveisConfiguradas = contarVariaveisObrigatoriasPreenchidas(
-        agendarDisparoVariaveisNode,
-        totalVariaveisTemplate
-      );
-
-      if (totalVariaveisTemplate > 3) {
-        setErro(
-          "O template selecionado exige mais de 3 variaveis. Use um template com ate 3 variaveis para este bloco."
-        );
-        return;
-      }
-
-      if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
-        setErro(
-          `O template selecionado exige ${totalVariaveisTemplate} variavel(is). Preencha os campos Variavel 1, 2 e 3 antes de salvar o bloco.`
-        );
-        return;
-      }
-    }
-  }
-
-  if (
-    (([
-      "agenda_criar_agendamento",
-      "agenda_remarcar_agendamento",
-      "agenda_cancelar_agendamento",
-    ].includes(tipoNodeEdicao) &&
-      agendaEnviarEmailNode) ||
-      (tipoNodeEdicao === "agenda_criar_agendamento" &&
-        agendaLembreteAtivoNode &&
-        agendaLembreteEmailNode)) &&
-    agendaEmailOrigemNode === "variavel" &&
-    !agendaEmailVariavelNode.trim()
-  ) {
-    setErro("Informe a variavel que contem o email do contato.");
-    return;
-  }
-
-  if (tipoNodeEdicao === "agenda_criar_agendamento" && agendaLembreteAtivoNode) {
-    const quantidadeLembrete = Number(agendaLembreteQuantidadeNode || 0);
-
-    if (!Number.isFinite(quantidadeLembrete) || quantidadeLembrete <= 0) {
-      setErro("Informe uma antecedencia valida para o lembrete.");
-      return;
-    }
-
-    if (!agendaLembreteWhatsappNode && !agendaLembreteEmailNode) {
-      setErro("Selecione pelo menos um canal para o lembrete.");
-      return;
-    }
-
-    if (agendaLembreteWhatsappNode && !agendaLembreteTemplateIdNode.trim()) {
-      setErro("Selecione um template WhatsApp para o lembrete.");
-      return;
-    }
-
-    if (agendaLembreteWhatsappNode && templateAgendaLembreteSelecionado) {
-      if (templateWhatsappTemCabecalhoMidia(templateAgendaLembreteSelecionado)) {
-        setErro(
-          "O template do lembrete possui cabecalho de midia. Use um template aprovado apenas com texto para lembretes agendados."
-        );
-        return;
-      }
-
-      const totalVariaveisTemplate = contarVariaveisTemplateWhatsapp(
-        templateAgendaLembreteSelecionado
-      );
-      const totalVariaveisConfiguradas = contarVariaveisObrigatoriasPreenchidas(
-        agendaLembreteVariaveisNode,
-        totalVariaveisTemplate
-      );
-
-      if (totalVariaveisTemplate > 3) {
-        setErro(
-          "O template do lembrete exige mais de 3 variaveis. Use um template com ate 3 variaveis para este bloco."
-        );
-        return;
-      }
-
-      if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
-        setErro(
-          `O template do lembrete exige ${totalVariaveisTemplate} variavel(is). Preencha os campos Variavel 1, 2 e 3 antes de salvar o bloco.`
-        );
-        return;
-      }
-    }
-  }
-
-  if (
-    tipoNodeEdicao === "capturar_resposta" &&
-    VARIAVEIS_FIXAS_CONTATO_RESERVADAS.includes(
-      capturaVariavelNode.trim().toLowerCase()
-    )
-  ) {
-    setErro(
-      "Esse nome de variavel e reservado para os dados fixos do contato."
-    );
-    return;
-  }
-
-  setErro("");
-
-    const nodesAtualizados = nodes.map((node) => {
-      if (node.id !== editandoNodeId) return node;
-
-      const tipoAtual = String(node.data?.tipo_no || "enviar_texto");
-      const tipoFinal = tipoAtual === "inicio" ? "inicio" : tipoNodeEdicao;
-
-      const configuracao_json: Record<string, any> = {};
-
-      if (
-        tipoFinal === "enviar_texto" ||
-        tipoFinal === "pergunta_opcoes" ||
-        tipoFinal === TIPO_NO_PERGUNTA_LIVRE_IA ||
-        tipoFinal === "enviar_botoes" ||
-        tipoFinal === "botao_redirect" ||
-        tipoFinal === "enviar_imagem" ||
-        tipoFinal === "enviar_video" ||
-        tipoFinal === "enviar_audio" ||
-        tipoFinal === "transferir_setor" ||
-        tipoFinal === "encerrar" ||
-        tipoFinal === "avaliacao" ||
-        tipoFinal === "capturar_resposta" ||
-        tipoFinal === "agenda_buscar_agendamento" ||
-        tipoFinal === "agenda_escolher_horario" ||
-        tipoFinal === "agenda_criar_agendamento" ||
-        tipoFinal === "agenda_remarcar_agendamento" ||
-        tipoFinal === "agenda_cancelar_agendamento" ||
-        tipoFinal === "interpretar_arquivo_ia"
-      ) {
-        configuracao_json.mensagem = mensagemNode;
-      }
-
-      if (tipoFinal === "encerrar") {
-        configuracao_json.resultado_fluxo = encerrarResultadoNode;
-        configuracao_json.valor_conversao_tipo =
-          encerrarResultadoNode === "positivo"
-            ? encerrarValorTipoNode
-            : "sem_valor";
-
-        if (
-          encerrarResultadoNode === "positivo" &&
-          encerrarValorTipoNode === "valor_fixo"
-        ) {
-          configuracao_json.valor_conversao = valorFixoEncerramento;
-        }
-
-        if (
-          encerrarResultadoNode === "positivo" &&
-          encerrarValorTipoNode === "variavel"
-        ) {
-          configuracao_json.valor_conversao_variavel = variavelEncerramento;
-        }
-      }
-
-      if (tipoFinal === "agendar_disparo") {
-        configuracao_json.template_id = agendarDisparoTemplateIdNode;
-        configuracao_json.templates_por_integracao =
-          agendarDisparoTemplatesPorIntegracaoNode;
-        configuracao_json.tempo_quantidade = Math.max(
-          1,
-          Number(agendarDisparoQuantidadeNode || 1)
-        );
-        configuracao_json.tempo_unidade = agendarDisparoUnidadeNode;
-        configuracao_json.variaveis = agendarDisparoVariaveisNode
-          .split("\n")
-          .map((item) => normalizarVariavelFluxo(item))
-          .filter(Boolean);
-      }
-
-      if (tipoFinal === "agenda_buscar_agendamento") {
-        configuracao_json.agenda_id = agendaIdNode;
-        configuracao_json.status_busca = ["agendado", "confirmado"];
-        configuracao_json.listar_para_escolha = agendaListarAgendamentosNode;
-        configuracao_json.quantidade_opcoes = Math.max(
-          1,
-          Math.min(10, Number(agendaQuantidadeOpcoesNode || 6))
-        );
-        configuracao_json.mensagem_encontrado =
-          mensagemNode.trim() ||
-          "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.";
-        configuracao_json.mensagem_listar_agendamentos =
-          agendaMensagemListarAgendamentosNode.trim() ||
-          "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:";
-        configuracao_json.mensagem_nao_encontrado =
-          agendaMensagemSemHorariosNode.trim() ||
-          "Nao encontrei nenhum agendamento futuro no seu contato.";
-      }
-
-      if (tipoFinal === "agenda_escolher_horario") {
-        configuracao_json.agenda_id = agendaIdNode;
-        configuracao_json.mensagem =
-          mensagemNode.trim() ||
-          "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.";
-        configuracao_json.mensagem_listar_horarios =
-          agendaMensagemListarHorariosNode.trim() ||
-          "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:";
-        configuracao_json.mensagem_preferencia_indisponivel =
-          agendaMensagemPreferenciaIndisponivelNode.trim() ||
-          "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:";
-        configuracao_json.mensagem_data_invalida =
-          agendaMensagemDataInvalidaNode.trim() ||
-          "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.";
-        configuracao_json.quantidade_opcoes = Math.max(
-          1,
-          Math.min(10, Number(agendaQuantidadeOpcoesNode || 6))
-        );
-        configuracao_json.janela_dias = Math.max(
-          1,
-          Math.min(60, Number(agendaJanelaDiasNode || 14))
-        );
-        configuracao_json.mensagem_sem_horarios =
-          agendaMensagemSemHorariosNode.trim() ||
-          "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.";
-        configuracao_json.mensagem_sem_expediente =
-          agendaMensagemSemExpedienteNode.trim() ||
-          "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis.";
-      }
-
-      if (tipoFinal === "agenda_criar_agendamento") {
-        configuracao_json.agenda_id = agendaIdNode;
-        configuracao_json.status_inicial =
-          agendaStatusAgendamentoNode === "confirmado" ? "confirmado" : "agendado";
-        configuracao_json.mensagem =
-          mensagemNode.trim() ||
-          "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato.";
-        configuracao_json.mensagem_conflito =
-          agendaMensagemConflitoNode.trim() ||
-          "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.";
-        configuracao_json.enviar_email_agendamento = agendaEnviarEmailNode;
-        configuracao_json.email_agendamento_origem =
-          agendaEmailOrigemNode === "variavel" ? "variavel" : "contato";
-        configuracao_json.email_agendamento_variavel =
-          agendaEmailVariavelNode.trim() || "email";
-        configuracao_json.lembrete_agendamento_ativo =
-          agendaLembreteAtivoNode;
-        configuracao_json.lembrete_agendamento_quantidade = Math.max(
-          1,
-          Number(agendaLembreteQuantidadeNode || 2)
-        );
-        configuracao_json.lembrete_agendamento_unidade =
-          agendaLembreteUnidadeNode;
-        configuracao_json.lembrete_agendamento_whatsapp =
-          agendaLembreteWhatsappNode;
-        configuracao_json.lembrete_agendamento_email =
-          agendaLembreteEmailNode;
-        configuracao_json.lembrete_agendamento_template_id =
-          agendaLembreteTemplateIdNode;
-        configuracao_json.lembrete_agendamento_variaveis =
-          agendaLembreteVariaveisNode
-            .split("\n")
-            .map((item) => normalizarVariavelFluxo(item))
-            .filter(Boolean);
-      }
-
-      if (tipoFinal === "agenda_remarcar_agendamento") {
-        configuracao_json.status_final =
-          agendaStatusAgendamentoNode === "confirmado" ? "confirmado" : "agendado";
-        configuracao_json.mensagem =
-          mensagemNode.trim() ||
-          "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}.";
-        configuracao_json.mensagem_conflito =
-          agendaMensagemConflitoNode.trim() ||
-          "Esse novo horario acabou de ficar indisponivel. Vamos escolher outro horario.";
-        configuracao_json.enviar_email_agendamento = agendaEnviarEmailNode;
-        configuracao_json.email_agendamento_origem =
-          agendaEmailOrigemNode === "variavel" ? "variavel" : "contato";
-        configuracao_json.email_agendamento_variavel =
-          agendaEmailVariavelNode.trim() || "email";
-      }
-
-      if (tipoFinal === "agenda_cancelar_agendamento") {
-        configuracao_json.status_final =
-          agendaStatusAgendamentoNode === "faltou" ? "faltou" : "cancelado";
-        configuracao_json.motivo =
-          agendaMotivoCancelamentoNode.trim() ||
-          "Cancelado pelo cliente via automacao";
-        configuracao_json.mensagem =
-          mensagemNode.trim() ||
-          "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar.";
-        configuracao_json.enviar_email_agendamento = agendaEnviarEmailNode;
-        configuracao_json.email_agendamento_origem =
-          agendaEmailOrigemNode === "variavel" ? "variavel" : "contato";
-        configuracao_json.email_agendamento_variavel =
-          agendaEmailVariavelNode.trim() || "email";
-      }
-
-      if (tipoFinal === "pergunta_opcoes") {
-        configuracao_json.opcoes = opcoesNode;
-      }
-
-      if (tipoFinal === "enviar_botoes") {
-        configuracao_json.botoes = botoesNode;
-      }
-
-      if (tipoFinal === "botao_redirect") {
-        configuracao_json.botao_texto =
-          redirectBotaoTextoNode.trim() || "Acessar";
-        configuracao_json.url = redirectUrlNode.trim();
-      }
-
-      if (
-        tipoFinal === "pergunta_opcoes" ||
-        tipoFinal === TIPO_NO_PERGUNTA_LIVRE_IA ||
-        tipoFinal === "enviar_botoes" ||
-        tipoFinal === "capturar_resposta" ||
-        tipoFinal === "agenda_buscar_agendamento" ||
-        tipoFinal === "agenda_escolher_horario" ||
-        tipoFinal === "avaliacao" ||
-        tipoFinal === "interpretar_arquivo_ia"
-      ) {
-        configuracao_json.max_tentativas_invalidas = Math.max(
-          1,
-          Number(maxTentativasInvalidasNode || 3)
-        );
-
-        configuracao_json.max_tentativas_sem_resposta = Math.max(
-          1,
-          Number(maxTentativasSemRespostaNode || 3)
-        );
-
-        configuracao_json.acao_excesso_tentativas =
-          acaoExcessoTentativasNode || "transferir_atendimento";
-
-        configuracao_json.setor_excesso_tentativas =
-          setorExcessoTentativasNode || null;
-
-        configuracao_json.mensagem_excesso_tentativas =
-          mensagemExcessoTentativasNode.trim() ||
-          "N√£o consegui continuar o atendimento autom√°tico. Vou te encaminhar para um atendente.";
-        configuracao_json.notificar_excesso_tentativas =
-          notificarExcessoTentativasNode;
-
-        configuracao_json.notificar_email_excesso_tentativas =
-          notificarEmailExcessoTentativasNode;
-      }
-
-      if (tipoFinal === "transferir_setor") {
-        configuracao_json.setor_id = setorDestino;
-      }
-
-      if (
-        tipoFinal === "enviar_imagem" ||
-        tipoFinal === "enviar_video" ||
-        tipoFinal === "enviar_audio"
-      ) {
-        configuracao_json.midia_url = midiaUrlNode;
-        configuracao_json.midia_nome = midiaNomeNode;
-      }
-
-      if (tipoFinal === "avaliacao") {
-        configuracao_json.solicitar_comentario =
-          solicitarComentarioNode;
-
-        configuracao_json.mensagem_comentario =
-          mensagemComentarioNode;
-
-        configuracao_json.nota_minima = Math.max(
-          0,
-          Number(notaMinimaNode || 0)
-        );
-
-        configuracao_json.nota_maxima = Math.max(
-          Number(notaMinimaNode || 0),
-          Number(notaMaximaNode || 5)
-        );
-
-        configuracao_json.mensagem_erro =
-          `Por favor, responda com uma nota de ${configuracao_json.nota_minima} a ${configuracao_json.nota_maxima}.`;
-      }
-
-      if (tipoFinal === "capturar_resposta") {
-        configuracao_json.variavel =
-          capturaVariavelNode.trim().toLowerCase() || "resposta";
-
-        configuracao_json.tipo_captura = capturaTipoNode || "texto";
-        configuracao_json.obrigatorio = true;
-
-        configuracao_json.mensagem_erro =
-          capturaMensagemErroNode.trim() ||
-          "N√£o consegui identificar essa informa√ß√£o. Por favor, envie novamente.";
-      }
-
-      if (tipoFinal === "interpretar_arquivo_ia") {
-        configuracao_json.instrucao_ia = arquivoInstrucaoIaNode.trim();
-        configuracao_json.tipos_aceitos = ["imagem", "documento"];
-        configuracao_json.salvar_variavel = "analise_arquivo";
-        configuracao_json.mensagem_erro =
-          arquivoMensagemErroNode.trim() ||
-          "N√£o consegui interpretar o arquivo. Envie uma imagem ou PDF leg√≠vel.";
-
-        configuracao_json.campos_extracao = arquivoCamposExtracaoNode
-          .split(",")
-          .map((campo) =>
-            campo
-              .trim()
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/[^a-z0-9_]/g, "_")
-              .replace(/_+/g, "_")
-              .replace(/^_|_$/g, "")
-          )
-          .filter(Boolean);
-      }
-
-        configuracao_json.notificar_ao_chegar = notificarAoChegarNode;
-        configuracao_json.notificacao_titulo = notificacaoTituloNode.trim();
-        configuracao_json.notificacao_mensagem = notificacaoMensagemNode.trim();
-        configuracao_json.notificar_email = notificarEmailNode;
-
-      const noAtualizado = dbNoParaReactFlow({
-        id: node.id,
-        tipo_no: tipoFinal,
-        titulo: tituloNode.trim() || tituloPadraoTipoNo(tipoFinal),
-        descricao: String(node.data?.descricao || "") || null,
-        posicao_x: node.position.x,
-        posicao_y: node.position.y,
-        configuracao_json,
-        delay_segundos:
-          tipoFinal === "inicio"
-            ? null
-            : normalizarDelaySegundos(delayNode),
-      });
-
-      return {
-        ...noAtualizado,
-        selected: true,
-        data: {
-          ...noAtualizado.data,
-          isSelecionado: true,
-        },
-      };
-    });
-
-  setNodes(nodesAtualizados);
-
-  await salvarEstrutura({
-    nodesParaSalvar: nodesAtualizados,
-    edgesParaSalvar: edges,
-    mensagemSucesso: "Bloco atualizado e fluxo salvo com sucesso.",
-  });
-
-  fecharPainelEdicao();
-}
-
-async function aplicarEdicaoConexao() {
-  if (!editandoEdgeId) return;
-
-  const ehSempreSeguir = tipoCondicaoConexao === "sempre";
-  const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
-
-  if (ehTimeout) {
-    const quantidade = Math.max(1, Number(timeoutQuantidade || 1));
-    const multiplicador = timeoutUnidade === "horas" ? 3600 : 60;
-    const timeoutSegundos = quantidade * multiplicador;
-
-    if (timeoutSegundos < 300) {
-      setErro("O tempo m√≠nimo para timeout sem resposta √© de 5 minutos.");
-      return;
-    }
-
-    const LIMITE_TIMEOUT_SEGUNDOS = 79200; // 22 horas
-
-    if (timeoutSegundos > LIMITE_TIMEOUT_SEGUNDOS) {
-      setErro("Para mensagens comuns, o tempo m√°ximo sem resposta √© de 22 horas.");
-      return;
-    }
-  }
-
-  setErro("");
-
-  const edgesAtualizados = edges.map((edge) => {
-    if (edge.id !== editandoEdgeId) return edge;
-
-    const usarIaFinal = usarIaConexao && !ehSempreSeguir && !ehTimeout;
-
-    const labelBase = ehTimeout
-      ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
-      : rotuloConexao || valorCondicao || "Condi√ß√£o";
-
-    const labelFinal =
-      usarIaFinal
-        ? `‚ú® ${labelBase}`
-        : labelBase;
-
-    let condicaoJson: Record<string, any> = {};
-
-    if (ehSempreSeguir) {
-      condicaoJson = {
-        tipo: "sempre",
-      };
-    } else if (ehTimeout) {
-      const quantidade = Math.max(1, Number(timeoutQuantidade || 1));
-      const multiplicador = timeoutUnidade === "horas" ? 3600 : 60;
-      const timeoutSegundos = quantidade * multiplicador;
-
-      condicaoJson = {
-        tipo: "timeout_sem_resposta",
-        timeout_segundos: timeoutSegundos,
-        tempo_quantidade: quantidade,
-        tempo_unidade: timeoutUnidade,
-        status_envio: statusEnvioTimeout,
-      };
-    } else if (valorCondicao || usarIaFinal) {
-      condicaoJson = {
-        tipo: tipoCondicaoConexao,
-      };
-
-      if (valorCondicao) {
-        condicaoJson.valor = valorCondicao;
-      }
-    }
-
-    return {
-      ...edge,
-      label: ehSempreSeguir ? "" : labelFinal,
-
-      data: {
-        ...(edge.data || {}),
-        rotulo: ehSempreSeguir
-          ? "Sempre seguir"
-          : ehTimeout
-          ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
-          : rotuloConexao,
-
-        condicao_json: condicaoJson,
-        usar_ia: usarIaFinal,
-        descricao_ia: descricaoIaConexao.trim(),
-      },
-    };
-  });
-
-  setEdges(edgesAtualizados);
-
-  await salvarEstrutura({
-    nodesParaSalvar: nodes,
-    edgesParaSalvar: edgesAtualizados,
-    mensagemSucesso: "Conex√£o atualizada e fluxo salvo com sucesso.",
-  });
-
-  fecharPainelEdicao();
-}
-
-function gerarDescricaoConexaoComIa() {
-  if (!edgeEditada) return;
-
-  const ehSempreSeguir = tipoCondicaoConexao === "sempre";
-  const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
-
-  if (ehSempreSeguir || ehTimeout) {
-    setErro("Esta condi√ß√£o n√£o usa interpreta√ß√£o por IA.");
-    return;
-  }
-
-  if (!fluxoSelecionado) {
-    setErro("Selecione um fluxo primeiro.");
-    return;
-  }
-
-  const contexto = montarContextoDescricaoIaConexao({
-    edge: edgeEditada,
-    rotulo: rotuloConexao,
-    valor: valorCondicao,
-    descricaoAtual: descricaoIaConexao,
-  });
-
-  setErro("");
-  setPreviaGeracaoDescricaoIa(
-    montarPreviaGeracaoDescricaoIa({
-      modo: "conexao",
-      titulo: "Gerar inten√ß√£o com IA",
-      conexoes: [{ edge: edgeEditada, contexto }],
-    })
-  );
-}
-
-async function executarGeracaoDescricaoConexaoComIa() {
-  if (!edgeEditada) return;
-
-  const ehSempreSeguir = tipoCondicaoConexao === "sempre";
-  const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
-
-  if (ehSempreSeguir || ehTimeout) {
-    setErro("Esta condi√ß√£o n√£o usa interpreta√ß√£o por IA.");
-    return;
-  }
-
-  if (!fluxoSelecionado) {
-    setErro("Selecione um fluxo primeiro.");
-    return;
-  }
-
-  try {
-    setGerandoDescricaoIaConexao(true);
-    setErro("");
-    setSucesso("");
-    setPreviaGeracaoDescricaoIa(null);
-
-    const contexto = montarContextoDescricaoIaConexao({
-      edge: edgeEditada,
-      rotulo: rotuloConexao,
-      valor: valorCondicao,
-      descricaoAtual: descricaoIaConexao,
-    });
-
-    const descricao = await solicitarDescricaoConexaoIa(edgeEditada, contexto);
-    const rotuloFinal =
-      textoLimpoConexao(rotuloConexao) ||
-      rotuloFinalDescricaoIa(contexto);
-    const condicaoJson = condicaoFinalDescricaoIa(edgeEditada, {
-      ...contexto,
-      idResposta: valorCondicao || contexto.idResposta,
-    });
-
-    condicaoJson.tipo = tipoCondicaoConexao || condicaoJson.tipo;
-
-    const edgesAtualizados = edges.map((edge) => {
-      if (edge.id !== edgeEditada.id) return edge;
-
-      return {
-        ...edge,
-        label: `‚ú® ${rotuloFinal}`,
-        data: {
-          ...(edge.data || {}),
-          rotulo: rotuloFinal,
-          condicao_json: condicaoJson,
-          usar_ia: true,
-          descricao_ia: descricao,
-        },
-      };
-    });
-
-    setUsarIaConexao(true);
-    setDescricaoIaConexao(descricao);
-    setRotuloConexao(rotuloFinal);
-    setEdges(edgesAtualizados);
-
-    await salvarEstrutura({
-      nodesParaSalvar: nodes,
-      edgesParaSalvar: edgesAtualizados,
-      mensagemSucesso: "Inten√ß√£o gerada com IA e fluxo salvo com sucesso.",
-    });
-  } catch (error: unknown) {
-    setErro(mensagemErroFluxo(error, "Erro ao gerar inten√ß√£o com IA."));
-  } finally {
-    setGerandoDescricaoIaConexao(false);
-  }
-}
-
-function gerarDescricoesConexoesDoBlocoComIa() {
-  if (!nodeEditado || !nodeEditadoPermiteGerarDescricoesIa) return;
-
-  if (!fluxoSelecionado) {
-    setErro("Selecione um fluxo primeiro.");
-    return;
-  }
-
-  const conexoesAlvo = edges.filter(
-    (edge) => edge.source === nodeEditado.id && conexaoPermiteDescricaoIa(edge)
-  );
-
-  if (conexoesAlvo.length === 0) {
-    setErro("Este bloco n√£o possui conex√µes de resposta para gerar inten√ß√£o com IA.");
-    return;
-  }
-
-  setErro("");
-  setPreviaGeracaoDescricaoIa(
-    montarPreviaGeracaoDescricaoIa({
-      modo: "bloco",
-      titulo: "Gerar inten√ß√µes com IA",
-      conexoes: conexoesAlvo.map((edge) => ({ edge })),
-    })
-  );
-}
-
-async function executarGeracaoDescricoesConexoesDoBlocoComIa() {
-  if (!nodeEditado || !nodeEditadoPermiteGerarDescricoesIa) return;
-
-  if (!fluxoSelecionado) {
-    setErro("Selecione um fluxo primeiro.");
-    return;
-  }
-
-  const conexoesAlvo = edges.filter(
-    (edge) => edge.source === nodeEditado.id && conexaoPermiteDescricaoIa(edge)
-  );
-
-  if (conexoesAlvo.length === 0) {
-    setErro("Este bloco n√£o possui conex√µes de resposta para gerar inten√ß√£o com IA.");
-    return;
-  }
-
-  try {
-    setGerandoDescricoesIaBloco(true);
-    setErro("");
-    setSucesso("");
-    setPreviaGeracaoDescricaoIa(null);
-
-    let edgesAtualizados = edges;
-    let totalGerado = 0;
-
-    for (const edgeAlvo of conexoesAlvo) {
-      const edgeAtual =
-        edgesAtualizados.find((edge) => edge.id === edgeAlvo.id) || edgeAlvo;
-      const contexto = montarContextoDescricaoIaConexao({
-        edge: edgeAtual,
-      });
-      const descricao = await solicitarDescricaoConexaoIa(edgeAtual, contexto);
-      const rotuloFinal = rotuloFinalDescricaoIa(contexto);
-      const condicaoJson = condicaoFinalDescricaoIa(edgeAtual, contexto);
-
-      edgesAtualizados = edgesAtualizados.map((edge) => {
-        if (edge.id !== edgeAtual.id) return edge;
-
-        return {
-          ...edge,
-          label: `‚ú® ${rotuloFinal}`,
-          data: {
-            ...(edge.data || {}),
-            rotulo: rotuloFinal,
-            condicao_json: condicaoJson,
-            usar_ia: true,
-            descricao_ia: descricao,
-          },
-        };
-      });
-      totalGerado += 1;
-    }
-
-    setEdges(edgesAtualizados);
-
-    await salvarEstrutura({
-      nodesParaSalvar: nodes,
-      edgesParaSalvar: edgesAtualizados,
-      mensagemSucesso:
-        totalGerado === 1
-          ? "1 inten√ß√£o gerada com IA e fluxo salvo com sucesso."
-          : `${totalGerado} inten√ß√µes geradas com IA e fluxo salvo com sucesso.`,
-    });
-  } catch (error: unknown) {
-    setErro(mensagemErroFluxo(error, "Erro ao gerar inten√ß√µes com IA."));
-  } finally {
-    setGerandoDescricoesIaBloco(false);
-  }
-}
-
-function cancelarPreviaGeracaoDescricaoIa() {
-  if (gerandoDescricaoIaConexao || gerandoDescricoesIaBloco) return;
-
-  setPreviaGeracaoDescricaoIa(null);
-}
-
-async function confirmarPreviaGeracaoDescricaoIa() {
-  if (!previaGeracaoDescricaoIa) return;
-
-  if (previaGeracaoDescricaoIa.modo === "conexao") {
-    await executarGeracaoDescricaoConexaoComIa();
-    return;
-  }
-
-  await executarGeracaoDescricoesConexoesDoBlocoComIa();
-}
-
-function obterFluxoAlvoEdicao() {
-  return fluxoEmEdicao || fluxoSelecionado;
-}
-
-function existeOutroFluxoPadraoNaEmpresa() {
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return false;
-
-  const escopoEdicao = montarEscopoIntegracoesFluxo(
-    deveMostrarEscopoIntegracoesFluxo
-      ? fluxoEscopoIntegracoesModoEdicao
-      : "todas",
-    deveMostrarEscopoIntegracoesFluxo ? fluxoIntegracoesIdsEdicao : []
-  );
-
-  return fluxos.some(
-    (fluxo) =>
-      fluxo.fluxo_padrao &&
-      fluxo.status !== "arquivado" &&
-      fluxo.id !== fluxoParaEditar.id &&
-      escoposIntegracaoConflitam(
-        escopoEdicao,
-        normalizarEscopoIntegracoesFluxo(fluxo.configuracao_json)
-      )
-  );
-}
-
-function abrirEdicaoFluxo(fluxoAlvo?: Fluxo) {
-  const fluxoParaEditar = fluxoAlvo || fluxoSelecionado;
-
-  if (!fluxoParaEditar) return;
-
-  if (fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa()) {
-    setErroEdicaoFluxo(
-      "J√° existe outro fluxo padr√£o cadastrado. Desmarque o fluxo padr√£o atual antes de definir este fluxo como padr√£o."
-    );
-    return;
-  }
-
-  setErro("");
-  setErroEdicaoFluxo("");
-  setFluxoEmEdicao(fluxoParaEditar);
-  setEditandoFluxo(true);
-  setNomeFluxoEdicao(fluxoParaEditar.nome || "");
-  setDescricaoFluxoEdicao(fluxoParaEditar.descricao || "");
-  setFluxoPadraoEdicao(Boolean(fluxoParaEditar.fluxo_padrao));
-
-  const config = fluxoParaEditar.configuracao_json || {};
-  const escopoIntegracoes = normalizarEscopoIntegracoesFluxo(config);
-  setFluxoEscopoIntegracoesModoEdicao(escopoIntegracoes.modo);
-  setFluxoIntegracoesIdsEdicao(escopoIntegracoes.ids);
-  const encerramento = config.encerramento_inatividade || {};
-  const unidadeEncerramento =
-    encerramento.tempo_unidade === "minutos" ? "minutos" : "horas";
-  const quantidadePadraoEncerramento =
-    unidadeEncerramento === "minutos" ? 1380 : 23;
-
-  setEncerrarInatividadeQuantidade(
-    String(encerramento.tempo_quantidade || quantidadePadraoEncerramento)
-  );
-
-  setEncerrarInatividadeUnidade(unidadeEncerramento);
-
-  setEncerrarInatividadeMensagem(
-    String(
-      encerramento.mensagem ||
-        "Como n√£o tivemos retorno, este atendimento ser√° encerrado. Caso precise de ajuda, envie uma nova mensagem."
-    )
-  );
-
-  setNovoGatilhoValor("");
-  setNovoGatilhoCondicao("contem");
-
-  if (fluxoParaEditar.fluxo_padrao) {
-    setGatilhosFluxo([]);
-  } else {
-    carregarGatilhosFluxo(fluxoParaEditar.id);
-  }
-}
-
-async function salvarEdicaoFluxo() {
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return;
-
-  const quantidadeInformada = Number(encerrarInatividadeQuantidade || 0);
-
-  const segundosInatividade =
-    encerrarInatividadeUnidade === "horas"
-      ? quantidadeInformada * 60 * 60
-      : quantidadeInformada * 60;
-
-  if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
-    setErroEdicaoFluxo("Informe um tempo v√°lido para o encerramento por inatividade.");
-    return;
-  }
-
-  if (segundosInatividade < 5 * 60) {
-    setErroEdicaoFluxo("O tempo m√≠nimo para encerramento por inatividade √© de 5 minutos.");
-    return;
-  }
-
-  if (segundosInatividade > 23 * 60 * 60) {
-    setErroEdicaoFluxo("O tempo m√°ximo para encerramento por inatividade √© de 23 horas.");
-    return;
-  }
-
-  const escopoIntegracoes = montarEscopoIntegracoesFluxo(
-    deveMostrarEscopoIntegracoesFluxo
-      ? fluxoEscopoIntegracoesModoEdicao
-      : "todas",
-    deveMostrarEscopoIntegracoesFluxo ? fluxoIntegracoesIdsEdicao : []
-  );
-
-  if (
-    deveMostrarEscopoIntegracoesFluxo &&
-    fluxoEscopoIntegracoesModoEdicao === "selecionadas" &&
-    escopoIntegracoes.ids.length === 0
-  ) {
-    setErroEdicaoFluxo("Selecione pelo menos uma integra√ß√£o WhatsApp.");
-    return;
-  }
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxoParaEditar.id,
-        nome: nomeFluxoEdicao,
-        descricao: descricaoFluxoEdicao,
-        fluxo_padrao: fluxoPadraoEdicao,
-        configuracao_json: {
-          ...(fluxoParaEditar.configuracao_json || {}),
-          integracoes_whatsapp: escopoIntegracoes,
-          encerramento_inatividade: {
-            ativo: true,
-            tempo_quantidade: quantidadeInformada,
-            tempo_unidade: encerrarInatividadeUnidade,
-            mensagem: encerrarInatividadeMensagem.trim(),
-          },
-        },
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao editar fluxo.");
-    }
-
-    setSucesso("Fluxo atualizado com sucesso.");
-    setEditandoFluxo(false);
-    setFluxoEmEdicao(null);
-    setFluxoSelecionado(json.fluxo);
-    await carregarFluxos();
-  } catch (error: any) {
-    setErroEdicaoFluxo(error?.message || "Erro ao editar fluxo.");
-  }
-}
-
-function obterLimitesInatividade(unidade: "minutos" | "horas") {
-  if (unidade === "horas") {
-    return {
-      min: 1,
-      max: 23,
-    };
-  }
-
-  return {
-    min: 5,
-    max: 1380, // 23 horas em minutos
-  };
-}
-
-function limitarQuantidadeInatividade(
-  valor: string,
-  unidade: "minutos" | "horas"
-) {
-  const somenteNumeros = valor.replace(/\D/g, "");
-
-  if (!somenteNumeros) {
-    return "";
-  }
-
-  const numero = Number(somenteNumeros);
-  const limites = obterLimitesInatividade(unidade);
-
-  if (!Number.isFinite(numero)) {
-    return "";
-  }
-
-  if (numero > limites.max) {
-    return String(limites.max);
-  }
-
-  return String(numero);
-}
-
-function corrigirQuantidadeMinimaInatividade(
-  valor: string,
-  unidade: "minutos" | "horas"
-) {
-  const numero = Number(valor || 0);
-  const limites = obterLimitesInatividade(unidade);
-
-  if (!Number.isFinite(numero) || numero < limites.min) {
-    return String(limites.min);
-  }
-
-  if (numero > limites.max) {
-    return String(limites.max);
-  }
-
-  return String(numero);
-}
-
-function mensagemErroFluxo(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
-
-async function duplicarFluxo(fluxo: Fluxo) {
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxo.id,
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao duplicar fluxo.");
-    }
-
-    setSucesso("Fluxo duplicado com sucesso.");
-    await carregarFluxos();
-    setFluxoSelecionado(json.fluxo);
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao duplicar fluxo.");
-  }
-}
-
-async function gerarCodigoCompartilhamento(fluxo: Fluxo) {
-  try {
-    setCarregandoCodigoCompartilhamento(true);
-    setErroCompartilhamento("");
-    setCodigoCompartilhamento("");
-
-    const res = await fetch("/api/automacoes/compartilhamentos", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        fluxo_id: fluxo.id,
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao gerar codigo.");
-    }
-
-    setCodigoCompartilhamento(json.codigo || "");
-  } catch (error: unknown) {
-    setErroCompartilhamento(mensagemErroFluxo(error, "Erro ao gerar codigo."));
-  } finally {
-    setCarregandoCodigoCompartilhamento(false);
-  }
-}
-
-function abrirCompartilhamentoFluxo(fluxo: Fluxo) {
-  setFluxoParaCompartilhar(fluxo);
-  setModalCompartilharAberto(true);
-  gerarCodigoCompartilhamento(fluxo);
-}
-
-async function copiarCodigoCompartilhamento() {
-  try {
-    if (!codigoCompartilhamento) return;
-
-    await navigator.clipboard.writeText(codigoCompartilhamento);
-    setSucesso("Codigo copiado com sucesso.");
-  } catch {
-    setErroCompartilhamento(
-      "Nao foi possivel copiar automaticamente. Selecione e copie o codigo."
-    );
-  }
-}
-
-async function importarFluxoCompartilhado() {
-  try {
-    setErroImportacao("");
-    setErro("");
-    setSucesso("");
-
-    const codigo = codigoImportacao.trim();
-
-    if (!codigo) {
-      setErroImportacao("Cole o codigo do fluxo.");
-      return;
-    }
-
-    setImportandoFluxo(true);
-
-    const res = await fetch("/api/automacoes/compartilhamentos", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ codigo }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao importar fluxo.");
-    }
-
-    setCodigoImportacao("");
-    setModalImportarAberto(false);
-    setSucesso("Fluxo importado como rascunho.");
-    await carregarFluxos();
-    setFluxoSelecionado(json.fluxo);
-  } catch (error: unknown) {
-    setErroImportacao(mensagemErroFluxo(error, "Erro ao importar fluxo."));
-  } finally {
-    setImportandoFluxo(false);
-  }
-}
-
-  async function salvarEstrutura(params?: {
-    nodesParaSalvar?: Node[];
-    edgesParaSalvar?: Edge[];
-    mensagemSucesso?: string;
-  }) {
-    if (!fluxoSelecionado) {
-      setErro("Selecione um fluxo primeiro.");
-      return;
-    }
-
-    try {
-      setSalvando(true);
-      setErro("");
-      setSucesso("");
-
-      const nodesBase = params?.nodesParaSalvar || nodes;
-      const edgesBase = params?.edgesParaSalvar || edges;
-      const erroMidiaObrigatoria = validarMidiasObrigatoriasNodes(nodesBase);
-
-      if (erroMidiaObrigatoria) {
-        setErro(erroMidiaObrigatoria);
-        return;
-      }
-
-      const nosParaSalvar = nodesBase.map((node) => {
-      const tipoNo = String(node.data?.tipo_no || "");
-
-        return {
-          id: node.id,
-          tipo_no: tipoNo,
-          titulo: node.data?.titulo,
-          descricao: node.data?.descricao || null,
-          posicao_x: node.position.x,
-          posicao_y: node.position.y,
-          configuracao_json: node.data?.configuracao_json || {},
-          delay_segundos:
-            node.data?.tipo_no === "inicio"
-              ? null
-              : normalizarDelaySegundos(node.data?.delay_segundos as any),
-        };
-      });
-
-    const conexoesParaSalvar = edgesBase.map((edge, index) => {
-    const data = edge.data as
-        | {
-            condicao_json?: Record<string, any>;
-            rotulo?: string;
-            usar_ia?: boolean;
-            descricao_ia?: string;
-        }
-        | undefined;
-
-    return {
-        id: edge.id,
-        no_origem_id: edge.source,
-        no_destino_id: edge.target,
-        rotulo:
-        data?.rotulo ||
-        (typeof edge.label === "string" ? edge.label : null),
-        ordem: index + 1,
-        condicao_json: data?.condicao_json || {},
-        usar_ia: data?.usar_ia === true,
-        descricao_ia: data?.descricao_ia || null,
-    };
-    });
-
-      const res = await fetch(
-        `/api/automacoes/${fluxoSelecionado.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            nos: nosParaSalvar,
-            conexoes: conexoesParaSalvar,
-          }),
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao salvar estrutura.");
-      }
-
-      setUltimoSalvamento(new Date());
-      setSucesso(params?.mensagemSucesso || "Fluxo salvo com sucesso.");
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao salvar estrutura.");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-function abrirModalArquivarFluxo(fluxo: Fluxo) {
-  setFluxoParaArquivar(fluxo);
-  setModalArquivarAberto(true);
-}
-
-async function confirmarArquivarFluxo() {
-  if (!fluxoParaArquivar) return;
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxoParaArquivar.id,
-        definitivo: false,
-      }),
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao arquivar fluxo.");
-    }
-
-    setSucesso("Fluxo arquivado com sucesso.");
-    setModalArquivarAberto(false);
-
-    if (fluxoSelecionado?.id === fluxoParaArquivar.id) {
-      setFluxoSelecionado(null);
-      setNodes([]);
-      setEdges([]);
-      setEditandoNodeId(null);
-      setEditandoEdgeId(null);
-    }
-
-    setFluxoParaArquivar(null);
-    await carregarFluxos();
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao arquivar fluxo.");
-  }
-}
-
-
-async function carregarGatilhosFluxo(fluxoId: string) {
-  try {
-    const res = await fetch(`/api/automacoes/${fluxoId}/gatilhos`, {
-      cache: "no-store",
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao carregar gatilhos.");
-    }
-
-    setGatilhosFluxo(json.gatilhos || []);
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao carregar gatilhos.");
-  }
-}
-
-async function criarGatilhoFluxo() {
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return;
-
-  try {
-    setErroEdicaoFluxo("");
-    setSucesso("");
-
-    const valor = novoGatilhoValor.trim();
-
-    if (!valor) {
-      setErroEdicaoFluxo("Informe a palavra-chave do gatilho.");
-      return;
-    }
-
-    const res = await fetch(
-      `/api/automacoes/${fluxoParaEditar.id}/gatilhos`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tipo_gatilho: "palavra_chave",
-          valor,
-          condicao: novoGatilhoCondicao,
-        }),
-      }
-    );
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao criar gatilho.");
-    }
-
-    setNovoGatilhoValor("");
-    setNovoGatilhoCondicao("contem");
-    setSucesso("Gatilho criado com sucesso.");
-    await carregarGatilhosFluxo(fluxoParaEditar.id);
-  } catch (error: any) {
-    setErroEdicaoFluxo(error?.message || "Erro ao criar gatilho.");
-  }
-}
-
-async function removerGatilhoFluxo(gatilhoId: string) {
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return;
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch(
-      `/api/automacoes/${fluxoParaEditar.id}/gatilhos`,
-      {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: gatilhoId,
-        }),
-      }
-    );
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao remover gatilho.");
-    }
-
-    setSucesso("Gatilho removido com sucesso.");
-    await carregarGatilhosFluxo(fluxoParaEditar.id);
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao remover gatilho.");
-  }
-}
-
-async function alternarGatilhoFluxo(gatilho: GatilhoFluxo) {
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return;
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch(
-      `/api/automacoes/${fluxoParaEditar.id}/gatilhos`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: gatilho.id,
-          ativo: !gatilho.ativo,
-        }),
-      }
-    );
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao atualizar gatilho.");
-    }
-
-    await carregarGatilhosFluxo(fluxoParaEditar.id);
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao atualizar gatilho.");
-  }
-}
-
-
-function adicionarGatilhoNovoFluxo() {
-  const valor = novoGatilhoValor.trim().toLowerCase();
-
-  if (!valor) {
-    setErroCriacaoFluxo("Informe a palavra-chave do gatilho.");
-    return;
-  }
-
-  const jaExiste = gatilhosNovoFluxo.some(
-    (gatilho) => gatilho.valor === valor
-  );
-
-  if (jaExiste) {
-    setErroCriacaoFluxo("Essa palavra-chave j√° foi adicionada.");
-    return;
-  }
-
-  setErroCriacaoFluxo("");
-  setGatilhosNovoFluxo((atuais) => [
-    ...atuais,
-    {
-      valor,
-      condicao: novoGatilhoCondicao,
-      ativo: true,
-    },
-  ]);
-
-  setNovoGatilhoValor("");
-  setNovoGatilhoCondicao("contem");
-}
-
-
-async function restaurarFluxo(fluxo: Fluxo) {
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxo.id,
-        status: "rascunho",
-      }),
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao restaurar fluxo.");
-    }
-
-    setSucesso("Fluxo restaurado como rascunho.");
-    await carregarFluxos();
-    setFluxoSelecionado(json.fluxo);
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao restaurar fluxo.");
-  }
-}
-  
-
-function abrirModalApagarDefinitivo(fluxo: Fluxo) {
-  if (apagandoFluxoDefinitivoRef.current) return;
-
-  setFluxoParaApagarDefinitivo(fluxo);
-  setModalApagarDefinitivoAberto(true);
-}
-
-async function confirmarApagarDefinitivo() {
-  if (!fluxoParaApagarDefinitivo || apagandoFluxoDefinitivoRef.current) return;
-
-  const fluxoAlvo = fluxoParaApagarDefinitivo;
-  apagandoFluxoDefinitivoRef.current = true;
-  setApagandoFluxoDefinitivo(true);
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxoAlvo.id,
-        definitivo: true,
-      }),
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao apagar definitivamente.");
-    }
-
-    setSucesso("Fluxo apagado definitivamente.");
-    setModalApagarDefinitivoAberto(false);
-
-    if (fluxoSelecionado?.id === fluxoAlvo.id) {
-      setFluxoSelecionado(null);
-      setNodes([]);
-      setEdges([]);
-      setEditandoNodeId(null);
-      setEditandoEdgeId(null);
-    }
-
-    setFluxoParaApagarDefinitivo(null);
-    await carregarFluxos();
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao apagar definitivamente.");
-  } finally {
-    apagandoFluxoDefinitivoRef.current = false;
-    setApagandoFluxoDefinitivo(false);
-  }
-}
-
-function validarFluxoAntesDeAtivar(params?: {
-  fluxo?: Fluxo | null;
-  nodesValidacao?: Node[];
-  edgesValidacao?: Edge[];
-}) {
-  const fluxoValidacao = params?.fluxo ?? fluxoSelecionado;
-  const nodesValidacao = params?.nodesValidacao ?? nodes;
-  const edgesValidacao = params?.edgesValidacao ?? edges;
-  const escopoIntegracoesValidacao = normalizarEscopoIntegracoesFluxo(
-    fluxoValidacao?.configuracao_json
-  );
-  const integracoesEscopoValidacao = obterIntegracoesDoEscopoFluxo(
-    escopoIntegracoesValidacao,
-    integracoesWhatsapp
-  );
-  const usaTemplatesPorIntegracaoValidacao = usaTemplatesPorIntegracao(
-    integracoesEscopoValidacao
-  );
-
-  if (!fluxoValidacao) {
-    return "Selecione um fluxo.";
-  }
-
-  const inicio = nodesValidacao.find((node) => node.data?.tipo_no === "inicio");
-
-  if (!inicio) {
-    return "Adicione um bloco de in√≠cio antes de ativar o fluxo.";
-  }
-
-  const conexaoSaindoDoInicio = edgesValidacao.some((edge) => edge.source === inicio.id);
-
-  if (!conexaoSaindoDoInicio) {
-    return "O bloco de in√≠cio precisa estar conectado a outro bloco.";
-  }
-
-  const temBlocoFinal = nodesValidacao.some(
-    (node) =>
-      node.data?.tipo_no === "encerrar" ||
-      node.data?.tipo_no === "transferir_setor"
-  );
-
-  if (!temBlocoFinal) {
-    return "Adicione pelo menos um bloco final: Encerrar ou Transferir.";
-  }
-
-  for (const node of nodesValidacao) {
-    const tipoNo = String(node.data?.tipo_no || "");
-    const config = (node.data?.configuracao_json || {}) as Record<string, any>;
-
-    if (tipoNo === "enviar_texto" && !String(config.mensagem || "").trim()) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
-    }
-
-    if (tipoNo === "encerrar") {
-      const resultadoFluxo = String(config.resultado_fluxo || "positivo");
-      const tipoValorConversao = String(config.valor_conversao_tipo || "sem_valor");
-
-      if (!resultadoEncerramentoValido(resultadoFluxo)) {
-        return `O bloco "${node.data?.titulo}" precisa ter um resultado valido.`;
-      }
-
-      if (resultadoFluxo === "positivo") {
-        if (!tipoValorConversaoValido(tipoValorConversao)) {
-          return `O bloco "${node.data?.titulo}" precisa ter um tipo de valor valido.`;
-        }
-
-        if (
-          tipoValorConversao === "valor_fixo" &&
-          normalizarValorMonetario(config.valor_conversao) == null
-        ) {
-          return `O bloco "${node.data?.titulo}" precisa ter um valor fixo valido.`;
-        }
-
-        if (
-          tipoValorConversao === "variavel" &&
-          !normalizarVariavelFluxo(String(config.valor_conversao_variavel || ""))
-        ) {
-          return `O bloco "${node.data?.titulo}" precisa informar a variavel do valor.`;
-        }
-      }
-    }
-
-    if (tipoNo === "pergunta_opcoes") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
-      }
-
-      if (!Array.isArray(config.opcoes) || config.opcoes.length === 0) {
-        return `O bloco "${node.data?.titulo}" precisa ter pelo menos uma op√ß√£o.`;
-      }
-    }
-
-    if (tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA) {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
-      }
-
-      const conexoesIa = edgesValidacao.filter((edge) => {
-        const data = edge.data as
-          | {
-              usar_ia?: boolean;
-              descricao_ia?: string | null;
-            }
-          | undefined;
-
-        return edge.source === node.id && data?.usar_ia === true;
-      });
-
-      if (conexoesIa.length === 0) {
-        return `O bloco "${node.data?.titulo}" precisa ter pelo menos uma conex√£o com IA.`;
-      }
-
-      const temConexaoIaSemDescricao = conexoesIa.some((edge) => {
-        const data = edge.data as
-          | {
-              descricao_ia?: string | null;
-            }
-          | undefined;
-
-        return !String(data?.descricao_ia || "").trim();
-      });
-
-      if (temConexaoIaSemDescricao) {
-        return `Todas as conex√µes com IA do bloco "${node.data?.titulo}" precisam ter descri√ß√£o para IA.`;
-      }
-    }
-
-    if (tipoNo === "enviar_botoes") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
-      }
-
-      if (!Array.isArray(config.botoes) || config.botoes.length === 0) {
-        return `O bloco "${node.data?.titulo}" precisa ter pelo menos um bot√£o.`;
-      }
-
-      if (config.botoes.length > 3) {
-        return `O bloco "${node.data?.titulo}" pode ter no m√°ximo 3 bot√µes.`;
-      }
-
-      const botaoInvalido = config.botoes.some(
-        (botao: any) =>
-          !String(botao.id || "").trim() ||
-          !String(botao.titulo || "").trim() ||
-          String(botao.titulo || "").length > 20
-      );
-
-      if (botaoInvalido) {
-        return `O bloco "${node.data?.titulo}" tem bot√£o inv√°lido. Verifique ID e t√≠tulo.`;
-      }
-    }
-
-    if (tipoNo === "botao_redirect") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
-      }
-
-      const textoBotao = String(config.botao_texto || "").trim();
-
-      if (!textoBotao || textoBotao.length > 20) {
-        return `O bloco "${node.data?.titulo}" precisa ter texto do bot√£o com at√© 20 caracteres.`;
-      }
-
-      if (!urlHttpValida(config.url)) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma URL come√ßando com http:// ou https://.`;
-      }
-    }
-
-    if (
-      tipoNo === "avaliacao" &&
-      config.solicitar_comentario === true &&
-      !String(config.mensagem_comentario || "").trim()
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para solicitar coment√°rio.`;
-    }
-
-    if (tipoNo === "avaliacao") {
-      const notaMinima = Number(config.nota_minima);
-      const notaMaxima = Number(config.nota_maxima);
-
-      if (notaMinima >= notaMaxima) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma nota m√°xima maior que a m√≠nima.`;
-      }
-    }
-
-    if (tipoNo === "capturar_resposta") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
-      }
-
-      if (!String(config.variavel || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa informar a vari√°vel onde a resposta ser√° salva.`;
-      }
-
-      if (!String(config.tipo_captura || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter um tipo de captura.`;
-      }
-    }
-
-    if (tipoNo === "agendar_disparo") {
-      const templatesPorIntegracao = normalizarTemplatesPorIntegracao(
-        config.templates_por_integracao
-      );
-      const templatesParaValidar = usaTemplatesPorIntegracaoValidacao
-        ? integracoesEscopoValidacao.map((integracao) => {
-            const templateId = String(
-              templatesPorIntegracao[integracao.id] || ""
-            ).trim();
-
-            return {
-              integracao,
-              templateId,
-              template: templatesWhatsapp.find(
-                (template) => template.id === templateId
-              ),
-            };
-          })
-        : [
-            {
-              integracao: null,
-              templateId: String(config.template_id || "").trim(),
-              template: templatesWhatsapp.find(
-                (template) => template.id === String(config.template_id || "").trim()
-              ),
-            },
-          ];
-
-      for (const item of templatesParaValidar) {
-        const rotuloIntegracao = item.integracao
-          ? ` para ${rotuloIntegracaoWhatsapp(item.integracao)}`
-          : "";
-
-        if (!item.templateId || !item.template) {
-          return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp aprovado${rotuloIntegracao}.`;
-        }
-
-        if (
-          item.integracao &&
-          !templateCompativelComIntegracao(item.template, item.integracao)
-        ) {
-          return `O bloco "${node.data?.titulo}" usa um template de outra WABA${rotuloIntegracao}.`;
-        }
-
-        if (
-          !usaTemplatesPorIntegracaoValidacao &&
-          item.template &&
-          integracoesEscopoValidacao.length > 0 &&
-          !integracoesEscopoValidacao.some((integracao) =>
-            templateCompativelComIntegracao(item.template, integracao)
-          )
-        ) {
-          return `O bloco "${node.data?.titulo}" usa um template fora do escopo do fluxo.`;
-        }
-
-        if (templateWhatsappTemCabecalhoMidia(item.template)) {
-          return `O bloco "${node.data?.titulo}" usa um template com cabecalho de midia. Use um template apenas com texto para disparos agendados.`;
-        }
-
-        const totalVariaveisTemplate =
-          contarVariaveisTemplateWhatsapp(item.template);
-        const totalVariaveisConfiguradas =
-          contarVariaveisObrigatoriasPreenchidas(
-            Array.isArray(config.variaveis) ? config.variaveis : [],
-            totalVariaveisTemplate
-          );
-
-        if (totalVariaveisTemplate > 3) {
-          return `O bloco "${node.data?.titulo}" usa um template com mais de 3 variaveis.`;
-        }
-
-        if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
-          return `O bloco "${node.data?.titulo}" precisa informar ${totalVariaveisTemplate} variavel(is) do template WhatsApp.`;
-        }
-      }
-
-      const quantidade = Number(config.tempo_quantidade || 0);
-
-      if (!Number.isFinite(quantidade) || quantidade <= 0) {
-        return `O bloco "${node.data?.titulo}" precisa ter um tempo v√°lido para agendar o disparo.`;
-      }
-
-      if (!["horas", "dias"].includes(String(config.tempo_unidade || ""))) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma unidade v√°lida.`;
-      }
-    }
-
-    if (
-      tipoNo === "agenda_escolher_horario" &&
-      !String(config.agenda_id || "").trim()
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma agenda.`;
-    }
-
-    if (
-      tipoNo === "agenda_escolher_horario" &&
-      !String(config.mensagem || "").trim()
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para pedir o dia.`;
-    }
-
-    if (tipoNo === "agenda_criar_agendamento") {
-      const lembreteAtivo = configuracaoMarcada(
-        config.lembrete_agendamento_ativo
-      );
-      const lembreteWhatsapp = configuracaoMarcada(
-        config.lembrete_agendamento_whatsapp
-      );
-      const lembreteEmail = configuracaoMarcada(
-        config.lembrete_agendamento_email
-      );
-
-      if (lembreteAtivo) {
-        const quantidade = Number(config.lembrete_agendamento_quantidade || 0);
-        const templateLembreteId = String(
-          config.lembrete_agendamento_template_id || ""
-        ).trim();
-        const templateLembreteSelecionado = templatesWhatsapp.find(
-          (template) => template.id === templateLembreteId
-        );
-
-        if (!Number.isFinite(quantidade) || quantidade <= 0) {
-          return `O bloco "${node.data?.titulo}" precisa ter uma antecedencia valida para o lembrete.`;
-        }
-
-        if (
-          !["minutos", "horas", "dias"].includes(
-            String(config.lembrete_agendamento_unidade || "")
-          )
-        ) {
-          return `O bloco "${node.data?.titulo}" precisa ter uma unidade valida para o lembrete.`;
-        }
-
-        if (!lembreteWhatsapp && !lembreteEmail) {
-          return `O bloco "${node.data?.titulo}" precisa ter pelo menos um canal de lembrete.`;
-        }
-
-        if (
-          lembreteWhatsapp &&
-          (!templateLembreteId || !templateLembreteSelecionado)
-        ) {
-          return "Selecione um template WhatsApp para o lembrete.";
-        }
-
-        if (lembreteWhatsapp) {
-          if (
-            templateWhatsappTemCabecalhoMidia(templateLembreteSelecionado)
-          ) {
-            return `O bloco "${node.data?.titulo}" usa um template de lembrete com cabecalho de midia. Use um template apenas com texto.`;
-          }
-
-          if (templateLembreteSelecionado) {
-            const totalVariaveisTemplate =
-              contarVariaveisTemplateWhatsapp(templateLembreteSelecionado);
-            const totalVariaveisConfiguradas =
-              contarVariaveisObrigatoriasPreenchidas(
-                Array.isArray(config.lembrete_agendamento_variaveis)
-                  ? config.lembrete_agendamento_variaveis
-                  : [],
-                totalVariaveisTemplate
-              );
-
-            if (totalVariaveisTemplate > 3) {
-              return `O bloco "${node.data?.titulo}" usa um template de lembrete com mais de 3 variaveis.`;
-            }
-
-            if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
-              return `O bloco "${node.data?.titulo}" precisa informar ${totalVariaveisTemplate} variavel(is) do template de lembrete.`;
-            }
-          }
-        }
-      }
-    }
-
-    if (tipoNo === "interpretar_arquivo_ia") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem solicitando o arquivo.`;
-      }
-
-      if (!String(config.instrucao_ia || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma instru√ß√£o para IA.`;
-      }
-    }
-
-    if (
-      tipoNo === "transferir_setor" &&
-      !String(config.setor_id || "").trim()
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter um setor destino.`;
-    }
-
-    if (
-        (
-          tipoNo === "enviar_imagem" ||
-          tipoNo === "enviar_video" ||
-          tipoNo === "enviar_audio"
-        ) &&
-      !String(config.midia_url || "").trim()
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma m√≠dia selecionada.`;
-    }
-  }
-
-  return "";
-}
-
-
-async function alterarStatusFluxo(
-  fluxo: Fluxo,
-  novoStatus: "ativo" | "rascunho" | "pausado"
-) {
-  try {
-    setErro("");
-    setSucesso("");
-
-    if (novoStatus === "ativo") {
-      if (headerUser.assinatura?.status === "bloqueada") {
-        window.dispatchEvent(new Event("assinatura:abrir-renovacao"));
-        setErro("Plano bloqueado. Renove a assinatura para ativar fluxos.");
-        return;
-      }
-
-      const fluxoEstaNoCanvas = fluxoSelecionado?.id === fluxo.id;
-      let nodesValidacao = nodes;
-      let edgesValidacao = edges;
-
-      if (!fluxoEstaNoCanvas || carregandoEstrutura) {
-        const estrutura = await carregarEstruturaParaValidacao(fluxo.id);
-        nodesValidacao = estrutura.nodesValidacao;
-        edgesValidacao = estrutura.edgesValidacao;
-      }
-
-      const erroValidacao = validarFluxoAntesDeAtivar({
-        fluxo,
-        nodesValidacao,
-        edgesValidacao,
-      });
-
-      if (erroValidacao) {
-        setErro(erroValidacao);
-        return;
-      }
-
-      if (fluxoEstaNoCanvas && !carregandoEstrutura) {
-        await salvarEstrutura();
-      }
-    }
-
-    const res = await fetch("/api/automacoes", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxo.id,
-        status: novoStatus,
-      }),
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
-
-    if (!res.ok || !json.ok) {
-      if (json.code === "ASSINATURA_BLOQUEADA") {
-        window.dispatchEvent(new Event("assinatura:abrir-renovacao"));
-      }
-
-      throw new Error(json.error || "Erro ao alterar status do fluxo.");
-    }
-
-    setSucesso(
-      novoStatus === "ativo"
-        ? "Fluxo ativado com sucesso."
-        : "Fluxo pausado com sucesso."
-    );
-
-    setFluxoSelecionado(json.fluxo);
-    await carregarFluxos();
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao alterar status do fluxo.");
-  }
-}
-
-  function badgeClass(status: string) {
-    if (status === "ativo") return `${styles.badge} ${styles.badgeGreen}`;
-    if (status === "pausado") return `${styles.badge} ${styles.badgeRed}`;
-    if (status === "arquivado") return `${styles.badge} ${styles.badgeYellow}`;
-    return `${styles.badge} ${styles.badgeGray}`;
-  }
-
-function removerNode(nodeId: string) {
-  const node = nodes.find((n) => n.id === nodeId);
-
-  if (!node) {
-    return;
-  }
-
-  if (node.data?.tipo_no === "inicio") {
-    setErro("O bloco de in√≠cio n√£o pode ser removido.");
-    return;
-  }
-
-  setNodes((nodesAtuais) => nodesAtuais.filter((n) => n.id !== nodeId));
-
-  setEdges((edgesAtuais) =>
-    edgesAtuais.filter((e) => e.source !== nodeId && e.target !== nodeId)
-  );
-
-  setEditandoNodeId(null);
-  setEditandoEdgeId(null);
-  setSucesso("Bloco removido. Clique em Salvar fluxo para gravar no banco.");
-}
-
-async function duplicarNode(nodeId: string) {
-  if (!fluxoSelecionado) {
-    setErro("Selecione um fluxo primeiro.");
-    return;
-  }
-
-  const nodeOriginal = nodes.find((node) => node.id === nodeId);
-
-  if (!nodeOriginal) {
-    setErro("Bloco n√£o encontrado.");
-    return;
-  }
-
-  if (nodeOriginal.data?.tipo_no === "inicio") {
-    setErro("O bloco de in√≠cio n√£o pode ser duplicado.");
-    return;
-  }
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const novoId = criarIdTemporario("node");
-    const novaPosicao = calcularPosicaoLivreDuplicacaoNo(
-      nodeOriginal,
-      nodes
-    );
-
-    const configuracaoOriginal =
-      (nodeOriginal.data?.configuracao_json as Record<string, any>) || {};
-
-    const configuracaoDuplicada =
-      typeof structuredClone === "function"
-        ? structuredClone(configuracaoOriginal)
-        : JSON.parse(JSON.stringify(configuracaoOriginal));
-
-    const novoNoDb: AutomacaoNo = {
-      id: novoId,
-      tipo_no: String(nodeOriginal.data?.tipo_no || "enviar_texto"),
-      titulo: String(nodeOriginal.data?.titulo || "Novo bloco"),
-      descricao: nodeOriginal.data?.descricao
-        ? String(nodeOriginal.data.descricao)
-        : null,
-      posicao_x: novaPosicao.x,
-      posicao_y: novaPosicao.y,
-      configuracao_json: configuracaoDuplicada,
-      delay_segundos:
-        nodeOriginal.data?.delay_segundos === null ||
-        nodeOriginal.data?.delay_segundos === undefined
-          ? null
-          : normalizarDelaySegundos(nodeOriginal.data.delay_segundos as any),
-    };
-
-    const novoNodeBase = dbNoParaReactFlow(novoNoDb);
-
-    const novoNode: Node = {
-      ...novoNodeBase,
-      selected: true,
-      data: {
-        ...novoNodeBase.data,
-        isSelecionado: true,
-      },
-    };
-
-    const nodesAtualizados = nodes.map((node) => ({
-      ...node,
-      selected: false,
-      data: {
-        ...(node.data || {}),
-        isSelecionado: false,
-      },
-    }));
-
-    const nodesParaSalvar = [...nodesAtualizados, novoNode];
-
-    setNodes(nodesParaSalvar);
-    abrirEdicaoNo(novoNode);
-
-    await salvarEstrutura({
-      nodesParaSalvar,
-      edgesParaSalvar: edges,
-      mensagemSucesso: "Bloco duplicado e fluxo salvo com sucesso.",
-    });
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao duplicar bloco.");
-  }
-}
-
-function removerConexao(edgeId: string) {
-  setEdges((edgesAtuais) => edgesAtuais.filter((edge) => edge.id !== edgeId));
-
-  setEditandoEdgeId(null);
-  setEditandoNodeId(null);
-  setSucesso("Conex√£o removida. Clique em Salvar fluxo para gravar no banco.");
-}
-
-function fecharPainelEdicao() {
-  setEditandoNodeId(null);
-  setEditandoEdgeId(null);
-  setConfirmandoExclusaoNo(false);
-  setConfirmandoExclusaoConexao(false);
-  marcarNodeSelecionado(null);
-
-  setEdges((atuais) =>
-    atuais.map((edge) => ({
-      ...edge,
-      selected: false,
-      style: {
-        ...(edge.style || {}),
-        stroke: "#cbd5e1",
-        strokeWidth: 2,
-        strokeDasharray: "6 6",
-      },
-    }))
-  );
-}
-
-useEffect(() => {
-  function handleClick() {
-    setMenuFluxo(null);
-  }
-  window.addEventListener("click", handleClick);
-  return () => window.removeEventListener("click", handleClick);
-}, []);
-
-useEffect(() => {
-  const deveCalcularCustoDisparo =
-    tipoNodeEdicao === "agendar_disparo" ||
-    (tipoNodeEdicao === "agenda_criar_agendamento" &&
-      agendaLembreteAtivoNode &&
-      agendaLembreteWhatsappNode);
-
-  if (!deveCalcularCustoDisparo) {
-    setPreviewCustoAgendarDisparo(null);
-    return;
-  }
-
-  const templateSelecionado =
-    tipoNodeEdicao === "agendar_disparo"
-      ? templateAgendarDisparoPreview
-      : templateAgendaLembreteSelecionado;
-
-  const categoria = String(
-    templateSelecionado?.categoria || ""
-  ).toLowerCase();
-
-  if (!categoria) {
-    setPreviewCustoAgendarDisparo(null);
-    return;
-  }
-
-  calcularPreviewCustoAgendarDisparo(categoria);
-}, [
-  tipoNodeEdicao,
-  agendaLembreteAtivoNode,
-  agendaLembreteWhatsappNode,
-  templateAgendarDisparoPreview,
-  templateAgendaLembreteSelecionado,
-]);
-
-const nodesRenderizados = useMemo(
-  () =>
-    nodes.map((node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        arquivo_ia_sem_conexao_erro: nodeArquivoIaSemConexaoErro(node, edges),
-        agendar_disparo_template_waba_alerta:
-          nodeAgendarDisparoPrecisaTemplatePorWaba(
-            node,
-            integracoesEscopoFluxoSelecionado,
-            templatesWhatsapp
-          ),
-      },
-    })),
-  [nodes, edges, integracoesEscopoFluxoSelecionado, templatesWhatsapp]
-);
-
-const nodesParaPreviaWhatsapp = useMemo(() => {
-  if (!editandoNodeId || !nodeEditado) return nodes;
-
-  return nodes.map((node) => {
-    if (node.id !== editandoNodeId) return node;
-
-    const tipoAtual = String(node.data?.tipo_no || "enviar_texto");
-    const tipoFinal = tipoAtual === "inicio" ? "inicio" : tipoNodeEdicao || tipoAtual;
-    const configuracao = {
-      ...((node.data?.configuracao_json || {}) as Record<string, unknown>),
-    };
-    const tiposComMensagem = [
-      "enviar_texto",
-      "pergunta_opcoes",
-      TIPO_NO_PERGUNTA_LIVRE_IA,
-      "enviar_botoes",
-      "botao_redirect",
-      "enviar_imagem",
-      "enviar_video",
-      "enviar_audio",
-      "transferir_setor",
-      "encerrar",
-      "avaliacao",
-      "capturar_resposta",
-      "agenda_buscar_agendamento",
-      "agenda_escolher_horario",
-      "agenda_criar_agendamento",
-      "agenda_remarcar_agendamento",
-      "agenda_cancelar_agendamento",
-      "interpretar_arquivo_ia",
-    ];
-
-    if (tiposComMensagem.includes(tipoFinal)) {
-      configuracao.mensagem = mensagemNode;
-    }
-
-    if (tipoFinal === "pergunta_opcoes") {
-      configuracao.opcoes = opcoesNode;
-    }
-
-    if (tipoFinal === "enviar_botoes") {
-      configuracao.botoes = botoesNode;
-    }
-
-    if (tipoFinal === "botao_redirect") {
-      configuracao.botao_texto = redirectBotaoTextoNode.trim() || "Acessar";
-      configuracao.url = redirectUrlNode.trim();
-    }
-
-    if (
-      tipoFinal === "enviar_imagem" ||
-      tipoFinal === "enviar_video" ||
-      tipoFinal === "enviar_audio"
-    ) {
-      configuracao.midia_url = midiaUrlNode;
-      configuracao.midia_nome = midiaNomeNode;
-    }
-
-    if (tipoFinal === "avaliacao") {
-      configuracao.solicitar_comentario = solicitarComentarioNode;
-      configuracao.mensagem_comentario = mensagemComentarioNode;
-      configuracao.nota_minima = Number(notaMinimaNode || 1);
-      configuracao.nota_maxima = Number(notaMaximaNode || 5);
-    }
-
-    if (tipoFinal === "capturar_resposta") {
-      configuracao.variavel = capturaVariavelNode.trim().toLowerCase() || "resposta";
-      configuracao.tipo_captura = capturaTipoNode || "texto";
-    }
-
-    if (tipoFinal === "agendar_disparo") {
-      configuracao.template_id = agendarDisparoTemplateIdNode;
-      configuracao.templates_por_integracao =
-        agendarDisparoTemplatesPorIntegracaoNode;
-      configuracao.tempo_quantidade = Math.max(
-        1,
-        Number(agendarDisparoQuantidadeNode || 1)
-      );
-      configuracao.tempo_unidade = agendarDisparoUnidadeNode;
-      configuracao.variaveis = agendarDisparoVariaveisNode
-        .split("\n")
-        .map((item) => normalizarVariavelFluxo(item))
-        .filter(Boolean);
-    }
-
-    if (tipoFinal === "agenda_buscar_agendamento") {
-      configuracao.mensagem_encontrado =
-        mensagemNode.trim() ||
-        "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.";
-      configuracao.mensagem_listar_agendamentos =
-        agendaMensagemListarAgendamentosNode.trim();
-      configuracao.mensagem_nao_encontrado =
-        agendaMensagemSemHorariosNode.trim();
-    }
-
-    if (tipoFinal === "agenda_escolher_horario") {
-      configuracao.mensagem =
-        mensagemNode.trim() ||
-        "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.";
-      configuracao.mensagem_listar_horarios =
-        agendaMensagemListarHorariosNode.trim();
-      configuracao.mensagem_preferencia_indisponivel =
-        agendaMensagemPreferenciaIndisponivelNode.trim();
-      configuracao.mensagem_data_invalida =
-        agendaMensagemDataInvalidaNode.trim();
-      configuracao.mensagem_sem_horarios =
-        agendaMensagemSemHorariosNode.trim();
-      configuracao.mensagem_sem_expediente =
-        agendaMensagemSemExpedienteNode.trim();
-    }
-
-    if (
-      tipoFinal === "agenda_criar_agendamento" ||
-      tipoFinal === "agenda_remarcar_agendamento" ||
-      tipoFinal === "agenda_cancelar_agendamento"
-    ) {
-      configuracao.mensagem = mensagemNode;
-      configuracao.mensagem_conflito = agendaMensagemConflitoNode.trim();
-      configuracao.lembrete_agendamento_ativo = agendaLembreteAtivoNode;
-      configuracao.lembrete_agendamento_whatsapp = agendaLembreteWhatsappNode;
-      configuracao.lembrete_agendamento_template_id =
-        agendaLembreteTemplateIdNode;
-      configuracao.lembrete_agendamento_variaveis =
-        agendaLembreteVariaveisNode
-          .split("\n")
-          .map((item) => normalizarVariavelFluxo(item))
-          .filter(Boolean);
-    }
-
-    if (tipoFinal === "interpretar_arquivo_ia") {
-      configuracao.mensagem_erro = arquivoMensagemErroNode.trim();
-    }
-
-    return {
-      ...node,
-      data: {
-        ...node.data,
-        tipo_no: tipoFinal,
-        titulo: tituloNode.trim() || tituloPadraoTipoNo(tipoFinal),
-        configuracao_json: configuracao,
-        delay_segundos:
-          tipoFinal === "inicio" ? null : normalizarDelaySegundos(delayNode),
-      },
-    };
-  });
-}, [
-  nodes,
-  editandoNodeId,
-  nodeEditado,
-  tipoNodeEdicao,
-  tituloNode,
-  mensagemNode,
-  delayNode,
-  opcoesNode,
-  botoesNode,
-  redirectBotaoTextoNode,
-  redirectUrlNode,
-  midiaUrlNode,
-  midiaNomeNode,
-  solicitarComentarioNode,
-  mensagemComentarioNode,
-  notaMinimaNode,
-  notaMaximaNode,
-  capturaVariavelNode,
-  capturaTipoNode,
-  agendarDisparoTemplateIdNode,
-  agendarDisparoTemplatesPorIntegracaoNode,
-  agendarDisparoQuantidadeNode,
-  agendarDisparoUnidadeNode,
-  agendarDisparoVariaveisNode,
-  agendaMensagemListarAgendamentosNode,
-  agendaMensagemSemHorariosNode,
-  agendaMensagemListarHorariosNode,
-  agendaMensagemPreferenciaIndisponivelNode,
-  agendaMensagemDataInvalidaNode,
-  agendaMensagemSemExpedienteNode,
-  agendaMensagemConflitoNode,
-  agendaLembreteAtivoNode,
-  agendaLembreteWhatsappNode,
-  agendaLembreteTemplateIdNode,
-  agendaLembreteVariaveisNode,
-  arquivoMensagemErroNode,
-]);
-
-const edgesParaPreviaWhatsapp = useMemo(() => {
-  if (!editandoEdgeId || !edgeEditada) return edges;
-
-  return edges.map((edge) => {
-    if (edge.id !== editandoEdgeId) return edge;
-
-    const ehSempreSeguir = tipoCondicaoConexao === "sempre";
-    const ehTimeout = tipoCondicaoConexao === "timeout_sem_resposta";
-    const usarIaFinal = usarIaConexao && !ehSempreSeguir && !ehTimeout;
-    const labelBase = ehTimeout
-      ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
-      : rotuloConexao || valorCondicao || "Condicao";
-    let condicaoJson: Record<string, unknown> = {};
-
-    if (ehSempreSeguir) {
-      condicaoJson = { tipo: "sempre" };
-    } else if (ehTimeout) {
-      const quantidade = Math.max(1, Number(timeoutQuantidade || 1));
-      const multiplicador = timeoutUnidade === "horas" ? 3600 : 60;
-
-      condicaoJson = {
-        tipo: "timeout_sem_resposta",
-        timeout_segundos: quantidade * multiplicador,
-        tempo_quantidade: quantidade,
-        tempo_unidade: timeoutUnidade,
-        status_envio: statusEnvioTimeout,
-      };
-    } else {
-      condicaoJson = {
-        tipo: tipoCondicaoConexao,
-      };
-
-      if (valorCondicao) {
-        condicaoJson.valor = valorCondicao;
-      }
-    }
-
-    return {
-      ...edge,
-      label: ehSempreSeguir ? "" : usarIaFinal ? `‚ú® ${labelBase}` : labelBase,
-      data: {
-        ...(edge.data || {}),
-        rotulo: ehSempreSeguir
-          ? "Sempre seguir"
-          : ehTimeout
-          ? `Sem resposta em ${timeoutQuantidade} ${timeoutUnidade}`
-          : rotuloConexao,
-        condicao_json: condicaoJson,
-        usar_ia: usarIaFinal,
-        descricao_ia: descricaoIaConexao.trim(),
-      },
-    };
-  });
-}, [
-  edges,
-  editandoEdgeId,
-  edgeEditada,
-  tipoCondicaoConexao,
-  usarIaConexao,
-  timeoutQuantidade,
-  timeoutUnidade,
-  statusEnvioTimeout,
-  rotuloConexao,
-  valorCondicao,
-  descricaoIaConexao,
-]);
-
-const encerramentoInatividadePrevia = useMemo<EncerramentoInatividadePreviaWhatsapp | null>(() => {
-  if (!fluxoSelecionado) return null;
-
-  const configuracaoSalva = obterConfiguracaoEncerramentoInatividade(
-    fluxoSelecionado.configuracao_json
-  );
-
-  if (editandoFluxo && fluxoEmEdicao?.id === fluxoSelecionado.id) {
-    const quantidadeEditada = Number(encerrarInatividadeQuantidade || 0);
-
-    return {
-      quantidade: Number.isFinite(quantidadeEditada) && quantidadeEditada > 0
-        ? quantidadeEditada
-        : configuracaoSalva.quantidade,
-      unidade: encerrarInatividadeUnidade,
-      mensagem:
-        encerrarInatividadeMensagem.trim() || configuracaoSalva.mensagem,
-    };
-  }
-
-  return {
-    quantidade: configuracaoSalva.quantidade,
-    unidade: configuracaoSalva.unidade,
-    mensagem: configuracaoSalva.mensagem,
-  };
-}, [
-  fluxoSelecionado,
-  editandoFluxo,
-  fluxoEmEdicao?.id,
-  encerrarInatividadeQuantidade,
-  encerrarInatividadeUnidade,
-  encerrarInatividadeMensagem,
-]);
-
-const previaWhatsappFluxo = useMemo(
-  () =>
-    montarPreviaWhatsappFluxo(
-      nodesParaPreviaWhatsapp,
-      edgesParaPreviaWhatsapp,
-      templatesWhatsapp,
-      respostasPreviaWhatsapp,
-      encerramentoInatividadePrevia
-    ),
-  [
-    nodesParaPreviaWhatsapp,
-    edgesParaPreviaWhatsapp,
-    templatesWhatsapp,
-    respostasPreviaWhatsapp,
-    encerramentoInatividadePrevia,
-  ]
-);
-
-function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
-  const rect = elemento.getBoundingClientRect();
-  const larguraTooltip = 280;
-  const margem = 12;
-  const x = Math.min(
-    rect.right + 12,
-    window.innerWidth - larguraTooltip - margem
-  );
-  const y = Math.min(
-    Math.max(margem, rect.top - 8),
-    window.innerHeight - 140
-  );
-
-  setTooltipAlertaFluxo({
-    texto: AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA,
-    x,
-    y,
-  });
-}
-
-  return (
-    <>
-      <Header
-        mobileBackHref={mobileDetailActive ? "/fluxos" : undefined}
-        mobileBackLabel="Voltar para fluxos"
-        title="Fluxos de automa√ß√£o"
-        subtitle="Monte fluxos para automatizar atendimentos, direcionar clientes e escalar suas conversas no WhatsApp."
-      />
-    <main
-      className={`${styles.pageContent} ${
-        mobileDetailActive ? styles.mobileDetailActive : ""
-      }`}
-    >
-      <aside className={styles.sidebarFluxos}>
-        <div className={styles.sidebarHeader}>
-          <p className={styles.eyebrow}>Automa√ß√µes</p>
-          <h1 className={styles.sidebarTitle}>Fluxos</h1>
-          <p className={styles.sidebarSubtitle}>
-            Selecione um fluxo ou crie um novo.
-          </p>
-        </div>
-
-        <div className={styles.sidebarFilters}>
-          <input
-            className={styles.input}
-            placeholder="Buscar fluxo..."
-            value={buscaFluxo}
-            onChange={(e) => setBuscaFluxo(e.target.value)}
-          />
-
-          <div className={styles.filterRow}>
-            <select
-              className={styles.input}
-              value={filtroStatusFluxo}
-              onChange={(e) =>
-                setFiltroStatusFluxo(
-                  e.target.value as
-                    | "todos"
-                    | "rascunho"
-                    | "ativo"
-                    | "pausado"
-                    | "arquivado"
-                )
-              }
-            >
-              <option value="todos">Todos</option>
-              <option value="ativo">Ativos</option>
-              <option value="rascunho">Rascunhos</option>
-              <option value="pausado">Pausados</option>
-              <option value="arquivado">Arquivados</option>
-            </select>
-
-            <button
-              type="button"
-              className={styles.newFlowButton}
-              title="Criar fluxo"
-              onClick={() => {
-                setErroCriacaoFluxo("");
-                setNovoFluxoNome("");
-                setDescricaoNovoFluxo("");
-                setNovoFluxoPadrao(false);
-                setGatilhosNovoFluxo([]);
-                setNovoGatilhoValor("");
-                setNovoGatilhoCondicao("contem");
-                resetarEncerramentoInatividadePadrao();
-                setAbrirCriacao(true);
-              }}
-            >
-              +
-            </button>
-
-            <button
-              type="button"
-              className={styles.importFlowButton}
-              title="Importar por codigo"
-              onClick={() => {
-                setErroImportacao("");
-                setCodigoImportacao("");
-                setModalImportarAberto(true);
-              }}
-            >
-              <CopyPlus size={18} strokeWidth={2.4} />
-            </button>
-          </div>
-        </div>
-
-        <div className={styles.flowList}>
-          {carregandoFluxos ? (
-            <div className={styles.emptyMini}>Carregando...</div>
-          ) : fluxos.length === 0 ? (
-            <div className={styles.emptyMini}>Nenhum fluxo cadastrado.</div>
-          ) : (
-            fluxos
-              .filter((f) =>
-                f.nome.toLowerCase().includes(buscaFluxo.toLowerCase())
-              )
-              .filter((f) =>
-                filtroStatusFluxo === "todos" ? true : f.status === filtroStatusFluxo
-              )
-              .sort((a, b) => {
-                const ordemStatus = {
-                  rascunho: 1,
-                  ativo: 2,
-                  pausado: 3,
-                  arquivado: 4,
-                };
-
-                const statusDiff =
-                  ordemStatus[a.status] - ordemStatus[b.status];
-
-                if (statusDiff !== 0) return statusDiff;
-
-                // üî• Ordena√ß√£o por data (mais recente primeiro)
-                return (
-                  new Date(b.created_at || 0).getTime() -
-                  new Date(a.created_at || 0).getTime()
-                );
-              })
-              .map((fluxo) => (
-              <div
-                key={fluxo.id}
-                role="button"
-                tabIndex={0}
-                className={
-                  fluxoSelecionado?.id === fluxo.id
-                    ? styles.flowItemActive
-                    : styles.flowItem
-                }
-                onClick={() => abrirFluxo(fluxo)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    abrirFluxo(fluxo);
-                  }
-                }}
-              >
-                <div className={styles.flowItemTop}>
-                  <div className={styles.flowItemInfo}>
-                    <span className={styles.flowItemTitle}>{fluxo.nome}</span>
-
-                    <div className={styles.flowBadges}>
-                      {fluxo.fluxo_padrao && (
-                        <span className={`${styles.badge} ${styles.badgeBlue}`}>
-                          padr√£o
-                        </span>
-                      )}
-
-                      <span className={badgeClass(fluxo.status)}>
-                        {fluxo.status}
-                      </span>
-
-                      {Number(
-                        fluxo.alertas_configuracao
-                          ?.interpretar_arquivo_ia_sem_conexao_erro || 0
-                      ) > 0 && (
-                        <span
-                          className={`${styles.infoAlertIcon} ${styles.infoAlertIconFlow}`}
-                          aria-label={AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA}
-                          role="img"
-                          tabIndex={0}
-                          onMouseEnter={(event) =>
-                            abrirTooltipAlertaFluxo(event.currentTarget)
-                          }
-                          onMouseLeave={() => setTooltipAlertaFluxo(null)}
-                          onFocus={(event) =>
-                            abrirTooltipAlertaFluxo(event.currentTarget)
-                          }
-                          onBlur={() => setTooltipAlertaFluxo(null)}
-                        >
-                          i
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className={styles.flowMenuWrapper}>
-                    <button
-                      type="button"
-                      className={styles.flowMenuButton}
-                      onClick={(e) => {
-                        e.stopPropagation();
-
-                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-
-                        setMenuFluxo((menuAtual) => {
-                          if (menuAtual?.fluxo?.id === fluxo.id) {
-                            return null;
-                          }
-
-                          return {
-                            fluxo,
-                            x: rect.right,
-                            y: rect.bottom,
-                            buttonTop: rect.top,
-                            buttonBottom: rect.bottom,
-                          };
-                        });
-                      }}
-                    >
-                      ‚ãÆ
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            ))
-          )}
-        </div>
-      </aside>
-
-      <section className={styles.editorPanel}>
-        <header className={styles.editorHeader}>
-          <div>
-            <p className={styles.eyebrow}>Construtor visual</p>
-            <h2 className={styles.editorTitle}>
-              {fluxoSelecionado?.nome || "Selecione um fluxo"}
-            </h2>
-            <p className={styles.editorSubtitle}>
-              Adicione blocos, arraste no painel e conecte um bloco no outro.
-            </p>
-          </div>
-
-          <div className={styles.headerActions}>
-            <div className={styles.headerActionsButtons}>
-              {fluxoSelecionado?.status === "arquivado" ? (
-                <>
-                  <button
-                    type="button"
-                    className={styles.secondaryButton}
-                    onClick={() => restaurarFluxo(fluxoSelecionado)}
-                  >
-                    Restaurar
-                  </button>
-
-                  <button
-                    type="button"
-                    className={styles.dangerButton}
-                    onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}
-                  >
-                    Apagar definitivo
-                  </button>
-                </>
-              ) : (
-              <>
-                <button
-                  type="button"
-                  className={`${styles.secondaryButton} ${styles.aiHeaderButton}`}
-                  onClick={() => setAssistenteFluxosAberto(true)}
-                >
-                  ‚ú® Assistente IA
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => adicionarNo("enviar_texto")}
-                  disabled={!fluxoSelecionado}
-                >
-                  + Bloco
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => abrirEdicaoFluxo()}
-                  disabled={!fluxoSelecionado}
-                >
-                  Editar fluxo
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={() => salvarEstrutura()}
-                  disabled={!fluxoSelecionado || salvando}
-                >
-                  {salvando ? "Salvando..." : "Salvar fluxo"}
-                </button>
-
-                {fluxo &&
-                  fluxo.status !== "ativo" &&
-                  fluxo.status !== "arquivado" && (
-                    <button
-                      type="button"
-                      className={styles.primaryButtonActv}
-                      onClick={() =>
-                        alterarStatusFluxo(fluxo, "ativo")
-                      }
-                    >
-                      Ativar fluxo
-                    </button>
-                )}
-
-                <div className={styles.headerMenuWrapper}>
-                  <button
-                    type="button"
-                    className={styles.headerMenuButton}
-                    disabled={!fluxoSelecionado}
-                    onClick={() => setMenuHeaderAberto((atual) => !atual)}
-                  >
-                    ‚ãÆ
-                  </button>
-
-                  {menuHeaderAberto && fluxoSelecionado && (
-                    <div className={styles.headerDropdownMenu}>
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("enviar_texto");
-                        }}
-                      >
-                        + Mensagem
-                      </button>
-                      
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("pergunta_opcoes");
-                        }}
-                      >
-                        + Pergunta
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo(TIPO_NO_PERGUNTA_LIVRE_IA);
-                        }}
-                      >
-                        + Pergunta IA
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("capturar_resposta");
-                        }}
-                      >
-                        + Capturar resposta
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("transferir_setor");
-                        }}
-                      >
-                        + Transfer√™ncia
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("encerrar");
-                        }}
-                      >
-                        + Encerramento
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("enviar_imagem");
-                        }}
-                      >
-                        + Imagem
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("enviar_video");
-                        }}
-                      >
-                        + V√≠deo
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("enviar_audio");
-                        }}
-                      >
-                        + √Åudio
-                      </button>
-                      
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("enviar_botoes");
-                        }}
-                      >
-                        + Pergunta com bot√µes
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("botao_redirect");
-                        }}
-                      >
-                        + Bot√£o redirect
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("agendar_disparo");
-                        }}
-                      >
-                        + Agendar disparo
-                      </button>
-                      
-                      <div className={styles.headerSubmenuWrapper}>
-                        <button
-                          type="button"
-                          className={`${styles.headerDropdownItem} ${styles.headerSubmenuTrigger}`}
-                        >
-                          <span>+ Agendar Dia/hora</span>
-                          <span className={styles.headerSubmenuArrow}>‚Äπ</span>
-                        </button>
-
-                        <div className={styles.headerSubmenuLeft}>
-                          <button
-                            type="button"
-                            className={styles.headerDropdownItem}
-                            onClick={() => {
-                              setMenuHeaderAberto(false);
-                              adicionarNo("agenda_buscar_agendamento");
-                            }}
-                          >
-                            + Buscar agendamento
-                          </button>
-
-                          <button
-                            type="button"
-                            className={styles.headerDropdownItem}
-                            onClick={() => {
-                              setMenuHeaderAberto(false);
-                              adicionarNo("agenda_escolher_horario");
-                            }}
-                          >
-                            + Escolher hor√°rio
-                          </button>
-
-                          <button
-                            type="button"
-                            className={styles.headerDropdownItem}
-                            onClick={() => {
-                              setMenuHeaderAberto(false);
-                              adicionarNo("agenda_criar_agendamento");
-                            }}
-                          >
-                            + Criar agendamento
-                          </button>
-
-                          <button
-                            type="button"
-                            className={styles.headerDropdownItem}
-                            onClick={() => {
-                              setMenuHeaderAberto(false);
-                              adicionarNo("agenda_remarcar_agendamento");
-                            }}
-                          >
-                            + Remarcar agendamento
-                          </button>
-
-                          <button
-                            type="button"
-                            className={styles.headerDropdownItem}
-                            onClick={() => {
-                              setMenuHeaderAberto(false);
-                              adicionarNo("agenda_cancelar_agendamento");
-                            }}
-                          >
-                            + Cancelar agendamento
-                          </button>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("avaliacao");
-                        }}
-                      >
-                        + Avalia√ß√£o
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          adicionarNo("interpretar_arquivo_ia");
-                        }}
-                      >
-                        + Interpretar arquivo IA
-                      </button>
-
-                      <div className={styles.headerDropdownDivider} />
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          duplicarFluxo(fluxoSelecionado);
-                        }}
-                      >
-                        Clonar fluxo
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          abrirCompartilhamentoFluxo(fluxoSelecionado);
-                        }}
-                      >
-                        Compartilhar fluxo
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          alterarStatusFluxo(
-                            fluxoSelecionado,
-                            fluxoSelecionado.status === "ativo" ? "pausado" : "ativo"
-                          );
-                        }}
-                      >
-                        {fluxoSelecionado.status === "ativo"
-                          ? "Pausar fluxo"
-                          : "Ativar fluxo"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`${styles.headerDropdownItem} ${styles.headerDropdownDanger}`}
-                        onClick={() => {
-                          setMenuHeaderAberto(false);
-                          abrirModalArquivarFluxo(fluxoSelecionado);
-                        }}
-                      >
-                        Apagar fluxo
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-              </div>
-
-              <span className={styles.lastSaveText}>
-                {salvando ? "Salvando..." : formatarUltimoSalvamento(ultimoSalvamento)}
-              </span>
-            </div>
-          </header>
-
-          {fluxoSelecionado?.status === "arquivado" && (
-            <div className={styles.archivedNotice}>
-              <strong>Fluxo arquivado.</strong>
-              <span>
-                Este fluxo n√£o est√° em execu√ß√£o e n√£o pode ser editado. Restaure o fluxo para voltar a usar.
-              </span>
-            </div>
-          )}
-
-          {erro && (
-          <div className={styles.alertArea}>
-            {erro && <div className={styles.errorAlert}>{erro}</div>}
-          </div>
-        )}
-        <FeedbackToast
-          success={sucesso}
-          onSuccessDismiss={() => setSucesso("")}
-        />
-
-        <div className={styles.editorBody}>
-          <div className={styles.canvasArea}>
-            {carregandoEstrutura ? (
-              <div className={styles.emptyState}>Carregando estrutura...</div>
-            ) : (
-              <ReactFlow
-                nodes={nodesRenderizados}
-                edges={edges}
-                fitView
-                fitViewOptions={{
-                  padding: 0.25,
-                }}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                connectOnClick={true}
-                onNodeDragStart={() => {
-                  ignorarCliqueNodeAposArrasteRef.current = true;
-                }}
-                onNodeDragStop={() => {
-                  window.setTimeout(() => {
-                    ignorarCliqueNodeAposArrasteRef.current = false;
-                  }, 120);
-                }}
-                onNodeClick={(_, node) => {
-                  if (ignorarCliqueNodeAposArrasteRef.current) {
-                    return;
-                  }
-
-                  abrirEdicaoNo(node);
-                }}
-                onEdgeClick={(_, edge) => {
-                  abrirEdicaoConexao(edge);
-
-                  setEdges((atuais) =>
-                    atuais.map((item) => ({
-                      ...item,
-                      selected: item.id === edge.id,
-                      style: {
-                        ...(item.style || {}),
-                        stroke: item.id === edge.id ? "#0098bab6" : "#cbd5e1",
-                        strokeWidth: item.id === edge.id ? 3 : 2,
-                        strokeDasharray: "6 6",
-                      },
-                    }))
-                  );
-                }}
-                nodeTypes={nodeTypes}
-                
-              >
-                <Background />
-                <Controls
-                  showInteractive={false}
-                />
-                <MiniMap />
-              </ReactFlow>
-            )}
-          </div>
-
-          {fluxoSelecionado && !previaWhatsappRecolhida && (
-            <aside className={styles.whatsappFlowPreviewPanel}>
-              <div className={styles.whatsappFlowPhone}>
-                <div className={styles.whatsappFlowPhoneHeader}>
-                  <div className={styles.whatsappFlowAvatar}>
-                    <MessageCircle size={16} />
-                  </div>
-
-                  <div className={styles.whatsappFlowPhoneContact}>
-                    <strong>{fluxoSelecionado.nome}</strong>
-                    <span>online</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    className={styles.whatsappFlowPhoneToggle}
-                    onClick={() => setPreviaWhatsappRecolhida(true)}
-                    title="Recolher previa"
-                    aria-label="Recolher previa do WhatsApp"
-                    aria-expanded="true"
-                  >
-                    <ChevronRight size={17} />
-                  </button>
-                </div>
-
-                <div className={styles.whatsappFlowChat}>
-                  {previaWhatsappFluxo.mensagens.length === 0 ? (
-                    <div className={styles.whatsappFlowEmpty}>
-                      Nenhuma mensagem visivel neste fluxo.
-                    </div>
-                  ) : (
-                    previaWhatsappFluxo.mensagens.map((mensagem) =>
-                      mensagem.tipo === "divisoria" ? (
-                        <div
-                          key={mensagem.id}
-                          className={styles.whatsappFlowDivider}
-                        >
-                          <span>{mensagem.texto}</span>
-                        </div>
-                      ) : mensagem.tipo === "seletor" ? (
-                        <div
-                          key={mensagem.id}
-                          className={styles.whatsappFlowJourneySelector}
-                        >
-                          <span>{mensagem.texto}</span>
-
-                          <div className={styles.whatsappFlowJourneyOptions}>
-                            {(mensagem.opcoesJornada || []).map((opcao) => (
-                              <button
-                                key={opcao.edgeId}
-                                type="button"
-                                className={
-                                  opcao.selecionada
-                                    ? styles.whatsappFlowJourneyOptionActive
-                                    : styles.whatsappFlowJourneyOption
-                                }
-                                onClick={() => {
-                                  if (!mensagem.sourceNodeId) return;
-
-                                  setRespostasPreviaWhatsapp((atuais) => ({
-                                    ...atuais,
-                                    [mensagem.sourceNodeId!]: opcao.edgeId,
-                                  }));
-                                }}
-                              >
-                                {opcao.texto}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : mensagem.tipo === "sistema" ? (
-                        <div
-                          key={mensagem.id}
-                          className={styles.whatsappFlowSystem}
-                        >
-                          {mensagem.texto}
-                        </div>
-                      ) : (
-                        <div
-                          key={mensagem.id}
-                          className={`${styles.whatsappFlowBubbleRow} ${
-                            mensagem.tipo === "contato"
-                              ? styles.whatsappFlowBubbleRowContact
-                              : ""
-                          }`}
-                        >
-                          <div
-                            className={`${styles.whatsappFlowBubble} ${
-                              mensagem.tipo === "contato"
-                                ? styles.whatsappFlowBubbleContact
-                                : styles.whatsappFlowBubbleBot
-                            }`}
-                          >
-                            {mensagem.delayLabel && (
-                              <span className={styles.whatsappFlowDelay}>
-                                {mensagem.delayLabel}
-                              </span>
-                            )}
-
-                            {mensagem.midiaTipo && (
-                              <div className={styles.whatsappFlowMedia}>
-                                <span>{mensagem.midiaTipo}</span>
-                                {mensagem.titulo && <strong>{mensagem.titulo}</strong>}
-                              </div>
-                            )}
-
-                            {mensagem.titulo && !mensagem.midiaTipo && (
-                              <strong className={styles.whatsappFlowBubbleTitle}>
-                                {mensagem.titulo}
-                              </strong>
-                            )}
-
-                            <p>{mensagem.texto}</p>
-
-                            {mensagem.rodape && (
-                              <span className={styles.whatsappFlowFooter}>
-                                {mensagem.rodape}
-                              </span>
-                            )}
-
-                            {mensagem.botoes && mensagem.botoes.length > 0 && (
-                              <div className={styles.whatsappFlowButtons}>
-                                {mensagem.botoes.map((botao, index) => (
-                                  <span key={`${mensagem.id}-${botao}-${index}`}>
-                                    {botao}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            <span className={styles.whatsappFlowTime}>09:41</span>
-                          </div>
-                        </div>
-                      )
-                    )
-                  )}
-
-                  {previaWhatsappFluxo.truncado && (
-                    <div className={styles.whatsappFlowSystem}>
-                      Previa interrompida pelo limite de tamanho desta jornada.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </aside>
-          )}
-
-          {fluxoSelecionado && previaWhatsappRecolhida && (
-            <button
-              type="button"
-              className={styles.whatsappFlowPreviewCollapsed}
-              onClick={() => setPreviaWhatsappRecolhida(false)}
-              title="Expandir previa"
-              aria-label="Expandir previa do WhatsApp"
-              aria-expanded="false"
-            >
-              <MessageCircle size={16} />
-              <span>Previa</span>
-              <ChevronLeft size={16} />
-            </button>
-          )}
-
-
-          {(nodeEditado || edgeEditada) && (
-            <aside className={styles.propertiesPanel}>
-                <div className={styles.propertiesHeader}>
-                  <h3 className={styles.propertiesTitle}>Editar bloco</h3>
-
-                  <div className={styles.propertiesHeaderActions}>
-                    {nodeEditado && nodeEditado.data?.tipo_no !== "inicio" && (
-                      <button
-                        type="button"
-                        className={styles.duplicateNodeHeaderButton}
-                        onClick={() => duplicarNode(nodeEditado.id)}
-                        title="Duplicar bloco"
-                        disabled={salvando}
-                      >
-                        <CopyPlus size={17} />
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      className={styles.closePanelButton}
-                      onClick={fecharPainelEdicao}
-                      title="Fechar"
-                    >
-                      √ó
-                    </button>
-                  </div>
-                </div>
-
-                {!nodeEditado && !edgeEditada ? (
-                <p className={styles.propertiesEmpty}>
-                    Clique em um bloco ou em uma conex√£o para editar.
-                </p>
-                ) : nodeEditado ? (
-                <div className={styles.propertiesForm}>
-                  {tipoNodeEdicao !== "inicio" && (
-                    <label className={styles.field}>
-                      <span className={styles.label}>Tipo do bloco</span>
-
-                      <select
-                        className={styles.input}
-                        value={tipoNodeEdicao}
-                        onChange={(e) => {
-                          const novoTipo = e.target.value;
-                          const tipoAnterior = tipoNodeEdicao;
-
-                          setTipoNodeEdicao(novoTipo);
-
-                          if (tituloEhPadraoDoSistema(tituloNode, tipoAnterior)) {
-                            setTituloNode(tituloPadraoTipoNo(novoTipo));
-                          }
-
-                          if (novoTipo === "encerrar") {
-                            setMensagemNode("");
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setEncerrarResultadoNode("positivo");
-                            setEncerrarValorTipoNode("sem_valor");
-                            setEncerrarValorFixoNode("");
-                            setEncerrarValorVariavelNode("");
-                          }
-
-                          if (novoTipo === "transferir_setor") {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                          }
-
-                          if (novoTipo === "enviar_texto") {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
-                          }
-                          
-                          if (novoTipo === "pergunta_opcoes") {
-                            setSetorDestino("");
-                            setBotoesNode([]);
-                          }
-
-                          if (novoTipo === TIPO_NO_PERGUNTA_LIVRE_IA) {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
-
-                            if (!mensagemNode.trim()) {
-                              setMensagemNode("Como posso te ajudar?");
-                            }
-                          }
-
-                          if (novoTipo === "enviar_botoes") {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-
-                            if (botoesNode.length === 0) {
-                              setBotoesNode([
-                                { id: "sim", titulo: "Sim" },
-                                { id: "nao", titulo: "N√£o" },
-                              ]);
-                            }
-                          }
-
-                          if (novoTipo === "botao_redirect") {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
-                            setMidiaUrlNode("");
-
-                            if (!redirectBotaoTextoNode.trim()) {
-                              setRedirectBotaoTextoNode("Acessar");
-                            }
-
-                            if (!redirectUrlNode.trim()) {
-                              setRedirectUrlNode("https://");
-                            }
-                          }
-
-                          if (
-                            novoTipo === "enviar_imagem" ||
-                            novoTipo === "enviar_video" ||
-                            novoTipo === "enviar_audio"
-                          ) {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                          }
-
-                          if (
-                            novoTipo !== "enviar_imagem" &&
-                            novoTipo !== "enviar_video" &&
-                            novoTipo !== "enviar_audio"
-                          ) {
-                            setMidiaUrlNode("");
-                          }
-                          if (novoTipo === "agendar_disparo") {
-                            setMensagemNode("");
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
-                            setMidiaUrlNode("");
-                          }
-
-                          if (novoTipo.startsWith("agenda_")) {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
-                            setMidiaUrlNode("");
-
-                            if (novoTipo === "agenda_buscar_agendamento") {
-                              setAgendaListarAgendamentosNode(true);
-                              setAgendaQuantidadeOpcoesNode("6");
-                              setAgendaMensagemListarAgendamentosNode(
-                                "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:"
-                              );
-                            }
-
-                            if (novoTipo === "agenda_escolher_horario") {
-                              setMensagemNode(
-                                "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira."
-                              );
-                              setAgendaMensagemListarHorariosNode(
-                                "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
-                              );
-                              setAgendaMensagemPreferenciaIndisponivelNode(
-                                "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
-                              );
-                              setAgendaMensagemDataInvalidaNode(
-                                "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}."
-                              );
-                              setAgendaMensagemSemExpedienteNode(
-                                "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis."
-                              );
-                            }
-
-                            if (novoTipo === "agenda_criar_agendamento") {
-                              setMensagemNode(
-                                "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato."
-                              );
-                              setAgendaEnviarEmailNode(true);
-                              setAgendaEmailOrigemNode("contato");
-                              setAgendaEmailVariavelNode("email");
-                            }
-
-                            if (novoTipo === "agenda_remarcar_agendamento") {
-                              setMensagemNode(
-                                "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}."
-                              );
-                            }
-
-                            if (novoTipo === "agenda_cancelar_agendamento") {
-                              setMensagemNode(
-                                "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar."
-                              );
-                              setAgendaStatusAgendamentoNode("cancelado");
-                              setAgendaEnviarEmailNode(true);
-                              setAgendaEmailOrigemNode("contato");
-                              setAgendaEmailVariavelNode("email");
-                            }
-                          }
-                        }}
-                      >
-                        <option value="enviar_texto">Mensagem</option>
-                        <option value="pergunta_opcoes">Pergunta</option>
-                        <option value={TIPO_NO_PERGUNTA_LIVRE_IA}>Pergunta aberta IA</option>
-                        <option value="capturar_resposta">Capturar resposta</option>
-                        <option value="transferir_setor">Transferir</option>
-                        <option value="encerrar">Encerrar</option>
-                        <option value="enviar_imagem">Imagem</option>
-                        <option value="enviar_video">V√≠deo</option>
-                        <option value="enviar_audio">√Åudio</option>
-                        <option value="enviar_botoes">Pergunta com Bot√µes</option>
-                        <option value="botao_redirect">Bot√£o redirect</option>
-                        <option value="agendar_disparo">Agendar disparo</option>
-                        <option value="agenda_buscar_agendamento">Agenda: Buscar agendamento</option>
-                        <option value="agenda_escolher_horario">Agenda: Escolher hor√°rio</option>
-                        <option value="agenda_criar_agendamento">Agenda: Criar agendamento</option>
-                        <option value="agenda_remarcar_agendamento">Agenda: Remarcar agendamento</option>
-                        <option value="agenda_cancelar_agendamento">Agenda: Cancelar agendamento</option>
-                        <option value="avaliacao">Avalia√ß√£o</option>
-                        <option value="interpretar_arquivo_ia">Interpretar arquivo IA</option>
-                      </select>
-                    </label>
-                  )}
-
-                  <label className={styles.field}>
-                    <span className={styles.label}>
-                      T√≠tulo
-                    </span>
-
-                    <span className={styles.help}>
-                      Esse t√≠tulo √© interno e n√£o aparece na conversa.
-                    </span>
-
-                    <input
-                      className={styles.input}
-                      value={tituloNode}
-                      onChange={(e) => setTituloNode(e.target.value)}
-                    />
-                  </label>
-
-                  {[
-                    "enviar_texto",
-                    "pergunta_opcoes",
-                    TIPO_NO_PERGUNTA_LIVRE_IA,
-                    "enviar_botoes",
-                    "botao_redirect",
-                    "enviar_imagem",
-                    "enviar_video",
-                    "enviar_audio",
-                    "transferir_setor",
-                    "encerrar",
-                    "avaliacao",
-                    "capturar_resposta",
-                    "agenda_buscar_agendamento",
-                    "agenda_escolher_horario",
-                    "agenda_criar_agendamento",
-                    "agenda_remarcar_agendamento",
-                    "agenda_cancelar_agendamento",
-                    "interpretar_arquivo_ia",
-                  ].includes(tipoNodeEdicao) && (
-                    <div className={styles.field}>
-                      <span className={styles.label}>
-                        {tipoNodeEdicao === "pergunta_opcoes"
-                          ? "Pergunta"
-                          : tipoNodeEdicao === TIPO_NO_PERGUNTA_LIVRE_IA
-                          ? "Pergunta aberta"
-                          : tipoNodeEdicao === "enviar_botoes"
-                          ? "Pergunta dos bot√µes"
-                          : tipoNodeEdicao === "botao_redirect"
-                          ? "Mensagem do bot√£o"
-                          : tipoNodeEdicao === "enviar_imagem"
-                          ? "Legenda da imagem"
-                          : tipoNodeEdicao === "enviar_video"
-                          ? "Legenda do v√≠deo"
-                          : tipoNodeEdicao === "enviar_audio"
-                          ? "Legenda do √°udio"
-                          : tipoNodeEdicao === "transferir_setor"
-                          ? "Mensagem antes de transferir"
-                          : tipoNodeEdicao === "encerrar"
-                          ? "Mensagem de encerramento (opcional)"
-                          : tipoNodeEdicao === "avaliacao"
-                          ? "Pergunta de avalia√ß√£o"
-                          : tipoNodeEdicao === "agenda_buscar_agendamento"
-                          ? "Mensagem quando encontrar"
-                          : tipoNodeEdicao === "agenda_escolher_horario"
-                          ? "Mensagem para pedir o dia"
-                          : tipoNodeEdicao === "agenda_criar_agendamento"
-                          ? "Mensagem depois de criar"
-                          : tipoNodeEdicao === "agenda_remarcar_agendamento"
-                          ? "Mensagem depois de remarcar"
-                          : tipoNodeEdicao === "agenda_cancelar_agendamento"
-                          ? "Mensagem depois de cancelar"
-                          : tipoNodeEdicao === "interpretar_arquivo_ia"
-                          ? "Mensagem solicitando o arquivo"
-                          : "Mensagem"}
-                      </span>
-
-                      <textarea
-                        className={styles.textarea}
-                        value={mensagemNode}
-                        onChange={(e) => setMensagemNode(e.target.value)}
-                        placeholder="Digite o conte√∫do"
-                      />
-                      <p className={styles.help}>
-                        Use variaveis com duas chaves de cada lado. Exemplo: {"{{variavel}}"} ou {"{{teste}}"}.
-                      </p>
-                      <p className={styles.help}>
-                        {VARIAVEIS_FIXAS_CONTATO_HELP}
-                      </p>
-                      <button
-                        type="button"
-                        className={styles.inlineVariablesButton}
-                        onClick={() => abrirModalGerenciarVariaveis("mensagem")}
-                      >
-                        Gerenciar vari√°veis
-                      </button>
-                    </div>
-
-                  )}
-
-                  {tipoNodeEdicao === "encerrar" && (
-                    <div className={styles.optionsBox}>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Resultado do fluxo</span>
-                        <select
-                          className={styles.input}
-                          value={encerrarResultadoNode}
-                          onChange={(e) => {
-                            const resultado = e.target.value;
-
-                            setEncerrarResultadoNode(
-                              resultadoEncerramentoValido(resultado)
-                                ? resultado
-                                : "positivo"
-                            );
-
-                            if (resultado !== "positivo") {
-                              setEncerrarValorTipoNode("sem_valor");
-                              setEncerrarValorFixoNode("");
-                              setEncerrarValorVariavelNode("");
-                            }
-                          }}
-                        >
-                          <option value="positivo">Positivo</option>
-                          <option value="negativo">Negativo</option>
-                          <option value="neutro">Neutro</option>
-                        </select>
-                        <span className={styles.help}>
-                          Esse resultado sera usado nos eventos e relatorios do
-                          rastreamento.
-                        </span>
-                      </label>
-
-                      {encerrarResultadoNode === "positivo" && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>
-                              Valor da conversao
-                            </span>
-                            <select
-                              className={styles.input}
-                              value={encerrarValorTipoNode}
-                              onChange={(e) => {
-                                const tipoValor = e.target.value;
-
-                                setEncerrarValorTipoNode(
-                                  tipoValorConversaoValido(tipoValor)
-                                    ? tipoValor
-                                    : "sem_valor"
-                                );
-
-                                if (tipoValor !== "valor_fixo") {
-                                  setEncerrarValorFixoNode("");
-                                }
-
-                                if (tipoValor !== "variavel") {
-                                  setEncerrarValorVariavelNode("");
-                                }
-                              }}
-                            >
-                              <option value="sem_valor">Sem valor</option>
-                              <option value="valor_fixo">Valor fixo</option>
-                              <option value="variavel">Variavel do fluxo</option>
-                            </select>
-                          </label>
-
-                          {encerrarValorTipoNode === "valor_fixo" && (
-                            <label className={styles.field}>
-                              <span className={styles.label}>
-                                Valor fixo da conversao
-                              </span>
-                              <input
-                                className={styles.input}
-                                value={encerrarValorFixoNode}
-                                onChange={(e) =>
-                                  setEncerrarValorFixoNode(e.target.value)
-                                }
-                                placeholder="Ex: 497,00"
-                              />
-                            </label>
-                          )}
-
-                          {encerrarValorTipoNode === "variavel" && (
-                            <label className={styles.field}>
-                              <span className={styles.label}>
-                                Variavel com o valor
-                              </span>
-                              <input
-                                className={styles.input}
-                                value={encerrarValorVariavelNode}
-                                onChange={(e) =>
-                                  setEncerrarValorVariavelNode(e.target.value)
-                                }
-                                placeholder="Ex: valor_plano"
-                              />
-                              <span className={styles.help}>
-                                Informe o nome da variavel salva no fluxo, sem
-                                chaves. Exemplo: valor_plano.
-                              </span>
-                            </label>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "capturar_resposta" && (
-                    <div className={styles.optionsBox}>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Tipo de captura</span>
-                          <select
-                            className={styles.input}
-                            value={capturaTipoNode}
-                            onChange={(e) => {
-                              const novoTipo = e.target.value;
-                              const variavelAtual = capturaVariavelNode.trim().toLowerCase();
-
-                              setCapturaTipoNode(novoTipo);
-
-                              const variaveisPadrao = [
-                                "resposta",
-                                "texto",
-                                "nome",
-                                "cpf",
-                                "cnpj",
-                                "email",
-                                "telefone",
-                                "numero",
-                                "data",
-                                "cep",
-                              ];
-
-                              if (!variavelAtual || variaveisPadrao.includes(variavelAtual)) {
-                                setCapturaVariavelNode(novoTipo);
-                              }
-                            }}
-                          >
-                          <option value="texto">Texto livre</option>
-                          <option value="nome">Nome</option>
-                          <option value="cpf">CPF</option>
-                          <option value="cnpj">CNPJ</option>
-                          <option value="email">Email</option>
-                          <option value="telefone">Telefone</option>
-                          <option value="numero">N√∫mero</option>
-                          <option value="data">Data</option>
-                          <option value="cep">CEP</option>
-                        </select>
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Salvar resposta na vari√°vel</span>
-                        <input
-                          className={styles.input}
-                          value={capturaVariavelNode}
-                          onChange={(e) => setCapturaVariavelNode(e.target.value)}
-                          placeholder="Ex: nome, cpf, email"
-                        />
-                        <p className={styles.help}>
-                          Use variaveis com duas chaves de cada lado. Exemplo: {"{{variavel}}"} ou {"{{teste}}"}.
-                        </p>
-                        <p className={styles.help}>
-                          Nao use os nomes fixos do contato para salvar respostas.
-                        </p>
-                      </label>
-                      
-                      <label className={styles.field}>
-                        <span className={styles.label}>Mensagem quando inv√°lido</span>
-                        <textarea
-                          className={styles.textarea}
-                          value={capturaMensagemErroNode}
-                          onChange={(e) => setCapturaMensagemErroNode(e.target.value)}
-                        />
-                      </label>
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "avaliacao" && (
-
-                    <div className={styles.optionsBox}>
-
-                      <div className={styles.optionRow}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>Nota m√≠nima</span>
-
-                          <input
-                            type="number"
-                            className={styles.input}
-                            value={notaMinimaNode}
-                            onChange={(e) => setNotaMinimaNode(e.target.value)}
-                            min={0}
-                          />
-                        </label>
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>Nota m√°xima</span>
-
-                          <input
-                            type="number"
-                            className={styles.input}
-                            value={notaMaximaNode}
-                            onChange={(e) => setNotaMaximaNode(e.target.value)}
-                            min={1}
-                          />
-                        </label>
-                      </div>
-
-                      <label className={styles.switchField}>
-                        <input
-                          type="checkbox"
-                          checked={solicitarComentarioNode}
-                          onChange={(e) => setSolicitarComentarioNode(e.target.checked)}
-                        />
-
-                        <div>
-                          <strong>Solicitar coment√°rio</strong>
-                          <p>
-                            Ap√≥s enviar a nota, o cliente poder√° escrever um coment√°rio sobre o atendimento.
-                          </p>
-                        </div>
-                      </label>
-
-                      {solicitarComentarioNode && (
-                        <label className={styles.field}>
-                          <span className={styles.label}>
-                            Mensagem para solicitar coment√°rio
-                          </span>
-
-                          <textarea
-                            className={styles.textarea}
-                            value={mensagemComentarioNode}
-                            onChange={(e) => setMensagemComentarioNode(e.target.value)}
-                            placeholder="Ex: Conte como foi sua experi√™ncia."
-                          />
-                        </label>
-                      )}
-                    </div>
-                  )}
-
-                  {["enviar_imagem", "enviar_video", "enviar_audio"].includes(tipoNodeEdicao) && (
-                    <div className={styles.field}>
-                      <span className={styles.label}>
-                        {tipoNodeEdicao === "enviar_imagem"
-                          ? "Imagem"
-                          : tipoNodeEdicao === "enviar_video"
-                          ? "V√≠deo"
-                          : "√Åudio"}
-                      </span>
-
-                      {midiaUrlNode ? (
-                        <div className={styles.midiaSelecionadaBox}>
-                          <div className={styles.midiaSelecionadaInfo}>
-                            <div className={styles.midiaSelecionadaIcone}>
-                              {tipoNodeEdicao === "enviar_imagem"
-                                ? "üñºÔ∏è"
-                                : tipoNodeEdicao === "enviar_video"
-                                ? "üé¨"
-                                : "üéß"}
-                            </div>
-
-                            <div>
-                              <strong className={styles.midiaSelecionadaTitulo}>
-                                {tipoNodeEdicao === "enviar_imagem"
-                                  ? "Imagem selecionada"
-                                  : tipoNodeEdicao === "enviar_video"
-                                  ? "V√≠deo selecionado"
-                                  : "√Åudio selecionado"}
-                              </strong>
-
-                              <p className={styles.midiaSelecionadaNome}>
-                                {midiaNomeNode || "M√≠dia selecionada"}
-                              </p>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            className={styles.dangerSmallButton}
-                            onClick={() => {
-                              setMidiaUrlNode("");
-                              setMidiaNomeNode("");
-                            }}
-                          >
-                            Remover
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div
-                            className={`${styles.optionsBox} ${
-                              tipoNodeEdicao === "enviar_imagem"
-                                ? styles.mediaOptionsBoxImagem
-                                : tipoNodeEdicao === "enviar_video"
-                                ? styles.mediaOptionsBoxVideo
-                                : styles.mediaOptionsBoxAudio
-                            }`}
-                          >
-                              <select
-                                className={styles.input}
-                                value={midiaUrlNode}
-                                onChange={(e) => {
-                                  const urlSelecionada = e.target.value;
-                                  const midiaSelecionada = midias.find(
-                                    (m) => m.url === urlSelecionada
-                                  );
-
-                                  setMidiaUrlNode(urlSelecionada);
-                                  setMidiaNomeNode(midiaSelecionada?.nome || "");
-                                }}
-                                disabled={carregandoMidias || enviandoMidia}
-                              >
-                                <option value="">
-                                  {carregandoMidias ? "Carregando m√≠dias..." : "Selecione uma m√≠dia"}
-                                </option>
-
-                                {midias
-                                  .filter((midia) =>
-                                    tipoNodeEdicao === "enviar_imagem"
-                                      ? midia.tipo === "imagem"
-                                      : tipoNodeEdicao === "enviar_video"
-                                      ? midia.tipo === "video"
-                                      : midia.tipo === "audio"
-                                  )
-                                  .map((midia) => (
-                                    <option key={midia.id} value={midia.url}>
-                                      {midia.nome}
-                                    </option>
-                                  ))}
-                              </select>
-
-                              <label
-                                className={`${styles.secondaryButton} ${
-                                  limiteStorageMidiasAtingido ? styles.disabledButton : ""
-                                }`}
-                              >
-                                {enviandoMidia ? "Enviando..." : "Subir nova m√≠dia"}
-
-                                <input
-                                  type="file"
-                                  accept={
-                                    tipoNodeEdicao === "enviar_imagem"
-                                      ? "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                                      : tipoNodeEdicao === "enviar_video"
-                                      ? "video/mp4,.mp4"
-                                      : "audio/*"
-                                  }
-                                  style={{ display: "none" }}
-                                  disabled={enviandoMidia || limiteStorageMidiasAtingido}
-                                  onChange={(e) => {
-                                    const arquivo = e.target.files?.[0];
-
-                                    if (!arquivo) return;
-
-                                    setErro("");
-                                    setSucesso("");
-
-                                    if (arquivo.type.startsWith("image/")) {
-                                      if (arquivo.size > LIMITE_IMAGEM_BYTES) {
-                                        setErro("A imagem deve ter no m√°ximo 5MB.");
-                                        return;
-                                      }
-                                    }
-
-                                    if (tipoNodeEdicao === "enviar_video") {
-                                      const nomeMinusculo = arquivo.name.toLowerCase();
-
-                                      const ehMp4 =
-                                        arquivo.type === "video/mp4" ||
-                                        nomeMinusculo.endsWith(".mp4");
-
-                                      if (!ehMp4) {
-                                        setErro(
-                                          "Formato de v√≠deo n√£o permitido. Envie somente um arquivo MP4 com v√≠deo H.264/AVC e √°udio AAC."
-                                        );
-                                        e.target.value = "";
-                                        return;
-                                      }
-
-                                      if (arquivo.size > LIMITE_VIDEO_BYTES) {
-                                        setErro(
-                                          "O v√≠deo deve ter no m√°ximo 16MB. Reduza o tamanho antes de enviar."
-                                        );
-                                        e.target.value = "";
-                                        return;
-                                      }
-                                    }
-
-                                    if (arquivo.type.startsWith("audio/")) {
-                                      if (arquivo.size > LIMITE_AUDIO_BYTES) {
-                                        setErro(
-                                          "O √°udio deve ter no m√°ximo 16MB. Reduza o tamanho antes de enviar."
-                                        );
-                                        return;
-                                      }
-                                    }
-
-                                    enviarNovaMidia(arquivo);
-
-                                    e.target.value = "";
-                                  }}
-                                />
-                              </label>
-
-                              <span className={styles.help}>
-                                {tipoNodeEdicao === "enviar_imagem"
-                                  ? "S√£o aceitas imagens de at√© 5MB nos formatos JPG, JPEG, PNG ou WEBP."
-                                  : tipoNodeEdicao === "enviar_video"
-                                  ? "S√£o aceitos v√≠deos de at√© 16MB no formato MP4, com v√≠deo H.264/AVC e √°udio AAC. Arquivos incompat√≠veis ser√£o recusados."
-                                  : "S√£o aceitos arquivos de √°udio de at√© 16MB."}
-                              </span>
-
-                              <div className={styles.mediaLimitPremiumRow}>
-                                <button
-                                  type="button"
-                                  className={styles.mediaManagePremiumCard}
-                                  onClick={() => {
-                                    setAbaMidias(
-                                      tipoNodeEdicao === "enviar_imagem"
-                                        ? "imagem"
-                                        : tipoNodeEdicao === "enviar_video"
-                                        ? "video"
-                                        : "audio"
-                                    );
-                                    setModalMidiasAberto(true);
-                                  }}
-                                >
-                                  <span className={styles.mediaManagePremiumIcon}>
-                                    {tipoNodeEdicao === "enviar_imagem"
-                                      ? "üñºÔ∏è"
-                                      : tipoNodeEdicao === "enviar_video"
-                                      ? "üé¨"
-                                      : "üéß"}
-                                  </span>
-
-                                  <span className={styles.mediaManagePremiumContent}>
-                                    <strong>Gerenciar m√≠dias</strong>
-                                    <small>Abrir biblioteca</small>
-                                  </span>
-                                </button>
-
-                                <div
-                                  className={`${styles.mediaLimitPremiumCard} ${classeUsoStorageMidias(
-                                    resumoMidias.tamanhoTotal,
-                                    LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
-                                  )}`}
-                                >
-                                  <div className={styles.mediaLimitPremiumNumbers}>
-                                    <strong>{formatarStorageMidiasMb(resumoMidias.tamanhoTotal)} /</strong>
-                                    <span>50 MB</span>
-                                  </div>
-
-                                  <small>Limite usado</small>
-                                </div>
-                              </div>
-
-                              {limiteStorageMidiasAtingido && (
-                                <span className={styles.help}>
-                                   Limite de 50 MB atingido. Exclua uma m√≠dia no gerenciador antes de subir outra.
-                                </span>
-                              )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "pergunta_opcoes" && (
-                    <div className={styles.optionsBox}>
-                      <div className={styles.optionsHeader}>
-                        <span className={styles.label}>Op√ß√µes da pergunta</span>
-                        <button
-                          type="button"
-                          className={styles.smallButton}
-                          onClick={adicionarOpcaoPergunta}
-                        >
-                          + Op√ß√£o
-                        </button>
-                      </div>
-
-                      {opcoesNode.length === 0 ? (
-                        <p className={styles.help}>Nenhuma op√ß√£o cadastrada.</p>
-                      ) : (
-                        opcoesNode.map((opcao, index) => (
-                          <div key={index} className={styles.optionRow}>
-                            <label className={styles.botaoRespostaCampo}>
-                              <span className={styles.botaoRespostaLabel}>ID da resposta</span>
-                              <input
-                                className={styles.optionValueInput}
-                                value={opcao.valor}
-                                onChange={(e) =>
-                                  atualizarOpcaoPergunta(index, "valor", e.target.value)
-                                }
-                                placeholder="1"
-                              />
-                            </label>
-                            <label className={styles.botaoRespostaCampo}>
-                              <span className={styles.botaoRespostaLabel}>Texto do bot√£o</span>
-                              <input
-                                className={styles.input}
-                                value={opcao.titulo}
-                                onChange={(e) =>
-                                  atualizarOpcaoPergunta(index, "titulo", e.target.value)
-                                }
-                                placeholder="Comercial"
-                              />
-                            </label>
-
-                            <button
-                              type="button"
-                              className={styles.dangerSmallButton}
-                              onClick={() => removerOpcaoPergunta(index)}
-                            >
-                              √ó
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "enviar_botoes" && (
-                    <div className={styles.optionsBox}>
-                      <div className={styles.optionsHeader}>
-                        <span className={styles.label}>Bot√µes de resposta</span>
-
-                        <button
-                          type="button"
-                          className={styles.smallButton}
-                          onClick={adicionarBotaoResposta}
-                          disabled={botoesNode.length >= 3}
-                        >
-                          + Bot√£o
-                        </button>
-                      </div>
-
-                      {botoesNode.length === 0 ? (
-                        <p className={styles.help}>Nenhum bot√£o cadastrado.</p>
-                      ) : (
-                        botoesNode.map((botao, index) => (
-                          <div key={index} className={styles.botaoRespostaRow}>
-                            <label className={styles.botaoRespostaCampo}>
-                              <span className={styles.botaoRespostaLabel}>ID da resposta</span>
-                              <input
-                                className={styles.optionValueInput}
-                                value={botao.id}
-                                onChange={(e) =>
-                                  atualizarBotaoResposta(index, "id", e.target.value)
-                                }
-                                placeholder="sim"
-                              />
-                            </label>
-
-                            <label className={styles.botaoRespostaCampo}>
-                              <span className={styles.botaoRespostaLabel}>Texto do bot√£o</span>
-                              <input
-                                className={styles.input}
-                                value={botao.titulo}
-                                onChange={(e) =>
-                                  atualizarBotaoResposta(index, "titulo", e.target.value)
-                                }
-                                placeholder="Sim"
-                                maxLength={20}
-                              />
-                            </label>
-
-                            <button
-                              type="button"
-                              className={styles.dangerSmallButton}
-                              onClick={() => removerBotaoResposta(index)}
-                            >
-                              √ó
-                            </button>
-                          </div>
-                        ))
-                      )}
-
-                      <p className={styles.help}>
-                        O cliente v√™ o texto do bot√£o. A conex√£o do fluxo deve usar o ID da resposta.
-                        Exemplo: ID ‚Äún√£o‚Äù conecta com resposta esperada ‚Äún√£o‚Äù.
-                      </p>
-                        <p className={styles.help}> O WhatsApp permite at√© 20 caracteres no bot√£o.</p>
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "botao_redirect" && (
-                    <div className={styles.optionsBox}>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Texto do bot√£o</span>
-                        <input
-                          className={styles.input}
-                          value={redirectBotaoTextoNode}
-                          onChange={(e) =>
-                            setRedirectBotaoTextoNode(e.target.value)
-                          }
-                          placeholder="Acessar"
-                          maxLength={20}
-                        />
-                        <span className={styles.help}>
-                          O WhatsApp permite ate 20 caracteres no bot√£o CTA.
-                        </span>
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>URL de destino</span>
-                        <input
-                          className={styles.input}
-                          value={redirectUrlNode}
-                          onChange={(e) => setRedirectUrlNode(e.target.value)}
-                          placeholder="https://chat.whatsapp.com/..."
-                        />
-                        <span className={styles.help}>
-                          Use um link https, incluindo convites de grupo do
-                          WhatsApp ou links externos.
-                        </span>
-                      </label>
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "agendar_disparo" && (
-                    <div className={styles.optionsBox}>
-                      <div className={styles.agendarDisparoCostAlert}>
-                        <div className={styles.agendarDisparoCostAlertIcon}>‚ö†</div>
-
-                        <div className={styles.agendarDisparoCostAlertContent}>
-                          <strong>Este disparo gera custos</strong>
-
-                          <p>
-                            O envio ser√° feito usando template oficial do WhatsApp e poder√° gerar
-                            cobran√ßa da Meta quando o disparo ocorrer.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className={styles.label}>Configura√ß√£o do disparo</span>
-                        <p className={styles.help}>
-                          Este bloco n√£o envia mensagem comum. Ele agenda um template WhatsApp para ser enviado depois.
-                        </p>
-                      </div>
-
-                      <label
-                        className={`${styles.field} ${
-                          agendarDisparoUsaTemplatesPorIntegracao
-                            ? styles.hiddenField
-                            : ""
-                        }`}
-                      >
-                        <span className={styles.label}>Template WhatsApp</span>
-
-                        <select
-                          className={styles.input}
-                          value={agendarDisparoTemplateIdNode}
-                          onChange={(e) => setAgendarDisparoTemplateIdNode(e.target.value)}
-                          disabled={carregandoTemplatesWhatsapp}
-                        >
-                          <option value="">
-                            {carregandoTemplatesWhatsapp
-                              ? "Carregando templates..."
-                              : "Selecione um template aprovado"}
-                          </option>
-
-                          {templatesWhatsapp.map((template) => (
-                            <option key={template.id} value={template.id}>
-                              {template.nome} - {template.idioma}
-                            </option>
-                          ))}
-                        </select>
-
-                        <span className={styles.help}>
-                          Apenas templates aprovados devem ser usados para disparos ap√≥s 24h.
-                        </span>
-                      </label>
-
-                      {agendarDisparoUsaTemplatesPorIntegracao && (
-                        <div className={styles.field}>
-                          <span className={styles.label}>
-                            Templates por numero
-                          </span>
-                          <span className={styles.help}>
-                            Este fluxo atende numeros de WABAs diferentes.
-                            Selecione um template aprovado para cada numero.
-                          </span>
-
-                          <div className={styles.integrationTemplateList}>
-                            {integracoesEscopoFluxoSelecionado.map((integracao) => {
-                              const templatesCompativeis = templatesWhatsapp.filter(
-                                (template) =>
-                                  templateCompativelComIntegracao(
-                                    template,
-                                    integracao
-                                  )
-                              );
-
-                              return (
-                                <label
-                                  key={integracao.id}
-                                  className={styles.integrationTemplateItem}
-                                >
-                                  <span>
-                                    <strong>
-                                      {rotuloIntegracaoWhatsapp(integracao)}
-                                    </strong>
-                                    <small>
-                                      WABA {integracao.waba_id || "nao informada"}
-                                    </small>
-                                  </span>
-
-                                  <select
-                                    className={styles.input}
-                                    value={
-                                      agendarDisparoTemplatesPorIntegracaoNode[
-                                        integracao.id
-                                      ] || ""
-                                    }
-                                    onChange={(e) =>
-                                      setAgendarDisparoTemplatesPorIntegracaoNode(
-                                        (atual) => ({
-                                          ...atual,
-                                          [integracao.id]: e.target.value,
-                                        })
-                                      )
-                                    }
-                                    disabled={carregandoTemplatesWhatsapp}
-                                  >
-                                    <option value="">
-                                      {carregandoTemplatesWhatsapp
-                                        ? "Carregando templates..."
-                                        : "Selecione um template"}
-                                    </option>
-
-                                    {templatesCompativeis.map((template) => (
-                                      <option key={template.id} value={template.id}>
-                                        {template.nome} - {template.idioma}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className={styles.optionRow}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>Enviar ap√≥s</span>
-
-                          <input
-                            type="number"
-                            min={1}
-                            className={styles.input}
-                            value={agendarDisparoQuantidadeNode}
-                            onChange={(e) => setAgendarDisparoQuantidadeNode(e.target.value)}
-                          />
-                        </label>
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>Unidade</span>
-
-                          <select
-                            className={styles.input}
-                            value={agendarDisparoUnidadeNode}
-                            onChange={(e) =>
-                              setAgendarDisparoUnidadeNode(e.target.value as "horas" | "dias")
-                            }
-                          >
-                            <option value="horas">Horas</option>
-                            <option value="dias">Dias</option>
-                          </select>
-                        </label>
-                      </div>
-
-                      <div className={styles.field}>
-                        {indicesVariaveisTemplateAgendarDisparo.length > 0 ? (
-                          <>
-                            <span className={styles.label}>Vari√°veis do template</span>
-
-                            <div className={styles.templateVariableGrid}>
-                              {indicesVariaveisTemplateAgendarDisparo.map((index) => (
-                                <TemplateVariableCombobox
-                                  key={index}
-                                  label={`Vari√°vel ${index + 1}`}
-                                  value={
-                                    obterLinhasVariaveisTemplate(
-                                      agendarDisparoVariaveisNode
-                                    )[index]
-                                  }
-                                  onChange={(chave) =>
-                                    setAgendarDisparoVariaveisNode((atual) =>
-                                      atualizarLinhaVariavelTemplate(
-                                        atual,
-                                        index,
-                                        chave
-                                      )
-                                    )
-                                  }
-                                  options={opcoesVariaveisFluxo}
-                                  loading={loadingVariaveis}
-                                />
-                              ))}
-                            </div>
-
-                            <span className={styles.help}>
-                              Vari√°vel 1 substitui {"{{1}}"}, Vari√°vel 2 substitui {"{{2}}"} e Vari√°vel 3 substitui {"{{3}}"}.
-                            </span>
-                            <button
-                              type="button"
-                              className={styles.inlineVariablesButton}
-                              onClick={() =>
-                                abrirModalGerenciarVariaveis("agendar_disparo")
-                              }
-                            >
-                              Gerenciar vari√°veis
-                            </button>
-                          </>
-                        ) : null}
-
-                        <div className={styles.templatePreviewCard}>
-                          <div className={styles.templatePreviewTop}>
-                            <strong>Pr√©via WhatsApp</strong>
-                            <span>{templateAgendarDisparoSelecionado?.nome || "Template"}</span>
-                          </div>
-
-                          {previewTemplateAgendarDisparo ? (
-                            <div className={styles.whatsappPreviewArea}>
-                              <div className={styles.whatsappBubble}>
-                                <strong className={styles.whatsappPreviewTitle}>
-                                  {previewTemplateAgendarDisparo.titulo}
-                                </strong>
-
-                                <p className={styles.whatsappPreviewText}>
-                                  {previewTemplateAgendarDisparo.corpo}
-                                </p>
-
-                                <div className={styles.whatsappPreviewMeta}>
-                                  <span className={styles.whatsappPreviewFooter}>
-                                    {previewTemplateAgendarDisparo.rodape}
-                                  </span>
-                                  <span className={styles.whatsappPreviewTime}>
-                                    {new Date().toLocaleTimeString("pt-BR", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </span>
-                                </div>
-
-                                {previewTemplateAgendarDisparo.botoes.map((texto, index) => (
-                                  <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
-                                    ‚Ü© {texto}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className={styles.previewEmptyState}>
-                              Selecione um template aprovado para visualizar a mensagem.
-                            </div>
-                          )}
-                        </div>
-
-                        <div className={styles.agendarDisparoCostPreviewCard}>
-                          <div className={styles.costPreviewTop}>
-                            <span className={styles.costPreviewLabel}>Estimativa de custo Meta</span>
-
-                            <span className={styles.costPreviewCategory}>
-                              {templateAgendarDisparoSelecionado?.categoria || "Categoria"}
-                            </span>
-                          </div>
-
-                          {loadingPreviewCustoAgendarDisparo ? (
-                            <p className={styles.costPreviewMuted}>Calculando estimativa...</p>
-                          ) : previewCustoAgendarDisparo ? (
-                            <>
-                              <strong className={styles.costPreviewValue}>
-                                R$ {previewCustoAgendarDisparo.valorTotalBrlMin.toFixed(2)} ~ R${" "}
-                                {previewCustoAgendarDisparo.valorTotalBrlMax.toFixed(2)}
-                              </strong>
-
-                              <p className={styles.costPreviewMeta}>
-                                USD: US$ {previewCustoAgendarDisparo.valorTotalUsd.toFixed(4)} ¬∑
-                                Cobrado: {previewCustoAgendarDisparo.totalCobrados} contato
-                              </p>
-
-                              <p className={styles.costPreviewHelp}>
-                                Esta √© uma estimativa para 1 contato. A cobran√ßa real pode variar
-                                conforme categoria do template, pa√≠s do contato, cota√ß√£o, impostos e
-                                regras da Meta.
-                              </p>
-                            </>
-                          ) : (
-                            <p className={styles.costPreviewMuted}>
-                              Selecione um template aprovado para visualizar a estimativa.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao.startsWith("agenda_") && (
-                    <div className={styles.optionsBox}>
-                      <div>
-                        <span className={styles.label}>Bloco de agenda</span>
-                        <p className={styles.help}>
-                          Use junto com Pergunta, Condi√ß√µes e Mensagens para montar agendamento, remarcacao ou cancelamento.
-                        </p>
-                      </div>
-
-                      {[
-                        "agenda_buscar_agendamento",
-                        "agenda_escolher_horario",
-                        "agenda_criar_agendamento",
-                      ].includes(tipoNodeEdicao) && (
-                        <label className={styles.field}>
-                          <span className={styles.label}>
-                            {tipoNodeEdicao === "agenda_criar_agendamento"
-                              ? "Selecione a agenda"
-                              : "Agenda"}
-                          </span>
-
-                          <select
-                            className={styles.input}
-                            value={agendaIdNode}
-                            onChange={(e) => setAgendaIdNode(e.target.value)}
-                            disabled={carregandoAgendasOpcoes}
-                          >
-                            <option value="">
-                              {tipoNodeEdicao === "agenda_buscar_agendamento"
-                                ? "Qualquer agenda"
-                                : carregandoAgendasOpcoes
-                                ? "Carregando agendas..."
-                                : "Selecione uma agenda ativa"}
-                            </option>
-
-                            {agendasOpcoes.map((agenda) => (
-                              <option key={agenda.id} value={agenda.id}>
-                                {agenda.nome} - {agenda.duracao_minutos}min
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-
-                      {tipoNodeEdicao === "agenda_escolher_horario" && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem ao listar horarios</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemListarHorariosNode}
-                              onChange={(e) =>
-                                setAgendaMensagemListarHorariosNode(e.target.value)
-                              }
-                            />
-                            <span className={styles.help}>
-                              Variaveis: {"{{agenda_data_nova}}"} e {"{{agenda_nome_nova}}"}.
-                            </span>
-                          </label>
-
-                          <div className={styles.optionRow}>
-                            <label className={styles.field}>
-                              <span className={styles.label}>Opcoes enviadas</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={10}
-                                className={styles.input}
-                                value={agendaQuantidadeOpcoesNode}
-                                onChange={(e) =>
-                                  setAgendaQuantidadeOpcoesNode(e.target.value)
-                                }
-                              />
-                            </label>
-
-                            <label className={styles.field}>
-                              <span className={styles.label}>Buscar por dias</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={60}
-                                className={styles.input}
-                                value={agendaJanelaDiasNode}
-                                onChange={(e) => setAgendaJanelaDiasNode(e.target.value)}
-                              />
-                            </label>
-                          </div>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem se horario pedido estiver ocupado</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemPreferenciaIndisponivelNode}
-                              onChange={(e) =>
-                                setAgendaMensagemPreferenciaIndisponivelNode(e.target.value)
-                              }
-                            />
-                            <span className={styles.help}>
-                              Variaveis: {"{{agenda_data_nova}}"},{" "}
-                              {"{{agenda_hora_solicitada}}"} e{" "}
-                              {"{{agenda_preferencia_solicitada}}"}.
-                            </span>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem para data passada</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemDataInvalidaNode}
-                              onChange={(e) =>
-                                setAgendaMensagemDataInvalidaNode(e.target.value)
-                              }
-                            />
-                            <span className={styles.help}>
-                              Variaveis: {"{{agenda_data_informada}}"} e{" "}
-                              {"{{agenda_data_sugestao_ano}}"}.
-                            </span>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem sem horarios</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemSemHorariosNode}
-                              onChange={(e) =>
-                                setAgendaMensagemSemHorariosNode(e.target.value)
-                              }
-                            />
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem sem expediente</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemSemExpedienteNode}
-                              onChange={(e) =>
-                                setAgendaMensagemSemExpedienteNode(e.target.value)
-                              }
-                            />
-                            <span className={styles.help}>
-                              Use quando o dia pedido nao tem horario configurado na agenda.
-                              Variavel: {"{{agenda_data_nova}}"}.
-                            </span>
-                          </label>
-                        </>
-                      )}
-
-                      {tipoNodeEdicao === "agenda_buscar_agendamento" && (
-                        <>
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaListarAgendamentosNode}
-                              onChange={(e) =>
-                                setAgendaListarAgendamentosNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Listar agendamentos para escolha</strong>
-                              <p>
-                                Envia os agendamentos futuros e aguarda o contato responder o numero.
-                              </p>
-                            </div>
-                          </label>
-
-                          {agendaListarAgendamentosNode && (
-                            <>
-                              <label className={styles.field}>
-                                <span className={styles.label}>Mensagem ao listar agendamentos</span>
-                                <textarea
-                                  className={styles.textarea}
-                                  value={agendaMensagemListarAgendamentosNode}
-                                  onChange={(e) =>
-                                    setAgendaMensagemListarAgendamentosNode(e.target.value)
-                                  }
-                                />
-                              </label>
-
-                              <label className={styles.field}>
-                                <span className={styles.label}>Agendamentos enviados</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={10}
-                                  className={styles.input}
-                                  value={agendaQuantidadeOpcoesNode}
-                                  onChange={(e) =>
-                                    setAgendaQuantidadeOpcoesNode(e.target.value)
-                                  }
-                                />
-                              </label>
-                            </>
-                          )}
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>Mensagem quando n√£o encontrar</span>
-                          <textarea
-                            className={styles.textarea}
-                            value={agendaMensagemSemHorariosNode}
-                            onChange={(e) =>
-                              setAgendaMensagemSemHorariosNode(e.target.value)
-                            }
-                          />
-                        </label>
-
-                        <p className={styles.help}>
-                          Este bloco escolhe a proxima conexao usando respostas internas.
-                          Crie conexoes do tipo Exata com os valores: encontrado,
-                          nao_encontrado e, se quiser tratar falhas, erro. Exemplo:
-                          encontrado continua o fluxo; nao_encontrado vai para Transferir.
-                        </p>
-                        </>
-                      )}
-
-                      {["agenda_criar_agendamento", "agenda_remarcar_agendamento"].includes(
-                        tipoNodeEdicao
-                      ) && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Status do agendamento</span>
-                            <select
-                              className={styles.input}
-                              value={agendaStatusAgendamentoNode}
-                              onChange={(e) =>
-                                setAgendaStatusAgendamentoNode(e.target.value)
-                              }
-                            >
-                              <option value="agendado">Agendado</option>
-                              <option value="confirmado">Confirmado</option>
-                            </select>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem sem hor√°rio / indisponivel</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemConflitoNode}
-                              onChange={(e) =>
-                                setAgendaMensagemConflitoNode(e.target.value)
-                              }
-                            />
-                          </label>
-                        </>
-                      )}
-                      <span className={styles.help}>
-                        Variaveis principais: {"{{agenda_data}}"}, {"{{agenda_hora}}"},{" "}
-                        {"{{agenda_data_nova}}"}, {"{{agenda_hora_nova}}"} e{" "}
-                        {"{{agenda_agendamento_id}}"}.
-                      </span>
-
-                      {tipoNodeEdicao === "agenda_remarcar_agendamento" && (
-                        <>
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaEnviarEmailNode}
-                              onChange={(e) =>
-                                setAgendaEnviarEmailNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Enviar email de confirmacao</strong>
-                              <p>
-                                O email sera enviado assim que o agendamento for remarcado, usando o mesmo formato do bloco Criar agendamento.
-                              </p>
-                            </div>
-                          </label>
-
-                          {agendaEnviarEmailNode && (
-                            <>
-                              <label className={styles.field}>
-                                <span className={styles.label}>Origem do email</span>
-                                <select
-                                  className={styles.input}
-                                  value={agendaEmailOrigemNode}
-                                  onChange={(e) =>
-                                    setAgendaEmailOrigemNode(
-                                      e.target.value === "variavel"
-                                        ? "variavel"
-                                        : "contato"
-                                    )
-                                  }
-                                >
-                                  <option value="contato">Email cadastrado no contato</option>
-                                  <option value="variavel">Email salvo em uma vari√°vel</option>
-                                </select>
-                                <span className={styles.help}>
-                                  Informe qual email o sistema vai usar, email do Contato ou uma variavel do bloco Capturar resposta.
-                                </span>
-                              </label>
-
-                              {agendaEmailOrigemNode === "variavel" && (
-                                <label className={styles.field}>
-                                  <span className={styles.label}>Variavel do email</span>
-                                  <input
-                                    className={styles.input}
-                                    value={agendaEmailVariavelNode}
-                                    onChange={(e) =>
-                                      setAgendaEmailVariavelNode(e.target.value)
-                                    }
-                                    placeholder="email"
-                                  />
-                                  <span className={styles.help}>
-                                    Use o nome da variavel criada em Capturar resposta. Exemplo: email.
-                                  </span>
-                                </label>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
-
-                      {tipoNodeEdicao === "agenda_criar_agendamento" && (
-                        <>
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaEnviarEmailNode}
-                              onChange={(e) =>
-                                setAgendaEnviarEmailNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Enviar email de confirmacao</strong>
-                              <p>
-                                O email ser√° enviado para o contato que est√° agendando. Selecione a origem do email abaixo.
-                              </p>
-                            </div>
-                          </label>
-
-                          {(agendaEnviarEmailNode ||
-                            (agendaLembreteAtivoNode &&
-                              agendaLembreteEmailNode)) && (
-                            <>
-                              <label className={styles.field}>
-                                <span className={styles.label}>Origem do email</span>
-                                <select
-                                  className={styles.input}
-                                  value={agendaEmailOrigemNode}
-                                  onChange={(e) =>
-                                    setAgendaEmailOrigemNode(
-                                      e.target.value === "variavel"
-                                        ? "variavel"
-                                        : "contato"
-                                    )
-                                  }
-                                >
-                                  <option value="contato">Email cadastrado no contato</option>
-                                  <option value="variavel">Email salvo em uma variavel</option>
-                                </select>
-                                <span className={styles.help}>
-                                  Informe qual email o sistema vai usar, email do Contato ou uma vari√°vel do bloco Capturar resposta.
-                                </span>
-
-                              </label>
-
-                              {agendaEmailOrigemNode === "variavel" && (
-                                <TemplateVariableCombobox
-                                  label="Vari√°vel do email"
-                                  value={agendaEmailVariavelNode}
-                                  onChange={setAgendaEmailVariavelNode}
-                                  options={opcoesVariaveisFluxo}
-                                  loading={loadingVariaveis}
-                                />
-                              )}
-                            </>
-                          )}
-
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaLembreteAtivoNode}
-                              onChange={(e) =>
-                                setAgendaLembreteAtivoNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Enviar lembrete antes do agendamento</strong>
-                              <p>
-                                Agenda um template WhatsApp, email ou ambos antes do horario marcado.
-                              </p>
-                            </div>
-                          </label>
-
-                          {agendaLembreteAtivoNode && (
-                            <>
-                              <div className={styles.optionRow}>
-                                <label className={styles.field}>
-                                  <span className={styles.label}>Enviar antes</span>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    className={styles.input}
-                                    value={agendaLembreteQuantidadeNode}
-                                    onChange={(e) =>
-                                      setAgendaLembreteQuantidadeNode(e.target.value)
-                                    }
-                                  />
-                                </label>
-
-                                <label className={styles.field}>
-                                  <span className={styles.label}>Unidade</span>
-                                  <select
-                                    className={styles.input}
-                                    value={agendaLembreteUnidadeNode}
-                                    onChange={(e) =>
-                                      setAgendaLembreteUnidadeNode(
-                                        e.target.value === "minutos"
-                                          ? "minutos"
-                                          : e.target.value === "dias"
-                                          ? "dias"
-                                          : "horas"
-                                      )
-                                    }
-                                  >
-                                    <option value="minutos">Minutos</option>
-                                    <option value="horas">Horas</option>
-                                    <option value="dias">Dias</option>
-                                  </select>
-                                </label>
-                              </div>
-
-                              <label className={styles.switchField}>
-                                <input
-                                  type="checkbox"
-                                  checked={agendaLembreteWhatsappNode}
-                                  onChange={(e) =>
-                                    setAgendaLembreteWhatsappNode(e.target.checked)
-                                  }
-                                />
-
-                                <div>
-                                  <strong>Lembrete por WhatsApp</strong>
-                                  <p>
-                                    Usa um template aprovado. Templates com botoes podem capturar confirmar, remarcar ou cancelar.
-                                  </p>
-                                </div>
-                              </label>
-
-                              {agendaLembreteWhatsappNode && (
-                                <>
-                                  <div className={styles.agendarDisparoCostAlert}>
-                                    <div className={styles.agendarDisparoCostAlertIcon}>‚ö†</div>
-
-                                    <div className={styles.agendarDisparoCostAlertContent}>
-                                      <strong>Este lembrete gera um disparo oficial do WhatsApp</strong>
-
-                                      <p>
-                                        O envio usara template aprovado e podera gerar cobranca da Meta quando o lembrete ocorrer.
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  <label className={styles.field}>
-                                    <span className={styles.label}>Template WhatsApp</span>
-                                    <select
-                                      className={styles.input}
-                                      value={agendaLembreteTemplateIdNode}
-                                      onChange={(e) =>
-                                        setAgendaLembreteTemplateIdNode(e.target.value)
-                                      }
-                                      disabled={carregandoTemplatesWhatsapp}
-                                    >
-                                      <option value="">
-                                        {carregandoTemplatesWhatsapp
-                                          ? "Carregando templates..."
-                                          : "Selecione um template aprovado"}
-                                      </option>
-
-                                      {templatesWhatsapp.map((template) => (
-                                        <option key={template.id} value={template.id}>
-                                          {template.nome} - {template.idioma}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-
-                                  <div className={styles.field}>
-                                    {indicesVariaveisTemplateAgendaLembrete.length > 0 ? (
-                                      <>
-                                        <span className={styles.label}>Variaveis do template</span>
-
-                                        <div className={`${styles.templateVariableGrid} ${styles.templateVariableStack}`}>
-                                          {indicesVariaveisTemplateAgendaLembrete.map((index) => (
-                                            <TemplateVariableCombobox
-                                              key={index}
-                                              label={`Vari√°vel ${index + 1}`}
-                                              value={
-                                                obterLinhasVariaveisTemplate(
-                                                  agendaLembreteVariaveisNode
-                                                )[index]
-                                              }
-                                              onChange={(chave) =>
-                                                setAgendaLembreteVariaveisNode(
-                                                  (atual) =>
-                                                    atualizarLinhaVariavelTemplate(
-                                                      atual,
-                                                      index,
-                                                      chave
-                                                    )
-                                                )
-                                              }
-                                              options={opcoesVariaveisAgendamento}
-                                              loading={loadingVariaveis}
-                                            />
-                                          ))}
-                                        </div>
-
-                                        <span className={styles.help}>
-                                          Variavel 1 substitui {"{{1}}"}, Variavel 2 substitui {"{{2}}"} e Variavel 3 substitui {"{{3}}"}.
-                                        </span>
-                                        <button
-                                          type="button"
-                                          className={styles.inlineVariablesButton}
-                                          onClick={() =>
-                                            abrirModalGerenciarVariaveis("agenda_lembrete")
-                                          }
-                                        >
-                                          Gerenciar vari√°veis
-                                        </button>
-                                      </>
-                                    ) : null}
-
-                                    <div className={styles.templatePreviewCard}>
-                                      <div className={styles.templatePreviewTop}>
-                                        <strong>Previa WhatsApp</strong>
-                                        <span>{templateAgendaLembreteSelecionado?.nome || "Template"}</span>
-                                      </div>
-
-                                      {previewTemplateAgendaLembrete ? (
-                                        <div className={styles.whatsappPreviewArea}>
-                                          <div className={styles.whatsappBubble}>
-                                            <strong className={styles.whatsappPreviewTitle}>
-                                              {previewTemplateAgendaLembrete.titulo}
-                                            </strong>
-
-                                            <p className={styles.whatsappPreviewText}>
-                                              {previewTemplateAgendaLembrete.corpo}
-                                            </p>
-
-                                            <div className={styles.whatsappPreviewMeta}>
-                                              <span className={styles.whatsappPreviewFooter}>
-                                                {previewTemplateAgendaLembrete.rodape}
-                                              </span>
-                                              <span className={styles.whatsappPreviewTime}>
-                                                {new Date().toLocaleTimeString("pt-BR", {
-                                                  hour: "2-digit",
-                                                  minute: "2-digit",
-                                                })}
-                                              </span>
-                                            </div>
-
-                                            {previewTemplateAgendaLembrete.botoes.map((texto, index) => (
-                                              <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
-                                                ‚Ü© {texto}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className={styles.previewEmptyState}>
-                                          Selecione um template aprovado para visualizar a mensagem.
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div className={styles.agendarDisparoCostPreviewCard}>
-                                      <div className={styles.costPreviewTop}>
-                                        <span className={styles.costPreviewLabel}>Estimativa de custo Meta</span>
-
-                                        <span className={styles.costPreviewCategory}>
-                                          {templateAgendaLembreteSelecionado?.categoria || "Categoria"}
-                                        </span>
-                                      </div>
-
-                                      {loadingPreviewCustoAgendarDisparo ? (
-                                        <p className={styles.costPreviewMuted}>Calculando estimativa...</p>
-                                      ) : previewCustoAgendarDisparo ? (
-                                        <>
-                                          <strong className={styles.costPreviewValue}>
-                                            R$ {previewCustoAgendarDisparo.valorTotalBrlMin.toFixed(2)} ~ R${" "}
-                                            {previewCustoAgendarDisparo.valorTotalBrlMax.toFixed(2)}
-                                          </strong>
-
-                                          <p className={styles.costPreviewMeta}>
-                                            USD: US$ {previewCustoAgendarDisparo.valorTotalUsd.toFixed(4)} ¬∑
-                                            Cobrado: {previewCustoAgendarDisparo.totalCobrados} contato
-                                          </p>
-
-                                          <p className={styles.costPreviewHelp}>
-                                            Esta √© uma estimativa para 1 contato. A cobran√ßa real pode variar
-                                            conforme categoria do template, pa√≠s do contato, cota√ß√£o, impostos e
-                                            regras da Meta.
-                                          </p>
-                                        </>
-                                      ) : (
-                                        <p className={styles.costPreviewMuted}>
-                                          Selecione um template aprovado para visualizar a estimativa.
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-
-                              <label className={styles.switchField}>
-                                <input
-                                  type="checkbox"
-                                  checked={agendaLembreteEmailNode}
-                                  onChange={(e) =>
-                                    setAgendaLembreteEmailNode(e.target.checked)
-                                  }
-                                />
-
-                                <div>
-                                  <strong>Lembrete por email</strong>
-                                  <p>
-                                    Envia um email simples de lembrete usando a mesma origem de email configurada acima.
-                                  </p>
-                                </div>
-                              </label>
-                            </>
-                          )}
-                        </>
-                      )}
-
-                      {tipoNodeEdicao === "agenda_cancelar_agendamento" && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Status final</span>
-                            <select
-                              className={styles.input}
-                              value={agendaStatusAgendamentoNode}
-                              onChange={(e) =>
-                                setAgendaStatusAgendamentoNode(e.target.value)
-                              }
-                            >
-                              <option value="cancelado">Cancelado</option>
-                              <option value="faltou">Faltou</option>
-                            </select>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Motivo</span>
-                            <input
-                              className={styles.input}
-                              value={agendaMotivoCancelamentoNode}
-                              onChange={(e) =>
-                                setAgendaMotivoCancelamentoNode(e.target.value)
-                              }
-                            />
-                          </label>
-
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaEnviarEmailNode}
-                              onChange={(e) =>
-                                setAgendaEnviarEmailNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Enviar email de cancelamento</strong>
-                              <p>
-                                O email sera enviado assim que o agendamento for cancelado, usando o mesmo formato dos emails de agendamento.
-                              </p>
-                            </div>
-                          </label>
-
-                          {agendaEnviarEmailNode && (
-                            <>
-                              <label className={styles.field}>
-                                <span className={styles.label}>Origem do email</span>
-                                <select
-                                  className={styles.input}
-                                  value={agendaEmailOrigemNode}
-                                  onChange={(e) =>
-                                    setAgendaEmailOrigemNode(
-                                      e.target.value === "variavel"
-                                        ? "variavel"
-                                        : "contato"
-                                    )
-                                  }
-                                >
-                                  <option value="contato">Email cadastrado no contato</option>
-                                  <option value="variavel">Email salvo em uma variavel</option>
-                                </select>
-                                <span className={styles.help}>
-                                  Informe qual email o sistema vai usar, email do Contato ou uma variavel do bloco Capturar resposta.
-                                </span>
-                              </label>
-
-                              {agendaEmailOrigemNode === "variavel" && (
-                                <label className={styles.field}>
-                                  <span className={styles.label}>Variavel do email</span>
-                                  <input
-                                    className={styles.input}
-                                    value={agendaEmailVariavelNode}
-                                    onChange={(e) =>
-                                      setAgendaEmailVariavelNode(e.target.value)
-                                    }
-                                    placeholder="email"
-                                  />
-                                  <span className={styles.help}>
-                                    Use o nome da variavel criada em Capturar resposta. Exemplo: email.
-                                  </span>
-                                </label>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
-
-
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "interpretar_arquivo_ia" && (
-                    <div className={styles.arquivoIABox}>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Instru√ß√£o para IA</span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={arquivoInstrucaoIaNode}
-                          onChange={(e) => setArquivoInstrucaoIaNode(e.target.value)}
-                          placeholder="Ex: Interprete se este arquivo √© um comprovante de pagamento no valor m√≠nimo de R$ 150,00."
-                        />
-
-                        <span className={styles.help}>
-                          Explique o que a IA deve verificar no arquivo enviado pelo cliente.
-                        </span>
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Campos para extrair</span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={arquivoCamposExtracaoNode}
-                          onChange={(e) => setArquivoCamposExtracaoNode(e.target.value)}
-                          placeholder="valor, banco, pagador, data, id_transacao"
-                        />
-
-                        <span className={styles.help}>
-                          Informe as vari√°veis separadas por v√≠rgula, palavras sem acentos. A IA s√≥ poder√° retornar esses campos.
-                          Exemplo: valor, banco, pagador. Depois voc√™ poder√° usar como
-                          {" "}{"{{analise_arquivo_valor}}"}.
-                        </span>
-                        <span className={styles.help}>
-                          V√°riaveis fixas: {"{{analise_arquivo}}"} {"{{analise_arquivo_motivo}}"}
-                        </span>
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Mensagem quando inv√°lido</span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={arquivoMensagemErroNode}
-                          onChange={(e) => setArquivoMensagemErroNode(e.target.value)}
-                        />
-                      </label>
-                      <div className={styles.warningBox}>
-                        <div className={styles.errorConnectionNotice}>
-                          <strong>Crie uma conex√£o de Erro para este bloco</strong>
-                          <p>
-                            Se os tokens de IA acabarem, o fluxo vai seguir pela
-                            conex√£o com resposta esperada <strong>erro</strong>.
-                            Configure essa rota para enviar uma mensagem, transferir
-                            o atendimento ou executar a tratativa que desejar.
-                          </p>
-                        </div>
-
-                        <strong>Como usar as conex√µes deste bloco</strong>
-
-                        <p>
-                          Ap√≥s interpretar o arquivo, a IA retorna um status para o fluxo seguir.
-                          Crie conex√µes saindo deste bloco.
-                        </p>
-
-                        <ul className={styles.warningList}>
-                          <li>
-                            <strong>aprovado</strong> ‚Äî quando o arquivo atende √† instru√ß√£o.
-                          </li>
-                          <li>
-                            <strong>reprovado</strong> ‚Äî quando o arquivo n√£o atende √† instru√ß√£o.
-                          </li>
-                          <li>
-                            <strong>erro</strong> ‚Äî quando o arquivo est√° ileg√≠vel,
-                            n√£o p√¥de ser analisado ou os tokens de IA acabaram.
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-
-                  {nodeEditadoPermiteGerarDescricoesIa && (
-                    <div className={styles.IABox}>
-                      <div className={styles.optionsHeader}>
-                        <span className={styles.label}>Inten√ß√µes das conex√µes</span>
-
-                        <button
-                          type="button"
-                          className={`${styles.smallButtonIA} ${styles.generateIaButton}`}
-                          onClick={gerarDescricoesConexoesDoBlocoComIa}
-                          disabled={
-                            gerandoDescricoesIaBloco ||
-                            salvando ||
-                            quantidadeConexoesIaNodeEditado === 0
-                          }
-                        >
-                          <Sparkles size={14} />
-                          {gerandoDescricoesIaBloco
-                            ? "Gerando..."
-                            : "Gerar IA para conex√µes"}
-                        </button>
-                      </div>
-
-                      <p className={styles.help}>
-                        Gera uma inten√ß√£o com IA para cada conex√£o de resposta deste bloco e salva o fluxo ao finalizar.
-                      </p>
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "transferir_setor" && (
-                    <label className={styles.field}>
-                      <span className={styles.label}>Setor destino</span>
-
-                      <select
-                        className={styles.input}
-                        value={setorDestino}
-                        onChange={(e) => setSetorDestino(e.target.value)}
-                        disabled={carregandoSetores}
-                      >
-                        <option value="">
-                          {carregandoSetores ? "Carregando setores..." : "Selecione um setor"}
-                        </option>
-
-                        {setores.map((setor) => (
-                          <option key={setor.id} value={setor.id}>
-                            {setor.nome}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  
-                  {tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (
-                    <label className={styles.delayField}>
-                      <div className={styles.delayTopRow}>
-                        <span className={styles.label}>Delay antes de enviar:</span>
-
-                        <span className={styles.helpS}>Segundos:</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={LIMITE_DELAY_SEGUNDOS}
-                            className={styles.delayInput}
-                            value={delayNode}
-                            onChange={(e) => {
-                              const valor = e.target.value;
-
-                              if (valor === "") {
-                                setDelayNode("");
-                                return;
-                              }
-
-                              const somenteNumeros = valor.replace(/\D/g, "");
-
-                              if (!somenteNumeros) {
-                                setDelayNode("");
-                                return;
-                              }
-
-                              const numero = Number(somenteNumeros);
-
-                              if (!Number.isFinite(numero)) {
-                                setDelayNode("");
-                                return;
-                              }
-
-                              if (numero > LIMITE_DELAY_SEGUNDOS) {
-                                setDelayNode(String(LIMITE_DELAY_SEGUNDOS));
-                                return;
-                              }
-
-                              setDelayNode(String(Math.floor(numero)));
-                            }}
-                          />
-
-                      </div>
-
-                      <span className={styles.help}>
-                        Delay adicional antes do envio deste bloco, √© somado ao tempo minimo do sistema, entre 2 a 3 segundos. Deixe vazio para envio imediato.
-                      </span>
-                      <span className={styles.help}>
-                        M√°ximo: 82.800 segundos, equivalente a 23 horas.
-                      </span>
-                    </label>
-                  )}
-                  
-                  {tipoNodeEdicao !== "inicio" && (
-                    <div className={styles.optionsBox}>
-                      <label className={styles.switchField}>
-                        <input
-                          type="checkbox"
-                          checked={notificarAoChegarNode}
-                          onChange={(e) => setNotificarAoChegarNode(e.target.checked)}
-                        />
-
-                        <div>
-                          <strong>Notificar quando chegar neste bloco</strong>
-                          <p>
-                            Cria uma notifica√ß√£o no sistema quando a automa√ß√£o alcan√ßar este bloco.
-                          </p>
-                        </div>
-                      </label>
-
-                      {notificarAoChegarNode && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>T√≠tulo da notifica√ß√£o</span>
-                            <input
-                              className={styles.input}
-                              value={notificacaoTituloNode}
-                              onChange={(e) => setNotificacaoTituloNode(e.target.value)}
-                              placeholder="Ex: Lead chegou na escolha de plano"
-                            />
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem da notifica√ß√£o</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={notificacaoMensagemNode}
-                              onChange={(e) => setNotificacaoMensagemNode(e.target.value)}
-                              placeholder="Ex: O contato chegou no bloco de escolha de plano."
-                            />
-                          </label>
-
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={notificarEmailNode}
-                              onChange={(e) => setNotificarEmailNode(e.target.checked)}
-                            />
-
-                            <div>
-                              <strong>Enviar email tamb√©m</strong>
-                              <p>
-                                Al√©m da notifica√ß√£o no sistema, envia um email para os respons√°veis.
-                              </p>
-                            </div>
-                          </label>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {[
-                    "pergunta_opcoes",
-                    TIPO_NO_PERGUNTA_LIVRE_IA,
-                    "enviar_botoes",
-                    "capturar_resposta",
-                    "agenda_buscar_agendamento",
-                    "agenda_escolher_horario",
-                    "avaliacao",
-                    "interpretar_arquivo_ia",
-                  ].includes(tipoNodeEdicao) && (
-                    <div className={styles.tentativasBox}>
-                      <div>
-                        <span className={styles.label}>Controle de tentativas</span>
-
-                        <p className={styles.help}>
-                          Evita que o fluxo fique repetindo este bloco em loop.
-                        </p>
-                      </div>
-
-                      <div className={styles.optionRow}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>
-                            Respostas inv√°lidas
-                          </span>
-
-                          <input
-                            type="number"
-                            min={1}
-                            className={styles.input}
-                            value={maxTentativasInvalidasNode}
-                            onChange={(e) =>
-                              setMaxTentativasInvalidasNode(e.target.value)
-                            }
-                          />
-                        </label>
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>
-                            Sem resposta
-                          </span>
-
-                          <input
-                            type="number"
-                            min={1}
-                            className={styles.input}
-                            value={maxTentativasSemRespostaNode}
-                            onChange={(e) =>
-                              setMaxTentativasSemRespostaNode(e.target.value)
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>
-                          Quando exceder
-                        </span>
-
-                        <select
-                          className={styles.input}
-                          value={acaoExcessoTentativasNode}
-                          onChange={(e) =>
-                            setAcaoExcessoTentativasNode(e.target.value)
-                          }
-                        >
-                          <option value="transferir_atendimento">
-                            Transferir para atendimento
-                          </option>
-
-                          <option value="encerrar_fluxo">
-                            Encerrar fluxo
-                          </option>
-
-                          <option value="reiniciar_fluxo">
-                            Reiniciar fluxo
-                          </option>
-                        </select>
-                        {acaoExcessoTentativasNode === "transferir_atendimento" && (
-                          <label className={styles.field}>
-                            <span className={styles.label}>
-                              Setor do atendimento
-                            </span>
-
-                            <select
-                              className={styles.input}
-                              value={setorExcessoTentativasNode}
-                              onChange={(e) =>
-                                setSetorExcessoTentativasNode(e.target.value)
-                              }
-                            >
-                              <option value="">
-                                Selecione um setor
-                              </option>
-
-                              {setores.map((setor) => (
-                                <option key={setor.id} value={setor.id}>
-                                  {setor.nome}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )}
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>
-                          Mensagem ao exceder
-                        </span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={mensagemExcessoTentativasNode}
-                          onChange={(e) =>
-                            setMensagemExcessoTentativasNode(e.target.value)
-                          }
-                        />
-                      </label>
-
-                      <label className={styles.switchField}>
-                        <input
-                          type="checkbox"
-                          checked={notificarExcessoTentativasNode}
-                          onChange={(e) =>
-                            setNotificarExcessoTentativasNode(e.target.checked)
-                          }
-                        />
-
-                        <div>
-                          <strong>Notificar no sistema</strong>
-                          <p>
-                            Cria uma notifica√ß√£o quando este bloco exceder o limite de tentativas.
-                          </p>
-                        </div>
-                      </label>
-
-                      <label className={styles.switchField}>
-                        <input
-                          type="checkbox"
-                          checked={notificarEmailExcessoTentativasNode}
-                          onChange={(e) =>
-                            setNotificarEmailExcessoTentativasNode(e.target.checked)
-                          }
-                        />
-
-                        <div>
-                          <strong>Enviar email</strong>
-                          <p>
-                            Envia um alerta por email quando o limite de tentativas for excedido.
-                          </p>
-                        </div>
-                      </label>
-                    </div>
-                  )}
-
-                    <div className={styles.actionButtonsRow}>
-                      {nodeEditado.data?.tipo_no !== "inicio" && (
-                        <>
-                          {confirmandoExclusaoNo ? (
-                          <button
-                            type="button"
-                            className={styles.deleteNodeConfirmButton}
-                            onClick={() => removerNode(nodeEditado.id)}
-                          >
-                            Excluir
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className={styles.deleteNodeIconButton}
-                            onClick={() => setConfirmandoExclusaoNo(true)}
-                            title="Excluir bloco"
-                          >
-                            üóë
-                          </button>
-                        )}
-                      </>
-                    )}
-
-                    <button
-                      type="button"
-                      className={styles.secondaryButton}
-                      onClick={fecharPainelEdicao}
-                    >
-                      Cancelar
-                    </button>
-
-                    <button
-                      type="button"
-                      className={styles.primaryButton}
-                      onClick={aplicarEdicaoNo}
-                    >
-                      Aplicar no bloco
-                    </button>
-                  </div>
-
-                  <p className={styles.help}>
-                    Depois de aplicar, clique em Salvar fluxo para gravar no banco.
-                  </p>
-
-
-                </div>
-                ) : (
-                <div className={styles.propertiesForm}>
-                    <label className={styles.field}>
-                      <span className={styles.label}>Nome da conex√£o</span>
-                      <input
-                        className={styles.input}
-                        value={tipoCondicaoConexao === "sempre" ? "Sempre seguir" : rotuloConexao}
-                        onChange={(e) => {
-                          setNomeConexaoEditadoManual(true);
-                          setRotuloConexao(e.target.value);
-                        }}
-                        placeholder="Ex: Op√ß√£o 1, Sim, Comercial"
-                        disabled={tipoCondicaoConexao === "sempre"}
-                      />
-                    </label>
-
-                    <label className={styles.field}>
-                      <span className={styles.label}>Tipo da condi√ß√£o</span>
-                      <select
-                          className={styles.input}
-                          value={tipoCondicaoConexao}
-                          onChange={(e) => {
-                            const novoTipo = e.target.value;
-
-                            setTipoCondicaoConexao(novoTipo);
-
-                            if (novoTipo === "sempre") {
-                              setValorCondicao("");
-                              setRotuloConexao("Sempre seguir");
-                              setUsarIaConexao(false);
-                            }
-
-                            if (novoTipo === "timeout_sem_resposta") {
-                              setUsarIaConexao(false);
-                            }
-                          }}
-                        >
-                          <option value="resposta_igual">Exata</option>
-                          <option value="resposta_contem">Cont√©m</option>
-                          <option value="resposta_inicia_com">Inicia com</option>
-                          <option value="resposta_regex">Regex</option>
-                          <option value="sempre">Sempre seguir</option>
-                          <option value="timeout_sem_resposta">Sem resposta ap√≥s tempo</option>
+Y™Áäx-ÆÈ‹j◊ù¢Îi∫⁄+äßj[hëÈ‹¢ÈÌ◊ùtÔ‘Ëµ©h∫⁄n∂XßzÕHù\ŸH€Y[ùé¬Çö[\‹ù»›\‹[úŸK\ŸPÿ[òX⁄À\ŸQYôôX›\ŸSY[[À\ŸTôYã\ŸT›]HHúõ€HúôXX›é¬ö[\‹ù»\ŸTõ›]\ã\ŸTŸX\ò⁄\ò[\»Húõ€Hõô^€ò]öYÿ][€àé¬ö[\‹ù¬àYYŸKàòX⁄Ÿ‹õ›[ôà€€ùõ€ÀàZ[öSX\àôXX›õ›Àà‹⁄][€ãàX\öŸ\ï\Kà\ŸQYŸ\‘›]Kà\ŸSõŸ\‘›]Kà\H€€õôX›[€ãà\HYŸKà\HõŸKüHúõ€HêYõ›À‹ôXX›é¬ö[\‹ùôYYòX⁄’ÿ\›úõ€Hêÿ€€\€ô[ùÀ—ôYYòX⁄’ÿ\›é¬ö[\‹ùXY\àúõ€Hêÿ€€\€ô[ùÀ“XY\àé¬ö[\‹ù\‹⁄\›[ùQõ^‹‘[ô[¬à\H\‹⁄\›[ùQõ^‹—õ^–‹öXYÀüHúõ€Hãã–\‹⁄\›[ùQõ^‹‘[ô[é¬ö[\‹ù[\]Uò\öXXõP€€Xõÿõﬁ¬à\H[\]Uò\öXXõS‹[€ãüHúõ€Hêÿ€€\€ô[ùÀ’[\]Uò\öXXõP€€Xõÿõﬁé¬ö[\‹ù»\ŸRXY\ï\Ÿ\àHúõ€Hêÿ€€\€ô[ùÀ⁄XY\ã]\Ÿ\ãX€€ù^é¬ö[\‹ùêYõ›À‹ôXX›Ÿ\›‹›[Kò‹‹»é¬ö[\‹ù›[\»úõ€HããŸõ^‹Àõ[Ÿ[Kò‹‹»é¬ö[\‹ù»[ôHHúõ€HêYõ›À‹ôXX›é¬ö[\‹ù»ÿù\ê€€ôöY›\òXÿ[—[òŸ\úò[Y[ù“[ò]]öYYHHúõ€Hê€Xãÿ]]€XX€Ÿ\À€õ‹õX[^ò\ãX€€ôöY›\òXÿ[ÀYõ^»é¬ö[\‹ù»Ÿ\ò\î›YŸ\›[—\ÿ‹öXÿ[“PP€€P€€ù^»Húõ€Hê€Xã⁄XK‹›YŸ\›Ÿ\ÀY\ÿ‹öXÿ[ÀZXHé¬ö[\‹ù»‹ôX]P€Y[ù\»‹ôX]T›\Xò\ŸPúõ›‹Ÿ\ê€Y[ùHúõ€Hê€Xã‹›\Xò\ŸKÿ€Y[ùé¬ö[\‹ù¬à⁄]úõ€ìYùà⁄]úõ€îöY⁄à€‹Kà€‹T\ÀàÿY\ê⁄\ò€KàY\‹ÿYŸP⁄\ò€Kà⁄\ôLãà‹\ö€\ÀüHúõ€HõX⁄YK\ôXX›é¬Çù\Hõ^»H¬àYà›ö[ôŒ¬àõ€YNà›ö[ôŒ¬à\ÿ‹öXÿ[Œà›ö[ô»ù[¬à›]\Œàúò\ÿ›[ö»àò]]õ»àú]\ÿY»àò\ú]Z]òY»é¬àÿ[ò[à›ö[ôŒ¬àõ^◊‹Yò[œŒàõ€€X[é¬à‹ôX]Yÿ]Œà›ö[ôŒ¬à€€ôöY›\òXÿ[◊⁄ú€€èŒàôX€‹ô›ö[ôÀ[ûOé¬à[\ù\◊ÿ€€ôöY›\òXÿ[œŒà¬à[ù\úô]\óÿ\ú]Z]õ◊⁄XW‹Ÿ[Wÿ€€ô^[◊Ÿ\úõœŒàù[Xô\é¬àN¬üN¬Çù\H]]€XXÿ[”õ»H¬àYà›ö[ôŒ¬à\◊€õŒà›ö[ôŒ¬à][Œà›ö[ôŒ¬à\ÿ‹öXÿ[Œà›ö[ô»ù[¬à‹⁄Xÿ[◊ﬁàù[Xô\é¬à‹⁄Xÿ[◊ﬁNàù[Xô\é¬à€€ôöY›\òXÿ[◊⁄ú€€éàôX€‹ô›ö[ôÀ[ûOé¬à[^W‹ŸY›[ô‹Œàù[Xô\àù[¬üN¬Çù\H]]€XXÿ[–€€ô^[»H¬àYà›ö[ôŒ¬àõ◊€‹öYŸ[W⁄Yà›ö[ôŒ¬àõ◊Ÿ\›[õ◊⁄Yà›ö[ôŒ¬àõ›[Œà›ö[ô»ù[¬à‹ô[Nàù[Xô\é¬à€€ôXÿ[◊⁄ú€€éàôX€‹ô›ö[ôÀ[ûOé¬à\ÿ\ó⁄XOŒàõ€€X[é¬à\ÿ‹öXÿ[◊⁄XOŒà›ö[ô»ù[¬üN¬Çù\Hô]öXQŸ\òXÿ[—\ÿ‹öXÿ[“XHH¬à[ŸŒàò€€ô^[»àòõÿ€»é¬à][Œà›ö[ôŒ¬à€€ô^Ÿ\Œà\úò^O¬àYŸRYà›ö[ôŒ¬àõ€YNà›ö[ôŒ¬à⁄Ÿ[ú—\›[XY‹Œàù[Xô\é¬àOé¬à⁄Ÿ[ú”Z[éàù[Xô\é¬à⁄Ÿ[ú”X^àù[Xô\é¬üN¬Çù\Hÿ][—õ^»H¬àYà›ö[ôŒ¬à\◊Ÿÿ][Œà›ö[ôŒ¬àò[‹éà›ö[ôŒ¬à€€ôXÿ[Œàò€€ù[Hàô^]Hàö[öX⁄XWÿ€€HàúôYŸ^é¬à]]õŒàõ€€X[é¬üN¬Çù\HŸ]‹ì‹ÿ[»H¬àYà›ö[ôŒ¬àõ€YNà›ö[ôŒ¬üN¬Çù\HZYXS‹ÿ[»H¬àYà›ö[ôŒ¬àõ€YNà›ö[ôŒ¬à\Œàö[XYŸ[HàùöY[»àò]Y[»àò\ú]Z]õ»é¬à\õà›ö[ôŒ¬àZ[YW›\Nà›ö[ô»ù[¬à[X[ö◊ÿû]\Œàù[Xô\àù[¬à‹ôX]Yÿ]Œà›ö[ôŒ¬üN¬Çù\H[\X›—^€\ÿ[”ZYXHH¬à›[ÿõÿ€‹◊ÿYô]Y‹œŒàù[Xô\é¬à›[Ÿõ^‹◊ÿYô]Y‹œŒàù[Xô\é¬à›[Ÿõ^‹◊‹]\ÿY‹œŒàù[Xô\é¬àõ^‹◊ÿYô]Y‹œŒà\úò^O¬àYà›ö[ôŒ¬àõ€YOŒà›ö[ô»ù[¬à›]\◊ÿ[ù\ö[‹èŒà›ö[ô»ù[¬à›]\◊ÿ]X[Œà›ö[ô»ù[¬à]\ÿYœŒàõ€€X[é¬àOé¬üN¬Çù\H[\]U⁄]ÿ\‹ÿ[»H¬àYà›ö[ôŒ¬àõ€YNà›ö[ôŒ¬àY[€XNà›ö[ôŒ¬à›]\Œà›ö[ôŒ¬àÿ]Y€‹öXOŒà›ö[ô»ù[¬à[ùY‹òXÿ[◊›⁄]ÿ\⁄Yà›ö[ôŒ¬àÿXòW⁄YŒà›ö[ô»ù[¬à^[ÿYŒà[ûN¬üN¬Çù\H[ùY‹òXÿ[’⁄]ÿ\‹ÿ[»H¬àYà›ö[ôŒ¬àõ€YWÿ€€ô^[œŒà›ö[ô»ù[¬àù[Y\õœŒà›ö[ô»ù[¬à›]\œŒà›ö[ô»ù[¬à‹⁄Xÿ[œŒàù[Xô\àù[¬àÿXòW⁄YŒà›ö[ô»ù[¬üN¬Çù\H\ÿ€‹“[ùY‹òX€Ÿ\”[Ÿ»HùŸ\»àúŸ[X⁄[€òY\»é¬Çù\H\ÿ€‹“[ùY‹òX€Ÿ\—õ^»H¬à[ŸŒà\ÿ€‹“[ùY‹òX€Ÿ\”[ŸŒ¬àYŒà›ö[ô÷◊N¬üN¬Çù\Hô]öY]’[\]U⁄]ÿ\H¬à][Œà›ö[ôŒ¬à€‹úŒà›ö[ôŒ¬àõŸ\Nà›ö[ôŒ¬àõ›Ÿ\Œà›ö[ô÷◊N¬üN¬Çù\Hò\öX]ô[\ú€€ò[^òYHH¬àYà›ö[ôŒ¬à⁄]ôNà›ö[ôŒ¬àò[‹éà›ö[ôŒ¬à\ÿ‹öXÿ[Œà›ö[ô»ù[¬à\ÿ€‹Œàô€ÿò[àô\‹\õ‹»àôõ^‹»é¬à]]õŒàõ€€X[é¬üN¬Çù\H[õ’ò\öX]ô[õ^»HõY[úÿYŸ[HàòYŸ[ô\óŸ\‹\õ»àòYŸ[ôW€[Xúô]Hé¬Çôù[ò›[€à[\]U⁄]ÿ\\õ›òY [\]OŒà[\]U⁄]ÿ\‹ÿ[»ù[
+H¬àô]\õà›ö[ô [\]OÀú›]\»àäKùö[J
+Kù’\\êÿ\ŸJ
+HOOHêTì’ëQé¬üBÇôù[ò›[€àõ‹õX[^ò\ë\ÿ€‹“[ùY‹òX€Ÿ\—õ^ à€€ôöY›\òXÿ[œŒàôX€‹ô›ö[ôÀ[ûOàù[äNà\ÿ€‹“[ùY‹òX€Ÿ\—õ^»¬à€€ú›\ÿ€‹»H€€ôöY›\òXÿ[œÀö[ùY‹òX€Ÿ\◊›⁄]ÿ\ﬂN¬à€€ú›Y”YÿY‹»H¬àããä\úò^Kö\–\úò^J€€ôöY›\òXÿ[œÀö[ùY‹òX€Ÿ\◊›⁄]ÿ\⁄Y Bà»€€ôöY›\òXÿ[œÀö[ùY‹òX€Ÿ\◊›⁄]ÿ\⁄Y¬àà◊JKà€€ôöY›\òXÿ[œÀö[ùY‹òXÿ[◊›⁄]ÿ\⁄YàN¬à€€ú›Y»H\úò^Kôúõ€Jàô]»Ÿ]
+à¬àããä\úò^Kö\–\úò^J\ÿ€‹œÀöY H»\ÿ€‹ÀöY»à◊JKàããöY”YÿY‹ÀàBàõX\
+
+Y
+HOà›ö[ô YàäKùö[J
+JBàôö[\äõ€€X[äBà
+Bà
+N¬à€€ú›[Ÿ»Bà›ö[ô \ÿ€‹œÀõ[Ÿ»€€ôöY›\òXÿ[œÀö[ùY‹òX€Ÿ\◊›⁄]ÿ\€[Ÿ»àäHOOBàúŸ[X⁄[€òY\»à	âàYÀõ[ô›àà»úŸ[X⁄[€òY\»ÇààùŸ\»é¬Çàô]\õà¬à[ŸÀàYŒà[Ÿ»OOHúŸ[X⁄[€òY\»à»Y»à◊KàN¬üBÇôù[ò›[€à[€ù\ë\ÿ€‹“[ùY‹òX€Ÿ\—õ^ à[ŸŒà\ÿ€‹“[ùY‹òX€Ÿ\”[ŸÀàYŒà›ö[ô÷◊BäNà\ÿ€‹“[ùY‹òX€Ÿ\—õ^»¬à€€ú›Y’[öX€‹»H\úò^Kôúõ€Jàô]»Ÿ]
+YÀõX\
+
+Y
+HOà›ö[ô YàäKùö[J
+JKôö[\äõ€€X[äJBà
+N¬Çàô]\õà[Ÿ»OOHúŸ[X⁄[€òY\»à	âàY’[öX€‹Àõ[ô›àà»»[ŸŒàúŸ[X⁄[€òY\»ãYŒàY’[öX€‹»Bàà»[ŸŒàùŸ\»ãYŒà◊HN¬üBÇôù[ò›[€à\ÿ€‹‹“[ùY‹òXÿ[–€€ôõ][Jà]X[à\ÿ€‹“[ùY‹òX€Ÿ\—õ^Àà^\›[ùNà\ÿ€‹“[ùY‹òX€Ÿ\—õ^¬äH¬àYà
+]X[õ[Ÿ»OOHúŸ[X⁄[€òY\»à^\›[ùKõ[Ÿ»OOHúŸ[X⁄[€òY\»äH¬àô]\õàùYN¬àBÇà€€ú›Y—^\›[ù\»Hô]»Ÿ]
+^\›[ùKöY N¬àô]\õà]X[öYÀú€€YJ
+Y
+HOàY—^\›[ù\Àö\ Y
+JN¬üBÇôù[ò›[€àõ›[“[ùY‹òXÿ[’⁄]ÿ\
+[ùY‹òXÿ[Œà[ùY‹òXÿ[’⁄]ÿ\‹ÿ[ H¬à€€ú›‹⁄Xÿ[»H[ùY‹òXÿ[Àú‹⁄Xÿ[»»ù[Y\õ»	⁄[ùY‹òXÿ[Àú‹⁄Xÿ[ﬂXàìù[Y\õ»é¬à€€ú›õ€YHBà›ö[ô [ùY‹òXÿ[Àõõ€YWÿ€€ô^[»àäKùö[J
+Hà›ö[ô [ùY‹òXÿ[Àõù[Y\õ»àäKùö[J
+Hàï⁄]–\é¬Çàô]\õà	‹‹⁄Xÿ[ﬂHH	€õ€Y_X¬üBÇôù[ò›[€àõ‹õX[^ò\ï[\]\‘‹í[ùY‹òXÿ[ ò[‹éà[ö€õ›€äH¬àYà
+]ò[‹à\[Ÿàò[‹àOOHõÿöôX›à\úò^Kö\–\úò^Jò[‹äJH¬àô]\õàﬂN¬àBÇàô]\õàÿöôX›ôúõ€Q[ùöY\ àÿöôX›ô[ùöY\ ò[‹à\»ôX€‹ô›ö[ôÀ[ö€õ›€èäBàõX\
+
+⁄[ùY‹òXÿ[“Y[\]RYJHOà¬à›ö[ô [ùY‹òXÿ[“YàäKùö[J
+Kà›ö[ô [\]RYàäKùö[J
+KàJBàôö[\ä
+⁄[ùY‹òXÿ[“Y[\]RYJHOà[ùY‹òXÿ[“Y	âà[\]RY
+Bà
+N¬üBÇôù[ò›[€àÿù\í[ùY‹òX€Ÿ\——\ÿ€‹—õ^ à\ÿ€‹Œà\ÿ€‹“[ùY‹òX€Ÿ\—õ^Àà[ùY‹òX€Ÿ\Œà[ùY‹òXÿ[’⁄]ÿ\‹ÿ[÷◊BäH¬àYà
+\ÿ€‹Àõ[Ÿ»OOHúŸ[X⁄[€òY\»äHô]\õà[ùY‹òX€Ÿ\Œ¬Çà€€ú›Y»Hô]»Ÿ]
+\ÿ€‹ÀöY N¬àô]\õà[ùY‹òX€Ÿ\Àôö[\ä
+[ùY‹òXÿ[ HOàYÀö\ [ùY‹òXÿ[ÀöY
+JN¬üBÇôù[ò›[€à⁄]ôUÿXòR[ùY‹òXÿ[ [ùY‹òXÿ[Œà[ùY‹òXÿ[’⁄]ÿ\‹ÿ[ H¬àô]\õà›ö[ô [ùY‹òXÿ[ÀùÿXòW⁄YàäKùö[J
+H[ùY‹òXÿ[Œâ⁄[ùY‹òXÿ[ÀöYX¬üBÇôù[ò›[€à\ÿU[\]\‘‹í[ùY‹òXÿ[ [ùY‹òX€Ÿ\Œà[ùY‹òXÿ[’⁄]ÿ\‹ÿ[÷◊JH¬àô]\õàô]»Ÿ]
+[ùY‹òX€Ÿ\ÀõX\
+⁄]ôUÿXòR[ùY‹òXÿ[ JKú⁄^ôHàN¬üBÇôù[ò›[€à[\]P€€\]]ô[€€R[ùY‹òXÿ[ à[\]Nà[\]U⁄]ÿ\‹ÿ[»ù[[ôYö[ôYà[ùY‹òXÿ[Œà[ùY‹òXÿ[’⁄]ÿ\‹ÿ[¬äH¬àYà
+][\]JHô]\õàò[ŸN¬àYà
+[\]Kö[ùY‹òXÿ[◊›⁄]ÿ\⁄YOOH[ùY‹òXÿ[ÀöY
+Hô]\õàùYN¬Çà€€ú›[\]UÿXòRYH›ö[ô [\]KùÿXòW⁄YàäKùö[J
+N¬à€€ú›[ùY‹òXÿ[’ÿXòRYH›ö[ô [ùY‹òXÿ[ÀùÿXòW⁄YàäKùö[J
+N¬Çàô]\õàõ€€X[ä[\]UÿXòRY	âà[ùY‹òXÿ[’ÿXòRY	âà[\]UÿXòRYOOH[ùY‹òXÿ[’ÿXòRY
+N¬üBÇôù[ò›[€à€€ù\ïò\öX]ôZ\’^’[\]J^œŒà›ö[ô»ù[
+H¬à€€ú›X]⁄\»H›ö[ô ^»àäKõX]⁄
+◊◊◊
+◊WKŸ H◊N¬à€€ú›ù[Y\õ‹»HX]⁄\¬àõX\
+
+][JHOàù[Xô\ä][Kúô\XŸJ÷ﬁﬂWKŸÀàäJJBàôö[\ä
+ù[Y\õ HOàù[Xô\ãö\—ö[ö]Jù[Y\õ JN¬Çàô]\õàù[Y\õ‹Àõ[ô›à»X]õX^
+ããõù[Y\õ‹ Hà¬üBÇôù[ò›[€à€€ù\ïò\öX]ôZ\’[\]U⁄]ÿ\
+[\]OŒà[\]U⁄]ÿ\‹ÿ[»ù[
+H¬à€€ú›€€\€ô[ù»H\úò^Kö\–\úò^J[\]OÀú^[ÿYÀò€€\€ô[ù Bà»[\]OÀú^[ÿYÀò€€\€ô[ù¬àà◊N¬Çà€€ú›XY\àH€€\€ô[ùÀôö[ô
+à
+][Nà[ûJHOà›ö[ô ][OÀù\HàäKù’\\êÿ\ŸJ
+HOOHíPQTàÇà
+N¬à€€ú›õŸHH€€\€ô[ùÀôö[ô
+à
+][Nà[ûJHOà›ö[ô ][OÀù\HàäKù’\\êÿ\ŸJ
+HOOHêì—HÇà
+N¬à€€ú›ù]€ú»H€€\€ô[ùÀôö[ô
+à
+][Nà[ûJHOà›ö[ô ][OÀù\HàäKù’\\êÿ\ŸJ
+HOOHêïU”î»Çà
+N¬Çà€€ú››[XY\àH€€ù\ïò\öX]ôZ\’^’[\]JXY\èÀù^
+N¬à€€ú››[õŸHH€€ù\ïò\öX]ôZ\’^’[\]JõŸOÀù^
+N¬à€€ú››[ù]€ú»H
+ù]€úœÀòù]€ú»◊JKúôYXŸJà
+›[àù[Xô\ãù]€éà[ûJHOà¬àYà
+›ö[ô ù]€èÀù\HàäKù’\\êÿ\ŸJ
+HOOHïTìäHô]\õà›[¬àô]\õà›[
+»€€ù\ïò\öX]ôZ\’^’[\]Jù]€èÀù\õ
+N¬àKàà
+N¬Çàô]\õà›[XY\à
+»›[õŸH
+»›[ù]€úŒ¬üBÇôù[ò›[€à[\]U⁄]ÿ\[PÿXôXÿ[”ZYXJ[\]OŒà[\]U⁄]ÿ\‹ÿ[»ù[
+H¬à€€ú›€€\€ô[ù»H\úò^Kö\–\úò^J[\]OÀú^[ÿYÀò€€\€ô[ù Bà»[\]OÀú^[ÿYÀò€€\€ô[ù¬àà◊N¬à€€ú›XY\àH€€\€ô[ùÀôö[ô
+à
+][Nà[ûJHOà›ö[ô ][OÀù\HàäKù’\\êÿ\ŸJ
+HOOHíPQTàÇà
+N¬à€€ú›õ‹õX]“XY\àH›ö[ô XY\èÀôõ‹õX]àäKù’\\êÿ\ŸJ
+N¬Çàô]\õà»íSPQ—HãïíQS»ãë–’SQSïóKö[ò€Y\ õ‹õX]“XY\äN¬üBÇôù[ò›[€à€€ù\ïò\öX]ôZ\”ÿúöYÿ]‹öX\‘ôY[ò⁄Y\ àò\öX]ôZ\Œà›ö[ô÷◊H›ö[ôÀà›[ÿúöYÿ]‹ö[Œàù[Xô\ÇäH¬à€€ú›[ö\»H\úò^Kö\–\úò^Jò\öX]ôZ\ Bà»ò\öX]ôZ\¬ààÿù\ì[ö\’ò\öX]ôZ\’[\]Jò\öX]ôZ\ N¬Çàô]\õà[ö\¬àú€XŸJ›[ÿúöYÿ]‹ö[ BàõX\
+
+][JHOà›ö[ô ][HàäKùö[J
+JBàôö[\äõ€€X[äKõ[ô›¬üBÇôù[ò›[€àÿù\ì[ö\’ò\öX]ôZ\’[\]Jò[‹éà›ö[ô H¬à€€ú›[ö\»H›ö[ô ò[‹ààäKú‹]
+óàäN¬àô]\õà€[ö\÷ÃHàã[ö\÷ÃWHàã[ö\÷ÃóHàóN¬üBÇôù[ò›[€àõ‹õX[^ò\ë[ùòYUò\öX]ô[[\]Jò[‹éà›ö[ô H¬àô]\õà›ö[ô ò[‹ààäBàúô\XŸJ÷ﬁﬂWKŸÀàäBàù”›Ÿ\êÿ\ŸJ
+Bàõõ‹õX[^ôJìëëäBàúô\XŸJ÷◊LÃWLÕôóKŸÀàäBàúô\XŸJ÷◊òK^åNW◊KŸÀó»äBàúô\XŸJ◊ ÀŸÀó»äBàúô\XŸJ◊ó ÀŸÀàäN¬üBÇôù[ò›[€à]X[^ò\ì[öUò\öX]ô[[\]Jàò[‹ê]X[à›ö[ôÀà[ô^àù[Xô\ãàõ›õ’ò[‹éà›ö[ô¬äH¬à€€ú›[ö\»Hÿù\ì[ö\’ò\öX]ôZ\’[\]Jò[‹ê]X[
+N¬à[ö\÷⁄[ô^HHõ‹õX[^ò\ë[ùòYUò\öX]ô[[\]Jõ›õ’ò[‹äN¬àô]\õà[ö\Àöõ⁄[äóàäN¬üBÇôù[ò›[€àôY[ò⁄\îö[YZ\òS[öUò\öX]ô[[\]Jò[‹ê]X[à›ö[ôÀõ›õ’ò[‹éà›ö[ô H¬à€€ú›[ö\»Hÿù\ì[ö\’ò\öX]ôZ\’[\]Jò[‹ê]X[
+N¬à€€ú›[ôXŸUò^ö[»H[ö\Àôö[ô[ô^
+
+][JHOàZ][Kùö[J
+JN¬à[ö\÷⁄[ôXŸUò^ö[»èH»[ôXŸUò^ö[»àHBàõ‹õX[^ò\ë[ùòYUò\öX]ô[[\]Jõ›õ’ò[‹äN¬àô]\õà[ö\Àöõ⁄[äóàäN¬üBÇôù[ò›[€à›Xú›]Z\ïò\öX]ôZ\‘ô]öY]’[\]Jà^Œà›ö[ôÀàò\öX]ôZ\Œà›ö[ô÷◊KàŸôúŸ]àù[Xô\ÇäH¬àô]\õà›ö[ô ^»àäKúô\XŸJ◊◊ 
+ WWKŸÀ
+Àù[Y\õ HOà¬à€€ú›[ô^HŸôúŸ]
+»ù[Xô\äù[Y\õ HHN¬àô]\õàò\öX]ôZ\÷⁄[ô^OÀùö[J
+Hﬁ…€ù[Y\õﬂ__X¬àJN¬üBÇôù[ò›[€à[€ù\îô]öY]’[\]U⁄]ÿ\
+à[\]Nà[\]U⁄]ÿ\‹ÿ[»ù[àò\öX]ôZ\‘ò]Œà›ö[ô¬äNàô]öY]’[\]U⁄]ÿ\ù[¬àYà
+][\]JHô]\õàù[¬Çà€€ú›ò\öX]ôZ\»Hÿù\ì[ö\’ò\öX]ôZ\’[\]Jò\öX]ôZ\‘ò] N¬à€€ú›€€\€ô[ù»H\úò^Kö\–\úò^J[\]Kú^[ÿYÀò€€\€ô[ù Bà»[\]Kú^[ÿYò€€\€ô[ù¬àà◊N¬à€€ú›XY\àH€€\€ô[ùÀôö[ô
+à
+][Nà[ûJHOà›ö[ô ][OÀù\HàäKù’\\êÿ\ŸJ
+HOOHíPQTàÇà
+N¬à€€ú›õŸHH€€\€ô[ùÀôö[ô
+à
+][Nà[ûJHOà›ö[ô ][OÀù\HàäKù’\\êÿ\ŸJ
+HOOHêì—HÇà
+N¬à€€ú›õ€›\àH€€\€ô[ùÀôö[ô
+à
+][Nà[ûJHOà›ö[ô ][OÀù\HàäKù’\\êÿ\ŸJ
+HOOHëì”’TàÇà
+N¬à€€ú›ù]€ú»H€€\€ô[ùÀôö[ô
+à
+][Nà[ûJHOà›ö[ô ][OÀù\HàäKù’\\êÿ\ŸJ
+HOOHêïU”î»Çà
+N¬Çà]ŸôúŸ]H¬à€€ú›XY\ï^H›Xú›]Z\ïò\öX]ôZ\‘ô]öY]’[\]JàXY\èÀù^àãàò\öX]ôZ\ÀàŸôúŸ]à
+Kùö[J
+N¬àŸôúŸ]
+œH€€ù\ïò\öX]ôZ\’^’[\]JXY\èÀù^
+N¬Çà€€ú›õŸU^H›Xú›]Z\ïò\öX]ôZ\‘ô]öY]’[\]JàõŸOÀù^àãàò\öX]ôZ\ÀàŸôúŸ]à
+Kùö[J
+N¬Çà€€ú›]ZX⁄‘ô\Y\»Bàù]€úœÀòù]€ú¬àÀôö[\ä
+ù]€éà[ûJHOàù]€èÀù\HOOHîURP“◊‘ëTHà	âàù]€èÀù^
+BàõX\
+
+ù]€éà[ûJHOà›ö[ô ù]€ãù^àäKùö[J
+JBàôö[\äõ€€X[äH◊N¬Çàô]\õà¬à][ŒàXY\ï^[\]Kõõ€YHï[\]H⁄]–\ãà€‹úŒàõŸU^ï[\]HŸ[H^»\òHô]ö\›X[^òXÿ[ÀàãàõŸ\Nà›ö[ô õ€›\èÀù^àäKùö[J
+Hë\]Z\HH][ô[Y[ù»ãàõ›Ÿ\Œà]ZX⁄‘ô\Y\ÀàN¬üBÇù\HYŸ[ôS‹ÿ[»H¬àYà›ö[ôŒ¬àõ€YNà›ö[ôŒ¬à[Y^õ€ôNà›ö[ôŒ¬à\òXÿ[◊€Z[ù]‹Œàù[Xô\é¬à[ù\ùò[◊€Z[ù]‹Œàù[Xô\é¬àò[ô[WŸX\Œàù[Xô\é¬à›]\Œà›ö[ôŒ¬üN¬Çù\Hô\›[Y—[òŸ\úò[Y[ù—õ^»Hú‹⁄]]õ»àõôYÿ]]õ»àõô]]õ»é¬ù\H\’ò[‹ê€€ùô\úÿ[»HúŸ[W›ò[‹ààùò[‹óŸö^»àùò\öX]ô[é¬Çò€€ú›ëT’SQ‘◊—Sê—TîêSQSïŒàô\›[Y—[òŸ\úò[Y[ù—õ^÷◊HH¬àú‹⁄]]õ»ãàõôYÿ]]õ»ãàõô]]õ»ãóN¬Çò€€ú›T‘◊’êS‘ó–””ïëTî–SŒà\’ò[‹ê€€ùô\úÿ[÷◊HH¬àúŸ[W›ò[‹àãàùò[‹óŸö^»ãàùò\öX]ô[ãóN¬Çò€€ú›SRUW‘’‘êQ—W”RQPT◊—STëT–W–ñUT»HL
+àLç
+àLç»À»LPÇò€€ú›SRUW’íQS◊–ñUT»HMà
+àLç
+àLç¬ò€€ú›SRUW“SPQ—SW–ñUT»HH
+àLç
+àLç¬ò€€ú›SRUW–UQS◊–ñUT»HMà
+àLç
+àLç¬ò€€ú›SRUW–TîURUì◊–ñUT»HL
+àLç
+àLç¬ò€€ú›P–—T–TîURUì‘»Bàãúãùò‹›ãôÿÀôÿﬁûÀûﬁúú\Xÿ][€ã‹ã^‹Z[ã^ÿ‹›ã\Xÿ][€ã€\›€‹ô\Xÿ][€ã›õôõ‹[û[õ‹õX]À[ŸôöXŸYÿ›[Y[ùù€‹ôõÿŸ\‹⁄[ô€[ôÿ›[Y[ù\Xÿ][€ã›õôõ\ÀY^Ÿ[\Xÿ][€ã›õôõ‹[û[õ‹õX]À[ŸôöXŸYÿ›[Y[ùú‹ôXY⁄Y][ú⁄Y]\Xÿ][€ã›õôõ\À\›Ÿ\ú⁄[ù\Xÿ][€ã›õôõ‹[û[õ‹õX]À[ŸôöXŸYÿ›[Y[ùúô\Ÿ[ù][€õ[úô\Ÿ[ù][€àé¬Çôù[ò›[€àZ[YU\T\òU\ÿY
+\ú]Z]õŒàö[JH¬à€€ú›^[úÿ[»H\ú]Z]õÀõò[YKú‹]
+ãàäKú‹
+
+OÀù”›Ÿ\êÿ\ŸJ
+Hàé¬à€€ú›Z[YT‹ë^[úÿ[ŒàôX€‹ô›ö[ôÀ›ö[ôœàH¬àéàò\Xÿ][€ã‹àãààù^‹Z[àãà‹›éàù^ÿ‹›àãàÿŒàò\Xÿ][€ã€\›€‹ôãàÿﬁàò\Xÿ][€ã›õôõ‹[û[õ‹õX]À[ŸôöXŸYÿ›[Y[ùù€‹ôõÿŸ\‹⁄[ô€[ôÿ›[Y[ùãàŒàò\Xÿ][€ã›õôõ\ÀY^Ÿ[ãàﬁàò\Xÿ][€ã›õôõ‹[û[õ‹õX]À[ŸôöXŸYÿ›[Y[ùú‹ôXY⁄Y][ú⁄Y]ãààò\Xÿ][€ã›õôõ\À\›Ÿ\ú⁄[ùãààò\Xÿ][€ã›õôõ‹[û[õ‹õX]À[ŸôöXŸYÿ›[Y[ùúô\Ÿ[ù][€õ[úô\Ÿ[ù][€àãàN¬Çàô]\õà
+àZ[YT‹ë^[úÿ[÷Ÿ^[úÿ[◊Hà\ú]Z]õÀù\Hàò\Xÿ][€ã€ÿ›]\›ôX[HÇà
+N¬üBò€€ú›SRUW—SVW‘—Q’Së‘»Hå»
+àå
+àå»ò€€ú›êTíPUëRT◊—íVT◊–””ïU◊“SBàïò\öX]ôZ\»ö^\Œàﬁ€õ€YWÿ€€ù]ﬂ_Kﬁ€õ€YW›⁄]ÿ\_KﬁŸ[XZ[ÿ€€ù]ﬂ_Kﬁ€ù[Y\õ◊ÿ€€ù]ﬂ_Kﬁÿÿ[\[ö__Kﬁ€‹öYŸ[__Kﬁ‹›]\◊€XY_Kﬁ‹õ›ÿ€€◊ÿ]X[_HHﬁ›[[[◊‹õ›ÿ€€ﬂ_Kàé¬ò€€ú›êTíPUëRT◊—íVT◊‘“T’SPHH¬à¬à⁄]ôNàõõ€YWÿ€€ù]»ãà^[\Œàûﬁ€õ€YWÿ€€ù]ﬂ_Hãà\ÿ‹öXÿ[Œàìõ€YHÿ[õ»õ»ÿY\›õ»»€€ù]ÀàãàKà¬à⁄]ôNàõõ€YHãà^[\Œàûﬁ€õ€Y__Hãà\ÿ‹öXÿ[Œàìõ€YH»€€ù]ÀàãàKà¬à⁄]ôNàõõ€YW›⁄]ÿ\ãà^[\Œàûﬁ€õ€YW›⁄]ÿ\_Hãà\ÿ‹öXÿ[ŒÇàìõ€YH»\ôö[»⁄]–\]X[ô»^\›\é»ŸH∞Ë€»^\›\ã\ÿH»õ€YHÿ[õ»õ»€€ù]ÀàãàKà¬à⁄]ôNàô[XZ[ÿ€€ù]»ãà^[\ŒàûﬁŸ[XZ[ÿ€€ù]ﬂ_Hãà\ÿ‹öXÿ[ŒàëK[XZ[ÿ[õ»õ»ÿY\›õ»»€€ù]ÀàãàKà¬à⁄]ôNàõù[Y\õ◊ÿ€€ù]»ãà^[\Œàûﬁ€ù[Y\õ◊ÿ€€ù]ﬂ_Hãà\ÿ‹öXÿ[Œàì∞ÓõY\õÀ›[Yõ€ôHÿ[õ»õ»ÿY\›õ»»€€ù]ÀàãàKà¬à⁄]ôNàòÿ[\[öHãà^[\Œàûﬁÿÿ[\[ö__Hãà\ÿ‹öXÿ[Œàêÿ[\[öHö[ò›[YH[»€€ù]ÀàãàKà¬à⁄]ôNàõ‹öYŸ[Hãà^[\Œàûﬁ€‹öYŸ[__Hãà\ÿ‹öXÿ[Œàì‹öYŸ[H»€€ù]ÀàãàKà¬à⁄]ôNàú›]\◊€XYãà^[\Œàûﬁ‹›]\◊€XY_Hãà\ÿ‹öXÿ[Œàî›]\»]X[»XYàãàKà¬à⁄]ôNàúõ›ÿ€€◊ÿ]X[ãà^[\Œàûﬁ‹õ›ÿ€€◊ÿ]X[_Hãà\ÿ‹öXÿ[Œàîõ›ÿ€€»]]õ»H€€ùô\úÿH]X[»€€ù]ÀàãàKà¬à⁄]ôNàù[[[◊‹õ›ÿ€€»ãà^[\Œàûﬁ›[[[◊‹õ›ÿ€€ﬂ_Hãà\ÿ‹öXÿ[Œà∞Êõ[[»õ›ÿ€€»[òŸ\úòYÀ⁄[ò]]õ»»€€ù]ÀàãàKóN¬ò€€ú›êTíPUëRT◊—íVT◊–””ïU◊‘ëT—TïêQT»H¬àõõ€YHãàõõ€YWÿ€€ù]»ãàò€€ù]◊€õ€YHãàõõ€YW›⁄]ÿ\ãàù⁄]ÿ\€õ€YHãàõõ€YW‹\ôö[›⁄]ÿ\ãàú\ôö[›⁄]ÿ\€õ€YHãÇàô[XZ[ãàô[XZ[ÿ€€ù]»ãàò€€ù]◊Ÿ[XZ[ãÇàù[Yõ€ôHãàõù[Y\õ»ãàõù[Y\õ◊ÿ€€ù]»ãàò€€ù]◊€ù[Y\õ»ãàù[Yõ€ôWÿ€€ù]»ãàò€€ù]◊›[Yõ€ôHãÇàòÿ[\[öHãàõ‹öYŸ[Hãàú›]\»ãàú›]\◊€XYãÇàúõ›ÿ€€◊ÿ]X[ãàù[[[◊‹õ›ÿ€€»ãóN¬Çò\ﬁ[ò»ù[ò›[€à\îô\‹‹›P\Jô\Œàô\‹€úŸKY[úÿYŸ[TYò[Œà›ö[ô H¬à€€ú›€€ù[ù\HHô\ÀöXY\úÀôŸ]
+ò€€ù[ù]\HäHàé¬à€€ú›^H]ÿZ]ô\Àù^
+
+N¬ÇàYà
+€€ù[ù\Kö[ò€Y\ ò\Xÿ][€ã⁄ú€€àäJH¬àûH¬àô]\õà^»î””ãú\úŸJ^
+HàﬂN¬àHÿ]⁄¬àõ›»ô]»\úõ‹äY[úÿYŸ[TYò[ N¬àBàBÇàYà
+\ô\Àõ⁄ H¬àYà
+àô\Àú›]\»OOHL»à‹ô\]Y\›[ù]H€»\ôŸ_^[ÿY€»\ôŸ_ù[ò›[€ó‹^[ÿY›€◊€\ôŸK⁄Kù\›
+^
+Bà
+H¬àõ›»ô]»\úõ‹äàì»\ú]Z]õ»^ŸYH»[Z]HH\ÿYXŸZ]»[»Ÿ\ùöY‹ãà[ùHôY^ö\à»[X[ö»H[ùöYHõ›ò[Y[ùKàÇà
+N¬àBÇàõ›»ô]»\úõ‹ä^Y[úÿYŸ[TYò[ N¬àBÇàûH¬àô]\õà^»î””ãú\úŸJ^
+HàﬂN¬àHÿ]⁄¬àô]\õàﬂN¬àBüBÇò€€ú›õŸU\\»H¬à›\›€NàõŸP›\›€KüN¬Çò€€ú›T◊”ì◊‘Të’SïW”UîëW“PHHú\ô›[ùW€]úôW⁄XHé¬ò€€ú›T‘◊”ì◊”RQPHHô]»Ÿ]
+¬àô[ùöX\ó⁄[XYŸ[Hãàô[ùöX\ó›öY[»ãàô[ùöX\óÿ]Y[»ãàô[ùöX\óÿ\ú]Z]õ»ãóJN¬ò€€ú›“UëT◊‘ëQëTëSê“PW”RQPW”ì—HH¬àõZYXW›\õãàõZYXW€õ€YHãàõZYXW⁄YãàõYYXW›\õãàõYYXW€õ€YHãàõYYXW⁄Yãàò\ú]Z]õ◊›\õãàò\ú]Z]õ◊€õ€YHãàò\ú]Z]õ◊⁄Yãàú›‹òYŸW‹]ãàú›‹òYŸT]ãóN¬ò€€ú›“—Sî◊‘–RQW”PV—T–‘íP–S◊“PHHN¬ò€€ú›“—Sî◊‘ì”T—íV◊—T–‘íP–S◊“PW—T’SPQ‘»HNL¬ÇÇôù[ò›[€à‹öX\íY[\‹ò\ö[ ôYö^Œà›ö[ô H¬àYà
+\[Ÿà‹û\»OOHù[ôYö[ôYà	âà‹û\Àúò[ô€UURQ
+H¬àô]\õà‹û\Àúò[ô€UURQ
+
+N¬àBÇàô]\õà	‹ôYö^ﬂW…—]Kõõ› 
+_W…”X]úò[ô€J
+Kù‘›ö[ô MäKú€XŸJä_X¬üBÇôù[ò›[€àXô[\”õ \Œà›ö[ô H¬àYà
+\»OOHö[öX⁄[»äHô]\õàí[∞ÎX⁄[»é¬àYà
+\»OOHô[ùöX\ó›^»äHô]\õàìY[úÿYŸ[Hé¬àYà
+\»OOHú\ô›[ùW€‹€Ÿ\»äHô]\õàî\ô›[ùHé¬àYà
+\»OOHT◊”ì◊‘Të’SïW”UîëW“PJHô]\õàî\ô›[ùHPHé¬àYà
+\»OOHùò[úŸô\ö\ó‹Ÿ]‹àäHô]\õàïò[úŸô\ö\àé¬àYà
+\»OOHô[òŸ\úò\àäHô]\õàë[òŸ\úò\àé¬àYà
+\»OOHô[ùöX\ó⁄[XYŸ[HäHô]\õàí[XYŸ[Hé¬àYà
+\»OOHô[ùöX\ó›öY[»äHô]\õàï∞ÎY[»é¬àYà
+\»OOHô[ùöX\óÿ]Y[»äHô]\õà∞‡]Y[»é¬àYà
+\»OOHô[ùöX\óÿ\ú]Z]õ»äHô]\õàê\ú]Z]õ»é¬àYà
+\»OOHô[ùöX\óÿõ›Ÿ\»äHô]\õàêõ›0ÌY\»é¬àYà
+\»OOHòõ›[◊‹ôY\ôX›äHô]\õàêõ›0Ë€»ôY\ôX›é¬àYà
+\»OOHò]ò[XXÿ[»äHô]\õàê]ò[XpÈË€»é¬àYà
+\»OOHòÿ\\ò\ó‹ô\‹‹›HäHô]\õàêÿ\\òHé¬àYà
+\»OOHòYŸ[ô\óŸ\‹\õ»äHô]\õàêYŸ[ô\à\‹\õ»é¬àYà
+\»OOHòYŸ[ôWÿù\ÿÿ\óÿYŸ[ô[Y[ù»äHô]\õàêù\ÿÿ\àYŸ[ôHé¬àYà
+\»OOHòYŸ[ôWŸ\ÿ€€\ó⁄‹ò\ö[»äHô]\õàë\ÿ€€\à‹∞Ë\ö[»é¬àYà
+\»OOHòYŸ[ôWÿ‹öX\óÿYŸ[ô[Y[ù»äHô]\õàê‹öX\àYŸ[ô[Y[ù»é¬àYà
+\»OOHòYŸ[ôW‹ô[X\òÿ\óÿYŸ[ô[Y[ù»äHô]\õàîô[X\òÿ\àé¬àYà
+\»OOHòYŸ[ôWÿÿ[òŸ[\óÿYŸ[ô[Y[ù»äHô]\õàêÿ[òŸ[\àYŸ[ôHé¬àYà
+\»OOHö[ù\úô]\óÿ\ú]Z]õ◊⁄XHäHô]\õàí[ù\úà\ú]Z]õ»PHé¬àô]\õà\Œ¬üBÇôù[ò›[€à€‹ï\”õ \Œà›ö[ô H¬àYà
+\»OOHö[öX⁄[»äHô]\õà›[\ÀõõŸR[öX⁄[Œ¬àYà
+\»OOHô[ùöX\ó›^»äHô]\õà›[\ÀõõŸSY[úÿYŸ[N¬àYà
+\»OOHú\ô›[ùW€‹€Ÿ\»äHô]\õà›[\ÀõõŸT\ô›[ùN¬àYà
+\»OOHT◊”ì◊‘Të’SïW”UîëW“PJHô]\õà›[\ÀõõŸT\ô›[ùRPN¬àYà
+\»OOHùò[úŸô\ö\ó‹Ÿ]‹àäHô]\õà›[\ÀõõŸUò[úŸô\ö\é¬àYà
+\»OOHô[òŸ\úò\àäHô]\õà›[\ÀõõŸQ[òŸ\úò\é¬àYà
+\»OOHô[ùöX\ó⁄[XYŸ[HäHô]\õà›[\ÀõõŸR[XYŸ[N¬àYà
+\»OOHô[ùöX\ó›öY[»äHô]\õà›[\ÀõõŸUöY[Œ¬àYà
+\»OOHô[ùöX\óÿ]Y[»äHô]\õà›[\ÀõõŸP]Y[Œ¬àYà
+\»OOHô[ùöX\óÿ\ú]Z]õ»äHô]\õà›[\ÀõõŸP\ú]Z]õŒ¬àYà
+\»OOHô[ùöX\óÿõ›Ÿ\»äHô]\õà›[\ÀõõŸPõ›Ÿ\Œ¬àYà
+\»OOHòõ›[◊‹ôY\ôX›äHô]\õà›[\ÀõõŸTôY\ôX›¬àYà
+\»OOHò]ò[XXÿ[»äHô]\õà›[\ÀõõŸP]ò[XXÿ[Œ¬àYà
+\»OOHòÿ\\ò\ó‹ô\‹‹›HäHô]\õà›[\ÀõõŸPÿ\\òN¬àYà
+\»OOHòYŸ[ô\óŸ\‹\õ»äHô]\õà›[\ÀõõŸPYŸ[ô\ë\‹\õŒ¬àYà
+\»OOHòYŸ[ôWÿù\ÿÿ\óÿYŸ[ô[Y[ù»äHô]\õà›[\ÀõõŸPYŸ[ôPù\ÿÿ\é¬àYà
+\»OOHòYŸ[ôWŸ\ÿ€€\ó⁄‹ò\ö[»äHô]\õà›[\ÀõõŸPYŸ[ôQ\ÿ€€\é¬àYà
+\»OOHòYŸ[ôWÿ‹öX\óÿYŸ[ô[Y[ù»äHô]\õà›[\ÀõõŸPYŸ[ôP‹öX\é¬àYà
+\»OOHòYŸ[ôW‹ô[X\òÿ\óÿYŸ[ô[Y[ù»äHô]\õà›[\ÀõõŸPYŸ[ôTô[X\òÿ\é¬àYà
+\»OOHòYŸ[ôWÿÿ[òŸ[\óÿYŸ[ô[Y[ù»äHô]\õà›[\ÀõõŸPYŸ[ôPÿ[òŸ[\é¬àYà
+\»OOHö[ù\úô]\óÿ\ú]Z]õ◊⁄XHäHô]\õà›[\ÀõõŸP\ú]Z]õ“PN¬àô]\õà›[\ÀõõŸTYò[Œ¬üBÇôù[ò›[€à][‘Yò[’\”õ \Œà›ö[ô H¬àYà
+\»OOHö[öX⁄[»äHô]\õàí[∞ÎX⁄[»é¬àYà
+\»OOHô[ùöX\ó›^»äHô]\õàìõ›òHY[úÿYŸ[Hé¬àYà
+\»OOHú\ô›[ùW€‹€Ÿ\»äHô]\õàìõ›òH\ô›[ùHé¬àYà
+\»OOHT◊”ì◊‘Të’SïW”UîëW“PJHô]\õàî\ô›[ùHXô\ùHPHé¬àYà
+\»OOHô[ùöX\óÿõ›Ÿ\»äHô]\õàî\ô›[ùHõ›0ÌY\»é¬àYà
+\»OOHòõ›[◊‹ôY\ôX›äHô]\õàêõ›0Ë€»ôY\ôX›é¬àYà
+\»OOHùò[úŸô\ö\ó‹Ÿ]‹àäHô]\õàïò[úŸô\ö\àŸ]‹àé¬àYà
+\»OOHô[òŸ\úò\àäHô]\õàë[òŸ\úò\àé¬àYà
+\»OOHô[ùöX\ó⁄[XYŸ[HäHô]\õàìõ›òH[XYŸ[Hé¬àYà
+\»OOHô[ùöX\ó›öY[»äHô]\õàìõ›õ»∞ÎY[»é¬àYà
+\»OOHô[ùöX\óÿ]Y[»äHô]\õàìõ›õ»0Ë]Y[»é¬àYà
+\»OOHô[ùöX\óÿ\ú]Z]õ»äHô]\õàìõ›õ»\ú]Z]õ»é¬àYà
+\»OOHò]ò[XXÿ[»äHô]\õàê]ò[XpÈË€»é¬àYà
+\»OOHòÿ\\ò\ó‹ô\‹‹›HäHô]\õàêÿ\\ò\àô\‹‹›Hé¬àYà
+\»OOHòYŸ[ô\óŸ\‹\õ»äHô]\õàêYŸ[ô\à\‹\õ»é¬àYà
+\»OOHòYŸ[ôWÿù\ÿÿ\óÿYŸ[ô[Y[ù»äHô]\õàêù\ÿÿ\àYŸ[ô[Y[ù»é¬àYà
+\»OOHòYŸ[ôWŸ\ÿ€€\ó⁄‹ò\ö[»äHô]\õàë\ÿ€€\à‹∞Ë\ö[»é¬àYà
+\»OOHòYŸ[ôWÿ‹öX\óÿYŸ[ô[Y[ù»äHô]\õàê‹öX\àYŸ[ô[Y[ù»é¬àYà
+\»OOHòYŸ[ôW‹ô[X\òÿ\óÿYŸ[ô[Y[ù»äHô]\õàîô[X\òÿ\àYŸ[ô[Y[ù»é¬àYà
+\»OOHòYŸ[ôWÿÿ[òŸ[\óÿYŸ[ô[Y[ù»äHô]\õàêÿ[òŸ[\àYŸ[ô[Y[ù»é¬àYà
+\»OOHö[ù\úô]\óÿ\ú]Z]õ◊⁄XHäHô]\õàí[ù\úô]\à\ú]Z]õ»PHé¬àô]\õàìõ›õ»õÿ€»é¬üBÇôù[ò›[€à][—ZYò[—‘⁄\›[XJ][Œà›ö[ôÀ\”õ–]X[à›ö[ô H¬à€€ú›][”[\»H›ö[ô ][»àäKùö[J
+N¬ÇàYà
+]][”[\ Hô]\õàùYN¬Çàô]\õà
+à][”[\»OOH][‘Yò[’\”õ \”õ–]X[
+Hà][”[\»OOHXô[\”õ \”õ–]X[
+Bà
+N¬üBÇôù[ò›[€à€‹ù\ï^–ÿ\ô
+^Œà›ö[ôÀ[Z]HHÕ
+H¬à€€ú›^”[\»H›ö[ô ^»àäKúô\XŸJ◊ ÀŸÀàäKùö[J
+N¬ÇàYà
+]^”[\ Hô]\õààé¬Çàô]\õà^”[\Àõ[ô›à[Z]Bà»	›^”[\Àú€XŸJ[Z]J_Kããòàà^”[\Œ¬üBÇôù[ò›[€à][’ö\⁄]ô[ÿ\ô
+]Nà[ûJH¬à€€ú›\”õ»H›ö[ô ]OÀù\◊€õ»àäN¬à€€ú›][»H›ö[ô ]OÀù][»àäKùö[J
+N¬à€€ú›][‘Yò[»H][‘Yò[’\”õ \”õ N¬à€€ú›Xô[Yò[»HXô[\”õ \”õ N¬Çà€€ú›Y[úÿYŸ[ú‘Yò[»H¬àëY⁄]HHY[úÿYŸ[H\]ZKàãàë\ÿ€€H[XH‹0ÈË€Œàãàê€€[»‹‹€»HZùY\è»ãààãàN¬Çà€€ú›Y[úÿYŸ[HH›ö[ô ]OÀò€€ôöY›\òXÿ[◊⁄ú€€èÀõY[úÿYŸ[HàäKùö[J
+N¬à€€ú›Y[úÿYŸ[QZYò[»HY[úÿYŸ[ú‘Yò[Àö[ò€Y\ Y[úÿYŸ[JN¬Çà€€ú›][—ZYò[»Bà]][»][»OOH][‘Yò[»][»OOHXô[Yò[Œ¬ÇàYà
+]][—ZYò[ H¬àô]\õà][Œ¬àBÇàYà
+Y[úÿYŸ[H	âà[Y[úÿYŸ[QZYò[ H¬àô]\õà€‹ù\ï^–ÿ\ô
+Y[úÿYŸ[JN¬àBÇàô]\õà][‘Yò[Œ¬üBÇôù[ò›[€à\”õ—\‹\òTô\‹‹›J\”õŒà›ö[ô H¬àô]\õà
+à\”õ»OOHú\ô›[ùW€‹€Ÿ\»àà\”õ»OOHT◊”ì◊‘Të’SïW”UîëW“PHà\”õ»OOHô[ùöX\óÿõ›Ÿ\»àà\”õ»OOHòÿ\\ò\ó‹ô\‹‹›Hàà\”õ»OOHòYŸ[ôWÿù\ÿÿ\óÿYŸ[ô[Y[ù»àà\”õ»OOHòYŸ[ôWŸ\ÿ€€\ó⁄‹ò\ö[»àà\”õ»OOHö[ù\úô]\óÿ\ú]Z]õ◊⁄XHÇà
+N¬üBÇôù[ò›[€à\–€€ôXÿ[‘Yò[‘‹ï\”õ \”õŒà›ö[ô H¬àYà
+\”õ»OOHòÿ\\ò\ó‹ô\‹‹›HäHô]\õàúŸ[\ôHé¬Çàô]\õà\”õ—\‹\òTô\‹‹›J\”õ H»úô\‹‹›Wÿ€€ù[HààúŸ[\ôHé¬üBÇôù[ò›[€àô\›[Y—[òŸ\úò[Y[ù’ò[Y àò[‹éà[ö€õ›€ÇäNàò[‹à\»ô\›[Y—[òŸ\úò[Y[ù—õ^»¬àô]\õàëT’SQ‘◊—Sê—TîêSQSïÀö[ò€Y\ àò[‹à\»ô\›[Y—[òŸ\úò[Y[ù—õ^¬à
+N¬üBÇôù[ò›[€à\’ò[‹ê€€ùô\úÿ[’ò[Y àò[‹éà[ö€õ›€ÇäNàò[‹à\»\’ò[‹ê€€ùô\úÿ[»¬àô]\õàT‘◊’êS‘ó–””ïëTî–SÀö[ò€Y\ ò[‹à\»\’ò[‹ê€€ùô\úÿ[ N¬üBÇôù[ò›[€àõ‹õX[^ò\ïò[‹ì[€ô]\ö[ ò[‹éà[ö€õ›€äH¬à€€ú›^»H›ö[ô ò[‹àœ»àäKúô\XŸJ÷‘â◊KŸÀàäKùö[J
+N¬ÇàYà
+]^ Hô]\õàù[¬Çà€€ú›õ‹õX[^òY»H^Àö[ò€Y\ ãäBà»^Àúô\XŸJ◊ãŸÀàäKúô\XŸJãããàäBàà^Œ¬Çà€€ú›ù[Y\õ»Hù[Xô\äõ‹õX[^òY N¬ÇàYà
+Sù[Xô\ãö\—ö[ö]Jù[Y\õ Hù[Y\õ»
+Hô]\õàù[¬Çàô]\õàX]úõ›[ô
+ù[Y\õ»
+àL
+H»L¬üBÇôù[ò›[€à\õò[YJò[‹éà[ö€õ›€äH¬à€€ú›^»H›ö[ô ò[‹ààäKùö[J
+N¬ÇàYà
+]^ Hô]\õàò[ŸN¬ÇàûH¬à€€ú›\õHô]»Tì
+^ N¬àô]\õà\õúõ›ÿ€€OOHöàà\õúõ›ÿ€€OOHöŒàé¬àHÿ]⁄¬àô]\õàò[ŸN¬àBüBÇôù[ò›[€à€€ôöY›\òXÿ[”õŸP€€[”ÿöô] ò[‹éà[ö€õ›€äNàôX€‹ô›ö[ôÀ[ö€õ›€èà¬àô]\õàò[‹à	âà\[Ÿàò[‹àOOHõÿöôX›à	âàP\úò^Kö\–\úò^Jò[‹äBà»
+ò[‹à\»ôX€‹ô›ö[ôÀ[ö€õ›€èäBààﬂN¬üBÇôù[ò›[€àõŸQZõÿ€”ZYXJõŸNàõŸJH¬àô]\õàT‘◊”ì◊”RQPKö\ ›ö[ô õŸKô]OÀù\◊€õ»àäJN¬üBÇôù[ò›[€àõŸU\ÿSZYXJõŸNàõŸKZYXNàZYXS‹ÿ[ H¬àYà
+[õŸQZõÿ€”ZYXJõŸJJHô]\õàò[ŸN¬Çà€€ú›€€ôöY»H€€ôöY›\òXÿ[”õŸP€€[”ÿöô] õŸKô]OÀò€€ôöY›\òXÿ[◊⁄ú€€äN¬Çàô]\õà
+à›ö[ô €€ôöYÀõZYXW›\õàäKùö[J
+HOOHZYXKù\õà›ö[ô €€ôöYÀõYYXW›\õàäKùö[J
+HOOHZYXKù\õà›ö[ô €€ôöYÀò\ú]Z]õ◊›\õàäKùö[J
+HOOHZYXKù\õà›ö[ô €€ôöYÀõZYXW⁄YàäKùö[J
+HOOHZYXKöYà›ö[ô €€ôöYÀõYYXW⁄YàäKùö[J
+HOOHZYXKöYà›ö[ô €€ôöYÀò\ú]Z]õ◊⁄YàäKùö[J
+HOOHZYXKöYà
+N¬üBÇôù[ò›[€à[\\ìZYXQ”õŸJõŸNàõŸKZYXNàZYXS‹ÿ[ H¬àYà
+[õŸU\ÿSZYXJõŸKZYXJJHô]\õàõŸN¬Çà€€ú›€€ôöY›\òXÿ[»H¬àããò€€ôöY›\òXÿ[”õŸP€€[”ÿöô] õŸKô]OÀò€€ôöY›\òXÿ[◊⁄ú€€äKàN¬Çàõ‹à
+€€ú›⁄]ôHŸà“UëT◊‘ëQëTëSê“PW”RQPW”ì—JH¬à[]H€€ôöY›\òXÿ[÷ÿ⁄]ôWN¬àBÇà€€ôöY›\òXÿ[ÀõZYXW‹ô[[›öYHH¬àYàZYXKöYàõ€YNàZYXKõõ€YKàô[[›öYWŸ[Nàô]»]J
+Kù“T”‘›ö[ô 
+Kà[›]õŒàõZYXWŸ^€ZYWÿöXõ[›XÿHãàN¬Çàô]\õà¬àããõõŸKà]Nà¬àããõõŸKô]Kà€€ôöY›\òXÿ[◊⁄ú€€éà€€ôöY›\òXÿ[ÀàKàN¬üBÇôù[ò›[€àò[Y\ìZYX\”ÿúöYÿ]‹öX\”õŸ\ õŸ\’ò[YXÿ[ŒàõŸV◊JH¬àõ‹à
+€€ú›õŸHŸàõŸ\’ò[YXÿ[ H¬àYà
+[õŸQZõÿ€”ZYXJõŸJJH€€ù[ùYN¬Çà€€ú›€€ôöY»H€€ôöY›\òXÿ[”õŸP€€[”ÿöô] õŸKô]OÀò€€ôöY›\òXÿ[◊⁄ú€€äN¬ÇàYà
+T›ö[ô €€ôöYÀõZYXW›\õàäKùö[J
+JH¬àô]\õà»õÿ€»â€õŸKô]OÀù][ﬂHàôX⁄\ÿH\à[XHZYXHŸ[X⁄[€òYKò¬àBàBÇàô]\õààé¬üBÇôù[ò›[€àY[úÿYŸ[Q^€\ÿ[”ZYXJ[\X›œŒà[\X›—^€\ÿ[”ZYXHù[
+H¬à€€ú››[õÿ€‹»Hù[Xô\ä[\X›œÀù›[ÿõÿ€‹◊ÿYô]Y‹»
+N¬à€€ú››[õ^‹»Hù[Xô\ä[\X›œÀù›[Ÿõ^‹◊ÿYô]Y‹»
+N¬à€€ú››[]\ÿY‹»Hù[Xô\ä[\X›œÀù›[Ÿõ^‹◊‹]\ÿY‹»
+N¬ÇàYà
+›[õÿ€‹»H
+H¬àô]\õàìZYXH^€ZYHYö[ö]]ò[Y[ùKàé¬àBÇà€€ú›\ù\»H¬àZYXH^€ZYHHô[[›öYHH	››[õÿ€‹ﬂHõÿ€  H[H	››[õ^‹ﬂHõ^  KòàN¬ÇàYà
+›[]\ÿY‹»à
+H¬à\ù\Àú\⁄
+à	››[]\ÿY‹ﬂHõ^  H]]õ  Hõ‹ò[H]\ÿY‹»]HŸ[X⁄[€ò\à›]òHZYXKòà
+N¬àBÇà\ù\Àú\⁄
+ì‹»õÿ€‹»Yô]Y‹»ôX⁄\ÿ[HH[XHõ›òHZYXH[ù\»Hÿ[ò\ãÿ]]ò\ãàäN¬Çàô]\õà\ù\Àöõ⁄[äàäN¬üBÇôù[ò›[€àõ‹õX[^ò\ïò\öX]ô[õ^ ò[‹éà›ö[ô H¬àô]\õà›ö[ô ò[‹ààäBàúô\XŸJ÷ﬁﬂWKŸÀàäBàùö[J
+Bàù”›Ÿ\êÿ\ŸJ
+Bàõõ‹õX[^ôJìëëäBàúô\XŸJ÷◊LÃWLÕôóKŸÀàäBàúô\XŸJ÷◊òK^åNW◊KŸÀó»äBàúô\XŸJ◊ ÀŸÀó»äBàúô\XŸJ◊óﬂ…ŸÀàäN¬üBÇôù[ò›[€àõ‹õX[^ò\ë[^TŸY›[ô‹ ò[‹éà›ö[ô»ù[Xô\àù[[ôYö[ôY
+H¬àYà
+ò[‹àOOHù[ò[‹àOOH[ôYö[ôYò[‹àOOHàäH¬àô]\õàù[¬àBÇà€€ú›ù[Y\õ»Hù[Xô\äò[‹äN¬ÇàYà
+Sù[Xô\ãö\—ö[ö]Jù[Y\õ JH¬àô]\õàù[¬àBÇàô]\õàX]õX^
+X]õZ[äSRUW—SVW‘—Q’Së‘ÀX]ôõ€‹äù[Y\õ JJN¬üBÇôù[ò›[€àõ‹õX]\ï[X[ö–\ú]Z]õ û]\œŒàù[Xô\àù[
+H¬à€€ú›ò[‹àHù[Xô\äû]\»
+N¬ÇàYà
+Sù[Xô\ãö\—ö[ö]Jò[‹äHò[‹àH
+H¬àô]\õàï[X[ö»∞Ë€»[ôõ‹õXY»é¬àBÇàYà
+ò[‹àLç
+H¬àô]\õà	›ò[‹üHò¬àBÇàYà
+ò[‹àLç
+àLç
+H¬àô]\õà	 ò[‹à»Lç
+Kù—ö^Y
+J_H–ò¬àBÇàô]\õà	 ò[‹à»Lç»Lç
+Kù—ö^Y
+J_HPò¬üBÇôù[ò›[€àõ‹õX]\î›‹òYŸSZYX\”Xäû]\œŒàù[Xô\àù[
+H¬à€€ú›ò[‹àHù[Xô\äû]\»
+N¬ÇàYà
+Sù[Xô\ãö\—ö[ö]Jò[‹äHò[‹àH
+H¬àô]\õàåé¬àBÇàô]\õà
+ò[‹à»Lç»Lç
+Kù—ö^Y
+JN¬üBÇôù[ò›[€àõ‹õX]\ï[[[‘ÿ[ò[Y[ù ]Nà]Hù[
+H¬àYà
+Y]JHô]\õàêZ[ôH∞Ë€»ÿ[õ»ô\›HŸ\‹Ë€»é¬Çà€€ú›Y€‹òHHô]»]J
+N¬Çà€€ú›Y\€[—XHBà]KôŸ]]J
+HOOHY€‹òKôŸ]]J
+H	âÇà]KôŸ][€ù
+
+HOOHY€‹òKôŸ][€ù
+
+H	âÇà]KôŸ]ù[YX\ä
+HOOHY€‹òKôŸ]ù[YX\ä
+N¬Çà€€ú›‹òHH]Kù”ÿÿ[U[YT›ö[ô úPîàã¬à›\éàåãYY⁄]ãàZ[ù]NàåãYY⁄]ãàJN¬ÇàYà
+Y\€[—XJH¬àô]\õàÿ[õ»⁄ôK0Ë»	⁄‹ò_X¬àBÇà€€ú›XSY\»H]Kù”ÿÿ[Q]T›ö[ô úPîàã¬à^NàåãYY⁄]ãà[€ùàåãYY⁄]ãàJN¬Çàô]\õàÿ[õ»[H	ŸXSY\ﬂK0Ë»	⁄‹ò_X¬üBÇôù[ò›[€àõ‹õX]\ë]SZYXJ]OŒà›ö[ô»ù[
+H¬àYà
+Y]JHô]\õàë]H∞Ë€»[ôõ‹õXYHé¬ÇàûH¬àô]\õàô]»]J]JKù”ÿÿ[T›ö[ô úPîàã¬à^NàåãYY⁄]ãà[€ùàåãYY⁄]ãàYX\éàõù[Y\öX»ãà›\éàåãYY⁄]ãàZ[ù]NàåãYY⁄]ãàJN¬àHÿ]⁄¬àô]\õàë]H∞Ë€»[ôõ‹õXYHé¬àBüBÇôù[ò›[€àXô[\”ZYXJ\Œà›ö[ô H¬àYà
+\»OOHö[XYŸ[HäHô]\õàí[XYŸ[Hé¬àYà
+\»OOHùöY[»äHô]\õàï∞ÎY[»é¬àYà
+\»OOHò]Y[»äHô]\õà∞‡]Y[»é¬àYà
+\»OOHò\ú]Z]õ»äHô]\õàê\ú]Z]õ»é¬àô]\õàìpÎYXHé¬üBÇôù[ò›[€àX€€ôU\”ZYXJ\Œà›ö[ô H¬àYà
+\»OOHö[XYŸ[HäHô]\õàº'ÂØ;Ó#»é¬àYà
+\»OOHùöY[»äHô]\õàº'„´é¬àYà
+\»OOHò]Y[»äHô]\õàº'„©»é¬àYà
+\»OOHò\ú]Z]õ»äHô]\õàº'‰·é¬àô]\õàº'‰„àé¬üBÇôù[ò›[€à€\‹ŸU\€‘›‹òYŸSZYX\ \ÿY–û]\Œàù[Xô\ã[Z]Pû]\Œàù[Xô\äH¬àYà
+[[Z]Pû]\»[Z]Pû]\»H
+Hô]\õààé¬Çà€€ú›\òŸ[ùX[H
+ù[Xô\ä\ÿY–û]\»
+H»[Z]Pû]\ H
+àL¬ÇàYà
+\òŸ[ùX[èHL
+H¬àô]\õà›[\ÀõYYXS[Z]ô[Z][Pÿ\ôôY¬àBÇàYà
+\òŸ[ùX[èHÃ
+H¬àô]\õà›[\ÀõYYXS[Z]ô[Z][Pÿ\ôY[›Œ¬àBÇàô]\õà›[\ÀõYYXS[Z]ô[Z][Pÿ\ô‹ôY[é¬üBÇôù[ò›[€àõ›[‘Yò[‘‹ï\”õ \”õŒà›ö[ô H¬àYà
+\”õ»OOHòÿ\\ò\ó‹ô\‹‹›HäH¬àô]\õàîô\‹‹›HôXŸXöYHé¬àBÇàYà
+\”õ»OOHT◊”ì◊‘Të’SïW”UîëW“PJH¬àô]\õàìõ›òH[ù[òÿ[»é¬àBÇàô]\õà\”õ—\‹\òTô\‹‹›J\”õ H»ìõ›òH€€ôpÈË€»ààîŸ[\ôHŸY›Z\àé¬üBÇù\H‹ÿ[‘ô\‹‹›P€€ô^[»H¬àò[‹éà›ö[ôŒ¬à][Œà›ö[ôŒ¬üN¬Çù\HYŸQ]P€€ô^[»H¬à€€ôXÿ[◊⁄ú€€èŒàôX€‹ô›ö[ôÀ[ö€õ›€èé¬üN¬Çôù[ò›[€à‹€Ÿ\‘ô\‹‹›Q”õ õŸOŒàõŸHù[
+Nà‹ÿ[‘ô\‹‹›P€€ô^[÷◊H¬à€€ú›\”õ»H›ö[ô õŸOÀô]OÀù\◊€õ»àäN¬à€€ú›€€ôöY›\òXÿ[»H
+õŸOÀô]OÀò€€ôöY›\òXÿ[◊⁄ú€€àﬂJH\»¬à‹€Ÿ\œŒà\úò^OôX€‹ô›ö[ôÀ[ö€õ›€èèé¬àõ›Ÿ\œŒà\úò^OôX€‹ô›ö[ôÀ[ö€õ›€èèé¬àN¬ÇàYà
+\”õ»OOHú\ô›[ùW€‹€Ÿ\»äH¬àô]\õà\úò^Kö\–\úò^J€€ôöY›\òXÿ[Àõ‹€Ÿ\ Bà»€€ôöY›\òXÿ[Àõ‹€Ÿ\¬àõX\
+
+‹ÿ[ HOà
+¬àò[‹éà›ö[ô ‹ÿ[Àùò[‹ààäKùö[J
+Kà][Œà›ö[ô ‹ÿ[Àù][»àäKùö[J
+KàJJBàôö[\ä
+‹ÿ[ HOàõ€€X[ä‹ÿ[Àùò[‹äJBàà◊N¬àBÇàYà
+\”õ»OOHô[ùöX\óÿõ›Ÿ\»äH¬àô]\õà\úò^Kö\–\úò^J€€ôöY›\òXÿ[Àòõ›Ÿ\ Bà»€€ôöY›\òXÿ[Àòõ›Ÿ\¬àõX\
+
+õ›[ HOà
+¬àò[‹éà›ö[ô õ›[ÀöYàäKùö[J
+Kà][Œà›ö[ô õ›[Àù][»àäKùö[J
+KàJJBàôö[\ä
+õ›[ HOàõ€€X[äõ›[Àùò[‹äJBàà◊N¬àBÇàô]\õà◊N¬üBÇôù[ò›[€àõﬁ[XS‹ÿ[‘ô\‹‹›Q\‹€ö]ô[
+àõŸS‹öYŸ[NàõŸH[ôYö[ôYàYŸ\–]XZ\ŒàYŸV◊BäH¬à€€ú›‹€Ÿ\‘ô\‹‹›HH‹€Ÿ\‘ô\‹‹›Q”õ õŸS‹öYŸ[JN¬ÇàYà
+‹€Ÿ\‘ô\‹‹›Kõ[ô›OOH
+Hô]\õàù[¬Çà€€ú›ò[‹ô\’\ÿY‹»Hô]»Ÿ]
+àYŸ\–]XZ\¬àôö[\ä
+YŸJHOàYŸKú€›\òŸHOOHõŸS‹öYŸ[OÀöY
+BàõX\
+
+YŸJHOÇà›ö[ô à
+
+YŸKô]H\»YŸQ]P€€ô^[»[ôYö[ôY
+OÀò€€ôXÿ[◊⁄ú€€àﬂJBàùò[‹ààÇà
+Kùö[J
+Bà
+Bàôö[\äõ€€X[äBà
+N¬Çàô]\õà
+à‹€Ÿ\‘ô\‹‹›Kôö[ô
+
+‹ÿ[ HOà]ò[‹ô\’\ÿY‹Àö\ ‹ÿ[Àùò[‹äJHù[à
+N¬üBÇôù[ò›[€à^—ZŸ[ô\öX€‘\òP€€ô^[“XJ^Œà›ö[ô H¬à€€ú›ò[‹àH›ö[ô ^»àäKùö[J
+N¬ÇàYà
+]ò[‹äHô]\õàùYN¬Çàô]\õàô]»Ÿ]
+¬àìõ›òH[ù[òÿ[»ãàí[ù[òÿ[»PHãàìõ›òH€€ôpÈË€»ãàê€€ôpÈË€»ãàìõ›òHY[úÿYŸ[HãàìY[úÿYŸ[Hãàìõ›õ»õÿ€»ãàëY⁄]HHY[úÿYŸ[H\]ZKàãàê€€[»‹‹€»HZùY\è»ãàJKö\ ò[‹äN¬üBÇôù[ò›[€àõ›[–€€ô^[“XT‹ë\›[õ õŸQ\›[õœŒàõŸHù[
+H¬àYà
+[õŸQ\›[õ Hô]\õàí[ù[òÿ[»PHé¬Çà€€ú›€€ôöY›\òXÿ[»H
+õŸQ\›[õÀô]OÀò€€ôöY›\òXÿ[◊⁄ú€€àﬂJH\»¬àY[úÿYŸ[OŒà›ö[ôŒ¬àN¬Çà€€ú›ÿ[ôY]‹»H¬à›ö[ô õŸQ\›[õÀô]OÀù][»àäKà][’ö\⁄]ô[ÿ\ô
+õŸQ\›[õÀô]JKà›ö[ô €€ôöY›\òXÿ[ÀõY[úÿYŸ[HàäKúô\XŸJ◊ ÀŸÀàäKùö[J
+KàXô[\”õ ›ö[ô õŸQ\›[õÀô]OÀù\◊€õ»àäJKàN¬Çàô]\õà
+àÿ[ôY]‹Àôö[ô
+
+^ HOà]^—ZŸ[ô\öX€‘\òP€€ô^[“XJ^ JHàí[ù[òÿ[»PHÇà
+N¬üBÇò€€ú›UíT”◊—ìV◊–””ëVS◊—Tîì◊–TîURUì◊“PHBàë\›Hõ^»‹‹›ZH[H›HXZ\»õÿ€‹»[ù\úà\ú]Z]õ»PHŸ[HHÿpÎYH\úõÀàô]ö\ŸH‹»õÿ€‹»⁄[ò[^òY‹»õ»ÿ[ùò\Ààé¬Çò€€ú›UíT”◊–ì–”◊–””ëVS◊—Tîì◊–TîURUì◊“PHBàë\›Hõÿ€»ôX⁄\ÿHH[XH””ëV0‡”»€€H[]úòH	—Tîì…»[HëT‘‘’HT‘TêQH\òHò]\àò[\»HPHH⁄Ÿ[ú»\Ÿ€›Y‹Ààé¬Çò€€ú›UíT”◊–ì–”◊’STUW’–PêW–Q—SëTó—T‘Tì»Bàë\›Hõ^»][ôH–Pê\»Yô\ô[ù\ÀàŸ[X⁄[€ôH[H[\]H\õ›òY»\òHÿYH∞ÓõY\õ»ô\›Hõÿ€Ààé¬Çôù[ò›[€àõ‹õX[^ò\ï^–€€\\òXÿ[ ò[‹éà[ö€õ›€äH¬àô]\õà›ö[ô ò[‹ààäKùö[J
+Kù”›Ÿ\êÿ\ŸJ
+N¬üBÇôù[ò›[€à€€ôXÿ[–€€Xö[òP€€Q\úõ–\ú]Z]õ“XJà€€ôXÿ[ŒàôX€‹ô›ö[ôÀ[ûOàù[[ôYö[ôYäH¬àYà
+X€€ôXÿ[œÀù\ Hô]\õàò[ŸN¬Çà€€ú›ò[‹àHõ‹õX[^ò\ï^–€€\\òXÿ[ €€ôXÿ[Àùò[‹äN¬ÇàYà
+]ò[‹äHô]\õàò[ŸN¬ÇàYà
+€€ôXÿ[Àù\»OOHúô\‹‹›W⁄Y›X[äHô]\õàò[‹àOOHô\úõ»é¬àYà
+€€ôXÿ[Àù\»OOHúô\‹‹›Wÿ€€ù[HäHô]\õàô\úõ»ãö[ò€Y\ ò[‹äN¬àYà
+€€ôXÿ[Àù\»OOHúô\‹‹›W⁄[öX⁄XWÿ€€HäHô]\õàô\úõ»ãú›\ù’⁄]
+ò[‹äN¬ÇàYà
+€€ôXÿ[Àù\»OOHúô\‹‹›W‹ôYŸ^äH¬àûH¬àô]\õàô]»ôY—^
+›ö[ô €€ôXÿ[Àùò[‹äKöHäKù\›
+ô\úõ»äN¬àHÿ]⁄¬àô]\õàò[ŸN¬àBàBÇàô]\õàò[ŸN¬üBÇôù[ò›[€àõŸP\ú]Z]õ“XTŸ[P€€ô^[—\úõ õŸNàõŸKYŸ\–]XZ\ŒàYŸV◊JH¬àYà
+›ö[ô õŸKô]OÀù\◊€õ»àäHOOHö[ù\úô]\óÿ\ú]Z]õ◊⁄XHäH¬àô]\õàò[ŸN¬àBÇàô]\õàYYŸ\–]XZ\Àú€€YJ
+YŸJHOà¬à€€ú›]HHYŸKô]H\»»€€ôXÿ[◊⁄ú€€èŒàôX€‹ô›ö[ôÀ[ûOàH[ôYö[ôY¬àô]\õà
+àYŸKú€›\òŸHOOHõŸKöY	âÇà€€ôXÿ[–€€Xö[òP€€Q\úõ–\ú]Z]õ“XJ]OÀò€€ôXÿ[◊⁄ú€€äBà
+N¬àJN¬üBÇôù[ò›[€àõŸPYŸ[ô\ë\‹\õ‘ôX⁄\ÿU[\]T‹ïÿXòJàõŸNàõŸKà[ùY‹òX€Ÿ\—\ÿ€‹Œà[ùY‹òXÿ[’⁄]ÿ\‹ÿ[÷◊Kà[\]\Œà[\]U⁄]ÿ\‹ÿ[÷◊BäH¬àYà
+›ö[ô õŸKô]OÀù\◊€õ»àäHOOHòYŸ[ô\óŸ\‹\õ»äH¬àô]\õàò[ŸN¬àBÇàYà
+]\ÿU[\]\‘‹í[ùY‹òXÿ[ [ùY‹òX€Ÿ\—\ÿ€‹ JH¬àô]\õàò[ŸN¬àBÇà€€ú›€€ôöY»H€€ôöY›\òXÿ[”õŸP€€[”ÿöô] õŸKô]OÀò€€ôöY›\òXÿ[◊⁄ú€€äN¬à€€ú›[\]\‘‹í[ùY‹òXÿ[»Hõ‹õX[^ò\ï[\]\‘‹í[ùY‹òXÿ[ à€€ôöYÀù[\]\◊‹‹ó⁄[ùY‹òXÿ[¬à
+N¬Çàô]\õà[ùY‹òX€Ÿ\—\ÿ€‹Àú€€YJ
+[ùY‹òXÿ[ HOà¬à€€ú›[\]RYH›ö[ô [\]\‘‹í[ùY‹òXÿ[÷⁄[ùY‹òXÿ[ÀöYHàäKùö[J
+N¬à€€ú›[\]HH[\]\Àôö[ô
+
+][JHOà][KöYOOH[\]RY
+N¬Çàô]\õà
+à][\]RYà][\]Hà][\]U⁄]ÿ\\õ›òY [\]JHà][\]P€€\]]ô[€€R[ùY‹òXÿ[ [\]K[ùY‹òXÿ[ Bà
+N¬àJN¬üBÇò€€ú›ì—W––Të’“QHMå¬ò€€ú›ì—W––Të“RQ“HMN¬ò€€ú›ì—W—–T÷HÃ¬ò€€ú›ì—W—–T÷HH¬Çôù[ò›[€à‹⁄X€Ÿ\‘€ÿúô\‹›\ àNà»àù[Xô\é»Nàù[Xô\àKàéà»àù[Xô\é»Nàù[Xô\àBäH¬àô]\õà
+àX]òXú KûHãû
+Hì—W––Të’“Q
+»ì—W—–T÷	âÇàX]òXú KûHHãûJHì—W––Të“RQ“
+»ì—W—–T÷Bà
+N¬üBÇôù[ò›[€àÿ[›[\î‹⁄Xÿ[”]úôSõ›õ”õ õŸ\–]XZ\ŒàõŸV◊JH¬àYà
+õŸ\–]XZ\Àõ[ô›OOH
+H¬àô]\õà¬ààNàNàååàN¬àBÇà€€ú›õŸTôYô\ô[ò⁄XHHõŸ\–]XZ\ÀúôYXŸJ
+XZ\–Q\ôZ]KõŸP]X[
+HOÇàõŸP]X[ú‹⁄][€ãûàXZ\–Q\ôZ]Kú‹⁄][€ãû»õŸP]X[àXZ\–Q\ôZ]Bà
+N¬Çà€€ú›\‹€÷Hì—W––Të’“Q
+»ì—W—–T÷¬à€€ú›\‹€÷HHì—W––Të“RQ“
+»ì—W—–T÷N¬à€€ú›‹⁄Xÿ[–ò\ŸHH¬ààX]úõ›[ô
+õŸTôYô\ô[ò⁄XKú‹⁄][€ãû
+»\‹€÷
+KàNàX]úõ›[ô
+õŸTôYô\ô[ò⁄XKú‹⁄][€ãûJKàN¬Çà€€ú›\€ÿÿ[Y[ù‹»H¬à»àNàKà»àNà\‹€÷HKà»àNà\\‹€÷HKà»à\‹€÷NàKà»à\‹€÷Nà\‹€÷HKà»à\‹€÷Nà\\‹€÷HKàN¬Çàõ‹à
+]€€[òHH»€€[òH»€€[òH
+œHJH¬àõ‹à
+€€ú›\€ÿÿ[Y[ù»Ÿà\€ÿÿ[Y[ù‹ H¬à€€ú›ÿ[ôY]»H¬àà‹⁄Xÿ[–ò\ŸKû
+»€€[òH
+à\‹€÷
+»\€ÿÿ[Y[ùÀûàNà‹⁄Xÿ[–ò\ŸKûH
+»\€ÿÿ[Y[ùÀûKàN¬Çà€€ú›€€YHHõŸ\–]XZ\Àú€€YJ
+õŸJHOÇà‹⁄X€Ÿ\‘€ÿúô\‹›\ ÿ[ôY]ÀõŸKú‹⁄][€äBà
+N¬ÇàYà
+X€€YJH¬àô]\õàÿ[ôY]Œ¬àBàBàBÇàô]\õà¬àà‹⁄Xÿ[–ò\ŸKû
+»õŸ\–]XZ\Àõ[ô›
+à\‹€÷àNà‹⁄Xÿ[–ò\ŸKûKàN¬üBÇôù[ò›[€àÿ[›[\î‹⁄Xÿ[”]úôQ\XÿXÿ[”õ àõŸS‹öYŸ[NàõŸKàõŸ\–]XZ\ŒàõŸV◊BäH¬à€€ú›\‹€÷Hì—W––Të’“Q
+»ì—W—–T÷¬à€€ú›\‹€÷HHì—W––Të“RQ“
+»ì—W—–T÷N¬Çà€€ú›‹⁄Xÿ[–ò\ŸHH¬ààX]úõ›[ô
+õŸS‹öYŸ[Kú‹⁄][€ãû
+»\‹€÷
+KàNàX]úõ›[ô
+õŸS‹öYŸ[Kú‹⁄][€ãûJKàN¬Çà€€ú›\€ÿÿ[Y[ù‹»H¬à»àNàKà»àNà\‹€÷HKà»àNà\\‹€÷HKà»à\‹€÷NàKà»à\‹€÷Nà\‹€÷HKà»à\‹€÷Nà\\‹€÷HKà»à\‹€÷
+àãNàKà»à\‹€÷
+àãNà\‹€÷HKà»à\‹€÷
+àãNà\\‹€÷HKàN¬Çàõ‹à
+€€ú›\€ÿÿ[Y[ù»Ÿà\€ÿÿ[Y[ù‹ H¬à€€ú›ÿ[ôY]»H¬àà‹⁄Xÿ[–ò\ŸKû
+»\€ÿÿ[Y[ùÀûàNà‹⁄Xÿ[–ò\ŸKûH
+»\€ÿÿ[Y[ùÀûKàN¬Çà€€ú›€€YHHõŸ\–]XZ\Àú€€YJ
+õŸJHOÇà‹⁄X€Ÿ\‘€ÿúô\‹›\ ÿ[ôY]ÀõŸKú‹⁄][€äBà
+N¬ÇàYà
+X€€YJH¬àô]\õàÿ[ôY]Œ¬àBàBÇàô]\õàÿ[›[\î‹⁄Xÿ[”]úôSõ›õ”õ õŸ\–]XZ\ N¬üBÇôù[ò›[€àìõ‘\òTôXX›õ› õŒà]]€XXÿ[”õ NàõŸH¬à€€ú›€€ôöY›\òXÿ[“ú€€àHõÀò€€ôöY›\òXÿ[◊⁄ú€€àﬂN¬Çàô]\õà¬àYàõÀöYà‹⁄][€éà¬ààõÀú‹⁄Xÿ[◊ﬁàNàõÀú‹⁄Xÿ[◊ﬁHàKà€›\òŸT‹⁄][€éà‹⁄][€ãîöY⁄à\ôŸ]‹⁄][€éà‹⁄][€ãìYùà\Nàò›\›€HãÇà]Nà¬à\◊€õŒàõÀù\◊€õÀà][ŒàõÀù][Àà\ÿ‹öXÿ[ŒàõÀô\ÿ‹öXÿ[Àà€€ôöY›\òXÿ[◊⁄ú€€éà€€ôöY›\òXÿ[“ú€€ãà[^W‹ŸY›[ô‹ŒàõÀô[^W‹ŸY›[ô‹»œ»ù[à\‘Ÿ[X⁄[€òYŒàò[ŸKàKàN¬üBÇôù[ò›[€àõŸP›\›€J»]KòYŸ⁄[ô»Nà[ûJH¬à€€ú›[P[\ùP€€ô^[—\úõ»H]OÀò\ú]Z]õ◊⁄XW‹Ÿ[Wÿ€€ô^[◊Ÿ\úõ»OOHùYN¬à€€ú›[P[\ùU[\]UÿXòHBà]OÀòYŸ[ô\óŸ\‹\õ◊›[\]W›ÿXòWÿ[\ùHOOHùYN¬Çàô]\õà
+à]Çà€\‹”ò[YO^ÿ	‹›[\ÀõõŸPõﬁH	ÿ€‹ï\”õ ]Kù\◊€õ _H	¬àYòYŸ⁄[ô»	âà]Kö\‘Ÿ[X⁄[€òY»»›[\ÀõõŸTŸ[X⁄[€òY»ààÇàXBàÇà[ôBà\OHù\ôŸ]Çà‹⁄][€è^‘‹⁄][€ãìYùBà€\‹”ò[YO^‹›[\ÀõõŸR[ô_Bà\–€€õôX›XõO^›ùY_Bà€ê€X⁄œ^ ]ô[ù
+HOà]ô[ùú›‹õ‹Yÿ][€ä
+_Bà€î⁄[ù\ë›€è^ ]ô[ù
+HOà]ô[ùú›‹õ‹Yÿ][€ä
+_BàœÇÇà]à€\‹”ò[YO^‹›[\ÀõõŸRXY\üOÇà]à€\‹”ò[YO^‹›[\ÀõõŸU\Tõ›ﬂOÇà‹[à€\‹”ò[YO^‹›[\ÀõõŸU\_OÇà€Xô[\”õ ]Kù\◊€õ _Bà‹‹[èÇÇàŸ]OÀô[^W‹ŸY›[ô‹»OHù[	âÇàù[Xô\ä]Kô[^W‹ŸY›[ô‹ Hà	âà
+à‹[à€\‹”ò[YO^‹›[\ÀõõŸQ[^PòYŸ_OÇà8£ÏHŸ]Kô[^W‹ŸY›[ô‹ﬂ\¬à‹‹[èÇà
+_BàŸ]èÇàŸ]èÇÇà]à€\‹”ò[YO^‹›[\ÀõõŸP€€ù[ùOÇà]à€\‹”ò[YO^‹›[\ÀõõŸU]Tõ›ﬂOÇà›õ€ô»€\‹”ò[YO^‹›[\ÀõõŸU]_Oû›][’ö\⁄]ô[ÿ\ô
+]J_O‹›õ€ôœÇÇà›[P[\ùP€€ô^[—\úõ»	âà
+à‹[Çà€\‹”ò[YO^ÿ	‹›[\Àö[ôõ–[\ùX€€üH	‹›[\Àö[ôõ–[\ùX€€ìõŸ_XBà]K]€€\^–UíT”◊–ì–”◊–””ëVS◊—Tîì◊–TîURUì◊“P_Bà]O^–UíT”◊–ì–”◊–””ëVS◊—Tîì◊–TîURUì◊“P_Bà\öXK[Xô[^–UíT”◊–ì–”◊–””ëVS◊—Tîì◊–TîURUì◊“P_Bàõ€OHö[Y»ÇàÇàBà‹‹[èÇà
+_BÇà›[P[\ùU[\]UÿXòH	âà
+à‹[Çà€\‹”ò[YO^ÿ	‹›[\Àö[ôõ–[\ùX€€üH	‹›[\Àö[ôõ–[\ùX€€ìõŸ_H	‹›[\Àö[ôõ–[\ùX€€ïÿ\õö[ôﬂXBà]K]€€\^–UíT”◊–ì–”◊’STUW’–PêW–Q—SëTó—T‘TìﬂBà]O^–UíT”◊–ì–”◊’STUW’–PêW–Q—SëTó—T‘TìﬂBà\öXK[Xô[^–UíT”◊–ì–”◊’STUW’–PêW–Q—SëTó—T‘TìﬂBàõ€OHö[Y»ÇàÇàBà‹‹[èÇà
+_BàŸ]èÇàŸ]èÇÇà[ôBà\OHú€›\òŸHÇà‹⁄][€è^‘‹⁄][€ãîöY⁄Bà€\‹”ò[YO^‹›[\ÀõõŸR[ô_Bà\–€€õôX›XõO^›ùY_Bà€ê€X⁄œ^ ]ô[ù
+HOà]ô[ùú›‹õ‹Yÿ][€ä
+_Bà€î⁄[ù\ë›€è^ ]ô[ù
+HOà]ô[ùú›‹õ‹Yÿ][€ä
+_BàœÇàŸ]èÇà
+N¬üBÇù\H\”Y[úÿYŸ[Tô]öXU⁄]ÿ\Bàòõ›Çàò€€ù]»Çàú⁄\›[XHÇàúŸ[]‹àÇàô]ö\€‹öXHé¬Çù\H‹ÿ[“õ‹õòYTô]öXU⁄]ÿ\H¬àYŸRYà›ö[ôŒ¬à^Œà›ö[ôŒ¬àŸ[X⁄[€òYNàõ€€X[é¬üN¬Çù\HY[úÿYŸ[Tô]öXU⁄]ÿ\H¬àYà›ö[ôŒ¬à\Œà\”Y[úÿYŸ[Tô]öXU⁄]ÿ\¬à^Œà›ö[ôŒ¬à][œŒà›ö[ôŒ¬àõŸ\OŒà›ö[ôŒ¬àõ›Ÿ\œŒà›ö[ô÷◊N¬àZYXU\œŒàö[XYŸ[HàùöY[»àò]Y[»àò\ú]Z]õ»é¬à[^SXô[Œà›ö[ôŒ¬à€›\òŸSõŸRYŒà›ö[ôŒ¬à‹€Ÿ\“õ‹õòYOŒà‹ÿ[“õ‹õòYTô]öXU⁄]ÿ\◊N¬üN¬Çù\Hô]öXU⁄]ÿ\õ^»H¬àY[úÿYŸ[úŒàY[úÿYŸ[Tô]öXU⁄]ÿ\◊N¬à›[õÿ€‹Œàù[Xô\é¬à›[õ›\Œàù[Xô\é¬àù[òÿYŒàõ€€X[é¬üN¬Çù\H[òŸ\úò[Y[ù“[ò]]öYYTô]öXU⁄]ÿ\H¬à]X[ùYYNàù[Xô\é¬à[öYYNàõZ[ù]‹»àö‹ò\»é¬àY[úÿYŸ[Nà›ö[ôŒ¬üN¬Çò€€ú›SRUW”QSî–Q—Sî◊‘ëUíPW’“U–TH¬Çò€€ú›VST‘◊’êTíPUëRT◊‘ëUíPW’“U–TàôX€‹ô›ö[ôÀ›ö[ôœàH¬àõ€YNàê[òHãàõ€YWÿ€€ù]Œàê[òHãàõ€YW›⁄]ÿ\àê[òHãà[XZ[ÿ€€ù]Œàò[òP[XZ[ò€€Hãàù[Y\õ◊ÿ€€ù]ŒàäLJHNNNNKLãàÿ[\[öNàêÿ[\[öHö[ò⁄\[ãà‹öYŸ[Nàí[ú›Y‹ò[Hãà›]\◊€XYàìõ›õ»XYãàõ›ÿ€€◊ÿ]X[àîì’ÀLLçãà[[[◊‹õ›ÿ€€Œàîì’ÀLLãàYŸ[ôWŸ]NàåLãÃ»ãàYŸ[ôW⁄‹òNàåMåÃãàYŸ[ôW€õ€YNàêYŸ[ôHö[ò⁄\[ãàYŸ[ôWŸ]W€õ›òNàåLãÃ»ãàYŸ[ôW‹ôYô\ô[ò⁄XW‹€€X⁄]YNàåMãàYŸ[ôWŸ]W‹›YŸ\›[◊ÿ[õŒàåLãÃÀÃåçàãüN¬Çôù[ò›[€à^‘ô]öXU⁄]ÿ\
+ò[‹éà[ö€õ›€ãò[òX⁄»HàäH¬à€€ú›^»H›ö[ô ò[‹àœ»àäKùö[J
+N¬àô]\õà^»ò[òX⁄Œ¬üBÇôù[ò›[€à\Xÿ\ïò\öX]ôZ\—[[‘ô]öXU⁄]ÿ\
+^Œà›ö[ô H¬àô]\õà›ö[ô ^»àäKúô\XŸJ◊◊◊ äÿK^êKVåNW◊J W óWKŸÀ
+X]⁄⁄]ôJHOà¬àô]\õàVST‘◊’êTíPUëRT◊‘ëUíPW’“U–T‘›ö[ô ⁄]ôJKù”›Ÿ\êÿ\ŸJ
+WHX]⁄¬àJN¬üBÇôù[ò›[€à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+àYà›ö[ôÀà\Œà\”Y[úÿYŸ[Tô]öXU⁄]ÿ\à^Œà›ö[ôÀà^ò\œŒà€Z]Y[úÿYŸ[Tô]öXU⁄]ÿ\öYàù\»àù^»èÇäNàY[úÿYŸ[Tô]öXU⁄]ÿ\¬àô]\õà¬àYà\Àà^Œà\Xÿ\ïò\öX]ôZ\—[[‘ô]öXU⁄]ÿ\
+^ Kàããô^ò\ÀàN¬üBÇôù[ò›[€àõ‹õX]\ë[^Tô]öXU⁄]ÿ\
+ŸY›[ô‹Œà[ö€õ›€äH¬à€€ú››[ŸY›[ô‹»Hù[Xô\äŸY›[ô‹ N¬ÇàYà
+Sù[Xô\ãö\—ö[ö]J›[ŸY›[ô‹ H›[ŸY›[ô‹»H
+H¬àô]\õààé¬àBÇàYà
+›[ŸY›[ô‹»å
+Hô]\õà\‹»	”X]ôõ€‹ä›[ŸY›[ô‹ _\ÿ¬Çà€€ú›Z[ù]‹»HX]úõ›[ô
+›[ŸY›[ô‹»»å
+N¬àYà
+Z[ù]‹»å
+Hô]\õà\‹»	€Z[ù]‹ﬂHZ[ò¬Çà€€ú›‹ò\»HX]úõ›[ô
+Z[ù]‹»»å
+N¬àô]\õà\‹»	⁄‹ò\ﬂH¬üBÇôù[ò›[€àõ‹õX]\ï[\–YŸ[ô[Y[ù‘ô]öXU⁄]ÿ\
+€€ôöY›\òXÿ[ŒàôX€‹ô›ö[ôÀ[ö€õ›€èäH¬à€€ú›]X[ùYYHHX]õX^
+Kù[Xô\ä€€ôöY›\òXÿ[Àù[\◊‹]X[ùYYHJJN¬à€€ú›[öYYHH›ö[ô €€ôöY›\òXÿ[Àù[\◊›[öYYHö‹ò\»äN¬à€€ú›[öYYT⁄[ô›[\àH[öYYHOOHôX\»à»ôXHààö‹òHé¬à€€ú›[öYYT\ò[H[öYYHOOHôX\»à»ôX\»ààö‹ò\»é¬Çàô]\õà	‹]X[ùYY_H	‹]X[ùYYHOOHH»[öYYT⁄[ô›[\àà[öYYT\ò[X¬üBÇôù[ò›[€àõ‹õX]\ï[\“[ò]]öYYTô]öXU⁄]ÿ\
+à[òŸ\úò[Y[ùŒà[òŸ\úò[Y[ù“[ò]]öYYTô]öXU⁄]ÿ\äH¬à€€ú›]X[ùYYHHX]õX^
+Kù[Xô\ä[òŸ\úò[Y[ùÀú]X[ùYYHJJN¬à€€ú›[öYYT⁄[ô›[\àBà[òŸ\úò[Y[ùÀù[öYYHOOHõZ[ù]‹»à»õZ[ù]»ààö‹òHé¬à€€ú›[öYYT\ò[Bà[òŸ\úò[Y[ùÀù[öYYHOOHõZ[ù]‹»à»õZ[ù]‹»ààö‹ò\»é¬Çàô]\õà	‹]X[ùYY_H	‹]X[ùYYHOOHH»[öYYT⁄[ô›[\àà[öYYT\ò[X¬üBÇôù[ò›[€àò\öX]ôZ\’[\]Tô]öXU⁄]ÿ\
+ò[‹éà[ö€õ›€äH¬àYà
+\úò^Kö\–\úò^Jò[‹äJH¬àô]\õàò[‹ãõX\
+
+][JHOà›ö[ô ][HàäKùö[J
+JKöõ⁄[äóàäN¬àBÇàô]\õà›ö[ô ò[‹ààäN¬üBÇôù[ò›[€à[\]T‹íYô]öXU⁄]ÿ\
+à[\]\Œà[\]U⁄]ÿ\‹ÿ[÷◊Kà[\]RYà[ö€õ›€ÇäH¬à€€ú›YH›ö[ô [\]RYàäN¬àYà
+ZY
+Hô]\õàù[¬Çàô]\õà[\]\Àôö[ô
+
+[\]JHOà[\]KöYOOHY
+Hù[¬üBÇôù[ò›[€à[€ù\ìY[úÿYŸ[U[\]Tô]öXU⁄]ÿ\
+àYà›ö[ôÀà[\]Nà[\]U⁄]ÿ\‹ÿ[»ù[àò\öX]ôZ\Œà[ö€õ›€ÇäNàY[úÿYŸ[Tô]öXU⁄]ÿ\¬à€€ú›ô]öY]»H[€ù\îô]öY]’[\]U⁄]ÿ\
+à[\]Kàò\öX]ôZ\’[\]Tô]öXU⁄]ÿ\
+ò\öX]ôZ\ Bà
+N¬ÇàYà
+\ô]öY] H¬àô]\õà‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+àYàòõ›ãàï[\]H⁄]–\Z[ôHò[»Ÿ[X⁄[€òYÀàÇà
+N¬àBÇàô]\õà‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+Yòõ›ãô]öY]Àò€‹úÀ¬à][Œàô]öY]Àù][ÀàõŸ\Nàô]öY]ÀúõŸ\Kàõ›Ÿ\Œàô]öY]Àòõ›Ÿ\ÀàJN¬üBÇôù[ò›[€àõ›Ÿ\’^‘ô]öXU⁄]ÿ\
+ò[‹éà[ö€õ›€ãÿ[\’][»Hù][»äH¬àYà
+P\úò^Kö\–\úò^Jò[‹äJHô]\õà◊N¬Çàô]\õàò[‹ÇàõX\
+
+][JHOà^‘ô]öXU⁄]ÿ\
+
+][H\»ôX€‹ô›ö[ôÀ[ö€õ›€èäOÀñÿÿ[\’][◊JJBàôö[\äõ€€X[äBàú€XŸJäN¬üBÇôù[ò›[€àY[úÿYŸ[ú—”õŸTô]öXU⁄]ÿ\
+àõŸNàõŸKà[\]\’⁄]ÿ\à[\]U⁄]ÿ\‹ÿ[÷◊BäH¬à€€ú›\”õ»H›ö[ô õŸKô]OÀù\◊€õ»àäN¬à€€ú›€€ôöY›\òXÿ[»H
+õŸKô]OÀò€€ôöY›\òXÿ[◊⁄ú€€àﬂJH\»ôX€‹ô›ö[ôÀ[ö€õ›€èé¬à€€ú›[^SXô[Hõ‹õX]\ë[^Tô]öXU⁄]ÿ\
+õŸKô]OÀô[^W‹ŸY›[ô‹ N¬à€€ú›][”õŸP]X[H^‘ô]öXU⁄]ÿ\
+õŸKô]OÀù][ÀXô[\”õ \”õ JN¬à€€ú›Yò\ŸHHõŸKöY¬Çà€€ú›Y[úÿYŸ[HH^‘ô]öXU⁄]ÿ\
+€€ôöY›\òXÿ[ÀõY[úÿYŸ[JN¬à€€ú›Y[úÿYŸ[TYò[»H
+ò[òX⁄Œà›ö[ô HOÇà^‘ô]öXU⁄]ÿ\
+€€ôöY›\òXÿ[ÀõY[úÿYŸ[Kò[òX⁄ N¬ÇàYà
+\”õ»OOHö[öX⁄[»äHô]\õà◊N¬ÇàYà
+\”õ»OOHô[ùöX\ó›^»äH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_K]^ÿàòõ›ãàY[úÿYŸ[TYò[ ëY⁄]HHY[úÿYŸ[H\]ZKàäKà»[^SXô[Bà
+KàN¬àBÇàYà
+\”õ»OOHú\ô›[ùW€‹€Ÿ\»äH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_K\\ô›[ùXàòõ›ãàY[úÿYŸ[TYò[ ë\ÿ€€H[XH‹ÿ[ŒàäKà¬àõ›Ÿ\Œàõ›Ÿ\’^‘ô]öXU⁄]ÿ\
+€€ôöY›\òXÿ[Àõ‹€Ÿ\ Kà[^SXô[àBà
+KàN¬àBÇàYà
+\”õ»OOHT◊”ì◊‘Të’SïW”UîëW“PJH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_K\\ô›[ùKZXXàòõ›ãàY[úÿYŸ[TYò[ ê€€[»‹‹€»HZùY\è»äKà»[^SXô[Bà
+KàN¬àBÇàYà
+\”õ»OOHô[ùöX\óÿõ›Ÿ\»äH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KXõ›Ÿ\ÿàòõ›ãàY[úÿYŸ[TYò[ ë\ÿ€€H[XH‹ÿ[ŒàäKà¬àõ›Ÿ\Œàõ›Ÿ\’^‘ô]öXU⁄]ÿ\
+€€ôöY›\òXÿ[Àòõ›Ÿ\ Kà[^SXô[àBà
+KàN¬àBÇàYà
+\”õ»OOHòõ›[◊‹ôY\ôX›äH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_K\ôY\ôX›àòõ›ãàY[úÿYŸ[TYò[ ê€\]YHõ»õ›[»XòZ^»\òHXŸ\‹ÿ\ãàäKà¬àõ›Ÿ\Œà›^‘ô]öXU⁄]ÿ\
+€€ôöY›\òXÿ[Àòõ›[◊›^ÀêXŸ\‹ÿ\àäWKà[^SXô[àBà
+KàN¬àBÇàYà
+à\”õ»OOHô[ùöX\ó⁄[XYŸ[Hàà\”õ»OOHô[ùöX\ó›öY[»àà\”õ»OOHô[ùöX\óÿ]Y[»àà\”õ»OOHô[ùöX\óÿ\ú]Z]õ»Çà
+H¬à€€ú›ZYXU\»Bà\”õ»OOHô[ùöX\ó⁄[XYŸ[HÇà»ö[XYŸ[HÇàà\”õ»OOHô[ùöX\ó›öY[»Çà»ùöY[»Çàà\”õ»OOHô[ùöX\óÿ]Y[»Çà»ò]Y[»Çààò\ú]Z]õ»é¬à€€ú›ò[òX⁄»BàZYXU\»OOHö[XYŸ[HÇà»í[XYŸ[H[ùöXYH[»][ô[Y[ùÀàÇààZYXU\»OOHùöY[»Çà»ïöY[»[ùöXY»[»][ô[Y[ùÀàÇààZYXU\»OOHò]Y[»Çà»ê]Y[»[ùöXY»[»][ô[Y[ùÀàÇààê\ú]Z]õ»[ùöXY»[»][ô[Y[ùÀàé¬Çàô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_K[ZYXXàòõ›ãàY[úÿYŸ[Hò[òX⁄Àà¬à][Œà^‘ô]öXU⁄]ÿ\
+€€ôöY›\òXÿ[ÀõZYXW€õ€YK][”õŸP]X[
+KàZYXU\Àà[^SXô[àBà
+KàN¬àBÇàYà
+\”õ»OOHò]ò[XXÿ[»äH¬à€€ú›õ›SZ[ö[XHHX]õX^
+ù[Xô\ä€€ôöY›\òXÿ[Àõõ›W€Z[ö[XHœ»JJN¬à€€ú›õ›SX^[XHHX]õX^
+õ›SZ[ö[XKù[Xô\ä€€ôöY›\òXÿ[Àõõ›W€X^[XHœ»JJN¬à€€ú›õ›\»H\úò^Kôúõ€Jà»[ô›àX]õZ[äãõ›SX^[XHHõ›SZ[ö[XH
+»JHKà
+À[ô^
+HOà›ö[ô õ›SZ[ö[XH
+»[ô^
+Bà
+N¬Çàô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KX]ò[XXÿ[ÿàòõ›ãàY[úÿYŸ[TYò[ ëHHHK€€[»õÿŸH]ò[XH\›H][ô[Y[ùœ»äKà¬àõ›Ÿ\Œàõ›\Àà[^SXô[àBà
+KàN¬àBÇàYà
+\”õ»OOHòÿ\\ò\ó‹ô\‹‹›HäH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KXÿ\\òXàòõ›ãàY[úÿYŸ[TYò[ ìYH[ôõ‹õYHŸ]Hõ€YK‹àò]õ‹ãàäKà»[^SXô[Bà
+KàN¬àBÇàYà
+\”õ»OOHùò[úŸô\ö\ó‹Ÿ]‹àäH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_K]ò[úŸô\ö\òàú⁄\›[XHãàê][ô[Y[ù»ò[úŸô\öY»\òHH\]Z\Hô\‹€úÿ]ô[àÇà
+KàN¬àBÇàYà
+\”õ»OOHô[òŸ\úò\àäH¬à€€ú›Y[úÿYŸ[úŒàY[úÿYŸ[Tô]öXU⁄]ÿ\◊HH◊N¬ÇàYà
+Y[úÿYŸ[JH¬àY[úÿYŸ[úÀú\⁄
+à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+	⁄Yò\Ÿ_KY[òŸ\úò\ã[\Ÿÿòõ›ãY[úÿYŸ[K¬à[^SXô[àJBà
+N¬àBÇàY[úÿYŸ[úÀú\⁄
+à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+	⁄Yò\Ÿ_KY[òŸ\úò\òú⁄\›[XHãëõ^»[òŸ\úòYÀàäBà
+N¬Çàô]\õàY[úÿYŸ[úŒ¬àBÇàYà
+\”õ»OOHòYŸ[ô\óŸ\‹\õ»äH¬à€€ú›[\]HH[\]T‹íYô]öXU⁄]ÿ\
+à[\]\’⁄]ÿ\à€€ôöY›\òXÿ[Àù[\]W⁄Yà
+N¬Çàô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KXYŸ[ô[Y[ùÀZ[ôõÿàú⁄\›[XHãà\‹\õ»YŸ[ôY»\òH\]ZHH	Ÿõ‹õX]\ï[\–YŸ[ô[Y[ù‘ô]öXU⁄]ÿ\
+€€ôöY›\òXÿ[ _Kòà
+Kà[€ù\ìY[úÿYŸ[U[\]Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_K][\]Xà[\]Kà€€ôöY›\òXÿ[Àùò\öX]ôZ\¬à
+KàN¬àBÇàYà
+\”õ»OOHòYŸ[ôWÿù\ÿÿ\óÿYŸ[ô[Y[ù»äH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KXYŸ[ôKXù\ÿÿXàòõ›ãà^‘ô]öXU⁄]ÿ\
+à€€ôöY›\òXÿ[ÀõY[úÿYŸ[WŸ[ò€€ùòY»€€ôöY›\òXÿ[ÀõY[úÿYŸ[Kàë[ò€€ùôZHŸ]HYŸ[ô[Y[ù»\òHﬁÿYŸ[ôWŸ]__H\»ﬁÿYŸ[ôW⁄‹ò__KàÇà
+Kà»[^SXô[Bà
+KàN¬àBÇàYà
+\”õ»OOHòYŸ[ôWŸ\ÿ€€\ó⁄‹ò\ö[»äH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KXYŸ[ôKY\ÿ€€Xàòõ›ãàY[úÿYŸ[TYò[ àî]X[XHõÿŸH]Y\àX\òÿ\è»ŸHô\‹€ô\éà⁄ôK[X[öKXHåãåãÃH›HŸ^KYôZ\òKàÇà
+Kà»[^SXô[Bà
+Kà‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KXYŸ[ôKZ‹ò\ö[‹ÿàòõ›ãà^‘ô]öXU⁄]ÿ\
+à€€ôöY›\òXÿ[ÀõY[úÿYŸ[W€\›\ó⁄‹ò\ö[‹Ààî\òHﬁÿYŸ[ôWŸ]W€õ›ò__H[ö»\›\»‹ò\ö[‹Ààô\‹€ôH€€H»ù[Y\õ»»‹ò\ö[»›HYHYÿH›]õ»XNàÇà
+Kà¬àõ›Ÿ\Œà»åMåãåMåÃãåMNåóKàBà
+KàN¬àBÇàYà
+à\”õ»OOHòYŸ[ôWÿ‹öX\óÿYŸ[ô[Y[ù»àà\”õ»OOHòYŸ[ôW‹ô[X\òÿ\óÿYŸ[ô[Y[ù»àà\”õ»OOHòYŸ[ôWÿÿ[òŸ[\óÿYŸ[ô[Y[ù»Çà
+H¬à€€ú›Y[úÿYŸ[úŒàY[úÿYŸ[Tô]öXU⁄]ÿ\◊HH¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KXYŸ[ôKX€€ôö\õXXÿ[ÿàòõ›ãàY[úÿYŸ[TYò[ à\”õ»OOHòYŸ[ôWÿÿ[òŸ[\óÿYŸ[ô[Y[ù»Çà»îõ€ùÀŸ]H‹ò\ö[»HﬁÿYŸ[ôWŸ]__H\»ﬁÿYŸ[ôW⁄‹ò__Hõ⁄Hÿ[òŸ[YÀàÇàà\”õ»OOHòYŸ[ôW‹ô[X\òÿ\óÿYŸ[ô[Y[ù»Çà»îô[X\òÿY»HŸ]H‹ò\ö[»Y€‹òHöX€›H\òHﬁÿYŸ[ôWŸ]__H\»ﬁÿYŸ[ôW⁄‹ò__KàÇààêYŸ[ôY»HŸ]H‹ò\ö[»öX€›HX\òÿY»\òHﬁÿYŸ[ôWŸ]__H\»ﬁÿYŸ[ôW⁄‹ò__KàÇà
+Kà»[^SXô[Bà
+KàN¬ÇàYà
+à\”õ»OOHòYŸ[ôWÿ‹öX\óÿYŸ[ô[Y[ù»à	âÇà€€ôöY›\òXÿ[Àõ[Xúô]WÿYŸ[ô[Y[ù◊ÿ]]õ»	âÇà€€ôöY›\òXÿ[Àõ[Xúô]WÿYŸ[ô[Y[ù◊›⁄]ÿ\à
+H¬à€€ú›[\]HH[\]T‹íYô]öXU⁄]ÿ\
+à[\]\’⁄]ÿ\à€€ôöY›\òXÿ[Àõ[Xúô]WÿYŸ[ô[Y[ù◊›[\]W⁄Yà
+N¬ÇàY[úÿYŸ[úÀú\⁄
+à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KXYŸ[ôK[[Xúô]KZ[ôõÿàú⁄\›[XHãàì[Xúô]H⁄]–\õŸ‹ò[XY»\òH[ù\»»‹ò\ö[ÀàÇà
+Kà[€ù\ìY[úÿYŸ[U[\]Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KXYŸ[ôK[[Xúô]K][\]Xà[\]Kà€€ôöY›\òXÿ[Àõ[Xúô]WÿYŸ[ô[Y[ù◊›ò\öX]ôZ\¬à
+Bà
+N¬àBÇàô]\õàY[úÿYŸ[úŒ¬àBÇàYà
+\”õ»OOHö[ù\úô]\óÿ\ú]Z]õ◊⁄XHäH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_KX\ú]Z]õÀZXXàòõ›ãàY[úÿYŸ[TYò[ ë[ùöYH»\ú]Z]õ»\òH[ò[\ŸKàäKà»[^SXô[Bà
+KàN¬àBÇàYà
+Y[úÿYŸ[JH¬àô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+	⁄Yò\Ÿ_K[Y[úÿYŸ[Xòõ›ãY[úÿYŸ[K¬à[^SXô[àJKàN¬àBÇàô]\õà¬à‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	⁄Yò\Ÿ_K\⁄\›[XXàú⁄\›[XHãà	€Xô[\”õ \”õ _Nà	›][”õŸP]X[Xà
+KàN¬üBÇôù[ò›[€à€€ôXÿ[‘ô]öXU⁄]ÿ\
+YŸNàYŸKõŸS‹öYŸ[OŒàõŸHù[
+H¬à€€ú›]HHYŸKô]H\¬à¬à€€ôXÿ[◊⁄ú€€èŒàôX€‹ô›ö[ôÀ[ö€õ›€èé¬àõ›[œŒà›ö[ô»ù[¬à\ÿ\ó⁄XOŒàõ€€X[é¬àBà[ôYö[ôY¬à€€ú›€€ôXÿ[»H]OÀò€€ôXÿ[◊⁄ú€€àﬂN¬à€€ú›\»H›ö[ô €€ôXÿ[Àù\»àäN¬ÇàYà
+]\»\»OOHúŸ[\ôHäHô]\õàù[¬ÇàYà
+\»OOHù[Y[›]‹Ÿ[W‹ô\‹‹›HäH¬à€€ú›]X[ùYYHHù[Xô\ä€€ôXÿ[Àù[\◊‹]X[ùYYH
+N¬à€€ú›[öYYHH›ö[ô €€ôXÿ[Àù[\◊›[öYYHàäN¬à€€ú›^»Bà]X[ùYYHà	âà[öYYBà»Ÿ[Hô\‹‹›H[H	‹]X[ùYY_H	›[öYY_KòààîŸ[Hô\‹‹›H»€€ù]Ààé¬Çàô]\õà‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+	ŸYŸKöYK][Y[›]ú⁄\›[XHã^ N¬àBÇà€€ú›ò[‹àH^‘ô]öXU⁄]ÿ\
+€€ôXÿ[Àùò[‹äN¬à€€ú›‹ÿ[»Bàò[‹à	âàõŸS‹öYŸ[Bà»‹€Ÿ\‘ô\‹‹›Q”õ õŸS‹öYŸ[JKôö[ô
+
+][JHOà][Kùò[‹àOOHò[‹äBààù[¬à€€ú›^»Bà^‘ô]öXU⁄]ÿ\
+‹ÿ[œÀù][ Hà^‘ô]öXU⁄]ÿ\
+]OÀúõ›[ Hàò[‹àà^‘ô]öXU⁄]ÿ\
+\[ŸàYŸKõXô[OOHú›ö[ô»à»YŸKõXô[ààäHàîô\‹‹›H»€€ù]»é¬Çàô]\õà‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+	ŸYŸKöYK\ô\‹‹›Xò€€ù]»ã^ N¬üBÇôù[ò›[€àõ›[”‹ÿ[“õ‹õòYTô]öXU⁄]ÿ\
+àYŸNàYŸKàõŸS‹öYŸ[NàõŸHù[[ôYö[ôYàõŸQ\›[õŒàõŸHù[[ôYö[ôYà[ô^àù[Xô\ÇäH¬à€€ú›]HHYŸKô]H\¬à¬à€€ôXÿ[◊⁄ú€€èŒàôX€‹ô›ö[ôÀ[ö€õ›€èé¬àõ›[œŒà›ö[ô»ù[¬àBà[ôYö[ôY¬à€€ú›€€ôXÿ[»H]OÀò€€ôXÿ[◊⁄ú€€àﬂN¬à€€ú›\»H›ö[ô €€ôXÿ[Àù\»àäN¬ÇàYà
+\»OOHù[Y[›]‹Ÿ[W‹ô\‹‹›HäH¬à€€ú›]X[ùYYHHù[Xô\ä€€ôXÿ[Àù[\◊‹]X[ùYYH
+N¬à€€ú›[öYYHH›ö[ô €€ôXÿ[Àù[\◊›[öYYHàäN¬Çàô]\õà]X[ùYYHà	âà[öYYBà»Ÿ[Hô\‹‹›H[H	‹]X[ùYY_H	›[öYY_XààîŸ[Hô\‹‹›Hé¬àBÇà€€ú›ò[‹àH^‘ô]öXU⁄]ÿ\
+€€ôXÿ[Àùò[‹äN¬à€€ú›‹ÿ[»Bàò[‹à	âàõŸS‹öYŸ[Bà»‹€Ÿ\‘ô\‹‹›Q”õ õŸS‹öYŸ[JKôö[ô
+
+][JHOà][Kùò[‹àOOHò[‹äBààù[¬à€€ú›\›[õ»HõŸQ\›[õ»»][’ö\⁄]ô[ÿ\ô
+õŸQ\›[õÀô]JHààé¬Çàô]\õà
+à^‘ô]öXU⁄]ÿ\
+‹ÿ[œÀù][ Hà^‘ô]öXU⁄]ÿ\
+]OÀúõ›[ Hàò[‹àà^‘ô]öXU⁄]ÿ\
+\[ŸàYŸKõXô[OOHú›ö[ô»à»YŸKõXô[ààäHà\›[õ»àÿ[Z[ö»	⁄[ô^
+»_Xà
+N¬üBÇôù[ò›[€à‹ô[ò\ìõŸ\‘ô]öXU⁄]ÿ\
+õŸ\ŒàõŸV◊JH¬àô]\õàÀããõõŸ\◊Kú€‹ù
+
+KäHOà¬à€€ú›HH
+Kú‹⁄][€èÀûH
+HH
+ãú‹⁄][€èÀûH
+N¬àYà
+X]òXú JHàå
+Hô]\õàN¬Çàô]\õà
+Kú‹⁄][€èÀû
+HH
+ãú‹⁄][€èÀû
+N¬àJN¬üBÇôù[ò›[€à[€ù\îô]öXU⁄]ÿ\õ^ àõŸ\ŒàõŸV◊KàYŸ\ŒàYŸV◊Kà[\]\’⁄]ÿ\à[\]U⁄]ÿ\‹ÿ[÷◊Kàô\‹‹›\‘Ÿ[X⁄[€òY\ŒàôX€‹ô›ö[ôÀ›ö[ôœãà[òŸ\úò[Y[ù“[ò]]öYYOŒà[òŸ\úò[Y[ù“[ò]]öYYTô]öXU⁄]ÿ\ù[äNàô]öXU⁄]ÿ\õ^»¬à€€ú››[õÿ€‹»HõŸ\Àôö[\äà
+õŸJHOà›ö[ô õŸKô]OÀù\◊€õ»àäHOOHö[öX⁄[»Çà
+Kõ[ô›¬à€€ú›Y[úÿYŸ[úŒàY[úÿYŸ[Tô]öXU⁄]ÿ\◊HH◊N¬à€€ú›õŸ\”‹ô[òY‹»H‹ô[ò\ìõŸ\‘ô]öXU⁄]ÿ\
+õŸ\ N¬à€€ú›[öX⁄[»BàõŸ\Àôö[ô
+
+õŸJHOà›ö[ô õŸKô]OÀù\◊€õ»àäHOOHö[öX⁄[»äHàõŸ\”‹ô[òY‹÷ÃHàù[¬à€€ú›õŸ\‘‹íYHô]»X\
+õŸ\ÀõX\
+
+õŸJHOà€õŸKöYõŸWJJN¬à€€ú›[ôXŸQYŸHHô]»X\
+YŸ\ÀõX\
+
+YŸK[ô^
+HOàŸYŸKöY[ô^JJN¬à€€ú›YŸ\‘‹ì‹öYŸ[HHô]»X\›ö[ôÀYŸV◊Oä
+N¬Çàõ‹à
+€€ú›YŸHŸàYŸ\ H¬à€€ú›\›HHYŸ\‘‹ì‹öYŸ[KôŸ]
+YŸKú€›\òŸJH◊N¬à\›Kú\⁄
+YŸJN¬àYŸ\‘‹ì‹öYŸ[KúŸ]
+YŸKú€›\òŸK\›JN¬àBÇàõ‹à
+€€ú›€‹öYŸ[K\›WHŸàYŸ\‘‹ì‹öYŸ[JH¬àYŸ\‘‹ì‹öYŸ[KúŸ]
+à‹öYŸ[KàÀããõ\›WKú€‹ù
+
+KäHOà¬à€€ú›€€ôXÿ[–HH
+
+Kô]H\»YŸQ]P€€ô^[»[ôYö[ôY
+OÀò€€ôXÿ[◊⁄ú€€àﬂJBàù\Œ¬à€€ú›€€ôXÿ[–àH
+
+ãô]H\»YŸQ]P€€ô^[»[ôYö[ôY
+OÀò€€ôXÿ[◊⁄ú€€àﬂJBàù\Œ¬ÇàYà
+€€ôXÿ[–HOOHúŸ[\ôHà	âà€€ôXÿ[–àOOHúŸ[\ôHäHô]\õàLN¬àYà
+€€ôXÿ[–HOOHúŸ[\ôHà	âà€€ôXÿ[–àOOHúŸ[\ôHäHô]\õàN¬Çà€€ú›\›[õ–HHõŸ\‘‹íYôŸ]
+Kù\ôŸ]
+N¬à€€ú›\›[õ–àHõŸ\‘‹íYôŸ]
+ãù\ôŸ]
+N¬à€€ú›HH
+\›[õ–OÀú‹⁄][€èÀûH
+HH
+\›[õ–èÀú‹⁄][€èÀûH
+N¬àYà
+X]òXú JHàå
+Hô]\õàN¬Çà€€ú›H
+\›[õ–OÀú‹⁄][€èÀû
+HH
+\›[õ–èÀú‹⁄][€èÀû
+N¬àYà
+X]òXú 
+Hàå
+Hô]\õà¬Çàô]\õà
+[ôXŸQYŸKôŸ]
+KöY
+H
+HH
+[ôXŸQYŸKôŸ]
+ãöY
+H
+N¬àJBà
+N¬àBÇà€€ú›ö\⁄]Y‹»Hô]»Ÿ]›ö[ôœä
+N¬à]ù[òÿY»Hò[ŸN¬Çàù[ò›[€àYX⁄[€ò\ìY[úÿYŸ[JY[úÿYŸ[NàY[úÿYŸ[Tô]öXU⁄]ÿ\
+H¬àYà
+Y[úÿYŸ[úÀõ[ô›èHSRUW”QSî–Q—Sî◊‘ëUíPW’“U–T
+H¬àù[òÿY»HùYN¬àô]\õé¬àBÇàY[úÿYŸ[úÀú\⁄
+Y[úÿYŸ[JN¬àBÇàù[ò›[€àÿ[Z[ö\äõŸNàõŸHù[[ôYö[ôYöXQYŸOŒàYŸJH¬àYà
+[õŸJHô]\õé¬ÇàYà
+öXQYŸJH¬à€€ú›‹öYŸ[HHõŸ\‘‹íYôŸ]
+öXQYŸKú€›\òŸJHù[¬à€€ú›Y[úÿYŸ[P€€ôXÿ[»H€€ôXÿ[‘ô]öXU⁄]ÿ\
+öXQYŸK‹öYŸ[JN¬ÇàYà
+Y[úÿYŸ[P€€ôXÿ[ H¬àYX⁄[€ò\ìY[úÿYŸ[JY[úÿYŸ[P€€ôXÿ[ N¬àBàBÇàYà
+ö\⁄]Y‹Àö\ õŸKöY
+JH¬àYX⁄[€ò\ìY[úÿYŸ[Jà‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+à	›öXQYŸOÀöYõŸKöYK\ô]‹õõÀ[€‹àú⁄\›[XHãàô]‹õòH\òHâ›][’ö\⁄]ô[ÿ\ô
+õŸKô]J_Hãà\›Hõ‹õòYHô\]H\‹ŸHôX⁄»]H›]òHô\‹‹›HŸ\àŸ[X⁄[€òYKòà
+Bà
+N¬àô]\õé¬àBÇàö\⁄]Y‹ÀòY
+õŸKöY
+N¬Çàõ‹à
+€€ú›Y[úÿYŸ[HŸàY[úÿYŸ[ú—”õŸTô]öXU⁄]ÿ\
+õŸK[\]\’⁄]ÿ\
+JH¬àYX⁄[€ò\ìY[úÿYŸ[JY[úÿYŸ[JN¬àBÇà€€ú›ÿZY\»HYŸ\‘‹ì‹öYŸ[KôŸ]
+õŸKöY
+H◊N¬àYà
+ÿZY\Àõ[ô›OOH
+Hô]\õé¬Çà€€ú›YŸTŸ[X⁄[€òYHBàÿZY\Àôö[ô
+
+YŸJHOàYŸKöYOOHô\‹‹›\‘Ÿ[X⁄[€òY\÷€õŸKöYJHàÿZY\÷ÃN¬àYà
+YYŸTŸ[X⁄[€òYJHô]\õé¬ÇàYà
+ÿZY\Àõ[ô›àJH¬àYX⁄[€ò\ìY[úÿYŸ[J¬àYà	€õŸKöYK\Ÿ[]‹ãZõ‹õòYXà\ŒàúŸ[]‹àãà^Œàîô\‹‹›\»\òHö\›X[^ò\àãà€›\òŸSõŸRYàõŸKöYà‹€Ÿ\“õ‹õòYNàÿZY\ÀõX\
+
+YŸK[ô^
+HOà¬à€€ú›\›[õ»HõŸ\‘‹íYôŸ]
+YŸKù\ôŸ]
+Hù[¬Çàô]\õà¬àYŸRYàYŸKöYà^Œàõ›[”‹ÿ[“õ‹õòYTô]öXU⁄]ÿ\
+YŸKõŸK\›[õÀ[ô^
+KàŸ[X⁄[€òYNàYŸKöYOOHYŸTŸ[X⁄[€òYKöYàN¬àJKàJN¬àBÇàÿ[Z[ö\äõŸ\‘‹íYôŸ]
+YŸTŸ[X⁄[€òYKù\ôŸ]
+KYŸTŸ[X⁄[€òYJN¬àBÇàÿ[Z[ö\ä[öX⁄[ N¬ÇàYà
+[òŸ\úò[Y[ù“[ò]]öYYJH¬à€€ú›[\“[ò]]öYYHBàõ‹õX]\ï[\“[ò]]öYYTô]öXU⁄]ÿ\
+[òŸ\úò[Y[ù“[ò]]öYYJN¬ÇàYX⁄[€ò\ìY[úÿYŸ[J¬àYàô[òŸ\úò[Y[ùÀZ[ò]]öYYKY]ö\€‹öXHãà\Œàô]ö\€‹öXHãà^Œà[òŸ\úò[Y[ù»‹à[ò]]öYYHH	›[\“[ò]]öYY_HŸ[Hô\‹‹›XàJN¬ÇàYX⁄[€ò\ìY[úÿYŸ[Jà‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+àô[òŸ\úò[Y[ùÀZ[ò]]öYYK[Y[úÿYŸ[Hãàòõ›ãà[òŸ\úò[Y[ù“[ò]]öYYKõY[úÿYŸ[Kà¬à[^SXô[à\‹»	›[\“[ò]]öYY_XàBà
+Bà
+N¬ÇàYX⁄[€ò\ìY[úÿYŸ[Jà‹öX\ìY[úÿYŸ[Tô]öXU⁄]ÿ\
+àô[òŸ\úò[Y[ùÀZ[ò]]öYYKYö[Hãàú⁄\›[XHãàëõ^»[òŸ\úòY»‹à[ò]]öYYKàÇà
+Bà
+N¬àBÇàô]\õà¬àY[úÿYŸ[úÀà›[õÿ€‹Àà›[õ›\ŒàYŸ\Àõ[ô›àù[òÿYÀàN¬üBÇôù[ò›[€à€€ôöY›\òXÿ[”X\òÿYJò[‹éà[ö€õ›€äH¬àô]\õàò[‹àOOHùYHò[‹àOOHùùYHàò[‹àOOHHò[‹àOOHåHé¬üBÇôù[ò›[€àõ^‹‘YŸP€€ù[ù
+
+H¬à€€ú›õ›]\àH\ŸTõ›]\ä
+N¬à€€ú›ŸX\ò⁄\ò[\»H\ŸTŸX\ò⁄\ò[\ 
+N¬à€€ú›õ^‘\ò[HHŸX\ò⁄\ò[\ÀôŸ]
+ôõ^»äN¬à€€ú›[ÿö[Q]Z[X›]ôHHõ€€X[äõ^‘\ò[JN¬Çà€€ú›XY\ï\Ÿ\àH\ŸRXY\ï\Ÿ\ä
+N¬à€€ú›Ÿõ^‹ÀŸ]õ^‹◊HH\ŸT›]Oõ^÷◊Oä◊JN¬à€€ú›Ÿõ^‘Ÿ[X⁄[€òYÀŸ]õ^‘Ÿ[X⁄[€òY◊HH\ŸT›]Oõ^»ù[äù[
+N¬à€€ú›ÿXúö\ê‹öXXÿ[ÀŸ]Xúö\ê‹öXXÿ[◊HH\ŸT›]Jò[ŸJN¬à€€ú›Ÿ\ÿ‹öXÿ[”õ›õ—õ^ÀŸ]\ÿ‹öXÿ[”õ›õ—õ^◊HH\ŸT›]JàäN¬Çà€€ú›€õŸ\ÀŸ]õŸ\À€ìõŸ\–⁄[ôŸWHH\ŸSõŸ\‘›]OõŸOä◊JN¬à€€ú›ŸYŸ\ÀŸ]YŸ\À€ëYŸ\–⁄[ôŸWHH\ŸQYŸ\‘›]OYŸOä◊JN¬à€€ú›ÿ\‹⁄\›[ùQõ^‹–Xô\ùÀŸ]\‹⁄\›[ùQõ^‹–Xô\ù◊HH\ŸT›]Jò[ŸJN¬à€€ú›‹ô]öXU⁄]ÿ\ôX€€YKŸ]ô]öXU⁄]ÿ\ôX€€YWHBà\ŸT›]Jò[ŸJN¬à€€ú›‹ô\‹‹›\‘ô]öXU⁄]ÿ\Ÿ]ô\‹‹›\‘ô]öXU⁄]ÿ\HH\ŸT›]OàôX€‹ô›ö[ôÀ›ö[ôœÇàäﬂJN¬à€€ú›Y€õ‹ò\ê€\]YSõŸP\‹–\úò\›TôYàH\ŸTôYäò[ŸJN¬Çà€€ú›ÿÿ\úôYÿ[ô—õ^‹ÀŸ]ÿ\úôYÿ[ô—õ^‹◊HH\ŸT›]JùYJN¬à€€ú›ÿÿ\úôYÿ[ô—\›ù]\òKŸ]ÿ\úôYÿ[ô—\›ù]\òWHH\ŸT›]Jò[ŸJN¬à€€ú›‹ÿ[ò[ôÀŸ]ÿ[ò[ô◊HH\ŸT›]Jò[ŸJN¬à€€ú››[[[‘ÿ[ò[Y[ùÀŸ][[[‘ÿ[ò[Y[ù◊HH\ŸT›]O]Hù[äù[
+N¬à€€ú›‹€€X⁄]\ê€€Y[ù\ö[”õŸKŸ]€€X⁄]\ê€€Y[ù\ö[”õŸWHBà\ŸT›]Jò[ŸJN¬Çà€€ú›€Y[úÿYŸ[P€€Y[ù\ö[”õŸKŸ]Y[úÿYŸ[P€€Y[ù\ö[”õŸWHBà\ŸT›]JàäN¬Çà€€ú›€õ›SZ[ö[XSõŸKŸ]õ›SZ[ö[XSõŸWHH\ŸT›]JåHäN¬à€€ú›€õ›SX^[XSõŸKŸ]õ›SX^[XSõŸWHH\ŸT›]JçHäN¬Çà€€ú›Ÿ\úõÀŸ]\úõ◊HH\ŸT›]JàäN¬à€€ú›Ÿ\úõ–‹öXXÿ[—õ^ÀŸ]\úõ–‹öXXÿ[—õ^◊HH\ŸT›]JàäN¬à€€ú›‹›XŸ\‹€ÀŸ]›XŸ\‹€◊HH\ŸT›]JàäN¬à€€ú›€[Ÿ[ò\öX]ôZ\–Xô\ùÀŸ][Ÿ[ò\öX]ôZ\–Xô\ù◊HH\ŸT›]Jò[ŸJN¬à€€ú››ò\öX]ôZ\‘\ú€€ò[^òY\ÀŸ]ò\öX]ôZ\‘\ú€€ò[^òY\◊HH\ŸT›]Oàò\öX]ô[\ú€€ò[^òYV◊Bàä◊JN¬à€€ú›€ÿY[ô’ò\öX]ôZ\ÀŸ]ÿY[ô’ò\öX]ôZ\◊HH\ŸT›]Jò[ŸJN¬à€€ú›‹ÿ[ò[ô’ò\öX]ô[Ÿ]ÿ[ò[ô’ò\öX]ô[HH\ŸT›]Jò[ŸJN¬à€€ú›Ÿ\úõ’ò\öX]ô[[Ÿ[Ÿ]\úõ’ò\öX]ô[[Ÿ[HH\ŸT›]JàäN¬à€€ú›€õ›òUò\öX]ô[⁄]ôKŸ]õ›òUò\öX]ô[⁄]ôWHH\ŸT›]JàäN¬à€€ú›€õ›òUò\öX]ô[ò[‹ãŸ]õ›òUò\öX]ô[ò[‹óHH\ŸT›]JàäN¬à€€ú›€õ›òUò\öX]ô[\ÿ‹öXÿ[ÀŸ]õ›òUò\öX]ô[\ÿ‹öXÿ[◊HH\ŸT›]JàäN¬à€€ú›ÿ[õ’ò\öX]ô[õ^ÀŸ][õ’ò\öX]ô[õ^◊HBà\ŸT›]O[õ’ò\öX]ô[õ^œäõY[úÿYŸ[HäN¬à€€ú››€€\[\ùQõ^ÀŸ]€€\[\ùQõ^◊HH\ŸT›]O¬à^Œà›ö[ôŒ¬ààù[Xô\é¬àNàù[Xô\é¬àHù[äù[
+N¬Çà€€ú›€õ›õ—õ^”õ€YKŸ]õ›õ—õ^”õ€YWHH\ŸT›]JàäN¬à€€ú›€õ›õ—õ^‘Yò[ÀŸ]õ›õ—õ^‘Yò[◊HH\ŸT›]Jò[ŸJN¬à€€ú›⁄[ùY‹òX€Ÿ\’⁄]ÿ\Ÿ][ùY‹òX€Ÿ\’⁄]ÿ\HH\ŸT›]Oà[ùY‹òXÿ[’⁄]ÿ\‹ÿ[÷◊Bàä◊JN¬à€€ú›€[Z]R[ùY‹òX€Ÿ\’⁄]ÿ\õ^‹ÀŸ][Z]R[ùY‹òX€Ÿ\’⁄]ÿ\õ^‹◊HBà\ŸT›]JJN¬à€€ú›ÿÿ\úôYÿ[ô“[ùY‹òX€Ÿ\’⁄]ÿ\Ÿ]ÿ\úôYÿ[ô“[ùY‹òX€Ÿ\’⁄]ÿ\HBà\ŸT›]Jò[ŸJN¬à€€ú›€õ›õ—õ^—\ÿ€‹“[ùY‹òX€Ÿ\”[ŸÀŸ]õ›õ—õ^—\ÿ€‹“[ùY‹òX€Ÿ\”[Ÿ◊HBà\ŸT›]O\ÿ€‹“[ùY‹òX€Ÿ\”[ŸœäùŸ\»äN¬à€€ú›€õ›õ—õ^“[ùY‹òX€Ÿ\“YÀŸ]õ›õ—õ^“[ùY‹òX€Ÿ\“Y◊HH\ŸT›]Oà›ö[ô÷◊Bàä◊JN¬à€€ú›]ôS[‹›ò\ë\ÿ€‹“[ùY‹òX€Ÿ\—õ^»Bà[Z]R[ùY‹òX€Ÿ\’⁄]ÿ\õ^‹»àH[ùY‹òX€Ÿ\’⁄]ÿ\õ[ô›àN¬à€€ú›òQ^\›Qõ^‘Yò[»Hõ^‹Àú€€YJà
+õ^ HOà¬à€€ú›\ÿ€‹”õ›õ»H[€ù\ë\ÿ€‹“[ùY‹òX€Ÿ\—õ^ à]ôS[‹›ò\ë\ÿ€‹“[ùY‹òX€Ÿ\—õ^¬à»õ›õ—õ^—\ÿ€‹“[ùY‹òX€Ÿ\”[Ÿ¬ààùŸ\»ãà]ôS[‹›ò\ë\ÿ€‹“[ùY‹òX€Ÿ\—õ^»»õ›õ—õ^“[ùY‹òX€Ÿ\“Y»à◊Bà
+N¬Çàô]\õà
+àõ^Àôõ^◊‹Yò[»	âÇàõ^Àú›]\»OOHò\ú]Z]òY»à	âÇà\ÿ€‹‹“[ùY‹òXÿ[–€€ôõ][Jà\ÿ€‹”õ›õÀàõ‹õX[^ò\ë\ÿ€‹“[ùY‹òX€Ÿ\—õ^ õ^Àò€€ôöY›\òXÿ[◊⁄ú€€äBà
+Bà
+N¬àBà
+N¬Çà€€ú›ŸY][ô”õŸRYŸ]Y][ô”õŸRYHH\ŸT›]O›ö[ô»ù[äù[
+N¬à€€ú››][”õŸKŸ]][”õŸWHH\ŸT›]JàäN¬à€€ú›€Y[úÿYŸ[SõŸKŸ]Y[úÿYŸ[SõŸWHH\ŸT›]JàäN¬à€€ú›Ÿ[^SõŸKŸ][^SõŸWHH\ŸT›]O›ö[ôœäàäN¬Çà€€ú›€ZYXU\õõŸKŸ]ZYXU\õõŸWHH\ŸT›]JàäN¬à€€ú›€ZYXSõ€YSõŸKŸ]ZYXSõ€YSõŸWHH\ŸT›]JàäN¬à€€ú›ÿù\ÿÿQõ^ÀŸ]ù\ÿÿQõ^◊HH\ŸT›]JàäN¬à€€ú›€Y[ùQõ^–Xô\ù“YŸ]Y[ùQõ^–Xô\ù“YHH\ŸT›]O›ö[ô»ù[äù[
+N¬à€€ú››\”õŸQYXÿ[ÀŸ]\”õŸQYXÿ[◊HH\ŸT›]JàäN¬Çà€€ú›€ZYX\ÀŸ]ZYX\◊HH\ŸT›]OZYXS‹ÿ[÷◊Oä◊JN¬à€€ú›ÿÿ\úôYÿ[ô”ZYX\ÀŸ]ÿ\úôYÿ[ô”ZYX\◊HH\ŸT›]Jò[ŸJN¬à€€ú›Ÿ[ùöX[ô”ZYXKŸ][ùöX[ô”ZYXWHH\ŸT›]Jò[ŸJN¬à€€ú››[Y[›]]X[ùYYKŸ][Y[›]]X[ùYYWHH\ŸT›]JåàäN¬à€€ú›€[Ÿ[ZYX\–Xô\ùÀŸ][Ÿ[ZYX\–Xô\ù◊HH\ŸT›]Jò[ŸJN¬à€€ú›ÿXòSZYX\ÀŸ]XòSZYX\◊HH\ŸT›]OàùŸ\»àö[XYŸ[HàùöY[»àò]Y[»àò\ú]Z]õ»ÇàäùŸ\»äN¬à€€ú›€ZYXQ^€Z[ô“YŸ]ZYXQ^€Z[ô“YHH\ŸT›]O›ö[ô»ù[äù[
+N¬à€€ú›ÿ€€ôö\õX[ô—^€\ÿ[”ZYXRYŸ]€€ôö\õX[ô—^€\ÿ[”ZYXRYHH\ŸT›]O›ö[ô»ù[äù[
+N¬Çà€€ú››[Y[›][öYYKŸ][Y[›][öYYWHBà\ŸT›]OõZ[ù]‹»àö‹ò\»èäö‹ò\»äN¬à€€ú›‹›]\—[ùö[’[Y[›]Ÿ]›]\—[ùö[’[Y[›]HBà\ŸT›]Oú]X[]Y\ààô[ùôY›YHàõYHèäú]X[]Y\àäN¬Çà€€ú›ŸY][ô—õ^ÀŸ]Y][ô—õ^◊HH\ŸT›]Jò[ŸJN¬à€€ú›Ÿõ^—[QYXÿ[ÀŸ]õ^—[QYXÿ[◊HH\ŸT›]Oõ^»ù[äù[
+N¬à€€ú›€õ€YQõ^—YXÿ[ÀŸ]õ€YQõ^—YXÿ[◊HH\ŸT›]JàäN¬à€€ú›Ÿ\ÿ‹öXÿ[—õ^—YXÿ[ÀŸ]\ÿ‹öXÿ[—õ^—YXÿ[◊HH\ŸT›]JàäN¬à€€ú›Ÿ\úõ—YXÿ[—õ^ÀŸ]\úõ—YXÿ[—õ^◊HH\ŸT›]JàäN¬à€€ú›Ÿõ^‘Yò[—YXÿ[ÀŸ]õ^‘Yò[—YXÿ[◊HH\ŸT›]Jò[ŸJN¬à€€ú›Ÿõ^—\ÿ€‹“[ùY‹òX€Ÿ\”[Ÿ—YXÿ[ÀŸ]õ^—\ÿ€‹“[ùY‹òX€Ÿ\”[Ÿ—YXÿ[◊HBà\ŸT›]O\ÿ€‹“[ùY‹òX€Ÿ\”[ŸœäùŸ\»äN¬à€€ú›Ÿõ^“[ùY‹òX€Ÿ\“Y—YXÿ[ÀŸ]õ^“[ùY‹òX€Ÿ\“Y—YXÿ[◊HH\ŸT›]Oà›ö[ô÷◊Bàä◊JN¬àà€€ú›Ÿ[òŸ\úò\í[ò]]öYYT]X[ùYYKŸ][òŸ\úò\í[ò]]öYYT]X[ùYYWHH\ŸT›]Jåå»äN¬à€€ú›Ÿ[òŸ\úò\í[ò]]öYYU[öYYKŸ][òŸ\úò\í[ò]]öYYU[öYYWHBà\ŸT›]OõZ[ù]‹»àö‹ò\»èäö‹ò\»äN¬à€€ú›Ÿ[òŸ\úò\í[ò]]öYYSY[úÿYŸ[KŸ][òŸ\úò\í[ò]]öYYSY[úÿYŸ[WHH\ŸT›]Jàê€€[»∞Ë€»]ô[[‹»ô]‹õõÀ\›H][ô[Y[ù»Ÿ\∞ËH[òŸ\úòYÀàÿ\€»ôX⁄\ŸHHZùYK[ùöYH[XHõ›òHY[úÿYŸ[KàÇà
+N¬Çàù[ò›[€àô\Ÿ]\ë[òŸ\úò[Y[ù“[ò]]öYYTYò[ 
+H¬àŸ][òŸ\úò\í[ò]]öYYT]X[ùYYJåå»äN¬àŸ][òŸ\úò\í[ò]]öYYU[öYYJö‹ò\»äN¬àŸ][òŸ\úò\í[ò]]öYYSY[úÿYŸ[Jàê€€[»∞Ë€»]ô[[‹»ô]‹õõÀ\›H][ô[Y[ù»Ÿ\∞ËH[òŸ\úòYÀàÿ\€»ôX⁄\ŸHHZùYK[ùöYH[XHõ›òHY[úÿYŸ[KàÇà
+N¬àBÇà€€ú›‹Ÿ]‹ë\›[õÀŸ]Ÿ]‹ë\›[õ◊HH\ŸT›]JàäN¬à€€ú›õ^»Hõ^‘Ÿ[X⁄[€òYŒ¬à€€ú›ÿ€€ôö\õX[ô—^€\ÿ[”õÀŸ]€€ôö\õX[ô—^€\ÿ[”õ◊HH\ŸT›]Jò[ŸJN¬à€€ú›ÿ€€ôö\õX[ô—^€\ÿ[–€€ô^[ÀŸ]€€ôö\õX[ô—^€\ÿ[–€€ô^[◊HBà\ŸT›]Jò[ŸJN¬àà€€ú›€[‹›ò\ì[Ÿ[›\›–YŸ[ô[Y[ùÀŸ][‹›ò\ì[Ÿ[›\›–YŸ[ô[Y[ù◊HBà\ŸT›]Jò[ŸJN¬Çà€€ú›ÿXÿ[‘[ô[ùP\Xÿ\ìõÀŸ]Xÿ[‘[ô[ùP\Xÿ\ìõ◊HBà\ŸT›]O
+
+
+HOàõ⁄Y
+Hù[äù[
+N¬Çà€€ú›‹Ÿ]‹ô\ÀŸ]Ÿ]‹ô\◊HH\ŸT›]OŸ]‹ì‹ÿ[÷◊Oä◊JN¬à€€ú›ÿÿ\úôYÿ[ô‘Ÿ]‹ô\ÀŸ]ÿ\úôYÿ[ô‘Ÿ]‹ô\◊HH\ŸT›]Jò[ŸJN¬à€€ú›€Y[ùRXY\êXô\ùÀŸ]Y[ùRXY\êXô\ù◊HH\ŸT›]Jò[ŸJN¬à€€ú›€Y[ùQõ^ÀŸ]Y[ùQõ^◊HH\ŸT›]O¬àõ^Œàõ^»ù[¬ààù[Xô\é¬àNàù[Xô\é¬àù]€ï‹àù[Xô\é¬àù]€êõ›€Nàù[Xô\é¬àHù[äù[
+N¬Çà€€ú›Ÿÿ][‹—õ^ÀŸ]ÿ][‹—õ^◊HH\ŸT›]Oÿ][—õ^÷◊Oä◊JN¬à€€ú›€õ›õ—ÿ][’ò[‹ãŸ]õ›õ—ÿ][’ò[‹óHH\ŸT›]JàäN¬à€€ú›€õ›õ—ÿ][–€€ôXÿ[ÀŸ]õ›õ—ÿ][–€€ôXÿ[◊HBà\ŸT›]Oÿ][—õ^÷»ò€€ôXÿ[»óOäò€€ù[HäN¬àà€€ú›Ÿö[õ‘›]\—õ^ÀŸ]ö[õ‘›]\—õ^◊HH\ŸT›]OàùŸ‹»àúò\ÿ›[ö»àò]]õ»àú]\ÿY»àò\ú]Z]òY»ÇàäùŸ‹»äN¬Çà€€ú›€[Ÿ[\ú]Z]ò\êXô\ùÀŸ][Ÿ[\ú]Z]ò\êXô\ù◊HH\ŸT›]Jò[ŸJN¬à€€ú›Ÿõ^‘\òP\ú]Z]ò\ãŸ]õ^‘\òP\ú]Z]ò\óHH\ŸT›]Oõ^»ù[äù[
+N¬Çà€€ú›Ÿÿ][‹”õ›õ—õ^ÀŸ]ÿ][‹”õ›õ—õ^◊HH\ŸT›]Oà»ò[‹éà›ö[ôŒ»€€ôXÿ[Œàÿ][—õ^÷»ò€€ôXÿ[»óN»]]õœŒàõ€€X[àV◊Bàä◊JN¬Çà€€ú›€[Ÿ[\Yÿ\ëYö[ö]]õ–Xô\ùÀŸ][Ÿ[\Yÿ\ëYö[ö]]õ–Xô\ù◊HBà\ŸT›]Jò[ŸJN¬à€€ú›Ÿõ^‘\òP\Yÿ\ëYö[ö]]õÀŸ]õ^‘\òP\Yÿ\ëYö[ö]]õ◊HBà\ŸT›]Oõ^»ù[äù[
+N¬à€€ú›ÿ\Yÿ[ô—õ^—Yö[ö]]õÀŸ]\Yÿ[ô—õ^—Yö[ö]]õ◊HBà\ŸT›]Jò[ŸJN¬à€€ú›\Yÿ[ô—õ^—Yö[ö]]õ‘ôYàH\ŸTôYäò[ŸJN¬à€€ú›€[Ÿ[€€\\ù[\êXô\ùÀŸ][Ÿ[€€\\ù[\êXô\ù◊HH\ŸT›]Jò[ŸJN¬à€€ú›Ÿõ^‘\òP€€\\ù[\ãŸ]õ^‘\òP€€\\ù[\óHBà\ŸT›]Oõ^»ù[äù[
+N¬à€€ú›ÿ€ŸY€–€€\\ù[[Y[ùÀŸ]€ŸY€–€€\\ù[[Y[ù◊HH\ŸT›]JàäN¬à€€ú›ÿÿ\úôYÿ[ô–€ŸY€–€€\\ù[[Y[ùÀŸ]ÿ\úôYÿ[ô–€ŸY€–€€\\ù[[Y[ù◊HBà\ŸT›]Jò[ŸJN¬à€€ú›Ÿ\úõ–€€\\ù[[Y[ùÀŸ]\úõ–€€\\ù[[Y[ù◊HH\ŸT›]JàäN¬à€€ú›€[Ÿ[[\‹ù\êXô\ùÀŸ][Ÿ[[\‹ù\êXô\ù◊HH\ŸT›]Jò[ŸJN¬à€€ú›ÿ€ŸY€“[\‹ùXÿ[ÀŸ]€ŸY€“[\‹ùXÿ[◊HH\ŸT›]JàäN¬à€€ú›⁄[\‹ù[ô—õ^ÀŸ][\‹ù[ô—õ^◊HH\ŸT›]Jò[ŸJN¬à€€ú›Ÿ\úõ“[\‹ùXÿ[ÀŸ]\úõ“[\‹ùXÿ[◊HH\ŸT›]JàäN¬Çà€€ú›€‹€Ÿ\”õŸKŸ]‹€Ÿ\”õŸWHH\ŸT›]Oà»ò[‹éà›ö[ôŒ»][Œà›ö[ô»V◊Bàä◊JN¬Çà€€ú›ÿõ›Ÿ\”õŸKŸ]õ›Ÿ\”õŸWHH\ŸT›]Oà»Yà›ö[ôŒ»][Œà›ö[ô»V◊Bàä◊JN¬à€€ú›‹ôY\ôX›õ›[’^”õŸKŸ]ôY\ôX›õ›[’^”õŸWHBà\ŸT›]JêXŸ\‹ÿ\àäN¬à€€ú›‹ôY\ôX›\õõŸKŸ]ôY\ôX›\õõŸWHH\ŸT›]JàäN¬Çà€€ú›ŸY][ô—YŸRYŸ]Y][ô—YŸRYHH\ŸT›]O›ö[ô»ù[äù[
+N¬à€€ú›‹õ›[–€€ô^[ÀŸ]õ›[–€€ô^[◊HH\ŸT›]JàäN¬à€€ú››ò[‹ê€€ôXÿ[ÀŸ]ò[‹ê€€ôXÿ[◊HH\ŸT›]JàäN¬à€€ú››\–€€ôXÿ[–€€ô^[ÀŸ]\–€€ôXÿ[–€€ô^[◊HBà\ŸT›]Júô\‹‹›Wÿ€€ù[HäN¬à€€ú›€õ€YP€€ô^[—Y]Y”X[ùX[Ÿ]õ€YP€€ô^[—Y]Y”X[ùX[HH\ŸT›]Jò[ŸJN¬Çà€€ú››\ÿ\íXP€€ô^[ÀŸ]\ÿ\íXP€€ô^[◊HH\ŸT›]Jò[ŸJN¬à€€ú›Ÿ\ÿ‹öXÿ[“XP€€ô^[ÀŸ]\ÿ‹öXÿ[“XP€€ô^[◊HH\ŸT›]JàäN¬à€€ú›ŸŸ\ò[ô—\ÿ‹öXÿ[“XP€€ô^[ÀŸ]Ÿ\ò[ô—\ÿ‹öXÿ[“XP€€ô^[◊HBà\ŸT›]Jò[ŸJN¬à€€ú›ŸŸ\ò[ô—\ÿ‹öX€Ÿ\“XPõÿ€ÀŸ]Ÿ\ò[ô—\ÿ‹öX€Ÿ\“XPõÿ€◊HBà\ŸT›]Jò[ŸJN¬à€€ú›‹ô]öXQŸ\òXÿ[—\ÿ‹öXÿ[“XKŸ]ô]öXQŸ\òXÿ[—\ÿ‹öXÿ[“XWHBà\ŸT›]Oô]öXQŸ\òXÿ[—\ÿ‹öXÿ[“XHù[äù[
+N¬à€€ú›ÿÿ\\òUò\öX]ô[õŸKŸ]ÿ\\òUò\öX]ô[õŸWHH\ŸT›]Jõõ€YHäN¬à€€ú›ÿÿ\\òU\”õŸKŸ]ÿ\\òU\”õŸWHH\ŸT›]Jõõ€YHäN¬à€€ú›ÿÿ\\òSY[úÿYŸ[Q\úõ”õŸKŸ]ÿ\\òSY[úÿYŸ[Q\úõ”õŸWHH\ŸT›]JàäN¬à€€ú›ÿÿ\\òSX^[ù]]ò\”õŸKŸ]ÿ\\òSX^[ù]]ò\”õŸWHH\ŸT›]Jå»äN¬à€€ú›ÿ\ú]Z]õ–ÿ[\‹—^òXÿ[”õŸKŸ]\ú]Z]õ–ÿ[\‹—^òXÿ[”õŸWHH\ŸT›]JàäN¬Çà€€ú›€X^[ù]]ò\“[ùò[Y\”õŸKŸ]X^[ù]]ò\“[ùò[Y\”õŸWHH\ŸT›]Jå»äN¬à€€ú›€X^[ù]]ò\‘Ÿ[Tô\‹‹›SõŸKŸ]X^[ù]]ò\‘Ÿ[Tô\‹‹›SõŸWHH\ŸT›]Jå»äN¬à€€ú›ÿXÿ[—^Ÿ\‹€’[ù]]ò\”õŸKŸ]Xÿ[—^Ÿ\‹€’[ù]]ò\”õŸWHBà\ŸT›]Jùò[úŸô\ö\óÿ][ô[Y[ù»äN¬à€€ú›‹Ÿ]‹ë^Ÿ\‹€’[ù]]ò\”õŸKŸ]Ÿ]‹ë^Ÿ\‹€’[ù]]ò\”õŸWHBà\ŸT›]JàäN¬à€€ú›€Y[úÿYŸ[Q^Ÿ\‹€’[ù]]ò\”õŸKŸ]Y[úÿYŸ[Q^Ÿ\‹€’[ù]]ò\”õŸWHBà\ŸT›]Jì∞Ë€»€€úŸY›ZH€€ù[ùX\à»][ô[Y[ù»]]€pË]X€Ààõ›HH[òÿ[Z[ö\à\òH[H][ô[ùKàäN¬à€€ú›€õ›YöXÿ\ë^Ÿ\‹€’[ù]]ò\”õŸKŸ]õ›YöXÿ\ë^Ÿ\‹€’[ù]]ò\”õŸWHBà\ŸT›]JùYJN¬à€€ú›€õ›YöXÿ\ë[XZ[^Ÿ\‹€’[ù]]ò\”õŸKŸ]õ›YöXÿ\ë[XZ[^Ÿ\‹€’[ù]]ò\”õŸWHBà\ŸT›]JùYJN¬Çà€€ú›€õ›YöXÿ\ê[–⁄Yÿ\ìõŸKŸ]õ›YöXÿ\ê[–⁄Yÿ\ìõŸWHH\ŸT›]Jò[ŸJN¬à€€ú›€õ›YöXÿXÿ[’][”õŸKŸ]õ›YöXÿXÿ[’][”õŸWHH\ŸT›]JàäN¬à€€ú›€õ›YöXÿXÿ[”Y[úÿYŸ[SõŸKŸ]õ›YöXÿXÿ[”Y[úÿYŸ[SõŸWHH\ŸT›]JàäN¬à€€ú›€õ›YöXÿ\ë[XZ[õŸKŸ]õ›YöXÿ\ë[XZ[õŸWHH\ŸT›]Jò[ŸJN¬Çà€€ú››[\]\’⁄]ÿ\Ÿ][\]\’⁄]ÿ\HH\ŸT›]O[\]U⁄]ÿ\‹ÿ[÷◊Oä◊JN¬à€€ú›ÿÿ\úôYÿ[ô’[\]\’⁄]ÿ\Ÿ]ÿ\úôYÿ[ô’[\]\’⁄]ÿ\HH\ŸT›]Jò[ŸJN¬à€€ú›ÿYŸ[ô\”‹€Ÿ\ÀŸ]YŸ[ô\”‹€Ÿ\◊HH\ŸT›]OYŸ[ôS‹ÿ[÷◊Oä◊JN¬à€€ú›ÿÿ\úôYÿ[ô–YŸ[ô\”‹€Ÿ\ÀŸ]ÿ\úôYÿ[ô–YŸ[ô\”‹€Ÿ\◊HH\ŸT›]Jò[ŸJN¬Çà€€ú›ÿ\ú]Z]õ“[ú›ùXÿ[“XSõŸKŸ]\ú]Z]õ“[ú›ùXÿ[“XSõŸWHH\ŸT›]JàäN¬à€€ú›ÿ\ú]Z]õ”Y[úÿYŸ[Q\úõ”õŸKŸ]\ú]Z]õ”Y[úÿYŸ[Q\úõ”õŸWHH\ŸT›]JàäN¬Çà€€ú›ÿYŸ[ô\ë\‹\õ’[\]RYõŸKŸ]YŸ[ô\ë\‹\õ’[\]RYõŸWHH\ŸT›]JàäN¬à€€ú›¬àYŸ[ô\ë\‹\õ’[\]\‘‹í[ùY‹òXÿ[”õŸKàŸ]YŸ[ô\ë\‹\õ’[\]\‘‹í[ùY‹òXÿ[”õŸKàHH\ŸT›]OôX€‹ô›ö[ôÀ›ö[ôœèäﬂJN¬à€€ú›ÿYŸ[ô\ë\‹\õ‘]X[ùYYSõŸKŸ]YŸ[ô\ë\‹\õ‘]X[ùYYSõŸWHH\ŸT›]JåÃàäN¬à€€ú›ÿYŸ[ô\ë\‹\õ’[öYYSõŸKŸ]YŸ[ô\ë\‹\õ’[öYYSõŸWHBà\ŸT›]Oö‹ò\»àôX\»èäö‹ò\»äN¬à€€ú›ÿYŸ[ô\ë\‹\õ’ò\öX]ôZ\”õŸKŸ]YŸ[ô\ë\‹\õ’ò\öX]ôZ\”õŸWHH\ŸT›]JàäN¬à€€ú›ÿYŸ[ôRYõŸKŸ]YŸ[ôRYõŸWHH\ŸT›]JàäN¬à€€ú›ÿYŸ[ôS\›\êYŸ[ô[Y[ù‹”õŸKŸ]YŸ[ôS\›\êYŸ[ô[Y[ù‹”õŸWHBà\ŸT›]Jò[ŸJN¬à€€ú›ÿYŸ[ôT]X[ùYYS‹€Ÿ\”õŸKŸ]YŸ[ôT]X[ùYYS‹€Ÿ\”õŸWHH\ŸT›]JçàäN¬à€€ú›ÿYŸ[ôRò[ô[QX\”õŸKŸ]YŸ[ôRò[ô[QX\”õŸWHH\ŸT›]JåMäN¬à€€ú›ÿYŸ[ôSY[úÿYŸ[TŸ[R‹ò\ö[‹”õŸKŸ]YŸ[ôSY[úÿYŸ[TŸ[R‹ò\ö[‹”õŸWHBà\ŸT›]Jìõ»[€Y[ù»ò[»[ò€€ùôZH‹ò\ö[‹»\‹€ö]ôZ\Ààõ›HH[òÿ[Z[ö\à\òH[H][ô[ùKàäN¬à€€ú›ÿYŸ[ôSY[úÿYŸ[TŸ[Q^YY[ùSõŸKŸ]YŸ[ôSY[úÿYŸ[TŸ[Q^YY[ùSõŸWHBà\ŸT›]Jìò[»[[‹»][ô[Y[ù»[HﬁÿYŸ[ôWŸ]W€õ›ò__KàYHYÿH›]õ»XH\òH]Hô\öYöXÿ\à‹»‹ò\ö[‹»\‹€ö]ôZ\ÀàäN¬à€€ú›ÿYŸ[ôSY[úÿYŸ[Q]R[ùò[YSõŸKŸ]YŸ[ôSY[úÿYŸ[Q]R[ùò[YSõŸWHBà\ŸT›]Jë\‹ÿH]HòH\‹€›Kà\òH]ö]\à€€ôù\ÿ[ÀYH[ùöYH[XH]Hù]\òKàŸH]Z\Ÿ\àX\òÿ\à\òH›]õ»[õÀ[ôõ‹õYH»[õ»€€\]À‹à^[\»ﬁÿYŸ[ôWŸ]W‹›YŸ\›[◊ÿ[õﬂ_KàäN¬à€€ú›ÿYŸ[ôSY[úÿYŸ[S\›\êYŸ[ô[Y[ù‹”õŸKŸ]YŸ[ôSY[úÿYŸ[S\›\êYŸ[ô[Y[ù‹”õŸWHBà\ŸT›]Jë[ò€€ùôZH\›\»YŸ[ô[Y[ù‹Ààô\‹€ôH€€H»ù[Y\õ»»YŸ[ô[Y[ù»]YH\ŸZòHÿ[òŸ[\à›Hô[X\òÿ\éàäN¬à5”];ˆ⁄$z{-ÆÈ‹j◊ùp√≥s tempo</option>
                       </select>
                     </label>
 
@@ -10990,6 +1088,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 <strong>{resumoMidias.audios}</strong>
               </div>
 
+              <div className={styles.mediaSummaryCard}>
+                <span>Arquivos</span>
+                <strong>{resumoMidias.arquivos}</strong>
+              </div>
+
               <div
                 className={`${styles.mediaSummaryCard} ${styles.mediaSummaryStorageCard} ${classeUsoStorageMidias(
                   resumoMidias.tamanhoTotal,
@@ -11051,6 +1154,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 onClick={() => setAbaMidias("audio")}
               >
                 √Åudios ({resumoMidias.audios})
+              </button>
+
+              <button
+                type="button"
+                className={abaMidias === "arquivo" ? styles.mediaTabActive : styles.mediaTab}
+                onClick={() => setAbaMidias("arquivo")}
+              >
+                Arquivos ({resumoMidias.arquivos})
               </button>
             </div>
 

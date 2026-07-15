@@ -705,6 +705,11 @@
   background: #adffec;
 }
 
+.nodeArquivo {
+  border-color: #a8c7ff;
+  background: #dce9ff;
+}
+
 .nodeBotoes {
   border-color: #bdff8f;
   background: #d3ffb3;
@@ -3244,7 +3249,7 @@
 
 .mediaSummaryGrid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   margin: 16px 22px 12px;
   flex-shrink: 0;
@@ -3429,6 +3434,11 @@
 .mediaOptionsBoxAudio {
   background: linear-gradient(135deg, #d8fffe, #ffffff 82%);
   border-color: #91fee5;
+}
+
+.mediaOptionsBoxArquivo {
+  background: linear-gradient(135deg, #e6efff, #ffffff 82%);
+  border-color: #a8c7ff;
 }
 
 

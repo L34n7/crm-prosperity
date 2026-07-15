@@ -3,8 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const BUCKET_MIDIAS = "midias";
-const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 100 * 1024 * 1024; // 100 MB
-const TIPOS_NO_MIDIA = ["enviar_imagem", "enviar_video", "enviar_audio"];
+const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 50 * 1024 * 1024; // 50 MB
+const TIPOS_NO_MIDIA = [
+  "enviar_imagem",
+  "enviar_video",
+  "enviar_audio",
+  "enviar_arquivo",
+];
 const CHAVES_REFERENCIA_MIDIA = [
   "midia_url",
   "midia_nome",
@@ -261,6 +266,7 @@ function montarResumoMidias(midias: any[]) {
   const imagens = midias.filter((midia) => midia.tipo === "imagem").length;
   const videos = midias.filter((midia) => midia.tipo === "video").length;
   const audios = midias.filter((midia) => midia.tipo === "audio").length;
+  const arquivos = midias.filter((midia) => midia.tipo === "arquivo").length;
 
   const tamanhoTotalBytes = midias.reduce(
     (totalBytes, midia) => totalBytes + Number(midia.tamanho_bytes || 0),
@@ -272,6 +278,7 @@ function montarResumoMidias(midias: any[]) {
     imagens,
     videos,
     audios,
+    arquivos,
     tamanhoTotalBytes,
     limiteStorageBytes: LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES,
     limiteStorageAtingido:
