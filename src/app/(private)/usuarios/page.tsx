@@ -139,9 +139,9 @@ export default function UsuariosPage() {
 
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [quantidadeUsuariosAtivos, setQuantidadeUsuariosAtivos] = useState(0);
-  const [limiteUsuariosPlano, setLimiteUsuariosPlano] = useState<number | null>(
-    null
-  );
+  const [limiteUsuariosEfetivo, setLimiteUsuariosEfetivo] = useState<
+    number | null
+  >(null);
   const [setores, setSetores] = useState<Setor[]>([]);
   const [perfisEmpresa, setPerfisEmpresa] = useState<PerfilDinamico[]>([]);
 
@@ -201,11 +201,14 @@ export default function UsuariosPage() {
 
     setUsuarios(data.usuarios || []);
     setQuantidadeUsuariosAtivos(Number(data.quantidade_usuarios_ativos || 0));
-    setLimiteUsuariosPlano(
-      typeof data.limite_usuarios_plano === "number"
-        ? data.limite_usuarios_plano
-        : null
-    );
+    const limiteRecebido =
+      typeof data.limite_usuarios_efetivo === "number"
+        ? data.limite_usuarios_efetivo
+        : typeof data.limite_usuarios_plano === "number"
+          ? data.limite_usuarios_plano
+          : null;
+
+    setLimiteUsuariosEfetivo(limiteRecebido);
   }
 
   async function carregarSetores() {
@@ -790,7 +793,7 @@ export default function UsuariosPage() {
 
             <div className={styles.listHeaderActions}>
               <span className={styles.infoBadge}>
-                {quantidadeUsuariosAtivos} / {limiteUsuariosPlano ?? "—"} Total usuários
+                {quantidadeUsuariosAtivos} / {limiteUsuariosEfetivo ?? "—"} Total usuários
               </span>
               {podeCriarUsuarios && (
                 <button
