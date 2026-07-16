@@ -383,20 +383,22 @@
   align-items: center;
 }
 
-.conversationItem:hover {
+.conversationItemIntegration1 {
+  background: var(--conversationItem);
+}
+
+.conversationItem:hover,
+.conversationItemIntegration2:hover
+.conversationItemIntegration3:hover {
   background:  var(--crm-bottom-Hover);
 }
 
-.conversationItemActive {
+.conversationItemIntegration1.conversationItemActive {
   background: var(--crm-bottom-Active);
 }
 
 .conversationItemIntegration2 {
   background: var(--conversationItem2);
-}
-
-.conversationItemIntegration2:hover {
-  background: var(--crm-bottom-Hover2);
 }
 
 .conversationItemIntegration2.conversationItemActive {
@@ -405,10 +407,6 @@
 
 .conversationItemIntegration3 {
   background: var(--conversationItem3);
-}
-
-.conversationItemIntegration3:hover {
-  background: var(--crm-bottom-Hover3);
 }
 
 .conversationItemIntegration3.conversationItemActive {
@@ -438,15 +436,23 @@
 .integrationMiniBadge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+
+  margin-left: auto;
+  flex: 0 0 auto;
+
   max-width: 130px;
+  min-width: 0;
   min-height: 20px;
+
   border: 1px solid var(--crm-border);
   border-radius: 999px;
-  background: var(--crm-surface-soft);
   color: var(--crm-text-muted);
   padding: 0 8px;
+
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
+
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

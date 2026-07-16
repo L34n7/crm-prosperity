@@ -2134,11 +2134,18 @@ function ConversasPageContent() {
   function getClasseCorIntegracao(conversa: Conversa) {
     const posicao = obterPosicaoIntegracaoConversa(conversa);
 
+    if (posicao === 1) return styles.conversationItemIntegration1;
     if (posicao === 2) return styles.conversationItemIntegration2;
     if (posicao === 3) return styles.conversationItemIntegration3;
 
     return "";
   }
+
+  function limitarTexto(texto: string, limite = 16) {
+  if (texto.length <= limite) return texto;
+
+  return `${texto.slice(0, limite).trim()}...`;
+}
 
   function abrirConversa(conversa: Conversa) {
     setMensagemSucesso("");
@@ -8111,6 +8118,11 @@ const templateFooterTexto = useMemo(() => {
                     {(c) => {
                         const ativo = conversaSelecionada?.id === c.id;
                         const unreadCount = c.unread_count || 0;
+                        const integracaoConversa = obterIntegracaoConversa(c);
+                        const posicaoIntegracao = Number(obterPosicaoIntegracaoConversa(c));
+
+                        const nomeIntegracao =
+                          integracaoConversa?.nome_conexao || `Número ${posicaoIntegracao}`;
 
                         return (
                             <button
@@ -8160,13 +8172,6 @@ const templateFooterTexto = useMemo(() => {
                         </div>
 
                         <div className={styles.conversationBottomLine}>
-                          {integracoesWhatsapp.length > 1 && obterIntegracaoConversa(c) && (
-                            <span className={styles.integrationMiniBadge}>
-                              {obterIntegracaoConversa(c)?.nome_conexao ||
-                                `Número ${obterPosicaoIntegracaoConversa(c)}`}
-                            </span>
-                          )}
-
                           <span
                             className={`${styles.statusMiniBadge} ${
                               ["encerrado_manual", "encerrado_24h", "encerrado_aut"].includes(c.status)
@@ -8195,6 +8200,17 @@ const templateFooterTexto = useMemo(() => {
                               {getPrioridadeLabel(c.prioridade)}
                             </span>
                           )}
+
+                          {integracoesWhatsapp.length > 1 &&
+                            integracaoConversa &&
+                            posicaoIntegracao !== 1 && (
+                              <span
+                                className={styles.integrationMiniBadge}
+                                title={nomeIntegracao}
+                              >
+                                {limitarTexto(nomeIntegracao, 15)}
+                              </span>
+                            )}
                         </div>
                       </div>
                             </button>
