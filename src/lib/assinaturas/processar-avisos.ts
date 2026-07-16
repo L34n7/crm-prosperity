@@ -18,6 +18,18 @@ function avisoElegivel(status: string, vencimento: Date, agora: Date): TipoAviso
   return null;
 }
 
+async function buscarEmailsAdministradores(empresaId: string) {
+  const { data: usuarios, error: usuariosError } = await supabase.from("usuarios").select("id,email").eq("empresa_id", empresaId).eq("status", "ativo");
+  if (usuariosError || !usuarios?.length) return [];
+  const { data: vinculos, error: vinculosError } = await supabase.from("usuarios_perfis").select("usuario_id,perfis_empresa(nome,ativo,empresa_id)").in("usuario_id", usuarios.map((usuario) => usuario.id));
+  if (vinculosError) return [];
+  const adminIds = new Set((vinculos || []).filter((vinculo: any) => {
+    const perfil = Array.isArray(vinculo.perfis_empresa) ? vinculo.perfis_empresa[0] : vinculo.perfis_empresa;
+    return String(perfil?.nome || "").toLowerCase() === "administrador" && perfil?.ativo !== false && perfil?.empresa_id === empresaId;
+  }).map((vinculo: any) => vinculo.usuario_id));
+  return usuarios.filter((usuario) => adminIds.has(usuario.id)).map((usuario) => String(usuario.email || "").trim()).filter(Boolean);
+}
+
 export async function processarAvisosAssinatura(agora = new Date()) {
   const { data: empresas, error } = await supabase.from("empresas").select("id,email,nome_fantasia,razao_social,assinatura_vencimento_em,planos(slug)").not("assinatura_vencimento_em", "is", null).order("assinatura_vencimento_em", { ascending: true }).limit(1000);
   if (error) throw new Error(`Erro ao buscar assinaturas: ${error.message}`);
@@ -30,8 +42,8 @@ export async function processarAvisosAssinatura(agora = new Date()) {
       resultado.atualizadas += 1;
       const vencimento = new Date(String(empresa.assinatura_vencimento_em));
       const tipo = avisoElegivel(String(status), vencimento, agora);
-      const email = String(empresa.email || "").trim();
-      if (!tipo || !email || Number.isNaN(vencimento.getTime())) { resultado.ignorados += 1; continue; }
+      const emails = Array.from(new Set([String(empresa.email || "").trim(), ...(await buscarEmailsAdministradores(empresa.id))].filter(Boolean)));
+      if (!tipo || emails.length === 0 || Number.isNaN(vencimento.getTime())) { resultado.ignorados += 1; continue; }
 
       // Reservas antigas são de execuções interrompidas antes do envio; podem ser tentadas novamente.
       await supabase.from("assinatura_avisos_email").delete().eq("empresa_id", empresa.id).eq("tipo", tipo).is("enviado_em", null).lt("created_at", new Date(agora.getTime() - 60 * 60 * 1000).toISOString());
@@ -42,10 +54,10 @@ export async function processarAvisosAssinatura(agora = new Date()) {
       const limite = tipo === "pre_vencimento" ? 1 : 2;
       if (enviados.length >= limite || (ultimo && agora.getTime() - ultimo.getTime() < COOLDOWN_MS)) { resultado.ignorados += 1; continue; }
       const tentativa = enviados.length + 1;
-      const { data: reserva, error: reservaErro } = await supabase.from("assinatura_avisos_email").insert({ empresa_id: empresa.id, tipo, vencimento_em: vencimento.toISOString(), tentativa, destinatario: email }).select("id").maybeSingle();
+      const { data: reserva, error: reservaErro } = await supabase.from("assinatura_avisos_email").insert({ empresa_id: empresa.id, tipo, vencimento_em: vencimento.toISOString(), tentativa, destinatario: emails.join(", ") }).select("id").maybeSingle();
       if (reservaErro || !reserva) { resultado.ignorados += 1; continue; }
       const plano = Array.isArray(empresa.planos) ? empresa.planos[0] : empresa.planos;
-      const enviado = await sendAssinaturaAvisoEmail({ to: email, nome: String(empresa.nome_fantasia || empresa.razao_social || "Cliente"), vencimentoEm: vencimento.toISOString(), tipo, checkoutUrl: checkoutUrl(plano?.slug || null) });
+      const enviado = await sendAssinaturaAvisoEmail({ to: emails, nome: String(empresa.nome_fantasia || empresa.razao_social || "Cliente"), vencimentoEm: vencimento.toISOString(), tipo, checkoutUrl: checkoutUrl(plano?.slug || null) });
       if (!enviado) { await supabase.from("assinatura_avisos_email").delete().eq("id", reserva.id); resultado.erros += 1; continue; }
       await supabase.from("assinatura_avisos_email").update({ enviado_em: agora.toISOString(), updated_at: agora.toISOString() }).eq("id", reserva.id);
       resultado.enviados += 1;
