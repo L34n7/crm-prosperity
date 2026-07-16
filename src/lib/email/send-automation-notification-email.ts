@@ -82,6 +82,7 @@ export async function sendAutomationNotificationEmail({
     "https://crmprosperity.com";
 
   const linkConversa = `${appUrl}/conversas?id=${conversaId}`;
+  const logoUrl = `${appUrl.replace(/\/$/, "")}/logo.png`;
 
   const tituloSeguro = escaparHtml(titulo || "Nova notificação da automação");
   const ehExcessoTentativas =
@@ -124,15 +125,18 @@ export async function sendAutomationNotificationEmail({
                   
                   <tr>
                     <td style="background:linear-gradient(135deg,#0f509a,#0f172a);padding:28px 32px;color:#ffffff;">
-                      <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">
-                        CRM Prosperity
-                      </div>
-                      <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">
-                        ${tituloPrincipal}
-                      </h1>
-                      <p style="margin:10px 0 0;font-size:14px;line-height:1.6;opacity:0.9;">
-                        ${subtituloPrincipal}
-                      </p>
+                      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                        <tr>
+                          <td style="padding:0;vertical-align:middle;">
+                            <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">CRM Prosperity</div>
+                            <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">${tituloPrincipal}</h1>
+                            <p style="margin:10px 0 0;font-size:14px;line-height:1.6;opacity:0.9;">${subtituloPrincipal}</p>
+                          </td>
+                          <td width="86" align="right" style="width:86px;padding:0 0 0 18px;vertical-align:middle;">
+                            <img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none;" />
+                          </td>
+                        </tr>
+                      </table>
                     </td>
                   </tr>
 

@@ -288,6 +288,7 @@ async function enviarEmailAdministradores(params: {
   const integracao = obterIntegracao(params.campanha);
   const statusLabel = formatarStatusPausa(params.statusPausa);
   const linkCampanhas = `${appUrl()}/disparos-whatsapp`;
+  const logoUrl = `${appUrl()}/logo.png`;
   const templateSeguro = escaparHtml(
     params.campanha.template_nome || "Template nao informado"
   );
@@ -320,15 +321,18 @@ async function enviarEmailAdministradores(params: {
                 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 18px 45px rgba(15,23,42,0.10);">
                   <tr>
                     <td style="background:linear-gradient(135deg,#991b1b,#0f172a);padding:28px 32px;color:#ffffff;">
-                      <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">
-                        CRM Prosperity
-                      </div>
-                      <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">
-                        Campanha de WhatsApp pausada
-                      </h1>
-                      <p style="margin:10px 0 0;font-size:14px;line-height:1.6;opacity:0.9;">
-                        O disparo foi interrompido automaticamente para proteger a conta WhatsApp e a estabilidade do sistema.
-                      </p>
+                      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                        <tr>
+                          <td style="padding:0;vertical-align:middle;">
+                            <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">CRM Prosperity</div>
+                            <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">Campanha de WhatsApp pausada</h1>
+                            <p style="margin:10px 0 0;font-size:14px;line-height:1.6;opacity:0.9;">O disparo foi interrompido automaticamente para proteger a conta WhatsApp e a estabilidade do sistema.</p>
+                          </td>
+                          <td width="86" align="right" style="width:86px;padding:0 0 0 18px;vertical-align:middle;">
+                            <img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none;" />
+                          </td>
+                        </tr>
+                      </table>
                     </td>
                   </tr>
 
