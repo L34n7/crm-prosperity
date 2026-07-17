@@ -35,15 +35,14 @@ type ColunaKanban = {
   contatos: ContatoKanban[];
 };
 
-const CLASSIFICACOES: Array<{ id: ClassificacaoLead; titulo: string }> = [
-  { id: "novo", titulo: "Novo" },
+const CLASSIFICACOES_KANBAN: Array<{ id: ClassificacaoLead; titulo: string }> = [
   { id: "qualificado", titulo: "Qualificado" },
   { id: "convertido", titulo: "Convertido" },
   { id: "perdido", titulo: "Perdido" },
 ];
 
 function criarColunasVazias(): ColunaKanban[] {
-  return CLASSIFICACOES.map((coluna) => ({
+  return CLASSIFICACOES_KANBAN.map((coluna) => ({
     ...coluna,
     total: 0,
     contatos: [],
@@ -395,7 +394,7 @@ export default function KanbanPage() {
                             )
                           }
                         >
-                          {CLASSIFICACOES.map((item) => (
+                          {CLASSIFICACOES_KANBAN.map((item) => (
                             <option key={item.id} value={item.id}>
                               {item.titulo}
                             </option>

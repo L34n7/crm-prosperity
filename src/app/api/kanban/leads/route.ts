@@ -5,7 +5,6 @@ import {
 } from "@/lib/auth/get-usuario-contexto";
 import {
   aplicarClassificacaoLeadContato,
-  CLASSIFICACOES_LEAD,
   CLASSIFICACAO_LEAD_LABEL,
   classificacaoLeadValida,
   normalizarClassificacaoLead,
@@ -19,6 +18,11 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const LIMITE_PADRAO_POR_COLUNA = 80;
 const LIMITE_MAXIMO_POR_COLUNA = 200;
+const CLASSIFICACOES_KANBAN: ClassificacaoLead[] = [
+  "qualificado",
+  "convertido",
+  "perdido",
+];
 
 type ContatoKanban = {
   id: string;
@@ -45,12 +49,16 @@ function podeGerenciarKanban(usuario: UsuarioContexto) {
 }
 
 function montarColunasVazias() {
-  return CLASSIFICACOES_LEAD.map((classificacao) => ({
+  return CLASSIFICACOES_KANBAN.map((classificacao) => ({
     id: classificacao,
     titulo: CLASSIFICACAO_LEAD_LABEL[classificacao],
     total: 0,
     contatos: [] as ContatoKanban[],
   }));
+}
+
+function classificacaoDisponivelNoKanban(classificacao: ClassificacaoLead) {
+  return CLASSIFICACOES_KANBAN.includes(classificacao);
 }
 
 export async function GET(request: Request) {
@@ -233,6 +241,14 @@ export async function PATCH(request: Request) {
   const classificacao = normalizarClassificacaoLead(
     classificacaoEntrada
   ) as ClassificacaoLead;
+
+  if (!classificacaoDisponivelNoKanban(classificacao)) {
+    return NextResponse.json(
+      { ok: false, error: "Classificação não disponível no Kanban." },
+      { status: 400 }
+    );
+  }
+
   const supabase = getSupabaseAdmin();
   const { data: contatoAtual, error: contatoError } = await supabase
     .from("contatos")

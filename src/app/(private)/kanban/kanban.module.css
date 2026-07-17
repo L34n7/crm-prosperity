@@ -15,7 +15,7 @@
 
 .summaryGrid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   min-width: 0;
 }
@@ -34,10 +34,6 @@
     linear-gradient(135deg, color-mix(in srgb, var(--summary-accent) 9%, transparent), transparent 55%),
     var(--crm-surface);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), var(--crm-shadow-xs);
-}
-
-.summary_novo {
-  --summary-accent: #94a3b8;
 }
 
 .summary_qualificado {
@@ -152,7 +148,7 @@
 
 .board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(260px, 1fr));
+  grid-template-columns: repeat(3, minmax(300px, 1fr));
   gap: 12px;
   align-items: start;
   overflow-x: auto;
@@ -211,10 +207,6 @@
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--column-accent) 14%, transparent);
 }
 
-.column_novo {
-  --column-accent: #94a3b8;
-}
-
 .column_qualificado {
   --column-accent: #2563eb;
 }
@@ -259,10 +251,6 @@
 
 .leadCard:active {
   cursor: grabbing;
-}
-
-.card_novo {
-  --card-accent: #94a3b8;
 }
 
 .card_qualificado {
