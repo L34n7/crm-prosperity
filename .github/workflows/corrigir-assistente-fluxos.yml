@@ -1,0 +1,311 @@
+name: Corrigir assistente de fluxos
+
+on:
+  push:
+    paths:
+      - .github/workflows/corrigir-assistente-fluxos.yml
+
+permissions:
+  contents: write
+
+jobs:
+  corrigir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Ampliar catalogo do assistente de fluxos
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          lib_path = Path('src/lib/automacoes/assistente-fluxos.ts')
+          route_path = Path('src/app/api/automacoes/assistente/gerar/route.ts')
+          lib = lib_path.read_text()
+          route = route_path.read_text()
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'Trecho nao encontrado: {label}')
+              return text.replace(old, new, 1)
+
+          lib = replace_once(lib, '''export type PlanoAssistenteEtapa = {
+  ref: string;
+  tipo: string;
+  titulo: string | null;
+  mensagem: string | null;
+  variavel: string | null;
+  tipo_captura: string | null;
+  setor_id: string | null;
+  setor_nome: string | null;
+  resultado: string | null;
+  opcoes: PlanoAssistenteOpcao[];
+};''', '''export type PlanoAssistenteEtapa = {
+  ref: string;
+  tipo: string;
+  titulo: string | null;
+  mensagem: string | null;
+  variavel: string | null;
+  tipo_captura: string | null;
+  setor_id: string | null;
+  setor_nome: string | null;
+  resultado: string | null;
+  opcoes: PlanoAssistenteOpcao[];
+  configuracao_json?: Record<string, unknown>;
+  delay_segundos?: number | null;
+};''', 'tipo PlanoAssistenteEtapa')
+
+          lib = replace_once(lib, '''const TIPOS_ETAPA_PERMITIDOS = new Set([
+  "inicio",
+  "mensagem",
+  "pergunta_opcoes",
+  "pergunta_botoes",
+  "pergunta_livre_ia",
+  "capturar_resposta",
+  "transferir",
+  "encerrar",
+  "avaliacao",
+]);''', '''const TIPOS_ETAPA_PERMITIDOS = new Set([
+  "inicio",
+  "mensagem",
+  "enviar_texto",
+  "enviar_imagem",
+  "enviar_video",
+  "enviar_audio",
+  "enviar_arquivo",
+  "pergunta_opcoes",
+  "pergunta_botoes",
+  "enviar_botoes",
+  "botao_redirect",
+  "pergunta_livre_ia",
+  "capturar_resposta",
+  "transferir",
+  "transferir_setor",
+  "encerrar",
+  "avaliacao",
+  "agendar_disparo",
+  "agenda_buscar_agendamento",
+  "agenda_escolher_horario",
+  "agenda_criar_agendamento",
+  "agenda_remarcar_agendamento",
+  "agenda_cancelar_agendamento",
+  "interpretar_arquivo_ia",
+]);''', 'catalogo de etapas')
+
+          lib = replace_once(lib, '''function tituloPadraoTipoNo(tipoNo: string) {
+  if (tipoNo === "inicio") return "Inicio";
+  if (tipoNo === "enviar_texto") return "Mensagem";
+  if (tipoNo === "pergunta_opcoes") return "Pergunta";
+  if (tipoNo === "pergunta_livre_ia") return "Pergunta aberta IA";
+  if (tipoNo === "enviar_botoes") return "Pergunta com botoes";
+  if (tipoNo === "capturar_resposta") return "Capturar resposta";
+  if (tipoNo === "transferir_setor") return "Transferir setor";
+  if (tipoNo === "encerrar") return "Encerrar";
+  if (tipoNo === "avaliacao") return "Avaliacao";
+  return "Bloco";
+}''', '''function tituloPadraoTipoNo(tipoNo: string) {
+  const titulos: Record<string, string> = {
+    inicio: "Inicio",
+    enviar_texto: "Mensagem",
+    enviar_imagem: "Enviar imagem",
+    enviar_video: "Enviar video",
+    enviar_audio: "Enviar audio",
+    enviar_arquivo: "Enviar arquivo",
+    pergunta_opcoes: "Pergunta",
+    pergunta_livre_ia: "Pergunta aberta IA",
+    enviar_botoes: "Pergunta com botoes",
+    botao_redirect: "Botao redirect",
+    capturar_resposta: "Capturar resposta",
+    transferir_setor: "Transferir setor",
+    encerrar: "Encerrar",
+    avaliacao: "Avaliacao",
+    agendar_disparo: "Agendar disparo",
+    agenda_buscar_agendamento: "Buscar agendamento",
+    agenda_escolher_horario: "Escolher horario",
+    agenda_criar_agendamento: "Criar agendamento",
+    agenda_remarcar_agendamento: "Remarcar agendamento",
+    agenda_cancelar_agendamento: "Cancelar agendamento",
+    interpretar_arquivo_ia: "Interpretar arquivo com IA",
+  };
+  return titulos[tipoNo] || "Bloco";
+}''', 'titulos dos blocos')
+
+          lib = replace_once(lib, '''function tipoNoPorEtapa(tipo: string) {
+  if (tipo === "inicio") return "inicio";
+  if (tipo === "mensagem") return "enviar_texto";
+  if (tipo === "pergunta_opcoes") return "pergunta_opcoes";
+  if (tipo === "pergunta_botoes") return "enviar_botoes";
+  if (tipo === "pergunta_livre_ia") return "pergunta_livre_ia";
+  if (tipo === "capturar_resposta") return "capturar_resposta";
+  if (tipo === "transferir") return "transferir_setor";
+  if (tipo === "encerrar") return "encerrar";
+  if (tipo === "avaliacao") return "avaliacao";
+  return "enviar_texto";
+}''', '''function tipoNoPorEtapa(tipo: string) {
+  if (tipo === "mensagem") return "enviar_texto";
+  if (tipo === "pergunta_botoes") return "enviar_botoes";
+  if (tipo === "transferir") return "transferir_setor";
+  return TIPOS_ETAPA_PERMITIDOS.has(tipo) ? tipo : "enviar_texto";
+}''', 'mapeamento dos blocos')
+
+          lib = replace_once(lib, '''function configuracaoPorEtapa(
+  etapa: PlanoAssistenteEtapa,
+  tipoNo: string,
+  setores: AssistenteSetor[]
+) {''', '''function configuracaoPadraoPorEtapa(
+  etapa: PlanoAssistenteEtapa,
+  tipoNo: string,
+  setores: AssistenteSetor[]
+) {''', 'renomear configuracao padrao')
+
+          marker = '''function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
+          wrapper = '''function configuracaoPorEtapa(
+  etapa: PlanoAssistenteEtapa,
+  tipoNo: string,
+  setores: AssistenteSetor[]
+) {
+  return {
+    ...configuracaoPadraoPorEtapa(etapa, tipoNo, setores),
+    ...objeto(etapa.configuracao_json),
+  };
+}
+
+function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
+          lib = replace_once(lib, marker, wrapper, 'wrapper de configuracao')
+
+          lib = replace_once(lib, '''    resultado: texto(item.resultado, 40) || null,
+    opcoes,
+  };''', '''    resultado: texto(item.resultado, 40) || null,
+    opcoes,
+    configuracao_json: objeto(item.configuracao_json),
+    delay_segundos:
+      item.delay_segundos === null || item.delay_segundos === undefined
+        ? null
+        : clamp(numeroInteiro(item.delay_segundos, 3) || 0, 0, LIMITE_DELAY_SEGUNDOS),
+  };''', 'normalizacao de configuracao')
+
+          lib = replace_once(lib, '''    configuracao_json: configuracaoPorEtapa(etapa, tipoNo, setores),
+    delay_segundos: tipoNo === "inicio" ? null : 3,''', '''    configuracao_json: configuracaoPorEtapa(etapa, tipoNo, setores),
+    delay_segundos:
+      tipoNo === "inicio"
+        ? null
+        : etapa.delay_segundos == null
+          ? 3
+          : clamp(Number(etapa.delay_segundos || 0), 0, LIMITE_DELAY_SEGUNDOS),''', 'delay da etapa')
+
+          enum_old = '''              "inicio",
+              "mensagem",
+              "pergunta_opcoes",
+              "pergunta_botoes",
+              "pergunta_livre_ia",
+              "capturar_resposta",
+              "transferir",
+              "encerrar",
+              "avaliacao",'''
+          enum_new = '''              "inicio",
+              "mensagem",
+              "enviar_texto",
+              "enviar_imagem",
+              "enviar_video",
+              "enviar_audio",
+              "enviar_arquivo",
+              "pergunta_opcoes",
+              "pergunta_botoes",
+              "enviar_botoes",
+              "botao_redirect",
+              "pergunta_livre_ia",
+              "capturar_resposta",
+              "transferir",
+              "transferir_setor",
+              "encerrar",
+              "avaliacao",
+              "agendar_disparo",
+              "agenda_buscar_agendamento",
+              "agenda_escolher_horario",
+              "agenda_criar_agendamento",
+              "agenda_remarcar_agendamento",
+              "agenda_cancelar_agendamento",
+              "interpretar_arquivo_ia",'''
+          route = replace_once(route, enum_old, enum_new, 'enum do schema')
+
+          route = replace_once(route, '''          opcoes: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                id: { type: "string" },
+                texto: { type: "string" },
+              },
+              required: ["id", "texto"],
+            },
+          },''', '''          opcoes: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                id: { type: "string" },
+                texto: { type: "string" },
+              },
+              required: ["id", "texto"],
+            },
+          },
+          configuracao_json: {
+            type: "object",
+            additionalProperties: true,
+          },
+          delay_segundos: { type: ["number", "null"] },''', 'campos de configuracao do schema')
+
+          route = replace_once(route, '''          "resultado",
+          "opcoes",
+        ],''', '''          "resultado",
+          "opcoes",
+          "configuracao_json",
+          "delay_segundos",
+        ],''', 'required do schema')
+
+          prompt_old = '''Tipos de etapa permitidos:
+- inicio: ponto inicial do fluxo.
+- mensagem: envia texto ao contato.
+- pergunta_opcoes: pergunta com varias opcoes numeradas/textuais.
+- pergunta_botoes: ate 3 botoes do WhatsApp.
+- pergunta_livre_ia: entende texto livre por intencao.
+- capturar_resposta: solicita e salva um dado em uma variavel.
+- transferir: encaminha para um setor existente.
+- encerrar: finaliza a jornada.
+- avaliacao: coleta nota de atendimento.'''
+          prompt_new = '''Tipos de etapa permitidos e recursos disponiveis:
+- inicio: ponto inicial do fluxo.
+- mensagem ou enviar_texto: envia texto.
+- enviar_imagem, enviar_video, enviar_audio e enviar_arquivo: enviam midias cadastradas; preencha configuracao_json com os dados necessarios.
+- pergunta_opcoes: lista com opcoes.
+- pergunta_botoes ou enviar_botoes: ate 3 botoes de resposta.
+- botao_redirect: botao que abre uma URL; use configuracao_json com mensagem, texto_botao e url.
+- pergunta_livre_ia: interpreta texto livre e deve usar conexoes com condicao ia.
+- capturar_resposta: captura e salva uma variavel.
+- transferir ou transferir_setor: transfere para setor existente.
+- encerrar e avaliacao: encerramento e avaliacao.
+- agendar_disparo: agenda um disparo/template.
+- agenda_buscar_agendamento, agenda_escolher_horario, agenda_criar_agendamento, agenda_remarcar_agendamento e agenda_cancelar_agendamento: jornada completa de agenda.
+- interpretar_arquivo_ia: interpreta arquivo com IA e deve possuir conexoes de sucesso e erro quando aplicavel.'''
+          route = replace_once(route, prompt_old, prompt_new, 'catalogo do prompt')
+
+          route = replace_once(route, '''- Nao inclua midias, templates ou agenda se o contexto nao demonstrar recursos suficientes.''', '''- Use obrigatoriamente o tipo de bloco explicitamente solicitado pelo usuario. Nunca substitua botao_redirect, agenda, midia, disparo ou interpretacao por uma simples mensagem.
+- Para recursos que dependem de cadastro externo ainda nao informado, crie o bloco correto com configuracao_json parcial e registre em avisos o que precisa ser selecionado pelo usuario.
+- Preserve configuracoes especificas em configuracao_json e use delay_segundos quando solicitado.
+- Em interpretar_arquivo_ia e pergunta_livre_ia, use conexoes interpretativas com usar_ia/condicao ia e descricao_ia objetiva.''', 'regras do prompt')
+
+          lib_path.write_text(lib)
+          route_path.write_text(route)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/automacoes/assistente-fluxos.ts src/app/api/automacoes/assistente/gerar/route.ts
+          git commit -m "Ampliar recursos da IA de fluxos"
+          git push origin main
