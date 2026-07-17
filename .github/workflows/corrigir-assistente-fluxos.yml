@@ -1,6 +1,7 @@
 name: Corrigir assistente de fluxos
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - .github/workflows/corrigir-assistente-fluxos.yml
@@ -162,8 +163,7 @@ jobs:
   setores: AssistenteSetor[]
 ) {''', 'renomear configuracao padrao')
 
-          marker = '''function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
-          wrapper = '''function configuracaoPorEtapa(
+          lib = replace_once(lib, '''function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {''', '''function configuracaoPorEtapa(
   etapa: PlanoAssistenteEtapa,
   tipoNo: string,
   setores: AssistenteSetor[]
@@ -174,8 +174,7 @@ jobs:
   };
 }
 
-function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
-          lib = replace_once(lib, marker, wrapper, 'wrapper de configuracao')
+function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {''', 'wrapper de configuracao')
 
           lib = replace_once(lib, '''    resultado: texto(item.resultado, 40) || null,
     opcoes,
@@ -197,7 +196,7 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
           ? 3
           : clamp(Number(etapa.delay_segundos || 0), 0, LIMITE_DELAY_SEGUNDOS),''', 'delay da etapa')
 
-          enum_old = '''              "inicio",
+          route = replace_once(route, '''              "inicio",
               "mensagem",
               "pergunta_opcoes",
               "pergunta_botoes",
@@ -205,8 +204,7 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
               "capturar_resposta",
               "transferir",
               "encerrar",
-              "avaliacao",'''
-          enum_new = '''              "inicio",
+              "avaliacao",''', '''              "inicio",
               "mensagem",
               "enviar_texto",
               "enviar_imagem",
@@ -229,8 +227,7 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
               "agenda_criar_agendamento",
               "agenda_remarcar_agendamento",
               "agenda_cancelar_agendamento",
-              "interpretar_arquivo_ia",'''
-          route = replace_once(route, enum_old, enum_new, 'enum do schema')
+              "interpretar_arquivo_ia",''', 'enum do schema')
 
           route = replace_once(route, '''          opcoes: {
             type: "array",
@@ -269,7 +266,7 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
           "delay_segundos",
         ],''', 'required do schema')
 
-          prompt_old = '''Tipos de etapa permitidos:
+          route = replace_once(route, '''Tipos de etapa permitidos:
 - inicio: ponto inicial do fluxo.
 - mensagem: envia texto ao contato.
 - pergunta_opcoes: pergunta com varias opcoes numeradas/textuais.
@@ -278,8 +275,7 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
 - capturar_resposta: solicita e salva um dado em uma variavel.
 - transferir: encaminha para um setor existente.
 - encerrar: finaliza a jornada.
-- avaliacao: coleta nota de atendimento.'''
-          prompt_new = '''Tipos de etapa permitidos e recursos disponiveis:
+- avaliacao: coleta nota de atendimento.''', '''Tipos de etapa permitidos e recursos disponiveis:
 - inicio: ponto inicial do fluxo.
 - mensagem ou enviar_texto: envia texto.
 - enviar_imagem, enviar_video, enviar_audio e enviar_arquivo: enviam midias cadastradas; preencha configuracao_json com os dados necessarios.
@@ -292,8 +288,7 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {'''
 - encerrar e avaliacao: encerramento e avaliacao.
 - agendar_disparo: agenda um disparo/template.
 - agenda_buscar_agendamento, agenda_escolher_horario, agenda_criar_agendamento, agenda_remarcar_agendamento e agenda_cancelar_agendamento: jornada completa de agenda.
-- interpretar_arquivo_ia: interpreta arquivo com IA e deve possuir conexoes de sucesso e erro quando aplicavel.'''
-          route = replace_once(route, prompt_old, prompt_new, 'catalogo do prompt')
+- interpretar_arquivo_ia: interpreta arquivo com IA e deve possuir conexoes de sucesso e erro quando aplicavel.''', 'catalogo do prompt')
 
           route = replace_once(route, '''- Nao inclua midias, templates ou agenda se o contexto nao demonstrar recursos suficientes.''', '''- Use obrigatoriamente o tipo de bloco explicitamente solicitado pelo usuario. Nunca substitua botao_redirect, agenda, midia, disparo ou interpretacao por uma simples mensagem.
 - Para recursos que dependem de cadastro externo ainda nao informado, crie o bloco correto com configuracao_json parcial e registre em avisos o que precisa ser selecionado pelo usuario.
