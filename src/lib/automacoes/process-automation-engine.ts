@@ -13,6 +13,10 @@ import { sendAutomationNotificationEmail } from "@/lib/email/send-automation-not
 import { sendAppointmentCreatedEmail } from "@/lib/email/send-appointment-created-email";
 import { interpretarConexaoComIA } from "@/lib/ia/interpretar-conexao";
 import { interpretarArquivoComIA } from "@/lib/ia/interpretar-arquivo";
+import {
+  aplicarClassificacaoLeadContato,
+  classificacaoLeadPorEventoRastreamento,
+} from "@/lib/leads/classificacao";
 import { baixarMidiaWhatsapp } from "@/lib/whatsapp/download-arquivo";
 import { salvarArquivoAnaliseStorage } from "@/lib/automacoes/salvar-arquivo-analise";
 import {
@@ -242,7 +246,7 @@ async function carregarVariaveisFixasContatoExecucao(params: {
   const { data: contato, error: contatoError } = await supabaseAdmin
     .from("contatos")
     .select(
-      "id, nome, whatsapp_profile_name, email, telefone, campanha, origem, status_lead"
+      "id, nome, whatsapp_profile_name, email, telefone, campanha, origem, status_lead, classificacao"
     )
     .eq("id", execucao.contato_id)
     .eq("empresa_id", empresaId)
@@ -493,6 +497,34 @@ export async function registrarEventoRastreamentoFluxo(params: {
       tipo,
       error,
     });
+  }
+
+  const classificacao = classificacaoLeadPorEventoRastreamento(tipo, resultado);
+
+  if (!error && classificacao) {
+    try {
+      await aplicarClassificacaoLeadContato({
+        empresaId,
+        contatoId: execucao?.contato_id || null,
+        classificacao,
+        protocoloId: execucao?.conversa_protocolo_id || null,
+        origem: "automacao_fluxo",
+      });
+    } catch (classificacaoError) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao atualizar classificação do lead:",
+        {
+          empresaId,
+          conversaId,
+          execucaoId,
+          fluxoId,
+          noId,
+          tipo,
+          resultado,
+          error: classificacaoError,
+        }
+      );
+    }
   }
 }
 

@@ -5,7 +5,12 @@ import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import styles from "./contatos.module.css";
 
-type ClassificacaoContato = "qualificado" | "convertido" | "perdido" | null;
+type ClassificacaoContato =
+  | "novo"
+  | "qualificado"
+  | "convertido"
+  | "perdido"
+  | null;
 
 type Contato = {
   id: string;
@@ -89,6 +94,8 @@ const REMOVER_VALOR_EM_MASSA = "__remover__";
 
 function getClassificacaoLabel(classificacao: ClassificacaoContato) {
   switch (classificacao) {
+    case "novo":
+      return "Novo";
     case "qualificado":
       return "Qualificado";
     case "convertido":
@@ -102,6 +109,8 @@ function getClassificacaoLabel(classificacao: ClassificacaoContato) {
 
 function getClassificacaoClass(classificacao: ClassificacaoContato) {
   switch (classificacao) {
+    case "novo":
+      return styles.statusNovo;
     case "qualificado":
       return styles.statusQualificado;
     case "convertido":
@@ -1345,16 +1354,8 @@ export default function ContatosPage() {
               <label className={styles.label}>Classificações</label>
 
               <div className={styles.filterChecklist}>
-                <label className={styles.filterCheck}>
-                  <input
-                    type="checkbox"
-                    checked={filtroApenasNovos}
-                    onChange={(e) => setFiltroApenasNovos(e.target.checked)}
-                  />
-                  <span>Novo</span>
-                </label>
-
                 {[
+                  ["novo", "Novo"],
                   ["qualificado", "Qualificado"],
                   ["convertido", "Convertido"],
                   ["perdido", "Perdido"],
@@ -1374,6 +1375,15 @@ export default function ContatosPage() {
                     <span>{label}</span>
                   </label>
                 ))}
+
+                <label className={styles.filterCheck}>
+                  <input
+                    type="checkbox"
+                    checked={filtroApenasNovos}
+                    onChange={(e) => setFiltroApenasNovos(e.target.checked)}
+                  />
+                  <span>Criado nos últimos 3 dias</span>
+                </label>
               </div>
             </div>
           </div>

@@ -100,6 +100,11 @@ const EVENTOS_LABEL: Record<string, string> = {
   lead_qualificado: "Lead qualificado",
   agendamento_criado: "Agendamento criado",
   agendamento_confirmado: "Agendamento confirmado",
+  entrada_grupo_confirmada: "Entrada no grupo confirmada",
+  pagamento_confirmado: "Pagamento confirmado",
+  objetivo_concluido: "Objetivo concluído",
+  objetivo_nao_concluido: "Objetivo não concluído",
+  sem_interesse: "Sem interesse",
   venda_realizada: "Venda realizada",
   venda_perdida: "Venda perdida",
   fluxo_iniciado: "Fluxo iniciado",
@@ -114,6 +119,11 @@ const EVENTOS_MANUAIS = [
   { value: "lead_qualificado", label: "Lead qualificado" },
   { value: "agendamento_criado", label: "Agendamento criado" },
   { value: "agendamento_confirmado", label: "Agendamento confirmado" },
+  { value: "entrada_grupo_confirmada", label: "Entrada no grupo confirmada" },
+  { value: "pagamento_confirmado", label: "Pagamento confirmado" },
+  { value: "objetivo_concluido", label: "Objetivo concluído" },
+  { value: "objetivo_nao_concluido", label: "Objetivo não concluído" },
+  { value: "sem_interesse", label: "Sem interesse" },
 ];
 
 const EVENTOS_POR_PAGINA = 10;

@@ -584,7 +584,12 @@ const VARIAVEIS_FIXAS_SISTEMA = [
   {
     chave: "status_lead",
     exemplo: "{{status_lead}}",
-    descricao: "Status atual do lead.",
+    descricao: "Classificação atual do lead.",
+  },
+  {
+    chave: "classificacao_lead",
+    exemplo: "{{classificacao_lead}}",
+    descricao: "Classificação global do lead.",
   },
   {
     chave: "protocolo_atual",

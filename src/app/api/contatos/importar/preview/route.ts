@@ -5,13 +5,16 @@ import {
   type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+import {
+  normalizarClassificacaoLead,
+  statusLeadLegadoDaClassificacao,
+} from "@/lib/leads/classificacao";
 import * as XLSX from "xlsx";
 
 const supabaseAdmin = getSupabaseAdmin();
 
 type StatusLead =
   | "novo"
-  | "em_atendimento"
   | "qualificado"
   | "cliente"
   | "perdido";
@@ -43,19 +46,9 @@ function podeGerenciarContatos(usuario: UsuarioContexto) {
 }
 
 function normalizarStatusLead(valor: string): StatusLead {
-  const v = String(valor || "").trim().toLowerCase();
-
-  if (
-    v === "novo" ||
-    v === "em_atendimento" ||
-    v === "qualificado" ||
-    v === "cliente" ||
-    v === "perdido"
-  ) {
-    return v;
-  }
-
-  return "novo";
+  return statusLeadLegadoDaClassificacao(
+    normalizarClassificacaoLead(valor, "novo")
+  ) as StatusLead;
 }
 
 function normalizeHeaderName(value: string) {
@@ -409,7 +402,13 @@ export async function POST(request: Request) {
         getFirstValueByPossibleHeaders(headers, row, ["campanha", "campaign"]) || null;
 
       const statusLead = normalizarStatusLead(
-        getFirstValueByPossibleHeaders(headers, row, ["status_lead", "status"])
+        getFirstValueByPossibleHeaders(headers, row, [
+          "classificacao",
+          "classificação",
+          "classificacao_lead",
+          "status_lead",
+          "status",
+        ])
       );
 
       const base: LinhaPreview = {

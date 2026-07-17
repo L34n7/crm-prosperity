@@ -30,17 +30,21 @@ const CLASSIFICACAO_LEGADA_MAP: Record<string, ClassificacaoLead> = {
   negativo: "perdido",
 };
 
-export function normalizarClassificacaoLead(
-  valor: unknown,
-  fallback: ClassificacaoLead = "novo"
-): ClassificacaoLead {
-  const normalizado = String(valor || "")
+function normalizarTokenClassificacao(valor: unknown) {
+  return String(valor || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9_]+/g, "_")
     .replace(/^_|_$/g, "");
+}
+
+export function normalizarClassificacaoLead(
+  valor: unknown,
+  fallback: ClassificacaoLead = "novo"
+): ClassificacaoLead {
+  const normalizado = normalizarTokenClassificacao(valor);
 
   if (CLASSIFICACOES_SET.has(normalizado)) {
     return normalizado as ClassificacaoLead;
@@ -50,7 +54,12 @@ export function normalizarClassificacaoLead(
 }
 
 export function classificacaoLeadValida(valor: unknown): valor is ClassificacaoLead {
-  return CLASSIFICACOES_SET.has(normalizarClassificacaoLead(valor));
+  const normalizado = normalizarTokenClassificacao(valor);
+
+  return (
+    CLASSIFICACOES_SET.has(normalizado) ||
+    Object.prototype.hasOwnProperty.call(CLASSIFICACAO_LEGADA_MAP, normalizado)
+  );
 }
 
 export function statusLeadLegadoDaClassificacao(

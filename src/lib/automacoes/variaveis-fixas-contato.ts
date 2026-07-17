@@ -1,3 +1,5 @@
+import { normalizarClassificacaoLead } from "@/lib/leads/classificacao";
+
 type ContatoVariaveisFixas = {
   nome?: string | null;
   whatsapp_profile_name?: string | null;
@@ -6,6 +8,7 @@ type ContatoVariaveisFixas = {
   campanha?: string | null;
   origem?: string | null;
   status_lead?: string | null;
+  classificacao?: string | null;
 };
 
 type ExtrasVariaveisFixas = {
@@ -21,6 +24,7 @@ type CampoContatoVariavelFixa =
   | "campanha"
   | "origem"
   | "status_lead"
+  | "classificacao"
   | "nome_whatsapp"
   | "protocolo_atual"
   | "ultimo_protocolo";
@@ -54,6 +58,9 @@ const VARIAVEIS_FIXAS_CONTATO_CAMPOS: Record<
 
   status: "status_lead",
   status_lead: "status_lead",
+  classificacao: "classificacao",
+  classificacao_lead: "classificacao",
+  lead_classificacao: "classificacao",
 
   protocolo_atual: "protocolo_atual",
   ultimo_protocolo: "ultimo_protocolo",
@@ -68,6 +75,7 @@ export const VARIAVEIS_FIXAS_CONTATO = [
   "campanha",
   "origem",
   "status_lead",
+  "classificacao_lead",
   "protocolo_atual",
   "ultimo_protocolo",
 ] as const;
@@ -104,13 +112,18 @@ export function montarMapaVariaveisFixasContato(
   contato: ContatoVariaveisFixas | null | undefined,
   extras: ExtrasVariaveisFixas = {}
 ) {
+  const classificacao = normalizarClassificacaoLead(
+    contato?.classificacao || contato?.status_lead,
+    "novo"
+  );
   const valores: Record<CampoContatoVariavelFixa, string> = {
     nome: String(contato?.nome || "").trim(),
     email: String(contato?.email || "").trim(),
     telefone: String(contato?.telefone || "").trim(),
     campanha: String(contato?.campanha || "").trim(),
     origem: String(contato?.origem || "").trim(),
-    status_lead: String(contato?.status_lead || "").trim(),
+    status_lead: classificacao,
+    classificacao,
     nome_whatsapp: String(
       extras.nome_whatsapp || contato?.whatsapp_profile_name || contato?.nome || ""
     ).trim(),

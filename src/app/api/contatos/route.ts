@@ -8,6 +8,12 @@ import {
 } from "@/lib/auditoria/logs";
 import { buscarCooldownsDisparoPorTelefone } from "@/lib/whatsapp/disparo-cooldown";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import {
+  CLASSIFICACOES_LEAD,
+  classificacaoLeadValida,
+  normalizarClassificacaoLead,
+  statusLeadLegadoDaClassificacao,
+} from "@/lib/leads/classificacao";
 
 type ContatoLista = {
   id: unknown;
@@ -132,9 +138,9 @@ export async function GET(request: Request) {
   const classificacoes = (searchParams.get("classificacoes") || "")
     .split(",")
     .map((item) => item.trim())
-    .filter((item) =>
-      ["qualificado", "convertido", "perdido"].includes(item)
-    );
+    .filter(classificacaoLeadValida)
+    .map((item) => normalizarClassificacaoLead(item, "novo"))
+    .filter((item) => CLASSIFICACOES_LEAD.includes(item));
   const statusConversa = (searchParams.get("status_conversa") || "")
     .split(",")
     .map((item) => item.trim())
@@ -333,15 +339,14 @@ export async function GET(request: Request) {
 
   if (classificacoes.length > 0) {
     query = query.in("classificacao", classificacoes);
-  } else if (statusLead === "qualificado") {
-    query = query.eq("classificacao", "qualificado");
-  } else if (statusLead === "cliente") {
-    query = query.eq("classificacao", "convertido");
-  } else if (statusLead === "perdido") {
-    query = query.eq("classificacao", "perdido");
+  } else if (statusLead && classificacaoLeadValida(statusLead)) {
+    query = query.eq(
+      "classificacao",
+      normalizarClassificacaoLead(statusLead, "novo")
+    );
   }
 
-  if (apenasNovos || statusLead === "novo") {
+  if (apenasNovos) {
     query = query.gte(
       "created_at",
       new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
@@ -521,7 +526,17 @@ export async function POST(request: Request) {
   const email = body?.email?.trim()?.toLowerCase() || null;
   const rastreamentoCampanhaId =
     String(body?.rastreamento_campanha_id || "").trim() || null;
-  const status_lead = body?.status_lead || "novo";
+  const classificacaoEntrada = body?.classificacao ?? body?.status_lead ?? "novo";
+
+  if (!classificacaoLeadValida(classificacaoEntrada)) {
+    return NextResponse.json(
+      { ok: false, error: "Classificação do lead inválida" },
+      { status: 400 }
+    );
+  }
+
+  const classificacaoLead = normalizarClassificacaoLead(classificacaoEntrada);
+  const status_lead = statusLeadLegadoDaClassificacao(classificacaoLead);
   const observacoes = body?.observacoes?.trim() || null;
   const empresa_id = usuario.empresa_id;
   
@@ -536,17 +551,6 @@ export async function POST(request: Request) {
   if (!telefone) {
     return NextResponse.json(
       { ok: false, error: "Telefone é obrigatório" },
-      { status: 400 }
-    );
-  }
-
-  if (
-    !["novo", "em_atendimento", "qualificado", "cliente", "perdido"].includes(
-      status_lead
-    )
-  ) {
-    return NextResponse.json(
-      { ok: false, error: "Status do lead inválido" },
       { status: 400 }
     );
   }
@@ -625,6 +629,8 @@ export async function POST(request: Request) {
       campanha,
       rastreamento_origem_id: campanhaRastreamento?.origem_id || null,
       rastreamento_campanha_id: campanhaRastreamento?.id || null,
+      classificacao: classificacaoLead,
+      classificacao_atualizada_em: new Date().toISOString(),
       status_lead,
       observacoes,
       telefone_revisar: false,

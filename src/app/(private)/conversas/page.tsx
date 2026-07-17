@@ -395,7 +395,7 @@ type VariavelForm = {
 };
 
 const TEXTO_VARIAVEIS_FIXAS_MACRO =
-  "Variáveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+  "Variáveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
 
 const VARIAVEIS_FIXAS_SISTEMA = [
   {
@@ -437,7 +437,12 @@ const VARIAVEIS_FIXAS_SISTEMA = [
   {
     chave: "status_lead",
     exemplo: "{{status_lead}}",
-    descricao: "Status atual do lead.",
+    descricao: "Classificação atual do lead.",
+  },
+  {
+    chave: "classificacao_lead",
+    exemplo: "{{classificacao_lead}}",
+    descricao: "Classificação global do lead.",
   },
   {
     chave: "protocolo_atual",
@@ -512,9 +517,8 @@ type AbaMidiaDocsLinks = "midia" | "documentos" | "links";
 
 type StatusLeadContato =
   | "novo"
-  | "em_atendimento"
   | "qualificado"
-  | "cliente"
+  | "convertido"
   | "perdido";
 
 type ContatoCompartilhadoMensagem = {
@@ -650,7 +654,12 @@ type RastreamentoEventoTipoManual =
   | "venda_perdida"
   | "lead_qualificado"
   | "agendamento_criado"
-  | "agendamento_confirmado";
+  | "agendamento_confirmado"
+  | "entrada_grupo_confirmada"
+  | "pagamento_confirmado"
+  | "objetivo_concluido"
+  | "objetivo_nao_concluido"
+  | "sem_interesse";
 
 type RastreamentoEventoConversa = {
   id: string;
@@ -675,6 +684,11 @@ const RASTREAMENTO_EVENTOS_MANUAIS: Array<{
   { value: "lead_qualificado", label: "Lead qualificado" },
   { value: "agendamento_criado", label: "Agendamento criado" },
   { value: "agendamento_confirmado", label: "Agendamento confirmado" },
+  { value: "entrada_grupo_confirmada", label: "Entrada no grupo confirmada" },
+  { value: "pagamento_confirmado", label: "Pagamento confirmado" },
+  { value: "objetivo_concluido", label: "Objetivo concluído" },
+  { value: "objetivo_nao_concluido", label: "Objetivo não concluído" },
+  { value: "sem_interesse", label: "Sem interesse" },
 ];
 
 function getEventoRastreamentoLabel(tipo: string) {
@@ -12297,9 +12311,8 @@ const templateFooterTexto = useMemo(() => {
                     }
                   >
                     <option value="novo">Novo</option>
-                    <option value="em_atendimento">Em atendimento</option>
                     <option value="qualificado">Qualificado</option>
-                    <option value="cliente">Cliente</option>
+                    <option value="convertido">Convertido</option>
                     <option value="perdido">Perdido</option>
                   </select>
                 </div>

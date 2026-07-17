@@ -10,7 +10,7 @@ export async function GET() {
       "email",
       "origem",
       "campanha",
-      "status_lead",
+      "classificacao",
       "observacoes",
     ];
 
@@ -21,7 +21,7 @@ export async function GET() {
       "joao@email.com",
       "WhatsApp",
       "Campanha Abril",
-      "novo",
+      "qualificado",
       "Cliente interessado",
     ];
 

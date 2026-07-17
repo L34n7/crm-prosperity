@@ -502,7 +502,7 @@ function mimeTypeParaUpload(arquivo: File) {
 }
 const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; 
 const VARIAVEIS_FIXAS_CONTATO_HELP =
-    "Variaveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+    "Variaveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
 const VARIAVEIS_FIXAS_SISTEMA = [
   {
     chave: "nome_contato",
@@ -543,7 +543,12 @@ const VARIAVEIS_FIXAS_SISTEMA = [
   {
     chave: "status_lead",
     exemplo: "{{status_lead}}",
-    descricao: "Status atual do lead.",
+    descricao: "Classificacao atual do lead.",
+  },
+  {
+    chave: "classificacao_lead",
+    exemplo: "{{classificacao_lead}}",
+    descricao: "Classificacao global do lead.",
   },
   {
     chave: "protocolo_atual",

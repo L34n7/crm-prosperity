@@ -58,3 +58,148 @@ create index if not exists contatos_empresa_classificacao_idx
 
 create index if not exists contatos_empresa_classificacao_atualizada_idx
   on public.contatos (empresa_id, classificacao_atualizada_em desc);
+
+create or replace function public.rastreamento_classificacao_evento(
+  p_tipo text,
+  p_metadata jsonb
+)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when p_tipo = 'lead_criado'
+      then 'novo'
+    when p_tipo in (
+      'protocolo_iniciado',
+      'conversa_iniciada',
+      'primeira_mensagem_recebida',
+      'lead_qualificado',
+      'fluxo_iniciado',
+      'fluxo_transferido_atendimento'
+    ) then 'qualificado'
+    when p_tipo in (
+      'venda_realizada',
+      'agendamento_criado',
+      'agendamento_confirmado',
+      'agendamento_remarcado',
+      'agendamento_realizado',
+      'entrada_grupo_confirmada',
+      'pagamento_confirmado',
+      'objetivo_concluido'
+    ) then 'convertido'
+    when p_tipo in (
+      'venda_perdida',
+      'agendamento_cancelado',
+      'agendamento_faltou',
+      'fluxo_incompleto_timeout',
+      'conversa_encerrada_24h',
+      'sem_interesse',
+      'objetivo_nao_concluido'
+    ) then 'perdido'
+    when p_tipo = 'fluxo_finalizado'
+      and coalesce(p_metadata->>'resultado_fluxo', '') = 'positivo'
+      then 'convertido'
+    when p_tipo = 'fluxo_finalizado'
+      and coalesce(p_metadata->>'resultado_fluxo', '') = 'negativo'
+      then 'perdido'
+    when p_tipo = 'fluxo_finalizado'
+      and coalesce(p_metadata->>'resultado_fluxo', '') = 'neutro'
+      then 'qualificado'
+    when p_tipo = 'conversa_encerrada_manual'
+      and coalesce(p_metadata->>'resultado', '') = 'convertido'
+      then 'convertido'
+    when p_tipo = 'conversa_encerrada_manual'
+      and coalesce(p_metadata->>'resultado', '') = 'perdido'
+      then 'perdido'
+    when p_tipo = 'conversa_encerrada_manual'
+      then 'qualificado'
+    else null
+  end;
+$$;
+
+create or replace function public.recalcular_classificacao_contato(
+  p_contato_id uuid
+)
+returns void
+language plpgsql
+as $$
+declare
+  v_protocolo record;
+  v_evento record;
+  v_classificacao text;
+begin
+  if p_contato_id is null then
+    return;
+  end if;
+
+  select
+    cp.id,
+    cp.resultado,
+    cp.resultado_em,
+    cp.resultado_evento_id,
+    coalesce(cp.started_at, cp.created_at) as iniciado_em
+  into v_protocolo
+  from public.conversa_protocolos cp
+  where cp.contato_id = p_contato_id
+  order by coalesce(cp.started_at, cp.created_at) desc, cp.created_at desc
+  limit 1;
+
+  if v_protocolo.id is not null then
+    v_classificacao := case
+      when v_protocolo.resultado = 'convertido' then 'convertido'
+      when v_protocolo.resultado = 'perdido' then 'perdido'
+      else 'qualificado'
+    end;
+
+    update public.contatos
+    set
+      classificacao = v_classificacao,
+      status_lead = case
+        when v_classificacao = 'convertido' then 'cliente'
+        else v_classificacao
+      end,
+      classificacao_atualizada_em =
+        coalesce(v_protocolo.resultado_em, v_protocolo.iniciado_em, now()),
+      classificacao_evento_id = v_protocolo.resultado_evento_id,
+      classificacao_protocolo_id = v_protocolo.id
+    where id = p_contato_id;
+
+    return;
+  end if;
+
+  select
+    e.id,
+    public.rastreamento_classificacao_evento(e.tipo, e.metadata_json)
+      as classificacao,
+    e.ocorrido_em
+  into v_evento
+  from public.rastreamento_eventos e
+  where e.contato_id = p_contato_id
+    and e.conversa_protocolo_id is null
+    and public.rastreamento_classificacao_evento(
+      e.tipo,
+      e.metadata_json
+    ) is not null
+  order by e.ocorrido_em desc, e.created_at desc, e.id desc
+  limit 1;
+
+  v_classificacao := case
+    when v_evento.classificacao in ('novo', 'qualificado', 'convertido', 'perdido')
+      then v_evento.classificacao
+    else null
+  end;
+
+  update public.contatos
+  set
+    classificacao = v_classificacao,
+    status_lead = case
+      when v_classificacao = 'convertido' then 'cliente'
+      else coalesce(v_classificacao, status_lead)
+    end,
+    classificacao_atualizada_em = v_evento.ocorrido_em,
+    classificacao_evento_id = v_evento.id,
+    classificacao_protocolo_id = null
+  where id = p_contato_id;
+end;
+$$;

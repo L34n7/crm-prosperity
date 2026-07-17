@@ -5,6 +5,11 @@ import {
   type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import {
+  CLASSIFICACOES_LEAD,
+  classificacaoLeadValida,
+  normalizarClassificacaoLead,
+} from "@/lib/leads/classificacao";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -88,9 +93,9 @@ export async function GET(request: Request) {
   const classificacoes = (searchParams.get("classificacoes") || "")
     .split(",")
     .map((item) => item.trim())
-    .filter((item) =>
-      ["qualificado", "convertido", "perdido"].includes(item)
-    );
+    .filter(classificacaoLeadValida)
+    .map((item) => normalizarClassificacaoLead(item, "novo"))
+    .filter((item) => CLASSIFICACOES_LEAD.includes(item));
   const statusConversa = (searchParams.get("status_conversa") || "")
     .split(",")
     .map((item) => item.trim())
@@ -222,15 +227,14 @@ export async function GET(request: Request) {
 
     if (classificacoes.length > 0) {
       query = query.in("classificacao", classificacoes);
-    } else if (statusLead === "qualificado") {
-      query = query.eq("classificacao", "qualificado");
-    } else if (statusLead === "cliente") {
-      query = query.eq("classificacao", "convertido");
-    } else if (statusLead === "perdido") {
-      query = query.eq("classificacao", "perdido");
+    } else if (statusLead && classificacaoLeadValida(statusLead)) {
+      query = query.eq(
+        "classificacao",
+        normalizarClassificacaoLead(statusLead, "novo")
+      );
     }
 
-    if (apenasNovos || statusLead === "novo") {
+    if (apenasNovos) {
       query = query.gte(
         "created_at",
         new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()

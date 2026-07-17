@@ -9,6 +9,11 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import {
+  classificacaoLeadValida,
+  normalizarClassificacaoLead,
+  statusLeadLegadoDaClassificacao,
+} from "@/lib/leads/classificacao";
 
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -244,20 +249,25 @@ if (body?.rastreamento_campanha_id !== undefined) {
   }
 }
 
-// status_lead
-if (body?.status_lead !== undefined) {
-  if (
-    !["novo", "em_atendimento", "qualificado", "cliente", "perdido"].includes(
-      body.status_lead
-    )
-  ) {
+// classificacao/status_lead
+if (body?.status_lead !== undefined || body?.classificacao !== undefined) {
+  const classificacaoEntrada = body?.classificacao ?? body?.status_lead;
+
+  if (!classificacaoLeadValida(classificacaoEntrada)) {
     return NextResponse.json(
-      { ok: false, error: "Status do lead inválido" },
+      { ok: false, error: "Classificação do lead inválida" },
       { status: 400 }
     );
   }
 
-  payload.status_lead = body.status_lead;
+  const classificacaoLead = normalizarClassificacaoLead(
+    classificacaoEntrada,
+    normalizarClassificacaoLead(contatoAtual.classificacao || contatoAtual.status_lead)
+  );
+
+  payload.classificacao = classificacaoLead;
+  payload.classificacao_atualizada_em = new Date().toISOString();
+  payload.status_lead = statusLeadLegadoDaClassificacao(classificacaoLead);
 }
 
 // observacoes

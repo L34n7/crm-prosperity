@@ -8,15 +8,13 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
+import {
+  classificacaoLeadValida,
+  normalizarClassificacaoLead,
+  statusLeadLegadoDaClassificacao,
+} from "@/lib/leads/classificacao";
 
 const MAX_CONTATOS_POR_LOTE = 500;
-const STATUS_VALIDOS = [
-  "novo",
-  "em_atendimento",
-  "qualificado",
-  "cliente",
-  "perdido",
-] as const;
 
 function podeGerenciarContatos(usuario: UsuarioContexto) {
   const perfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
@@ -113,7 +111,9 @@ export async function PATCH(request: Request) {
     "rastreamento_campanha_id"
   );
   const temOrigem = Object.prototype.hasOwnProperty.call(body, "origem");
-  const temStatus = Object.prototype.hasOwnProperty.call(body, "status_lead");
+  const temStatus =
+    Object.prototype.hasOwnProperty.call(body, "status_lead") ||
+    Object.prototype.hasOwnProperty.call(body, "classificacao");
   const supabaseAdmin = getSupabaseAdmin();
 
   if (temCampanha) {
@@ -175,16 +175,23 @@ export async function PATCH(request: Request) {
   }
 
   if (temStatus) {
-    const status = String(body.status_lead || "");
+    const classificacaoEntrada = body.classificacao ?? body.status_lead;
 
-    if (!STATUS_VALIDOS.includes(status as (typeof STATUS_VALIDOS)[number])) {
+    if (!classificacaoLeadValida(classificacaoEntrada)) {
       return NextResponse.json(
-        { ok: false, error: "Status do lead inválido." },
+        { ok: false, error: "Classificação do lead inválida." },
         { status: 400 }
       );
     }
 
-    payload.status_lead = status;
+    const classificacaoLead = normalizarClassificacaoLead(
+      classificacaoEntrada,
+      "novo"
+    );
+
+    payload.classificacao = classificacaoLead;
+    payload.classificacao_atualizada_em = new Date().toISOString();
+    payload.status_lead = statusLeadLegadoDaClassificacao(classificacaoLead);
   }
 
   if (Object.keys(payload).length === 0) {

@@ -19,6 +19,7 @@ type ContatoAgendado = {
   origem?: string | null;
   campanha?: string | null;
   status_lead?: string | null;
+  classificacao?: string | null;
 };
 
 type ComponenteTemplate = {
@@ -195,7 +196,8 @@ async function buscarContatoAgendado(params: {
             empresa,
             origem,
             campanha,
-            status_lead
+            status_lead,
+            classificacao
           )
         `
       )
@@ -220,7 +222,7 @@ async function buscarContatoAgendado(params: {
     const { data, error } = await supabaseAdmin
       .from("contatos")
       .select(
-        "id, nome, whatsapp_profile_name, telefone, email, empresa, origem, campanha, status_lead"
+        "id, nome, whatsapp_profile_name, telefone, email, empresa, origem, campanha, status_lead, classificacao"
       )
       .eq("id", params.contatoId)
       .eq("empresa_id", params.empresaId)
@@ -240,6 +242,7 @@ async function buscarContatoAgendado(params: {
     origem: String(params.payload.origem_contato || "").trim() || null,
     campanha: String(params.payload.campanha || "").trim() || null,
     status_lead: String(params.payload.status_lead || "").trim() || null,
+    classificacao: String(params.payload.classificacao || "").trim() || null,
   } satisfies ContatoAgendado;
 }
 
@@ -354,6 +357,8 @@ async function resolverValores(params: {
     "campanha",
     "origem_contato",
     "status_lead",
+    "classificacao",
+    "classificacao_lead",
   ]) {
     adicionarPayload(chave, params.payload[chave]);
   }
@@ -386,8 +391,17 @@ async function resolverValores(params: {
     if (chave === "campanha") return String(params.contato.campanha || "");
     if (chave === "origem") return String(params.contato.origem || "");
 
-    if (chave === "status_lead" || chave === "status") {
-      return String(params.contato.status_lead || "");
+    if (
+      chave === "status_lead" ||
+      chave === "status" ||
+      chave === "classificacao" ||
+      chave === "classificacao_lead" ||
+      chave === "lead_classificacao"
+    ) {
+      return (
+        fixasContato.get(chave) ||
+        String(params.contato.classificacao || params.contato.status_lead || "")
+      );
     }
 
     if (chave === "protocolo_atual") return protocoloAtual;
