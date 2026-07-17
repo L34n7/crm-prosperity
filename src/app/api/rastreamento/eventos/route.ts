@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  aplicarClassificacaoLeadContato,
+  classificacaoLeadPorEventoRastreamento,
+} from "@/lib/leads/classificacao";
 import { obterAcessoRastreamento } from "@/lib/rastreamento/api";
 import {
   obterResultadoFluxoEventoManual,
@@ -100,12 +104,13 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const tipo = String(body?.tipo || "").trim();
-  const contatoId = String(body?.contato_id || "").trim() || null;
+  let contatoId = String(body?.contato_id || "").trim() || null;
   const conversaId = String(body?.conversa_id || "").trim() || null;
   const conversaProtocoloId =
     String(body?.conversa_protocolo_id || "").trim() || null;
   const observacao = String(body?.observacao || "").trim() || null;
   const valorInformado = normalizarValorInformado(body?.valor);
+  const resultadoFluxo = obterResultadoFluxoEventoManual(tipo);
 
   if (!tipoEventoManualValido(tipo)) {
     return NextResponse.json(
@@ -150,7 +155,7 @@ export async function POST(request: Request) {
   if (conversaId) {
     const { data: conversa } = await supabase
       .from("conversas")
-      .select("id")
+      .select("id, contato_id")
       .eq("empresa_id", acesso.usuario.empresa_id)
       .eq("id", conversaId)
       .maybeSingle();
@@ -161,6 +166,8 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
+
+    contatoId = contatoId || conversa.contato_id || null;
   }
 
   if (conversaProtocoloId) {
@@ -189,7 +196,7 @@ export async function POST(request: Request) {
     protocolo = data;
   }
 
-  const { error } = await supabase.rpc("rastreamento_criar_evento", {
+  const { data: eventoCriado, error } = await supabase.rpc("rastreamento_criar_evento", {
     p_empresa_id: acesso.usuario.empresa_id,
     p_tipo: tipo,
     p_contato_id: contatoId,
@@ -201,13 +208,34 @@ export async function POST(request: Request) {
       conversa_protocolo_id: protocolo?.id || null,
       protocolo: protocolo?.protocolo || null,
       observacao,
-      resultado_fluxo: obterResultadoFluxoEventoManual(tipo),
+      resultado_fluxo: resultadoFluxo,
     },
     p_created_by: acesso.usuario.id,
   });
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  const classificacao = classificacaoLeadPorEventoRastreamento(
+    tipo,
+    resultadoFluxo
+  );
+
+  if (classificacao) {
+    await aplicarClassificacaoLeadContato({
+      empresaId: acesso.usuario.empresa_id,
+      contatoId,
+      classificacao,
+      eventoId:
+        Array.isArray(eventoCriado) && eventoCriado[0]?.id
+          ? eventoCriado[0].id
+          : typeof eventoCriado === "object" && eventoCriado && "id" in eventoCriado
+            ? String(eventoCriado.id)
+            : null,
+      protocoloId: protocolo?.id || null,
+      origem: "rastreamento_manual",
+    });
   }
 
   return NextResponse.json(
