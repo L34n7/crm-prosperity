@@ -4,6 +4,11 @@ export const TIPOS_EVENTO_MANUAL = [
   "lead_qualificado",
   "agendamento_criado",
   "agendamento_confirmado",
+  "entrada_grupo_confirmada",
+  "pagamento_confirmado",
+  "objetivo_concluido",
+  "objetivo_nao_concluido",
+  "sem_interesse",
 ] as const;
 
 export type TipoEventoManual = (typeof TIPOS_EVENTO_MANUAL)[number];
@@ -18,6 +23,11 @@ const RESULTADO_FLUXO_POR_TIPO: Record<
   lead_qualificado: "neutro",
   agendamento_criado: "positivo",
   agendamento_confirmado: "positivo",
+  entrada_grupo_confirmada: "positivo",
+  pagamento_confirmado: "positivo",
+  objetivo_concluido: "positivo",
+  objetivo_nao_concluido: "negativo",
+  sem_interesse: "negativo",
 };
 
 export function tipoEventoManualValido(tipo: string): tipo is TipoEventoManual {
