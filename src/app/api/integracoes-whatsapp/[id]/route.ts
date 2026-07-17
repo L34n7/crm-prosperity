@@ -142,7 +142,7 @@ export async function DELETE(
 
     const redirectTo =
       !totalError && (totalIntegracoesRestantes || 0) > 0
-        ? "/configuracoes/whatsapp/perfil"
+        ? "/perfil-whatsapp"
         : "/configurar-ambiente";
 
     const auditMeta = getRequestAuditMetadata(request);

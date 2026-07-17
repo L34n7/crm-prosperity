@@ -111,7 +111,7 @@ export default function MeusImoveisPage() {
             className={`${styles.secondaryButton} ${styles.integrationButton}`}
             type="button"
             onClick={() =>
-              router.push("/configuracoes#integracao-imobiliaria")
+              router.push("/configuracoes-gerais#integracao-imobiliaria")
             }
           >
             <Cable size={17} />

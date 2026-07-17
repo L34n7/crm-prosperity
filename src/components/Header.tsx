@@ -1112,7 +1112,7 @@ export default function Header({
 
               {headerUser.isAdmin ? (
                 <Link
-                  href="/configuracoes"
+                  href="/configuracoes-gerais"
                   className={styles.dropdownItem}
                   onClick={closeMenu}
                 >

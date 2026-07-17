@@ -106,7 +106,7 @@ const menuItems: MenuItem[] = [
   { label: "Agendas", href: "/agendas", icon: CalendarCheck },
   {
     label: "Templates",
-    href: "/configuracoes/templates-whatsapp",
+    href: "/templates-whatsapp",
     icon: FileText,
   },
   { label: "Fluxos", href: "/fluxos", icon: GitBranch },
@@ -118,10 +118,14 @@ const menuItems: MenuItem[] = [
     icon: MousePointerClick,
     permissao: "rastreamento.visualizar",
   },
-  { label: "Usuários", href: "/usuarios", icon: Users },
+  {
+    label: "Usuários",
+    href: "/configuracoes/usuarios",
+    icon: Users,
+  },
   {
     label: "Empresas",
-    href: "/empresas",
+    href: "/configuracoes/empresas",
     icon: Building2,
     permissao: PERMISSAO_INTERNA_EMPRESAS,
   },
@@ -144,7 +148,7 @@ const menuItems: MenuItem[] = [
   },
   {
     label: "Auditoria",
-    href: "/auditoria",
+    href: "/configuracoes/auditoria",
     icon: ScrollText,
     permissao: "auditoria.visualizar",
   },
@@ -156,18 +160,18 @@ const menuItems: MenuItem[] = [
   },
   {
     label: "Perfil WhatsApp",
-    href: "/configuracoes/whatsapp/perfil",
+    href: "/perfil-whatsapp",
     icon: Settings2,
   },
 ];
 
 const configuracoesHrefs = new Set([
-  "/usuarios",
-  "/empresas",
+  "/configuracoes/usuarios",
+  "/configuracoes/empresas",
   "/configuracoes/setores",
   "/configuracoes/perfis",
   "/configuracoes/permissoes",
-  "/auditoria",
+  "/configuracoes/auditoria",
 ]);
 
 function isActivePath(pathname: string, href: string) {
@@ -294,7 +298,7 @@ export default function Sidebar({
 
   const desktopMenuItems = visibleMenuItems.filter(
     (item) =>
-      item.href !== "/configuracoes/whatsapp/perfil" &&
+      item.href !== "/perfil-whatsapp" &&
       !configuracoesHrefs.has(item.href),
   );
 
@@ -314,7 +318,7 @@ export default function Sidebar({
 
   const mobileMoreItems = visibleMenuItems.filter(
     (item) =>
-      item.href !== "/configuracoes/whatsapp/perfil" &&
+      item.href !== "/perfil-whatsapp" &&
       !mobilePrimaryHrefs.includes(item.href) &&
       !configuracoesHrefs.has(item.href),
   );
@@ -322,7 +326,7 @@ export default function Sidebar({
   const mobileMoreActive =
     mobileMoreItems.some((item) => isActivePath(pathname, item.href)) ||
     isActivePath(pathname, "/perfil") ||
-    isActivePath(pathname, "/configuracoes/whatsapp/perfil");
+    isActivePath(pathname, "/perfil-whatsapp");
 
   function getMenuNotificationCount(href: string) {
     if (href === "/conversas") {
@@ -479,7 +483,7 @@ export default function Sidebar({
                   title={collapsed ? item.label : undefined}
                 >
                   <span className={styles.linkIcon}>
-                    {item.href === "/configuracoes/whatsapp/perfil" &&
+                    {item.href === "/perfil-whatsapp" &&
                     whatsappPerfil?.foto ? (
                       <img
                         src={whatsappPerfil.foto}
@@ -587,9 +591,9 @@ export default function Sidebar({
 
       {!assinaturaBloqueada && (
         <Link
-          href="/configuracoes/whatsapp/perfil"
+          href="/perfil-whatsapp"
           className={`${styles.link} ${styles.linkWhatsappPerfil} ${
-            pathname === "/configuracoes/whatsapp/perfil"
+            pathname === "/perfil-whatsapp"
               ? styles.linkWhatsappActive
               : ""
           }`}
@@ -725,7 +729,7 @@ export default function Sidebar({
             {!assinaturaBloqueada && (
               <div className={styles.mobileWhatsappCard}>
                 <Link
-                  href="/configuracoes/whatsapp/perfil"
+                  href="/perfil-whatsapp"
                   className={styles.mobileWhatsappLink}
                   onClick={() => setMobileMoreOpen(false)}
                 >
@@ -781,7 +785,7 @@ export default function Sidebar({
                     onClick={() => setMobileMoreOpen(false)}
                   >
                     <span className={styles.mobileMoreIcon}>
-                      {item.href === "/configuracoes/whatsapp/perfil" &&
+                      {item.href === "/perfil-whatsapp" &&
                       whatsappPerfil?.foto ? (
                         <img
                           src={whatsappPerfil.foto}

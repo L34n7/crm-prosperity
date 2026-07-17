@@ -9283,7 +9283,7 @@ const templateFooterTexto = useMemo(() => {
                                         type="button"
                                         className={styles.disparoQuickNewButton}
                                         onClick={() => {
-                                          window.location.href = "/configuracoes/templates-whatsapp";
+                                          window.location.href = "/templates-whatsapp";
                                         }}
                                       >
                                         + Novo

@@ -126,7 +126,7 @@ export default function AmbienteObrigatorioGuard() {
 
       void verificarAmbiente(false, true).then((configurado) => {
         if (configurado) {
-          router.replace("/configuracoes/whatsapp/perfil");
+          router.replace("/perfil-whatsapp");
         }
       });
       return;

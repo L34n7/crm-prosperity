@@ -1579,7 +1579,7 @@ async function salvarNichoEAvancar() {
 
   function voltarEtapaQuiz() {
     if (fluxoNumeroAdicional && etapaQuiz <= 1) {
-      router.push("/configuracoes/whatsapp/perfil");
+      router.push("/perfil-whatsapp");
       return;
     }
 
@@ -2539,7 +2539,7 @@ return (
                           onClick={() =>
                             router.push(
                               fluxoNumeroAdicional
-                                ? "/configuracoes/whatsapp/perfil"
+                                ? "/perfil-whatsapp"
                                 : "/configuracoes/permissoes"
                             )
                           }

@@ -144,7 +144,10 @@ export default async function HomePage() {
                   Abrir conversas
                 </Link>
 
-                <Link href="/usuarios" className={styles.secondaryButton}>
+                <Link
+                  href="/configuracoes/usuarios"
+                  className={styles.secondaryButton}
+                >
                   Gerenciar usuários
                 </Link>
               </div>
