@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  aplicarClassificacaoLeadContato,
+  classificacaoLeadPorEventoRastreamento,
+} from "@/lib/leads/classificacao";
 import { obterAcessoRastreamento } from "@/lib/rastreamento/api";
 import {
   obterResultadoFluxoEventoManual,
@@ -57,6 +61,7 @@ export async function PATCH(
     String(body?.conversa_protocolo_id || "").trim() || null;
   const observacao = String(body?.observacao || "").trim() || null;
   const valorInformado = normalizarValorInformado(body?.valor);
+  const resultadoFluxo = obterResultadoFluxoEventoManual(tipo);
 
   if (!tipoEventoManualValido(tipo)) {
     return NextResponse.json(
@@ -210,7 +215,7 @@ export async function PATCH(
     conversa_protocolo_id: protocolo?.id || null,
     protocolo: protocolo?.protocolo || null,
     observacao,
-    resultado_fluxo: obterResultadoFluxoEventoManual(tipo),
+    resultado_fluxo: resultadoFluxo,
     atualizado_por: acesso.usuario.id,
     atualizado_em: new Date().toISOString(),
   };
@@ -235,6 +240,22 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+  }
+
+  const classificacao = classificacaoLeadPorEventoRastreamento(
+    tipo,
+    resultadoFluxo
+  );
+
+  if (classificacao) {
+    await aplicarClassificacaoLeadContato({
+      empresaId: acesso.usuario.empresa_id,
+      contatoId: contatoAtualizadoId,
+      classificacao,
+      eventoId: data.id,
+      protocoloId: protocolo?.id || null,
+      origem: "rastreamento_manual_edicao",
+    });
   }
 
   return NextResponse.json({
