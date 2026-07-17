@@ -7,6 +7,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { Search, X } from "lucide-react";
 import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
 import styles from "./kanban.module.css";
@@ -133,6 +134,7 @@ export default function KanbanPage() {
   const [dragContatoId, setDragContatoId] = useState<string | null>(null);
   const [dragOverColuna, setDragOverColuna] =
     useState<ClassificacaoLead | null>(null);
+  const [buscaAberta, setBuscaAberta] = useState(false);
   const [feedback, setFeedback] = useState({ success: "", error: "" });
 
   const totalContatos = useMemo(
@@ -249,51 +251,66 @@ export default function KanbanPage() {
           onErrorDismiss={() => setFeedback((atual) => ({ ...atual, error: "" }))}
         />
 
-        <section className={styles.toolbar}>
-          <div>
-            <p className={styles.eyebrow}>Pipeline comercial</p>
-            <h2 className={styles.title}>Leads por etapa</h2>
-            <p className={styles.description}>
-              Mover um card altera a classificação do contato em todo o CRM.
-            </p>
-          </div>
-
-          <form className={styles.searchForm} onSubmit={aplicarBusca}>
-            <input
-              className={styles.searchInput}
-              value={busca}
-              onChange={(event) => setBusca(event.target.value)}
-              placeholder="Buscar nome, telefone, origem ou campanha"
-            />
-            <button className={styles.searchButton} type="submit">
-              Buscar
-            </button>
-            {buscaAplicada && (
-              <button
-                className={styles.clearButton}
-                type="button"
-                onClick={() => {
-                  setBusca("");
-                  setBuscaAplicada("");
-                }}
-              >
-                Limpar
-              </button>
-            )}
-          </form>
-        </section>
-
-        <section className={styles.summaryGrid} aria-label="Resumo do Kanban">
-          <div className={styles.summaryItem}>
-            <span>Total no quadro</span>
-            <strong>{totalContatos}</strong>
-          </div>
-          {colunas.map((coluna) => (
-            <div key={coluna.id} className={styles.summaryItem}>
-              <span>{coluna.titulo}</span>
-              <strong>{coluna.total}</strong>
+        <section className={styles.summaryBar} aria-label="Resumo do Kanban">
+          <div className={styles.summaryGrid}>
+            <div className={styles.summaryItem}>
+              <span>Total no quadro</span>
+              <strong>{totalContatos}</strong>
             </div>
-          ))}
+            {colunas.map((coluna) => (
+              <div
+                key={coluna.id}
+                className={`${styles.summaryItem} ${
+                  styles[`summary_${coluna.id}`]
+                }`}
+              >
+                <span>{coluna.titulo}</span>
+                <strong>{coluna.total}</strong>
+              </div>
+            ))}
+          </div>
+
+          <form
+            className={`${styles.searchDock} ${
+              buscaAberta ? styles.searchDockOpen : ""
+            }`}
+            onSubmit={aplicarBusca}
+          >
+            <div className={styles.searchField}>
+              <input
+                className={styles.searchInput}
+                value={busca}
+                onChange={(event) => setBusca(event.target.value)}
+                placeholder="Buscar no Kanban"
+              />
+              {buscaAplicada && (
+                <button
+                  className={styles.clearSearchButton}
+                  type="button"
+                  aria-label="Limpar busca"
+                  onClick={() => {
+                    setBusca("");
+                    setBuscaAplicada("");
+                  }}
+                >
+                  <X size={14} strokeWidth={2.4} />
+                </button>
+              )}
+            </div>
+
+            <button
+              className={styles.searchIconButton}
+              type={buscaAberta ? "submit" : "button"}
+              aria-label={buscaAberta ? "Buscar no Kanban" : "Abrir busca"}
+              onClick={() => {
+                if (!buscaAberta) {
+                  setBuscaAberta(true);
+                }
+              }}
+            >
+              <Search size={18} strokeWidth={2.4} />
+            </button>
+          </form>
         </section>
 
         <section className={styles.board} aria-busy={loading}>
@@ -334,7 +351,7 @@ export default function KanbanPage() {
                       key={contato.id}
                       className={`${styles.leadCard} ${
                         movendoContatoId === contato.id ? styles.cardMoving : ""
-                      }`}
+                      } ${styles[`card_${coluna.id}`]}`}
                       draggable={movendoContatoId !== contato.id}
                       onDragStart={() => setDragContatoId(contato.id)}
                       onDragEnd={() => {
@@ -366,11 +383,9 @@ export default function KanbanPage() {
                               contato.created_at
                           )}
                         </span>
-                      </div>
-
-                      <label className={styles.mobileMove}>
-                        Mover para
                         <select
+                          className={styles.stageSelect}
+                          aria-label="Mover lead para outra classificação"
                           value={contato.classificacao || coluna.id}
                           disabled={movendoContatoId === contato.id}
                           onChange={(event) =>
@@ -386,7 +401,7 @@ export default function KanbanPage() {
                             </option>
                           ))}
                         </select>
-                      </label>
+                      </div>
                     </article>
                   ))
                 ) : (
