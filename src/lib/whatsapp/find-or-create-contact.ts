@@ -1,6 +1,10 @@
+import {
+  aplicarClassificacaoLeadContato,
+  normalizarClassificacaoLead,
+} from "@/lib/leads/classificacao";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { normalizeContactName } from "@/lib/whatsapp/normalize";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+import { normalizeContactName } from "@/lib/whatsapp/normalize";
 
 export type WhatsAppContact = {
   id: string;
@@ -12,6 +16,7 @@ export type WhatsAppContact = {
   origem?: string | null;
   campanha?: string | null;
   status_lead?: string | null;
+  classificacao?: string | null;
   observacoes?: string | null;
 };
 
@@ -21,6 +26,36 @@ type FindOrCreateContactParams = {
   profileName?: string | null;
   salvarProfileNameWhatsapp?: boolean;
 };
+
+function contatoPrecisaSerQualificado(contato: WhatsAppContact) {
+  const classificacao = normalizarClassificacaoLead(
+    contato.classificacao || contato.status_lead,
+    "novo"
+  );
+
+  return classificacao === "novo";
+}
+
+async function qualificarContatoPorEntradaWhatsapp(
+  contato: WhatsAppContact
+): Promise<WhatsAppContact> {
+  if (!contatoPrecisaSerQualificado(contato)) {
+    return contato;
+  }
+
+  await aplicarClassificacaoLeadContato({
+    empresaId: contato.empresa_id,
+    contatoId: contato.id,
+    classificacao: "qualificado",
+    origem: "entrada_whatsapp",
+  });
+
+  return {
+    ...contato,
+    classificacao: "qualificado",
+    status_lead: "qualificado",
+  };
+}
 
 export async function findOrCreateWhatsAppContact({
   empresaId,
@@ -79,13 +114,18 @@ export async function findOrCreateWhatsAppContact({
           updateError
         );
       } else if (contatoAtualizado) {
-        return contatoAtualizado as WhatsAppContact;
+        return await qualificarContatoPorEntradaWhatsapp(
+          contatoAtualizado as WhatsAppContact
+        );
       }
     }
 
-    return existingContact as WhatsAppContact;
+    return await qualificarContatoPorEntradaWhatsapp(
+      existingContact as WhatsAppContact
+    );
   }
 
+  const agora = new Date().toISOString();
   const { data: newContact, error: insertError } = await supabaseAdmin
     .from("contatos")
     .insert({
@@ -94,7 +134,9 @@ export async function findOrCreateWhatsAppContact({
       whatsapp_profile_name: whatsappProfileName || null,
       telefone,
       origem: "Direto / Nao identificado",
-      status_lead: "novo",
+      status_lead: "qualificado",
+      classificacao: "qualificado",
+      classificacao_atualizada_em: agora,
       observacoes: "Contato criado automaticamente via webhook do WhatsApp.",
     })
     .select("*")
@@ -142,10 +184,14 @@ export async function findOrCreateWhatsAppContact({
           );
         }
 
-        return (contatoAtualizado || contatoExistenteAposConflito) as WhatsAppContact;
+        return await qualificarContatoPorEntradaWhatsapp(
+          (contatoAtualizado || contatoExistenteAposConflito) as WhatsAppContact
+        );
       }
 
-      return contatoExistenteAposConflito as WhatsAppContact;
+      return await qualificarContatoPorEntradaWhatsapp(
+        contatoExistenteAposConflito as WhatsAppContact
+      );
     }
 
     throw new Error(`Erro ao criar contato automaticamente: ${insertError.message}`);
