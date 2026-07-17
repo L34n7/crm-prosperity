@@ -2,11 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {
-  usePathname,
-  useRouter,
-  useSearchParams,
-} from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
@@ -26,6 +22,7 @@ import {
   Settings2,
   FileText,
   GitBranch,
+  Workflow,
   MessageCircle,
   ScrollText,
   MousePointerClick,
@@ -49,10 +46,7 @@ import {
 } from "@/lib/permissoes/internas";
 import { PERMISSAO_VISUALIZAR_DISPAROS } from "@/lib/whatsapp/disparo-permissoes";
 import styles from "./Sidebar.module.css";
-import {
-  getNichoConfig,
-  type NichoCodigo,
-} from "@/lib/nichos/config";
+import { getNichoConfig, type NichoCodigo } from "@/lib/nichos/config";
 
 type MenuItem = {
   label: string;
@@ -110,8 +104,13 @@ const menuItems: MenuItem[] = [
     permissao: PERMISSAO_VISUALIZAR_DISPAROS,
   },
   { label: "Agendas", href: "/agendas", icon: CalendarCheck },
-  { label: "Templates", href: "/configuracoes/templates-whatsapp", icon: FileText },
+  {
+    label: "Templates",
+    href: "/configuracoes/templates-whatsapp",
+    icon: FileText,
+  },
   { label: "Fluxos", href: "/fluxos", icon: GitBranch },
+  { label: "Automações", href: "/automacoes-api", icon: Workflow },
   { label: "Contatos", href: "/contatos", icon: Contact },
   {
     label: "Rastreamento de leads",
@@ -155,7 +154,11 @@ const menuItems: MenuItem[] = [
     icon: BarChart3,
     permissao: PERMISSAO_RELATORIOS_INTERNOS,
   },
-  { label: "Perfil WhatsApp", href: "/configuracoes/whatsapp/perfil", icon: Settings2 },
+  {
+    label: "Perfil WhatsApp",
+    href: "/configuracoes/whatsapp/perfil",
+    icon: Settings2,
+  },
 ];
 
 const configuracoesHrefs = new Set([
@@ -190,10 +193,7 @@ export default function Sidebar({
 
   const conversaAbertaNoMobile =
     pathname === "/conversas" &&
-    Boolean(
-      searchParams.get("id") ||
-      searchParams.get("conversaId")
-  );
+    Boolean(searchParams.get("id") || searchParams.get("conversaId"));
   const headerUser = useHeaderUser();
   const {
     conversasNaoLidas,
@@ -215,7 +215,7 @@ export default function Sidebar({
       ? "true"
       : "false";
   }, [collapsed]);
-    
+
   const assinaturaBloqueada = assinatura?.status === "bloqueada";
   const disparosPendentesVisiveis = assinaturaBloqueada ? 0 : disparosPendentes;
   const planoNome = assinatura?.plano_nome || "Plano atual";
@@ -223,7 +223,7 @@ export default function Sidebar({
   const assinaturaStatusLabel = getAssinaturaStatusLabel(assinaturaStatus);
   const planoTitle = `Plano atual: ${planoNome} (${assinaturaStatusLabel})`;
   const podeVisualizarPlanoSidebar = permissoes.includes(
-    PERMISSAO_VISUALIZAR_PLANO_SIDEBAR
+    PERMISSAO_VISUALIZAR_PLANO_SIDEBAR,
   );
   const nomeFinal = headerUser.profileName || "Usuario";
   const avatarFinal = headerUser.avatarUrl || "";
@@ -269,7 +269,7 @@ export default function Sidebar({
       : []),
   ];
   const menuItemsComCadastro: MenuItem[] = [
-    ...menuItems.slice(0, 8),
+    ...menuItems.slice(0, 9),
     {
       label: nichoConfig.cadastroPlural,
       href: "/cadastros",
@@ -277,7 +277,7 @@ export default function Sidebar({
       permissao: "pessoas.visualizar",
     },
     ...modulosNichoMenu,
-    ...menuItems.slice(8),
+    ...menuItems.slice(9),
   ];
 
   const visibleMenuItems = menuItemsComCadastro.filter((item) => {
@@ -289,17 +289,17 @@ export default function Sidebar({
   });
 
   const configuracoesItems = visibleMenuItems.filter((item) =>
-    configuracoesHrefs.has(item.href)
+    configuracoesHrefs.has(item.href),
   );
 
   const desktopMenuItems = visibleMenuItems.filter(
     (item) =>
       item.href !== "/configuracoes/whatsapp/perfil" &&
-      !configuracoesHrefs.has(item.href)
+      !configuracoesHrefs.has(item.href),
   );
 
   const configuracoesActive = configuracoesItems.some((item) =>
-    isActivePath(pathname, item.href)
+    isActivePath(pathname, item.href),
   );
 
   useEffect(() => {
@@ -311,12 +311,12 @@ export default function Sidebar({
   const mobilePrimaryItems = mobilePrimaryHrefs
     .map((href) => visibleMenuItems.find((item) => item.href === href))
     .filter((item): item is MenuItem => Boolean(item));
-    
+
   const mobileMoreItems = visibleMenuItems.filter(
     (item) =>
       item.href !== "/configuracoes/whatsapp/perfil" &&
       !mobilePrimaryHrefs.includes(item.href) &&
-      !configuracoesHrefs.has(item.href)
+      !configuracoesHrefs.has(item.href),
   );
 
   const mobileMoreActive =
@@ -342,7 +342,7 @@ export default function Sidebar({
 
   const mobileMoreNotificationCount = mobileMoreItems.reduce(
     (total, item) => total + getMenuNotificationCount(item.href),
-    0
+    0,
   );
 
   function getMenuNotificationClass(href: string) {
@@ -385,7 +385,7 @@ export default function Sidebar({
   function persistSidebarState(nextValue: boolean) {
     localStorage.setItem("crm-sidebar-collapsed", String(nextValue));
     document.cookie = `crm-sidebar-collapsed=${String(
-      nextValue
+      nextValue,
     )}; path=/; max-age=31536000; samesite=lax`;
   }
 
@@ -401,7 +401,7 @@ export default function Sidebar({
     const detail = { handled: false };
 
     window.dispatchEvent(
-      new CustomEvent("assinatura:abrir-modal-planos", { detail })
+      new CustomEvent("assinatura:abrir-modal-planos", { detail }),
     );
 
     if (!detail.handled) {
@@ -430,11 +430,7 @@ export default function Sidebar({
     <aside
       className={`${styles.sidebar} ${
         collapsed ? styles.sidebarCollapsed : ""
-      } ${
-        conversaAbertaNoMobile
-          ? styles.sidebarHiddenDuringMobileChat
-          : ""
-      }`}
+      } ${conversaAbertaNoMobile ? styles.sidebarHiddenDuringMobileChat : ""}`}
     >
       <div className={styles.sidebarTop}>
         <div className={styles.topBar}>
@@ -521,7 +517,9 @@ export default function Sidebar({
                       )}
                   </span>
 
-                  {!collapsed && <span className={styles.linkText}>{item.label}</span>}
+                  {!collapsed && (
+                    <span className={styles.linkText}>{item.label}</span>
+                  )}
                 </Link>
               );
             })}
@@ -538,7 +536,7 @@ export default function Sidebar({
                   aria-expanded={configuracoesOpen}
                 >
                   <span className={styles.linkIcon}>
-                    <Settings  size={18} strokeWidth={2} />
+                    <Settings size={18} strokeWidth={2} />
                   </span>
 
                   {!collapsed && (
@@ -609,9 +607,7 @@ export default function Sidebar({
           </span>
 
           {!collapsed && (
-            <span className={styles.linkText}>
-              Perfil WhatsApp
-            </span>
+            <span className={styles.linkText}>Perfil WhatsApp</span>
           )}
         </Link>
       )}
@@ -703,7 +699,9 @@ export default function Sidebar({
 
             {mobileMoreNotificationCount > 0 && (
               <span className={styles.mobileNotificationDot}>
-                {mobileMoreNotificationCount > 9 ? "9+" : mobileMoreNotificationCount}
+                {mobileMoreNotificationCount > 9
+                  ? "9+"
+                  : mobileMoreNotificationCount}
               </span>
             )}
           </span>
@@ -722,7 +720,7 @@ export default function Sidebar({
             className={styles.mobileMorePanel}
             onClick={(event) => event.stopPropagation()}
           >
-          <div className={styles.mobileMoreHandle} />
+            <div className={styles.mobileMoreHandle} />
 
             {!assinaturaBloqueada && (
               <div className={styles.mobileWhatsappCard}>
