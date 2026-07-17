@@ -51,6 +51,11 @@ const modulos = [
     href: "/contatos",
   },
   {
+    titulo: "Kanban",
+    descricao: "Acompanhe os leads por Novo, Qualificado, Convertido e Perdido.",
+    href: "/kanban",
+  },
+  {
     titulo: "Fluxos",
     descricao: "Crie automações, respostas automáticas e jornadas de atendimento.",
     href: "/fluxos",

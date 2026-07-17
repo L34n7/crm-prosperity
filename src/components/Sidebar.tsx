@@ -112,6 +112,7 @@ const menuItems: MenuItem[] = [
   { label: "Fluxos", href: "/fluxos", icon: GitBranch },
   { label: "Automações", href: "/automacoes-api", icon: Workflow },
   { label: "Contatos", href: "/contatos", icon: Contact },
+  { label: "Kanban", href: "/kanban", icon: Layers3 },
   {
     label: "Rastreamento de leads",
     href: "/rastreamento",
