@@ -144,123 +144,126 @@ export default function IntegracaoEntradaImoveis({ ativo, onError, onSuccess }: 
   if (!ativo) return null;
 
   return (
-    <section id="integracao-imobiliaria" className={styles.configCard}>
-      <div className={styles.sectionHeader}>
-        <div>
-          <span className={styles.eyebrow}>Integração de entrada</span>
-          <h2>API e webhook imobiliário</h2>
-          <p>
-            Receba imóveis de parceiros e sistemas externos. Os registros recebidos
-            entram no catálogo global e não são adicionados automaticamente à carteira.
-          </p>
-        </div>
-        <span className={styles.integrationIcon}><KeyRound size={22} /></span>
-      </div>
+    
+      <main className={styles.page}>
+        <section id="integracao-imobiliaria" className={styles.configCard}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <span className={styles.eyebrow}>Integração de entrada</span>
+              <h2>API e webhook imobiliário</h2>
+              <p>
+                Receba imóveis de parceiros e sistemas externos. Os registros recebidos
+                entram no catálogo global e não são adicionados automaticamente à carteira.
+              </p>
+            </div>
+            <span className={styles.integrationIcon}><KeyRound size={22} /></span>
+          </div>
 
-      <div className={styles.integrationCreate}>
-        <label className={styles.integrationField}>
-          <span>Empresa ou sistema de origem</span>
-          <input
-            value={nomeParceiro}
-            onChange={(event) => setNomeParceiro(event.target.value)}
-            placeholder="Ex.: Site institucional, parceiro ou ERP"
-          />
-        </label>
-        <button
-          type="button"
-          className={styles.primaryButton}
-          disabled={processando === "novo"}
-          onClick={() => void configurar()}
-        >
-          {processando === "novo" ? "Criando..." : "Criar integração API"}
-        </button>
-      </div>
+          <div className={styles.integrationCreate}>
+            <label className={styles.integrationField}>
+              <span>Empresa ou sistema de origem</span>
+              <input
+                value={nomeParceiro}
+                onChange={(event) => setNomeParceiro(event.target.value)}
+                placeholder="Ex.: Site institucional, parceiro ou ERP"
+              />
+            </label>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              disabled={processando === "novo"}
+              onClick={() => void configurar()}
+            >
+              {processando === "novo" ? "Criando..." : "Criar integração API"}
+            </button>
+          </div>
 
-      {carregando ? (
-        <div className={styles.loadingCard}>Carregando integrações...</div>
-      ) : integracoes.length === 0 ? (
-        <div className={styles.integrationEmpty}>
-          Nenhuma integração de entrada foi criada para esta empresa.
-        </div>
-      ) : (
-        <div className={styles.integrationList}>
-          {integracoes.map((integracao) => (
-            <article key={integracao.id} className={styles.integrationItem}>
-              <div className={styles.integrationTitle}>
-                <div>
-                  <strong>{integracao.nome}</strong>
-                  <small>Último evento: {formatarData(integracao.ultimo_evento_em)}</small>
-                </div>
-                <span
-                  className={`${styles.integrationStatus} ${
-                    integracao.status === "ativo"
-                      ? styles.integrationStatusActive
-                      : styles.integrationStatusInactive
-                  }`}
-                >
-                  {integracao.status === "ativo" ? "Ativo" : "Inativo"}
-                </span>
-              </div>
-
-              <label className={styles.integrationField}>
-                <span>URL do webhook</span>
-                <div className={styles.copyField}>
-                  <input readOnly value={integracao.webhook_url} />
-                  <button
-                    type="button"
-                    className={styles.copyButton}
-                    onClick={() => void copiar(integracao.webhook_url, "URL do webhook")}
-                    aria-label="Copiar URL"
-                  >
-                    <Copy size={17} />
-                  </button>
-                </div>
-              </label>
-
-              {credencial?.integracaoId === integracao.id ? (
-                <label className={styles.integrationField}>
-                  <span>Segredo — exibido somente agora</span>
-                  <div className={styles.copyField}>
-                    <input readOnly value={credencial.secret} />
-                    <button
-                      type="button"
-                      className={styles.copyButton}
-                      onClick={() => void copiar(credencial.secret, "Segredo")}
-                      aria-label="Copiar segredo"
+          {carregando ? (
+            <div className={styles.loadingCard}>Carregando integrações...</div>
+          ) : integracoes.length === 0 ? (
+            <div className={styles.integrationEmpty}>
+              Nenhuma integração de entrada foi criada para esta empresa.
+            </div>
+          ) : (
+            <div className={styles.integrationList}>
+              {integracoes.map((integracao) => (
+                <article key={integracao.id} className={styles.integrationItem}>
+                  <div className={styles.integrationTitle}>
+                    <div>
+                      <strong>{integracao.nome}</strong>
+                      <small>Último evento: {formatarData(integracao.ultimo_evento_em)}</small>
+                    </div>
+                    <span
+                      className={`${styles.integrationStatus} ${
+                        integracao.status === "ativo"
+                          ? styles.integrationStatusActive
+                          : styles.integrationStatusInactive
+                      }`}
                     >
-                      <Copy size={17} />
-                    </button>
+                      {integracao.status === "ativo" ? "Ativo" : "Inativo"}
+                    </span>
                   </div>
-                </label>
-              ) : null}
 
-              <div className={styles.integrationFooter}>
-                <small>Identificação do token: {integracao.token_hint}</small>
-                <div className={styles.integrationActions}>
-                  <button
-                    type="button"
-                    className={styles.secondaryButton}
-                    disabled={processando === integracao.id}
-                    onClick={() => void configurar(integracao)}
-                  >
-                    <RefreshCw size={16} /> Regenerar segredo
-                  </button>
-                  {integracao.status === "ativo" ? (
-                    <button
-                      type="button"
-                      className={styles.dangerButton}
-                      disabled={processando === integracao.id}
-                      onClick={() => void desativar(integracao)}
-                    >
-                      <Power size={16} /> Desativar
-                    </button>
+                  <label className={styles.integrationField}>
+                    <span>URL do webhook</span>
+                    <div className={styles.copyField}>
+                      <input readOnly value={integracao.webhook_url} />
+                      <button
+                        type="button"
+                        className={styles.copyButton}
+                        onClick={() => void copiar(integracao.webhook_url, "URL do webhook")}
+                        aria-label="Copiar URL"
+                      >
+                        <Copy size={17} />
+                      </button>
+                    </div>
+                  </label>
+
+                  {credencial?.integracaoId === integracao.id ? (
+                    <label className={styles.integrationField}>
+                      <span>Segredo — exibido somente agora</span>
+                      <div className={styles.copyField}>
+                        <input readOnly value={credencial.secret} />
+                        <button
+                          type="button"
+                          className={styles.copyButton}
+                          onClick={() => void copiar(credencial.secret, "Segredo")}
+                          aria-label="Copiar segredo"
+                        >
+                          <Copy size={17} />
+                        </button>
+                      </div>
+                    </label>
                   ) : null}
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
+
+                  <div className={styles.integrationFooter}>
+                    <small>Identificação do token: {integracao.token_hint}</small>
+                    <div className={styles.integrationActions}>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        disabled={processando === integracao.id}
+                        onClick={() => void configurar(integracao)}
+                      >
+                        <RefreshCw size={16} /> Regenerar segredo
+                      </button>
+                      {integracao.status === "ativo" ? (
+                        <button
+                          type="button"
+                          className={styles.dangerButton}
+                          disabled={processando === integracao.id}
+                          onClick={() => void desativar(integracao)}
+                        >
+                          <Power size={16} /> Desativar
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
   );
 }
