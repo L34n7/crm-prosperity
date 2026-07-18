@@ -8,6 +8,7 @@ import {
   CircleAlert,
   HeartPulse,
   Home,
+  Save,
   ShoppingBag,
   Stethoscope,
 } from "lucide-react";
@@ -52,17 +53,18 @@ function IconeNicho({ codigo }: { codigo: string }) {
 export default function ConfiguracoesClient() {
   const router = useRouter();
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
+  const [nomeEmpresa, setNomeEmpresa] = useState("");
   const [nichos, setNichos] = useState<Nicho[]>([]);
   const [nichoSelecionadoId, setNichoSelecionadoId] = useState("");
   const [carregando, setCarregando] = useState(true);
+  const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
 
   const nichoSelecionado = useMemo(
-    () =>
-      nichos.find((nicho) => nicho.id === nichoSelecionadoId) ?? null,
+    () => nichos.find((nicho) => nicho.id === nichoSelecionadoId) ?? null,
     [nichoSelecionadoId, nichos]
   );
 
@@ -70,6 +72,8 @@ export default function ConfiguracoesClient() {
   const alterouNicho =
     Boolean(empresa && nichoSelecionadoId) &&
     empresa?.nicho_id !== nichoSelecionadoId;
+  const alterouEmpresa =
+    Boolean(empresa) && nomeEmpresa.trim() !== empresa?.nome_fantasia;
   const trocaDeGrupo =
     Boolean(empresa?.nicho && nichoSelecionado) &&
     empresa?.nicho?.grupo !== nichoSelecionado?.grupo;
@@ -86,15 +90,16 @@ export default function ConfiguracoesClient() {
         const data = await response.json();
 
         if (!response.ok) {
-          setErro(data.error || "Erro ao carregar a configuração de nicho.");
+          setErro(data.error || "Erro ao carregar as configurações da empresa.");
           return;
         }
 
         setEmpresa(data.empresa);
+        setNomeEmpresa(data.empresa?.nome_fantasia || "");
         setNichos(data.nichos || []);
         setNichoSelecionadoId(data.empresa?.nicho_id || "");
       } catch {
-        setErro("Erro ao carregar a configuração de nicho.");
+        setErro("Erro ao carregar as configurações da empresa.");
       } finally {
         setCarregando(false);
       }
@@ -108,6 +113,40 @@ export default function ConfiguracoesClient() {
     setConfirmando(false);
     setErro("");
     setSucesso("");
+  }
+
+  async function salvarEmpresa() {
+    const nomeNormalizado = nomeEmpresa.trim().replace(/\s+/g, " ");
+    if (!empresa || nomeNormalizado.length < 2 || !alterouEmpresa) return;
+
+    try {
+      setSalvandoEmpresa(true);
+      setErro("");
+      setSucesso("");
+
+      const response = await fetch("/api/configuracoes/empresa", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome_fantasia: nomeNormalizado }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErro(data.error || "Erro ao atualizar os dados da empresa.");
+        return;
+      }
+
+      setEmpresa((atual) =>
+        atual ? { ...atual, nome_fantasia: data.empresa.nome_fantasia } : atual
+      );
+      setNomeEmpresa(data.empresa.nome_fantasia);
+      setSucesso(data.message || "Dados da empresa atualizados com sucesso.");
+      router.refresh();
+    } catch {
+      setErro("Erro ao atualizar os dados da empresa.");
+    } finally {
+      setSalvandoEmpresa(false);
+    }
   }
 
   async function salvarNicho() {
@@ -131,6 +170,7 @@ export default function ConfiguracoesClient() {
       }
 
       setEmpresa(data.empresa);
+      setNomeEmpresa(data.empresa.nome_fantasia);
       setNichoSelecionadoId(data.empresa.nicho_id);
       setConfirmando(false);
       setSucesso(data.message || "Nicho alterado com sucesso.");
@@ -146,7 +186,7 @@ export default function ConfiguracoesClient() {
     <>
       <Header
         title="Configurações"
-        subtitle="Personalize o funcionamento do sistema para a sua empresa."
+        subtitle="Gerencie os dados e personalize o funcionamento da sua empresa."
       />
 
       <main className={styles.page}>
@@ -158,9 +198,64 @@ export default function ConfiguracoesClient() {
         />
 
         {carregando ? (
-          <section className={styles.loadingCard}>Carregando nicho...</section>
+          <section className={styles.loadingCard}>Carregando configurações...</section>
         ) : empresa ? (
           <>
+            <section className={`${styles.configCard} ${styles.companyCard}`}>
+              <div className={styles.sectionHeader}>
+                <div className={styles.companyHeading}>
+                  <span className={styles.companyIcon}>
+                    <Building2 size={24} />
+                  </span>
+                  <div>
+                    <span className={styles.eyebrow}>Empresa</span>
+                    <h2>Dados da empresa</h2>
+                    <p>
+                      Atualize as informações institucionais utilizadas dentro do CRM.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.companyForm}>
+                <label className={styles.companyField}>
+                  <span>Nome da empresa</span>
+                  <input
+                    type="text"
+                    value={nomeEmpresa}
+                    maxLength={120}
+                    placeholder="Digite o nome da empresa"
+                    onChange={(event) => {
+                      setNomeEmpresa(event.target.value);
+                      setErro("");
+                      setSucesso("");
+                    }}
+                  />
+                  <small>
+                    Este nome identifica a empresa no CRM. Os nomes das integrações
+                    continuam sendo configurados separadamente.
+                  </small>
+                </label>
+              </div>
+
+              <div className={styles.footer}>
+                <p>Somente administradores podem modificar estes dados.</p>
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={salvarEmpresa}
+                  disabled={
+                    salvandoEmpresa ||
+                    !alterouEmpresa ||
+                    nomeEmpresa.trim().length < 2
+                  }
+                >
+                  <Save size={17} />
+                  {salvandoEmpresa ? "Salvando..." : "Salvar empresa"}
+                </button>
+              </div>
+            </section>
+
             <section className={styles.currentCard}>
               <div className={styles.currentIcon}>
                 <IconeNicho codigo={empresa.nicho?.codigo ?? ""} />
@@ -171,9 +266,7 @@ export default function ConfiguracoesClient() {
                 <p>
                   {empresa.nome_fantasia} está configurada no grupo{" "}
                   <strong>
-                    {empresa.nicho?.grupo === "saude"
-                      ? "Saúde"
-                      : "Comercial"}
+                    {empresa.nicho?.grupo === "saude" ? "Saúde" : "Comercial"}
                   </strong>
                   .
                 </p>
@@ -267,9 +360,9 @@ export default function ConfiguracoesClient() {
                     </p>
                     {trocaDeGrupo ? (
                       <p className={styles.groupWarning}>
-                        Esta mudança troca os modulos da empresa. Os cadastros de
-                        pessoas serão preservados e ao trocar de nicho os campos serão
-                        preparados automaticamente de acordo com nicho.
+                        Esta mudança troca os módulos da empresa. Os cadastros de
+                        pessoas serão preservados e os campos serão preparados
+                        automaticamente de acordo com o novo nicho.
                       </p>
                     ) : null}
                     <div className={styles.confirmActions}>
@@ -294,9 +387,7 @@ export default function ConfiguracoesClient() {
                 </div>
               ) : (
                 <div className={styles.footer}>
-                  <p>
-                    Somente administradores podem modificar esta configuração.
-                  </p>
+                  <p>Somente administradores podem modificar esta configuração.</p>
                   <button
                     type="button"
                     className={styles.primaryButton}
@@ -314,7 +405,9 @@ export default function ConfiguracoesClient() {
               <div>
                 <strong>O que muda?</strong>
                 <p>
-                  Ao mudar o nicho, o sistema adapta a experiência para o segmento escolhido, exibindo apenas os recursos mais relevantes para sua operação.
+                  Ao mudar o nicho, o sistema adapta a experiência para o segmento
+                  escolhido, exibindo apenas os recursos mais relevantes para sua
+                  operação.
                 </p>
               </div>
             </section>
