@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import CrmShell from "@/components/CrmShell";
 import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
+import MobileEmpresaMenuLink from "@/components/MobileEmpresaMenuLink";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
@@ -53,6 +54,7 @@ export default async function PrivateLayout({
     >
       {children}
       <AmbienteObrigatorioGuard />
+      <MobileEmpresaMenuLink isAdmin={isAdmin} />
     </CrmShell>
   );
 }
