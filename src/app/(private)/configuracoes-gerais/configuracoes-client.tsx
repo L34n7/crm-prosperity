@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Building2,
+  Cable,
   CheckCircle2,
   CircleAlert,
   HeartPulse,
   Home,
+  ImageIcon,
   Save,
   ShoppingBag,
   Stethoscope,
@@ -15,8 +17,10 @@ import {
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { getNichoConfig } from "@/lib/nichos/config";
+import IntegracaoEntradaImoveisSection from "./IntegracaoEntradaImoveisSection";
 import styles from "./configuracoes.module.css";
 
+type Aba = "empresa" | "integracoes";
 type Nicho = {
   id: string;
   codigo: string;
@@ -25,14 +29,45 @@ type Nicho = {
   rotulo_cadastro_singular: string;
   rotulo_cadastro_plural: string;
 };
-
 type Empresa = {
   id: string;
   nome_fantasia: string;
+  documento: string | null;
+  email: string;
+  telefone: string | null;
+  site: string | null;
+  logo_url: string | null;
+  endereco: string | null;
+  cidade: string | null;
+  estado: string | null;
   nicho_id: string;
   nicho: Nicho | null;
 };
+type FormEmpresa = {
+  nome_fantasia: string;
+  documento: string;
+  email: string;
+  telefone: string;
+  site: string;
+  logo_url: string;
+  endereco: string;
+  cidade: string;
+  estado: string;
+  nicho_id: string;
+};
 
+const FORM_VAZIO: FormEmpresa = {
+  nome_fantasia: "",
+  documento: "",
+  email: "",
+  telefone: "",
+  site: "",
+  logo_url: "",
+  endereco: "",
+  cidade: "",
+  estado: "",
+  nicho_id: "",
+};
 const MODULOS_LABEL: Record<string, string> = {
   "cadastros.pessoas": "Cadastro de pessoas",
   "saude.pacientes": "Cadastro de pacientes",
@@ -50,133 +85,98 @@ function IconeNicho({ codigo }: { codigo: string }) {
   return <Building2 size={24} />;
 }
 
-export default function ConfiguracoesClient() {
+function paraForm(empresa: Empresa): FormEmpresa {
+  return {
+    nome_fantasia: empresa.nome_fantasia || "",
+    documento: empresa.documento || "",
+    email: empresa.email || "",
+    telefone: empresa.telefone || "",
+    site: empresa.site || "",
+    logo_url: empresa.logo_url || "",
+    endereco: empresa.endereco || "",
+    cidade: empresa.cidade || "",
+    estado: empresa.estado || "",
+    nicho_id: empresa.nicho_id || "",
+  };
+}
+
+export default function ConfiguracoesClient({
+  integracaoImobiliariaAtiva,
+}: {
+  integracaoImobiliariaAtiva: boolean;
+}) {
   const router = useRouter();
+  const [aba, setAba] = useState<Aba>("empresa");
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
-  const [nomeEmpresa, setNomeEmpresa] = useState("");
+  const [form, setForm] = useState<FormEmpresa>(FORM_VAZIO);
   const [nichos, setNichos] = useState<Nicho[]>([]);
-  const [nichoSelecionadoId, setNichoSelecionadoId] = useState("");
   const [carregando, setCarregando] = useState(true);
-  const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [confirmando, setConfirmando] = useState(false);
+  const [confirmandoNicho, setConfirmandoNicho] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
 
   const nichoSelecionado = useMemo(
-    () => nichos.find((nicho) => nicho.id === nichoSelecionadoId) ?? null,
-    [nichoSelecionadoId, nichos]
+    () => nichos.find((item) => item.id === form.nicho_id) ?? null,
+    [form.nicho_id, nichos]
   );
-
   const configSelecionada = getNichoConfig(nichoSelecionado?.codigo);
-  const alterouNicho =
-    Boolean(empresa && nichoSelecionadoId) &&
-    empresa?.nicho_id !== nichoSelecionadoId;
-  const alterouEmpresa =
-    Boolean(empresa) && nomeEmpresa.trim() !== empresa?.nome_fantasia;
-  const trocaDeGrupo =
-    Boolean(empresa?.nicho && nichoSelecionado) &&
-    empresa?.nicho?.grupo !== nichoSelecionado?.grupo;
+  const alterouNicho = Boolean(empresa && form.nicho_id !== empresa.nicho_id);
+  const alterouFormulario = Boolean(empresa) && JSON.stringify(form) !== JSON.stringify(paraForm(empresa!));
+  const trocaDeGrupo = Boolean(empresa?.nicho && nichoSelecionado) && empresa?.nicho?.grupo !== nichoSelecionado?.grupo;
 
   useEffect(() => {
     async function carregar() {
       try {
         setCarregando(true);
-        setErro("");
-
-        const response = await fetch("/api/configuracoes/nicho", {
-          cache: "no-store",
-        });
+        const response = await fetch("/api/configuracoes/empresa", { cache: "no-store" });
         const data = await response.json();
-
-        if (!response.ok) {
-          setErro(data.error || "Erro ao carregar as configurações da empresa.");
-          return;
-        }
-
+        if (!response.ok) throw new Error(data.error || "Erro ao carregar as configurações.");
         setEmpresa(data.empresa);
-        setNomeEmpresa(data.empresa?.nome_fantasia || "");
+        setForm(paraForm(data.empresa));
         setNichos(data.nichos || []);
-        setNichoSelecionadoId(data.empresa?.nicho_id || "");
-      } catch {
-        setErro("Erro ao carregar as configurações da empresa.");
+      } catch (error) {
+        setErro(error instanceof Error ? error.message : "Erro ao carregar as configurações.");
       } finally {
         setCarregando(false);
       }
     }
-
-    carregar();
+    void carregar();
   }, []);
 
-  function selecionarNicho(nichoId: string) {
-    setNichoSelecionadoId(nichoId);
-    setConfirmando(false);
+  function atualizar(campo: keyof FormEmpresa, valor: string) {
+    setForm((atual) => ({ ...atual, [campo]: valor }));
     setErro("");
     setSucesso("");
+    if (campo === "nicho_id") setConfirmandoNicho(false);
   }
 
-  async function salvarEmpresa() {
-    const nomeNormalizado = nomeEmpresa.trim().replace(/\s+/g, " ");
-    if (!empresa || nomeNormalizado.length < 2 || !alterouEmpresa) return;
-
-    try {
-      setSalvandoEmpresa(true);
-      setErro("");
-      setSucesso("");
-
-      const response = await fetch("/api/configuracoes/empresa", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome_fantasia: nomeNormalizado }),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        setErro(data.error || "Erro ao atualizar os dados da empresa.");
-        return;
-      }
-
-      setEmpresa((atual) =>
-        atual ? { ...atual, nome_fantasia: data.empresa.nome_fantasia } : atual
-      );
-      setNomeEmpresa(data.empresa.nome_fantasia);
-      setSucesso(data.message || "Dados da empresa atualizados com sucesso.");
-      router.refresh();
-    } catch {
-      setErro("Erro ao atualizar os dados da empresa.");
-    } finally {
-      setSalvandoEmpresa(false);
+  async function salvar() {
+    if (!alterouFormulario) return;
+    if (alterouNicho && !confirmandoNicho) {
+      setConfirmandoNicho(true);
+      return;
     }
-  }
-
-  async function salvarNicho() {
-    if (!nichoSelecionado || !alterouNicho) return;
 
     try {
       setSalvando(true);
       setErro("");
       setSucesso("");
-
-      const response = await fetch("/api/configuracoes/nicho", {
+      const response = await fetch("/api/configuracoes/empresa", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nicho_id: nichoSelecionado.id }),
+        body: JSON.stringify(form),
       });
       const data = await response.json();
-
-      if (!response.ok) {
-        setErro(data.error || "Erro ao alterar o nicho da empresa.");
-        return;
-      }
-
+      if (!response.ok) throw new Error(data.error || "Erro ao salvar as configurações.");
       setEmpresa(data.empresa);
-      setNomeEmpresa(data.empresa.nome_fantasia);
-      setNichoSelecionadoId(data.empresa.nicho_id);
-      setConfirmando(false);
-      setSucesso(data.message || "Nicho alterado com sucesso.");
+      setForm(paraForm(data.empresa));
+      setNichos(data.nichos || nichos);
+      setConfirmandoNicho(false);
+      setSucesso(data.message || "Configurações salvas com sucesso.");
       router.refresh();
-    } catch {
-      setErro("Erro ao alterar o nicho da empresa.");
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao salvar as configurações.");
     } finally {
       setSalvando(false);
     }
@@ -184,239 +184,76 @@ export default function ConfiguracoesClient() {
 
   return (
     <>
-      <Header
-        title="Configurações"
-        subtitle="Gerencie os dados e personalize o funcionamento da sua empresa."
-      />
-
+      <Header title="Configurações" subtitle="Gerencie sua empresa e as integrações externas." />
       <main className={styles.page}>
-        <FeedbackToast
-          success={sucesso}
-          error={erro}
-          onSuccessDismiss={() => setSucesso("")}
-          onErrorDismiss={() => setErro("")}
-        />
+        <FeedbackToast success={sucesso} error={erro} onSuccessDismiss={() => setSucesso("")} onErrorDismiss={() => setErro("")} />
 
-        {carregando ? (
+        <div className={styles.tabs} role="tablist" aria-label="Seções de configurações">
+          <button type="button" role="tab" aria-selected={aba === "empresa"} className={`${styles.tabButton} ${aba === "empresa" ? styles.tabButtonActive : ""}`} onClick={() => setAba("empresa")}>
+            <Building2 size={18} /> Empresa
+          </button>
+          <button type="button" role="tab" aria-selected={aba === "integracoes"} className={`${styles.tabButton} ${aba === "integracoes" ? styles.tabButtonActive : ""}`} onClick={() => setAba("integracoes")}>
+            <Cable size={18} /> Integrações API
+          </button>
+        </div>
+
+        {aba === "integracoes" ? (
+          integracaoImobiliariaAtiva ? (
+            <IntegracaoEntradaImoveisSection />
+          ) : (
+            <section className={styles.loadingCard}>Nenhuma integração API específica está disponível para o nicho atual.</section>
+          )
+        ) : carregando ? (
           <section className={styles.loadingCard}>Carregando configurações...</section>
         ) : empresa ? (
-          <>
-            <section className={`${styles.configCard} ${styles.companyCard}`}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.companyHeading}>
-                  <span className={styles.companyIcon}>
-                    <Building2 size={24} />
-                  </span>
-                  <div>
-                    <span className={styles.eyebrow}>Empresa</span>
-                    <h2>Dados da empresa</h2>
-                    <p>
-                      Atualize as informações institucionais utilizadas dentro do CRM.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className={styles.companyForm}>
-                <label className={styles.companyField}>
-                  <span>Nome da empresa</span>
-                  <input
-                    type="text"
-                    value={nomeEmpresa}
-                    maxLength={120}
-                    placeholder="Digite o nome da empresa"
-                    onChange={(event) => {
-                      setNomeEmpresa(event.target.value);
-                      setErro("");
-                      setSucesso("");
-                    }}
-                  />
-                  <small>
-                    Este nome identifica a empresa no CRM. Os nomes das integrações
-                    continuam sendo configurados separadamente.
-                  </small>
-                </label>
-              </div>
-
-              <div className={styles.footer}>
-                <p>Somente administradores podem modificar estes dados.</p>
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={salvarEmpresa}
-                  disabled={
-                    salvandoEmpresa ||
-                    !alterouEmpresa ||
-                    nomeEmpresa.trim().length < 2
-                  }
-                >
-                  <Save size={17} />
-                  {salvandoEmpresa ? "Salvando..." : "Salvar empresa"}
-                </button>
-              </div>
-            </section>
-
-            <section className={styles.currentCard}>
-              <div className={styles.currentIcon}>
-                <IconeNicho codigo={empresa.nicho?.codigo ?? ""} />
-              </div>
-              <div>
-                <span className={styles.eyebrow}>Nicho atual</span>
-                <h2>{empresa.nicho?.nome ?? "Não definido"}</h2>
-                <p>
-                  {empresa.nome_fantasia} está configurada no grupo{" "}
-                  <strong>
-                    {empresa.nicho?.grupo === "saude" ? "Saúde" : "Comercial"}
-                  </strong>
-                  .
-                </p>
-              </div>
-              <span className={styles.activeBadge}>
-                <CheckCircle2 size={15} />
-                Ativo
-              </span>
-            </section>
-
-            <section className={styles.configCard}>
-              <div className={styles.sectionHeader}>
+          <section className={styles.configCard}>
+            <div className={styles.sectionHeader}>
+              <div className={styles.companyHeading}>
+                <span className={styles.companyIcon}><Building2 size={24} /></span>
                 <div>
-                  <span className={styles.eyebrow}>Nicho e módulos</span>
-                  <h2>Nicho da empresa</h2>
-                  <p>
-                    Escolha o segmento da operação. A alteração adapta os nomes
-                    dos cadastros e os módulos disponíveis no sistema.
-                  </p>
+                  <span className={styles.eyebrow}>Dados cadastrais</span>
+                  <h2>Empresa</h2>
+                  <p>Atualize os dados institucionais, localização, identidade visual e nicho.</p>
                 </div>
               </div>
+            </div>
 
-              <div className={styles.nicheGrid}>
-                {nichos.map((nicho) => {
-                  const selecionado = nicho.id === nichoSelecionadoId;
-                  const atual = nicho.id === empresa.nicho_id;
+            <div className={styles.companyFormGrid}>
+              <label className={styles.companyField}><span>Nome da empresa *</span><input value={form.nome_fantasia} maxLength={120} onChange={(e) => atualizar("nome_fantasia", e.target.value)} /></label>
+              <label className={styles.companyField}><span>CNPJ/CPF</span><input value={form.documento} maxLength={20} onChange={(e) => atualizar("documento", e.target.value)} /></label>
+              <label className={styles.companyField}><span>E-mail comercial *</span><input type="email" value={form.email} maxLength={160} onChange={(e) => atualizar("email", e.target.value)} /></label>
+              <label className={styles.companyField}><span>Telefone comercial</span><input value={form.telefone} maxLength={30} onChange={(e) => atualizar("telefone", e.target.value)} /></label>
+              <label className={styles.companyField}><span>Site</span><input type="url" value={form.site} maxLength={240} placeholder="https://" onChange={(e) => atualizar("site", e.target.value)} /></label>
+              <label className={styles.companyField}><span>Estado</span><input value={form.estado} maxLength={2} placeholder="SP" onChange={(e) => atualizar("estado", e.target.value.toUpperCase())} /></label>
+              <label className={`${styles.companyField} ${styles.fieldWide}`}><span>Endereço</span><input value={form.endereco} maxLength={240} onChange={(e) => atualizar("endereco", e.target.value)} /></label>
+              <label className={styles.companyField}><span>Cidade</span><input value={form.cidade} maxLength={120} onChange={(e) => atualizar("cidade", e.target.value)} /></label>
+              <label className={`${styles.companyField} ${styles.fieldWide}`}><span>Logo da empresa (URL)</span><div className={styles.logoField}><span className={styles.logoPreview}>{form.logo_url ? <img src={form.logo_url} alt="Logo da empresa" /> : <ImageIcon size={22} />}</span><input type="url" value={form.logo_url} maxLength={500} placeholder="https://..." onChange={(e) => atualizar("logo_url", e.target.value)} /></div><small>Informe uma URL pública da imagem. O upload direto poderá ser adicionado depois.</small></label>
+            </div>
 
-                  return (
-                    <button
-                      key={nicho.id}
-                      type="button"
-                      className={`${styles.nicheOption} ${
-                        selecionado ? styles.nicheOptionSelected : ""
-                      }`}
-                      onClick={() => selecionarNicho(nicho.id)}
-                      aria-pressed={selecionado}
-                    >
-                      <span className={styles.optionIcon}>
-                        <IconeNicho codigo={nicho.codigo} />
-                      </span>
-                      <span className={styles.optionContent}>
-                        <strong>{nicho.nome}</strong>
-                        <small>
-                          {nicho.grupo === "saude" ? "Saúde" : "Comercial"} ·{" "}
-                          {nicho.rotulo_cadastro_plural}
-                        </small>
-                      </span>
-                      <span
-                        className={`${styles.radio} ${
-                          selecionado ? styles.radioSelected : ""
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {atual ? (
-                        <span className={styles.currentLabel}>Atual</span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
+            <div className={styles.nicheDivider} />
+            <div className={styles.sectionHeader}>
+              <div><span className={styles.eyebrow}>Nicho e módulos</span><h2>Nicho da empresa</h2><p>Escolha o segmento que adapta cadastros e módulos do CRM.</p></div>
+            </div>
+            <div className={styles.nicheGrid}>
+              {nichos.map((nicho) => {
+                const selecionado = nicho.id === form.nicho_id;
+                return <button key={nicho.id} type="button" className={`${styles.nicheOption} ${selecionado ? styles.nicheOptionSelected : ""}`} onClick={() => atualizar("nicho_id", nicho.id)} aria-pressed={selecionado}>
+                  <span className={styles.optionIcon}><IconeNicho codigo={nicho.codigo} /></span>
+                  <span className={styles.optionContent}><strong>{nicho.nome}</strong><small>{nicho.grupo === "saude" ? "Saúde" : "Comercial"} · {nicho.rotulo_cadastro_plural}</small></span>
+                  <span className={`${styles.radio} ${selecionado ? styles.radioSelected : ""}`} />
+                </button>;
+              })}
+            </div>
+            {nichoSelecionado && <div className={styles.preview}><div><span className={styles.previewLabel}>O sistema será exibido como</span><strong>{configSelecionada.cadastroPlural}</strong></div><div className={styles.moduleList}>{configSelecionada.modulos.map((modulo) => <span key={modulo}><CheckCircle2 size={14} />{MODULOS_LABEL[modulo] ?? modulo}</span>)}</div></div>}
 
-              {nichoSelecionado ? (
-                <div className={styles.preview}>
-                  <div>
-                    <span className={styles.previewLabel}>
-                      O sistema será exibido como
-                    </span>
-                    <strong>{configSelecionada.cadastroPlural}</strong>
-                  </div>
-                  <div className={styles.moduleList}>
-                    {configSelecionada.modulos.map((modulo) => (
-                      <span key={modulo}>
-                        <CheckCircle2 size={14} />
-                        {MODULOS_LABEL[modulo] ?? modulo}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
+            {confirmandoNicho && alterouNicho && <div className={styles.confirmBox}><CircleAlert size={22} /><div className={styles.confirmContent}><strong>Confirmar mudança para {nichoSelecionado?.nome}?</strong><p>Os dados existentes não serão apagados. Módulos fora do novo nicho deixarão de aparecer.</p>{trocaDeGrupo && <p className={styles.groupWarning}>Esta mudança troca o grupo de módulos da empresa, preservando os cadastros existentes.</p>}</div></div>}
 
-              {confirmando && alterouNicho ? (
-                <div className={styles.confirmBox} role="alert">
-                  <CircleAlert size={22} />
-                  <div className={styles.confirmContent}>
-                    <strong>
-                      Confirmar mudança para {nichoSelecionado?.nome}?
-                    </strong>
-                    <p>
-                      Os dados existentes não serão apagados. Módulos que não
-                      pertencem ao novo nicho deixarão de aparecer.
-                    </p>
-                    {trocaDeGrupo ? (
-                      <p className={styles.groupWarning}>
-                        Esta mudança troca os módulos da empresa. Os cadastros de
-                        pessoas serão preservados e os campos serão preparados
-                        automaticamente de acordo com o novo nicho.
-                      </p>
-                    ) : null}
-                    <div className={styles.confirmActions}>
-                      <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        onClick={() => setConfirmando(false)}
-                        disabled={salvando}
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.primaryButton}
-                        onClick={salvarNicho}
-                        disabled={salvando}
-                      >
-                        {salvando ? "Alterando..." : "Confirmar alteração"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className={styles.footer}>
-                  <p>Somente administradores podem modificar esta configuração.</p>
-                  <button
-                    type="button"
-                    className={styles.primaryButton}
-                    onClick={() => setConfirmando(true)}
-                    disabled={!alterouNicho}
-                  >
-                    {alterouNicho ? "Alterar nicho" : "Nicho atual selecionado"}
-                  </button>
-                </div>
-              )}
-            </section>
-
-            <section className={styles.infoCard}>
-              <CircleAlert size={20} />
-              <div>
-                <strong>O que muda?</strong>
-                <p>
-                  Ao mudar o nicho, o sistema adapta a experiência para o segmento
-                  escolhido, exibindo apenas os recursos mais relevantes para sua
-                  operação.
-                </p>
-              </div>
-            </section>
-          </>
-        ) : (
-          <section className={styles.loadingCard}>
-            Não foi possível identificar a empresa.
+            <div className={styles.footer}>
+              <p>Todos os dados e o nicho serão salvos juntos.</p>
+              <button type="button" className={styles.primaryButton} onClick={salvar} disabled={salvando || !alterouFormulario || form.nome_fantasia.trim().length < 2 || !form.email.trim()}><Save size={17} />{salvando ? "Salvando..." : confirmandoNicho ? "Confirmar e salvar" : "Salvar alterações"}</button>
+            </div>
           </section>
-        )}
+        ) : <section className={styles.loadingCard}>Não foi possível identificar a empresa.</section>}
       </main>
     </>
   );
