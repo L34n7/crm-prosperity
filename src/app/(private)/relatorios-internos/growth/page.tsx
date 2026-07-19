@@ -38,10 +38,8 @@ type EmpresaGrowthRow = {
   created_at: string;
   plano_id: string | null;
   assinatura_status: string | null;
-  assinatura_inicio_em: string | null;
   assinatura_gateway: string | null;
   assinatura_referencia: string | null;
-  assinatura_metadata_json: unknown | null;
   planos: PlanoRelacao;
 };
 
@@ -51,15 +49,15 @@ type PagamentoRow = {
   paid_at: string | null;
   created_at: string;
   valor: number | null;
+  offer_hash: string | null;
+  offer_titulo: string | null;
 };
 
 type OfertaRow = {
-  id: string;
   plano_id: string | null;
   empresa_id: string | null;
   referencia: string | null;
   nome: string | null;
-  metadata_json: unknown | null;
 };
 
 type UsuarioRow = {
@@ -77,14 +75,12 @@ type ClienteGrowth = {
   plano: string;
   status: string;
   primeiroPagamentoEm: string;
-  cadastroEm: string;
   gateway: string;
-  valorMensal: number | null;
+  valorMensal: number;
   diasConversao: number;
 };
 
 const STATUS_PAGAMENTO_CONFIRMADO = ["paid", "approved", "completed", "succeeded"];
-const STATUS_ASSINATURA_ATIVA = ["ativa", "ativo", "regular"];
 const TIME_ZONE = "America/Sao_Paulo";
 
 const moeda = new Intl.NumberFormat("pt-BR", {
@@ -105,8 +101,8 @@ function parametro(params: SearchParams, chave: string) {
 }
 
 function dataSaoPaulo(ano: number, mes: number, dia: number, fimDoDia = false) {
-  const dataTexto = `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-  return new Date(`${dataTexto}T${fimDoDia ? "23:59:59.999" : "00:00:00"}-03:00`);
+  const texto = `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+  return new Date(`${texto}T${fimDoDia ? "23:59:59.999" : "00:00:00"}-03:00`);
 }
 
 function partesAgora() {
@@ -148,10 +144,6 @@ function normalizarAtalho(valor: string): AtalhoPeriodo {
     : "mes_atual";
 }
 
-function subtrairDias(fim: Date, quantidade: number) {
-  return new Date(fim.getTime() - (quantidade - 1) * 24 * 60 * 60 * 1000);
-}
-
 function resolverPeriodo(params: SearchParams) {
   const atalho = normalizarAtalho(parametro(params, "atalho"));
   const agora = new Date();
@@ -165,28 +157,27 @@ function resolverPeriodo(params: SearchParams) {
     inicio = /^\d{4}-\d{2}-\d{2}$/.test(inicioTexto)
       ? new Date(`${inicioTexto}T00:00:00-03:00`)
       : dataSaoPaulo(ano, mes, 1);
-    const fimBase = /^\d{4}-\d{2}-\d{2}$/.test(fimTexto)
+    const fimInformado = /^\d{4}-\d{2}-\d{2}$/.test(fimTexto)
       ? new Date(`${fimTexto}T23:59:59.999-03:00`)
       : agora;
-    fim = inicio <= fimBase ? fimBase : agora;
+    fim = inicio <= fimInformado ? fimInformado : agora;
   } else if (atalho === "mes_passado") {
     const primeiroMesAtual = dataSaoPaulo(ano, mes, 1);
     fim = new Date(primeiroMesAtual.getTime() - 1);
-    const partesFim = new Intl.DateTimeFormat("en-CA", {
+    const partes = new Intl.DateTimeFormat("en-CA", {
       timeZone: TIME_ZONE,
       year: "numeric",
       month: "2-digit",
     }).formatToParts(fim);
-    const mapaFim = new Map(partesFim.map((parte) => [parte.type, parte.value]));
-    inicio = dataSaoPaulo(Number(mapaFim.get("year")), Number(mapaFim.get("month")), 1);
+    const mapa = new Map(partes.map((parte) => [parte.type, parte.value]));
+    inicio = dataSaoPaulo(Number(mapa.get("year")), Number(mapa.get("month")), 1);
   } else if (atalho === "mes_atual") {
     inicio = dataSaoPaulo(ano, mes, 1);
     fim = agora;
   } else {
     fim = dataSaoPaulo(ano, mes, dia, true);
     const dias = atalho === "7d" ? 7 : atalho === "15d" ? 15 : atalho === "30d" ? 30 : 90;
-    inicio = subtrairDias(fim, dias);
-    inicio.setHours(3, 0, 0, 0);
+    inicio = new Date(fim.getTime() - (dias - 1) * 86400000);
   }
 
   const duracao = Math.max(1, fim.getTime() - inicio.getTime());
@@ -212,47 +203,12 @@ function nomeEmpresa(empresa: EmpresaGrowthRow) {
   return empresa.nome_fantasia?.trim() || empresa.razao_social?.trim() || "Empresa sem nome";
 }
 
-function numeroMetadata(valor: unknown, profundidade = 0): number | null {
-  if (profundidade > 3 || valor == null) return null;
-  if (typeof valor === "number" && Number.isFinite(valor)) return valor;
-  if (typeof valor === "string") {
-    const limpo = valor
-      .replace(/[^0-9,.-]/g, "")
-      .replace(/\.(?=\d{3}(?:\D|$))/g, "")
-      .replace(",", ".");
-    const convertido = Number(limpo);
-    return Number.isFinite(convertido) ? convertido : null;
-  }
-  if (Array.isArray(valor)) {
-    for (const item of valor) {
-      const encontrado = numeroMetadata(item, profundidade + 1);
-      if (encontrado != null) return encontrado;
-    }
-    return null;
-  }
-  if (typeof valor === "object") {
-    const registro = valor as Record<string, unknown>;
-    const chaves = [
-      "valor_mensal",
-      "preco_mensal",
-      "valor",
-      "preco",
-      "amount",
-      "unit_amount",
-      "price",
-    ];
-    for (const chave of chaves) {
-      if (chave in registro) {
-        const encontrado = numeroMetadata(registro[chave], profundidade + 1);
-        if (encontrado != null) {
-          return chave.includes("amount") && encontrado > 1000
-            ? encontrado / 100
-            : encontrado;
-        }
-      }
-    }
-  }
-  return null;
+function dataPagamento(pagamento: PagamentoRow) {
+  return pagamento.paid_at || pagamento.created_at;
+}
+
+function valorPagamento(pagamento: PagamentoRow | undefined) {
+  return pagamento?.valor == null ? 0 : pagamento.valor / 100;
 }
 
 function formatarStatus(status: string | null) {
@@ -260,22 +216,29 @@ function formatarStatus(status: string | null) {
   return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "Não informado";
 }
 
+function noPeriodo(valor: string, inicio: Date, fim: Date) {
+  const instante = new Date(valor).getTime();
+  return instante >= inicio.getTime() && instante <= fim.getTime();
+}
+
 function diferencaDias(inicio: string, fim: string) {
-  const valor = new Date(fim).getTime() - new Date(inicio).getTime();
-  return Math.max(0, Math.round(valor / 86400000));
+  return Math.max(0, Math.round((new Date(fim).getTime() - new Date(inicio).getTime()) / 86400000));
 }
 
-function dataPagamento(pagamento: PagamentoRow) {
-  return pagamento.paid_at || pagamento.created_at;
-}
+function rotuloPlano(
+  empresa: EmpresaGrowthRow,
+  pagamento: PagamentoRow,
+  oferta: OfertaRow | undefined
+) {
+  const planoBase = primeiroPlano(empresa.planos)?.nome?.trim() || "Plano não informado";
+  const valor = valorPagamento(pagamento);
+  const titulo = pagamento.offer_titulo?.trim() || oferta?.nome?.trim() || "";
 
-function valorPagamento(pagamento: PagamentoRow | undefined) {
-  if (!pagamento || pagamento.valor == null) return null;
-  return pagamento.valor / 100;
-}
-
-function assinaturaAtiva(status: string | null) {
-  return STATUS_ASSINATURA_ATIVA.includes(String(status || "").trim().toLowerCase());
+  if (valor === 0) return `${planoBase} — Gratuito`;
+  if (valor > 0) return `${planoBase} — ${moeda.format(valor)}`;
+  return titulo && titulo.toLowerCase() !== planoBase.toLowerCase()
+    ? `${planoBase} — ${titulo}`
+    : planoBase;
 }
 
 export default async function GrowthAnalyticsPage({ searchParams }: GrowthPageProps) {
@@ -293,20 +256,19 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
       .from("empresas")
       .select(`
         id, nome_fantasia, razao_social, created_at, plano_id,
-        assinatura_status, assinatura_inicio_em, assinatura_gateway,
-        assinatura_referencia, assinatura_metadata_json,
+        assinatura_status, assinatura_gateway, assinatura_referencia,
         planos (id, nome, slug)
       `),
     supabase
       .from("pagamentos")
-      .select("empresa_id, status, paid_at, created_at, valor")
+      .select("empresa_id, status, paid_at, created_at, valor, offer_hash, offer_titulo")
       .not("empresa_id", "is", null)
       .in("status", STATUS_PAGAMENTO_CONFIRMADO)
       .order("paid_at", { ascending: true })
       .limit(20000),
     supabase
       .from("ia_token_ofertas")
-      .select("id, plano_id, empresa_id, referencia, nome, metadata_json")
+      .select("plano_id, empresa_id, referencia, nome")
       .eq("tipo", "mensalidade")
       .eq("ativa", true),
     supabase
@@ -339,12 +301,12 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     pagamentosPorEmpresa.set(pagamento.empresa_id, lista);
   }
 
-  const encontrarOferta = (empresa: EmpresaGrowthRow) =>
+  const encontrarOferta = (empresa: EmpresaGrowthRow, pagamento: PagamentoRow) =>
     ofertas.find(
-      (item) =>
-        (empresa.assinatura_referencia && item.referencia === empresa.assinatura_referencia) ||
-        (item.empresa_id && item.empresa_id === empresa.id) ||
-        (item.plano_id && item.plano_id === empresa.plano_id)
+      (oferta) =>
+        (pagamento.offer_hash && oferta.referencia === pagamento.offer_hash) ||
+        (empresa.assinatura_referencia && oferta.referencia === empresa.assinatura_referencia) ||
+        (oferta.empresa_id && oferta.empresa_id === empresa.id)
     );
 
   const clientes: ClienteGrowth[] = [];
@@ -354,25 +316,19 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
 
     const primeiroPagamento = pagamentosEmpresa[0];
     const primeiroPagamentoEm = dataPagamento(primeiroPagamento);
-    const plano = primeiroPlano(empresa.planos);
-    const oferta = encontrarOferta(empresa);
     const usuario = usuarioPorEmpresa.get(empresa.id);
-    const valorMensal =
-      valorPagamento(primeiroPagamento) ??
-      numeroMetadata(empresa.assinatura_metadata_json) ??
-      numeroMetadata(oferta?.metadata_json);
+    const oferta = encontrarOferta(empresa, primeiroPagamento);
 
     clientes.push({
       id: empresa.id,
       empresa: nomeEmpresa(empresa),
       responsavel: usuario?.nome?.trim() || "Não informado",
       email: usuario?.email?.trim() || "Não informado",
-      plano: plano?.nome?.trim() || oferta?.nome?.trim() || "Não informado",
+      plano: rotuloPlano(empresa, primeiroPagamento, oferta),
       status: formatarStatus(empresa.assinatura_status),
       primeiroPagamentoEm,
-      cadastroEm: empresa.created_at,
       gateway: empresa.assinatura_gateway?.trim() || "Não informado",
-      valorMensal,
+      valorMensal: valorPagamento(primeiroPagamento),
       diasConversao: diferencaDias(empresa.created_at, primeiroPagamentoEm),
     });
   }
@@ -383,89 +339,63 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
       new Date(a.primeiroPagamentoEm).getTime()
   );
 
-  const noPeriodo = (valor: string, inicio: Date, fim: Date) => {
-    const instante = new Date(valor).getTime();
-    return instante >= inicio.getTime() && instante <= fim.getTime();
-  };
-
-  const atuais = clientes.filter((item) =>
-    noPeriodo(item.primeiroPagamentoEm, periodo.inicio, periodo.fim)
+  const atuais = clientes.filter((cliente) =>
+    noPeriodo(cliente.primeiroPagamentoEm, periodo.inicio, periodo.fim)
   );
-  const anteriores = clientes.filter((item) =>
-    noPeriodo(item.primeiroPagamentoEm, periodo.anteriorInicio, periodo.anteriorFim)
+  const anteriores = clientes.filter((cliente) =>
+    noPeriodo(cliente.primeiroPagamentoEm, periodo.anteriorInicio, periodo.anteriorFim)
   );
-
   const pagamentosPeriodo = pagamentos.filter((pagamento) =>
     noPeriodo(dataPagamento(pagamento), periodo.inicio, periodo.fim)
   );
-  const receitaPeriodo = pagamentosPeriodo.reduce(
-    (total, pagamento) => total + (valorPagamento(pagamento) ?? 0),
-    0
-  );
-
   const renovacoes = pagamentosPeriodo.filter((pagamento) => {
     if (!pagamento.empresa_id) return false;
     const primeiro = pagamentosPorEmpresa.get(pagamento.empresa_id)?.[0];
     return Boolean(primeiro && primeiro !== pagamento);
   });
 
-  const novoMrr = atuais.reduce(
-    (total, item) => total + (item.valorMensal ?? 0),
+  const novoMrr = atuais.reduce((total, cliente) => total + cliente.valorMensal, 0);
+  const receitaPeriodo = pagamentosPeriodo.reduce(
+    (total, pagamento) => total + valorPagamento(pagamento),
     0
   );
-  const clientesComValor = atuais.filter((item) => item.valorMensal != null);
-  const ticketMedio = clientesComValor.length
-    ? novoMrr / clientesComValor.length
-    : 0;
-
-  const mrrTotal = empresas.reduce((total, empresa) => {
-    if (!assinaturaAtiva(empresa.assinatura_status)) return total;
-    const pagamentosEmpresa = pagamentosPorEmpresa.get(empresa.id) ?? [];
-    const ultimoPagamento = pagamentosEmpresa.at(-1);
-    const oferta = encontrarOferta(empresa);
-    const valor =
-      valorPagamento(ultimoPagamento) ??
-      numeroMetadata(empresa.assinatura_metadata_json) ??
-      numeroMetadata(oferta?.metadata_json) ??
-      0;
-    return total + valor;
-  }, 0);
-
+  const totalHistorico = pagamentos.reduce(
+    (total, pagamento) => total + valorPagamento(pagamento),
+    0
+  );
+  const ticketMedio = atuais.length ? novoMrr / atuais.length : 0;
   const crescimento = anteriores.length
     ? ((atuais.length - anteriores.length) / anteriores.length) * 100
     : atuais.length
       ? 100
       : 0;
   const tempoMedio = atuais.length
-    ? atuais.reduce((total, item) => total + item.diasConversao, 0) /
-      atuais.length
+    ? atuais.reduce((total, cliente) => total + cliente.diasConversao, 0) / atuais.length
     : 0;
 
   const porPlano = Array.from(
-    atuais.reduce((mapa, item) => {
-      const atual = mapa.get(item.plano) ?? { clientes: 0, receita: 0 };
-      atual.clientes += 1;
-      atual.receita += item.valorMensal ?? 0;
-      mapa.set(item.plano, atual);
+    atuais.reduce((mapa, cliente) => {
+      const resumo = mapa.get(cliente.plano) ?? { clientes: 0, receita: 0 };
+      resumo.clientes += 1;
+      resumo.receita += cliente.valorMensal;
+      mapa.set(cliente.plano, resumo);
       return mapa;
     }, new Map<string, { clientes: number; receita: number }>())
-  ).sort((a, b) => b[1].clientes - a[1].clientes);
+  ).sort((a, b) => b[1].receita - a[1].receita);
 
   return (
     <>
       <Header
         title="Growth Analytics"
-        subtitle="Acompanhe novos clientes, renovações, receita do período e MRR atual."
+        subtitle="Acompanhe novos clientes, renovações e pagamentos confirmados."
       />
 
       <main className={styles.page}>
         <section className={styles.filterPanel}>
           <div className={styles.filterIntro}>
             <span className={styles.eyebrow}>Período analisado</span>
-            <h2>Novos clientes e receita recorrente</h2>
-            <p>
-              {data.format(periodo.inicio)} até {data.format(periodo.fim)}
-            </p>
+            <h2>Novos clientes e receita</h2>
+            <p>{data.format(periodo.inicio)} até {data.format(periodo.fim)}</p>
           </div>
 
           <form className={styles.filters} action="/relatorios-internos/growth">
@@ -483,29 +413,14 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
                 </select>
               </span>
             </label>
-
             <label>
               Início
-              <span>
-                <input
-                  type="date"
-                  name="inicio"
-                  defaultValue={periodo.inicioInput}
-                />
-              </span>
+              <span><input type="date" name="inicio" defaultValue={periodo.inicioInput} /></span>
             </label>
-
             <label>
               Fim
-              <span>
-                <input
-                  type="date"
-                  name="fim"
-                  defaultValue={periodo.fimInput}
-                />
-              </span>
+              <span><input type="date" name="fim" defaultValue={periodo.fimInput} /></span>
             </label>
-
             <button type="submit">Aplicar período</button>
           </form>
         </section>
@@ -515,40 +430,32 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
             <Users size={21} />
             <span>Novos pagantes</span>
             <strong>{numero.format(atuais.length)}</strong>
-            <small>
-              {crescimento >= 0 ? "+" : ""}
-              {crescimento.toFixed(1)}% vs. período anterior
-            </small>
+            <small>{crescimento >= 0 ? "+" : ""}{crescimento.toFixed(1)}% vs. período anterior</small>
           </article>
-
           <article>
             <RefreshCw size={21} />
             <span>Renovações</span>
             <strong>{numero.format(renovacoes.length)}</strong>
             <small>Pagamentos posteriores ao primeiro</small>
           </article>
-
           <article>
             <CircleDollarSign size={21} />
             <span>Novo MRR</span>
             <strong>{moeda.format(novoMrr)}</strong>
-            <small>{clientesComValor.length} novos clientes com valor</small>
+            <small>Primeiros pagamentos no período</small>
           </article>
-
           <article>
             <CreditCard size={21} />
             <span>Receita do período</span>
             <strong>{moeda.format(receitaPeriodo)}</strong>
             <small>{numero.format(pagamentosPeriodo.length)} pagamentos confirmados</small>
           </article>
-
           <article>
             <WalletCards size={21} />
-            <span>MRR total atual</span>
-            <strong>{moeda.format(mrrTotal)}</strong>
-            <small>+{moeda.format(novoMrr)} adicionados no período</small>
+            <span>Total geral recebido</span>
+            <strong>{moeda.format(totalHistorico)}</strong>
+            <small>Todos os pagamentos, independente do filtro</small>
           </article>
-
           <article>
             <TrendingUp size={21} />
             <span>Ticket médio inicial</span>
@@ -562,14 +469,11 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
             <div className={styles.panelHeader}>
               <div>
                 <span className={styles.eyebrow}>Distribuição</span>
-                <h2>Novos clientes por plano</h2>
+                <h2>Novos clientes por plano e valor</h2>
               </div>
             </div>
-
             {porPlano.length === 0 ? (
-              <p className={styles.empty}>
-                Nenhum novo cliente pagante no período.
-              </p>
+              <p className={styles.empty}>Nenhum novo cliente pagante no período.</p>
             ) : (
               <div className={styles.planList}>
                 {porPlano.map(([plano, resumo]) => (
@@ -593,26 +497,14 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
               </div>
               <Building2 size={20} />
             </div>
-
             <div className={styles.comparison}>
-              <div>
-                <span>Novos atuais</span>
-                <strong>{atuais.length}</strong>
-              </div>
-              <div>
-                <span>Novos anteriores</span>
-                <strong>{anteriores.length}</strong>
-              </div>
-              <div>
-                <span>Renovações atuais</span>
-                <strong>{renovacoes.length}</strong>
-              </div>
+              <div><span>Novos atuais</span><strong>{atuais.length}</strong></div>
+              <div><span>Novos anteriores</span><strong>{anteriores.length}</strong></div>
+              <div><span>Renovações atuais</span><strong>{renovacoes.length}</strong></div>
             </div>
-
             <p className={styles.note}>
-              Novo cliente é definido pelo primeiro pagamento confirmado. A
-              receita do período soma todos os pagamentos confirmados, enquanto
-              o MRR total considera as assinaturas atualmente ativas.
+              “Receita do período” respeita o filtro. “Total geral recebido” soma todo o histórico
+              de pagamentos confirmados e não muda quando o período é alterado.
             </p>
           </article>
         </section>
@@ -625,11 +517,8 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
             </div>
             <span className={styles.badge}>{atuais.length} registros</span>
           </div>
-
           {atuais.length === 0 ? (
-            <p className={styles.empty}>
-              Nenhum cliente novo encontrado para o período selecionado.
-            </p>
+            <p className={styles.empty}>Nenhum cliente novo encontrado para o período selecionado.</p>
           ) : (
             <div className={styles.tableWrapper}>
               <table>
@@ -638,7 +527,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
                     <th>Primeiro pagamento</th>
                     <th>Empresa</th>
                     <th>Responsável</th>
-                    <th>Plano</th>
+                    <th>Plano / valor</th>
                     <th>MRR</th>
                     <th>Conversão</th>
                     <th>Status</th>
@@ -648,24 +537,12 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
                   {atuais.map((cliente) => (
                     <tr key={cliente.id}>
                       <td>{data.format(new Date(cliente.primeiroPagamentoEm))}</td>
-                      <td>
-                        <strong>{cliente.empresa}</strong>
-                        <small>{cliente.gateway}</small>
-                      </td>
-                      <td>
-                        {cliente.responsavel}
-                        <small>{cliente.email}</small>
-                      </td>
+                      <td><strong>{cliente.empresa}</strong><small>{cliente.gateway}</small></td>
+                      <td>{cliente.responsavel}<small>{cliente.email}</small></td>
                       <td>{cliente.plano}</td>
-                      <td>
-                        {cliente.valorMensal == null
-                          ? "Não identificado"
-                          : moeda.format(cliente.valorMensal)}
-                      </td>
+                      <td>{moeda.format(cliente.valorMensal)}</td>
                       <td>{cliente.diasConversao} dias</td>
-                      <td>
-                        <span className={styles.status}>{cliente.status}</span>
-                      </td>
+                      <td><span className={styles.status}>{cliente.status}</span></td>
                     </tr>
                   ))}
                 </tbody>
