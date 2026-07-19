@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
 import { PERMISSAO_RELATORIOS_INTERNOS } from "@/lib/permissoes/internas";
+import RelatoriosInternosTabs from "./RelatoriosInternosTabs";
 
 export default async function RelatoriosInternosLayout({
   children,
@@ -18,5 +19,10 @@ export default async function RelatoriosInternosLayout({
     redirect("/painel");
   }
 
-  return children;
+  return (
+    <>
+      <RelatoriosInternosTabs />
+      {children}
+    </>
+  );
 }
