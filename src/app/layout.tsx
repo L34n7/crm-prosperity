@@ -17,7 +17,7 @@ const siteUrl = (() => {
   return "https://crmprosperity.com.br";
 })();
 
-const title = "CRM Prosperity | Atendimento, automações e vendas no WhatsApp";
+const title = "CRM Prosperity | CRM com IA para WhatsApp";
 const description =
   "Centralize o atendimento pelo WhatsApp, automatize conversas, faça disparos, acompanhe leads e gerencie sua operação em uma única plataforma empresarial.";
 
@@ -48,9 +48,20 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   icons: {
-    icon: [{ url: "/favicon.svg?v=4", sizes: "any", type: "image/svg+xml" }],
-    shortcut: [{ url: "/favicon.svg?v=4", type: "image/svg+xml" }],
-    apple: [{ url: "/logo.png?v=4", type: "image/png" }],
+    icon: [
+      { url: "/favicon.ico?v=5", type: "image/x-icon" },
+      { url: "/favicon-16x16.png?v=5", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png?v=5", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-48x48.png?v=5", sizes: "48x48", type: "image/png" },
+    ],
+    shortcut: [{ url: "/favicon.ico?v=5", type: "image/x-icon" }],
+    apple: [
+      {
+        url: "/apple-touch-icon.png?v=5",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
   },
   manifest: "/manifest.webmanifest",
   openGraph: {
@@ -111,9 +122,17 @@ export default function RootLayout({
     "@type": "Organization",
     name: "CRM Prosperity",
     url: siteUrl,
-    logo: `${siteUrl}/logo.png`,
+    logo: `${siteUrl}/android-chrome-512x512.png`,
     image: `${siteUrl}/opengraph-image`,
     description,
+  };
+
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "CRM Prosperity",
+    alternateName: "CRM Prosperity",
+    url: siteUrl,
   };
 
   const softwareSchema = {
@@ -123,23 +142,31 @@ export default function RootLayout({
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
     url: siteUrl,
-    image: `${siteUrl}/logo.png`,
+    image: `${siteUrl}/android-chrome-512x512.png`,
     description,
   };
 
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/favicon.ico?v=5" sizes="any" />
         <link
           rel="icon"
-          href="/favicon.svg?v=4"
-          type="image/svg+xml"
-          sizes="any"
+          href="/favicon-32x32.png?v=5"
+          type="image/png"
+          sizes="32x32"
         />
         <link
-          rel="shortcut icon"
-          href="/favicon.svg?v=4"
-          type="image/svg+xml"
+          rel="icon"
+          href="/favicon-16x16.png?v=5"
+          type="image/png"
+          sizes="16x16"
+        />
+        <link rel="shortcut icon" href="/favicon.ico?v=5" />
+        <link
+          rel="apple-touch-icon"
+          href="/apple-touch-icon.png?v=5"
+          sizes="180x180"
         />
       </head>
       <body className="antialiased">
@@ -162,6 +189,11 @@ export default function RootLayout({
           id="crm-organization-schema"
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        />
+        <Script
+          id="crm-website-schema"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
         />
         <Script
           id="crm-software-schema"
