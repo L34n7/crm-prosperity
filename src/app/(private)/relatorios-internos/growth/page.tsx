@@ -1,4 +1,4 @@
-import { Building2, CircleDollarSign, TrendingUp, Users } from "lucide-react";
+import { Building2, CircleDollarSign, RefreshCw, TrendingUp, Users } from "lucide-react";
 import Header from "@/components/Header";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import styles from "./growth.module.css";
@@ -22,11 +22,18 @@ type EmpresaGrowthRow = {
   plano_id: string | null;
   assinatura_status: string | null;
   assinatura_inicio_em: string | null;
-  assinatura_vencimento_em: string | null;
   assinatura_gateway: string | null;
   assinatura_referencia: string | null;
   assinatura_metadata_json: unknown | null;
   planos: PlanoRelacao;
+};
+
+type PagamentoRow = {
+  empresa_id: string | null;
+  status: string | null;
+  paid_at: string | null;
+  created_at: string;
+  valor: number | null;
 };
 
 type OfertaRow = {
@@ -52,12 +59,14 @@ type ClienteGrowth = {
   email: string;
   plano: string;
   status: string;
-  inicioEm: string;
+  primeiroPagamentoEm: string;
   cadastroEm: string;
   gateway: string;
   valorMensal: number | null;
   diasConversao: number;
 };
+
+const STATUS_PAGAMENTO_CONFIRMADO = ["paid", "approved", "completed", "succeeded"];
 
 const moeda = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -78,14 +87,22 @@ function parametro(params: SearchParams, chave: string) {
 
 function inicioDoMes() {
   const agora = new Date();
-  return new Date(agora.getFullYear(), agora.getMonth(), 1);
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(agora);
+  const mapa = new Map(partes.map((parte) => [parte.type, parte.value]));
+  return new Date(`${mapa.get("year")}-${mapa.get("month")}-01T00:00:00-03:00`);
 }
 
 function inputData(valor: Date) {
-  const ano = valor.getFullYear();
-  const mes = String(valor.getMonth() + 1).padStart(2, "0");
-  const dia = String(valor.getDate()).padStart(2, "0");
-  return `${ano}-${mes}-${dia}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(valor);
 }
 
 function resolverPeriodo(params: SearchParams) {
@@ -122,11 +139,6 @@ function nomeEmpresa(empresa: EmpresaGrowthRow) {
   return empresa.nome_fantasia?.trim() || empresa.razao_social?.trim() || "Empresa sem nome";
 }
 
-function statusPagante(status: string | null) {
-  const valor = String(status || "").trim().toLowerCase();
-  return ["ativa", "ativo", "regular", "vencida", "inadimplente", "bloqueada"].includes(valor);
-}
-
 function numeroMetadata(valor: unknown, profundidade = 0): number | null {
   if (profundidade > 3 || valor == null) return null;
   if (typeof valor === "number" && Number.isFinite(valor)) return valor;
@@ -155,8 +167,8 @@ function numeroMetadata(valor: unknown, profundidade = 0): number | null {
   return null;
 }
 
-function formatarStatus(status: string) {
-  const texto = status.replace(/_/g, " ").trim();
+function formatarStatus(status: string | null) {
+  const texto = String(status || "").replace(/_/g, " ").trim();
   return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "Não informado";
 }
 
@@ -165,47 +177,13 @@ function diferencaDias(inicio: string, fim: string) {
   return Math.max(0, Math.round(valor / 86400000));
 }
 
-function montarClientes(
-  empresas: EmpresaGrowthRow[],
-  ofertas: OfertaRow[],
-  usuarios: UsuarioRow[]
-): ClienteGrowth[] {
-  const usuarioPorEmpresa = new Map<string, UsuarioRow>();
-  for (const usuario of usuarios) {
-    if (usuario.empresa_id && !usuarioPorEmpresa.has(usuario.empresa_id)) {
-      usuarioPorEmpresa.set(usuario.empresa_id, usuario);
-    }
-  }
+function dataPagamento(pagamento: PagamentoRow) {
+  return pagamento.paid_at || pagamento.created_at;
+}
 
-  return empresas
-    .filter((empresa) => empresa.assinatura_inicio_em && statusPagante(empresa.assinatura_status))
-    .map((empresa) => {
-      const plano = primeiroPlano(empresa.planos);
-      const oferta = ofertas.find(
-        (item) =>
-          (empresa.assinatura_referencia && item.referencia === empresa.assinatura_referencia) ||
-          (item.empresa_id && item.empresa_id === empresa.id) ||
-          (item.plano_id && item.plano_id === empresa.plano_id)
-      );
-      const usuario = usuarioPorEmpresa.get(empresa.id);
-      const valorMensal =
-        numeroMetadata(empresa.assinatura_metadata_json) ?? numeroMetadata(oferta?.metadata_json);
-
-      return {
-        id: empresa.id,
-        empresa: nomeEmpresa(empresa),
-        responsavel: usuario?.nome?.trim() || "Não informado",
-        email: usuario?.email?.trim() || "Não informado",
-        plano: plano?.nome?.trim() || oferta?.nome?.trim() || "Não informado",
-        status: formatarStatus(empresa.assinatura_status || ""),
-        inicioEm: empresa.assinatura_inicio_em as string,
-        cadastroEm: empresa.created_at,
-        gateway: empresa.assinatura_gateway?.trim() || "Não informado",
-        valorMensal,
-        diasConversao: diferencaDias(empresa.created_at, empresa.assinatura_inicio_em as string),
-      };
-    })
-    .sort((a, b) => new Date(b.inicioEm).getTime() - new Date(a.inicioEm).getTime());
+function valorPagamento(pagamento: PagamentoRow | undefined) {
+  if (!pagamento || pagamento.valor == null) return null;
+  return pagamento.valor / 100;
 }
 
 export default async function GrowthAnalyticsPage({ searchParams }: GrowthPageProps) {
@@ -213,47 +191,120 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const periodo = resolverPeriodo(params);
   const supabase = getSupabaseAdmin();
 
-  const [{ data: empresasData, error: empresasError }, { data: ofertasData }, { data: usuariosData }] =
-    await Promise.all([
-      supabase
-        .from("empresas")
-        .select(`
-          id, nome_fantasia, razao_social, created_at, plano_id,
-          assinatura_status, assinatura_inicio_em, assinatura_vencimento_em,
-          assinatura_gateway, assinatura_referencia, assinatura_metadata_json,
-          planos (id, nome, slug)
-        `)
-        .not("assinatura_inicio_em", "is", null)
-        .gte("assinatura_inicio_em", periodo.anteriorInicio.toISOString())
-        .lte("assinatura_inicio_em", periodo.fim.toISOString())
-        .order("assinatura_inicio_em", { ascending: false }),
-      supabase
-        .from("ia_token_ofertas")
-        .select("id, plano_id, empresa_id, referencia, nome, metadata_json")
-        .eq("tipo", "mensalidade")
-        .eq("ativa", true),
-      supabase
-        .from("usuarios")
-        .select("empresa_id, nome, email, created_at")
-        .order("created_at", { ascending: true }),
-    ]);
+  const [
+    { data: empresasData, error: empresasError },
+    { data: pagamentosData, error: pagamentosError },
+    { data: ofertasData },
+    { data: usuariosData },
+  ] = await Promise.all([
+    supabase
+      .from("empresas")
+      .select(`
+        id, nome_fantasia, razao_social, created_at, plano_id,
+        assinatura_status, assinatura_inicio_em, assinatura_gateway,
+        assinatura_referencia, assinatura_metadata_json,
+        planos (id, nome, slug)
+      `),
+    supabase
+      .from("pagamentos")
+      .select("empresa_id, status, paid_at, created_at, valor")
+      .not("empresa_id", "is", null)
+      .in("status", STATUS_PAGAMENTO_CONFIRMADO)
+      .lte("paid_at", periodo.fim.toISOString())
+      .order("paid_at", { ascending: true })
+      .limit(10000),
+    supabase
+      .from("ia_token_ofertas")
+      .select("id, plano_id, empresa_id, referencia, nome, metadata_json")
+      .eq("tipo", "mensalidade")
+      .eq("ativa", true),
+    supabase
+      .from("usuarios")
+      .select("empresa_id, nome, email, created_at")
+      .order("created_at", { ascending: true }),
+  ]);
 
-  if (empresasError) {
-    console.error("[growth-analytics] Erro ao carregar empresas", empresasError);
+  if (empresasError) console.error("[growth-analytics] Erro ao carregar empresas", empresasError);
+  if (pagamentosError) console.error("[growth-analytics] Erro ao carregar pagamentos", pagamentosError);
+
+  const empresas = (empresasData ?? []) as EmpresaGrowthRow[];
+  const pagamentos = (pagamentosData ?? []) as PagamentoRow[];
+  const ofertas = (ofertasData ?? []) as OfertaRow[];
+  const usuarios = (usuariosData ?? []) as UsuarioRow[];
+
+  const empresaPorId = new Map(empresas.map((empresa) => [empresa.id, empresa]));
+  const usuarioPorEmpresa = new Map<string, UsuarioRow>();
+  for (const usuario of usuarios) {
+    if (usuario.empresa_id && !usuarioPorEmpresa.has(usuario.empresa_id)) {
+      usuarioPorEmpresa.set(usuario.empresa_id, usuario);
+    }
   }
 
-  const clientes = montarClientes(
-    (empresasData ?? []) as EmpresaGrowthRow[],
-    (ofertasData ?? []) as OfertaRow[],
-    (usuariosData ?? []) as UsuarioRow[]
+  const pagamentosPorEmpresa = new Map<string, PagamentoRow[]>();
+  for (const pagamento of pagamentos) {
+    if (!pagamento.empresa_id) continue;
+    const lista = pagamentosPorEmpresa.get(pagamento.empresa_id) ?? [];
+    lista.push(pagamento);
+    pagamentosPorEmpresa.set(pagamento.empresa_id, lista);
+  }
+
+  const clientes: ClienteGrowth[] = [];
+  for (const [empresaId, pagamentosEmpresa] of pagamentosPorEmpresa) {
+    const empresa = empresaPorId.get(empresaId);
+    if (!empresa || pagamentosEmpresa.length === 0) continue;
+
+    const primeiroPagamento = pagamentosEmpresa[0];
+    const primeiroPagamentoEm = dataPagamento(primeiroPagamento);
+    const plano = primeiroPlano(empresa.planos);
+    const oferta = ofertas.find(
+      (item) =>
+        (empresa.assinatura_referencia && item.referencia === empresa.assinatura_referencia) ||
+        (item.empresa_id && item.empresa_id === empresa.id) ||
+        (item.plano_id && item.plano_id === empresa.plano_id)
+    );
+    const usuario = usuarioPorEmpresa.get(empresa.id);
+    const valorMensal =
+      valorPagamento(primeiroPagamento) ??
+      numeroMetadata(empresa.assinatura_metadata_json) ??
+      numeroMetadata(oferta?.metadata_json);
+
+    clientes.push({
+      id: empresa.id,
+      empresa: nomeEmpresa(empresa),
+      responsavel: usuario?.nome?.trim() || "Não informado",
+      email: usuario?.email?.trim() || "Não informado",
+      plano: plano?.nome?.trim() || oferta?.nome?.trim() || "Não informado",
+      status: formatarStatus(empresa.assinatura_status),
+      primeiroPagamentoEm,
+      cadastroEm: empresa.created_at,
+      gateway: empresa.assinatura_gateway?.trim() || primeiroPagamento.status || "Não informado",
+      valorMensal,
+      diasConversao: diferencaDias(empresa.created_at, primeiroPagamentoEm),
+    });
+  }
+
+  clientes.sort(
+    (a, b) => new Date(b.primeiroPagamentoEm).getTime() - new Date(a.primeiroPagamentoEm).getTime()
   );
-  const atuais = clientes.filter((item) => {
-    const instante = new Date(item.inicioEm).getTime();
-    return instante >= periodo.inicio.getTime() && instante <= periodo.fim.getTime();
-  });
-  const anteriores = clientes.filter((item) => {
-    const instante = new Date(item.inicioEm).getTime();
-    return instante >= periodo.anteriorInicio.getTime() && instante <= periodo.anteriorFim.getTime();
+
+  const noPeriodo = (valor: string, inicio: Date, fim: Date) => {
+    const instante = new Date(valor).getTime();
+    return instante >= inicio.getTime() && instante <= fim.getTime();
+  };
+
+  const atuais = clientes.filter((item) =>
+    noPeriodo(item.primeiroPagamentoEm, periodo.inicio, periodo.fim)
+  );
+  const anteriores = clientes.filter((item) =>
+    noPeriodo(item.primeiroPagamentoEm, periodo.anteriorInicio, periodo.anteriorFim)
+  );
+
+  const renovacoes = pagamentos.filter((pagamento) => {
+    if (!pagamento.empresa_id) return false;
+    const lista = pagamentosPorEmpresa.get(pagamento.empresa_id) ?? [];
+    const primeiro = lista[0];
+    if (!primeiro || primeiro === pagamento) return false;
+    return noPeriodo(dataPagamento(pagamento), periodo.inicio, periodo.fim);
   });
 
   const receita = atuais.reduce((total, item) => total + (item.valorMensal ?? 0), 0);
@@ -282,14 +333,14 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     <>
       <Header
         title="Growth Analytics"
-        subtitle="Acompanhe novos clientes pagantes, receita adicionada e velocidade de conversão."
+        subtitle="Acompanhe novos clientes pagantes, renovações e receita adicionada."
       />
 
       <main className={styles.page}>
         <section className={styles.filterPanel}>
           <div>
             <span className={styles.eyebrow}>Período analisado</span>
-            <h2>Novos clientes pagantes</h2>
+            <h2>Novos clientes e renovações</h2>
             <p>{data.format(periodo.inicio)} até {data.format(periodo.fim)}</p>
           </div>
           <form className={styles.filters} action="/relatorios-internos/growth">
@@ -307,9 +358,9 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
 
         <section className={styles.kpis}>
           <article><Users size={21} /><span>Novos pagantes</span><strong>{numero.format(atuais.length)}</strong><small>{crescimento >= 0 ? "+" : ""}{crescimento.toFixed(1)}% vs. período anterior</small></article>
+          <article><RefreshCw size={21} /><span>Renovações</span><strong>{numero.format(renovacoes.length)}</strong><small>Pagamentos posteriores ao primeiro</small></article>
           <article><CircleDollarSign size={21} /><span>Novo MRR identificado</span><strong>{moeda.format(receita)}</strong><small>{clientesComValor.length} clientes com valor localizado</small></article>
-          <article><TrendingUp size={21} /><span>Ticket médio inicial</span><strong>{moeda.format(ticketMedio)}</strong><small>Baseado nos valores identificados</small></article>
-          <article><Building2 size={21} /><span>Tempo para conversão</span><strong>{tempoMedio.toFixed(1)} dias</strong><small>Do cadastro ao início da assinatura</small></article>
+          <article><TrendingUp size={21} /><span>Ticket médio inicial</span><strong>{moeda.format(ticketMedio)}</strong><small>Tempo médio de conversão: {tempoMedio.toFixed(1)} dias</small></article>
         </section>
 
         <section className={styles.grid}>
@@ -326,25 +377,25 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
           </article>
 
           <article className={styles.panel}>
-            <div className={styles.panelHeader}><div><span className={styles.eyebrow}>Leitura rápida</span><h2>Comparativo do período</h2></div></div>
+            <div className={styles.panelHeader}><div><span className={styles.eyebrow}>Leitura rápida</span><h2>Comparativo do período</h2></div><Building2 size={20} /></div>
             <div className={styles.comparison}>
-              <div><span>Período atual</span><strong>{atuais.length}</strong></div>
-              <div><span>Período anterior</span><strong>{anteriores.length}</strong></div>
-              <div><span>Variação líquida</span><strong>{atuais.length - anteriores.length >= 0 ? "+" : ""}{atuais.length - anteriores.length}</strong></div>
+              <div><span>Novos atuais</span><strong>{atuais.length}</strong></div>
+              <div><span>Novos anteriores</span><strong>{anteriores.length}</strong></div>
+              <div><span>Renovações atuais</span><strong>{renovacoes.length}</strong></div>
             </div>
-            <p className={styles.note}>O relatório usa o primeiro início de assinatura registrado na empresa. Renovações não são contadas como novos clientes.</p>
+            <p className={styles.note}>Novo cliente é definido pelo primeiro pagamento confirmado da empresa. Qualquer pagamento confirmado posterior é classificado como renovação.</p>
           </article>
         </section>
 
         <section className={styles.tablePanel}>
-          <div className={styles.panelHeader}><div><span className={styles.eyebrow}>Detalhamento</span><h2>Clientes que começaram a pagar</h2></div><span className={styles.badge}>{atuais.length} registros</span></div>
-          {atuais.length === 0 ? <p className={styles.empty}>Nenhum cliente encontrado para o período selecionado.</p> : (
+          <div className={styles.panelHeader}><div><span className={styles.eyebrow}>Detalhamento</span><h2>Clientes com primeiro pagamento no período</h2></div><span className={styles.badge}>{atuais.length} registros</span></div>
+          {atuais.length === 0 ? <p className={styles.empty}>Nenhum cliente novo encontrado para o período selecionado.</p> : (
             <div className={styles.tableWrapper}>
               <table>
-                <thead><tr><th>Início</th><th>Empresa</th><th>Responsável</th><th>Plano</th><th>MRR</th><th>Conversão</th><th>Status</th></tr></thead>
+                <thead><tr><th>Primeiro pagamento</th><th>Empresa</th><th>Responsável</th><th>Plano</th><th>MRR</th><th>Conversão</th><th>Status</th></tr></thead>
                 <tbody>{atuais.map((cliente) => (
                   <tr key={cliente.id}>
-                    <td>{data.format(new Date(cliente.inicioEm))}</td>
+                    <td>{data.format(new Date(cliente.primeiroPagamentoEm))}</td>
                     <td><strong>{cliente.empresa}</strong><small>{cliente.gateway}</small></td>
                     <td>{cliente.responsavel}<small>{cliente.email}</small></td>
                     <td>{cliente.plano}</td>
