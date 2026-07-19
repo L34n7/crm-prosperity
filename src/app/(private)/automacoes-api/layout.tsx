@@ -6,5 +6,9 @@ export default function AutomacoesApiLayout({
 }: {
   children: ReactNode;
 }) {
-  return <div className="automacoes-api-font-scope">{children}</div>;
+  return (
+    <div className="automacoes-api-font-scope" style={{ display: "contents" }}>
+      {children}
+    </div>
+  );
 }
