@@ -1,113 +1,119 @@
 .automacoes-api-font-scope [role="dialog"] {
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .automacoes-api-font-scope [role="dialog"] p {
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.65;
 }
 
 .automacoes-api-font-scope [role="dialog"] small {
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.automacoes-api-font-scope [role="dialog"] b {
   font-size: 13px;
-  line-height: 1.35;
+  line-height: 1.5;
 }
 
+.automacoes-api-font-scope [role="dialog"] b,
 .automacoes-api-font-scope [role="dialog"] strong {
-  font-size: 14px;
-  line-height: 1.35;
+  font-size: 15px;
+  line-height: 1.4;
 }
 
 .automacoes-api-font-scope [role="dialog"] label > span,
 .automacoes-api-font-scope [role="dialog"] [class*="mappingGrid"] span {
-  font-size: 13px;
-  line-height: 1.35;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .automacoes-api-font-scope [role="dialog"] input,
 .automacoes-api-font-scope [role="dialog"] select,
 .automacoes-api-font-scope [role="dialog"] textarea,
 .automacoes-api-font-scope [role="dialog"] button {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .automacoes-api-font-scope [role="dialog"] code {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="modalBadge"] {
-  font-size: 13px;
+  font-size: 14px;
+}
+
+.automacoes-api-font-scope [role="dialog"] [class*="modalHeader"] h2 {
+  font-size: 25px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="modalHeader"] p {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="sectionLabel"],
 .automacoes-api-font-scope [role="dialog"] [class*="stepHeading"] > span {
-  font-size: 12px;
+  font-size: 13px;
+}
+
+.automacoes-api-font-scope [role="dialog"] [class*="stepHeading"] h3,
+.automacoes-api-font-scope [role="dialog"] [class*="integrationIntro"] h3 {
+  font-size: 22px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="stepHeading"] p,
 .automacoes-api-font-scope [role="dialog"] [class*="integrationIntro"] p {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="step"] b {
-  font-size: 13px;
-}
-
-.automacoes-api-font-scope [role="dialog"] [class*="step"] small {
-  font-size: 11px;
-}
-
-.automacoes-api-font-scope [role="dialog"] [class*="step"] > span {
-  font-size: 12px;
-}
-
-.automacoes-api-font-scope [role="dialog"] [class*="integrationTabs"] button > span {
   font-size: 14px;
 }
 
+.automacoes-api-font-scope [role="dialog"] [class*="step"] small {
+  font-size: 13px;
+}
+
+.automacoes-api-font-scope [role="dialog"] [class*="step"] > span {
+  font-size: 14px;
+}
+
+.automacoes-api-font-scope [role="dialog"] [class*="integrationTabs"] button > span {
+  font-size: 15px;
+}
+
 .automacoes-api-font-scope [role="dialog"] [class*="integrationTabs"] button small {
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="connectionCounter"],
 .automacoes-api-font-scope [role="dialog"] [class*="connectorStatus"] {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="connectorInfo"] small {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="connectorInfo"] strong {
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="connectorInfo"] em {
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="connectorFormHeader"] h4,
 .automacoes-api-font-scope [role="dialog"] [class*="customConnectorBody"] h4 {
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="connectorFormHeader"] p,
 .automacoes-api-font-scope [role="dialog"] [class*="customConnectorBody"] p {
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="connectorFormHeader"] > span {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="infoBox"] b,
@@ -115,7 +121,7 @@
 .automacoes-api-font-scope [role="dialog"] [class*="scheduleSummary"] b,
 .automacoes-api-font-scope [role="dialog"] [class*="testButton"] b,
 .automacoes-api-font-scope [role="dialog"] [class*="consentBox"] b {
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="infoBox"] p,
@@ -123,38 +129,42 @@
 .automacoes-api-font-scope [role="dialog"] [class*="scheduleSummary"] p,
 .automacoes-api-font-scope [role="dialog"] [class*="testButton"] small,
 .automacoes-api-font-scope [role="dialog"] [class*="consentBox"] p {
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="reviewGrid"] span {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="reviewGrid"] strong,
 .automacoes-api-font-scope [role="dialog"] [class*="frequencyGrid"] b {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .automacoes-api-font-scope [role="dialog"] [class*="frequencyGrid"] small,
 .automacoes-api-font-scope [role="dialog"] [class*="connectionSuccess"] b,
 .automacoes-api-font-scope [role="dialog"] [class*="connectionSuccess"] small {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 @media (max-width: 720px) {
+  .automacoes-api-font-scope [role="dialog"] {
+    font-size: 15px;
+  }
+
   .automacoes-api-font-scope [role="dialog"] p {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .automacoes-api-font-scope [role="dialog"] small {
-    font-size: 11px;
+    font-size: 13px;
   }
 
   .automacoes-api-font-scope [role="dialog"] input,
   .automacoes-api-font-scope [role="dialog"] select,
   .automacoes-api-font-scope [role="dialog"] textarea,
   .automacoes-api-font-scope [role="dialog"] button {
-    font-size: 13px;
+    font-size: 14px;
   }
 }
