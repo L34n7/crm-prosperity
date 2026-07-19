@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import {
   Activity,
   AlertTriangle,
+  Archive,
   ArrowRight,
   CalendarClock,
   Check,
@@ -18,16 +19,18 @@ import {
   EyeOff,
   Filter,
   Loader2,
+  MessageCircle,
   Pause,
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Send,
-  Server,
   Settings2,
   ShieldCheck,
   Sparkles,
+  Trash2,
   Workflow,
   X,
   Zap,
@@ -62,7 +65,12 @@ type Rotina = {
   total_processados: number;
 };
 
-type Template = { id: string; nome: string; status: string };
+type Template = {
+  id: string;
+  nome: string;
+  status: string;
+};
+
 type Frequencia = Rotina["frequencia"];
 type AbaIntegracao = "sistemas" | "crm";
 
@@ -82,8 +90,13 @@ const metricasVazias: Metricas = {
   taxa_execucao: null,
 };
 
+const CRM_WHATSAPP_HOMOLOGACAO = `https://wa.me/553175117638?text=${encodeURIComponent(
+  "Olá, preciso solicitar a homologação de uma integração personalizada no CRM Prosperity.",
+)}`;
+
 function formatarData(valor: string | null) {
   if (!valor) return "Ainda não executada";
+
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
@@ -99,8 +112,14 @@ function statusLabel(status: Rotina["status"]) {
 function statusIntegracaoLabel(status: Integracao["status"]) {
   if (status === "ativa") return "Conectada";
   if (status === "erro") return "Com erro";
-  if (status === "inativa") return "Inativa";
+  if (status === "inativa") return "Arquivada";
   return "Não testada";
+}
+
+function frequenciaLabel(frequencia: Frequencia) {
+  if (frequencia === "diaria") return "Diariamente";
+  if (frequencia === "semanal") return "Semanalmente";
+  return "Mensalmente";
 }
 
 export default function AutomacoesApiPage() {
@@ -108,6 +127,7 @@ export default function AutomacoesApiPage() {
   const [rotinas, setRotinas] = useState<Rotina[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [metricas, setMetricas] = useState(metricasVazias);
+  const [podeGerenciar, setPodeGerenciar] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -118,19 +138,17 @@ export default function AutomacoesApiPage() {
   const [modalRotinaAberto, setModalRotinaAberto] = useState(false);
   const [etapa, setEtapa] = useState(1);
   const [consentimento, setConsentimento] = useState(false);
-  const [validandoRotina, setValidandoRotina] = useState(false);
   const [rotinaValidada, setRotinaValidada] = useState(false);
 
   const [modalIntegracoesAberto, setModalIntegracoesAberto] = useState(false);
   const [abaIntegracao, setAbaIntegracao] =
     useState<AbaIntegracao>("sistemas");
-  const [conectorExpandido, setConectorExpandido] = useState<string | null>(
-    "erp_provedor",
-  );
+  const [conectorExpandido, setConectorExpandido] = useState<string | null>(null);
   const [mostrarTokenErp, setMostrarTokenErp] = useState(false);
   const [testandoConexao, setTestandoConexao] = useState(false);
   const [conexaoTestada, setConexaoTestada] = useState(false);
   const [mensagemTesteConexao, setMensagemTesteConexao] = useState("");
+  const [operacaoConexaoId, setOperacaoConexaoId] = useState<string | null>(null);
 
   const [nomeIntegracao, setNomeIntegracao] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -146,23 +164,32 @@ export default function AutomacoesApiPage() {
   const [frequencia, setFrequencia] = useState<Frequencia>("diaria");
   const [horario, setHorario] = useState("09:00");
 
+  const mostrarFeedback = useCallback((mensagem: string) => {
+    setFeedback(mensagem);
+    window.setTimeout(() => setFeedback(""), 3500);
+  }, []);
+
   const carregar = useCallback(async () => {
     setCarregando(true);
     setErro("");
+
     try {
       const response = await fetch("/api/automacoes-api", {
         cache: "no-store",
       });
       const data = await response.json();
+
       if (!response.ok || !data.ok) {
         throw new Error(
           data.error || "Não foi possível carregar as automações.",
         );
       }
+
       setIntegracoes(data.integracoes || []);
       setRotinas(data.rotinas || []);
       setTemplates(data.templates || []);
       setMetricas(data.metricas || metricasVazias);
+      setPodeGerenciar(data.pode_gerenciar === true);
     } catch (error) {
       setErro(
         error instanceof Error ? error.message : "Erro ao carregar a página.",
@@ -178,18 +205,25 @@ export default function AutomacoesApiPage() {
 
   const rotinasFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
+
     return rotinas.filter((rotina) => {
       const correspondeBusca =
         !termo ||
         rotina.nome.toLowerCase().includes(termo) ||
         rotina.consulta_chave.toLowerCase().includes(termo) ||
         rotina.endpoint.toLowerCase().includes(termo);
+
       return (
         correspondeBusca &&
         (statusFiltro === "todas" || rotina.status === statusFiltro)
       );
     });
   }, [busca, rotinas, statusFiltro]);
+
+  const integracoesDisponiveis = useMemo(
+    () => integracoes.filter((item) => item.status !== "inativa"),
+    [integracoes],
+  );
 
   const integracaoSelecionada = useMemo(
     () => integracoes.find((item) => item.id === integracaoId) || null,
@@ -201,12 +235,18 @@ export default function AutomacoesApiPage() {
     [templateId, templates],
   );
 
+  const totalIntegracoesAtivas = useMemo(
+    () => integracoes.filter((item) => item.status === "ativa").length,
+    [integracoes],
+  );
+
   async function requisicao(
     body: Record<string, unknown>,
     method = "POST",
   ) {
     setSalvando(true);
     setErro("");
+
     try {
       const response = await fetch("/api/automacoes-api", {
         method,
@@ -214,9 +254,11 @@ export default function AutomacoesApiPage() {
         body: JSON.stringify(body),
       });
       const data = await response.json();
+
       if (!response.ok || !data.ok) {
         throw new Error(data.error || "Não foi possível concluir a operação.");
       }
+
       await carregar();
       return data;
     } catch (error) {
@@ -230,7 +272,7 @@ export default function AutomacoesApiPage() {
   function abrirNovaRotina() {
     setEtapa(1);
     setNomeRotina("");
-    setIntegracaoId(integracoes[0]?.id || "");
+    setIntegracaoId(integracoesDisponiveis[0]?.id || "");
     setConsultaChave("personalizada");
     setEndpoint("");
     setMetodo("GET");
@@ -244,10 +286,17 @@ export default function AutomacoesApiPage() {
 
   function abrirIntegracoes() {
     setAbaIntegracao("sistemas");
-    setConectorExpandido("erp_provedor");
+    setConectorExpandido(integracoes[0]?.id || "nova_conexao");
     setConexaoTestada(false);
     setMensagemTesteConexao("");
     setModalIntegracoesAberto(true);
+  }
+
+  function abrirFormularioConexao() {
+    setModalRotinaAberto(false);
+    setModalIntegracoesAberto(true);
+    setAbaIntegracao("sistemas");
+    setConectorExpandido("nova_conexao");
   }
 
   async function criarIntegracao() {
@@ -257,24 +306,29 @@ export default function AutomacoesApiPage() {
       base_url: baseUrl,
       codigo_empresa: codigoEmpresa,
       token: tokenErp,
+      conexao_testada: conexaoTestada,
     });
+
     if (!data) return;
-    setModalIntegracoesAberto(false);
+
     setNomeIntegracao("");
     setBaseUrl("");
     setCodigoEmpresa("");
     setTokenErp("");
     setConexaoTestada(false);
     setMensagemTesteConexao("");
-    setFeedback("Conexão cadastrada com sucesso.");
+    setConectorExpandido(data.integracao?.id || null);
+    mostrarFeedback("Conexão cadastrada com sucesso.");
   }
 
   async function testarConexaoErp() {
     if (!baseUrl.trim()) return;
+
     setTestandoConexao(true);
     setConexaoTestada(false);
     setMensagemTesteConexao("");
     setErro("");
+
     try {
       const response = await fetch("/api/automacoes-api", {
         method: "POST",
@@ -286,9 +340,11 @@ export default function AutomacoesApiPage() {
         }),
       });
       const data = await response.json();
+
       if (!response.ok || !data.ok) {
         throw new Error(data.error || "Não foi possível testar a conexão.");
       }
+
       setConexaoTestada(true);
       setMensagemTesteConexao(
         data.message || "O servidor externo respondeu à validação.",
@@ -314,13 +370,15 @@ export default function AutomacoesApiPage() {
       frequencia,
       horario,
     });
+
     if (!data) return;
+
     setModalRotinaAberto(false);
     setNomeRotina("");
     setEndpoint("");
     setConsentimento(false);
     setRotinaValidada(false);
-    setFeedback(
+    mostrarFeedback(
       "Automação criada pausada. Ative após homologar a resposta da API.",
     );
   }
@@ -328,6 +386,7 @@ export default function AutomacoesApiPage() {
   async function alternarStatus(rotina: Rotina) {
     await requisicao(
       {
+        entidade: "rotina",
         id: rotina.id,
         status: rotina.status === "ativa" ? "pausada" : "ativa",
       },
@@ -335,30 +394,102 @@ export default function AutomacoesApiPage() {
     );
   }
 
-  function validarConfiguracaoRotina() {
-    setValidandoRotina(true);
-    setRotinaValidada(false);
-    window.setTimeout(() => {
-      const valida = Boolean(
-        nomeRotina.trim() &&
-          integracaoId &&
-          consultaChave.trim() &&
-          endpoint.trim().startsWith("/") &&
-          horario,
-      );
-      setRotinaValidada(valida);
-      setValidandoRotina(false);
-      if (!valida) {
-        setErro(
-          "Preencha nome, conexão, identificador, endpoint iniciado por / e horário.",
-        );
+  async function alterarStatusIntegracao(
+    integracao: Integracao,
+    status: "inativa" | "nao_testada",
+  ) {
+    setOperacaoConexaoId(integracao.id);
+
+    const data = await requisicao(
+      {
+        entidade: "integracao",
+        id: integracao.id,
+        status,
+      },
+      "PATCH",
+    );
+
+    setOperacaoConexaoId(null);
+    if (!data) return;
+
+    mostrarFeedback(
+      data.message ||
+        (status === "inativa"
+          ? "Conexão arquivada."
+          : "Conexão reaberta."),
+    );
+  }
+
+  async function excluirIntegracao(integracao: Integracao) {
+    const totalRotinas = rotinas.filter(
+      (rotina) => rotina.integracao_id === integracao.id,
+    ).length;
+
+    const detalheRotinas = totalRotinas
+      ? ` Esta ação também excluirá ${totalRotinas} rotina${totalRotinas === 1 ? "" : "s"} vinculada${totalRotinas === 1 ? "" : "s"} e seus históricos.`
+      : "";
+
+    const confirmou = window.confirm(
+      `Excluir permanentemente a conexão “${integracao.nome}”?${detalheRotinas} Esta ação não pode ser desfeita.`,
+    );
+
+    if (!confirmou) return;
+
+    setOperacaoConexaoId(integracao.id);
+    setErro("");
+
+    try {
+      const response = await fetch("/api/automacoes-api", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: integracao.id }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível excluir a conexão.");
       }
-    }, 250);
+
+      if (integracaoId === integracao.id) setIntegracaoId("");
+      setConectorExpandido(null);
+      await carregar();
+      mostrarFeedback(
+        data.rotinas_excluidas
+          ? `Conexão excluída com ${data.rotinas_excluidas} rotina(s) vinculada(s).`
+          : "Conexão excluída permanentemente.",
+      );
+    } catch (error) {
+      setErro(
+        error instanceof Error ? error.message : "Erro ao excluir conexão.",
+      );
+    } finally {
+      setOperacaoConexaoId(null);
+    }
+  }
+
+  function validarConfiguracaoRotina() {
+    const valida = Boolean(
+      nomeRotina.trim() &&
+        integracaoId &&
+        consultaChave.trim() &&
+        endpoint.trim().startsWith("/") &&
+        horario,
+    );
+
+    setRotinaValidada(valida);
+
+    if (!valida) {
+      setErro(
+        "Preencha nome, conexão, identificador, endpoint iniciado por / e horário.",
+      );
+    } else {
+      setErro("");
+    }
   }
 
   async function copiarTexto(valor: string, mensagem: string) {
     await navigator.clipboard?.writeText(valor);
-    setFeedback(mensagem);
+    mostrarFeedback(mensagem);
   }
 
   const podeAvancarEtapa1 = Boolean(
@@ -367,7 +498,8 @@ export default function AutomacoesApiPage() {
       consultaChave.trim() &&
       endpoint.trim().startsWith("/"),
   );
-  const podeSalvarRotina = podeAvancarEtapa1 && Boolean(horario) && consentimento;
+  const podeSalvarRotina =
+    podeAvancarEtapa1 && Boolean(horario) && consentimento;
 
   return (
     <main className={styles.page}>
@@ -383,6 +515,7 @@ export default function AutomacoesApiPage() {
             {feedback}
           </div>
         ) : null}
+
         {erro ? (
           <div
             className={styles.feedback}
@@ -404,15 +537,16 @@ export default function AutomacoesApiPage() {
             </span>
             <h1>Automatize consultas externas com controle e rastreabilidade.</h1>
             <p>
-              Cadastre a conexão do sistema, configure o endpoint e associe um
-              template aprovado. Métricas só aparecem depois de execuções reais.
+              Cadastre uma conexão real, configure o endpoint e associe um
+              template aprovado. Nenhum conector é exibido como conectado sem
+              existir no banco da empresa.
             </p>
             <div className={styles.heroActions}>
               <button className={styles.primaryButton} onClick={abrirNovaRotina}>
                 <Plus size={18} /> Nova automação
               </button>
               <button className={styles.secondaryButton} onClick={abrirIntegracoes}>
-                <Code2 size={18} /> Gerenciar conexão da API
+                <Code2 size={18} /> Gerenciar conexões
               </button>
               <button
                 className={styles.secondaryButton}
@@ -509,7 +643,7 @@ export default function AutomacoesApiPage() {
               <p>Somente registros persistidos para a empresa atual.</p>
             </div>
             <button className={styles.primaryButton} onClick={abrirNovaRotina}>
-              <Plus size={18} /> Criar automação
+              <Plus size={17} /> Criar automação
             </button>
           </div>
 
@@ -533,13 +667,12 @@ export default function AutomacoesApiPage() {
                 <option value="pausada">Pausadas</option>
                 <option value="erro">Com erro</option>
               </select>
-              <ChevronDown size={16} />
             </label>
           </div>
 
           {carregando ? (
             <div style={{ padding: 40, textAlign: "center" }}>
-              <Loader2 className="animate-spin" /> Carregando dados reais...
+              <Loader2 className={styles.spinning} /> Carregando dados reais...
             </div>
           ) : null}
 
@@ -553,10 +686,7 @@ export default function AutomacoesApiPage() {
             >
               <Workflow size={34} />
               <h3>Nenhuma automação configurada</h3>
-              <p>
-                Cadastre uma conexão e crie a primeira rotina. Nenhum exemplo
-                fictício será exibido.
-              </p>
+              <p>Cadastre uma conexão e crie a primeira rotina.</p>
             </div>
           ) : null}
 
@@ -588,9 +718,8 @@ export default function AutomacoesApiPage() {
                       </span>
                       <span>
                         <Send size={14} />
-                        {templates.find(
-                          (item) => item.id === rotina.template_id,
-                        )?.nome || "Sem template"}
+                        {templates.find((item) => item.id === rotina.template_id)
+                          ?.nome || "Sem template"}
                       </span>
                     </div>
                   </div>
@@ -599,7 +728,8 @@ export default function AutomacoesApiPage() {
                   <span>Próxima execução</span>
                   <strong>{formatarData(rotina.proxima_execucao_em)}</strong>
                   <small>
-                    {rotina.frequencia} às {rotina.horario.slice(0, 5)}
+                    {frequenciaLabel(rotina.frequencia)} às{" "}
+                    {rotina.horario.slice(0, 5)}
                   </small>
                 </div>
                 <div className={styles.routineResult}>
@@ -619,7 +749,7 @@ export default function AutomacoesApiPage() {
                       <Play size={17} />
                     )}
                   </button>
-                  <button title="Configuração persistida">
+                  <button title="Configuração persistida" disabled>
                     <Settings2 size={17} />
                   </button>
                 </div>
@@ -634,13 +764,15 @@ export default function AutomacoesApiPage() {
               <span className={styles.sectionLabel}>CONEXÕES CADASTRADAS</span>
               <h2>Sistemas externos</h2>
               <p>
-                Aqui aparecem apenas conexões reais cadastradas para a empresa.
+                Aqui aparecem somente conexões reais. Conectores demonstrativos
+                foram removidos.
               </p>
             </div>
             <button className={styles.secondaryButton} onClick={abrirIntegracoes}>
-              <Plus size={17} /> Adicionar conexão
+              <Plus size={17} /> Gerenciar conexões
             </button>
           </div>
+
           <div className={styles.catalogGrid}>
             {integracoes.map((integracao) => (
               <article className={styles.queryCard} key={integracao.id}>
@@ -669,9 +801,7 @@ export default function AutomacoesApiPage() {
           className={styles.modalBackdrop}
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setModalRotinaAberto(false);
-            }
+            if (event.target === event.currentTarget) setModalRotinaAberto(false);
           }}
         >
           <section
@@ -709,23 +839,19 @@ export default function AutomacoesApiPage() {
                       className={`${styles.step} ${
                         etapa === numero ? styles.stepActive : ""
                       } ${etapa > numero ? styles.stepDone : ""}`}
-                      onClick={() => {
-                        if (numero === 1 || podeAvancarEtapa1) setEtapa(numero);
-                      }}
+                      onClick={() => setEtapa(numero)}
                     >
-                      <span>
-                        {etapa > numero ? <Check size={15} /> : numero}
-                      </span>
+                      <span>{etapa > numero ? <Check size={15} /> : numero}</span>
                       <div>
                         <b>{item}</b>
                         <small>
                           {index === 0
                             ? "Dados externos"
                             : index === 1
-                              ? "Template e campos"
+                              ? "Template"
                               : index === 2
                                 ? "Frequência"
-                                : "Salvar"}
+                                : "Confirmar"}
                         </small>
                       </div>
                     </button>
@@ -739,130 +865,126 @@ export default function AutomacoesApiPage() {
                 <div className={styles.stepContent}>
                   <div className={styles.stepHeading}>
                     <span>ETAPA 1 DE 4</span>
-                    <h3>Qual conexão e endpoint devem iniciar o disparo?</h3>
+                    <h3>Qual conexão e endpoint serão consultados?</h3>
                     <p>
-                      Selecione uma conexão cadastrada e informe a consulta real
-                      disponibilizada pelo sistema externo.
+                      Selecione uma conexão real e informe o endpoint fornecido
+                      pelo sistema externo.
                     </p>
                   </div>
 
-                  <label className={styles.formField}>
-                    <span>Nome da automação</span>
-                    <input
-                      value={nomeRotina}
-                      onChange={(event) => {
-                        setNomeRotina(event.target.value);
-                        setRotinaValidada(false);
-                      }}
-                      placeholder="Ex.: Cobrança diária de inadimplentes"
-                    />
-                  </label>
-
-                  {integracoes.length ? (
-                    <div className={styles.querySelection}>
-                      {integracoes.map((integracao) => (
-                        <button
-                          key={integracao.id}
-                          className={
-                            integracaoId === integracao.id
-                              ? styles.queryOptionActive
-                              : ""
-                          }
-                          onClick={() => {
-                            setIntegracaoId(integracao.id);
-                            setRotinaValidada(false);
-                          }}
-                        >
-                          <div className={styles.queryOptionIcon}>
-                            <Database size={19} />
-                          </div>
-                          <div>
-                            <b>{integracao.nome}</b>
-                            <small>
-                              {integracao.base_url} · {statusIntegracaoLabel(integracao.status)}
-                            </small>
-                          </div>
-                          <span className={styles.radio}>
-                            {integracaoId === integracao.id ? (
-                              <Check size={13} />
-                            ) : null}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
+                  {!integracoesDisponiveis.length ? (
                     <div className={styles.infoBox}>
-                      <Server size={19} />
+                      <AlertTriangle size={19} />
                       <div>
-                        <b>Nenhuma conexão cadastrada</b>
+                        <b>Nenhuma conexão disponível</b>
                         <p>
-                          Cadastre o ERP ou a API externa antes de continuar com a
-                          automação.
+                          Cadastre uma conexão antes de configurar a automação.
                         </p>
                         <button
-                          className={styles.secondaryButton}
-                          onClick={() => {
-                            setModalRotinaAberto(false);
-                            abrirIntegracoes();
-                          }}
+                          className={styles.primaryButton}
+                          onClick={abrirFormularioConexao}
                         >
                           <Plus size={16} /> Cadastrar conexão
                         </button>
                       </div>
                     </div>
+                  ) : (
+                    <>
+                      <label className={styles.formField}>
+                        <span>Nome da automação</span>
+                        <input
+                          value={nomeRotina}
+                          onChange={(event) => {
+                            setNomeRotina(event.target.value);
+                            setRotinaValidada(false);
+                          }}
+                          placeholder="Ex.: Cobrança diária de inadimplentes"
+                        />
+                      </label>
+
+                      <div className={styles.querySelection}>
+                        {integracoesDisponiveis.map((integracao) => (
+                          <button
+                            key={integracao.id}
+                            className={
+                              integracaoId === integracao.id
+                                ? styles.queryOptionActive
+                                : ""
+                            }
+                            onClick={() => {
+                              setIntegracaoId(integracao.id);
+                              setRotinaValidada(false);
+                            }}
+                          >
+                            <div className={styles.queryOptionIcon}>
+                              <Database size={19} />
+                            </div>
+                            <div>
+                              <b>{integracao.nome}</b>
+                              <small>
+                                {integracao.base_url} ·{" "}
+                                {statusIntegracaoLabel(integracao.status)}
+                              </small>
+                            </div>
+                            <span className={styles.radio}>
+                              {integracaoId === integracao.id ? (
+                                <Check size={13} />
+                              ) : null}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className={styles.scheduleGrid}>
+                        <label className={styles.formField}>
+                          <span>Identificador da consulta</span>
+                          <input
+                            value={consultaChave}
+                            onChange={(event) => {
+                              setConsultaChave(event.target.value);
+                              setRotinaValidada(false);
+                            }}
+                            placeholder="Ex.: clientes_inadimplentes"
+                          />
+                        </label>
+                        <label className={styles.formField}>
+                          <span>Método</span>
+                          <select
+                            value={metodo}
+                            onChange={(event) =>
+                              setMetodo(event.target.value as "GET" | "POST")
+                            }
+                          >
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <label className={styles.formField}>
+                        <span>Endpoint *</span>
+                        <input
+                          value={endpoint}
+                          onChange={(event) => {
+                            setEndpoint(event.target.value);
+                            setRotinaValidada(false);
+                          }}
+                          placeholder="/clientes/inadimplentes"
+                        />
+                      </label>
+
+                      <div className={styles.infoBox}>
+                        <ShieldCheck size={19} />
+                        <div>
+                          <b>Consulta isolada por empresa</b>
+                          <p>
+                            A rotina só poderá utilizar conexões cadastradas para
+                            a empresa atual.
+                          </p>
+                        </div>
+                      </div>
+                    </>
                   )}
-
-                  <div className={styles.integrationFormGrid}>
-                    <label className={styles.formField}>
-                      <span>Identificador da consulta *</span>
-                      <input
-                        value={consultaChave}
-                        onChange={(event) => {
-                          setConsultaChave(event.target.value);
-                          setRotinaValidada(false);
-                        }}
-                        placeholder="Ex.: clientes_inadimplentes"
-                      />
-                    </label>
-                    <label className={styles.formField}>
-                      <span>Método</span>
-                      <select
-                        value={metodo}
-                        onChange={(event) => {
-                          setMetodo(event.target.value as "GET" | "POST");
-                          setRotinaValidada(false);
-                        }}
-                      >
-                        <option value="GET">GET</option>
-                        <option value="POST">POST</option>
-                      </select>
-                    </label>
-                    <label
-                      className={`${styles.formField} ${styles.formFieldWide}`}
-                    >
-                      <span>Endpoint *</span>
-                      <input
-                        value={endpoint}
-                        onChange={(event) => {
-                          setEndpoint(event.target.value);
-                          setRotinaValidada(false);
-                        }}
-                        placeholder="/clientes/inadimplentes"
-                      />
-                    </label>
-                  </div>
-
-                  <div className={styles.infoBox}>
-                    <ShieldCheck size={19} />
-                    <div>
-                      <b>Consulta protegida</b>
-                      <p>
-                        O endpoint é executado no servidor e vinculado somente à
-                        empresa atual. Ele deve começar com uma barra, por exemplo
-                        /clientes/inadimplentes.
-                      </p>
-                    </div>
-                  </div>
                 </div>
               ) : null}
 
@@ -870,21 +992,19 @@ export default function AutomacoesApiPage() {
                 <div className={styles.stepContent}>
                   <div className={styles.stepHeading}>
                     <span>ETAPA 2 DE 4</span>
-                    <h3>Escolha a mensagem e confira o contrato dos dados.</h3>
+                    <h3>Escolha a mensagem do WhatsApp.</h3>
                     <p>
-                      Somente templates aprovados da empresa são exibidos nesta
-                      etapa.
+                      São listados somente templates aprovados da empresa. O
+                      mapeamento das variáveis depende da homologação do retorno da
+                      API.
                     </p>
                   </div>
 
                   <label className={styles.formField}>
-                    <span>Template do WhatsApp</span>
+                    <span>Template aprovado</span>
                     <select
                       value={templateId}
-                      onChange={(event) => {
-                        setTemplateId(event.target.value);
-                        setRotinaValidada(false);
-                      }}
+                      onChange={(event) => setTemplateId(event.target.value)}
                     >
                       <option value="">Sem template por enquanto</option>
                       {templates.map((template) => (
@@ -895,58 +1015,15 @@ export default function AutomacoesApiPage() {
                     </select>
                   </label>
 
-                  <div className={styles.mappingGrid}>
-                    <div>
-                      <span>Campo obrigatório</span>
-                      <strong>telefone</strong>
-                      <small>Destinatário no WhatsApp</small>
-                    </div>
-                    <ArrowRight size={18} />
-                    <label>
-                      <span>Resposta esperada da API</span>
-                      <select defaultValue="telefone">
-                        <option value="telefone">telefone</option>
-                      </select>
-                    </label>
-                    <div>
-                      <span>Campo recomendado</span>
-                      <strong>nome</strong>
-                      <small>Identificação do contato</small>
-                    </div>
-                    <ArrowRight size={18} />
-                    <label>
-                      <span>Resposta esperada da API</span>
-                      <select defaultValue="nome">
-                        <option value="nome">nome</option>
-                      </select>
-                    </label>
-                    <div>
-                      <span>Variáveis adicionais</span>
-                      <strong>campos</strong>
-                      <small>Valores usados pelo template</small>
-                    </div>
-                    <ArrowRight size={18} />
-                    <label>
-                      <span>Resposta esperada da API</span>
-                      <select defaultValue="dinamicas">
-                        <option value="dinamicas">campos retornados</option>
-                      </select>
-                    </label>
-                  </div>
-
                   <div className={styles.templatePreview}>
                     <div className={styles.phoneHeader}>WhatsApp Business</div>
                     <div className={styles.messageBubble}>
-                      <b>
-                        {templateSelecionado
-                          ? templateSelecionado.nome
-                          : "Template ainda não selecionado"}
-                      </b>
+                      <b>{templateSelecionado?.nome || "Template não selecionado"}</b>
                       <p>
-                        Os valores reais serão inseridos usando a resposta do
-                        endpoint configurado.
+                        As variáveis serão preenchidas com os campos reais
+                        retornados pelo endpoint homologado.
                       </p>
-                      <small>Sem dados ou resultados demonstrativos.</small>
+                      <small>Nenhum resultado de consulta é simulado.</small>
                     </div>
                   </div>
                 </div>
@@ -970,19 +1047,10 @@ export default function AutomacoesApiPage() {
                           className={
                             frequencia === item ? styles.frequencyActive : ""
                           }
-                          onClick={() => {
-                            setFrequencia(item);
-                            setRotinaValidada(false);
-                          }}
+                          onClick={() => setFrequencia(item)}
                         >
                           <CalendarClock size={20} />
-                          <b>
-                            {item === "diaria"
-                              ? "Diariamente"
-                              : item === "semanal"
-                                ? "Semanalmente"
-                                : "Mensalmente"}
-                          </b>
+                          <b>{frequenciaLabel(item)}</b>
                           <small>
                             {item === "diaria"
                               ? "Todos os dias"
@@ -1001,10 +1069,7 @@ export default function AutomacoesApiPage() {
                       <input
                         type="time"
                         value={horario}
-                        onChange={(event) => {
-                          setHorario(event.target.value);
-                          setRotinaValidada(false);
-                        }}
+                        onChange={(event) => setHorario(event.target.value)}
                       />
                     </label>
                     <label className={styles.formField}>
@@ -1022,8 +1087,8 @@ export default function AutomacoesApiPage() {
                     <div>
                       <b>Resumo do agendamento</b>
                       <p>
-                        A consulta será executada com frequência {frequencia}, às {" "}
-                        {horario}, usando a conexão {integracaoSelecionada?.nome || "selecionada"}.
+                        Execução {frequenciaLabel(frequencia).toLowerCase()}, às{" "}
+                        {horario}.
                       </p>
                     </div>
                   </div>
@@ -1036,8 +1101,7 @@ export default function AutomacoesApiPage() {
                     <span>ETAPA 4 DE 4</span>
                     <h3>Revise e autorize a automação.</h3>
                     <p>
-                      A rotina será salva pausada para que a resposta do endpoint
-                      seja homologada antes da ativação.
+                      A rotina será criada pausada até a homologação do endpoint.
                     </p>
                   </div>
 
@@ -1055,7 +1119,7 @@ export default function AutomacoesApiPage() {
                     <div>
                       <span>Consulta</span>
                       <strong>
-                        {metodo} {endpoint || "—"}
+                        {metodo} {endpoint || "Endpoint não informado"}
                       </strong>
                     </div>
                     <div>
@@ -1065,13 +1129,9 @@ export default function AutomacoesApiPage() {
                       </strong>
                     </div>
                     <div>
-                      <span>Identificador</span>
-                      <strong>{consultaChave || "—"}</strong>
-                    </div>
-                    <div>
                       <span>Execução</span>
                       <strong>
-                        {frequencia}, {horario}
+                        {frequenciaLabel(frequencia)}, {horario}
                       </strong>
                     </div>
                   </div>
@@ -1081,27 +1141,21 @@ export default function AutomacoesApiPage() {
                       rotinaValidada ? styles.testSuccess : ""
                     }`}
                     onClick={validarConfiguracaoRotina}
-                    disabled={validandoRotina}
                   >
-                    {validandoRotina ? (
-                      <RefreshCw size={18} className={styles.spinning} />
-                    ) : rotinaValidada ? (
+                    {rotinaValidada ? (
                       <CheckCircle2 size={18} />
                     ) : (
                       <Database size={18} />
                     )}
                     <div>
                       <b>
-                        {validandoRotina
-                          ? "Validando configuração..."
-                          : rotinaValidada
-                            ? "Configuração preenchida corretamente"
-                            : "Validar configuração"}
+                        {rotinaValidada
+                          ? "Campos obrigatórios validados"
+                          : "Validar configuração"}
                       </b>
                       <small>
-                        {rotinaValidada
-                          ? "Os campos obrigatórios estão prontos para salvar."
-                          : "Nenhum resultado fictício será gerado neste teste."}
+                        Esta validação não inventa registros nem executa uma
+                        consulta sem endpoint homologado.
                       </small>
                     </div>
                   </button>
@@ -1118,28 +1172,14 @@ export default function AutomacoesApiPage() {
                       {consentimento ? <Check size={14} /> : null}
                     </span>
                     <div>
-                      <b>
-                        Confirmo a autorização e responsabilidade pelo envio
-                      </b>
+                      <b>Confirmo a autorização e responsabilidade pelo envio</b>
                       <p>
-                        Declaro que possuo base legal para tratar os dados e enviar
-                        mensagens, respeitando opt-out, LGPD e políticas do
+                        Declaro possuir base legal para consultar os dados e enviar
+                        mensagens, respeitando LGPD, opt-out e políticas do
                         WhatsApp.
                       </p>
                     </div>
                   </label>
-
-                  <div className={styles.warningBox}>
-                    <AlertTriangle size={19} />
-                    <div>
-                      <b>Importante</b>
-                      <p>
-                        A automação será criada pausada. A ativação deve ocorrer
-                        somente depois que o endpoint e os campos retornados forem
-                        homologados.
-                      </p>
-                    </div>
-                  </div>
                 </div>
               ) : null}
             </div>
@@ -1206,8 +1246,8 @@ export default function AutomacoesApiPage() {
                 </span>
                 <h2>Conecte o CRM aos seus sistemas</h2>
                 <p>
-                  Configure o ERP que fornecerá os dados ou consulte a situação da
-                  API pública do CRM.
+                  Somente conexões realmente cadastradas são identificadas como
+                  existentes.
                 </p>
               </div>
               <button
@@ -1228,10 +1268,10 @@ export default function AutomacoesApiPage() {
                 }
                 onClick={() => setAbaIntegracao("sistemas")}
               >
-                <Server size={17} />
+                <Database size={17} />
                 <span>
                   Sistemas conectados
-                  <small>CRM consulta ERPs externos</small>
+                  <small>CRM consulta APIs externas</small>
                 </span>
               </button>
               <button
@@ -1254,42 +1294,196 @@ export default function AutomacoesApiPage() {
                   <div className={styles.integrationIntro}>
                     <div>
                       <span className={styles.sectionLabel}>
-                        CATÁLOGO DE CONECTORES
+                        CONEXÕES DA EMPRESA
                       </span>
-                      <h3>Escolha o sistema externo</h3>
+                      <h3>Sistemas externos cadastrados</h3>
                       <p>
-                        Cada conexão fica isolada por empresa e pode ser usada por
-                        várias rotinas.
+                        O número abaixo diferencia conexões ativas de simples
+                        cadastros ainda não testados.
                       </p>
                     </div>
                     <span className={styles.connectionCounter}>
-                      {integracoes.length} conectado
+                      {totalIntegracoesAtivas} conectada
+                      {totalIntegracoesAtivas === 1 ? "" : "s"} ·{" "}
+                      {integracoes.length} cadastrada
                       {integracoes.length === 1 ? "" : "s"}
                     </span>
                   </div>
 
                   <div className={styles.connectorList}>
-                    {integracoes.map((integracao) => (
-                      <article className={styles.connectorCard} key={integracao.id}>
-                        <div className={styles.connectorSummary}>
-                          <span className={styles.connectorIcon}>
-                            <Database size={22} />
-                          </span>
-                          <span className={styles.connectorInfo}>
-                            <small>{integracao.tipo}</small>
-                            <strong>{integracao.nome}</strong>
-                            <em>{integracao.base_url}</em>
-                          </span>
-                          <span className={styles.connectorStatus}>
-                            {statusIntegracaoLabel(integracao.status)}
-                          </span>
-                        </div>
-                      </article>
-                    ))}
+                    {integracoes.map((integracao) => {
+                      const expandido = conectorExpandido === integracao.id;
+                      const processando = operacaoConexaoId === integracao.id;
+                      const totalRotinas = rotinas.filter(
+                        (rotina) => rotina.integracao_id === integracao.id,
+                      ).length;
+
+                      return (
+                        <article
+                          className={`${styles.connectorCard} ${
+                            expandido ? styles.connectorCardExpanded : ""
+                          }`}
+                          key={integracao.id}
+                        >
+                          <button
+                            className={styles.connectorSummary}
+                            onClick={() =>
+                              setConectorExpandido(expandido ? null : integracao.id)
+                            }
+                            aria-expanded={expandido}
+                          >
+                            <span className={styles.connectorIcon}>
+                              <Database size={22} />
+                            </span>
+                            <span className={styles.connectorInfo}>
+                              <small>{integracao.tipo.toUpperCase()}</small>
+                              <strong>{integracao.nome}</strong>
+                              <em>{integracao.base_url}</em>
+                            </span>
+                            <span className={styles.connectorStatus}>
+                              {statusIntegracaoLabel(integracao.status)}
+                            </span>
+                            <ChevronDown
+                              size={18}
+                              className={
+                                expandido
+                                  ? styles.connectorChevronOpen
+                                  : styles.connectorChevron
+                              }
+                            />
+                          </button>
+
+                          {expandido ? (
+                            <div className={styles.connectorForm}>
+                              <div className={styles.connectorFormHeader}>
+                                <div>
+                                  <h4>Detalhes da conexão</h4>
+                                  <p>
+                                    {totalRotinas} rotina
+                                    {totalRotinas === 1 ? "" : "s"} vinculada
+                                    {totalRotinas === 1 ? "" : "s"}.
+                                  </p>
+                                </div>
+                                <span>
+                                  <ShieldCheck size={15} /> Credenciais protegidas
+                                </span>
+                              </div>
+
+                              <div className={styles.reviewGrid}>
+                                <div>
+                                  <span>URL base</span>
+                                  <strong>{integracao.base_url}</strong>
+                                </div>
+                                <div>
+                                  <span>Código da empresa</span>
+                                  <strong>
+                                    {integracao.codigo_empresa || "Não informado"}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Status</span>
+                                  <strong>
+                                    {statusIntegracaoLabel(integracao.status)}
+                                  </strong>
+                                </div>
+                                <div>
+                                  <span>Último teste</span>
+                                  <strong>
+                                    {integracao.ultimo_teste_em
+                                      ? formatarData(integracao.ultimo_teste_em)
+                                      : "Ainda não testada"}
+                                  </strong>
+                                </div>
+                              </div>
+
+                              {integracao.ultimo_erro ? (
+                                <div className={styles.warningBox}>
+                                  <AlertTriangle size={19} />
+                                  <div>
+                                    <b>Último erro</b>
+                                    <p>{integracao.ultimo_erro}</p>
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {podeGerenciar ? (
+                                <div className={styles.connectorFormActions}>
+                                  {integracao.status === "inativa" ? (
+                                    <button
+                                      className={styles.ghostButton}
+                                      onClick={() =>
+                                        void alterarStatusIntegracao(
+                                          integracao,
+                                          "nao_testada",
+                                        )
+                                      }
+                                      disabled={processando}
+                                    >
+                                      {processando ? (
+                                        <Loader2
+                                          size={17}
+                                          className={styles.spinning}
+                                        />
+                                      ) : (
+                                        <RotateCcw size={17} />
+                                      )}
+                                      Reabrir conexão
+                                    </button>
+                                  ) : (
+                                    <button
+                                      className={styles.ghostButton}
+                                      onClick={() =>
+                                        void alterarStatusIntegracao(
+                                          integracao,
+                                          "inativa",
+                                        )
+                                      }
+                                      disabled={processando}
+                                    >
+                                      {processando ? (
+                                        <Loader2
+                                          size={17}
+                                          className={styles.spinning}
+                                        />
+                                      ) : (
+                                        <Archive size={17} />
+                                      )}
+                                      Arquivar
+                                    </button>
+                                  )}
+                                  <button
+                                    className={styles.secondaryButton}
+                                    style={{
+                                      color: "var(--crm-danger-text)",
+                                      borderColor: "var(--crm-danger-border)",
+                                    }}
+                                    onClick={() => void excluirIntegracao(integracao)}
+                                    disabled={processando}
+                                  >
+                                    <Trash2 size={17} /> Excluir permanentemente
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className={styles.infoBox}>
+                                  <ShieldCheck size={19} />
+                                  <div>
+                                    <b>Acesso administrativo necessário</b>
+                                    <p>
+                                      Somente administradores podem arquivar ou
+                                      excluir conexões.
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </article>
+                      );
+                    })}
 
                     <article
                       className={`${styles.connectorCard} ${
-                        conectorExpandido === "erp_provedor"
+                        conectorExpandido === "nova_conexao"
                           ? styles.connectorCardExpanded
                           : ""
                       }`}
@@ -1297,43 +1491,43 @@ export default function AutomacoesApiPage() {
                       <button
                         className={styles.connectorSummary}
                         onClick={() =>
-                          setConectorExpandido((atual) =>
-                            atual === "erp_provedor" ? null : "erp_provedor",
+                          setConectorExpandido(
+                            conectorExpandido === "nova_conexao"
+                              ? null
+                              : "nova_conexao",
                           )
                         }
-                        aria-expanded={conectorExpandido === "erp_provedor"}
+                        aria-expanded={conectorExpandido === "nova_conexao"}
                       >
                         <span className={styles.connectorIcon}>
-                          <Server size={22} />
+                          <Plus size={22} />
                         </span>
                         <span className={styles.connectorInfo}>
-                          <small>Provedor de internet</small>
-                          <strong>ERP para provedores</strong>
+                          <small>NOVA INTEGRAÇÃO</small>
+                          <strong>Adicionar conexão REST</strong>
                           <em>
-                            Cadastre a URL, identificação e credencial fornecidas
-                            pelo ERP.
+                            Cadastre URL, identificação e credencial fornecidas
+                            pelo sistema externo.
                           </em>
                         </span>
-                        <span className={styles.connectorStatus}>
-                          Nova conexão
-                        </span>
+                        <span className={styles.connectorStatus}>Cadastrar</span>
                         <ChevronDown
                           size={18}
                           className={
-                            conectorExpandido === "erp_provedor"
+                            conectorExpandido === "nova_conexao"
                               ? styles.connectorChevronOpen
                               : styles.connectorChevron
                           }
                         />
                       </button>
 
-                      {conectorExpandido === "erp_provedor" ? (
+                      {conectorExpandido === "nova_conexao" ? (
                         <div className={styles.connectorForm}>
                           <div className={styles.connectorFormHeader}>
                             <div>
-                              <h4>Credenciais do ERP</h4>
+                              <h4>Credenciais do sistema externo</h4>
                               <p>
-                                Solicite estes dados ao suporte do sistema externo.
+                                Solicite os dados ao fornecedor da API ou do ERP.
                               </p>
                             </div>
                             <span>
@@ -1349,7 +1543,7 @@ export default function AutomacoesApiPage() {
                                 onChange={(event) =>
                                   setNomeIntegracao(event.target.value)
                                 }
-                                placeholder="Ex.: ERP da empresa"
+                                placeholder="Ex.: ERP principal"
                               />
                             </label>
                             <label className={styles.formField}>
@@ -1365,7 +1559,7 @@ export default function AutomacoesApiPage() {
                             <label
                               className={`${styles.formField} ${styles.formFieldWide}`}
                             >
-                              <span>URL base da API *</span>
+                              <span>URL base HTTPS *</span>
                               <input
                                 value={baseUrl}
                                 onChange={(event) => {
@@ -1373,7 +1567,7 @@ export default function AutomacoesApiPage() {
                                   setConexaoTestada(false);
                                   setMensagemTesteConexao("");
                                 }}
-                                placeholder="https://api.seuerp.com.br/v1"
+                                placeholder="https://api.sistema.com.br/v1"
                                 inputMode="url"
                               />
                             </label>
@@ -1390,7 +1584,7 @@ export default function AutomacoesApiPage() {
                                     setConexaoTestada(false);
                                     setMensagemTesteConexao("");
                                   }}
-                                  placeholder="Cole o token fornecido pelo ERP"
+                                  placeholder="Cole o token fornecido pelo sistema"
                                 />
                                 <button
                                   type="button"
@@ -1413,33 +1607,12 @@ export default function AutomacoesApiPage() {
                             </label>
                           </div>
 
-                          <div className={styles.availableQueries}>
-                            <span>Funcionamento da conexão</span>
-                            <div>
-                              <b>
-                                <Check size={13} /> Endpoints definidos por rotina
-                              </b>
-                              <b>
-                                <Check size={13} /> Dados isolados por empresa
-                              </b>
-                              <b>
-                                <Check size={13} /> Token armazenado criptografado
-                              </b>
-                              <b>
-                                <Check size={13} /> Métricas somente de execuções reais
-                              </b>
-                            </div>
-                          </div>
-
                           {conexaoTestada ? (
                             <div className={styles.connectionSuccess}>
                               <CheckCircle2 size={18} />
                               <div>
-                                <b>Servidor externo alcançado</b>
-                                <small>
-                                  {mensagemTesteConexao ||
-                                    "A URL respondeu e pode ser cadastrada."}
-                                </small>
+                                <b>Servidor alcançado</b>
+                                <small>{mensagemTesteConexao}</small>
                               </div>
                             </div>
                           ) : null}
@@ -1451,7 +1624,7 @@ export default function AutomacoesApiPage() {
                               disabled={!baseUrl.trim() || testandoConexao}
                             >
                               {testandoConexao ? (
-                                <RefreshCw
+                                <Loader2
                                   size={17}
                                   className={styles.spinning}
                                 />
@@ -1476,8 +1649,10 @@ export default function AutomacoesApiPage() {
                                   size={17}
                                   className={styles.spinning}
                                 />
-                              ) : null}
-                              Salvar integração
+                              ) : (
+                                <CheckCircle2 size={17} />
+                              )}
+                              Salvar conexão
                             </button>
                           </div>
                         </div>
@@ -1494,25 +1669,23 @@ export default function AutomacoesApiPage() {
                       <button
                         className={styles.connectorSummary}
                         onClick={() =>
-                          setConectorExpandido((atual) =>
-                            atual === "api_personalizada"
+                          setConectorExpandido(
+                            conectorExpandido === "api_personalizada"
                               ? null
                               : "api_personalizada",
                           )
                         }
-                        aria-expanded={
-                          conectorExpandido === "api_personalizada"
-                        }
+                        aria-expanded={conectorExpandido === "api_personalizada"}
                       >
                         <span className={styles.connectorIcon}>
                           <Code2 size={22} />
                         </span>
                         <span className={styles.connectorInfo}>
-                          <small>Integração sob medida</small>
+                          <small>INTEGRAÇÃO SOB MEDIDA</small>
                           <strong>API personalizada</strong>
                           <em>
-                            Use a mesma estrutura para qualquer sistema com API
-                            REST documentada.
+                            Solicite a análise da documentação e homologação dos
+                            endpoints.
                           </em>
                         </span>
                         <span
@@ -1532,17 +1705,23 @@ export default function AutomacoesApiPage() {
 
                       {conectorExpandido === "api_personalizada" ? (
                         <div className={styles.customConnectorBody}>
-                          <Code2 size={22} />
+                          <MessageCircle size={22} />
                           <div>
-                            <h4>Integração personalizada</h4>
+                            <h4>Solicitar homologação</h4>
                             <p>
-                              A documentação do sistema deve definir autenticação,
-                              limites, endpoints e formato dos dados retornados.
+                              Envie a documentação da API para a equipe do CRM
+                              Prosperity analisar autenticação, limites, endpoints
+                              e formato dos dados.
                             </p>
                           </div>
-                          <button className={styles.secondaryButton} disabled>
-                            Solicitar homologação <ChevronRight size={16} />
-                          </button>
+                          <a
+                            className={styles.secondaryButton}
+                            href={CRM_WHATSAPP_HOMOLOGACAO}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Falar com o CRM <ChevronRight size={16} />
+                          </a>
                         </div>
                       ) : null}
                     </article>
@@ -1570,9 +1749,7 @@ export default function AutomacoesApiPage() {
                         <strong>API CRM Prosperity</strong>
                         <p>Endpoints públicos ainda não habilitados.</p>
                       </div>
-                      <span className={styles.connectorStatus}>
-                        Em preparação
-                      </span>
+                      <span className={styles.connectorStatus}>Em preparação</span>
                     </div>
 
                     <div className={styles.endpointBox}>
@@ -1595,9 +1772,9 @@ export default function AutomacoesApiPage() {
                       <div>
                         <b>API pública ainda indisponível</b>
                         <p>
-                          Nenhum token fictício será gerado. A emissão será liberada
-                          quando autenticação, permissões e endpoints públicos
-                          estiverem implementados.
+                          Nenhum token fictício será gerado. A emissão será
+                          liberada quando autenticação, permissões e endpoints
+                          públicos estiverem implementados.
                         </p>
                       </div>
                     </div>
