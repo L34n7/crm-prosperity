@@ -8173,7 +8173,7 @@ const templateFooterTexto = useMemo(() => {
                           <p className={styles.previewLine}>{getPreviewConversa(c)}</p>
                             {c.tem_disparo_agendado_pendente && (
                               <div className={styles.scheduledDisparoMiniBadge}>
-                                ⏰ Disparo agendado
+                                ⏰ Disparo 
                               </div>
                             )}
 

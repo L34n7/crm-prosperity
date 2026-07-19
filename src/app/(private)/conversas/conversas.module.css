@@ -370,17 +370,25 @@
 
 .conversationItem {
   width: 100%;
+  height: 104px;
+  min-height: 104px;
+  box-sizing: border-box;
+  overflow: hidden;
+
   border: none;
   border-bottom: 1px solid var(--crm-border-soft);
   background: var(--conversationItem);
-  padding: 14px 16px;
+
+  padding: 12px 16px;
+
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
   gap: 12px;
+
   cursor: pointer;
   text-align: left;
   transition: 0.2s ease;
-  align-items: center;
 }
 
 .conversationItemIntegration1 {
@@ -506,6 +514,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 22px;
 }
 
 .conversationPreviewRow {
@@ -513,13 +522,18 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 20px;
+  height: 22px;
+  min-height: 22px;
+  overflow: hidden;
 }
 
 .conversationBottomLine {
   margin-top: 6px;
   justify-content: flex-start;
   flex-wrap: wrap;
+  height: 24px;
+  min-height: 24px;
+  overflow: hidden;
 }
 
 .robotMiniBadge {
@@ -618,6 +632,13 @@
   font-size: 11px;
   font-weight: 700;
   box-shadow: inset 0 0 0 1px transparent;
+}
+
+.statusMiniBadge,
+.priorityMiniBadge,
+.scheduledDisparoMiniBadge {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .statusMiniDefault {
