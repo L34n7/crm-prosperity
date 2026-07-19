@@ -1,0 +1,305 @@
+.page {
+  display: grid;
+  gap: 18px;
+  padding: 22px clamp(16px, 3vw, 32px) 36px;
+}
+
+.filterPanel,
+.panel,
+.tablePanel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+}
+
+.filterPanel {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+}
+
+.filterPanel h2,
+.panelHeader h2 {
+  margin: 4px 0 0;
+  color: #0f172a;
+  font-size: 1.08rem;
+}
+
+.filterPanel p {
+  margin: 6px 0 0;
+  color: #64748b;
+}
+
+.eyebrow {
+  color: #2563eb;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filters {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.filters label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.filters label span {
+  display: flex;
+  min-width: 0;
+  padding: 9px 11px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+}
+
+.filters input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  color: #0f172a;
+  background: transparent;
+  border: 0;
+  font: inherit;
+}
+
+.filters button {
+  min-height: 39px;
+  padding: 0 15px;
+  color: #fff;
+  font-weight: 700;
+  background: #2563eb;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.kpis article {
+  display: grid;
+  gap: 7px;
+  padding: 17px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+.kpis svg {
+  color: #2563eb;
+}
+
+.kpis span {
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.kpis strong {
+  color: #0f172a;
+  font-size: 1.55rem;
+}
+
+.kpis small,
+.planRow small,
+td small {
+  display: block;
+  color: #94a3b8;
+  font-size: 0.76rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 18px;
+}
+
+.panel,
+.tablePanel {
+  padding: 20px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.planList {
+  display: grid;
+  gap: 10px;
+}
+
+.planRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.planRow:last-child {
+  border-bottom: 0;
+}
+
+.planRow strong {
+  color: #0f172a;
+}
+
+.comparison {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.comparison div {
+  display: grid;
+  gap: 5px;
+  padding: 13px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.comparison span {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.comparison strong {
+  color: #0f172a;
+  font-size: 1.25rem;
+}
+
+.note,
+.empty {
+  margin: 16px 0 0;
+  color: #64748b;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.badge,
+.status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 9px;
+  color: #1d4ed8;
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: #eff6ff;
+  border-radius: 999px;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.tableWrapper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tableWrapper th,
+.tableWrapper td {
+  padding: 12px 10px;
+  color: #334155;
+  font-size: 0.82rem;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.tableWrapper th {
+  color: #64748b;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tableWrapper td strong {
+  color: #0f172a;
+}
+
+@media (max-width: 1050px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .filterPanel,
+  .filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filters button {
+    min-height: 44px;
+  }
+
+  .kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .filterPanel,
+  .panel,
+  .tablePanel,
+  .kpis article {
+    background: #0f172a;
+    border-color: #1e293b;
+  }
+
+  .filterPanel h2,
+  .panelHeader h2,
+  .kpis strong,
+  .planRow strong,
+  .comparison strong,
+  .tableWrapper td strong,
+  .filters input {
+    color: #f8fafc;
+  }
+
+  .filters label span {
+    background: #111827;
+    border-color: #334155;
+  }
+
+  .planRow,
+  .tableWrapper th,
+  .tableWrapper td {
+    border-color: #1e293b;
+  }
+
+  .comparison div {
+    background: #111827;
+  }
+}
