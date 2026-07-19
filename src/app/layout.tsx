@@ -48,12 +48,9 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   icons: {
-    icon: [
-      { url: "/logo.png", type: "image/png" },
-      { url: "/logo.png", sizes: "32x32", type: "image/png" },
-    ],
-    shortcut: "/logo.png",
-    apple: [{ url: "/logo.png", type: "image/png" }],
+    icon: [{ url: "/icon?v=2", sizes: "64x64", type: "image/png" }],
+    shortcut: [{ url: "/icon?v=2", type: "image/png" }],
+    apple: [{ url: "/icon?v=2", sizes: "64x64", type: "image/png" }],
   },
   manifest: "/manifest.webmanifest",
   openGraph: {
