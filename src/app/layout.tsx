@@ -48,9 +48,9 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   icons: {
-    icon: [{ url: "/icon?v=2", sizes: "64x64", type: "image/png" }],
-    shortcut: [{ url: "/icon?v=2", type: "image/png" }],
-    apple: [{ url: "/icon?v=2", sizes: "64x64", type: "image/png" }],
+    icon: [{ url: "/favicon.svg?v=4", sizes: "any", type: "image/svg+xml" }],
+    shortcut: [{ url: "/favicon.svg?v=4", type: "image/svg+xml" }],
+    apple: [{ url: "/logo.png?v=4", type: "image/png" }],
   },
   manifest: "/manifest.webmanifest",
   openGraph: {
@@ -129,6 +129,19 @@ export default function RootLayout({
 
   return (
     <html lang="pt-BR" suppressHydrationWarning>
+      <head>
+        <link
+          rel="icon"
+          href="/favicon.svg?v=4"
+          type="image/svg+xml"
+          sizes="any"
+        />
+        <link
+          rel="shortcut icon"
+          href="/favicon.svg?v=4"
+          type="image/svg+xml"
+        />
+      </head>
       <body className="antialiased">
         <Script id="crm-theme-bootstrap" strategy="beforeInteractive">
           {`
