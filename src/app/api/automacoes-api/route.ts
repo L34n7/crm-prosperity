@@ -10,6 +10,7 @@ const supabase = getSupabaseAdmin();
 async function contexto() {
   const resultado = await getUsuarioContexto();
   if (!resultado.ok) return resultado;
+
   if (!resultado.usuario.empresa_id) {
     return {
       ok: false as const,
@@ -17,11 +18,22 @@ async function contexto() {
       error: "Usuário sem empresa vinculada.",
     };
   }
+
   return {
     ok: true as const,
     usuario: resultado.usuario,
     empresaId: resultado.usuario.empresa_id,
   };
+}
+
+function respostaErro(error: unknown, status = 500) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: error instanceof Error ? error.message : "Erro interno.",
+    },
+    { status },
+  );
 }
 
 function normalizarBaseUrl(valor: unknown) {
@@ -43,6 +55,7 @@ function enderecoIpv4Privado(endereco: string) {
   if (partes.length !== 4 || partes.some((parte) => Number.isNaN(parte))) {
     return true;
   }
+
   const [a, b] = partes;
   return (
     a === 0 ||
@@ -60,6 +73,7 @@ function enderecoIpv4Privado(endereco: string) {
 function enderecoPrivado(endereco: string) {
   const versao = isIP(endereco);
   if (versao === 4) return enderecoIpv4Privado(endereco);
+
   if (versao === 6) {
     const valor = endereco.toLowerCase();
     return (
@@ -77,11 +91,13 @@ function enderecoPrivado(endereco: string) {
       valor.startsWith("::ffff:192.168.")
     );
   }
+
   return true;
 }
 
 async function validarDestinoExterno(url: URL) {
   const hostname = url.hostname.toLowerCase();
+
   if (
     hostname === "localhost" ||
     hostname.endsWith(".localhost") ||
@@ -131,6 +147,18 @@ function criptografarToken(valor: string) {
   ].join(":");
 }
 
+async function buscarIntegracaoDaEmpresa(id: string, empresaId: string) {
+  const { data, error } = await supabase
+    .from("integracoes_api_externas")
+    .select("id,nome,status")
+    .eq("id", id)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function GET() {
   const ctx = await contexto();
   if (!ctx.ok) {
@@ -177,12 +205,8 @@ export async function GET() {
     rotinasResult.error ||
     execucoesResult.error ||
     templatesResult.error;
-  if (erro) {
-    return NextResponse.json(
-      { ok: false, error: erro.message },
-      { status: 500 },
-    );
-  }
+
+  if (erro) return respostaErro(new Error(erro.message));
 
   const execucoes = execucoesResult.data || [];
   const concluidas = execucoes.filter((item) => item.status !== "executando");
@@ -190,14 +214,14 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
+    pode_gerenciar: ctx.usuario.is_admin,
     integracoes: integracoesResult.data || [],
     rotinas: rotinasResult.data || [],
     templates: templatesResult.data || [],
     metricas: {
       total_rotinas: rotinasResult.data?.length || 0,
       rotinas_ativas:
-        rotinasResult.data?.filter((item) => item.status === "ativa").length ||
-        0,
+        rotinasResult.data?.filter((item) => item.status === "ativa").length || 0,
       com_erro:
         rotinasResult.data?.filter((item) => item.status === "erro").length || 0,
       enviados_30_dias: execucoes.reduce(
@@ -234,6 +258,7 @@ export async function POST(request: NextRequest) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);
       let resposta: Response;
+
       try {
         resposta = await fetch(url, {
           method: "GET",
@@ -282,6 +307,7 @@ export async function POST(request: NextRequest) {
           : error instanceof Error
             ? error.message
             : "Não foi possível testar a conexão.";
+
       return NextResponse.json({ ok: false, error: mensagem }, { status: 400 });
     }
   }
@@ -290,6 +316,7 @@ export async function POST(request: NextRequest) {
     const nome = String(body?.nome || "").trim();
     const baseUrl = normalizarBaseUrl(body?.base_url);
     const token = String(body?.token || "").trim();
+    const conexaoTestada = body?.conexao_testada === true;
 
     if (!nome || !baseUrl) {
       return NextResponse.json(
@@ -317,19 +344,11 @@ export async function POST(request: NextRequest) {
       try {
         tokenCriptografado = criptografarToken(token);
       } catch (error) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Não foi possível proteger o token.",
-          },
-          { status: 500 },
-        );
+        return respostaErro(error);
       }
     }
 
+    const agora = new Date().toISOString();
     const { data, error } = await supabase
       .from("integracoes_api_externas")
       .insert({
@@ -338,17 +357,14 @@ export async function POST(request: NextRequest) {
         base_url: baseUrl,
         token_criptografado: tokenCriptografado,
         codigo_empresa: String(body?.codigo_empresa || "").trim() || null,
-        status: "nao_testada",
+        status: conexaoTestada ? "ativa" : "nao_testada",
+        ultimo_teste_em: conexaoTestada ? agora : null,
+        ultimo_erro: null,
       })
       .select("id,nome,tipo,base_url,codigo_empresa,status,created_at")
       .single();
 
-    if (error) {
-      return NextResponse.json(
-        { ok: false, error: error.message },
-        { status: 500 },
-      );
-    }
+    if (error) return respostaErro(new Error(error.message));
     return NextResponse.json({ ok: true, integracao: data });
   }
 
@@ -370,15 +386,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: integracao } = await supabase
-      .from("integracoes_api_externas")
-      .select("id")
-      .eq("id", integracaoId)
-      .eq("empresa_id", ctx.empresaId)
-      .maybeSingle();
-    if (!integracao) {
+    const integracao = await buscarIntegracaoDaEmpresa(
+      integracaoId,
+      ctx.empresaId,
+    );
+
+    if (!integracao || integracao.status === "inativa") {
       return NextResponse.json(
-        { ok: false, error: "Integração inválida." },
+        { ok: false, error: "Integração inválida ou arquivada." },
         { status: 404 },
       );
     }
@@ -402,12 +417,7 @@ export async function POST(request: NextRequest) {
       .select("*")
       .single();
 
-    if (error) {
-      return NextResponse.json(
-        { ok: false, error: error.message },
-        { status: 500 },
-      );
-    }
+    if (error) return respostaErro(new Error(error.message));
     return NextResponse.json({ ok: true, rotina: data });
   }
 
@@ -427,11 +437,78 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json();
+  const entidade = String(body?.entidade || "rotina");
   const id = String(body?.id || "");
   const status = String(body?.status || "");
-  if (!id || !["ativa", "pausada"].includes(status)) {
+
+  if (!id) {
     return NextResponse.json(
-      { ok: false, error: "Dados inválidos." },
+      { ok: false, error: "Identificador inválido." },
+      { status: 400 },
+    );
+  }
+
+  if (entidade === "integracao") {
+    if (!ctx.usuario.is_admin) {
+      return NextResponse.json(
+        { ok: false, error: "Apenas administradores podem arquivar conexões." },
+        { status: 403 },
+      );
+    }
+
+    if (!["inativa", "nao_testada"].includes(status)) {
+      return NextResponse.json(
+        { ok: false, error: "Status de conexão inválido." },
+        { status: 400 },
+      );
+    }
+
+    const integracao = await buscarIntegracaoDaEmpresa(id, ctx.empresaId);
+    if (!integracao) {
+      return NextResponse.json(
+        { ok: false, error: "Conexão não encontrada." },
+        { status: 404 },
+      );
+    }
+
+    if (status === "inativa") {
+      const { error: rotinasError } = await supabase
+        .from("automacoes_api_rotinas")
+        .update({
+          status: "pausada",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("empresa_id", ctx.empresaId)
+        .eq("integracao_id", id)
+        .neq("status", "pausada");
+
+      if (rotinasError) return respostaErro(new Error(rotinasError.message));
+    }
+
+    const { error } = await supabase
+      .from("integracoes_api_externas")
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+        ultimo_erro: null,
+      })
+      .eq("id", id)
+      .eq("empresa_id", ctx.empresaId);
+
+    if (error) return respostaErro(new Error(error.message));
+
+    return NextResponse.json({
+      ok: true,
+      message:
+        status === "inativa"
+          ? "Conexão arquivada e rotinas vinculadas pausadas."
+          : "Conexão reaberta e marcada para novo teste.",
+    });
+  }
+
+  if (!["ativa", "pausada"].includes(status)) {
+    return NextResponse.json(
+      { ok: false, error: "Status da rotina inválido." },
       { status: 400 },
     );
   }
@@ -446,11 +523,63 @@ export async function PATCH(request: NextRequest) {
     .eq("id", id)
     .eq("empresa_id", ctx.empresaId);
 
-  if (error) {
+  if (error) return respostaErro(new Error(error.message));
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(request: NextRequest) {
+  const ctx = await contexto();
+  if (!ctx.ok) {
     return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 },
+      { ok: false, error: ctx.error },
+      { status: ctx.status },
     );
   }
-  return NextResponse.json({ ok: true });
+
+  if (!ctx.usuario.is_admin) {
+    return NextResponse.json(
+      { ok: false, error: "Apenas administradores podem excluir conexões." },
+      { status: 403 },
+    );
+  }
+
+  const body = await request.json();
+  const id = String(body?.id || "");
+
+  if (!id) {
+    return NextResponse.json(
+      { ok: false, error: "Identificador inválido." },
+      { status: 400 },
+    );
+  }
+
+  const integracao = await buscarIntegracaoDaEmpresa(id, ctx.empresaId);
+  if (!integracao) {
+    return NextResponse.json(
+      { ok: false, error: "Conexão não encontrada." },
+      { status: 404 },
+    );
+  }
+
+  const { count: rotinasVinculadas, error: countError } = await supabase
+    .from("automacoes_api_rotinas")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_id", ctx.empresaId)
+    .eq("integracao_id", id);
+
+  if (countError) return respostaErro(new Error(countError.message));
+
+  const { error } = await supabase
+    .from("integracoes_api_externas")
+    .delete()
+    .eq("id", id)
+    .eq("empresa_id", ctx.empresaId);
+
+  if (error) return respostaErro(new Error(error.message));
+
+  return NextResponse.json({
+    ok: true,
+    message: "Conexão excluída permanentemente.",
+    rotinas_excluidas: rotinasVinculadas || 0,
+  });
 }
