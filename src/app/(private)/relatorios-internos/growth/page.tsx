@@ -48,6 +48,7 @@ type ClienteGrowth = {
 };
 
 const STATUS_PAGAMENTO_CONFIRMADO = ["paid", "approved", "completed", "succeeded"];
+const STATUS_RENOVACAO = ["ativa", "ativo", "regular", "vencida", "vencido", "bloqueada", "bloqueado"];
 const TIME_ZONE = "America/Sao_Paulo";
 const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const numero = new Intl.NumberFormat("pt-BR");
@@ -216,9 +217,19 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const fimMesPassado = new Date(inicioMesAtual.getTime() - 1);
   const anteriorPartes = partesData(fimMesPassado);
   const inicioMesPassado = dataSaoPaulo(anteriorPartes.ano, anteriorPartes.mes, 1);
-  const pagadoresMesPassado = new Set(pagamentos.filter((p) => p.empresa_id && noPeriodo(dataPagamento(p), inicioMesPassado, fimMesPassado)).map((p) => p.empresa_id as string));
-  const pagadoresMesAtual = new Set(pagamentos.filter((p) => p.empresa_id && noPeriodo(dataPagamento(p), inicioMesAtual, fimMesAtual)).map((p) => p.empresa_id as string));
-  const inadimplentesIds = [...pagadoresMesPassado].filter((id) => !pagadoresMesAtual.has(id));
+
+  const pagadoresMesAtual = new Set(
+    pagamentos.filter((p) => p.empresa_id && noPeriodo(dataPagamento(p), inicioMesAtual, fimMesAtual)).map((p) => p.empresa_id as string)
+  );
+
+  const aguardandoRenovacao = empresas.flatMap((empresa) => {
+    const status = String(empresa.assinatura_status || "").trim().toLowerCase();
+    if (!STATUS_RENOVACAO.includes(status) || pagadoresMesAtual.has(empresa.id)) return [];
+    const pagamentosEmpresa = pagamentosPorEmpresa.get(empresa.id) ?? [];
+    const ultimoMesPassado = [...pagamentosEmpresa].reverse().find((p) => noPeriodo(dataPagamento(p), inicioMesPassado, fimMesPassado));
+    if (!ultimoMesPassado || valorPagamento(ultimoMesPassado) <= 0) return [];
+    return [{ empresa, pagamento: ultimoMesPassado }];
+  });
 
   const novoMrr = atuais.reduce((total, cliente) => total + cliente.valorMensal, 0);
   const receitaPeriodo = pagamentosPeriodo.reduce((total, pagamento) => total + valorPagamento(pagamento), 0);
@@ -241,33 +252,29 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const detalhePagamento = (pagamento: PagamentoRow): GrowthDetailRow => {
     const empresa = pagamento.empresa_id ? empresaPorId.get(pagamento.empresa_id) : undefined;
     const usuario = pagamento.empresa_id ? usuarioPorEmpresa.get(pagamento.empresa_id) : undefined;
-    const plano = empresa ? rotuloPlano(empresa, pagamento, encontrarOferta(empresa, pagamento)) : pagamento.offer_titulo || "Não informado";
     return {
       id: pagamento.id,
       empresa: empresa ? nomeEmpresa(empresa) : "Empresa não localizada",
       responsavel: usuario?.nome || "Não informado",
       email: usuario?.email || "",
-      plano,
+      plano: empresa ? rotuloPlano(empresa, pagamento, encontrarOferta(empresa, pagamento)) : pagamento.offer_titulo || "Não informado",
       data: data.format(new Date(dataPagamento(pagamento))),
       valor: moeda.format(valorPagamento(pagamento)),
       status: formatarStatus(pagamento.status),
     };
   };
 
-  const inadimplentesDetalhes: GrowthDetailRow[] = inadimplentesIds.map((empresaId) => {
-    const empresa = empresaPorId.get(empresaId);
-    const usuario = usuarioPorEmpresa.get(empresaId);
-    const pagamentosEmpresa = pagamentosPorEmpresa.get(empresaId) ?? [];
-    const ultimoMesPassado = [...pagamentosEmpresa].reverse().find((p) => noPeriodo(dataPagamento(p), inicioMesPassado, fimMesPassado));
+  const renovacaoDetalhes: GrowthDetailRow[] = aguardandoRenovacao.map(({ empresa, pagamento }) => {
+    const usuario = usuarioPorEmpresa.get(empresa.id);
     return {
-      id: empresaId,
-      empresa: empresa ? nomeEmpresa(empresa) : "Empresa não localizada",
+      id: empresa.id,
+      empresa: nomeEmpresa(empresa),
       responsavel: usuario?.nome || "Não informado",
       email: usuario?.email || "",
-      plano: empresa && ultimoMesPassado ? rotuloPlano(empresa, ultimoMesPassado, encontrarOferta(empresa, ultimoMesPassado)) : "Não informado",
-      data: ultimoMesPassado ? data.format(new Date(dataPagamento(ultimoMesPassado))) : "Não informado",
-      valor: ultimoMesPassado ? moeda.format(valorPagamento(ultimoMesPassado)) : "—",
-      status: "Não pagou no mês atual",
+      plano: rotuloPlano(empresa, pagamento, encontrarOferta(empresa, pagamento)),
+      data: data.format(new Date(dataPagamento(pagamento))),
+      valor: moeda.format(valorPagamento(pagamento)),
+      status: formatarStatus(empresa.assinatura_status),
     };
   });
 
@@ -278,7 +285,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     { id: "receita", label: "Receita do período", value: moeda.format(receitaPeriodo), detail: `${numero.format(pagamentosPeriodo.length)} pagamentos confirmados`, icon: "card", modalTitle: "Receita do período", modalDescription: "Todos os pagamentos confirmados dentro do filtro selecionado.", rows: pagamentosPeriodo.map(detalhePagamento) },
     { id: "historico", label: "Total geral recebido", value: moeda.format(totalHistorico), detail: "Todos os pagamentos, independente do filtro", icon: "wallet", modalTitle: "Total geral recebido", modalDescription: "Histórico completo de pagamentos confirmados.", rows: pagamentos.map(detalhePagamento).reverse() },
     { id: "ticket", label: "Ticket médio inicial", value: moeda.format(ticketMedio), detail: `Conversão média: ${tempoMedio.toFixed(1)} dias`, icon: "trend", modalTitle: "Ticket médio inicial", modalDescription: "Novos clientes usados no cálculo do ticket médio do período.", rows: atuais.map(detalheCliente) },
-    { id: "inadimplentes", label: "Inadimplentes do mês", value: numero.format(inadimplentesDetalhes.length), detail: "Pagaram mês passado e ainda não pagaram neste mês", icon: "alert", modalTitle: "Inadimplentes do mês atual", modalDescription: "Empresas com pagamento confirmado no mês passado e nenhum pagamento confirmado no mês atual.", rows: inadimplentesDetalhes },
+    { id: "aguardando-renovacao", label: "Aguardando renovação", value: numero.format(renovacaoDetalhes.length), detail: "Pagaram no mês passado e ainda não renovaram", icon: "alert", modalTitle: "Aguardando renovação", modalDescription: "Clientes pagos no mês passado, com cobrança maior que zero e sem pagamento confirmado no mês atual. Inclui assinaturas ativas, vencidas e bloqueadas.", rows: renovacaoDetalhes },
   ];
 
   const porPlano = Array.from(atuais.reduce((mapa, cliente) => {
@@ -291,7 +298,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
 
   return (
     <>
-      <Header title="Growth Analytics" subtitle="Acompanhe novos clientes, renovações, inadimplência e pagamentos confirmados." />
+      <Header title="Growth Analytics" subtitle="Acompanhe novos clientes, renovações pendentes e pagamentos confirmados." />
       <main className={styles.page}>
         <section className={styles.filterPanel}>
           <div className={styles.filterIntro}>
@@ -316,7 +323,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
           </article>
           <article className={styles.panel}>
             <div className={styles.panelHeader}><div><span className={styles.eyebrow}>Leitura rápida</span><h2>Comparativo do período</h2></div></div>
-            <div className={styles.comparison}><div><span>Novos atuais</span><strong>{atuais.length}</strong></div><div><span>Novos anteriores</span><strong>{anteriores.length}</strong></div><div><span>Inadimplentes</span><strong>{inadimplentesDetalhes.length}</strong></div></div>
+            <div className={styles.comparison}><div><span>Novos atuais</span><strong>{atuais.length}</strong></div><div><span>Novos anteriores</span><strong>{anteriores.length}</strong></div><div><span>Aguardando renovação</span><strong>{renovacaoDetalhes.length}</strong></div></div>
             <p className={styles.note}>Clique em qualquer card para consultar a lista detalhada que compõe o indicador.</p>
           </article>
         </section>
