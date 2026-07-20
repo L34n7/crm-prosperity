@@ -35,8 +35,79 @@ type ResultadoCompartilhamentoFluxoRpc = {
   criado?: boolean;
 };
 
+type ErroImportacaoFluxoClassificado = {
+  status: number;
+  codigo: string;
+  mensagem: string;
+};
+
 function obterMensagemErro(error: unknown, fallback = "Erro interno.") {
   return error instanceof Error ? error.message : fallback;
+}
+
+function normalizarTextoErro(texto: string) {
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function classificarErroImportacaoFluxo(
+  error: unknown
+): ErroImportacaoFluxoClassificado {
+  const mensagem = obterMensagemErro(error, "Erro ao importar fluxo.");
+  const textoErro = normalizarTextoErro(mensagem);
+
+  if (
+    textoErro.includes("palavra-chave") &&
+    textoErro.includes("ja esta cadastrada em um fluxo desta empresa")
+  ) {
+    return {
+      status: 409,
+      codigo: "PALAVRA_CHAVE_EM_USO",
+      mensagem,
+    };
+  }
+
+  if (
+    textoErro.includes("palavra-chave") &&
+    textoErro.includes("aparece mais de uma vez no fluxo importado")
+  ) {
+    return {
+      status: 422,
+      codigo: "PALAVRA_CHAVE_DUPLICADA_NO_FLUXO",
+      mensagem,
+    };
+  }
+
+  if (
+    textoErro.includes("codigo de fluxo invalido") ||
+    textoErro.includes("codigo de fluxo incompleto")
+  ) {
+    return {
+      status: 422,
+      codigo: "FLUXO_COMPARTILHADO_INVALIDO",
+      mensagem,
+    };
+  }
+
+  if (
+    textoErro.includes("erro ao importar gatilhos") &&
+    (textoErro.includes("duplicate key") || textoErro.includes("23505"))
+  ) {
+    return {
+      status: 409,
+      codigo: "CONFLITO_DE_GATILHO",
+      mensagem:
+        "Uma das palavras-chave do fluxo já está cadastrada nesta empresa. Remova o conflito antes de importar.",
+    };
+  }
+
+  return {
+    status: 500,
+    codigo: "ERRO_INTERNO_IMPORTACAO_FLUXO",
+    mensagem,
+  };
 }
 
 function erroDuplicidadeCodigoCompartilhamento(error: SupabaseErrorLike) {
@@ -321,9 +392,19 @@ export async function PUT(req: NextRequest) {
       totais: copia.totais,
     });
   } catch (error: unknown) {
+    const erroClassificado = classificarErroImportacaoFluxo(error);
+
+    if (erroClassificado.status >= 500) {
+      console.error("Erro ao importar fluxo compartilhado:", error);
+    }
+
     return NextResponse.json(
-      { ok: false, error: obterMensagemErro(error) },
-      { status: 500 }
+      {
+        ok: false,
+        error: erroClassificado.mensagem,
+        code: erroClassificado.codigo,
+      },
+      { status: erroClassificado.status }
     );
   }
 }
