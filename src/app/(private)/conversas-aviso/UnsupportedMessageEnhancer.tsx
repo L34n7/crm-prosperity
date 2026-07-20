@@ -36,9 +36,24 @@ function criarConteudoAviso() {
   return container;
 }
 
+function localizarTimelineAtiva() {
+  const timelines = Array.from(
+    document.querySelectorAll<HTMLElement>('[class*="timelineArea"]')
+  );
+
+  return (
+    timelines.find((timeline) =>
+      timeline.querySelector('[class*="messagesStack"]')
+    ) || null
+  );
+}
+
 function aplicarEstiloMensagensUnsupported() {
+  const timeline = localizarTimelineAtiva();
+  if (!timeline) return;
+
   const paragrafos = Array.from(
-    document.querySelectorAll<HTMLElement>('[class*="timelineArea"] p')
+    timeline.querySelectorAll<HTMLElement>('p[class*="messageText"]')
   );
 
   for (const paragrafo of paragrafos) {
@@ -48,12 +63,16 @@ function aplicarEstiloMensagensUnsupported() {
 
     if (!textoNormalizado.includes(TEXTO_MENSAGEM_UNSUPPORTED)) continue;
 
+    const balao = paragrafo.closest<HTMLElement>('[class*="messageBubble"]');
+    const linha = paragrafo.closest<HTMLElement>('[class*="messageRow"]');
+    const conteudoRow = paragrafo.closest<HTMLElement>(
+      '[class*="messageContentRow"]'
+    );
     const conteudoFlex = paragrafo.parentElement;
-    const conteudoRow = conteudoFlex?.parentElement;
-    const balao = conteudoRow?.parentElement;
-    const linha = balao?.parentElement;
 
-    if (!conteudoFlex || !conteudoRow || !balao || !linha) continue;
+    if (!balao || !linha || !conteudoRow || !conteudoFlex) continue;
+    if (!timeline.contains(balao) || !timeline.contains(linha)) continue;
+    if (balao.closest('[class*="conversationItem"]')) continue;
     if (balao.dataset.unsupportedMessageEnhanced === "true") continue;
 
     balao.dataset.unsupportedMessageEnhanced = "true";
@@ -63,7 +82,7 @@ function aplicarEstiloMensagensUnsupported() {
     conteudoFlex.classList.add("unsupportedMessageContentFlex");
 
     const favorito = conteudoRow.querySelector(
-      'button[title="Adicionar aos favoritos"], button[title="Remover dos favoritos"]'
+      'button[class*="messageFavoriteButton"]'
     );
     favorito?.remove();
 
@@ -89,12 +108,12 @@ export default function UnsupportedMessageEnhancer() {
 
   return (
     <style jsx global>{`
-      .unsupportedMessageRow {
+      [class*="timelineArea"] .unsupportedMessageRow {
         justify-content: center !important;
         padding-inline: 10px !important;
       }
 
-      .unsupportedMessageBubble {
+      [class*="timelineArea"] .unsupportedMessageBubble {
         width: min(560px, 94%) !important;
         max-width: min(560px, 94%) !important;
         padding: 14px 16px 10px !important;
@@ -109,19 +128,19 @@ export default function UnsupportedMessageEnhancer() {
         box-shadow: 0 8px 24px rgba(120, 83, 7, 0.1) !important;
       }
 
-      .unsupportedMessageContentRow,
-      .unsupportedMessageContentFlex {
+      [class*="timelineArea"] .unsupportedMessageContentRow,
+      [class*="timelineArea"] .unsupportedMessageContentFlex {
         width: 100% !important;
       }
 
-      .unsupportedMessageCardContent {
+      [class*="timelineArea"] .unsupportedMessageCardContent {
         display: flex;
         align-items: flex-start;
         gap: 12px;
         width: 100%;
       }
 
-      .unsupportedMessageCardIcon {
+      [class*="timelineArea"] .unsupportedMessageCardIcon {
         display: grid;
         place-items: center;
         flex: 0 0 38px;
@@ -134,12 +153,12 @@ export default function UnsupportedMessageEnhancer() {
         line-height: 1;
       }
 
-      .unsupportedMessageCardCopy {
+      [class*="timelineArea"] .unsupportedMessageCardCopy {
         min-width: 0;
         flex: 1;
       }
 
-      .unsupportedMessageCardTitle {
+      [class*="timelineArea"] .unsupportedMessageCardTitle {
         display: block;
         margin: 1px 0 4px;
         color: #29323a;
@@ -148,14 +167,14 @@ export default function UnsupportedMessageEnhancer() {
         line-height: 1.3;
       }
 
-      .unsupportedMessageCardDescription {
+      [class*="timelineArea"] .unsupportedMessageCardDescription {
         margin: 0;
         color: #5f6871;
         font-size: 13px;
         line-height: 1.45;
       }
 
-      .unsupportedMessageCardBadge {
+      [class*="timelineArea"] .unsupportedMessageCardBadge {
         display: inline-flex;
         align-items: center;
         margin-top: 8px;
@@ -170,24 +189,26 @@ export default function UnsupportedMessageEnhancer() {
         text-transform: uppercase;
       }
 
-      .unsupportedMessageBubble [class*="messageMetaBottom"] {
+      [class*="timelineArea"]
+        .unsupportedMessageBubble
+        [class*="messageMetaBottom"] {
         margin-top: 8px !important;
         color: #8b826e !important;
         font-size: 11px !important;
       }
 
       @media (max-width: 640px) {
-        .unsupportedMessageBubble {
+        [class*="timelineArea"] .unsupportedMessageBubble {
           width: 100% !important;
           max-width: 100% !important;
           padding: 13px 14px 9px !important;
         }
 
-        .unsupportedMessageCardContent {
+        [class*="timelineArea"] .unsupportedMessageCardContent {
           gap: 10px;
         }
 
-        .unsupportedMessageCardIcon {
+        [class*="timelineArea"] .unsupportedMessageCardIcon {
           flex-basis: 34px;
           width: 34px;
           height: 34px;
@@ -195,11 +216,11 @@ export default function UnsupportedMessageEnhancer() {
           font-size: 18px;
         }
 
-        .unsupportedMessageCardTitle {
+        [class*="timelineArea"] .unsupportedMessageCardTitle {
           font-size: 13px;
         }
 
-        .unsupportedMessageCardDescription {
+        [class*="timelineArea"] .unsupportedMessageCardDescription {
           font-size: 12px;
         }
       }
