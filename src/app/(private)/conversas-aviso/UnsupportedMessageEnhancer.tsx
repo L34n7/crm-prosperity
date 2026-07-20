@@ -37,7 +37,9 @@ function criarConteudoAviso() {
 }
 
 function aplicarEstiloMensagensUnsupported() {
-  const paragrafos = Array.from(document.querySelectorAll("p"));
+  const paragrafos = Array.from(
+    document.querySelectorAll<HTMLElement>('[class*="timelineArea"] p')
+  );
 
   for (const paragrafo of paragrafos) {
     const textoNormalizado = (paragrafo.textContent || "")
