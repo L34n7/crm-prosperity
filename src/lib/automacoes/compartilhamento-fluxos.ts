@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validarFluxoAssistente } from "@/lib/automacoes/assistente-fluxos";
 import { normalizarConfiguracaoFluxo } from "@/lib/automacoes/normalizar-configuracao-fluxo";
 
 const ALFABETO_CODIGO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -103,6 +104,100 @@ function sanitizarConfiguracaoFluxoCompartilhada(configuracao: unknown): JsonObj
   const configuracaoNormalizada = normalizarConfiguracaoFluxo(configuracaoLimpa);
 
   return ehObjetoJson(configuracaoNormalizada) ? configuracaoNormalizada : {};
+}
+
+function normalizarNomeSetor(valor: unknown) {
+  return String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function categoriaNomeSetor(valor: unknown) {
+  const nome = normalizarNomeSetor(valor);
+
+  if (["venda", "vendas", "comercial"].includes(nome)) return "comercial";
+  if (["suporte", "atendimento", "falar com atendente"].includes(nome)) {
+    return "atendimento";
+  }
+
+  return nome;
+}
+
+function coletarIdsSetoresConfiguracao(valor: unknown, ids: Set<string>) {
+  if (Array.isArray(valor)) {
+    valor.forEach((item) => coletarIdsSetoresConfiguracao(item, ids));
+    return;
+  }
+
+  if (!ehObjetoJson(valor)) return;
+
+  for (const [chave, item] of Object.entries(valor)) {
+    if (["setor_id", "setor_excesso_tentativas"].includes(chave)) {
+      const id = String(item || "").trim();
+      if (id) ids.add(id);
+      continue;
+    }
+
+    coletarIdsSetoresConfiguracao(item, ids);
+  }
+}
+
+function remapearSetoresConfiguracao(params: {
+  valor: unknown;
+  nomesOrigemPorId: Map<string, string>;
+  idsDestino: Set<string>;
+  destinoPorNome: Map<string, string>;
+  destinosPorCategoria: Map<string, string[]>;
+  setoresNaoMapeados: Set<string>;
+}): unknown {
+  if (Array.isArray(params.valor)) {
+    return params.valor.map((item) =>
+      remapearSetoresConfiguracao({ ...params, valor: item })
+    );
+  }
+
+  if (!ehObjetoJson(params.valor)) return params.valor;
+
+  return Object.entries(params.valor).reduce<JsonObject>(
+    (configuracao, [chave, item]) => {
+      if (["setor_id", "setor_excesso_tentativas"].includes(chave)) {
+        const setorOrigemId = String(item || "").trim();
+
+        if (!setorOrigemId || params.idsDestino.has(setorOrigemId)) {
+          configuracao[chave] = item;
+          return configuracao;
+        }
+
+        const nomeOrigem = params.nomesOrigemPorId.get(setorOrigemId) || "";
+        const porNome = params.destinoPorNome.get(normalizarNomeSetor(nomeOrigem));
+        const porCategoria = params.destinosPorCategoria.get(
+          categoriaNomeSetor(nomeOrigem)
+        );
+        const setorDestinoId =
+          porNome || (porCategoria?.length === 1 ? porCategoria[0] : null);
+
+        if (setorDestinoId) {
+          configuracao[chave] = setorDestinoId;
+        } else {
+          configuracao[chave] = chave === "setor_id" ? "" : null;
+          params.setoresNaoMapeados.add(nomeOrigem || setorOrigemId);
+        }
+
+        return configuracao;
+      }
+
+      configuracao[chave] = remapearSetoresConfiguracao({
+        ...params,
+        valor: item,
+      });
+      return configuracao;
+    },
+    {}
+  );
 }
 
 export function normalizarCodigoCompartilhamento(codigo: unknown) {
@@ -265,10 +360,17 @@ function validarSnapshot(
 export async function criarCopiaFluxoCompartilhado(params: {
   supabase: SupabaseLike;
   snapshot: SnapshotCompartilhamentoFluxo;
+  empresaOrigemId?: string | null;
   empresaDestinoId: string;
   usuarioId: string;
 }) {
-  const { supabase, snapshot, empresaDestinoId, usuarioId } = params;
+  const {
+    supabase,
+    snapshot,
+    empresaOrigemId,
+    empresaDestinoId,
+    usuarioId,
+  } = params;
 
   validarSnapshot(snapshot);
 
@@ -318,6 +420,119 @@ export async function criarCopiaFluxoCompartilhado(params: {
     }
   }
 
+  const idsSetoresOrigem = new Set<string>();
+  snapshot.nos.forEach((no) =>
+    coletarIdsSetoresConfiguracao(no.configuracao_json, idsSetoresOrigem)
+  );
+
+  const setoresOrigemPromise =
+    empresaOrigemId && idsSetoresOrigem.size > 0
+      ? supabase
+          .from("setores")
+          .select("id, nome")
+          .eq("empresa_id", empresaOrigemId)
+          .in("id", [...idsSetoresOrigem])
+      : Promise.resolve({ data: [], error: null });
+  const setoresDestinoPromise = supabase
+    .from("setores")
+    .select("id, nome")
+    .eq("empresa_id", empresaDestinoId)
+    .eq("ativo", true);
+  const [setoresOrigemResult, setoresDestinoResult] = await Promise.all([
+    setoresOrigemPromise,
+    setoresDestinoPromise,
+  ]);
+
+  if (setoresOrigemResult.error) {
+    throw new Error(
+      `Erro ao identificar setores do fluxo original: ${setoresOrigemResult.error.message}`
+    );
+  }
+
+  if (setoresDestinoResult.error) {
+    throw new Error(
+      `Erro ao identificar setores da empresa: ${setoresDestinoResult.error.message}`
+    );
+  }
+
+  const nomesOrigemPorId = new Map<string, string>(
+    (setoresOrigemResult.data || []).map((setor) => [
+      String(setor.id),
+      String(setor.nome || ""),
+    ])
+  );
+  const idsDestino = new Set<string>();
+  const destinoPorNome = new Map<string, string>();
+  const destinosPorCategoria = new Map<string, string[]>();
+
+  for (const setor of setoresDestinoResult.data || []) {
+    const id = String(setor.id);
+    const nome = String(setor.nome || "");
+    const categoria = categoriaNomeSetor(nome);
+
+    idsDestino.add(id);
+    destinoPorNome.set(normalizarNomeSetor(nome), id);
+    destinosPorCategoria.set(categoria, [
+      ...(destinosPorCategoria.get(categoria) || []),
+      id,
+    ]);
+  }
+
+  const setoresNaoMapeados = new Set<string>();
+  const configuracoesNosRemapeadas = new Map<string, JsonObject>();
+
+  for (const no of snapshot.nos) {
+    configuracoesNosRemapeadas.set(
+      no.id,
+      remapearSetoresConfiguracao({
+        valor: sanitizarConfiguracaoCompartilhada(no.configuracao_json),
+        nomesOrigemPorId,
+        idsDestino,
+        destinoPorNome,
+        destinosPorCategoria,
+        setoresNaoMapeados,
+      }) as JsonObject
+    );
+  }
+
+  const validacaoImportacao = validarFluxoAssistente({
+    nos: snapshot.nos.map((no) => ({
+      id: no.id,
+      tipo_no: no.tipo_no,
+      titulo: no.titulo || "Bloco",
+      descricao: no.descricao,
+      posicao_x: no.posicao_x,
+      posicao_y: no.posicao_y,
+      configuracao_json: configuracoesNosRemapeadas.get(no.id) || {},
+      delay_segundos: no.delay_segundos,
+    })),
+    conexoes: snapshot.conexoes.map((conexao) => ({
+      id: conexao.id,
+      no_origem_id: conexao.no_origem_id,
+      no_destino_id: conexao.no_destino_id,
+      rotulo: conexao.rotulo,
+      ordem: conexao.ordem,
+      condicao_json: conexao.condicao_json,
+      usar_ia: conexao.usar_ia,
+      descricao_ia: conexao.descricao_ia,
+    })),
+    setores: (setoresDestinoResult.data || []).map((setor) => ({
+      id: String(setor.id),
+      nome: String(setor.nome || ""),
+    })),
+  });
+
+  if (!validacaoImportacao.valido) {
+    const detalhes = validacaoImportacao.erros
+      .slice(0, 6)
+      .map((item) => item.mensagem)
+      .join(" ");
+
+    throw new Error(
+      `O fluxo compartilhado possui configuracoes incompletas e nao pode ser importado. ${detalhes}`
+    );
+  }
+
   const { data: novoFluxo, error: novoFluxoError } = await supabase
     .from("automacao_fluxos")
     .insert({
@@ -355,7 +570,7 @@ export async function criarCopiaFluxoCompartilhado(params: {
       descricao: no.descricao,
       posicao_x: Math.round(Number(no.posicao_x || 0)),
       posicao_y: Math.round(Number(no.posicao_y || 0)),
-      configuracao_json: sanitizarConfiguracaoCompartilhada(no.configuracao_json),
+      configuracao_json: configuracoesNosRemapeadas.get(no.id) || {},
       delay_segundos:
         no.tipo_no === "inicio" || no.delay_segundos == null
           ? null
@@ -374,16 +589,15 @@ export async function criarCopiaFluxoCompartilhado(params: {
     }
   }
 
-  const conexoesParaInserir = snapshot.conexoes
-    .map((conexao) => {
+  const conexoesParaInserir = snapshot.conexoes.flatMap((conexao) => {
       const novoOrigemId = mapaIds.get(conexao.no_origem_id);
       const novoDestinoId = mapaIds.get(conexao.no_destino_id);
 
       if (!novoOrigemId || !novoDestinoId) {
-        return null;
+        return [];
       }
 
-      return {
+      return [{
         id: randomUUID(),
         empresa_id: empresaDestinoId,
         fluxo_id: novoFluxo.id,
@@ -395,9 +609,8 @@ export async function criarCopiaFluxoCompartilhado(params: {
         usar_ia: conexao.usar_ia === true,
         descricao_ia: conexao.descricao_ia || null,
         ativo: true,
-      };
-    })
-    .filter(Boolean);
+      }];
+    });
 
   if (conexoesParaInserir.length > 0) {
     const { error: inserirConexoesError } = await supabase
@@ -452,5 +665,13 @@ export async function criarCopiaFluxoCompartilhado(params: {
       conexoes: conexoesParaInserir.length,
       gatilhos: gatilhosParaInserir.length,
     },
+    avisos:
+      setoresNaoMapeados.size > 0
+        ? [
+            `Selecione o setor de destino nos blocos importados: ${[
+              ...setoresNaoMapeados,
+            ].join(", ")}.`,
+          ]
+        : [],
   };
 }

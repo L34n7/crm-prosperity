@@ -905,6 +905,18 @@ export function validarFluxoAssistente(params: {
   }
 
   if (
+    inicio &&
+    params.conexoes.filter((conexao) => conexao.no_origem_id === inicio.id)
+      .length > 1
+  ) {
+    erros.push({
+      codigo: "INICIO_COM_MULTIPLAS_ROTAS",
+      mensagem: "O bloco de inicio deve possuir apenas uma conexao de saida.",
+      no_id: inicio.id,
+    });
+  }
+
+  if (
     !params.nos.some((no) =>
       ["encerrar", "transferir_setor"].includes(no.tipo_no)
     )
@@ -934,10 +946,21 @@ export function validarFluxoAssistente(params: {
     );
     const config = no.configuracao_json || {};
 
-    if (no.tipo_no !== "inicio" && entradas.length === 0 && saidas.length === 0) {
-      avisos.push({
-        codigo: "BLOCO_ORFAO",
-        mensagem: `O bloco "${no.titulo}" nao possui conexoes.`,
+    if (no.tipo_no !== "inicio" && entradas.length === 0) {
+      erros.push({
+        codigo: "BLOCO_SEM_ENTRADA",
+        mensagem: `O bloco "${no.titulo}" nao esta conectado ao fluxo.`,
+        no_id: no.id,
+      });
+    }
+
+    if (
+      !["encerrar", "transferir_setor"].includes(no.tipo_no) &&
+      saidas.length === 0
+    ) {
+      erros.push({
+        codigo: "BLOCO_SEM_SAIDA",
+        mensagem: `O bloco "${no.titulo}" nao possui conexao de saida.`,
         no_id: no.id,
       });
     }
@@ -995,23 +1018,51 @@ export function validarFluxoAssistente(params: {
     if (["pergunta_opcoes", "enviar_botoes"].includes(no.tipo_no)) {
       const campo = no.tipo_no === "pergunta_opcoes" ? "opcoes" : "botoes";
       const opcoes = Array.isArray(config[campo]) ? config[campo] : [];
-      const valoresComRota = new Set(
-        saidas
-          .map((conexao) => texto(conexao.condicao_json?.valor, 160))
-          .filter(Boolean)
+      const saidasPorValor = new Map<string, AssistenteAutomacaoConexao[]>();
+
+      for (const conexao of saidas) {
+        const valor = texto(conexao.condicao_json?.valor, 160);
+
+        if (!valor) continue;
+
+        saidasPorValor.set(valor, [
+          ...(saidasPorValor.get(valor) || []),
+          conexao,
+        ]);
+      }
+
+      const rotasIncondicionais = saidas.filter(
+        (conexao) => conexao.condicao_json?.tipo === "sempre"
       );
+
+      for (const conexao of rotasIncondicionais) {
+        erros.push({
+          codigo: "PERGUNTA_COM_ROTA_INCONDICIONAL",
+          mensagem: `O bloco "${no.titulo}" possui uma rota incondicional. Cada resposta deve ter sua propria rota.`,
+          no_id: no.id,
+          conexao_id: conexao.id,
+        });
+      }
 
       for (const opcao of opcoes) {
         const valor = texto(
           no.tipo_no === "pergunta_opcoes" ? opcao.valor : opcao.id,
           160
         );
+        const rotasDaOpcao = valor ? saidasPorValor.get(valor) || [] : [];
 
-        if (valor && !valoresComRota.has(valor)) {
-          avisos.push({
+        if (valor && rotasDaOpcao.length === 0) {
+          erros.push({
             codigo: "OPCAO_SEM_ROTA",
-            mensagem: `A opcao "${opcao.titulo || valor}" nao possui rota especifica.`,
+            mensagem: `A opcao "${opcao.titulo || valor}" do bloco "${no.titulo}" precisa ter uma rota.`,
             no_id: no.id,
+          });
+        } else if (rotasDaOpcao.length > 1) {
+          erros.push({
+            codigo: "OPCAO_COM_ROTAS_DUPLICADAS",
+            mensagem: `A opcao "${opcao.titulo || valor}" do bloco "${no.titulo}" possui mais de uma rota.`,
+            no_id: no.id,
+            conexao_id: rotasDaOpcao[1]?.id,
           });
         }
       }
@@ -1212,12 +1263,51 @@ export function compilarPlanoAssistente(params: {
 
     const nosPorId = new Map(nos.map((no) => [no.id, no]));
     const novasConexoes: AssistenteAutomacaoConexao[] = [];
+    const rotasResolvidas = params.plano.rotas
+      .map((rota) => ({
+        rota,
+        origem: resolverNoPorRef(rota.origem, refs, nosPorId),
+        destino: resolverNoPorRef(rota.destino, refs, nosPorId),
+      }))
+      .filter(
+        (item): item is {
+          rota: PlanoAssistenteRota;
+          origem: AssistenteAutomacaoNo;
+          destino: AssistenteAutomacaoNo;
+        } => Boolean(item.origem && item.destino)
+      );
 
-    for (const rota of params.plano.rotas) {
-      const origem = resolverNoPorRef(rota.origem, refs, nosPorId);
-      const destino = resolverNoPorRef(rota.destino, refs, nosPorId);
+    if (params.modo === "adicionar_etapa") {
+      const origensPlanejadas = new Set(
+        rotasResolvidas.map((item) => item.origem.id)
+      );
+      const origensComTimeoutPlanejado = new Set(
+        rotasResolvidas
+          .filter((item) =>
+            ["timeout", "timeout_sem_resposta"].includes(
+              normalizarRef(item.rota.condicao)
+            )
+          )
+          .map((item) => item.origem.id)
+      );
 
-      if (!origem || !destino) continue;
+      // No modo de edicao, as rotas retornadas pela IA representam o novo
+      // desenho das saidas desses blocos. Substituir as rotas antigas evita
+      // manter caminhos concorrentes ao inserir um desvio entre blocos.
+      conexoes = conexoes.filter((conexao) => {
+        if (!origensPlanejadas.has(conexao.no_origem_id)) return true;
+
+        const timeoutExistente =
+          conexao.condicao_json?.tipo === "timeout_sem_resposta";
+
+        return (
+          timeoutExistente &&
+          !origensComTimeoutPlanejado.has(conexao.no_origem_id)
+        );
+      });
+    }
+
+    for (const { rota, origem, destino } of rotasResolvidas) {
 
       const jaExiste = [...conexoes, ...novasConexoes].some(
         (conexao) =>

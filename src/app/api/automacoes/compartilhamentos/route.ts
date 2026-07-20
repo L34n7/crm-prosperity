@@ -82,7 +82,8 @@ function classificarErroImportacaoFluxo(
 
   if (
     textoErro.includes("codigo de fluxo invalido") ||
-    textoErro.includes("codigo de fluxo incompleto")
+    textoErro.includes("codigo de fluxo incompleto") ||
+    textoErro.includes("fluxo compartilhado possui configuracoes incompletas")
   ) {
     return {
       status: 422,
@@ -349,6 +350,7 @@ export async function PUT(req: NextRequest) {
     const copia = await criarCopiaFluxoCompartilhado({
       supabase: supabaseAdmin,
       snapshot,
+      empresaOrigemId: compartilhamento.empresa_origem_id,
       empresaDestinoId: usuario.empresa_id,
       usuarioId: usuario.id,
     });
@@ -388,6 +390,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
+      avisos: copia.avisos,
       fluxo: copia.fluxo,
       totais: copia.totais,
     });

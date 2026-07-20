@@ -797,7 +797,12 @@ Regras:
 - Para capturar_resposta, preencha variavel com chave curta em snake_case.
 - Para pergunta_livre_ia, crie rotas com condicao "ia" e descricao_ia clara.
 - Para rotas de opcoes, use condicao "resposta_contem" e valor igual ao id da opcao.
+- Toda opcao de pergunta_opcoes ou pergunta_botoes deve possuir exatamente uma rota.
+- Nunca crie rota "sempre" saindo de pergunta_opcoes ou pergunta_botoes.
+- Conecte todas as etapas. Nenhuma etapa pode ficar orfa ou sem caminho a partir de inicio.
+- O inicio deve apontar para a primeira etapa real solicitada pelo usuario.
 - Sempre que fizer sentido, inclua uma rota de encerramento ou transferencia.
+- Toda etapa transferir deve usar setor_id de um setor recebido no contexto. Se nenhum setor adequado existir, nao crie a transferencia e explique em avisos.
 - Nao inclua midias, templates ou agenda se o contexto nao demonstrar recursos suficientes.
 - Se o modo for adicionar_etapa, use refs de blocos existentes quando a nova etapa tiver que sair de um bloco atual.
 - Se o modo for melhorar_mensagens, nao crie etapas; preencha mensagens_revisadas usando refs existentes.
@@ -983,6 +988,17 @@ export async function POST(request: Request) {
       setores: contextoEmpresa.setores,
       variaveis: contextoEmpresa.variaveis,
     });
+
+    if (modo !== "analisar_fluxo" && !compilacao.validacao.valido) {
+      const detalhes = compilacao.validacao.erros
+        .slice(0, 6)
+        .map((item) => item.mensagem)
+        .join(" ");
+
+      throw new Error(
+        `A IA gerou um fluxo incompleto e ele nao foi criado. ${detalhes}`
+      );
+    }
 
     const uso = extrairUsoTokensIa(resposta.usage);
 
