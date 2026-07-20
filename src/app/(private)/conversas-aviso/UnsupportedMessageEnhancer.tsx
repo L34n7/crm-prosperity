@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 const TEXTO_MENSAGEM_UNSUPPORTED =
-  "⚠️ Mensagem não suportada pela API do WhatsApp";
+  "Mensagem não suportada pela API do WhatsApp";
 
 function criarConteudoAviso() {
   const container = document.createElement("div");
@@ -37,13 +37,16 @@ function criarConteudoAviso() {
 }
 
 function aplicarEstiloMensagensUnsupported() {
-  const spans = Array.from(document.querySelectorAll("span"));
+  const paragrafos = Array.from(document.querySelectorAll("p"));
 
-  for (const span of spans) {
-    if (span.textContent?.trim() !== TEXTO_MENSAGEM_UNSUPPORTED) continue;
+  for (const paragrafo of paragrafos) {
+    const textoNormalizado = (paragrafo.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim();
 
-    const paragrafo = span.closest("p");
-    const conteudoFlex = paragrafo?.parentElement;
+    if (!textoNormalizado.includes(TEXTO_MENSAGEM_UNSUPPORTED)) continue;
+
+    const conteudoFlex = paragrafo.parentElement;
     const conteudoRow = conteudoFlex?.parentElement;
     const balao = conteudoRow?.parentElement;
     const linha = balao?.parentElement;
