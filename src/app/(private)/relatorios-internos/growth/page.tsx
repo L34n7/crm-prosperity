@@ -128,6 +128,12 @@ function valorPagamento(pagamento: PagamentoRow | undefined) {
   return pagamento?.valor == null ? 0 : pagamento.valor / 100;
 }
 
+function pagamentoComercial(pagamento: PagamentoRow) {
+  const referencia = `${pagamento.offer_hash || ""} ${pagamento.offer_titulo || ""}`.toLowerCase();
+  const marcadoComoFree = referencia.includes("free") || referencia.includes("gratuit");
+  return valorPagamento(pagamento) > 0 && !marcadoComoFree;
+}
+
 function formatarStatus(status: string | null) {
   const texto = String(status || "").replace(/_/g, " ").trim();
   return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "Não informado";
@@ -146,7 +152,6 @@ function rotuloPlano(empresa: EmpresaRow, pagamento: PagamentoRow, oferta: Ofert
   const planoBase = primeiroPlano(empresa.planos)?.nome?.trim() || "Plano não informado";
   const valor = valorPagamento(pagamento);
   const titulo = pagamento.offer_titulo?.trim() || oferta?.nome?.trim() || "";
-  if (valor === 0) return `${planoBase} — Gratuito`;
   if (valor > 0) return `${planoBase} — ${moeda.format(valor)}`;
   return titulo && titulo.toLowerCase() !== planoBase.toLowerCase() ? `${planoBase} — ${titulo}` : planoBase;
 }
@@ -164,7 +169,8 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   ]);
 
   const empresas = (empresasData ?? []) as EmpresaRow[];
-  const pagamentos = (pagamentosData ?? []) as PagamentoRow[];
+  const pagamentosCarregados = (pagamentosData ?? []) as PagamentoRow[];
+  const pagamentos = pagamentosCarregados.filter(pagamentoComercial);
   const ofertas = (ofertasData ?? []) as OfertaRow[];
   const usuarios = (usuariosData ?? []) as UsuarioRow[];
   const empresaPorId = new Map(empresas.map((empresa) => [empresa.id, empresa]));
@@ -217,7 +223,6 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const fimMesPassado = new Date(inicioMesAtual.getTime() - 1);
   const anteriorPartes = partesData(fimMesPassado);
   const inicioMesPassado = dataSaoPaulo(anteriorPartes.ano, anteriorPartes.mes, 1);
-
   const pagadoresMesAtual = new Set(
     pagamentos.filter((p) => p.empresa_id && noPeriodo(dataPagamento(p), inicioMesAtual, fimMesAtual)).map((p) => p.empresa_id as string)
   );
@@ -227,7 +232,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     if (!STATUS_RENOVACAO.includes(status) || pagadoresMesAtual.has(empresa.id)) return [];
     const pagamentosEmpresa = pagamentosPorEmpresa.get(empresa.id) ?? [];
     const ultimoMesPassado = [...pagamentosEmpresa].reverse().find((p) => noPeriodo(dataPagamento(p), inicioMesPassado, fimMesPassado));
-    if (!ultimoMesPassado || valorPagamento(ultimoMesPassado) <= 0) return [];
+    if (!ultimoMesPassado) return [];
     return [{ empresa, pagamento: ultimoMesPassado }];
   });
 
@@ -279,13 +284,13 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   });
 
   const cards: GrowthCardData[] = [
-    { id: "novos", label: "Novos pagantes", value: numero.format(atuais.length), detail: `${crescimento >= 0 ? "+" : ""}${crescimento.toFixed(1)}% vs. período anterior`, icon: "users", modalTitle: "Novos pagantes", modalDescription: "Empresas cujo primeiro pagamento confirmado ocorreu no período selecionado.", rows: atuais.map(detalheCliente) },
-    { id: "renovacoes", label: "Renovações", value: numero.format(renovacoes.length), detail: "Pagamentos posteriores ao primeiro", icon: "refresh", modalTitle: "Renovações do período", modalDescription: "Pagamentos confirmados posteriores ao primeiro pagamento da empresa.", rows: renovacoes.map(detalhePagamento) },
-    { id: "novo-mrr", label: "Novo MRR", value: moeda.format(novoMrr), detail: "Primeiros pagamentos no período", icon: "money", modalTitle: "Novo MRR", modalDescription: "Valor mensal adicionado pelos novos clientes do período.", rows: atuais.map(detalheCliente) },
-    { id: "receita", label: "Receita do período", value: moeda.format(receitaPeriodo), detail: `${numero.format(pagamentosPeriodo.length)} pagamentos confirmados`, icon: "card", modalTitle: "Receita do período", modalDescription: "Todos os pagamentos confirmados dentro do filtro selecionado.", rows: pagamentosPeriodo.map(detalhePagamento) },
-    { id: "historico", label: "Total geral recebido", value: moeda.format(totalHistorico), detail: "Todos os pagamentos, independente do filtro", icon: "wallet", modalTitle: "Total geral recebido", modalDescription: "Histórico completo de pagamentos confirmados.", rows: pagamentos.map(detalhePagamento).reverse() },
-    { id: "ticket", label: "Ticket médio inicial", value: moeda.format(ticketMedio), detail: `Conversão média: ${tempoMedio.toFixed(1)} dias`, icon: "trend", modalTitle: "Ticket médio inicial", modalDescription: "Novos clientes usados no cálculo do ticket médio do período.", rows: atuais.map(detalheCliente) },
-    { id: "aguardando-renovacao", label: "Aguardando renovação", value: numero.format(renovacaoDetalhes.length), detail: "Pagaram no mês passado e ainda não renovaram", icon: "alert", modalTitle: "Aguardando renovação", modalDescription: "Clientes pagos no mês passado, com cobrança maior que zero e sem pagamento confirmado no mês atual. Inclui assinaturas ativas, vencidas e bloqueadas.", rows: renovacaoDetalhes },
+    { id: "novos", label: "Novos pagantes", value: numero.format(atuais.length), detail: `${crescimento >= 0 ? "+" : ""}${crescimento.toFixed(1)}% vs. período anterior`, icon: "users", modalTitle: "Novos pagantes", modalDescription: "Empresas pagantes cujo primeiro pagamento comercial ocorreu no período selecionado.", rows: atuais.map(detalheCliente) },
+    { id: "renovacoes", label: "Renovações", value: numero.format(renovacoes.length), detail: "Pagamentos posteriores ao primeiro", icon: "refresh", modalTitle: "Renovações do período", modalDescription: "Pagamentos comerciais confirmados posteriores ao primeiro pagamento da empresa.", rows: renovacoes.map(detalhePagamento) },
+    { id: "novo-mrr", label: "Novo MRR", value: moeda.format(novoMrr), detail: "Primeiros pagamentos no período", icon: "money", modalTitle: "Novo MRR", modalDescription: "Valor mensal adicionado pelos novos clientes pagantes do período.", rows: atuais.map(detalheCliente) },
+    { id: "receita", label: "Receita do período", value: moeda.format(receitaPeriodo), detail: `${numero.format(pagamentosPeriodo.length)} pagamentos confirmados`, icon: "card", modalTitle: "Receita do período", modalDescription: "Todos os pagamentos comerciais confirmados dentro do filtro selecionado.", rows: pagamentosPeriodo.map(detalhePagamento) },
+    { id: "historico", label: "Total geral recebido", value: moeda.format(totalHistorico), detail: "Pagamentos comerciais, independente do filtro", icon: "wallet", modalTitle: "Total geral recebido", modalDescription: "Histórico completo de pagamentos comerciais confirmados, sem clientes gratuitos.", rows: pagamentos.map(detalhePagamento).reverse() },
+    { id: "ticket", label: "Ticket médio inicial", value: moeda.format(ticketMedio), detail: `Conversão média: ${tempoMedio.toFixed(1)} dias`, icon: "trend", modalTitle: "Ticket médio inicial", modalDescription: "Novos clientes pagantes usados no cálculo do ticket médio do período.", rows: atuais.map(detalheCliente) },
+    { id: "aguardando-renovacao", label: "Aguardando renovação", value: numero.format(renovacaoDetalhes.length), detail: "Pagaram no mês passado e ainda não renovaram", icon: "alert", modalTitle: "Aguardando renovação", modalDescription: "Clientes pagantes do mês passado sem pagamento comercial confirmado no mês atual. Inclui assinaturas ativas, vencidas e bloqueadas.", rows: renovacaoDetalhes },
   ];
 
   const porPlano = Array.from(atuais.reduce((mapa, cliente) => {
@@ -298,7 +303,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
 
   return (
     <>
-      <Header title="Growth Analytics" subtitle="Acompanhe novos clientes, renovações pendentes e pagamentos confirmados." />
+      <Header title="Growth Analytics" subtitle="Acompanhe somente clientes pagantes, renovações pendentes e pagamentos comerciais." />
       <main className={styles.page}>
         <section className={styles.filterPanel}>
           <div className={styles.filterIntro}>
@@ -324,7 +329,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
           <article className={styles.panel}>
             <div className={styles.panelHeader}><div><span className={styles.eyebrow}>Leitura rápida</span><h2>Comparativo do período</h2></div></div>
             <div className={styles.comparison}><div><span>Novos atuais</span><strong>{atuais.length}</strong></div><div><span>Novos anteriores</span><strong>{anteriores.length}</strong></div><div><span>Aguardando renovação</span><strong>{renovacaoDetalhes.length}</strong></div></div>
-            <p className={styles.note}>Clique em qualquer card para consultar a lista detalhada que compõe o indicador.</p>
+            <p className={styles.note}>Todos os indicadores excluem clientes gratuitos e pagamentos de valor zero.</p>
           </article>
         </section>
       </main>
