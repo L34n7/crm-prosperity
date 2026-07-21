@@ -9,12 +9,15 @@ import {
   clonarConexao,
   clonarNo,
   conteudoNo,
+  ehAbrirLocalizacao,
   ehAgendamento,
   ehAntesDepois,
   ehConteudoProcedimento,
+  ehEspecialista,
   ehFaq,
   ehLocalizacao,
   ehMenuFaq,
+  ehVoltarMenu,
   ehMenuProcedimento,
   ehPergunta,
   ehTerminal,
@@ -23,7 +26,9 @@ import {
   indicePorId,
   melhorMenuPrincipal,
   normalizarId,
+  respostaCorrespondeFaq,
   servicoDoNo,
+  servicoDoTexto,
   type Servico,
 } from "./assistente-fluxos-reparador-semantica";
 import {
@@ -31,12 +36,10 @@ import {
   criarConexaoOpcao,
   criarConexaoSempre,
   criarNoEncerrar,
-  criarNoFallback,
   deduplicarSempre,
   escolherDestinoSemantico,
   idsAlcancaveis,
   opcoesDaPergunta,
-  pontuarAncora,
   substituirSempre,
 } from "./assistente-fluxos-reparador-rotas";
 
@@ -98,6 +101,46 @@ function ehConfirmacaoHorario(no: AssistenteAutomacaoNo) {
     botoes.map((botao) => normalizarId(botao?.id)).filter(Boolean)
   );
   return ids.has("confirmar_horario") && ids.has("escolher_outro_horario");
+}
+
+function destinoOriginalCorresponde(params: {
+  origem: AssistenteAutomacaoNo;
+  destino: AssistenteAutomacaoNo;
+  opcao: { id: string; titulo: string };
+  mainMenu: AssistenteAutomacaoNo | null;
+  menusProcedimento: Map<Servico, AssistenteAutomacaoNo>;
+  menusFaq: Map<Servico, AssistenteAutomacaoNo>;
+}) {
+  const { origem, destino, opcao, mainMenu, menusProcedimento, menusFaq } =
+    params;
+  const servicoOrigem = servicoDoNo(origem);
+  const servicoOpcao = servicoDoTexto(opcao.titulo);
+  const origemFaq = ehMenuFaq(origem, servicoOrigem);
+
+  if (origemFaq) {
+    if (ehVoltarMenu(opcao.titulo)) {
+      return Boolean(
+        servicoOrigem && menusProcedimento.get(servicoOrigem)?.id === destino.id
+      );
+    }
+    return respostaCorrespondeFaq(opcao, destino);
+  }
+  if (ehVoltarMenu(opcao.titulo)) return mainMenu?.id === destino.id;
+  if (servicoOpcao) return servicoDoNo(destino) === servicoOpcao;
+  if (ehAgendamento(opcao.titulo)) {
+    return destino.tipo_no === "agenda_escolher_horario";
+  }
+  if (ehAbrirLocalizacao(opcao.titulo)) return destino.tipo_no === "botao_redirect";
+  if (ehLocalizacao(opcao.titulo)) return ehLocalizacao(conteudoNo(destino));
+  if (ehEspecialista(opcao.titulo)) return destino.tipo_no === "transferir_setor";
+  if (ehAntesDepois(opcao.titulo)) {
+    return destino.tipo_no === "enviar_imagem" || ehAntesDepois(conteudoNo(destino));
+  }
+  if (ehValores(opcao.titulo)) return ehValores(conteudoNo(destino));
+  if (ehFaq(opcao.titulo)) {
+    return Boolean(servicoOrigem && menusFaq.get(servicoOrigem)?.id === destino.id);
+  }
+  return true;
 }
 
 function garantirConfirmacoesAgenda(params: {
@@ -195,6 +238,7 @@ function garantirConfirmacoesAgenda(params: {
 export function repararGrafoAssistente(params: {
   nos: AssistenteAutomacaoNo[];
   conexoes: AssistenteAutomacaoConexao[];
+  estrito?: boolean;
 }): ResultadoReparoGrafoAssistente {
   let nos = params.nos.map(clonarNo);
   let conexoes = params.conexoes.map(clonarConexao);
@@ -273,8 +317,24 @@ export function repararGrafoAssistente(params: {
       const destinoAtual = atual
         ? nosPorId.get(atual.no_destino_id) || null
         : null;
-      let destino =
-        escolherDestinoSemantico({
+      const destinoOriginalSeguro = Boolean(
+        destinoAtual &&
+          destinoAtual.id !== pergunta.id &&
+          (params.estrito === false || !usadas.has(destinoAtual.id)) &&
+          (params.estrito === false ||
+            destinoOriginalCorresponde({
+              origem: pergunta,
+              destino: destinoAtual,
+              opcao,
+              mainMenu,
+              menusProcedimento,
+              menusFaq,
+            }))
+      );
+      const servicoOrigem = servicoDoNo(pergunta);
+      let destino = destinoOriginalSeguro
+        ? destinoAtual
+        : escolherDestinoSemantico({
           origem: pergunta,
           opcao,
           nos,
@@ -284,21 +344,26 @@ export function repararGrafoAssistente(params: {
           primeirosConteudos,
           menusFaq,
           ordemNos,
-        }) ||
-        (destinoAtual && destinoAtual.id !== pergunta.id
-          ? destinoAtual
-          : null);
+        });
 
-      if (!destino) {
-        destino = criarNoFallback(opcao);
-        nos.push(destino);
-        nosPorId.set(destino.id, destino);
-        avisos.push(
-          `Foi criado um bloco de apoio para a opção “${opcao.titulo}”.`
-        );
+      if (!destino && ehVoltarMenu(opcao.titulo)) {
+        destino =
+          (destinoAtual && destinoAtual.id !== pergunta.id
+            ? destinoAtual
+            : null) ||
+          (servicoOrigem
+            ? nos.find((no) => ehMenuProcedimento(no, servicoOrigem))
+            : null) || mainMenu;
       }
 
-      if (usadas.has(destino.id)) {
+      if (!destino) {
+        avisos.push(
+          `A opção “${opcao.titulo}” não possui um destino semanticamente seguro. O plano deve ser gerado novamente.`
+        );
+        continue;
+      }
+
+      if (params.estrito !== false && usadas.has(destino.id)) {
         destino = clonarDestinoParaOpcao({
           destino,
           opcao,
@@ -339,8 +404,8 @@ export function repararGrafoAssistente(params: {
     .map((conexao) => nosPorId.get(conexao.no_destino_id))
     .find((no) => no && no.id !== inicio.id);
   const destinoInicio =
-    destinoInicioExistente ||
     mainMenu ||
+    destinoInicioExistente ||
     nos.find((no) => no.id !== inicio.id && !ehTerminal(no)) ||
     nos.find((no) => no.id !== inicio.id);
 
@@ -434,73 +499,15 @@ export function repararGrafoAssistente(params: {
   }
 
   alcancaveis = idsAlcancaveis(nos, conexoes);
-  const restantes = nos
-    .filter((no) => !alcancaveis.has(no.id))
-    .sort((a, b) => Number(ehTerminal(a)) - Number(ehTerminal(b)));
-  const terminalAlcancavel = nos.some(
-    (no) => alcancaveis.has(no.id) && ehTerminal(no)
-  );
+  const restantes = nos.filter((no) => !alcancaveis.has(no.id));
   const terminaisRedundantes = new Set<string>();
 
   for (const no of restantes) {
-    if (ehTerminal(no) && terminalAlcancavel) {
+    if (ehTerminal(no) && nos.some(
+      (item) => item.id !== no.id && alcancaveis.has(item.id) && ehTerminal(item)
+    )) {
       terminaisRedundantes.add(no.id);
-      continue;
     }
-
-    const servico = servicoDoNo(no);
-    const alvo =
-      (servico && menusProcedimento.get(servico)) ||
-      mainMenu ||
-      terminal;
-    const ancoraClassificada = nos
-      .filter(
-        (item) =>
-          alcancaveis.has(item.id) &&
-          item.id !== inicio.id &&
-          !ehPergunta(item) &&
-          !ehTerminal(item) &&
-          item.id !== no.id &&
-          conexoes.some(
-            (conexao) =>
-              conexao.no_origem_id === item.id &&
-              conexao.condicao_json?.tipo === "sempre"
-          )
-      )
-      .map((item) => ({ item, pontos: pontuarAncora(no, item) }))
-      .sort((a, b) => b.pontos - a.pontos);
-    const ancora =
-      ancoraClassificada[0] && ancoraClassificada[0].pontos > 0
-        ? ancoraClassificada[0].item
-        : null;
-
-    if (!ancora) continue;
-
-    const saida = conexoes.find(
-      (conexao) =>
-        conexao.no_origem_id === ancora.id &&
-        conexao.condicao_json?.tipo === "sempre"
-    );
-    if (!saida) continue;
-
-    const destinoAnterior = saida.no_destino_id;
-    saida.no_destino_id = no.id;
-
-    if (
-      !ehPergunta(no) &&
-      !ehTerminal(no) &&
-      !conexoes.some((conexao) => conexao.no_origem_id === no.id)
-    ) {
-      conexoes.push(
-        criarConexaoSempre(
-          no.id,
-          alvo && alvo.id !== no.id ? alvo.id : destinoAnterior,
-          conexoes.length + 1
-        )
-      );
-    }
-
-    alcancaveis = idsAlcancaveis(nos, conexoes);
   }
 
   if (terminaisRedundantes.size > 0) {
@@ -519,15 +526,8 @@ export function repararGrafoAssistente(params: {
   );
 
   if (aindaInalcancaveis.length > 0) {
-    const remover = new Set(aindaInalcancaveis.map((no) => no.id));
-    nos = nos.filter((no) => !remover.has(no.id));
-    conexoes = conexoes.filter(
-      (conexao) =>
-        !remover.has(conexao.no_origem_id) &&
-        !remover.has(conexao.no_destino_id)
-    );
     avisos.push(
-      `${aindaInalcancaveis.length} bloco(s) sem relação segura com o pedido foram removido(s) somente após a reconstrução completa das rotas.`
+      `${aindaInalcancaveis.length} bloco(s) permaneceram inalcançáveis porque não havia relação segura para inseri-los. A validação deve bloquear o plano e solicitar nova geração.`
     );
   }
 

@@ -21,6 +21,7 @@ import {
   encontrarPorTipo,
   normalizar,
   opcoesNo,
+  respostaCorrespondeFaq,
   servicoDoNo,
   servicoDoTexto,
   type OpcaoNo,
@@ -151,7 +152,13 @@ export function escolherDestinoSemantico(params: {
   const origemFaq = ehMenuFaq(origem, servicoOrigem);
   const diretos: Array<AssistenteAutomacaoNo | null | undefined> = [];
 
-  if (ehVoltarMenu(opcao.titulo)) diretos.push(mainMenu);
+  if (ehVoltarMenu(opcao.titulo)) {
+    diretos.push(
+      origemFaq && servicoOrigem
+        ? menusProcedimento.get(servicoOrigem)
+        : mainMenu
+    );
+  }
   if (servicoOpcao) {
     diretos.push(
       primeirosConteudos.get(servicoOpcao),
@@ -224,8 +231,7 @@ export function escolherDestinoSemantico(params: {
       nos.find(
         (no) =>
           no.id !== origem.id &&
-          no.tipo_no === "enviar_texto" &&
-          ehFaq(conteudoNo(no)) &&
+          respostaCorrespondeFaq(opcao, no) &&
           (!servicoOrigem || servicoDoNo(no) === servicoOrigem) &&
           !usados.has(no.id)
       )
@@ -242,11 +248,15 @@ export function escolherDestinoSemantico(params: {
     const reutilizavel = nos.find(
       (no) =>
         no.id !== origem.id &&
-        no.tipo_no === "enviar_texto" &&
-        ehFaq(conteudoNo(no)) &&
+        respostaCorrespondeFaq(opcao, no) &&
         (!servicoOrigem || servicoDoNo(no) === servicoOrigem)
     );
     if (reutilizavel) return reutilizavel;
+
+    // Uma FAQ sem resposta semanticamente correspondente e insegura para
+    // reparo por similaridade. A validacao posterior deve bloquear o plano e
+    // solicitar nova geracao, em vez de trocar dor por duracao, por exemplo.
+    return null;
   }
 
   const alvo = normalizar(opcao.titulo);

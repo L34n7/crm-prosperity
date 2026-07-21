@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import {
+  getUsuarioContexto,
+  type UsuarioContexto,
+} from "@/lib/auth/get-usuario-contexto";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -93,7 +96,10 @@ function escoposIntegracaoConflitam(
 
 async function validarEscopoIntegracoesWhatsappFluxo(params: {
   empresaId: string;
-  usuario: any;
+  usuario: Pick<
+    UsuarioContexto,
+    "id" | "empresa_id" | "perfis_dinamicos" | "perfil_dinamico_principal"
+  >;
   configuracao: unknown;
 }) {
   const escopo = normalizarEscopoIntegracoesWhatsappFluxo(params.configuracao);
@@ -1629,13 +1635,13 @@ export async function PUT(req: NextRequest) {
     }
 
     const conexoesDuplicadas = (conexoesOriginais || [])
-      .map((conexao) => {
+      .flatMap((conexao) => {
         const novoOrigemId = mapaIds.get(conexao.no_origem_id);
         const novoDestinoId = mapaIds.get(conexao.no_destino_id);
 
-        if (!novoOrigemId || !novoDestinoId) return null;
+        if (!novoOrigemId || !novoDestinoId) return [];
 
-        return {
+        return [{
           id: crypto.randomUUID(),
           empresa_id: usuario.empresa_id,
           fluxo_id: novoFluxo.id,
@@ -1647,9 +1653,8 @@ export async function PUT(req: NextRequest) {
           ativo: true,
           usar_ia: conexao.usar_ia === true,
           descricao_ia: conexao.descricao_ia || null,
-        };
-      })
-      .filter(Boolean);
+        }];
+      });
 
     if (conexoesDuplicadas.length > 0) {
       const { error: inserirConexoesError } = await supabaseAdmin

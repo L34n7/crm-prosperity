@@ -906,7 +906,11 @@ Regras:
 - Duas opcoes da mesma pergunta nunca devem apontar para o mesmo destino. Crie uma etapa/ref propria para cada ramo e replique as etapas seguintes necessarias para manter os caminhos separados.
 - Nunca crie rota "sempre" saindo de pergunta_opcoes ou pergunta_botoes.
 - Conecte todas as etapas. Nenhuma etapa pode ficar orfa ou sem caminho a partir de inicio.
-- O inicio deve apontar para a primeira etapa real solicitada pelo usuario.
+- O inicio e apenas tecnico, sem mensagem ou opcoes. Ele deve apontar para Boas-vindas e depois para um unico Menu Principal canonico quando houver menu.
+- Todos os retornos ao Menu Principal devem apontar para o mesmo bloco, nunca para um procedimento especifico.
+- Em FAQs, associe cada pergunta a uma resposta de intencao exata. Uma resposta FAQ deve voltar ao mesmo menu FAQ ou ao menu do procedimento e nunca apontar automaticamente para outra resposta.
+- Nunca crie ciclo composto apenas por rotas "sempre".
+- Depois de agenda_criar_agendamento, confirme usando {{agenda_data}} e {{agenda_hora}} e nunca solicite novamente nome, telefone, dia ou horario.
 - Sempre que fizer sentido, inclua uma rota de encerramento ou transferencia.
 - Inclua a etapa transferir quando ela for solicitada. Use apenas um setor_id recebido no contexto como sugestao; a interface exigira a escolha do usuario antes de criar.
 - Frases como "o corretor vai assumir", "encaminhar para especialista" ou "falar com atendente" implicam uma etapa transferir depois da mensagem de handoff.

@@ -7,6 +7,7 @@ import {
   type AssistenteSetor,
   type AssistenteVariavel,
   type ModoAssistenteFluxos,
+  type PlanoAssistenteEtapa,
   type PlanoAssistenteFluxos,
   type ResultadoCompilacaoAssistente,
   type ValidacaoItemAssistente,
@@ -17,6 +18,15 @@ import {
   prepararPlanoBaseComAgenda,
 } from "./assistente-fluxos-agenda";
 import { repararGrafoAssistente } from "./assistente-fluxos-reparador-grafo";
+import {
+  conteudoNo,
+  ehFaq,
+  ehMenuFaq,
+  normalizar,
+  normalizarId,
+  opcoesNo,
+  respostaCorrespondeFaq,
+} from "./assistente-fluxos-reparador-semantica";
 
 export * from "./assistente-fluxos-base";
 export { normalizarPlanoAssistenteComAgenda as normalizarPlanoAssistente };
@@ -53,6 +63,184 @@ function validarRotasSempre(params: {
     });
   }
 
+  return erros;
+}
+
+function separarInicioComConteudo(plano: PlanoAssistenteFluxos) {
+  const copia = structuredClone(plano);
+  const inicio = copia.etapas.find((etapa) => etapa.tipo === "inicio");
+  if (!inicio) return copia;
+
+  const temMensagem = Boolean(texto(inicio.mensagem, 1800));
+  const temOpcoes = inicio.opcoes.length > 0;
+  inicio.titulo = "Início";
+  if (!temMensagem && !temOpcoes) return copia;
+
+  const refs = new Set(copia.etapas.map((etapa) => etapa.ref));
+  let ref = "abertura";
+  let indice = 2;
+  while (refs.has(ref)) ref = `abertura_${indice++}`;
+
+  const abertura: PlanoAssistenteEtapa = {
+    ...inicio,
+    ref,
+    tipo: temOpcoes
+      ? inicio.opcoes.length > 3
+        ? "pergunta_opcoes"
+        : "pergunta_botoes"
+      : "mensagem",
+    titulo: temOpcoes ? "Menu Principal" : "Boas-vindas",
+  };
+  inicio.mensagem = null;
+  inicio.opcoes = [];
+
+  copia.etapas.splice(copia.etapas.indexOf(inicio) + 1, 0, abertura);
+  copia.rotas = copia.rotas
+    .filter(
+      (rota) =>
+        rota.origem !== inicio.ref ||
+        normalizar(rota.condicao) !== "sempre" ||
+        !temOpcoes
+    )
+    .map((rota) =>
+      rota.origem === inicio.ref ? { ...rota, origem: abertura.ref } : rota
+    );
+  copia.rotas.unshift({
+    origem: inicio.ref,
+    destino: abertura.ref,
+    condicao: "sempre",
+    valor: null,
+    rotulo: "Sempre seguir",
+    descricao_ia: null,
+    timeout_segundos: null,
+  });
+  copia.avisos = [
+    ...copia.avisos,
+    "O conteúdo retornado dentro do início foi separado em um bloco real de abertura.",
+  ];
+  return copia;
+}
+
+function validarCiclosAutomaticos(params: {
+  nos: AssistenteAutomacaoNo[];
+  conexoes: AssistenteAutomacaoConexao[];
+}) {
+  const adjacencias = new Map<string, string[]>();
+  for (const no of params.nos) adjacencias.set(no.id, []);
+  for (const conexao of params.conexoes) {
+    if (conexao.condicao_json?.tipo !== "sempre") continue;
+    adjacencias.get(conexao.no_origem_id)?.push(conexao.no_destino_id);
+  }
+
+  const estado = new Map<string, 0 | 1 | 2>();
+  const pilha: string[] = [];
+  let ciclo: string[] | null = null;
+
+  const visitar = (id: string): boolean => {
+    estado.set(id, 1);
+    pilha.push(id);
+    for (const destino of adjacencias.get(id) || []) {
+      if (estado.get(destino) === 1) {
+        ciclo = pilha.slice(Math.max(0, pilha.indexOf(destino)));
+        return true;
+      }
+      if (!estado.get(destino) && visitar(destino)) return true;
+    }
+    pilha.pop();
+    estado.set(id, 2);
+    return false;
+  };
+
+  for (const no of params.nos) {
+    if (!estado.get(no.id) && visitar(no.id)) break;
+  }
+  if (!ciclo) return [];
+
+  const porId = new Map(params.nos.map((no) => [no.id, no]));
+  const titulos = (ciclo as string[])
+    .map((id) => porId.get(id)?.titulo || id)
+    .join(" → ");
+  return [
+    {
+      codigo: "CICLO_AUTOMATICO",
+      mensagem: `O fluxo possui um ciclo composto apenas por conexões “Sempre seguir”: ${titulos}.`,
+      no_id: (ciclo as string[])[0],
+    } satisfies ValidacaoItemAssistente,
+  ];
+}
+
+function validarCoerenciaSemantica(params: {
+  nos: AssistenteAutomacaoNo[];
+  conexoes: AssistenteAutomacaoConexao[];
+}) {
+  const erros: ValidacaoItemAssistente[] = [];
+  const porId = new Map(params.nos.map((no) => [no.id, no]));
+
+  for (const conexao of params.conexoes) {
+    if (conexao.condicao_json?.tipo !== "sempre") continue;
+    const origem = porId.get(conexao.no_origem_id);
+    const destino = porId.get(conexao.no_destino_id);
+    if (!origem || !destino) continue;
+
+    const origemRespostaFaq =
+      origem.tipo_no === "enviar_texto" &&
+      /\b(duvida|faq|resposta)\b/.test(normalizar(origem.titulo));
+    const destinoRespostaFaq =
+      destino.tipo_no === "enviar_texto" &&
+      /\b(duvida|faq|resposta)\b/.test(normalizar(destino.titulo));
+    if (origemRespostaFaq && destinoRespostaFaq) {
+      erros.push({
+        codigo: "FAQ_RESPOSTAS_ENCADEADAS",
+        mensagem: `A resposta de FAQ “${origem.titulo}” não pode enviar automaticamente outra resposta de FAQ.`,
+        no_id: origem.id,
+        conexao_id: conexao.id,
+      });
+    }
+
+    if (
+      origem.tipo_no === "agenda_criar_agendamento" &&
+      destino.tipo_no === "enviar_texto" &&
+      /\b(nome completo|telefone|melhor dia|melhor horario|envie.*dia|informe.*horario)\b/.test(
+        normalizar(conteudoNo(destino))
+      )
+    ) {
+      erros.push({
+        codigo: "AGENDA_COLETA_DUPLICADA",
+        mensagem: `O bloco “${destino.titulo}” solicita novamente dados depois que o agendamento já foi criado.`,
+        no_id: destino.id,
+        conexao_id: conexao.id,
+      });
+    }
+  }
+
+  for (const menu of params.nos.filter((no) => ehMenuFaq(no, null))) {
+    const saidas = params.conexoes.filter(
+      (conexao) =>
+        conexao.no_origem_id === menu.id &&
+        conexao.condicao_json?.tipo !== "timeout_sem_resposta"
+    );
+    for (const saida of saidas) {
+      const destino = porId.get(saida.no_destino_id);
+      if (!destino || /\b(voltar|menu)\b/.test(normalizar(saida.rotulo))) continue;
+      const opcao = opcoesNo(menu).find(
+        (item) =>
+          item.id === normalizarId(saida.condicao_json?.valor || saida.rotulo)
+      );
+      if (
+        !opcao ||
+        destino.tipo_no !== "enviar_texto" ||
+        !ehFaq(conteudoNo(destino)) ||
+        !respostaCorrespondeFaq(opcao, destino)
+      ) {
+        erros.push({
+          codigo: "FAQ_DESTINO_INCOMPATIVEL",
+          mensagem: `A opção “${saida.rotulo || "FAQ"}” de “${menu.titulo}” não aponta para uma resposta de FAQ compatível.`,
+          no_id: menu.id,
+          conexao_id: saida.id,
+        });
+      }
+    }
+  }
   return erros;
 }
 
@@ -227,7 +415,8 @@ export function compilarPlanoAssistente(params: {
   variaveis?: AssistenteVariavel[];
   midias?: AssistenteMidia[];
 }): ResultadoCompilacaoAssistente {
-  const preparado = prepararPlanoBaseComAgenda(params.plano);
+  const planoComInicioSeparado = separarInicioComConteudo(params.plano);
+  const preparado = prepararPlanoBaseComAgenda(planoComInicioSeparado);
   const compilacao = compilarPlanoAssistenteBase({
     ...params,
     plano: preparado.plano,
@@ -239,6 +428,7 @@ export function compilarPlanoAssistente(params: {
   const grafo = repararGrafoAssistente({
     nos: nosComAgenda,
     conexoes: compilacao.conexoes,
+    estrito: params.modo === "criar_fluxo",
   });
   const nosOrganizados =
     params.modo === "criar_fluxo"
@@ -256,6 +446,14 @@ export function compilarPlanoAssistente(params: {
     midias: params.midias || [],
   });
   const errosSempre = validarRotasSempre(grafoOrganizado);
+  const errosOriginaisBloqueantes = compilacao.validacao.erros.filter((erro) =>
+    [
+      "OPCAO_COM_ROTAS_DUPLICADAS",
+      "PERGUNTA_COM_ROTA_INCONDICIONAL",
+    ].includes(erro.codigo)
+  );
+  const errosCicloAutomatico = validarCiclosAutomaticos(grafoOrganizado);
+  const errosSemanticos = validarCoerenciaSemantica(grafoOrganizado);
   const avisosReparo = grafoOrganizado.avisos.map(
     (mensagem, indice): ValidacaoItemAssistente => ({
       codigo: `REPARO_GRAFO_${indice + 1}`,
@@ -263,8 +461,20 @@ export function compilarPlanoAssistente(params: {
     })
   );
   const validacao = {
-    valido: validacaoBase.erros.length + errosSempre.length === 0,
-    erros: [...validacaoBase.erros, ...errosSempre],
+    valido:
+      validacaoBase.erros.length +
+        errosOriginaisBloqueantes.length +
+        errosSempre.length +
+        errosCicloAutomatico.length +
+        errosSemanticos.length ===
+      0,
+    erros: [
+      ...validacaoBase.erros,
+      ...errosOriginaisBloqueantes,
+      ...errosSempre,
+      ...errosCicloAutomatico,
+      ...errosSemanticos,
+    ],
     avisos: [
       ...validacaoBase.avisos,
       ...avisosAgenda(grafoOrganizado.nos),

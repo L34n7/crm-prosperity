@@ -30,15 +30,20 @@ Regras obrigatorias de qualidade e compatibilidade:
 - Quando um menu tiver de 4 a 10 opcoes, use pergunta_opcoes. pergunta_botoes aceita no maximo 3 botoes.
 - Se o usuario exigir botoes em um menu com mais de 3 itens, divida em submenus de ate 3 botoes, sem omitir nenhum caminho.
 - Cada opcao deve possuir exatamente uma rota propria.
+- O bloco inicio e apenas tecnico: nao coloque mensagem nem opcoes nele. Crie Boas-vindas e um Menu Principal reais depois do inicio.
+- Crie um unico Menu Principal canonico com titulo "Menu Principal" e mensagem de abertura. Todos os retornos "Menu Principal" devem apontar para ele.
 - Qualquer bloco que nao seja pergunta pode possuir no maximo uma conexao com condicao "sempre". Nunca crie duas rotas "sempre" saindo do mesmo bloco.
 - Quando o pedido mencionar fotos, imagens, galeria ou "antes e depois", crie bloco midia_imagem. A interface confirmara qual imagem da biblioteca sera utilizada.
 - Tipos de agenda disponiveis: agenda_escolher_horario, agenda_criar_agendamento, agenda_buscar_agendamento, agenda_remarcar_agendamento e agenda_cancelar_agendamento.
-- Quando o pedido mencionar agendar, marcar horario ou avaliacao, use agenda_escolher_horario seguido de agenda_criar_agendamento. Use somente agenda_id recebido em recursos.agendas.
+- Quando o pedido mencionar agendar, marcar horario ou avaliacao, use agenda_escolher_horario, uma confirmacao Sim/Escolher outro e somente depois agenda_criar_agendamento. Use somente agenda_id recebido em recursos.agendas.
+- Depois de agenda_criar_agendamento, confirme com {{agenda_data}} e {{agenda_hora}}. Nunca solicite novamente nome, telefone, dia ou horario.
 - Se houver mais de uma agenda ativa e o pedido nao indicar qual usar, crie uma clarificacao curta para o usuario escolher a agenda.
 - Para localizacao, crie uma mensagem com o endereco e depois uma pergunta_botoes com ate 3 opcoes, incluindo abrir localizacao, agendar e voltar ao menu. Use redirect para abrir o mapa.
 - Solicitar especialista, atendente ou atendimento humano exige uma etapa transferir.
 - Quando o usuario pedir explicacao, beneficios, indicacoes, cuidados, duracao, recuperacao e resultados, distribua o conteudo em pelo menos 3 blocos de mensagem por procedimento antes do menu de navegacao.
-- Duvidas frequentes devem ser navegaveis por pergunta_opcoes ou pergunta_botoes, com respostas curtas em blocos separados.
+- Duvidas frequentes devem ser navegaveis por pergunta_opcoes ou pergunta_botoes, com respostas curtas em blocos separados. Cada pergunta deve apontar para a resposta de intencao exata; dor nao pode apontar para duracao. Cada resposta volta ao mesmo menu FAQ ou ao menu do procedimento e nunca envia automaticamente outra resposta.
+- Nunca crie ciclo composto somente por rotas "sempre".
+- Inclua ao menos um encerramento alcancavel e ofereca encerrar nos pontos finais relevantes.
 - Seja conciso em cada mensagem, mas complete toda a arvore solicitada.
 `.trim();
 

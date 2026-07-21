@@ -546,7 +546,11 @@ test("adicionar etapa substitui rotas antigas do bloco alterado", () => {
     (conexao) => conexao.no_origem_id === "renda-atual"
   );
 
-  assert.equal(resultado.validacao.valido, true);
+  assert.equal(
+    resultado.validacao.valido,
+    true,
+    JSON.stringify(resultado.validacao.erros)
+  );
   assert.equal(saidasRenda.length, 3);
   assert.deepEqual(
     saidasRenda.map((conexao) => conexao.condicao_json.valor).sort(),
@@ -836,7 +840,11 @@ test("assistente corrige captura de nome e reutiliza a variavel no fluxo", () =>
     resultado.variaveis_sugeridas.some((item) => item.chave === "nome"),
     false
   );
-  assert.equal(resultado.validacao.valido, true);
+  assert.equal(
+    resultado.validacao.valido,
+    true,
+    JSON.stringify(resultado.validacao.erros)
+  );
 });
 
 test("assistente completa a rota ausente de cada opcao de botoes", () => {
@@ -968,8 +976,20 @@ test("assistente normaliza titulos de botoes e sincroniza rotulos das conexoes",
           { id: "localizacao", texto: "🗺️ Abrir Localização" },
         ],
       },
-      { ref: "fim_a", tipo: "encerrar", titulo: "Fim A", opcoes: [] },
-      { ref: "fim_b", tipo: "encerrar", titulo: "Fim B", opcoes: [] },
+      {
+        ref: "fim_a",
+        tipo: "transferir",
+        titulo: "Falar com especialista",
+        setor_id: "setor-atendimento",
+        opcoes: [],
+      },
+      {
+        ref: "fim_b",
+        tipo: "redirect",
+        titulo: "Abrir Localização",
+        url: "https://maps.example.com",
+        opcoes: [],
+      },
     ],
     rotas: [
       { origem: "inicio", destino: "menu", condicao: "sempre" },
@@ -993,20 +1013,247 @@ test("assistente normaliza titulos de botoes e sincroniza rotulos das conexoes",
     avisos: [],
   });
 
-  const resultado = compilarPlanoAssistente({ modo: "criar_fluxo", plano });
+  const resultado = compilarPlanoAssistente({
+    modo: "criar_fluxo",
+    plano,
+    setores: [{ id: "setor-atendimento", nome: "Atendimento" }],
+  });
   const menu = resultado.nos.find((no) => no.titulo === "Dúvidas Frequentes");
-  const botoes = menu?.configuracao_json.botoes || [];
+  const botoes = (menu?.configuracao_json.botoes || []) as Array<{
+    id: string;
+    titulo: string;
+  }>;
   const rotulos = resultado.conexoes
     .filter((conexao) => conexao.no_origem_id === menu?.id)
     .map((conexao) => conexao.rotulo);
 
   assert.deepEqual(
     botoes.map((botao) => botao.titulo),
-    ["Falar especialista", "Abrir Localização"]
+    ["Falar especialista", "Abrir Localização"],
+    JSON.stringify(
+      resultado.nos.map((no) => ({
+        titulo: no.titulo,
+        tipo: no.tipo_no,
+        configuracao: no.configuracao_json,
+      }))
+    )
   );
   assert.deepEqual(rotulos, ["Falar especialista", "Abrir Localização"]);
   assert.equal(botoes.every((botao) => botao.titulo.length <= 20), true);
   assert.equal(resultado.validacao.valido, true);
+});
+
+test("separa mensagem e opcoes colocadas indevidamente no inicio", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Abertura no início",
+    etapas: [
+      {
+        ref: "inicio",
+        tipo: "inicio",
+        titulo: "Menu Principal",
+        mensagem: "Bem-vindo. Como podemos ajudar?",
+        opcoes: [
+          { id: "informacoes", texto: "Informações" },
+          { id: "encerrar", texto: "Encerrar" },
+        ],
+      },
+      { ref: "info", tipo: "encerrar", titulo: "Informações", opcoes: [] },
+      { ref: "fim", tipo: "encerrar", titulo: "Encerrar", opcoes: [] },
+    ],
+    rotas: [
+      {
+        origem: "inicio",
+        destino: "info",
+        condicao: "resposta_contem",
+        valor: "informacoes",
+      },
+      {
+        origem: "inicio",
+        destino: "fim",
+        condicao: "resposta_contem",
+        valor: "encerrar",
+      },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({ modo: "criar_fluxo", plano });
+  const inicio = resultado.nos.find((no) => no.tipo_no === "inicio");
+  const menu = resultado.nos.find((no) => no.titulo === "Menu Principal");
+
+  assert.ok(inicio && menu);
+  assert.deepEqual(inicio.configuracao_json, {});
+  assert.equal(menu.tipo_no, "enviar_botoes");
+  assert.ok(
+    resultado.conexoes.some(
+      (conexao) =>
+        conexao.no_origem_id === inicio.id &&
+        conexao.no_destino_id === menu.id &&
+        conexao.condicao_json.tipo === "sempre"
+    )
+  );
+  assert.equal(resultado.validacao.valido, true);
+});
+
+test("prioriza Menu Principal explícito e não usa Antes e Depois como entrada", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Menu canônico",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      { ref: "harm", tipo: "mensagem", titulo: "Harmonização", mensagem: "Conteúdo", opcoes: [] },
+      {
+        ref: "resultados",
+        tipo: "pergunta_opcoes",
+        titulo: "Antes e Depois",
+        mensagem: "Escolha um resultado",
+        opcoes: [
+          { id: "harmonizacao", texto: "Harmonização" },
+          { id: "melasma", texto: "Melasma" },
+          { id: "botox", texto: "Botox" },
+          { id: "voltar", texto: "Voltar" },
+        ],
+      },
+      {
+        ref: "menu",
+        tipo: "pergunta_opcoes",
+        titulo: "Menu Principal",
+        mensagem: "Como podemos ajudar?",
+        opcoes: [
+          { id: "harmonizacao", texto: "Harmonização" },
+          { id: "encerrar", texto: "Encerrar" },
+        ],
+      },
+      { ref: "fim", tipo: "encerrar", titulo: "Encerrar", opcoes: [] },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "harm", condicao: "sempre" },
+      { origem: "menu", destino: "harm", condicao: "resposta_contem", valor: "harmonizacao" },
+      { origem: "menu", destino: "fim", condicao: "resposta_contem", valor: "encerrar" },
+      { origem: "resultados", destino: "harm", condicao: "resposta_contem", valor: "harmonizacao" },
+      { origem: "resultados", destino: "harm", condicao: "resposta_contem", valor: "melasma" },
+      { origem: "resultados", destino: "harm", condicao: "resposta_contem", valor: "botox" },
+      { origem: "resultados", destino: "menu", condicao: "resposta_contem", valor: "voltar" },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({ modo: "criar_fluxo", plano });
+  const inicio = resultado.nos.find((no) => no.tipo_no === "inicio");
+  const menu = resultado.nos.find((no) => no.titulo === "Menu Principal");
+  const saidaInicio = resultado.conexoes.find(
+    (conexao) => conexao.no_origem_id === inicio?.id
+  );
+
+  assert.equal(saidaInicio?.no_destino_id, menu?.id);
+});
+
+test("corrige FAQ por intenção exata e não cruza dor com duração", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "FAQ semântica",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      {
+        ref: "menu",
+        tipo: "pergunta_botoes",
+        titulo: "Menu Principal",
+        mensagem: "Como podemos ajudar?",
+        opcoes: [
+          { id: "botox", texto: "Botox" },
+          { id: "encerrar", texto: "Encerrar" },
+        ],
+      },
+      {
+        ref: "menu_botox",
+        tipo: "pergunta_botoes",
+        titulo: "Menu Botox",
+        mensagem: "Escolha uma opção",
+        opcoes: [
+          { id: "duvidas", texto: "Dúvidas" },
+          { id: "voltar_menu", texto: "Menu Principal" },
+        ],
+      },
+      {
+        ref: "faq_botox",
+        tipo: "pergunta_opcoes",
+        titulo: "Dúvidas Frequentes - Botox",
+        mensagem: "Escolha uma dúvida",
+        opcoes: [
+          { id: "doi", texto: "Dói?" },
+          { id: "duracao", texto: "Quanto tempo dura?" },
+          { id: "voltar", texto: "Voltar" },
+        ],
+      },
+      { ref: "dor", tipo: "mensagem", titulo: "Resposta FAQ Botox - dor", mensagem: "A sensibilidade é leve e usamos medidas de conforto.", opcoes: [] },
+      { ref: "duracao", tipo: "mensagem", titulo: "Resposta FAQ Botox - duração", mensagem: "A duração do efeito varia conforme o organismo.", opcoes: [] },
+      { ref: "fim", tipo: "encerrar", titulo: "Encerrar", opcoes: [] },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "menu", condicao: "sempre" },
+      { origem: "menu", destino: "menu_botox", condicao: "resposta_contem", valor: "botox" },
+      { origem: "menu", destino: "fim", condicao: "resposta_contem", valor: "encerrar" },
+      { origem: "menu_botox", destino: "faq_botox", condicao: "resposta_contem", valor: "duvidas" },
+      { origem: "menu_botox", destino: "menu", condicao: "resposta_contem", valor: "voltar_menu" },
+      { origem: "faq_botox", destino: "duracao", condicao: "resposta_contem", valor: "doi" },
+      { origem: "faq_botox", destino: "dor", condicao: "resposta_contem", valor: "duracao" },
+      { origem: "faq_botox", destino: "menu_botox", condicao: "resposta_contem", valor: "voltar" },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({ modo: "criar_fluxo", plano });
+  const faq = resultado.nos.find((no) => no.titulo === "Dúvidas Frequentes - Botox");
+  const dor = resultado.nos.find((no) => no.titulo === "Resposta FAQ Botox - dor");
+  const duracao = resultado.nos.find((no) => no.titulo === "Resposta FAQ Botox - duração");
+  const saidas = resultado.conexoes.filter(
+    (conexao) => conexao.no_origem_id === faq?.id
+  );
+
+  assert.equal(
+    saidas.find((conexao) => conexao.condicao_json.valor === "doi")?.no_destino_id,
+    dor?.id
+  );
+  assert.equal(
+    saidas.find((conexao) => conexao.condicao_json.valor === "duracao")?.no_destino_id,
+    duracao?.id
+  );
+  assert.equal(
+    resultado.validacao.valido,
+    true,
+    JSON.stringify(resultado.validacao.erros)
+  );
+});
+
+test("bloqueia ciclo composto somente por Sempre seguir", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Loop automático",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      { ref: "a", tipo: "mensagem", titulo: "A", mensagem: "A", opcoes: [] },
+      { ref: "b", tipo: "mensagem", titulo: "B", mensagem: "B", opcoes: [] },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "a", condicao: "sempre" },
+      { origem: "a", destino: "b", condicao: "sempre" },
+      { origem: "b", destino: "a", condicao: "sempre" },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({ modo: "criar_fluxo", plano });
+  assert.ok(
+    resultado.validacao.erros.some(
+      (erro) => erro.codigo === "CICLO_AUTOMATICO"
+    )
+  );
+  assert.equal(resultado.validacao.valido, false);
 });
 
 test("assistente confirma o horario antes de criar o agendamento", () => {

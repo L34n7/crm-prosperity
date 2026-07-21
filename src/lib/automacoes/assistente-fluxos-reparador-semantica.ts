@@ -5,6 +5,13 @@ import type {
 
 export type OpcaoNo = { id: string; titulo: string };
 export type Servico = "harmonizacao" | "melasma" | "botox";
+export type IntencaoFaq =
+  | "dor"
+  | "duracao"
+  | "resultado"
+  | "recorrencia"
+  | "naturalidade"
+  | "sessoes";
 
 const TIPOS_PERGUNTA = new Set(["pergunta_opcoes", "enviar_botoes"]);
 const TIPOS_TERMINAIS = new Set(["encerrar", "transferir_setor"]);
@@ -133,13 +140,58 @@ export const ehEspecialista = (v: unknown) =>
 
 export function ehMenuPrincipal(no: AssistenteAutomacaoNo) {
   if (!ehPergunta(no)) return false;
-  if (/\b(menu principal|como podemos ajudar|selecione uma opcao)\b/.test(conteudoNo(no))) {
+  const conteudo = conteudoNo(no);
+  const titulo = normalizar(no.titulo);
+
+  if (/\b(antes e depois|valores?|duvidas?|faq|frequentes?)\b/.test(titulo)) {
+    return false;
+  }
+
+  if (/\b(menu principal|como podemos ajudar)\b/.test(conteudo)) {
     return true;
   }
+
   const servicos = new Set(
     opcoesNo(no).map((opcao) => servicoDoTexto(opcao.titulo)).filter(Boolean)
   );
-  return servicos.size >= 2;
+  const opcoes = opcoesNo(no);
+  const navegacoes = [
+    opcoes.some((opcao) => ehAntesDepois(opcao.titulo)),
+    opcoes.some((opcao) => ehValores(opcao.titulo)),
+    opcoes.some((opcao) => ehAgendamento(opcao.titulo)),
+    opcoes.some((opcao) => ehLocalizacao(opcao.titulo)),
+    opcoes.some((opcao) => ehEspecialista(opcao.titulo)),
+  ].filter(Boolean).length;
+
+  return servicos.size >= 2 && opcoes.length >= 6 && navegacoes >= 3;
+}
+
+export function intencaoFaq(valor: unknown): IntencaoFaq | null {
+  const alvo = normalizar(valor);
+  if (/\b(doi|dor|dolor|sensibilidade|desconforto)\b/.test(alvo)) return "dor";
+  if (/\b(quanto tempo dura|duracao|durar|efeito dura)\b/.test(alvo)) {
+    return "duracao";
+  }
+  if (/\b(quando vejo|em quanto tempo|resultado|resultados|efeito aparece)\b/.test(alvo)) {
+    return "resultado";
+  }
+  if (/\b(volta|retorna|reaparece|recorrencia|manutencao)\b/.test(alvo)) {
+    return "recorrencia";
+  }
+  if (/\b(natural|naturalidade|artificial)\b/.test(alvo)) return "naturalidade";
+  if (/\b(quantas sessoes|numero de sessoes|sessoes necessarias)\b/.test(alvo)) {
+    return "sessoes";
+  }
+  return null;
+}
+
+export function respostaCorrespondeFaq(
+  opcao: OpcaoNo,
+  destino: AssistenteAutomacaoNo
+) {
+  const esperada = intencaoFaq(`${opcao.id} ${opcao.titulo}`);
+  if (!esperada || destino.tipo_no !== "enviar_texto") return false;
+  return intencaoFaq(conteudoNo(destino)) === esperada;
 }
 
 export function ehMenuProcedimento(
@@ -165,12 +217,20 @@ export function ehMenuFaq(
 ) {
   if (!ehPergunta(no)) return false;
   if (servico && servicoDoNo(no) !== servico) return false;
-  const conteudo = [
-    conteudoNo(no),
-    ...opcoesNo(no).map((opcao) => normalizar(opcao.titulo)),
-  ].join(" ");
-  return /\b(duvida|faq|frequente|doi|quanto tempo|duracao|sessoes)\b/.test(
-    conteudo
+  const identificacao = normalizar(
+    `${no.titulo} ${no.configuracao_json?.mensagem || ""}`
+  );
+  const intencoes = new Set(
+    opcoesNo(no)
+      .map((opcao) => intencaoFaq(`${opcao.id} ${opcao.titulo}`))
+      .filter(Boolean)
+  );
+  return (
+    intencoes.size >= 2 ||
+    (intencoes.size >= 1 &&
+      /\b(duvidas? frequentes?|menu faq|escolha uma duvida)\b/.test(
+        identificacao
+      ))
   );
 }
 
@@ -208,19 +268,30 @@ export function melhorMenuPrincipal(nos: AssistenteAutomacaoNo[]) {
   const candidatas = nos
     .filter(ehPergunta)
     .map((no) => {
+      const conteudo = conteudoNo(no);
+      const titulo = normalizar(no.titulo);
       const servicos = new Set(
         opcoesNo(no).map((opcao) => servicoDoTexto(opcao.titulo)).filter(Boolean)
       );
+      const explicitamentePrincipal = /\bmenu principal\b/.test(titulo);
+      const mensagemPrincipal = /\bcomo podemos ajudar\b/.test(conteudo);
+      const contextoProibido =
+        /\b(antes e depois|valores?|duvidas?|faq|frequentes?)\b/.test(titulo);
       return {
         no,
         pontos:
+          (explicitamentePrincipal ? 1000 : 0) +
+          (mensagemPrincipal ? 500 : 0) +
           (ehMenuPrincipal(no) ? 100 : 0) +
-          servicos.size * 20 +
+          (contextoProibido ? -2000 : 0) +
+          servicos.size * 30 +
           opcoesNo(no).length,
       };
     })
     .sort((a, b) => b.pontos - a.pontos);
-  return candidatas[0]?.pontos ? candidatas[0].no : null;
+  return candidatas[0]?.pontos && candidatas[0].pontos >= 100
+    ? candidatas[0].no
+    : null;
 }
 
 export function encontrarPorTipo(
