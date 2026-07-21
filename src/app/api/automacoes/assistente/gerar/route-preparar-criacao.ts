@@ -54,6 +54,72 @@ function removerRotasIncondicionaisDePerguntas(
   );
 }
 
+function removerRotasDuplicadasDeOpcoes(plano: PlanoAssistenteFluxos) {
+  const perguntasPorRef = new Map(
+    plano.etapas
+      .filter((etapa) => ["pergunta_opcoes", "pergunta_botoes"].includes(etapa.tipo))
+      .map((etapa) => [etapa.ref, etapa] as const)
+  );
+  const vistos = new Set<string>();
+  const removidas: PlanoAssistenteRota[] = [];
+  const rotas = plano.rotas.filter((rota) => {
+    const pergunta = perguntasPorRef.get(rota.origem);
+    if (!pergunta) return true;
+
+    const condicao = normalizar(rota.condicao);
+    if (["timeout", "timeout_sem_resposta"].includes(condicao)) {
+      const chaveTimeout = `${rota.origem}:timeout`;
+      if (vistos.has(chaveTimeout)) {
+        removidas.push(rota);
+        return false;
+      }
+      vistos.add(chaveTimeout);
+      return true;
+    }
+
+    const valor = normalizar(rota.valor || rota.rotulo);
+    if (!valor) return true;
+
+    const opcaoExiste = pergunta.opcoes.some(
+      (opcao) => normalizar(opcao.id || opcao.texto) === valor
+    );
+    if (!opcaoExiste) return true;
+
+    const chave = `${rota.origem}:opcao:${valor}`;
+    if (vistos.has(chave)) {
+      removidas.push(rota);
+      return false;
+    }
+
+    vistos.add(chave);
+    return true;
+  });
+
+  if (removidas.length > 0) {
+    console.warn("[assistente-fluxos] removendo rotas duplicadas de opcoes", {
+      total: removidas.length,
+      rotas: removidas.slice(0, 20).map((rota) => ({
+        origem: rota.origem,
+        destino: rota.destino,
+        valor: rota.valor,
+      })),
+    });
+  }
+
+  return {
+    ...plano,
+    rotas,
+    avisos: [
+      ...plano.avisos,
+      ...(removidas.length > 0
+        ? [
+            `${removidas.length} rota(s) duplicada(s) de opcoes foram removidas automaticamente antes da criacao.`,
+          ]
+        : []),
+    ],
+  };
+}
+
 function refsAlcancaveis(plano: PlanoAssistenteFluxos) {
   const inicio = plano.etapas.find((etapa) => etapa.tipo === "inicio");
   const alcancaveis = new Set<string>();
@@ -205,7 +271,9 @@ export function repararPlanoAntesDaCriacao(valor: unknown) {
     rotas: removerRotasIncondicionaisDePerguntas(plano.etapas, plano.rotas),
   };
 
+  plano = removerRotasDuplicadasDeOpcoes(plano);
   plano = completarRotasDeOpcoesPlano(plano);
+  plano = removerRotasDuplicadasDeOpcoes(plano);
   plano = {
     ...plano,
     rotas: removerRotasIncondicionaisDePerguntas(plano.etapas, plano.rotas),
@@ -213,7 +281,9 @@ export function repararPlanoAntesDaCriacao(valor: unknown) {
   plano = conectarOrfasLineares(plano);
   plano = conectarEncerramento(plano);
   plano = completarRotasDeOpcoesPlano(plano);
+  plano = removerRotasDuplicadasDeOpcoes(plano);
   plano = removerEtapasInalcancaveis(plano);
+  plano = removerRotasDuplicadasDeOpcoes(plano);
 
   return {
     ...plano,
