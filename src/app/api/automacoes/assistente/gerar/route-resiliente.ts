@@ -8,6 +8,7 @@ import {
 } from "./route-contexto-ia";
 import {
   extrairTextoSaida,
+  repararRespostaPlano,
   somarUsoRespostas,
   substituirTextoSaida,
   validarQualidadePlano,
@@ -86,10 +87,9 @@ function instalarSdkResiliente() {
       repetir: false,
       contexto,
     });
-    const primeiraResposta = await criarOriginal.call(
-      this,
-      primeiroPayload,
-      options
+    const primeiraResposta = repararRespostaPlano(
+      await criarOriginal.call(this, primeiroPayload, options),
+      contexto
     );
     const primeiraValidacao = validarQualidadePlano(
       primeiraResposta,
@@ -118,9 +118,9 @@ function instalarSdkResiliente() {
       segundoPayload,
       options
     );
-    const respostaComUso = somarUsoRespostas(
-      primeiraResposta,
-      segundaResposta
+    const respostaComUso = repararRespostaPlano(
+      somarUsoRespostas(primeiraResposta, segundaResposta),
+      contexto
     );
     const segundaValidacao = validarQualidadePlano(
       respostaComUso,
