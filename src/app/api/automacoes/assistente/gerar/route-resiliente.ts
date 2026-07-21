@@ -6,6 +6,7 @@ import {
   prepararPayloadAssistente,
   type ContextoAssistenteFluxos,
 } from "./route-contexto-ia";
+import { completarRespostaPlano } from "./route-completar-estrutura";
 import {
   extrairTextoSaida,
   repararRespostaPlano,
@@ -25,16 +26,10 @@ type CriarResposta = (
   body: Record<string, unknown>,
   options?: unknown
 ) => Promise<RespostaOpenAI>;
-
-type PrototipoResponses = {
-  create: CriarResposta;
-};
-
+type PrototipoResponses = { create: CriarResposta };
 type ObjetoJson = Record<string, unknown>;
 
-const contextoAssistenteFluxos =
-  new AsyncLocalStorage<ContextoAssistenteFluxos>();
-
+const contextoAssistenteFluxos = new AsyncLocalStorage<ContextoAssistenteFluxos>();
 let sdkResilienteInstalado = false;
 let moduloOriginalPromise: Promise<typeof import("./route-original")> | null = null;
 
@@ -42,12 +37,9 @@ const LIMITE_SAIDA_ASSISTENTE = (() => {
   const configurado = Number(
     process.env.OPENAI_ASSISTENTE_FLUXOS_MAX_OUTPUT_TOKENS || 16000
   );
-
   if (!Number.isFinite(configurado)) return 16000;
-
   return Math.max(6000, Math.min(24000, Math.floor(configurado)));
 })();
-
 const LIMITE_SAIDA_REPETICAO = Math.min(
   24000,
   Math.max(LIMITE_SAIDA_ASSISTENTE, 22000)
@@ -57,6 +49,22 @@ function objeto(valor: unknown): ObjetoJson {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as ObjetoJson)
     : {};
+}
+
+function jsonLegivel(resposta: RespostaOpenAI) {
+  try {
+    const valor = JSON.parse(extrairTextoSaida(resposta));
+    return Boolean(valor && typeof valor === "object" && !Array.isArray(valor));
+  } catch {
+    return false;
+  }
+}
+
+function repararECompletar(
+  resposta: RespostaOpenAI,
+  contexto: ContextoAssistenteFluxos
+) {
+  return completarRespostaPlano(repararRespostaPlano(resposta, contexto), contexto);
 }
 
 function instalarSdkResiliente() {
@@ -76,10 +84,7 @@ function instalarSdkResiliente() {
     options?: unknown
   ) {
     const contexto = contextoAssistenteFluxos.getStore();
-
-    if (!contexto?.ativo) {
-      return criarOriginal.call(this, body, options);
-    }
+    if (!contexto?.ativo) return criarOriginal.call(this, body, options);
 
     const primeiroPayload = prepararPayloadAssistente({
       body,
@@ -87,14 +92,11 @@ function instalarSdkResiliente() {
       repetir: false,
       contexto,
     });
-    const primeiraResposta = repararRespostaPlano(
+    const primeiraResposta = repararECompletar(
       await criarOriginal.call(this, primeiroPayload, options),
       contexto
     );
-    const primeiraValidacao = validarQualidadePlano(
-      primeiraResposta,
-      contexto
-    );
+    const primeiraValidacao = validarQualidadePlano(primeiraResposta, contexto);
 
     if (primeiraValidacao.valido) return primeiraResposta;
 
@@ -118,23 +120,26 @@ function instalarSdkResiliente() {
       segundoPayload,
       options
     );
-    const respostaComUso = repararRespostaPlano(
+    const respostaComUso = repararECompletar(
       somarUsoRespostas(primeiraResposta, segundaResposta),
       contexto
     );
-    const segundaValidacao = validarQualidadePlano(
-      respostaComUso,
-      contexto
-    );
+    const segundaValidacao = validarQualidadePlano(respostaComUso, contexto);
 
     if (!segundaValidacao.valido) {
-      console.error("[assistente-fluxos] plano rejeitado apos repeticao", {
+      console.error("[assistente-fluxos] plano incompleto apos repeticao", {
         response_id: respostaComUso.id || null,
         problemas: segundaValidacao.problemas,
+        json_legivel: jsonLegivel(respostaComUso),
       });
 
-      // O endpoint original trata JSON invalido e nao persiste o fluxo.
-      substituirTextoSaida(respostaComUso, "{");
+      // Problemas semanticos remanescentes nao devem destruir um JSON valido.
+      // O normalizador e o compilador seguro completam rotas e impedem a
+      // persistencia de um grafo tecnicamente invalido. So force o erro 422
+      // quando a resposta realmente nao puder ser interpretada como JSON.
+      if (!jsonLegivel(respostaComUso)) {
+        substituirTextoSaida(respostaComUso, "{");
+      }
     }
 
     return respostaComUso;
@@ -165,8 +170,7 @@ export async function executarAssistente(request: Request) {
 
       await persistirInstrucaoCompleta({
         response,
-        instrucaoCompleta:
-          contextoRequisicao.contexto.instrucaoCompleta,
+        instrucaoCompleta: contextoRequisicao.contexto.instrucaoCompleta,
         empresaId: contextoRequisicao.empresaId,
         usuarioId: contextoRequisicao.usuarioId,
       });
