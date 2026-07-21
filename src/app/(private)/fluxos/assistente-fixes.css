@@ -1,0 +1,107 @@
+/* Correções de contenção do painel do assistente de fluxos.
+   Os seletores por fragmento alcançam as classes geradas pelo CSS Module. */
+
+[class*="assistantPanel"] {
+  max-width: calc(100vw - 48px);
+  min-width: 0;
+  overflow: hidden;
+}
+
+[class*="assistantHeader"],
+[class*="assistantBody"],
+[class*="assistantConversation"],
+[class*="assistantHistoryTurn"],
+[class*="assistantChatBubble"],
+[class*="assistantUserBubble"],
+[class*="assistantQuestionCard"],
+[class*="assistantAnswerOptions"],
+[class*="assistantAnswerOption"],
+[class*="assistantAnswerOptionActive"],
+[class*="assistantQuestionActions"],
+[class*="assistantPlanList"],
+[class*="assistantPlanItem"] {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+[class*="assistantBody"] {
+  overflow-x: hidden !important;
+}
+
+[class*="assistantConversation"],
+[class*="assistantHistoryTurn"] {
+  overflow: hidden;
+}
+
+[class*="assistantChatBubble"],
+[class*="assistantUserBubble"],
+[class*="assistantQuestionCard"] {
+  overflow: hidden;
+}
+
+[class*="assistantUserBubble"] {
+  width: fit-content;
+  max-width: 88%;
+}
+
+[class*="assistantChatBubble"] p,
+[class*="assistantUserBubble"] p,
+[class*="assistantQuestionCard"] p,
+[class*="assistantQuestionCard"] strong,
+[class*="assistantAnswerOption"] span,
+[class*="assistantAnswerOptionActive"] span,
+[class*="assistantAnswerOption"] small,
+[class*="assistantAnswerOptionActive"] small,
+[class*="assistantPlanItem"] span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+
+[class*="assistantQuestionCard"] input,
+[class*="assistantQuestionCard"] textarea,
+[class*="assistantQuestionCard"] select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[class*="assistantQuestionActions"] {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  gap: 8px;
+}
+
+[class*="assistantQuestionActions"] button {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal !important;
+  line-height: 1.25;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  [class*="assistantPanel"] {
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+  }
+
+  [class*="assistantQuestionActions"] {
+    grid-template-columns: 1fr;
+  }
+
+  [class*="assistantUserBubble"] {
+    max-width: 94%;
+  }
+}
