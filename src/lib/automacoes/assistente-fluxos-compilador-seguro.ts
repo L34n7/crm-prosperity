@@ -11,9 +11,16 @@ import {
   type ModoAssistenteFluxos,
   type PlanoAssistenteFluxos,
   type ResultadoCompilacaoAssistente,
+  type ValidacaoItemAssistente,
 } from "./assistente-fluxos-base";
+import {
+  aplicarTiposAgenda,
+  normalizarPlanoAssistenteComAgenda,
+  prepararPlanoBaseComAgenda,
+} from "./assistente-fluxos-agenda";
 
 export * from "./assistente-fluxos-base";
+export { normalizarPlanoAssistenteComAgenda as normalizarPlanoAssistente };
 
 function texto(valor: unknown, limite = 160) {
   return String(valor || "").trim().slice(0, limite);
@@ -102,6 +109,43 @@ function deduplicarConexoesDeOpcoes(params: {
   return conexoes;
 }
 
+function deduplicarConexoesSempre(
+  conexoes: AssistenteAutomacaoConexao[]
+) {
+  const origensComSempre = new Set<string>();
+  const removidas: AssistenteAutomacaoConexao[] = [];
+
+  const resultado = [...conexoes]
+    .sort((a, b) => a.ordem - b.ordem)
+    .filter((conexao) => {
+      if (conexao.condicao_json?.tipo !== "sempre") return true;
+
+      if (origensComSempre.has(conexao.no_origem_id)) {
+        removidas.push(conexao);
+        return false;
+      }
+
+      origensComSempre.add(conexao.no_origem_id);
+      return true;
+    });
+
+  if (removidas.length > 0) {
+    console.warn(
+      "[assistente-fluxos] removendo rotas incondicionais excedentes",
+      {
+        total: removidas.length,
+        conexoes: removidas.slice(0, 20).map((conexao) => ({
+          origem: conexao.no_origem_id,
+          destino: conexao.no_destino_id,
+          rotulo: conexao.rotulo,
+        })),
+      }
+    );
+  }
+
+  return resultado;
+}
+
 function idsAlcancaveis(
   nos: AssistenteAutomacaoNo[],
   conexoes: AssistenteAutomacaoConexao[]
@@ -179,13 +223,6 @@ function garantirTerminalEPrunarGrafo(params: {
   );
 
   if (!terminalAlcancavel) {
-    let terminal = nos.find((no) => ehTerminal(no));
-
-    if (!terminal) {
-      terminal = criarNoEncerrar();
-      nos.push(terminal);
-    }
-
     const origensComSaida = new Set(
       conexoes.map((conexao) => conexao.no_origem_id)
     );
@@ -197,22 +234,18 @@ function garantirTerminalEPrunarGrafo(params: {
         !origensComSaida.has(no.id) &&
         !ehNoDeOpcoes(no)
     );
-    const origem =
-      folhas.at(-1) ||
-      [...nos]
-        .reverse()
-        .find(
-          (no) =>
-            alcancaveis.has(no.id) &&
-            no.tipo_no !== "inicio" &&
-            !ehTerminal(no) &&
-            !ehNoDeOpcoes(no)
-        );
+    const origem = folhas.at(-1);
 
+    // Nunca conecte um encerramento automaticamente a um bloco que ja possui
+    // saida. Isso criaria duas rotas "sempre" e uma delas seria inalcançavel.
     if (origem) {
-      conexoes = conexoes.filter(
-        (conexao) => conexao.no_destino_id !== terminal!.id
-      );
+      let terminal = nos.find((no) => ehTerminal(no));
+
+      if (!terminal) {
+        terminal = criarNoEncerrar();
+        nos.push(terminal);
+      }
+
       conexoes.push(criarConexaoTerminal(origem, terminal, conexoes.length + 1));
       alcancaveis = idsAlcancaveis(nos, conexoes);
     }
@@ -250,6 +283,48 @@ function garantirTerminalEPrunarGrafo(params: {
   };
 }
 
+function validarRotasSempre(params: {
+  nos: AssistenteAutomacaoNo[];
+  conexoes: AssistenteAutomacaoConexao[];
+}) {
+  const erros: ValidacaoItemAssistente[] = [];
+
+  for (const no of params.nos) {
+    const sempre = params.conexoes.filter(
+      (conexao) =>
+        conexao.no_origem_id === no.id &&
+        conexao.condicao_json?.tipo === "sempre"
+    );
+
+    if (sempre.length <= 1) continue;
+
+    erros.push({
+      codigo: "MULTIPLAS_ROTAS_SEMPRE",
+      mensagem: `O bloco "${no.titulo}" possui mais de uma conexão "Sempre seguir". Apenas uma rota incondicional é permitida por bloco.`,
+      no_id: no.id,
+      conexao_id: sempre[1]?.id,
+    });
+  }
+
+  return erros;
+}
+
+function avisosAgenda(nos: AssistenteAutomacaoNo[]) {
+  return nos
+    .filter(
+      (no) =>
+        no.tipo_no.startsWith("agenda_") &&
+        !texto(no.configuracao_json?.agenda_id, 120)
+    )
+    .map(
+      (no): ValidacaoItemAssistente => ({
+        codigo: "AGENDA_AUSENTE",
+        mensagem: `O bloco "${no.titulo}" precisa ter uma agenda selecionada antes da ativação.`,
+        no_id: no.id,
+      })
+    );
+}
+
 export function compilarPlanoAssistente(params: {
   modo: ModoAssistenteFluxos;
   plano: PlanoAssistenteFluxos;
@@ -261,22 +336,38 @@ export function compilarPlanoAssistente(params: {
   variaveis?: AssistenteVariavel[];
   midias?: AssistenteMidia[];
 }): ResultadoCompilacaoAssistente {
-  const compilacao = compilarPlanoAssistenteBase(params);
-  const conexoesSemDuplicidade = deduplicarConexoesDeOpcoes({
-    nos: compilacao.nos,
-    conexoes: compilacao.conexoes,
+  const preparado = prepararPlanoBaseComAgenda(params.plano);
+  const compilacao = compilarPlanoAssistenteBase({
+    ...params,
+    plano: preparado.plano,
   });
+  const nosComAgenda = aplicarTiposAgenda(
+    compilacao.nos,
+    preparado.agendasPorMarcador
+  );
+  const conexoesSemDuplicidade = deduplicarConexoesSempre(
+    deduplicarConexoesDeOpcoes({
+      nos: nosComAgenda,
+      conexoes: compilacao.conexoes,
+    })
+  );
   const grafo = garantirTerminalEPrunarGrafo({
-    nos: compilacao.nos,
+    nos: nosComAgenda,
     conexoes: conexoesSemDuplicidade,
   });
-  const validacao = validarFluxoAssistente({
+  const validacaoBase = validarFluxoAssistente({
     nos: grafo.nos,
     conexoes: grafo.conexoes,
     setores: params.setores || [],
     variaveis: params.variaveis || [],
     midias: params.midias || [],
   });
+  const errosSempre = validarRotasSempre(grafo);
+  const validacao = {
+    valido: validacaoBase.erros.length + errosSempre.length === 0,
+    erros: [...validacaoBase.erros, ...errosSempre],
+    avisos: [...validacaoBase.avisos, ...avisosAgenda(grafo.nos)],
+  };
 
   return {
     ...compilacao,
