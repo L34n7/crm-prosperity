@@ -133,13 +133,10 @@ function instalarSdkResiliente() {
         json_legivel: jsonLegivel(respostaComUso),
       });
 
-      // Problemas semanticos remanescentes nao devem destruir um JSON valido.
-      // O normalizador e o compilador seguro completam rotas e impedem a
-      // persistencia de um grafo tecnicamente invalido. So force o erro 422
-      // quando a resposta realmente nao puder ser interpretada como JSON.
-      if (!jsonLegivel(respostaComUso)) {
-        substituirTextoSaida(respostaComUso, "{");
-      }
+      // Nunca deixe uma segunda resposta estruturalmente incompleta seguir
+      // para o compilador. Invalidar o JSON faz a rota original interromper
+      // antes da materializacao; executarAssistente converte a falha em 422.
+      substituirTextoSaida(respostaComUso, "{");
     }
 
     return respostaComUso;

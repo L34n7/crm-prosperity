@@ -564,6 +564,97 @@ export function validarQualidadePlano(
     };
   }
 
+  const refsEtapas = new Set(
+    etapas.map((etapa) => texto(etapa.ref, 160)).filter(Boolean)
+  );
+  const refsDuplicadas = etapas
+    .map((etapa) => texto(etapa.ref, 160))
+    .filter((ref, indice, todas) => ref && todas.indexOf(ref) !== indice);
+
+  if (refsDuplicadas.length > 0) {
+    problemas.push(
+      `Existem etapas com referencias duplicadas: ${[...new Set(refsDuplicadas)].join(", ")}.`
+    );
+  }
+
+  for (const rota of rotas) {
+    const origem = texto(rota.origem, 160);
+    const destino = texto(rota.destino, 160);
+
+    if (!refsEtapas.has(origem) || !refsEtapas.has(destino)) {
+      problemas.push(
+        `A rota ${origem || "sem origem"} -> ${destino || "sem destino"} referencia um bloco inexistente.`
+      );
+    }
+  }
+
+  const inicio = etapas.find((etapa) => etapa.tipo === "inicio");
+
+  if (!inicio) {
+    problemas.push("O fluxo precisa de um bloco Inicio.");
+  } else {
+    const alcancaveis = new Set<string>();
+    const pendentes = [texto(inicio.ref, 160)];
+
+    while (pendentes.length > 0) {
+      const atual = pendentes.shift();
+      if (!atual || alcancaveis.has(atual)) continue;
+      alcancaveis.add(atual);
+
+      for (const rota of rotas) {
+        if (texto(rota.origem, 160) !== atual) continue;
+        const destino = texto(rota.destino, 160);
+        if (destino && refsEtapas.has(destino) && !alcancaveis.has(destino)) {
+          pendentes.push(destino);
+        }
+      }
+    }
+
+    for (const etapa of etapas) {
+      const ref = texto(etapa.ref, 160);
+      if (ref && !alcancaveis.has(ref)) {
+        problemas.push(
+          `O bloco "${texto(etapa.titulo, 120) || ref}" nao esta conectado ao fluxo.`
+        );
+      }
+    }
+  }
+
+  for (const etapa of etapas) {
+    if (
+      !["pergunta_opcoes", "pergunta_botoes"].includes(String(etapa.tipo || ""))
+    ) {
+      continue;
+    }
+
+    const origem = texto(etapa.ref, 160);
+    const rotasEtapa = rotas.filter(
+      (rota) => texto(rota.origem, 160) === origem
+    );
+
+    for (const opcao of opcoesEtapa(etapa)) {
+      const id = texto(opcao.id, 160);
+      const titulo = texto(opcao.texto || opcao.titulo || opcao.id, 120);
+      const idNormalizado = normalizarRef(id);
+      const tituloNormalizado = normalizarRef(titulo);
+      const possuiRota = rotasEtapa.some((rota) => {
+        const valor = normalizarRef(rota.valor);
+        const rotulo = normalizarRef(rota.rotulo);
+        return Boolean(
+          (idNormalizado && (valor === idNormalizado || rotulo === idNormalizado)) ||
+            (tituloNormalizado &&
+              (valor === tituloNormalizado || rotulo === tituloNormalizado))
+        );
+      });
+
+      if (!possuiRota) {
+        problemas.push(
+          `A opcao "${titulo || id || "sem titulo"}" do bloco "${texto(etapa.titulo, 120) || origem}" precisa ter uma rota.`
+        );
+      }
+    }
+  }
+
   const instrucao = contexto.instrucaoCompleta;
   const opcoesMenu = extrairOpcoesMenuPrincipal(instrucao);
 
