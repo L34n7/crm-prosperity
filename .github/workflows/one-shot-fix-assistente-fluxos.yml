@@ -1,4 +1,5 @@
 name: One-shot fix assistente de fluxos
+# Segundo push para acionar o workflow ja registrado na branch principal.
 
 on:
   push:
