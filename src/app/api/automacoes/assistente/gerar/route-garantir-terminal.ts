@@ -104,53 +104,51 @@ function criarRotaParaTerminal(
   ];
 }
 
-function limparTerminaisOrfaos(
-  plano: PlanoAssistenteFluxos,
-  terminalMantido: string
-) {
-  const terminaisRemovidos = new Set(
-    plano.etapas
-      .filter(
-        (etapa) =>
-          ["encerrar", "transferir"].includes(etapa.tipo) &&
-          etapa.ref !== terminalMantido
-      )
-      .map((etapa) => etapa.ref)
-  );
+function removerRotasSempreExcedentes(plano: PlanoAssistenteFluxos) {
+  const vistas = new Set<string>();
+  const removidas: PlanoAssistenteRota[] = [];
+  const rotas = plano.rotas.filter((rota) => {
+    if (rota.condicao !== "sempre") return true;
 
-  if (terminaisRemovidos.size === 0) return plano;
+    if (vistas.has(rota.origem)) {
+      removidas.push(rota);
+      return false;
+    }
+
+    vistas.add(rota.origem);
+    return true;
+  });
+
+  if (removidas.length === 0) return plano;
 
   return {
     ...plano,
-    etapas: plano.etapas.filter(
-      (etapa) => !terminaisRemovidos.has(etapa.ref)
-    ),
-    rotas: plano.rotas.filter(
-      (rota) =>
-        !terminaisRemovidos.has(rota.origem) &&
-        !terminaisRemovidos.has(rota.destino)
-    ),
+    rotas,
+    avisos: [
+      ...plano.avisos,
+      `${removidas.length} rota(s) "Sempre seguir" excedente(s) foram removidas antes da criacao.`,
+    ],
   };
 }
 
 export function garantirTerminalAlcancavel(valor: unknown) {
-  let plano = normalizarPlanoAssistente(valor);
-  let alcancaveis = refsAlcancaveis(plano);
-  const terminalAlcancavel = plano.etapas.find(
+  let plano = removerRotasSempreExcedentes(
+    normalizarPlanoAssistente(valor)
+  );
+  const alcancaveis = refsAlcancaveis(plano);
+  const terminalAlcancavel = plano.etapas.some(
     (etapa) =>
       alcancaveis.has(etapa.ref) &&
       ["encerrar", "transferir"].includes(etapa.tipo)
   );
 
-  if (terminalAlcancavel) {
-    return limparTerminaisOrfaos(plano, terminalAlcancavel.ref);
-  }
+  // Mais de um terminal pode ser valido quando existem caminhos distintos.
+  // Nao remova encerramentos ou transferencias criados de proposito.
+  if (terminalAlcancavel) return plano;
 
-  const terminalExistente = plano.etapas.find((etapa) =>
+  let terminal = plano.etapas.find((etapa) =>
     ["encerrar", "transferir"].includes(etapa.tipo)
   );
-
-  let terminal = terminalExistente;
 
   if (!terminal) {
     const refs = new Set(plano.etapas.map((etapa) => etapa.ref));
@@ -169,50 +167,31 @@ export function garantirTerminalAlcancavel(valor: unknown) {
     };
   }
 
-  plano = limparTerminaisOrfaos(plano, terminal.ref);
-  alcancaveis = refsAlcancaveis(plano);
-
-  const rotasSemEntradaTerminal = plano.rotas.filter(
-    (rota) => rota.destino !== terminal.ref
-  );
-  const origensComSaida = new Set(
-    rotasSemEntradaTerminal.map((rota) => rota.origem)
-  );
-  let folhas = plano.etapas.filter(
+  const origensComSaida = new Set(plano.rotas.map((rota) => rota.origem));
+  const folhas = plano.etapas.filter(
     (etapa) =>
       alcancaveis.has(etapa.ref) &&
-      etapa.ref !== terminal.ref &&
+      etapa.ref !== terminal!.ref &&
       etapa.tipo !== "inicio" &&
       !["encerrar", "transferir"].includes(etapa.tipo) &&
       !origensComSaida.has(etapa.ref)
   );
 
-  if (folhas.length === 0) {
-    const fallback = [...plano.etapas]
-      .reverse()
-      .find(
-        (etapa) =>
-          alcancaveis.has(etapa.ref) &&
-          etapa.ref !== terminal.ref &&
-          etapa.tipo !== "inicio" &&
-          !["encerrar", "transferir"].includes(etapa.tipo)
-      );
-    folhas = fallback ? [fallback] : [];
-  }
-
+  // Em um ciclo sem folhas, nao escolha um bloco arbitrario. Isso criaria
+  // uma segunda rota incondicional e uma das saidas nunca seria executada.
   if (folhas.length === 0) return plano;
 
   return {
     ...plano,
     rotas: [
-      ...rotasSemEntradaTerminal,
+      ...plano.rotas,
       ...folhas.flatMap((etapa) =>
-        criarRotaParaTerminal(etapa, terminal.ref)
+        criarRotaParaTerminal(etapa, terminal!.ref)
       ),
     ],
     avisos: [
       ...plano.avisos,
-      "O assistente garantiu um único encerramento alcançável ao final do fluxo.",
+      "O assistente conectou um encerramento somente a blocos finais sem saida.",
     ],
   };
 }
