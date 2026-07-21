@@ -104,31 +104,84 @@ function criarRotaParaTerminal(
   ];
 }
 
+function limparTerminaisOrfaos(
+  plano: PlanoAssistenteFluxos,
+  terminalMantido: string
+) {
+  const terminaisRemovidos = new Set(
+    plano.etapas
+      .filter(
+        (etapa) =>
+          ["encerrar", "transferir"].includes(etapa.tipo) &&
+          etapa.ref !== terminalMantido
+      )
+      .map((etapa) => etapa.ref)
+  );
+
+  if (terminaisRemovidos.size === 0) return plano;
+
+  return {
+    ...plano,
+    etapas: plano.etapas.filter(
+      (etapa) => !terminaisRemovidos.has(etapa.ref)
+    ),
+    rotas: plano.rotas.filter(
+      (rota) =>
+        !terminaisRemovidos.has(rota.origem) &&
+        !terminaisRemovidos.has(rota.destino)
+    ),
+  };
+}
+
 export function garantirTerminalAlcancavel(valor: unknown) {
-  const plano = normalizarPlanoAssistente(valor);
-  const alcancaveis = refsAlcancaveis(plano);
-  const terminalAlcancavel = plano.etapas.some(
+  let plano = normalizarPlanoAssistente(valor);
+  let alcancaveis = refsAlcancaveis(plano);
+  const terminalAlcancavel = plano.etapas.find(
     (etapa) =>
       alcancaveis.has(etapa.ref) &&
       ["encerrar", "transferir"].includes(etapa.tipo)
   );
 
-  if (terminalAlcancavel) return plano;
-
-  const refs = new Set(plano.etapas.map((etapa) => etapa.ref));
-  let refTerminal = "encerrar_atendimento";
-  let indice = 2;
-
-  while (refs.has(refTerminal)) {
-    refTerminal = `encerrar_atendimento_${indice}`;
-    indice += 1;
+  if (terminalAlcancavel) {
+    return limparTerminaisOrfaos(plano, terminalAlcancavel.ref);
   }
 
-  const terminal = criarEtapaEncerrar(refTerminal);
-  const origensComSaida = new Set(plano.rotas.map((rota) => rota.origem));
+  const terminalExistente = plano.etapas.find((etapa) =>
+    ["encerrar", "transferir"].includes(etapa.tipo)
+  );
+
+  let terminal = terminalExistente;
+
+  if (!terminal) {
+    const refs = new Set(plano.etapas.map((etapa) => etapa.ref));
+    let refTerminal = "encerrar_atendimento";
+    let indice = 2;
+
+    while (refs.has(refTerminal)) {
+      refTerminal = `encerrar_atendimento_${indice}`;
+      indice += 1;
+    }
+
+    terminal = criarEtapaEncerrar(refTerminal);
+    plano = {
+      ...plano,
+      etapas: [...plano.etapas, terminal],
+    };
+  }
+
+  plano = limparTerminaisOrfaos(plano, terminal.ref);
+  alcancaveis = refsAlcancaveis(plano);
+
+  const rotasSemEntradaTerminal = plano.rotas.filter(
+    (rota) => rota.destino !== terminal.ref
+  );
+  const origensComSaida = new Set(
+    rotasSemEntradaTerminal.map((rota) => rota.origem)
+  );
   let folhas = plano.etapas.filter(
     (etapa) =>
       alcancaveis.has(etapa.ref) &&
+      etapa.ref !== terminal.ref &&
       etapa.tipo !== "inicio" &&
       !["encerrar", "transferir"].includes(etapa.tipo) &&
       !origensComSaida.has(etapa.ref)
@@ -140,6 +193,7 @@ export function garantirTerminalAlcancavel(valor: unknown) {
       .find(
         (etapa) =>
           alcancaveis.has(etapa.ref) &&
+          etapa.ref !== terminal.ref &&
           etapa.tipo !== "inicio" &&
           !["encerrar", "transferir"].includes(etapa.tipo)
       );
@@ -150,14 +204,15 @@ export function garantirTerminalAlcancavel(valor: unknown) {
 
   return {
     ...plano,
-    etapas: [...plano.etapas, terminal],
     rotas: [
-      ...plano.rotas,
-      ...folhas.flatMap((etapa) => criarRotaParaTerminal(etapa, terminal.ref)),
+      ...rotasSemEntradaTerminal,
+      ...folhas.flatMap((etapa) =>
+        criarRotaParaTerminal(etapa, terminal.ref)
+      ),
     ],
     avisos: [
       ...plano.avisos,
-      "O assistente adicionou automaticamente um encerramento ao final dos caminhos que estavam sem destino terminal.",
+      "O assistente garantiu um único encerramento alcançável ao final do fluxo.",
     ],
   };
 }
