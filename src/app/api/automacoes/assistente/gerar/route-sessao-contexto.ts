@@ -14,6 +14,14 @@ function texto(valor: unknown, limite = 20000) {
   return String(valor || "").trim().slice(0, limite);
 }
 
+function limparSeparadores(instrucao: string) {
+  return instrucao
+    .split(/\r?\n/)
+    .filter((linha) => !/^\s*[-–—]{5,}\s*$/.test(linha))
+    .join("\n")
+    .trim();
+}
+
 function objeto(valor: unknown): ObjetoJson {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as ObjetoJson)
@@ -29,7 +37,7 @@ export async function carregarContextoAssistente(body: ObjetoJson) {
       contexto: {
         ativo: true,
         modo,
-        instrucaoCompleta: texto(body.instrucao),
+        instrucaoCompleta: limparSeparadores(texto(body.instrucao)),
         agendas: [] as AgendaAssistente[],
       } satisfies ContextoAssistenteFluxos,
       empresaId: null as string | null,
@@ -40,7 +48,7 @@ export async function carregarContextoAssistente(body: ObjetoJson) {
   const empresaId = resultado.usuario.empresa_id;
   const usuarioId = resultado.usuario.id;
   const sessaoId = texto(body.sessao_id || body.sessaoId, 120);
-  let instrucaoCompleta = texto(body.instrucao);
+  let instrucaoCompleta = limparSeparadores(texto(body.instrucao));
 
   if (!instrucaoCompleta && sessaoId) {
     const { data: sessao } = await supabaseAdmin
@@ -52,10 +60,11 @@ export async function carregarContextoAssistente(body: ObjetoJson) {
       .maybeSingle();
 
     const contexto = objeto(sessao?.contexto_json);
-    instrucaoCompleta =
+    instrucaoCompleta = limparSeparadores(
       texto(contexto.instrucao) ||
-      texto(objeto(contexto.conversa).instrucao) ||
-      texto(sessao?.instrucao);
+        texto(objeto(contexto.conversa).instrucao) ||
+        texto(sessao?.instrucao)
+    );
   }
 
   const { data: agendas } = await supabaseAdmin
