@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import OpenAI from "openai";
 
 export const runtime = "nodejs";
 
@@ -6,13 +7,38 @@ type ContextoAssistenteFluxos = {
   ativo: true;
 };
 
-type RespostaOpenAIJson = Record<string, unknown>;
+type UsoResposta = {
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  total_tokens?: number | null;
+  [chave: string]: unknown;
+};
+
+type RespostaOpenAI = {
+  id?: string;
+  status?: string;
+  output_text?: string;
+  output?: unknown[];
+  usage?: UsoResposta | null;
+  incomplete_details?: {
+    reason?: string | null;
+  } | null;
+  [chave: string]: unknown;
+};
+
+type CriarResposta = (
+  body: Record<string, unknown>,
+  options?: unknown
+) => Promise<RespostaOpenAI>;
+
+type PrototipoResponses = {
+  create: CriarResposta;
+};
 
 const contextoAssistenteFluxos =
   new AsyncLocalStorage<ContextoAssistenteFluxos>();
-const fetchOriginal = globalThis.fetch.bind(globalThis);
 
-let fetchResilienteInstalado = false;
+let sdkResilienteInstalado = false;
 let moduloOriginalPromise: Promise<typeof import("./route-original")> | null = null;
 
 const LIMITE_SAIDA_ASSISTENTE = (() => {
@@ -44,25 +70,12 @@ Regras adicionais de tamanho e compatibilidade:
 const INSTRUCAO_REPETICAO = `
 A resposta anterior nao terminou com um JSON completo e valido.
 Gere novamente o plano completo conforme o schema, sem omitir etapas ou rotas.
-Reduza objetivo, resumo e mensagens ao essencial e retorne somente o JSON final.
+Reduza objetivo, resumo e mensagens ao essencial.
+Nao repita a arvore no resumo e retorne somente o JSON final.
 `.trim();
 
-function obterUrl(input: Parameters<typeof fetch>[0]) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
-}
-
-function ehEndpointResponsesOpenAI(input: Parameters<typeof fetch>[0]) {
-  try {
-    const url = new URL(obterUrl(input));
-    return (
-      url.hostname === "api.openai.com" &&
-      url.pathname.replace(/\/+$/, "") === "/v1/responses"
-    );
-  } catch {
-    return false;
-  }
+function copiarPayload(valor: Record<string, unknown>) {
+  return structuredClone(valor);
 }
 
 function anexarInstrucaoSistema(
@@ -103,43 +116,28 @@ function anexarInstrucaoSistema(
 }
 
 function prepararPayload(
-  body: string,
+  body: Record<string, unknown>,
   limite: number,
   repetir: boolean
-): string | null {
-  try {
-    const payload = JSON.parse(body) as Record<string, unknown>;
-    const limiteAtual = Number(payload.max_output_tokens || 0);
+) {
+  const payload = copiarPayload(body);
+  const limiteAtual = Number(payload.max_output_tokens || 0);
 
-    payload.max_output_tokens = Math.max(
-      Number.isFinite(limiteAtual) ? limiteAtual : 0,
-      limite
-    );
+  payload.max_output_tokens = Math.max(
+    Number.isFinite(limiteAtual) ? limiteAtual : 0,
+    limite
+  );
 
-    anexarInstrucaoSistema(payload, INSTRUCAO_COMPACTA);
+  anexarInstrucaoSistema(payload, INSTRUCAO_COMPACTA);
 
-    if (repetir) {
-      anexarInstrucaoSistema(payload, INSTRUCAO_REPETICAO);
-    }
-
-    return JSON.stringify(payload);
-  } catch {
-    return null;
+  if (repetir) {
+    anexarInstrucaoSistema(payload, INSTRUCAO_REPETICAO);
   }
+
+  return payload;
 }
 
-async function lerRespostaJson(response: Response) {
-  try {
-    const valor = await response.clone().json();
-    return valor && typeof valor === "object" && !Array.isArray(valor)
-      ? (valor as RespostaOpenAIJson)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function extrairTextoSaida(resposta: RespostaOpenAIJson) {
+function extrairTextoSaida(resposta: RespostaOpenAI) {
   if (typeof resposta.output_text === "string") {
     return resposta.output_text.trim();
   }
@@ -170,9 +168,9 @@ function extrairTextoSaida(resposta: RespostaOpenAIJson) {
   return partes.join("").trim();
 }
 
-function respostaEstruturadaValida(resposta: RespostaOpenAIJson | null) {
-  if (!resposta) return false;
+function respostaEstruturadaValida(resposta: RespostaOpenAI) {
   if (resposta.status && resposta.status !== "completed") return false;
+  if (resposta.incomplete_details?.reason) return false;
 
   const texto = extrairTextoSaida(resposta);
   if (!texto) return false;
@@ -191,21 +189,11 @@ function numeroUso(valor: unknown) {
 }
 
 function somarUsoRespostas(
-  primeira: RespostaOpenAIJson,
-  segunda: RespostaOpenAIJson
+  primeira: RespostaOpenAI,
+  segunda: RespostaOpenAI
 ) {
-  const usoPrimeira =
-    primeira.usage &&
-    typeof primeira.usage === "object" &&
-    !Array.isArray(primeira.usage)
-      ? (primeira.usage as Record<string, unknown>)
-      : {};
-  const usoSegunda =
-    segunda.usage &&
-    typeof segunda.usage === "object" &&
-    !Array.isArray(segunda.usage)
-      ? (segunda.usage as Record<string, unknown>)
-      : {};
+  const usoPrimeira = primeira.usage || {};
+  const usoSegunda = segunda.usage || {};
 
   segunda.usage = {
     ...usoSegunda,
@@ -221,97 +209,68 @@ function somarUsoRespostas(
   return segunda;
 }
 
-function recriarRespostaJson(dados: RespostaOpenAIJson, base: Response) {
-  const headers = new Headers(base.headers);
-  headers.delete("content-length");
+function instalarSdkResiliente() {
+  if (sdkResilienteInstalado) return;
+  sdkResilienteInstalado = true;
 
-  return new Response(JSON.stringify(dados), {
-    status: base.status,
-    statusText: base.statusText,
-    headers,
+  const clienteInstrumentacao = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY || "instrumentacao",
   });
-}
+  const prototipo = Object.getPrototypeOf(
+    clienteInstrumentacao.responses
+  ) as PrototipoResponses;
+  const criarOriginal = prototipo.create;
 
-function instalarFetchResiliente() {
-  if (fetchResilienteInstalado) return;
-  fetchResilienteInstalado = true;
-
-  globalThis.fetch = (async (input, init) => {
-    if (
-      !contextoAssistenteFluxos.getStore()?.ativo ||
-      !ehEndpointResponsesOpenAI(input) ||
-      typeof init?.body !== "string"
-    ) {
-      return fetchOriginal(input, init);
+  prototipo.create = async function criarRespostaResiliente(
+    body: Record<string, unknown>,
+    options?: unknown
+  ) {
+    if (!contextoAssistenteFluxos.getStore()?.ativo) {
+      return criarOriginal.call(this, body, options);
     }
 
-    const primeiroBody = prepararPayload(
-      init.body,
+    const primeiroPayload = prepararPayload(
+      body,
       LIMITE_SAIDA_ASSISTENTE,
       false
     );
+    const primeiraResposta = await criarOriginal.call(
+      this,
+      primeiroPayload,
+      options
+    );
 
-    if (!primeiroBody) {
-      return fetchOriginal(input, init);
-    }
-
-    const primeiraResposta = await fetchOriginal(input, {
-      ...init,
-      body: primeiroBody,
-    });
-
-    if (!primeiraResposta.ok) return primeiraResposta;
-
-    const primeiroJson = await lerRespostaJson(primeiraResposta);
-
-    if (respostaEstruturadaValida(primeiroJson)) {
+    if (respostaEstruturadaValida(primeiraResposta)) {
       return primeiraResposta;
     }
 
-    const segundoBody = prepararPayload(
-      init.body,
-      LIMITE_SAIDA_REPETICAO,
-      true
-    );
-
-    if (!segundoBody) return primeiraResposta;
-
     console.warn("[assistente-fluxos] repetindo resposta estruturada", {
-      response_id:
-        primeiroJson && typeof primeiroJson.id === "string"
-          ? primeiroJson.id
-          : null,
-      status: primeiroJson?.status || null,
+      response_id: primeiraResposta.id || null,
+      status: primeiraResposta.status || null,
       motivo:
-        primeiroJson?.incomplete_details &&
-        typeof primeiroJson.incomplete_details === "object" &&
-        !Array.isArray(primeiroJson.incomplete_details)
-          ? (primeiroJson.incomplete_details as Record<string, unknown>).reason ||
-            "json_invalido"
-          : "json_invalido",
+        primeiraResposta.incomplete_details?.reason || "json_invalido",
+      output_length: extrairTextoSaida(primeiraResposta).length,
       limite_inicial: LIMITE_SAIDA_ASSISTENTE,
       limite_repeticao: LIMITE_SAIDA_REPETICAO,
     });
 
-    const segundaResposta = await fetchOriginal(input, {
-      ...init,
-      body: segundoBody,
-    });
-
-    if (!segundaResposta.ok || !primeiroJson) return segundaResposta;
-
-    const segundoJson = await lerRespostaJson(segundaResposta);
-    if (!segundoJson) return segundaResposta;
-
-    return recriarRespostaJson(
-      somarUsoRespostas(primeiroJson, segundoJson),
-      segundaResposta
+    const segundoPayload = prepararPayload(
+      body,
+      LIMITE_SAIDA_REPETICAO,
+      true
     );
-  }) as typeof fetch;
+    const segundaResposta = await criarOriginal.call(
+      this,
+      segundoPayload,
+      options
+    );
+
+    return somarUsoRespostas(primeiraResposta, segundaResposta);
+  };
 }
 
 async function carregarModuloOriginal() {
-  instalarFetchResiliente();
+  instalarSdkResiliente();
   moduloOriginalPromise ||= import("./route-original");
   return moduloOriginalPromise;
 }
