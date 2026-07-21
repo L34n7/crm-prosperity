@@ -1,5 +1,4 @@
 import {
-  completarRotasDeOpcoesPlano,
   normalizarPlanoAssistente,
   type PlanoAssistenteEtapa,
   type PlanoAssistenteFluxos,
@@ -18,8 +17,6 @@ const TIPOS_PERGUNTA = new Set([
   "avaliacao",
 ]);
 
-const TIPOS_TERMINAIS = new Set(["encerrar", "transferir"]);
-
 function texto(valor: unknown, limite = 160) {
   return String(valor || "").trim().slice(0, limite);
 }
@@ -34,261 +31,83 @@ function normalizar(valor: unknown) {
     .replace(/^_|_$/g, "");
 }
 
-function rotaCondicionalValida(rota: PlanoAssistenteRota) {
-  const condicao = normalizar(rota.condicao);
-  return !["", "sempre", "always", "incondicional"].includes(condicao);
-}
-
-function removerRotasIncondicionaisDePerguntas(
+function sanitizarRotas(
   etapas: PlanoAssistenteEtapa[],
   rotas: PlanoAssistenteRota[]
 ) {
+  const refs = new Set(etapas.map((etapa) => etapa.ref));
   const perguntas = new Set(
     etapas
       .filter((etapa) => TIPOS_PERGUNTA.has(etapa.tipo))
       .map((etapa) => etapa.ref)
   );
+  const rotasVistas = new Set<string>();
+  const sempreVistas = new Set<string>();
+  const resultado: PlanoAssistenteRota[] = [];
+  let removidas = 0;
 
-  return rotas.filter(
-    (rota) => !perguntas.has(rota.origem) || rotaCondicionalValida(rota)
-  );
-}
-
-function removerRotasDuplicadasDeOpcoes(plano: PlanoAssistenteFluxos) {
-  const perguntasPorRef = new Map(
-    plano.etapas
-      .filter((etapa) => ["pergunta_opcoes", "pergunta_botoes"].includes(etapa.tipo))
-      .map((etapa) => [etapa.ref, etapa] as const)
-  );
-  const vistos = new Set<string>();
-  const removidas: PlanoAssistenteRota[] = [];
-  const rotas = plano.rotas.filter((rota) => {
-    const pergunta = perguntasPorRef.get(rota.origem);
-    if (!pergunta) return true;
-
-    const condicao = normalizar(rota.condicao);
-    if (["timeout", "timeout_sem_resposta"].includes(condicao)) {
-      const chaveTimeout = `${rota.origem}:timeout`;
-      if (vistos.has(chaveTimeout)) {
-        removidas.push(rota);
-        return false;
-      }
-      vistos.add(chaveTimeout);
-      return true;
-    }
-
-    const valor = normalizar(rota.valor || rota.rotulo);
-    if (!valor) return true;
-
-    const opcaoExiste = pergunta.opcoes.some(
-      (opcao) => normalizar(opcao.id || opcao.texto) === valor
-    );
-    if (!opcaoExiste) return true;
-
-    const chave = `${rota.origem}:opcao:${valor}`;
-    if (vistos.has(chave)) {
-      removidas.push(rota);
-      return false;
-    }
-
-    vistos.add(chave);
-    return true;
-  });
-
-  if (removidas.length > 0) {
-    console.warn("[assistente-fluxos] removendo rotas duplicadas de opcoes", {
-      total: removidas.length,
-      rotas: removidas.slice(0, 20).map((rota) => ({
-        origem: rota.origem,
-        destino: rota.destino,
-        valor: rota.valor,
-      })),
-    });
-  }
-
-  return {
-    ...plano,
-    rotas,
-    avisos: [
-      ...plano.avisos,
-      ...(removidas.length > 0
-        ? [
-            `${removidas.length} rota(s) duplicada(s) de opcoes foram removidas automaticamente antes da criacao.`,
-          ]
-        : []),
-    ],
-  };
-}
-
-function refsAlcancaveis(plano: PlanoAssistenteFluxos) {
-  const inicio = plano.etapas.find((etapa) => etapa.tipo === "inicio");
-  const alcancaveis = new Set<string>();
-
-  if (!inicio) return alcancaveis;
-
-  const fila = [inicio.ref];
-
-  while (fila.length > 0) {
-    const atual = fila.shift();
-    if (!atual || alcancaveis.has(atual)) continue;
-    alcancaveis.add(atual);
-
-    for (const rota of plano.rotas) {
-      if (rota.origem === atual && !alcancaveis.has(rota.destino)) {
-        fila.push(rota.destino);
-      }
-    }
-  }
-
-  return alcancaveis;
-}
-
-function criarRotaSempre(origem: string, destino: string): PlanoAssistenteRota {
-  return {
-    origem,
-    destino,
-    condicao: "sempre",
-    valor: null,
-    rotulo: null,
-    descricao_ia: null,
-    timeout_segundos: null,
-  };
-}
-
-function conectarEncerramento(plano: PlanoAssistenteFluxos) {
-  const encerramento = plano.etapas.find((etapa) => etapa.tipo === "encerrar");
-  if (!encerramento) return plano;
-
-  const entradas = plano.rotas.filter(
-    (rota) => rota.destino === encerramento.ref
-  );
-  if (entradas.length > 0) return plano;
-
-  const alcancaveis = refsAlcancaveis(plano);
-  const origensComSaida = new Set(plano.rotas.map((rota) => rota.origem));
-  const folhas = plano.etapas.filter(
-    (etapa) =>
-      etapa.ref !== encerramento.ref &&
-      alcancaveis.has(etapa.ref) &&
-      !origensComSaida.has(etapa.ref) &&
-      !TIPOS_TERMINAIS.has(etapa.tipo) &&
-      !TIPOS_PERGUNTA.has(etapa.tipo)
-  );
-
-  if (folhas.length === 0) return plano;
-
-  return {
-    ...plano,
-    rotas: [
-      ...plano.rotas,
-      ...folhas.map((etapa) => criarRotaSempre(etapa.ref, encerramento.ref)),
-    ],
-  };
-}
-
-function conectarOrfasLineares(plano: PlanoAssistenteFluxos) {
-  let resultado = plano;
-  let alcancaveis = refsAlcancaveis(resultado);
-
-  for (let indice = 0; indice < resultado.etapas.length; indice += 1) {
-    const etapa = resultado.etapas[indice];
-
-    if (
-      alcancaveis.has(etapa.ref) ||
-      etapa.tipo === "inicio" ||
-      etapa.tipo === "encerrar" ||
-      TIPOS_PERGUNTA.has(etapa.tipo)
-    ) {
+  for (const rota of rotas) {
+    if (!refs.has(rota.origem) || !refs.has(rota.destino)) {
+      removidas += 1;
       continue;
     }
 
-    const anterior = [...resultado.etapas]
-      .slice(0, indice)
-      .reverse()
-      .find(
-        (item) =>
-          alcancaveis.has(item.ref) &&
-          !TIPOS_PERGUNTA.has(item.tipo) &&
-          !TIPOS_TERMINAIS.has(item.tipo) &&
-          !resultado.rotas.some((rota) => rota.origem === item.ref)
-      );
+    const condicao = normalizar(rota.condicao);
+    const timeout = ["timeout", "timeout_sem_resposta"].includes(condicao);
 
-    if (!anterior) continue;
+    if (
+      perguntas.has(rota.origem) &&
+      !timeout &&
+      ["", "sempre", "always", "incondicional"].includes(condicao)
+    ) {
+      removidas += 1;
+      continue;
+    }
 
-    resultado = {
-      ...resultado,
-      rotas: [...resultado.rotas, criarRotaSempre(anterior.ref, etapa.ref)],
-    };
-    alcancaveis = refsAlcancaveis(resultado);
-  }
+    if (!perguntas.has(rota.origem) && condicao === "sempre") {
+      if (sempreVistas.has(rota.origem)) {
+        removidas += 1;
+        continue;
+      }
+      sempreVistas.add(rota.origem);
+    }
 
-  return resultado;
-}
-
-function removerEtapasInalcancaveis(plano: PlanoAssistenteFluxos) {
-  const alcancaveis = refsAlcancaveis(plano);
-
-  if (alcancaveis.size === 0) return plano;
-
-  const etapas = plano.etapas.filter((etapa) => alcancaveis.has(etapa.ref));
-  const refsMantidas = new Set(etapas.map((etapa) => etapa.ref));
-  const rotas = plano.rotas.filter(
-    (rota) =>
-      refsMantidas.has(rota.origem) && refsMantidas.has(rota.destino)
-  );
-  const removidas = plano.etapas
-    .filter((etapa) => !refsMantidas.has(etapa.ref))
-    .map((etapa) => etapa.titulo || etapa.ref);
-
-  if (removidas.length > 0) {
-    console.warn("[assistente-fluxos] removendo etapas inalcancaveis", {
-      total: removidas.length,
-      etapas: removidas.slice(0, 20),
+    const chave = JSON.stringify({
+      origem: rota.origem,
+      destino: rota.destino,
+      condicao,
+      valor: normalizar(rota.valor || rota.rotulo),
     });
+
+    if (rotasVistas.has(chave)) {
+      removidas += 1;
+      continue;
+    }
+
+    rotasVistas.add(chave);
+    resultado.push(rota);
   }
 
-  return {
-    ...plano,
-    etapas,
-    rotas,
-    avisos: [
-      ...plano.avisos,
-      ...(removidas.length > 0
-        ? [
-            `${removidas.length} etapa(s) duplicada(s) ou desconectada(s) foram removidas automaticamente antes da criacao.`,
-          ]
-        : []),
-    ],
-  };
+  return { rotas: resultado, removidas };
 }
 
 export function repararPlanoAntesDaCriacao(valor: unknown) {
-  let plano = normalizarPlanoAssistente(valor);
-
-  plano = {
-    ...plano,
-    clarificacoes: [],
-    rotas: removerRotasIncondicionaisDePerguntas(plano.etapas, plano.rotas),
-  };
-
-  plano = removerRotasDuplicadasDeOpcoes(plano);
-  plano = completarRotasDeOpcoesPlano(plano);
-  plano = removerRotasDuplicadasDeOpcoes(plano);
-  plano = {
-    ...plano,
-    rotas: removerRotasIncondicionaisDePerguntas(plano.etapas, plano.rotas),
-  };
-  plano = conectarOrfasLineares(plano);
-  plano = conectarEncerramento(plano);
-  plano = completarRotasDeOpcoesPlano(plano);
-  plano = removerRotasDuplicadasDeOpcoes(plano);
-  plano = removerEtapasInalcancaveis(plano);
-  plano = removerRotasDuplicadasDeOpcoes(plano);
+  const plano = normalizarPlanoAssistente(valor);
+  const sanitizado = sanitizarRotas(plano.etapas, plano.rotas);
 
   return {
     ...plano,
-    rotas: removerRotasIncondicionaisDePerguntas(plano.etapas, plano.rotas),
-  };
+    clarificacoes: [],
+    rotas: sanitizado.rotas,
+    avisos: [
+      ...plano.avisos,
+      ...(sanitizado.removidas > 0
+        ? [
+            `${sanitizado.removidas} rota(s) inválida(s) ou duplicada(s) foram removidas antes da compilação. As conexões ausentes serão reconstruídas pelo compilador seguro.`,
+          ]
+        : []),
+    ],
+  } satisfies PlanoAssistenteFluxos;
 }
 
 export async function prepararSessaoAntesDeCriar(request: Request) {
@@ -331,7 +150,7 @@ export async function prepararSessaoAntesDeCriar(request: Request) {
 
   if (atualizarError) {
     console.warn(
-      "[assistente-fluxos] nao foi possivel salvar reparo final",
+      "[assistente-fluxos] nao foi possivel salvar saneamento final",
       atualizarError
     );
   }
