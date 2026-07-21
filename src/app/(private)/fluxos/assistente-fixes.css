@@ -1,4 +1,4 @@
-/* Correções de contenção do painel do assistente de fluxos.
+/* Contenção e empilhamento do painel do assistente de fluxos.
    Os seletores por fragmento alcançam as classes geradas pelo CSS Module. */
 
 [class*="assistantPanel"] {
@@ -27,22 +27,56 @@
 
 [class*="assistantBody"] {
   overflow-x: hidden !important;
+  align-content: start;
+  grid-auto-rows: max-content;
 }
 
-[class*="assistantConversation"],
+[class*="assistantConversation"] {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  height: auto !important;
+  min-height: max-content;
+  overflow: visible !important;
+}
+
 [class*="assistantHistoryTurn"] {
-  overflow: hidden;
+  display: flex !important;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  width: 100%;
+  height: auto !important;
+  min-height: max-content;
+  overflow: visible !important;
+  position: static !important;
+}
+
+[class*="assistantChatBubble"],
+[class*="assistantUserBubble"],
+[class*="assistantQuestionCard"],
+[class*="assistantProgress"],
+[class*="assistantPlanList"] {
+  flex: 0 0 auto;
+  width: 100%;
+  height: auto !important;
+  position: static !important;
+  inset: auto !important;
 }
 
 [class*="assistantChatBubble"],
 [class*="assistantUserBubble"],
 [class*="assistantQuestionCard"] {
-  overflow: hidden;
+  overflow: visible !important;
 }
 
 [class*="assistantUserBubble"] {
   width: fit-content;
   max-width: 88%;
+  align-self: flex-end;
 }
 
 [class*="assistantChatBubble"] p,

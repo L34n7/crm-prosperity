@@ -169,26 +169,41 @@ function perguntaClarificacao(
   };
 }
 
+function removerSugestaoDeUrl(
+  perguntas: PerguntaAssistenteFluxo[]
+): PerguntaAssistenteFluxo[] {
+  return perguntas.map((pergunta) =>
+    pergunta.campo === "url"
+      ? {
+          ...pergunta,
+          valor_sugerido: null,
+        }
+      : pergunta
+  );
+}
+
 export function criarPerguntasAssistenteFluxo(params: Parameters<
   typeof criarPerguntasOriginais
 >[0]) {
   if (params.plano.clarificacoes.length === 0) {
-    return criarPerguntasOriginais(params);
+    return removerSugestaoDeUrl(criarPerguntasOriginais(params));
   }
 
-  return params.plano.clarificacoes.map((clarificacao) => {
-    if (ehClarificacaoTecnicaDeSetor(clarificacao)) {
-      const etapa = encontrarEtapaTransferencia(params.plano, clarificacao);
+  return removerSugestaoDeUrl(
+    params.plano.clarificacoes.map((clarificacao) => {
+      if (ehClarificacaoTecnicaDeSetor(clarificacao)) {
+        const etapa = encontrarEtapaTransferencia(params.plano, clarificacao);
 
-      if (etapa) {
-        return perguntaTecnicaDeSetor({
-          clarificacao,
-          etapa,
-          setores: params.setores,
-        });
+        if (etapa) {
+          return perguntaTecnicaDeSetor({
+            clarificacao,
+            etapa,
+            setores: params.setores,
+          });
+        }
       }
-    }
 
-    return perguntaClarificacao(clarificacao);
-  });
+      return perguntaClarificacao(clarificacao);
+    })
+  );
 }
