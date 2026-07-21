@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
   compilarPlanoAssistente,
+  completarRotasDeOpcoesPlano,
   normalizarPlanoAssistente,
   type AssistenteAutomacaoConexao,
   type AssistenteAutomacaoNo,
@@ -697,7 +698,22 @@ const planoAssistenteSchema = {
           titulo: { type: ["string", "null"] },
           mensagem: { type: ["string", "null"] },
           variavel: { type: ["string", "null"] },
-          tipo_captura: { type: ["string", "null"] },
+          tipo_captura: {
+            type: ["string", "null"],
+            enum: [
+              "texto",
+              "nome",
+              "cpf",
+              "cnpj",
+              "email",
+              "telefone",
+              "numero",
+              "data",
+              "cep",
+              "moeda",
+              null,
+            ],
+          },
           setor_id: { type: ["string", "null"] },
           setor_nome: { type: ["string", "null"] },
           resultado: { type: ["string", "null"] },
@@ -878,12 +894,15 @@ Tipos de etapa permitidos:
 Regras:
 - Use apenas setores recebidos no contexto. Preencha setor_id quando souber.
 - Para pergunta_botoes, gere no maximo 3 opcoes.
-- Para capturar_resposta, preencha variavel com chave curta em snake_case.
+- Para capturar_resposta, use somente uma variavel personalizada em snake_case. Nunca use variaveis fixas do contato como nome, email, telefone, numero, origem ou status_lead. Para capturar o nome, use a chave nome_cliente e tipo_captura nome.
+- Tipos de captura permitidos: texto, nome, cpf, cnpj, email, telefone, numero, data, cep ou moeda. Nunca use "livre"; para texto livre use "texto".
+- Toda variavel capturada deve ser utilizada em uma etapa posterior, com a sintaxe {{chave}}. Se o pedido nao precisar reutilizar a resposta, nao crie o bloco de captura.
 - Para etapas de midia, indique apenas o tipo adequado. A midia real sera escolhida pelo usuario depois.
 - Para redirect, sugira mensagem e botao_texto com ate 20 caracteres. Extraia a URL do pedido quando existir; ela sera confirmada pelo usuario.
 - Para pergunta_livre_ia, crie rotas com condicao "ia" e descricao_ia clara.
 - Para rotas de opcoes, use condicao "resposta_contem" e valor igual ao id da opcao.
 - Toda opcao de pergunta_opcoes ou pergunta_botoes deve possuir exatamente uma rota.
+- Antes de finalizar, confira a contagem: cada opcao/botao deve aparecer uma unica vez em rotas, sem excecao.
 - Nunca crie rota "sempre" saindo de pergunta_opcoes ou pergunta_botoes.
 - Conecte todas as etapas. Nenhuma etapa pode ficar orfa ou sem caminho a partir de inicio.
 - O inicio deve apontar para a primeira etapa real solicitada pelo usuario.
@@ -989,6 +1008,7 @@ Voce esta reparando um plano que falhou na validacao tecnica.
 - Corrija somente o necessario para resolver todos os erros informados.
 - Preserve textos, intencao, opcoes e caminhos corretos do pedido original.
 - Garanta exatamente uma rota para cada opcao e conecte todas as etapas a partir do inicio.
+- Para erros de captura, use variavel personalizada (por exemplo nome_cliente), tipo_captura valido e reutilize {{variavel}} em uma mensagem posterior.
 - Nao gere novas clarificacoes durante o reparo; retorne clarificacoes como array vazio.
     `.trim(),
   });
@@ -1006,7 +1026,7 @@ Voce esta reparando um plano que falhou na validacao tecnica.
     },
   });
 
-  plano = reparo.plano;
+  plano = completarRotasDeOpcoesPlano(reparo.plano);
   compilacao = compilar(plano);
   const errosRestantes = errosQueExigemReparo(compilacao.validacao.erros);
 

@@ -180,6 +180,29 @@ const VARIAVEIS_FIXAS = new Set([
   "ultimo_protocolo",
 ]);
 
+const TIPOS_CAPTURA_VALIDOS = new Set([
+  "texto",
+  "nome",
+  "cpf",
+  "cnpj",
+  "email",
+  "telefone",
+  "numero",
+  "data",
+  "cep",
+  "moeda",
+]);
+
+const ALIASES_TIPO_CAPTURA: Record<string, string> = {
+  livre: "texto",
+  texto_livre: "texto",
+  resposta_livre: "texto",
+  string: "texto",
+  e_mail: "email",
+  phone: "telefone",
+  currency: "moeda",
+};
+
 function texto(valor: unknown, limite = 1200) {
   return String(valor || "")
     .replace(/\s+/g, " ")
@@ -217,6 +240,59 @@ function normalizarChaveVariavel(valor: unknown) {
     .replace(/[^a-z0-9_]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "");
+}
+
+function contextoIndicaNome(etapa: {
+  titulo?: string | null;
+  mensagem?: string | null;
+  variavel?: string | null;
+}) {
+  return /\b(nome|chamar|chamo|seu nome|como posso te chamar)\b/i.test(
+    `${etapa.titulo || ""} ${etapa.mensagem || ""} ${etapa.variavel || ""}`
+  );
+}
+
+function normalizarTipoCaptura(etapa: {
+  titulo?: string | null;
+  mensagem?: string | null;
+  variavel?: string | null;
+  tipo_captura?: string | null;
+}) {
+  const informado = normalizarChaveVariavel(etapa.tipo_captura);
+  const tipo = ALIASES_TIPO_CAPTURA[informado] || informado;
+
+  if (contextoIndicaNome(etapa) && (!tipo || tipo === "texto")) {
+    return "nome";
+  }
+
+  return TIPOS_CAPTURA_VALIDOS.has(tipo) ? tipo : "texto";
+}
+
+function normalizarVariavelCaptura(etapa: {
+  titulo?: string | null;
+  mensagem?: string | null;
+  variavel?: string | null;
+  tipo_captura?: string | null;
+}) {
+  const variavelInformada = normalizarChaveVariavel(etapa.variavel);
+  const tipoCaptura = normalizarTipoCaptura(etapa);
+
+  if (
+    variavelInformada &&
+    !VARIAVEIS_FIXAS.has(variavelInformada) &&
+    variavelInformada !== "resposta" &&
+    variavelInformada !== "texto"
+  ) {
+    return variavelInformada;
+  }
+
+  if (tipoCaptura === "nome") return "nome_cliente";
+  if (tipoCaptura === "email") return "email_capturado";
+  if (tipoCaptura === "telefone") return "telefone_capturado";
+  if (tipoCaptura === "cpf") return "cpf_capturado";
+  if (tipoCaptura === "cnpj") return "cnpj_capturado";
+
+  return `${tipoCaptura || "resposta"}_capturado`;
 }
 
 function numeroInteiro(valor: unknown, fallback: number | null) {
@@ -492,13 +568,24 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {
       })
     : [];
 
-  return {
-    ref: normalizarRef(item.ref) || `etapa_${criarId()}`,
-    tipo,
+  const etapaBase = {
     titulo: texto(item.titulo, 120) || null,
     mensagem: texto(item.mensagem, 1800) || null,
     variavel: normalizarChaveVariavel(item.variavel) || null,
     tipo_captura: normalizarChaveVariavel(item.tipo_captura) || null,
+  };
+
+  const captura = tipo === "capturar_resposta";
+
+  return {
+    ref: normalizarRef(item.ref) || `etapa_${criarId()}`,
+    tipo,
+    titulo: etapaBase.titulo,
+    mensagem: etapaBase.mensagem,
+    variavel: captura ? normalizarVariavelCaptura(etapaBase) : etapaBase.variavel,
+    tipo_captura: captura
+      ? normalizarTipoCaptura(etapaBase)
+      : etapaBase.tipo_captura,
     setor_id: texto(item.setor_id, 120) || null,
     setor_nome: texto(item.setor_nome, 120) || null,
     resultado: texto(item.resultado, 40) || null,
@@ -532,6 +619,185 @@ function normalizarRota(valor: unknown): PlanoAssistenteRota | null {
   };
 }
 
+const TIPOS_ETAPA_COM_MENSAGEM = new Set([
+  "mensagem",
+  "pergunta_opcoes",
+  "pergunta_botoes",
+  "pergunta_livre_ia",
+  "redirect",
+  "avaliacao",
+]);
+
+function textoContemVariavel(valor: unknown, chave: string): boolean {
+  if (typeof valor === "string") {
+    return new RegExp(`\\{\\{\\s*${chave}\\s*\\}\\}`, "i").test(valor);
+  }
+
+  if (Array.isArray(valor)) {
+    return valor.some((item) => textoContemVariavel(item, chave));
+  }
+
+  if (valor && typeof valor === "object") {
+    return Object.values(valor).some((item) =>
+      textoContemVariavel(item, chave)
+    );
+  }
+
+  return false;
+}
+
+function personalizarMensagemComVariavel(mensagem: string, chave: string) {
+  const placeholder = `{{${chave}}}`;
+
+  if (textoContemVariavel(mensagem, chave)) return mensagem;
+
+  if (/muito prazer!?/i.test(mensagem)) {
+    return mensagem.replace(/muito prazer!?/i, `Muito prazer, ${placeholder}!`);
+  }
+
+  if (/^(ola|olá)\b/i.test(mensagem.trim())) {
+    return mensagem.replace(/^(\s*(?:ola|olá))/i, `$1, ${placeholder}`);
+  }
+
+  return `${placeholder}, ${mensagem}`;
+}
+
+function normalizarVariaveisCapturaUnicas(
+  etapas: PlanoAssistenteEtapa[]
+): PlanoAssistenteEtapa[] {
+  const usadas = new Set<string>();
+
+  return etapas.map((etapa) => {
+    if (etapa.tipo !== "capturar_resposta") return etapa;
+
+    const base = normalizarChaveVariavel(etapa.variavel) || "resposta_capturado";
+    let chave = base;
+    let indice = 2;
+
+    while (usadas.has(chave)) {
+      chave = `${base}_${indice}`;
+      indice += 1;
+    }
+
+    usadas.add(chave);
+    return chave === base ? etapa : { ...etapa, variavel: chave };
+  });
+}
+
+function garantirUsoCapturas(
+  etapas: PlanoAssistenteEtapa[],
+  rotas: PlanoAssistenteRota[]
+): PlanoAssistenteEtapa[] {
+  const adjacencias = new Map<string, string[]>();
+
+  for (const rota of rotas) {
+    adjacencias.set(rota.origem, [
+      ...(adjacencias.get(rota.origem) || []),
+      rota.destino,
+    ]);
+  }
+
+  const resultado = [...etapas];
+
+  for (const etapa of etapas) {
+    if (etapa.tipo !== "capturar_resposta" || !etapa.variavel) {
+      continue;
+    }
+
+    const visitados = new Set<string>();
+    const fila = [...(adjacencias.get(etapa.ref) || [])];
+    const alcancaveis: PlanoAssistenteEtapa[] = [];
+
+    while (fila.length > 0) {
+      const ref = fila.shift();
+      if (!ref || visitados.has(ref)) continue;
+      visitados.add(ref);
+
+      const destino = etapas.find((item) => item.ref === ref);
+      if (destino) alcancaveis.push(destino);
+
+      fila.push(...(adjacencias.get(ref) || []));
+    }
+
+    const usoExiste = alcancaveis.some((destino) =>
+      textoContemVariavel(destino.mensagem, etapa.variavel || "")
+    );
+
+    if (usoExiste || etapa.tipo_captura !== "nome") continue;
+
+    const destinoParaPersonalizar = alcancaveis.find(
+      (destino) =>
+        TIPOS_ETAPA_COM_MENSAGEM.has(destino.tipo) &&
+        Boolean(destino.mensagem)
+    );
+
+    if (!destinoParaPersonalizar) continue;
+
+    const indiceDestino = resultado.findIndex(
+      (item) => item.ref === destinoParaPersonalizar.ref
+    );
+
+    if (indiceDestino >= 0) {
+      resultado[indiceDestino] = {
+        ...resultado[indiceDestino],
+        mensagem: personalizarMensagemComVariavel(
+          resultado[indiceDestino].mensagem || "",
+          etapa.variavel
+        ),
+      };
+    }
+  }
+
+  return resultado;
+}
+
+export function completarRotasDeOpcoesPlano(
+  plano: PlanoAssistenteFluxos
+): PlanoAssistenteFluxos {
+  const rotas = [...plano.rotas];
+
+  for (let index = 0; index < plano.etapas.length; index += 1) {
+    const etapa = plano.etapas[index];
+    if (!["pergunta_opcoes", "pergunta_botoes"].includes(etapa.tipo)) {
+      continue;
+    }
+
+    const opcoes = etapa.opcoes || [];
+    const saidas = rotas.filter((rota) => rota.origem === etapa.ref);
+    const destinoFallback =
+      saidas.find((rota) => Boolean(rota.valor))?.destino ||
+      saidas[0]?.destino ||
+      plano.etapas[index + 1]?.ref;
+
+    if (!destinoFallback) continue;
+
+    for (const opcao of opcoes) {
+      const valor = normalizarChaveVariavel(opcao.id || opcao.texto);
+      if (!valor) continue;
+
+      const rotaExiste = rotas.some(
+        (rota) =>
+          rota.origem === etapa.ref &&
+          normalizarChaveVariavel(rota.valor) === valor
+      );
+
+      if (rotaExiste) continue;
+
+      rotas.push({
+        origem: etapa.ref,
+        destino: destinoFallback,
+        condicao: "resposta_contem",
+        valor,
+        rotulo: opcao.texto || valor,
+        descricao_ia: null,
+        timeout_segundos: null,
+      });
+    }
+  }
+
+  return { ...plano, rotas };
+}
+
 function normalizarMensagemRevisada(
   valor: unknown
 ): PlanoAssistenteMensagemRevisada | null {
@@ -557,7 +823,11 @@ function normalizarVariavelSugerida(
   if (!chave) return null;
 
   return {
-    chave,
+    chave: VARIAVEIS_FIXAS.has(chave)
+      ? chave === "nome" || chave === "nome_contato"
+        ? "nome_cliente"
+        : `${chave}_capturado`
+      : chave,
     descricao: texto(item.descricao, 280) || null,
   };
 }
@@ -599,8 +869,8 @@ export function normalizarPlanoAssistente(
   valor: unknown
 ): PlanoAssistenteFluxos {
   const item = objeto(valor);
-  const etapas = Array.isArray(item.etapas)
-    ? item.etapas.map(normalizarEtapa).filter(Boolean)
+  let etapas: PlanoAssistenteEtapa[] = Array.isArray(item.etapas)
+    ? (item.etapas.map(normalizarEtapa).filter(Boolean) as PlanoAssistenteEtapa[])
     : [];
   const rotas = Array.isArray(item.rotas)
     ? item.rotas.map(normalizarRota).filter(Boolean)
@@ -622,11 +892,19 @@ export function normalizarPlanoAssistente(
         .slice(0, 3)
     : [];
 
+  etapas = normalizarVariaveisCapturaUnicas(
+    etapas as PlanoAssistenteEtapa[]
+  );
+  etapas = garantirUsoCapturas(
+    etapas,
+    rotas as PlanoAssistenteRota[]
+  );
+
   return {
     nome_fluxo: texto(item.nome_fluxo, 120),
     objetivo: texto(item.objetivo, 500),
     resumo: texto(item.resumo, 1200),
-    etapas: etapas as PlanoAssistenteEtapa[],
+    etapas,
     rotas: rotas as PlanoAssistenteRota[],
     mensagens_revisadas:
       mensagensRevisadas as PlanoAssistenteMensagemRevisada[],
@@ -1261,6 +1539,39 @@ export function validarFluxoAssistente(params: {
 
     if (no.tipo_no === "capturar_resposta") {
       const chave = normalizarChaveVariavel(config.variavel);
+      const tipoCaptura = normalizarChaveVariavel(config.tipo_captura);
+
+      if (VARIAVEIS_FIXAS.has(chave)) {
+        erros.push({
+          codigo: "VARIAVEL_CAPTURA_FIXA",
+          mensagem: `O bloco "${no.titulo}" nao pode salvar a resposta na variavel fixa "${chave}". Use uma variavel personalizada, como "${tipoCaptura === "nome" ? "nome_cliente" : `${tipoCaptura || "resposta"}_capturado`}".`,
+          no_id: no.id,
+        });
+      }
+
+      if (!TIPOS_CAPTURA_VALIDOS.has(tipoCaptura)) {
+        erros.push({
+          codigo: "TIPO_CAPTURA_INVALIDO",
+          mensagem: `O bloco "${no.titulo}" possui um tipo de captura invalido.`,
+          no_id: no.id,
+        });
+      }
+
+      if (
+        chave &&
+        !variavelUsadaDepoisDoNo({
+          noId: no.id,
+          chave,
+          nos: params.nos,
+          conexoes: params.conexoes,
+        })
+      ) {
+        erros.push({
+          codigo: "CAPTURA_VARIAVEL_NAO_UTILIZADA",
+          mensagem: `A variavel "{{${chave}}}" capturada no bloco "${no.titulo}" nao e utilizada em nenhuma etapa posterior.`,
+          no_id: no.id,
+        });
+      }
 
       if (chave && !VARIAVEIS_FIXAS.has(chave) && !variaveis.has(chave)) {
         avisos.push({
@@ -1343,6 +1654,41 @@ function temCiclo(
   }
 
   return nos.some((no) => dfs(no.id));
+}
+
+function variavelUsadaDepoisDoNo(params: {
+  noId: string;
+  chave: string;
+  nos: AssistenteAutomacaoNo[];
+  conexoes: AssistenteAutomacaoConexao[];
+}) {
+  const nosPorId = new Map(params.nos.map((no) => [no.id, no]));
+  const saidasPorOrigem = new Map<string, string[]>();
+
+  for (const conexao of params.conexoes) {
+    saidasPorOrigem.set(conexao.no_origem_id, [
+      ...(saidasPorOrigem.get(conexao.no_origem_id) || []),
+      conexao.no_destino_id,
+    ]);
+  }
+
+  const visitados = new Set<string>();
+  const fila = [...(saidasPorOrigem.get(params.noId) || [])];
+
+  while (fila.length > 0) {
+    const noId = fila.shift();
+    if (!noId || visitados.has(noId)) continue;
+    visitados.add(noId);
+
+    const no = nosPorId.get(noId);
+    if (no && textoContemVariavel(no.configuracao_json, params.chave)) {
+      return true;
+    }
+
+    fila.push(...(saidasPorOrigem.get(noId) || []));
+  }
+
+  return false;
 }
 
 export function compilarPlanoAssistente(params: {

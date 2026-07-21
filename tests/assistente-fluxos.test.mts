@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   compilarPlanoAssistente,
+  completarRotasDeOpcoesPlano,
   normalizarPlanoAssistente,
 } from "../src/lib/automacoes/assistente-fluxos.ts";
 import {
@@ -784,4 +785,98 @@ test("assistente separa reparos estruturais de pendencias tecnicas", () => {
     errosQueBloqueiamCriacao(erros).map((erro) => erro.codigo),
     ["SETOR_AUSENTE", "OPCAO_SEM_ROTA"]
   );
+});
+
+test("assistente corrige captura de nome e reutiliza a variavel no fluxo", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Captura de nome",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      {
+        ref: "captura",
+        tipo: "capturar_resposta",
+        titulo: "Capturar nome",
+        mensagem: "Como posso te chamar?",
+        variavel: "nome",
+        tipo_captura: "texto",
+        opcoes: [],
+      },
+      {
+        ref: "proxima",
+        tipo: "mensagem",
+        titulo: "Boas-vindas",
+        mensagem: "Muito prazer! Vamos continuar.",
+        opcoes: [],
+      },
+      { ref: "fim", tipo: "encerrar", titulo: "Fim", opcoes: [] },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "captura", condicao: "sempre" },
+      { origem: "captura", destino: "proxima", condicao: "sempre" },
+      { origem: "proxima", destino: "fim", condicao: "sempre" },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [{ chave: "nome", descricao: "Nome do contato" }],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({
+    modo: "criar_fluxo",
+    plano,
+  });
+  const captura = resultado.nos.find((no) => no.tipo_no === "capturar_resposta");
+  const proxima = resultado.nos.find((no) => no.id !== captura?.id && no.titulo === "Boas-vindas");
+
+  assert.equal(captura?.configuracao_json.variavel, "nome_cliente");
+  assert.equal(captura?.configuracao_json.tipo_captura, "nome");
+  assert.match(String(proxima?.configuracao_json.mensagem), /\{\{nome_cliente\}\}/);
+  assert.equal(
+    resultado.variaveis_sugeridas.some((item) => item.chave === "nome"),
+    false
+  );
+  assert.equal(resultado.validacao.valido, true);
+});
+
+test("assistente completa a rota ausente de cada opcao de botoes", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Pergunta com rotas",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      {
+        ref: "pergunta",
+        tipo: "pergunta_botoes",
+        mensagem: "Escolha",
+        opcoes: [
+          { id: "a", texto: "A" },
+          { id: "b", texto: "B" },
+        ],
+      },
+      { ref: "fim", tipo: "encerrar", titulo: "Fim", opcoes: [] },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "pergunta", condicao: "sempre" },
+      {
+        origem: "pergunta",
+        destino: "fim",
+        condicao: "resposta_contem",
+        valor: "a",
+      },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({
+    modo: "criar_fluxo",
+    plano: completarRotasDeOpcoesPlano(plano),
+  });
+  const pergunta = resultado.nos.find((no) => no.tipo_no === "enviar_botoes");
+  const valores = resultado.conexoes
+    .filter((conexao) => conexao.no_origem_id === pergunta?.id)
+    .map((conexao) => conexao.condicao_json.valor)
+    .sort();
+
+  assert.deepEqual(valores, ["a", "b"]);
+  assert.equal(resultado.validacao.valido, true);
 });
