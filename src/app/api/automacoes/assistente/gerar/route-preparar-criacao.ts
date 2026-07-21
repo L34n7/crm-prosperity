@@ -44,7 +44,9 @@ function removerRotasIncondicionaisDePerguntas(
   rotas: PlanoAssistenteRota[]
 ) {
   const perguntas = new Set(
-    etapas.filter((etapa) => TIPOS_PERGUNTA.has(etapa.tipo)).map((etapa) => etapa.ref)
+    etapas
+      .filter((etapa) => TIPOS_PERGUNTA.has(etapa.tipo))
+      .map((etapa) => etapa.ref)
   );
 
   return rotas.filter(
@@ -91,7 +93,9 @@ function conectarEncerramento(plano: PlanoAssistenteFluxos) {
   const encerramento = plano.etapas.find((etapa) => etapa.tipo === "encerrar");
   if (!encerramento) return plano;
 
-  const entradas = plano.rotas.filter((rota) => rota.destino === encerramento.ref);
+  const entradas = plano.rotas.filter(
+    (rota) => rota.destino === encerramento.ref
+  );
   if (entradas.length > 0) return plano;
 
   const alcancaveis = refsAlcancaveis(plano);
@@ -220,9 +224,5 @@ export async function prepararSessaoAntesDeCriar(request: Request) {
     );
   }
 
-  return new Request(request.url, {
-    method: request.method,
-    headers: request.headers,
-    body: JSON.stringify(body),
-  });
+  return request;
 }
