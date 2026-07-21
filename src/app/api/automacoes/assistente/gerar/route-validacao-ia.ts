@@ -39,6 +39,13 @@ function normalizar(valor: unknown) {
     .trim();
 }
 
+function normalizarRef(valor: unknown) {
+  return normalizar(valor)
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
 export function extrairTextoSaida(resposta: RespostaOpenAI) {
   if (typeof resposta.output_text === "string") {
     return resposta.output_text.trim();
@@ -101,18 +108,21 @@ function extrairOpcoesDaSecao(
   fim: RegExp
 ) {
   const secao = extrairSecao(instrucao, inicio, fim);
-  const partes = secao.split(/BOT[ÕO]ES?\s*:?/i);
-  if (partes.length < 2) return [];
+  const marcador = /^\s*(?:depois\s+adicionar\s+os\s+)?bot[õo]es?\s*:?\s*$/im.exec(
+    secao
+  );
 
-  return partes
-    .slice(1)
-    .join("\n")
+  if (!marcador) return [];
+
+  return secao
+    .slice(marcador.index + marcador[0].length)
     .split(/\r?\n/)
     .map(limparItemLista)
     .filter(
       (linha) =>
         linha.length >= 2 &&
         linha.length <= 80 &&
+        !/^[-–—]+$/.test(linha) &&
         !/[.!?]$/.test(linha) &&
         !/^(mensagem|como podemos ajudar)/i.test(linha)
     );
@@ -121,24 +131,24 @@ function extrairOpcoesDaSecao(
 function extrairOpcoesMenuPrincipal(instrucao: string) {
   return extrairOpcoesDaSecao(
     instrucao,
-    /MENU\s+PRINCIPAL/i,
-    /PARA\s+CADA\s+PROCEDIMENTO|VALORES|ANTES\s+E\s+DEPOIS/i
+    /^\s*MENU\s+PRINCIPAL\s*$/im,
+    /^\s*PARA\s+CADA\s+PROCEDIMENTO\s*$/im
   );
 }
 
 function extrairOpcoesProcedimento(instrucao: string) {
   return extrairOpcoesDaSecao(
     instrucao,
-    /PARA\s+CADA\s+PROCEDIMENTO/i,
-    /VALORES|ANTES\s+E\s+DEPOIS|D[ÚU]VIDAS\s+FREQUENTES/i
+    /^\s*PARA\s+CADA\s+PROCEDIMENTO\s*$/im,
+    /^\s*VALORES\s*$/im
   );
 }
 
 function extrairServicos(instrucao: string) {
   const secao = extrairSecao(
     instrucao,
-    /SERVI[ÇC]OS/i,
-    /OBJETIVO|MENU\s+PRINCIPAL/i
+    /^\s*SERVI[ÇC]OS\s*$/im,
+    /^\s*OBJETIVO\s*$/im
   );
 
   return secao
@@ -175,7 +185,7 @@ function palavrasRelevantes(valor: string) {
 function textoCombina(alvo: unknown, esperado: string) {
   const normalizado = normalizar(alvo);
   const palavras = palavrasRelevantes(esperado);
-  return palavras.some((palavra) => normalizado.includes(palavra));
+  return palavras.length > 0 && palavras.some((palavra) => normalizado.includes(palavra));
 }
 
 function opcoesEtapa(etapa: ObjetoJson) {
@@ -188,20 +198,21 @@ function encontrarMenuPrincipal(
   etapas: ObjetoJson[],
   opcoesEsperadas: string[]
 ) {
-  const candidatas = etapas.filter((etapa) =>
-    ["pergunta_opcoes", "pergunta_botoes"].includes(String(etapa.tipo || ""))
-  );
-
-  return candidatas.sort((a, b) => {
-    const pontuar = (etapa: ObjetoJson) =>
-      opcoesEsperadas.filter((esperada) =>
+  const classificadas = etapas
+    .filter((etapa) =>
+      ["pergunta_opcoes", "pergunta_botoes"].includes(String(etapa.tipo || ""))
+    )
+    .map((etapa) => ({
+      etapa,
+      pontos: opcoesEsperadas.filter((esperada) =>
         opcoesEtapa(etapa).some((opcao) =>
           textoCombina(opcao.texto || opcao.id, esperada)
         )
-      ).length;
+      ).length,
+    }))
+    .sort((a, b) => b.pontos - a.pontos);
 
-    return pontuar(b) - pontuar(a);
-  })[0];
+  return classificadas[0]?.pontos > 0 ? classificadas[0].etapa : null;
 }
 
 function encontrarMenuProcedimento(
@@ -209,24 +220,276 @@ function encontrarMenuProcedimento(
   servico: string,
   opcoesEsperadas: string[]
 ) {
-  const candidatas = etapas.filter((etapa) =>
-    ["pergunta_opcoes", "pergunta_botoes"].includes(String(etapa.tipo || ""))
-  );
-
-  return candidatas.sort((a, b) => {
-    const pontuar = (etapa: ObjetoJson) => {
+  const classificadas = etapas
+    .filter((etapa) =>
+      ["pergunta_opcoes", "pergunta_botoes"].includes(String(etapa.tipo || ""))
+    )
+    .map((etapa) => {
       const identificacao = `${texto(etapa.titulo, 200)} ${texto(etapa.mensagem, 500)}`;
-      const pontosServico = textoCombina(identificacao, servico) ? 10 : 0;
+      const identificaServico = textoCombina(identificacao, servico);
       const pontosOpcoes = opcoesEsperadas.filter((esperada) =>
         opcoesEtapa(etapa).some((opcao) =>
           textoCombina(opcao.texto || opcao.id, esperada)
         )
       ).length;
-      return pontosServico + pontosOpcoes;
-    };
 
-    return pontuar(b) - pontuar(a);
-  })[0];
+      return {
+        etapa,
+        identificaServico,
+        pontos: (identificaServico ? 10 : 0) + pontosOpcoes,
+      };
+    })
+    .sort((a, b) => b.pontos - a.pontos);
+
+  const melhor = classificadas[0];
+  if (!melhor) return null;
+  if (melhor.identificaServico) return melhor.etapa;
+  return melhor.pontos >= Math.min(3, opcoesEsperadas.length) ? melhor.etapa : null;
+}
+
+function criarRefUnica(base: string, refs: Set<string>) {
+  const prefixo = normalizarRef(base) || "etapa";
+  let ref = prefixo;
+  let indice = 2;
+
+  while (refs.has(ref)) {
+    ref = `${prefixo}_${indice}`;
+    indice += 1;
+  }
+
+  refs.add(ref);
+  return ref;
+}
+
+function dividirMensagemDetalhes(mensagem: string, servico: string) {
+  const fragmentos = texto(mensagem, 6000)
+    .replace(/\s*[•▪◦]\s*/g, "\n")
+    .replace(/([.!?])\s+(?=[A-ZÀ-Ý0-9])/g, "$1\n")
+    .split(/\r?\n+/)
+    .map((parte) => parte.trim().replace(/^[-–—]+\s*/, ""))
+    .filter((parte) => parte.length >= 3);
+
+  if (fragmentos.length >= 3) {
+    const grupos: string[][] = [[], [], []];
+
+    fragmentos.forEach((fragmento, indice) => {
+      const grupo = Math.min(
+        2,
+        Math.floor((indice * 3) / Math.max(1, fragmentos.length))
+      );
+      grupos[grupo].push(fragmento);
+    });
+
+    const titulos = [
+      `✨ ${servico} — Visão geral`,
+      `🤍 ${servico} — Benefícios e indicações`,
+      `🩺 ${servico} — Cuidados e resultados`,
+    ];
+
+    return grupos.map((grupo, indice) =>
+      grupo.length > 0
+        ? `${titulos[indice]}\n${grupo.map((item) => `• ${item}`).join("\n")}`
+        : titulos[indice]
+    );
+  }
+
+  return [
+    mensagem,
+    `🤍 ${servico} — Benefícios e indicações\n• O protocolo é definido após uma avaliação individual.\n• A indicação considera os objetivos e as características de cada paciente.`,
+    `🩺 ${servico} — Cuidados e resultados\n• Duração, recuperação e resultados variam conforme o protocolo e a resposta individual.\n• A especialista orientará todos os cuidados antes e depois do procedimento.`,
+  ];
+}
+
+function expandirDetalhesProcedimentos(
+  plano: ObjetoJson,
+  instrucao: string
+) {
+  const instrucaoNormalizada = normalizar(instrucao);
+  const exigeDetalhes =
+    instrucaoNormalizada.includes("para cada procedimento") &&
+    instrucaoNormalizada.includes("beneficios") &&
+    instrucaoNormalizada.includes("cuidados");
+
+  if (!exigeDetalhes) return false;
+
+  const etapas = Array.isArray(plano.etapas)
+    ? plano.etapas.map((etapa) => objeto(etapa))
+    : [];
+  let rotas = Array.isArray(plano.rotas)
+    ? plano.rotas.map((rota) => objeto(rota))
+    : [];
+  const refs = new Set(etapas.map((etapa) => texto(etapa.ref, 160)).filter(Boolean));
+  let alterado = false;
+
+  for (const servico of extrairServicos(instrucao)) {
+    const mensagens = etapas.filter(
+      (etapa) =>
+        etapa.tipo === "mensagem" &&
+        textoCombina(
+          `${texto(etapa.titulo, 200)} ${texto(etapa.mensagem, 1800)}`,
+          servico
+        )
+    );
+
+    if (mensagens.length >= 3) continue;
+
+    const base =
+      mensagens.find(
+        (etapa) =>
+          !/duvida|faq|frequente|resposta/i.test(
+            `${texto(etapa.titulo)} ${texto(etapa.mensagem)}`
+          )
+      ) || mensagens[0];
+
+    if (!base) continue;
+
+    const baseRef = texto(base.ref, 160);
+    if (!baseRef) continue;
+
+    const partes = dividirMensagemDetalhes(texto(base.mensagem, 6000), servico);
+    const faltantes = Math.max(0, 3 - mensagens.length);
+    if (faltantes === 0) continue;
+
+    if (mensagens.length === 1) {
+      base.titulo = `${servico} — Visão geral`;
+      base.mensagem = partes[0];
+    }
+
+    const novasEtapas: ObjetoJson[] = [];
+
+    for (let indice = 0; indice < faltantes; indice += 1) {
+      const parteIndice = Math.min(2, 3 - faltantes + indice);
+      const ref = criarRefUnica(
+        `${baseRef}_${parteIndice === 1 ? "beneficios" : "cuidados"}`,
+        refs
+      );
+
+      novasEtapas.push({
+        ...base,
+        ref,
+        tipo: "mensagem",
+        titulo:
+          parteIndice === 1
+            ? `${servico} — Benefícios e indicações`
+            : `${servico} — Cuidados e resultados`,
+        mensagem: partes[parteIndice],
+        opcoes: [],
+      });
+    }
+
+    if (novasEtapas.length === 0) continue;
+
+    const saidasOriginais = rotas.filter(
+      (rota) => texto(rota.origem, 160) === baseRef
+    );
+    rotas = rotas.filter((rota) => texto(rota.origem, 160) !== baseRef);
+
+    let origemAtual = baseRef;
+
+    for (const novaEtapa of novasEtapas) {
+      const destino = texto(novaEtapa.ref, 160);
+      rotas.push({
+        origem: origemAtual,
+        destino,
+        condicao: "sempre",
+        valor: null,
+        rotulo: "Continuar",
+        descricao_ia: null,
+        timeout_segundos: null,
+      });
+      origemAtual = destino;
+      etapas.push(novaEtapa);
+    }
+
+    for (const saida of saidasOriginais) {
+      rotas.push({ ...saida, origem: origemAtual });
+    }
+
+    alterado = true;
+  }
+
+  if (alterado) {
+    plano.etapas = etapas;
+    plano.rotas = rotas;
+  }
+
+  return alterado;
+}
+
+function normalizarEstruturaPlano(plano: ObjetoJson, instrucao: string) {
+  const etapas = Array.isArray(plano.etapas)
+    ? plano.etapas.map((etapa) => objeto(etapa))
+    : [];
+  let rotas = Array.isArray(plano.rotas)
+    ? plano.rotas.map((rota) => objeto(rota))
+    : [];
+  let alterado = false;
+
+  for (const etapa of etapas) {
+    if (etapa.tipo === "pergunta_botoes" && opcoesEtapa(etapa).length > 3) {
+      etapa.tipo = "pergunta_opcoes";
+      alterado = true;
+    }
+  }
+
+  const sempreVistos = new Set<string>();
+  const rotasNormalizadas = rotas.filter((rota) => {
+    if (normalizar(rota.condicao) !== "sempre") return true;
+
+    const origem = texto(rota.origem, 160);
+    if (!origem || !sempreVistos.has(origem)) {
+      if (origem) sempreVistos.add(origem);
+      return true;
+    }
+
+    alterado = true;
+    return false;
+  });
+
+  rotas = rotasNormalizadas;
+  plano.etapas = etapas;
+  plano.rotas = rotas;
+
+  if (expandirDetalhesProcedimentos(plano, instrucao)) {
+    alterado = true;
+  }
+
+  if (alterado) {
+    const avisos = Array.isArray(plano.avisos)
+      ? plano.avisos.map((aviso) => texto(aviso, 500)).filter(Boolean)
+      : [];
+
+    plano.avisos = [
+      ...avisos,
+      "A estrutura foi normalizada automaticamente para respeitar limites de menus, conexoes lineares e detalhamento dos procedimentos.",
+    ];
+  }
+
+  return alterado;
+}
+
+export function repararRespostaPlano(
+  resposta: RespostaOpenAI,
+  contexto: ContextoAssistenteFluxos | undefined
+) {
+  const textoSaida = extrairTextoSaida(resposta);
+  if (!textoSaida) return resposta;
+
+  try {
+    const plano = objeto(JSON.parse(textoSaida));
+    const alterado = normalizarEstruturaPlano(
+      plano,
+      contexto?.instrucaoCompleta || ""
+    );
+
+    if (alterado) {
+      substituirTextoSaida(resposta, JSON.stringify(plano));
+    }
+  } catch {
+    // A validacao posterior continua responsavel por relatar JSON interrompido.
+  }
+
+  return resposta;
 }
 
 export function validarQualidadePlano(
@@ -444,11 +707,17 @@ export function validarQualidadePlano(
     }
 
     const menusFaq = etapas.filter((etapa) => {
-      if (!["pergunta_opcoes", "pergunta_botoes"].includes(String(etapa.tipo || ""))) {
+      if (
+        !["pergunta_opcoes", "pergunta_botoes"].includes(
+          String(etapa.tipo || "")
+        )
+      ) {
         return false;
       }
 
-      const conteudo = `${texto(etapa.titulo)} ${texto(etapa.mensagem)} ${opcoesEtapa(etapa)
+      const conteudo = `${texto(etapa.titulo)} ${texto(etapa.mensagem)} ${opcoesEtapa(
+        etapa
+      )
         .map((opcao) => texto(opcao.texto || opcao.id))
         .join(" ")}`;
 
