@@ -159,6 +159,43 @@ function conectarOrfasLineares(plano: PlanoAssistenteFluxos) {
   return resultado;
 }
 
+function removerEtapasInalcancaveis(plano: PlanoAssistenteFluxos) {
+  const alcancaveis = refsAlcancaveis(plano);
+
+  if (alcancaveis.size === 0) return plano;
+
+  const etapas = plano.etapas.filter((etapa) => alcancaveis.has(etapa.ref));
+  const refsMantidas = new Set(etapas.map((etapa) => etapa.ref));
+  const rotas = plano.rotas.filter(
+    (rota) =>
+      refsMantidas.has(rota.origem) && refsMantidas.has(rota.destino)
+  );
+  const removidas = plano.etapas
+    .filter((etapa) => !refsMantidas.has(etapa.ref))
+    .map((etapa) => etapa.titulo || etapa.ref);
+
+  if (removidas.length > 0) {
+    console.warn("[assistente-fluxos] removendo etapas inalcancaveis", {
+      total: removidas.length,
+      etapas: removidas.slice(0, 20),
+    });
+  }
+
+  return {
+    ...plano,
+    etapas,
+    rotas,
+    avisos: [
+      ...plano.avisos,
+      ...(removidas.length > 0
+        ? [
+            `${removidas.length} etapa(s) duplicada(s) ou desconectada(s) foram removidas automaticamente antes da criacao.`,
+          ]
+        : []),
+    ],
+  };
+}
+
 export function repararPlanoAntesDaCriacao(valor: unknown) {
   let plano = normalizarPlanoAssistente(valor);
 
@@ -175,8 +212,13 @@ export function repararPlanoAntesDaCriacao(valor: unknown) {
   };
   plano = conectarOrfasLineares(plano);
   plano = conectarEncerramento(plano);
+  plano = completarRotasDeOpcoesPlano(plano);
+  plano = removerEtapasInalcancaveis(plano);
 
-  return completarRotasDeOpcoesPlano(plano);
+  return {
+    ...plano,
+    rotas: removerRotasIncondicionaisDePerguntas(plano.etapas, plano.rotas),
+  };
 }
 
 export async function prepararSessaoAntesDeCriar(request: Request) {
