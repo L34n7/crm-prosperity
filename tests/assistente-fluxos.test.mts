@@ -4,6 +4,13 @@ import {
   compilarPlanoAssistente,
   normalizarPlanoAssistente,
 } from "../src/lib/automacoes/assistente-fluxos.ts";
+import {
+  aplicarRespostaPerguntaAssistente,
+  criarPerguntasAssistenteFluxo,
+  errosQueBloqueiamCriacao,
+  errosQueExigemReparo,
+  proximaPerguntaAssistente,
+} from "../src/lib/automacoes/assistente-fluxos-conversa.ts";
 
 test("compila plano de criacao em nos e conexoes validos", () => {
   const plano = normalizarPlanoAssistente({
@@ -548,5 +555,233 @@ test("adicionar etapa substitui rotas antigas do bloco alterado", () => {
     saidasRenda.filter((conexao) => conexao.condicao_json.valor === "a")
       .length,
     1
+  );
+});
+test("assistente coleta midia, URL e setor antes de compilar", () => {
+  let plano = normalizarPlanoAssistente({
+    nome_fluxo: "Fluxo guiado",
+    objetivo: "Enviar material e transferir",
+    resumo: "Fluxo com campos tecnicos confirmados pelo usuario.",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      {
+        ref: "material",
+        tipo: "midia_arquivo",
+        titulo: "Enviar catalogo",
+        mensagem: "Segue nosso catalogo.",
+        midia_tipo: "arquivo",
+        opcoes: [],
+      },
+      {
+        ref: "site",
+        tipo: "redirect",
+        titulo: "Conheca o site",
+        mensagem: "Veja mais detalhes em nosso site.",
+        botao_texto: "Abrir site",
+        opcoes: [],
+      },
+      {
+        ref: "comercial",
+        tipo: "transferir",
+        titulo: "Falar com comercial",
+        mensagem: "Vou encaminhar voce.",
+        opcoes: [],
+      },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "material", condicao: "sempre" },
+      { origem: "material", destino: "site", condicao: "sempre" },
+      { origem: "site", destino: "comercial", condicao: "sempre" },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+  const setores = [{ id: "setor-vendas", nome: "Vendas" }];
+  const midias = [
+    {
+      id: "midia-catalogo",
+      nome: "Catalogo.pdf",
+      tipo: "arquivo" as const,
+      url: "https://arquivos.exemplo.com/catalogo.pdf",
+    },
+  ];
+  const perguntas = criarPerguntasAssistenteFluxo({ plano, setores, midias });
+
+  assert.deepEqual(
+    perguntas.map((pergunta) => pergunta.campo),
+    ["midia_id", "url", "setor_id"]
+  );
+
+  const respostas = [
+    "midia-catalogo",
+    "https://exemplo.com/imovel",
+    "setor-vendas",
+  ];
+  const respondidas: string[] = [];
+
+  for (const resposta of respostas) {
+    const pergunta = proximaPerguntaAssistente({ perguntas, respondidas });
+    if (!pergunta) throw new Error("Pergunta esperada nao encontrada.");
+    const aplicada = aplicarRespostaPerguntaAssistente({
+      plano,
+      pergunta,
+      resposta,
+      setores,
+      midias,
+    });
+    plano = aplicada.plano;
+    respondidas.push(pergunta.id);
+  }
+
+  assert.equal(
+    proximaPerguntaAssistente({ perguntas, respondidas }),
+    null
+  );
+
+  const resultado = compilarPlanoAssistente({
+    modo: "criar_fluxo",
+    plano,
+    setores,
+    midias,
+  });
+
+  assert.equal(resultado.validacao.valido, true);
+  assert.equal(
+    resultado.nos.find((no) => no.tipo_no === "enviar_arquivo")
+      ?.configuracao_json.midia_id,
+    "midia-catalogo"
+  );
+  assert.equal(
+    resultado.nos.find((no) => no.tipo_no === "botao_redirect")
+      ?.configuracao_json.url,
+    "https://exemplo.com/imovel"
+  );
+});
+
+test("assistente permite criar rascunho sem midia selecionada", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Fluxo sem midia",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      { ref: "foto", tipo: "midia_imagem", titulo: "Foto", opcoes: [] },
+      { ref: "fim", tipo: "encerrar", titulo: "Fim", opcoes: [] },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "foto", condicao: "sempre" },
+      { origem: "foto", destino: "fim", condicao: "sempre" },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+  const perguntas = criarPerguntasAssistenteFluxo({
+    plano,
+    setores: [],
+    midias: [],
+  });
+
+  assert.equal(perguntas.length, 1);
+  assert.equal(perguntas[0].bloqueada, false);
+  assert.equal(perguntas[0].obrigatoria, false);
+  assert.equal(perguntas[0].opcoes.length, 0);
+
+  const aplicada = aplicarRespostaPerguntaAssistente({
+    plano,
+    pergunta: perguntas[0],
+    resposta: "",
+    setores: [],
+    midias: [],
+  });
+  const etapaMidia = aplicada.plano.etapas.find((etapa) => etapa.ref === "foto");
+
+  assert.equal(aplicada.resumoResposta, "Continuar sem mídia");
+  assert.equal(etapaMidia?.midia_id, null);
+  assert.equal(etapaMidia?.midia_url, null);
+
+  const compilacao = compilarPlanoAssistente({
+    modo: "criar_fluxo",
+    plano: aplicada.plano,
+    setores: [],
+    midias: [],
+  });
+
+  assert.equal(compilacao.validacao.valido, false);
+  assert.deepEqual(
+    compilacao.validacao.erros.map((erro) => erro.codigo),
+    ["MIDIA_AUSENTE"]
+  );
+  assert.equal(errosQueBloqueiamCriacao(compilacao.validacao.erros).length, 0);
+});
+
+test("assistente pergunta ambiguidades antes dos detalhes tecnicos", () => {
+  const planoComClarificacao = normalizarPlanoAssistente({
+    nome_fluxo: "Qualificacao",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      { ref: "handoff", tipo: "transferir", titulo: "Atendimento", opcoes: [] },
+    ],
+    rotas: [{ origem: "inicio", destino: "handoff", condicao: "sempre" }],
+    clarificacoes: [
+      {
+        id: "objetivo_final",
+        pergunta: "Qual deve ser o objetivo final?",
+        tipo: "selecao",
+        opcoes: [
+          { id: "venda", texto: "Concluir venda" },
+          { id: "agendamento", texto: "Agendar visita" },
+        ],
+        valor_sugerido: "venda",
+        motivo: "A resposta altera o encerramento.",
+      },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const perguntas = criarPerguntasAssistenteFluxo({
+    plano: planoComClarificacao,
+    setores: [{ id: "vendas", nome: "Vendas" }],
+    midias: [],
+  });
+
+  assert.equal(perguntas.length, 1);
+  assert.equal(perguntas[0].campo, "clarificacao");
+  assert.deepEqual(
+    perguntas[0].opcoes.map((opcao) => opcao.id),
+    ["venda", "agendamento"]
+  );
+
+  const planoEsclarecido = normalizarPlanoAssistente({
+    ...planoComClarificacao,
+    clarificacoes: [],
+  });
+  const perguntasTecnicas = criarPerguntasAssistenteFluxo({
+    plano: planoEsclarecido,
+    setores: [{ id: "vendas", nome: "Vendas" }],
+    midias: [],
+  });
+
+  assert.deepEqual(
+    perguntasTecnicas.map((pergunta) => pergunta.campo),
+    ["setor_id"]
+  );
+});
+
+test("assistente separa reparos estruturais de pendencias tecnicas", () => {
+  const erros = [
+    { codigo: "MIDIA_AUSENTE", mensagem: "Selecione uma midia." },
+    { codigo: "SETOR_AUSENTE", mensagem: "Selecione um setor." },
+    { codigo: "OPCAO_SEM_ROTA", mensagem: "A opcao precisa de uma rota." },
+  ];
+
+  assert.deepEqual(
+    errosQueExigemReparo(erros).map((erro) => erro.codigo),
+    ["OPCAO_SEM_ROTA"]
+  );
+  assert.deepEqual(
+    errosQueBloqueiamCriacao(erros).map((erro) => erro.codigo),
+    ["SETOR_AUSENTE", "OPCAO_SEM_ROTA"]
   );
 });

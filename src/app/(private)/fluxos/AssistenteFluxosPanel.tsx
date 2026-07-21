@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Edge, Node } from "@xyflow/react";
-import { Check, Sparkles, X } from "lucide-react";
+import { Check, Pencil, Sparkles, X } from "lucide-react";
 import styles from "./fluxos.module.css";
 
 type AssistenteAutomacaoNo = {
@@ -41,7 +41,34 @@ type ValidacaoItem = {
 };
 
 type RespostaAssistente = {
-  proposta_id: string;
+  proposta_id?: string;
+  sessao_id?: string;
+  fase?: "coletando" | "pronto" | "concluido";
+  mensagem?: string;
+  pergunta?: {
+    id: string;
+    etapa_ref: string;
+    campo: "clarificacao" | "setor_id" | "midia_id" | "url";
+    tipo: "selecao" | "texto";
+    mensagem: string;
+    ajuda: string | null;
+    obrigatoria: boolean;
+    bloqueada: boolean;
+    valor_sugerido: string | null;
+    opcoes: Array<{
+      id: string;
+      label: string;
+      descricao: string | null;
+    }>;
+  } | null;
+  progresso?: {
+    respondidas: number;
+    total: number;
+  };
+  historico?: Array<{
+    pergunta: string;
+    resposta: string;
+  }>;
   modo: ModoAssistenteFluxos;
   resumo: string;
   materializado?: boolean;
@@ -129,7 +156,7 @@ const MODOS: Array<{
   {
     id: "criar_fluxo",
     label: "Criar fluxo completo",
-    descricao: "Cria um novo fluxo rascunho salvo.",
+    descricao: "Monta o fluxo, confirma detalhes e salva somente no final.",
   },
   {
     id: "adicionar_etapa",
@@ -150,6 +177,7 @@ const MODOS: Array<{
 
 const TOKENS_PROMPT_FIXO_ASSISTENTE_ESTIMADOS = 1800;
 const TOKENS_SAIDA_MAX_ASSISTENTE = 4200;
+const CHAVE_SESSAO_ASSISTENTE_FLUXOS = "prosperity:assistente-fluxos:sessao";
 
 function nodeParaNo(node: Node): AssistenteAutomacaoNo {
   const data = (node.data || {}) as Record<string, unknown>;
@@ -214,7 +242,7 @@ function placeholderPorModo(modo: ModoAssistenteFluxos) {
 
 function tituloBotaoGerar(modo: ModoAssistenteFluxos) {
   if (modo === "analisar_fluxo") return "Analisar fluxo";
-  if (modo === "criar_fluxo") return "Criar novo fluxo com IA";
+  if (modo === "criar_fluxo") return "Iniciar assistente de criacao";
   return "Otimizar com IA";
 }
 
@@ -227,7 +255,7 @@ function tituloPreviaTokens(modo: ModoAssistenteFluxos) {
 
 function descricaoPreviaTokens(modo: ModoAssistenteFluxos) {
   if (modo === "criar_fluxo") {
-    return "A IA vai planejar um fluxo novo, compilar blocos e conexões e salvar um rascunho.";
+    return "A IA vai preparar o rascunho. Detalhes técnicos são confirmados sem IA; ambiguidades relevantes podem exigir uma revisão adicional do plano.";
   }
 
   if (modo === "adicionar_etapa") {
@@ -267,6 +295,7 @@ export default function AssistenteFluxosPanel({
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState("");
   const [resposta, setResposta] = useState<RespostaAssistente | null>(null);
+  const [respostaPergunta, setRespostaPergunta] = useState("");
   const [previaTokens, setPreviaTokens] =
     useState<PreviaTokensAssistente | null>(null);
 
@@ -282,6 +311,7 @@ export default function AssistenteFluxosPanel({
 
   function montarPayloadAssistente() {
     return {
+      acao: modo === "criar_fluxo" ? "preparar" : "gerar",
       modo,
       instrucao,
       fluxo_id: precisaFluxoAtual ? fluxoSelecionado?.id || null : null,
@@ -363,6 +393,14 @@ export default function AssistenteFluxosPanel({
 
       const respostaAssistente = json as RespostaAssistente;
       setResposta(respostaAssistente);
+      setRespostaPergunta(respostaAssistente.pergunta?.valor_sugerido || "");
+
+      if (respostaAssistente.sessao_id) {
+        window.localStorage.setItem(
+          CHAVE_SESSAO_ASSISTENTE_FLUXOS,
+          respostaAssistente.sessao_id
+        );
+      }
 
       if (respostaAssistente.fluxo_criado) {
         onFluxoCriado(respostaAssistente.fluxo_criado);
@@ -375,6 +413,122 @@ export default function AssistenteFluxosPanel({
       setGerando(false);
     }
   }
+
+  async function enviarAcaoConversa(
+    acao: "responder" | "atualizar" | "criar",
+    payload: Record<string, unknown> = {}
+  ) {
+    if (!resposta?.sessao_id) return;
+
+    try {
+      setGerando(true);
+      setErro("");
+
+      const res = await fetch("/api/automacoes/assistente/gerar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modo: "criar_fluxo",
+          acao,
+          sessao_id: resposta.sessao_id,
+          ...payload,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao continuar o assistente.");
+      }
+
+      const atualizada = json as RespostaAssistente;
+      setResposta(atualizada);
+      setRespostaPergunta(atualizada.pergunta?.valor_sugerido || "");
+
+      if (atualizada.fase === "concluido") {
+        window.localStorage.removeItem(CHAVE_SESSAO_ASSISTENTE_FLUXOS);
+      }
+
+      if (atualizada.fluxo_criado) {
+        onFluxoCriado(atualizada.fluxo_criado);
+      }
+    } catch (error: unknown) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao continuar o assistente."
+      );
+    } finally {
+      setGerando(false);
+    }
+  }
+
+  async function responderPerguntaAssistente() {
+    if (!resposta?.pergunta) return;
+
+    await enviarAcaoConversa("responder", {
+      pergunta_id: resposta.pergunta.id,
+      resposta: respostaPergunta,
+    });
+  }
+
+  function reiniciarConversa() {
+    window.localStorage.removeItem(CHAVE_SESSAO_ASSISTENTE_FLUXOS);
+    setResposta(null);
+    setRespostaPergunta("");
+    setErro("");
+  }
+
+  useEffect(() => {
+    const sessaoId = window.localStorage.getItem(
+      CHAVE_SESSAO_ASSISTENTE_FLUXOS
+    );
+
+    if (!sessaoId) return;
+
+    let cancelado = false;
+
+    async function retomarSessao() {
+      try {
+        setGerando(true);
+        const res = await fetch("/api/automacoes/assistente/gerar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            modo: "criar_fluxo",
+            acao: "retomar",
+            sessao_id: sessaoId,
+          }),
+        });
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error || "Sessao indisponivel.");
+        }
+
+        if (cancelado) return;
+
+        const retomada = json as RespostaAssistente;
+        setModo("criar_fluxo");
+        setResposta(retomada);
+        setRespostaPergunta(retomada.pergunta?.valor_sugerido || "");
+      } catch {
+        window.localStorage.removeItem(CHAVE_SESSAO_ASSISTENTE_FLUXOS);
+      } finally {
+        if (!cancelado) setGerando(false);
+      }
+    }
+
+    void retomarSessao();
+
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  const conversaAtiva =
+    modo === "criar_fluxo" &&
+    Boolean(resposta?.sessao_id) &&
+    resposta?.fase !== "concluido";
 
   return (
     <aside className={styles.assistantPanel}>
@@ -402,56 +556,240 @@ export default function AssistenteFluxosPanel({
           </div>
         )}
 
-        <div className={styles.assistantModeGrid}>
-          {MODOS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={
-                modo === item.id
-                  ? styles.assistantModeActive
-                  : styles.assistantModeButton
-              }
-              onClick={() => {
-                setModo(item.id);
-                setResposta(null);
-                setErro("");
-              }}
-            >
-              <strong>{item.label}</strong>
-              <span>{item.descricao}</span>
-            </button>
-          ))}
+        {!conversaAtiva && (
+          <div className={styles.assistantModeGrid}>
+            {MODOS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={
+                  modo === item.id
+                    ? styles.assistantModeActive
+                    : styles.assistantModeButton
+                }
+                onClick={() => {
+                  setModo(item.id);
+                  setResposta(null);
+                  setRespostaPergunta("");
+                  setErro("");
+                }}
+              >
+                <strong>{item.label}</strong>
+                <span>{item.descricao}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className={styles.assistantManualNotice}>
+          <Pencil size={15} aria-hidden="true" />
+          <p>
+            As informações geradas pela IA são sugestões. Depois da criação,
+            você poderá alterar manualmente qualquer texto, bloco, conexão,
+            setor, mídia ou link no editor do fluxo.
+          </p>
         </div>
 
-        <label className={styles.field}>
-          <span className={styles.label}>Pedido para a IA</span>
-          <textarea
-            className={styles.textarea}
-            rows={6}
-            value={instrucao}
-            onChange={(event) => setInstrucao(event.target.value)}
-            placeholder={placeholderPorModo(modo)}
-          />
-        </label>
+        {!conversaAtiva && (
+          <label className={styles.field}>
+            <span className={styles.label}>Pedido para a IA</span>
+            <textarea
+              className={styles.textarea}
+              rows={6}
+              value={instrucao}
+              onChange={(event) => setInstrucao(event.target.value)}
+              placeholder={placeholderPorModo(modo)}
+            />
+          </label>
+        )}
 
         {erro && <div className={styles.errorAlert}>{erro}</div>}
 
-        <button
-          type="button"
-          className={styles.primaryButton}
-          onClick={abrirPreviaTokens}
-          disabled={(precisaFluxoAtual && !fluxoSelecionado) || gerando}
-        >
-          <Sparkles size={16} />
-          {gerando ? "Gerando..." : tituloBotaoGerar(modo)}
-        </button>
+        {!conversaAtiva && (
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={abrirPreviaTokens}
+            disabled={(precisaFluxoAtual && !fluxoSelecionado) || gerando}
+          >
+            <Sparkles size={16} />
+            {gerando ? "Gerando..." : tituloBotaoGerar(modo)}
+          </button>
+        )}
 
-        {resposta && (
+        {conversaAtiva && resposta && (
+          <div className={styles.assistantConversation}>
+            {(resposta.historico || []).slice(-8).map((item, index) => (
+              <div
+                key={`${item.pergunta}-${index}`}
+                className={styles.assistantHistoryTurn}
+              >
+                <div className={styles.assistantChatBubble}>
+                  <strong>Assistente</strong>
+                  <p>{item.pergunta}</p>
+                </div>
+                <div className={styles.assistantUserBubble}>
+                  <strong>Você</strong>
+                  <p>{item.resposta}</p>
+                </div>
+              </div>
+            ))}
+
+            <div className={styles.assistantChatBubble}>
+              <strong>Assistente</strong>
+              <p>{resposta.mensagem}</p>
+            </div>
+
+            {(resposta.progresso?.total || 0) > 0 && (
+              <div className={styles.assistantProgress}>
+                <span>
+                  Detalhes confirmados: {resposta.progresso?.respondidas || 0} de{" "}
+                  {resposta.progresso?.total || 0}
+                </span>
+                <div>
+                  <i
+                    style={{
+                      width: `${Math.round(
+                        ((resposta.progresso?.respondidas || 0) /
+                          Math.max(1, resposta.progresso?.total || 1)) *
+                          100
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {resposta.pergunta && (
+              <div className={styles.assistantQuestionCard}>
+                <strong>{resposta.pergunta.mensagem}</strong>
+                {resposta.pergunta.ajuda && <p>{resposta.pergunta.ajuda}</p>}
+
+                {resposta.pergunta.tipo === "selecao" && (
+                  <div className={styles.assistantAnswerOptions}>
+                    {resposta.pergunta.opcoes.map((opcao) => (
+                      <button
+                        key={opcao.id}
+                        type="button"
+                        className={
+                          respostaPergunta === opcao.id
+                            ? styles.assistantAnswerOptionActive
+                            : styles.assistantAnswerOption
+                        }
+                        onClick={() => setRespostaPergunta(opcao.id)}
+                        disabled={gerando}
+                      >
+                        <span>{opcao.label}</span>
+                        {opcao.descricao && <small>{opcao.descricao}</small>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {resposta.pergunta.tipo === "texto" && (
+                  <input
+                    className={styles.input}
+                    value={respostaPergunta}
+                    onChange={(event) => setRespostaPergunta(event.target.value)}
+                    placeholder={
+                      resposta.pergunta.campo === "url"
+                        ? "https://exemplo.com.br"
+                        : "Digite sua resposta"
+                    }
+                    disabled={gerando}
+                  />
+                )}
+
+                {resposta.pergunta.bloqueada ? (
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => enviarAcaoConversa("atualizar")}
+                    disabled={gerando}
+                  >
+                    {gerando ? "Atualizando..." : "Atualizar opções"}
+                  </button>
+                ) : (
+                  <div className={styles.assistantQuestionActions}>
+                    {!resposta.pergunta.obrigatoria && (
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => {
+                          setRespostaPergunta("");
+                          void enviarAcaoConversa("responder", {
+                            pergunta_id: resposta.pergunta?.id,
+                            resposta: "",
+                          });
+                        }}
+                        disabled={gerando}
+                      >
+                        Continuar sem mídia
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className={styles.primaryButton}
+                      onClick={responderPerguntaAssistente}
+                      disabled={
+                        gerando ||
+                        (resposta.pergunta.obrigatoria &&
+                          !respostaPergunta.trim()) ||
+                        (!resposta.pergunta.obrigatoria &&
+                          resposta.pergunta.tipo === "selecao" &&
+                          !respostaPergunta.trim())
+                      }
+                    >
+                      {gerando ? "Salvando..." : "Confirmar resposta"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(resposta.plano?.etapas || []).length > 0 && (
+              <div className={styles.assistantPlanList}>
+                <strong>Rascunho do fluxo</strong>
+                {(resposta.plano?.etapas || []).slice(0, 16).map((etapa) => (
+                  <div key={etapa.ref} className={styles.assistantPlanItem}>
+                    <Check size={14} />
+                    <span>{etapa.titulo || etapa.tipo}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className={styles.assistantActions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={reiniciarConversa}
+                disabled={gerando}
+              >
+                Começar de novo
+              </button>
+
+              {resposta.fase === "pronto" && (
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={() => enviarAcaoConversa("criar")}
+                  disabled={gerando}
+                >
+                  <Sparkles size={16} />
+                  {gerando ? "Criando..." : "Criar fluxo rascunho"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {resposta && !conversaAtiva && (
           <div className={styles.assistantResult}>
             <div className={styles.assistantResultHeader}>
               <strong>Sugestao da IA</strong>
-              <span>{resposta.proposta_id.slice(0, 8)}</span>
+              <span>{resposta.proposta_id?.slice(0, 8) || "IA"}</span>
             </div>
 
             <p className={styles.assistantSummary}>{resposta.resumo}</p>

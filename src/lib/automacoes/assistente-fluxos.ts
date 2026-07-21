@@ -39,6 +39,13 @@ export type AssistenteVariavel = {
   origem?: string | null;
 };
 
+export type AssistenteMidia = {
+  id: string;
+  nome: string;
+  tipo: "imagem" | "video" | "audio" | "arquivo";
+  url: string;
+};
+
 export type PlanoAssistenteOpcao = {
   id: string;
   texto: string;
@@ -54,6 +61,12 @@ export type PlanoAssistenteEtapa = {
   setor_id: string | null;
   setor_nome: string | null;
   resultado: string | null;
+  midia_id: string | null;
+  midia_nome: string | null;
+  midia_tipo: string | null;
+  midia_url: string | null;
+  url: string | null;
+  botao_texto: string | null;
   opcoes: PlanoAssistenteOpcao[];
 };
 
@@ -78,6 +91,15 @@ export type PlanoAssistenteVariavelSugerida = {
   descricao: string | null;
 };
 
+export type PlanoAssistenteClarificacao = {
+  id: string;
+  pergunta: string;
+  tipo: "selecao" | "texto";
+  opcoes: PlanoAssistenteOpcao[];
+  valor_sugerido: string | null;
+  motivo: string | null;
+};
+
 export type PlanoAssistenteFluxos = {
   nome_fluxo: string;
   objetivo: string;
@@ -86,6 +108,7 @@ export type PlanoAssistenteFluxos = {
   rotas: PlanoAssistenteRota[];
   mensagens_revisadas: PlanoAssistenteMensagemRevisada[];
   variaveis_sugeridas: PlanoAssistenteVariavelSugerida[];
+  clarificacoes: PlanoAssistenteClarificacao[];
   avisos: string[];
 };
 
@@ -128,6 +151,11 @@ const TIPOS_ETAPA_PERMITIDOS = new Set([
   "pergunta_botoes",
   "pergunta_livre_ia",
   "capturar_resposta",
+  "midia_imagem",
+  "midia_video",
+  "midia_audio",
+  "midia_arquivo",
+  "redirect",
   "transferir",
   "encerrar",
   "avaliacao",
@@ -211,6 +239,11 @@ function tituloPadraoTipoNo(tipoNo: string) {
   if (tipoNo === "pergunta_livre_ia") return "Pergunta aberta IA";
   if (tipoNo === "enviar_botoes") return "Pergunta com botoes";
   if (tipoNo === "capturar_resposta") return "Capturar resposta";
+  if (tipoNo === "enviar_imagem") return "Imagem";
+  if (tipoNo === "enviar_video") return "Video";
+  if (tipoNo === "enviar_audio") return "Audio";
+  if (tipoNo === "enviar_arquivo") return "Arquivo";
+  if (tipoNo === "botao_redirect") return "Botao redirect";
   if (tipoNo === "transferir_setor") return "Transferir setor";
   if (tipoNo === "encerrar") return "Encerrar";
   if (tipoNo === "avaliacao") return "Avaliacao";
@@ -224,6 +257,11 @@ function tipoNoPorEtapa(tipo: string) {
   if (tipo === "pergunta_botoes") return "enviar_botoes";
   if (tipo === "pergunta_livre_ia") return "pergunta_livre_ia";
   if (tipo === "capturar_resposta") return "capturar_resposta";
+  if (tipo === "midia_imagem") return "enviar_imagem";
+  if (tipo === "midia_video") return "enviar_video";
+  if (tipo === "midia_audio") return "enviar_audio";
+  if (tipo === "midia_arquivo") return "enviar_arquivo";
+  if (tipo === "redirect") return "botao_redirect";
   if (tipo === "transferir") return "transferir_setor";
   if (tipo === "encerrar") return "encerrar";
   if (tipo === "avaliacao") return "avaliacao";
@@ -295,7 +333,8 @@ function buscarSetor(etapa: PlanoAssistenteEtapa, setores: AssistenteSetor[]) {
 function configuracaoPorEtapa(
   etapa: PlanoAssistenteEtapa,
   tipoNo: string,
-  setores: AssistenteSetor[]
+  setores: AssistenteSetor[],
+  midias: AssistenteMidia[]
 ) {
   const mensagem = texto(etapa.mensagem, 1800);
 
@@ -375,6 +414,29 @@ function configuracaoPorEtapa(
     };
   }
 
+  if (
+    ["enviar_imagem", "enviar_video", "enviar_audio", "enviar_arquivo"].includes(
+      tipoNo
+    )
+  ) {
+    const midia = midias.find((item) => item.id === etapa.midia_id);
+
+    return {
+      mensagem,
+      midia_id: midia?.id || etapa.midia_id || "",
+      midia_nome: midia?.nome || etapa.midia_nome || "",
+      midia_url: midia?.url || etapa.midia_url || "",
+    };
+  }
+
+  if (tipoNo === "botao_redirect") {
+    return {
+      mensagem: mensagem || "Clique no botao abaixo para acessar.",
+      botao_texto: texto(etapa.botao_texto, 20) || "Acessar",
+      url: texto(etapa.url, 1800),
+    };
+  }
+
   if (tipoNo === "transferir_setor") {
     const setor = buscarSetor(etapa, setores);
 
@@ -440,6 +502,12 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {
     setor_id: texto(item.setor_id, 120) || null,
     setor_nome: texto(item.setor_nome, 120) || null,
     resultado: texto(item.resultado, 40) || null,
+    midia_id: texto(item.midia_id, 120) || null,
+    midia_nome: texto(item.midia_nome, 240) || null,
+    midia_tipo: texto(item.midia_tipo, 40) || null,
+    midia_url: texto(item.midia_url, 1800) || null,
+    url: texto(item.url, 1800) || null,
+    botao_texto: texto(item.botao_texto, 20) || null,
     opcoes,
   };
 }
@@ -494,6 +562,39 @@ function normalizarVariavelSugerida(
   };
 }
 
+function normalizarClarificacao(
+  valor: unknown
+): PlanoAssistenteClarificacao | null {
+  const item = objeto(valor);
+  const id = normalizarRef(item.id);
+  const pergunta = texto(item.pergunta, 500);
+  const tipo = item.tipo === "selecao" ? "selecao" : "texto";
+  const opcoes = Array.isArray(item.opcoes)
+    ? item.opcoes
+        .map((opcaoRaw) => {
+          const opcao = objeto(opcaoRaw);
+          const opcaoId = texto(opcao.id, 80);
+          const opcaoTexto = texto(opcao.texto, 160);
+
+          return opcaoId && opcaoTexto
+            ? { id: opcaoId, texto: opcaoTexto }
+            : null;
+        })
+        .filter(Boolean)
+    : [];
+
+  if (!id || !pergunta) return null;
+
+  return {
+    id,
+    pergunta,
+    tipo,
+    opcoes: opcoes as PlanoAssistenteOpcao[],
+    valor_sugerido: texto(item.valor_sugerido, 500) || null,
+    motivo: texto(item.motivo, 300) || null,
+  };
+}
+
 export function normalizarPlanoAssistente(
   valor: unknown
 ): PlanoAssistenteFluxos {
@@ -514,6 +615,12 @@ export function normalizarPlanoAssistente(
         .map(normalizarVariavelSugerida)
         .filter(Boolean)
     : [];
+  const clarificacoes = Array.isArray(item.clarificacoes)
+    ? item.clarificacoes
+        .map(normalizarClarificacao)
+        .filter(Boolean)
+        .slice(0, 3)
+    : [];
 
   return {
     nome_fluxo: texto(item.nome_fluxo, 120),
@@ -525,6 +632,7 @@ export function normalizarPlanoAssistente(
       mensagensRevisadas as PlanoAssistenteMensagemRevisada[],
     variaveis_sugeridas:
       variaveisSugeridas as PlanoAssistenteVariavelSugerida[],
+    clarificacoes: clarificacoes as PlanoAssistenteClarificacao[],
     avisos: Array.isArray(item.avisos)
       ? item.avisos.map((aviso) => texto(aviso, 300)).filter(Boolean)
       : [],
@@ -565,7 +673,8 @@ function clonarConexao(
 
 function criarNo(
   etapa: PlanoAssistenteEtapa,
-  setores: AssistenteSetor[]
+  setores: AssistenteSetor[],
+  midias: AssistenteMidia[]
 ): AssistenteAutomacaoNo {
   const tipoNo = tipoNoPorEtapa(etapa.tipo);
 
@@ -576,7 +685,7 @@ function criarNo(
     descricao: null,
     posicao_x: 0,
     posicao_y: 0,
-    configuracao_json: configuracaoPorEtapa(etapa, tipoNo, setores),
+    configuracao_json: configuracaoPorEtapa(etapa, tipoNo, setores, midias),
     delay_segundos: tipoNo === "inicio" ? null : 3,
   };
 }
@@ -871,11 +980,15 @@ export function validarFluxoAssistente(params: {
   conexoes: AssistenteAutomacaoConexao[];
   setores?: AssistenteSetor[];
   variaveis?: AssistenteVariavel[];
+  midias?: AssistenteMidia[];
 }): ValidacaoAssistenteFluxos {
   const erros: ValidacaoItemAssistente[] = [];
   const avisos: ValidacaoItemAssistente[] = [];
   const nosPorId = new Map(params.nos.map((no) => [no.id, no]));
   const setoresIds = new Set((params.setores || []).map((setor) => setor.id));
+  const midiasPorId = new Map(
+    (params.midias || []).map((midia) => [midia.id, midia])
+  );
   const variaveis = new Set(
     (params.variaveis || [])
       .map((variavel) => normalizarChaveVariavel(variavel.chave))
@@ -986,6 +1099,70 @@ export function validarFluxoAssistente(params: {
         erros.push({
           codigo: "SETOR_INVALIDO",
           mensagem: `O setor do bloco "${no.titulo}" nao existe nesta empresa.`,
+          no_id: no.id,
+        });
+      }
+    }
+
+    if (
+      ["enviar_imagem", "enviar_video", "enviar_audio", "enviar_arquivo"].includes(
+        no.tipo_no
+      )
+    ) {
+      const midiaId = texto(config.midia_id, 120);
+      const midiaUrl = texto(config.midia_url, 1800);
+      const midia = midiasPorId.get(midiaId);
+      const tipoEsperado =
+        no.tipo_no === "enviar_imagem"
+          ? "imagem"
+          : no.tipo_no === "enviar_video"
+            ? "video"
+            : no.tipo_no === "enviar_audio"
+              ? "audio"
+              : "arquivo";
+
+      if (!midiaId || !midiaUrl) {
+        erros.push({
+          codigo: "MIDIA_AUSENTE",
+          mensagem: `O bloco "${no.titulo}" precisa ter uma midia selecionada.`,
+          no_id: no.id,
+        });
+      } else if (
+        midiasPorId.size > 0 &&
+        (!midia || midia.tipo !== tipoEsperado || midia.url !== midiaUrl)
+      ) {
+        erros.push({
+          codigo: "MIDIA_INVALIDA",
+          mensagem: `A midia do bloco "${no.titulo}" nao existe nesta empresa.`,
+          no_id: no.id,
+        });
+      }
+    }
+
+    if (no.tipo_no === "botao_redirect") {
+      const url = texto(config.url, 1800);
+      const botaoTexto = texto(config.botao_texto, 40);
+      let urlValida = false;
+
+      try {
+        const analisada = new URL(url);
+        urlValida = ["http:", "https:"].includes(analisada.protocol);
+      } catch {
+        urlValida = false;
+      }
+
+      if (!urlValida) {
+        erros.push({
+          codigo: "REDIRECT_URL_INVALIDA",
+          mensagem: `O bloco "${no.titulo}" precisa ter uma URL http ou https valida.`,
+          no_id: no.id,
+        });
+      }
+
+      if (!botaoTexto || botaoTexto.length > 20) {
+        erros.push({
+          codigo: "REDIRECT_BOTAO_INVALIDO",
+          mensagem: `O bloco "${no.titulo}" precisa ter texto de botao com ate 20 caracteres.`,
           no_id: no.id,
         });
       }
@@ -1177,9 +1354,11 @@ export function compilarPlanoAssistente(params: {
   } | null;
   setores?: AssistenteSetor[];
   variaveis?: AssistenteVariavel[];
+  midias?: AssistenteMidia[];
 }): ResultadoCompilacaoAssistente {
   const substituirTudo = params.modo === "criar_fluxo";
   const setores = params.setores || [];
+  const midias = params.midias || [];
   const nosBase = substituirTudo
     ? []
     : (params.fluxoAtual?.nos || []).map(clonarNo);
@@ -1195,6 +1374,7 @@ export function compilarPlanoAssistente(params: {
       conexoes: conexoesBase,
       setores,
       variaveis: params.variaveis || [],
+      midias,
     });
 
     return {
@@ -1239,6 +1419,12 @@ export function compilarPlanoAssistente(params: {
         setor_id: null,
         setor_nome: null,
         resultado: null,
+        midia_id: null,
+        midia_nome: null,
+        midia_tipo: null,
+        midia_url: null,
+        url: null,
+        botao_texto: null,
         opcoes: [],
       });
     }
@@ -1254,7 +1440,7 @@ export function compilarPlanoAssistente(params: {
 
       if (!ref || refs.has(ref)) continue;
 
-      const no = criarNo(etapa, setores);
+      const no = criarNo(etapa, setores, midias);
       refs.set(ref, no.id);
       idsCriados.add(no.id);
       novasPorRef.set(ref, no);
@@ -1359,6 +1545,7 @@ export function compilarPlanoAssistente(params: {
     conexoes,
     setores,
     variaveis: params.variaveis || [],
+    midias,
   });
 
   return {

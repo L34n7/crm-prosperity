@@ -7,11 +7,20 @@ import {
   normalizarPlanoAssistente,
   type AssistenteAutomacaoConexao,
   type AssistenteAutomacaoNo,
+  type AssistenteMidia,
   type AssistenteSetor,
   type AssistenteVariavel,
   type ModoAssistenteFluxos,
   type PlanoAssistenteFluxos,
 } from "@/lib/automacoes/assistente-fluxos";
+import {
+  aplicarRespostaPerguntaAssistente,
+  criarPerguntasAssistenteFluxo,
+  errosQueBloqueiamCriacao,
+  errosQueExigemReparo,
+  proximaPerguntaAssistente,
+  type PerguntaAssistenteFluxo,
+} from "@/lib/automacoes/assistente-fluxos-conversa";
 import {
   extrairUsoTokensIa,
   registrarUsoTokensIa,
@@ -533,7 +542,12 @@ async function buscarEstruturaFluxo(params: {
 }
 
 async function buscarContextoEmpresa(empresaId: string) {
-  const [{ data: empresa }, { data: setores }, { data: variaveis }] =
+  const [
+    { data: empresa },
+    { data: setores },
+    { data: variaveis },
+    { data: midias },
+  ] =
     await Promise.all([
       supabaseAdmin
         .from("empresas")
@@ -569,6 +583,12 @@ async function buscarContextoEmpresa(empresaId: string) {
         .eq("metadata_json->>ativo", "true")
         .order("chave", { ascending: true })
         .limit(80),
+      supabaseAdmin
+        .from("midias")
+        .select("id, nome, tipo, url")
+        .eq("empresa_id", empresaId)
+        .order("created_at", { ascending: false })
+        .limit(120),
     ]);
 
   const empresaRow = (empresa || null) as EmpresaContextoRow | null;
@@ -595,6 +615,16 @@ async function buscarContextoEmpresa(empresaId: string) {
       descricao: texto(variavel.metadata_json?.descricao, 240) || null,
       origem: "personalizada",
     })) as AssistenteVariavel[],
+    midias: ((midias || []) as AssistenteMidia[])
+      .filter((midia) =>
+        ["imagem", "video", "audio", "arquivo"].includes(midia.tipo)
+      )
+      .map((midia) => ({
+        id: midia.id,
+        nome: midia.nome,
+        tipo: midia.tipo,
+        url: midia.url,
+      })),
   };
 }
 
@@ -654,6 +684,11 @@ const planoAssistenteSchema = {
               "pergunta_botoes",
               "pergunta_livre_ia",
               "capturar_resposta",
+              "midia_imagem",
+              "midia_video",
+              "midia_audio",
+              "midia_arquivo",
+              "redirect",
               "transferir",
               "encerrar",
               "avaliacao",
@@ -666,6 +701,12 @@ const planoAssistenteSchema = {
           setor_id: { type: ["string", "null"] },
           setor_nome: { type: ["string", "null"] },
           resultado: { type: ["string", "null"] },
+          midia_id: { type: ["string", "null"] },
+          midia_nome: { type: ["string", "null"] },
+          midia_tipo: { type: ["string", "null"] },
+          midia_url: { type: ["string", "null"] },
+          url: { type: ["string", "null"] },
+          botao_texto: { type: ["string", "null"] },
           opcoes: {
             type: "array",
             items: {
@@ -689,6 +730,12 @@ const planoAssistenteSchema = {
           "setor_id",
           "setor_nome",
           "resultado",
+          "midia_id",
+          "midia_nome",
+          "midia_tipo",
+          "midia_url",
+          "url",
+          "botao_texto",
           "opcoes",
         ],
       },
@@ -754,6 +801,40 @@ const planoAssistenteSchema = {
         required: ["chave", "descricao"],
       },
     },
+    clarificacoes: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          id: { type: "string" },
+          pergunta: { type: "string" },
+          tipo: { type: "string", enum: ["selecao", "texto"] },
+          opcoes: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                id: { type: "string" },
+                texto: { type: "string" },
+              },
+              required: ["id", "texto"],
+            },
+          },
+          valor_sugerido: { type: ["string", "null"] },
+          motivo: { type: ["string", "null"] },
+        },
+        required: [
+          "id",
+          "pergunta",
+          "tipo",
+          "opcoes",
+          "valor_sugerido",
+          "motivo",
+        ],
+      },
+    },
     avisos: {
       type: "array",
       items: { type: "string" },
@@ -767,6 +848,7 @@ const planoAssistenteSchema = {
     "rotas",
     "mensagens_revisadas",
     "variaveis_sugeridas",
+    "clarificacoes",
     "avisos",
   ],
 };
@@ -787,6 +869,8 @@ Tipos de etapa permitidos:
 - pergunta_botoes: ate 3 botoes do WhatsApp.
 - pergunta_livre_ia: entende texto livre por intencao.
 - capturar_resposta: solicita e salva um dado em uma variavel.
+- midia_imagem, midia_video, midia_audio, midia_arquivo: envia uma midia da biblioteca.
+- redirect: envia uma mensagem com botao que abre uma URL.
 - transferir: encaminha para um setor existente.
 - encerrar: finaliza a jornada.
 - avaliacao: coleta nota de atendimento.
@@ -795,6 +879,8 @@ Regras:
 - Use apenas setores recebidos no contexto. Preencha setor_id quando souber.
 - Para pergunta_botoes, gere no maximo 3 opcoes.
 - Para capturar_resposta, preencha variavel com chave curta em snake_case.
+- Para etapas de midia, indique apenas o tipo adequado. A midia real sera escolhida pelo usuario depois.
+- Para redirect, sugira mensagem e botao_texto com ate 20 caracteres. Extraia a URL do pedido quando existir; ela sera confirmada pelo usuario.
 - Para pergunta_livre_ia, crie rotas com condicao "ia" e descricao_ia clara.
 - Para rotas de opcoes, use condicao "resposta_contem" e valor igual ao id da opcao.
 - Toda opcao de pergunta_opcoes ou pergunta_botoes deve possuir exatamente uma rota.
@@ -802,8 +888,13 @@ Regras:
 - Conecte todas as etapas. Nenhuma etapa pode ficar orfa ou sem caminho a partir de inicio.
 - O inicio deve apontar para a primeira etapa real solicitada pelo usuario.
 - Sempre que fizer sentido, inclua uma rota de encerramento ou transferencia.
-- Toda etapa transferir deve usar setor_id de um setor recebido no contexto. Se nenhum setor adequado existir, nao crie a transferencia e explique em avisos.
-- Nao inclua midias, templates ou agenda se o contexto nao demonstrar recursos suficientes.
+- Inclua a etapa transferir quando ela for solicitada. Use apenas um setor_id recebido no contexto como sugestao; a interface exigira a escolha do usuario antes de criar.
+- Frases como "o corretor vai assumir", "encaminhar para especialista" ou "falar com atendente" implicam uma etapa transferir depois da mensagem de handoff.
+- Inclua a etapa de midia quando o usuario pedir, mesmo sem item compativel. A interface oferecera a escolha, mas o usuario pode criar o rascunho sem midia; nesse caso o CRM impedira a ativacao ate a selecao posterior.
+- Nao inclua templates ou agenda se o contexto nao demonstrar recursos suficientes.
+- Em criar_fluxo, use clarificacoes somente quando uma informacao ausente ou ambigua mudar materialmente os caminhos, as perguntas ou o destino final. Gere no maximo 3 perguntas curtas, com 2 ou 3 opcoes sugeridas quando possivel.
+- Nao pergunte novamente algo que esteja explicito no pedido. Setor, midia e URL sao confirmados pela interface e nao devem entrar em clarificacoes.
+- Toda etapa transferir deve usar setor_id de um setor recebido no contexto quando existir; a interface continuara exigindo a confirmacao do usuario antes de criar.
 - Se o modo for adicionar_etapa, use refs de blocos existentes quando a nova etapa tiver que sair de um bloco atual.
 - Se o modo for melhorar_mensagens, nao crie etapas; preencha mensagens_revisadas usando refs existentes.
 - Se o modo for analisar_fluxo, nao crie etapas; use resumo e avisos para apontar problemas.
@@ -811,6 +902,125 @@ Regras:
 Modo solicitado: ${modo}.
 Retorne somente o JSON no schema solicitado.
   `.trim();
+}
+
+async function solicitarPlanoAssistente(params: {
+  modo: ModoAssistenteFluxos;
+  contexto: Record<string, unknown>;
+  instrucaoAdicional?: string;
+}) {
+  const resposta = await openai.responses.create({
+    model: MODELOS_ASSISTENTE_FLUXOS,
+    input: [
+      {
+        role: "system",
+        content: [
+          montarPromptSistema(params.modo),
+          params.instrucaoAdicional || "",
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      },
+      {
+        role: "user",
+        content: JSON.stringify(params.contexto),
+      },
+    ],
+    max_output_tokens: 4200,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "plano_assistente_fluxos",
+        strict: true,
+        schema: planoAssistenteSchema as Record<string, unknown>,
+      },
+    },
+  });
+
+  return {
+    plano: normalizarPlanoAssistente(
+      JSON.parse(resposta.output_text || "{}")
+    ),
+    uso: extrairUsoTokensIa(resposta.usage),
+  };
+}
+
+async function repararPlanoAssistenteSeNecessario(params: {
+  plano: PlanoAssistenteFluxos;
+  contexto: Record<string, unknown>;
+  empresaId: string;
+  usuarioId: string;
+  setores: AssistenteSetor[];
+  variaveis: AssistenteVariavel[];
+  midias: AssistenteMidia[];
+  etapaUso: string;
+}) {
+  const compilar = (plano: PlanoAssistenteFluxos) =>
+    compilarPlanoAssistente({
+      modo: "criar_fluxo",
+      plano,
+      fluxoAtual: null,
+      setores: params.setores,
+      variaveis: params.variaveis,
+      midias: params.midias,
+    });
+  let plano = params.plano;
+  let compilacao = compilar(plano);
+  const errosIniciais = errosQueExigemReparo(compilacao.validacao.erros);
+
+  if (errosIniciais.length === 0) {
+    return { plano, compilacao, reparado: false };
+  }
+
+  await verificarSaldoTokensIa(params.empresaId);
+
+  const reparo = await solicitarPlanoAssistente({
+    modo: "criar_fluxo",
+    contexto: {
+      contexto_original: params.contexto,
+      plano_invalido: plano,
+      erros_validacao: errosIniciais.map((erro) => ({
+        codigo: erro.codigo,
+        mensagem: erro.mensagem,
+      })),
+    },
+    instrucaoAdicional: `
+Voce esta reparando um plano que falhou na validacao tecnica.
+- Corrija somente o necessario para resolver todos os erros informados.
+- Preserve textos, intencao, opcoes e caminhos corretos do pedido original.
+- Garanta exatamente uma rota para cada opcao e conecte todas as etapas a partir do inicio.
+- Nao gere novas clarificacoes durante o reparo; retorne clarificacoes como array vazio.
+    `.trim(),
+  });
+
+  await registrarUsoTokensIa({
+    empresaId: params.empresaId,
+    usuarioId: params.usuarioId,
+    origem: "assistente_fluxos",
+    modelo: MODELOS_ASSISTENTE_FLUXOS,
+    uso: reparo.uso,
+    metadata: {
+      modo: "criar_fluxo",
+      etapa: params.etapaUso,
+      reparo_automatico: true,
+    },
+  });
+
+  plano = reparo.plano;
+  compilacao = compilar(plano);
+  const errosRestantes = errosQueExigemReparo(compilacao.validacao.erros);
+
+  if (errosRestantes.length > 0) {
+    const detalhes = errosRestantes
+      .slice(0, 6)
+      .map((erro) => erro.mensagem)
+      .join(" ");
+    throw new Error(
+      `A IA nao conseguiu corrigir completamente o rascunho. ${detalhes}`
+    );
+  }
+
+  return { plano, compilacao, reparado: true };
 }
 
 async function registrarExecucaoAssistenteSeguro(params: {
@@ -852,14 +1062,568 @@ async function registrarExecucaoAssistenteSeguro(params: {
   }
 }
 
+type EstadoConversaAssistente = {
+  versao: 1;
+  instrucao: string;
+  perguntas: PerguntaAssistenteFluxo[];
+  perguntas_respondidas: string[];
+  respostas: Array<{
+    pergunta_id: string;
+    pergunta: string;
+    resposta: string;
+    respondida_em: string;
+  }>;
+};
+
+type SessaoAssistenteRow = {
+  id: string;
+  empresa_id: string;
+  usuario_id: string | null;
+  instrucao: string;
+  contexto_json: unknown;
+  resposta_ia_json: unknown;
+  status: string;
+};
+
+function normalizarEstadoConversa(valor: unknown): EstadoConversaAssistente {
+  const item = objeto(valor);
+
+  return {
+    versao: 1,
+    instrucao: texto(item.instrucao, 4000),
+    perguntas: Array.isArray(item.perguntas)
+      ? (item.perguntas as PerguntaAssistenteFluxo[])
+      : [],
+    perguntas_respondidas: Array.isArray(item.perguntas_respondidas)
+      ? item.perguntas_respondidas.map((id) => texto(id, 240)).filter(Boolean)
+      : [],
+    respostas: Array.isArray(item.respostas)
+      ? (item.respostas as EstadoConversaAssistente["respostas"])
+      : [],
+  };
+}
+
+async function criarSessaoAssistente(params: {
+  empresaId: string;
+  usuarioId: string;
+  instrucao: string;
+  contexto: Record<string, unknown>;
+  plano: PlanoAssistenteFluxos;
+  perguntas: PerguntaAssistenteFluxo[];
+  tokensEntrada: number | null;
+  tokensSaida: number | null;
+}) {
+  const estado: EstadoConversaAssistente = {
+    versao: 1,
+    instrucao: params.instrucao,
+    perguntas: params.perguntas,
+    perguntas_respondidas: [],
+    respostas: [],
+  };
+  const { data, error } = await supabaseAdmin
+    .from("automacao_assistente_ia_execucoes")
+    .insert({
+      empresa_id: params.empresaId,
+      automacao_id: null,
+      usuario_id: params.usuarioId,
+      modo: "criar_fluxo",
+      instrucao: params.instrucao,
+      contexto_json: {
+        ...params.contexto,
+        conversa: estado,
+      },
+      resposta_ia_json: params.plano,
+      fluxo_gerado_json: null,
+      status: "processando",
+      aplicada: false,
+      tokens_entrada: params.tokensEntrada,
+      tokens_saida: params.tokensSaida,
+      updated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (error || !data?.id) {
+    throw new Error(`Nao foi possivel iniciar o assistente: ${error?.message}`);
+  }
+
+  return { id: String(data.id), estado };
+}
+
+async function buscarSessaoAssistente(params: {
+  sessaoId: string;
+  empresaId: string;
+  usuarioId: string;
+}) {
+  const { data, error } = await supabaseAdmin
+    .from("automacao_assistente_ia_execucoes")
+    .select(
+      "id, empresa_id, usuario_id, instrucao, contexto_json, resposta_ia_json, status"
+    )
+    .eq("id", params.sessaoId)
+    .eq("empresa_id", params.empresaId)
+    .eq("usuario_id", params.usuarioId)
+    .eq("modo", "criar_fluxo")
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new Error("Sessao do assistente nao encontrada.");
+  }
+
+  if (data.status !== "processando") {
+    throw new Error("Esta sessao do assistente ja foi concluida.");
+  }
+
+  const contexto = objeto(data.contexto_json);
+
+  return {
+    sessao: data as SessaoAssistenteRow,
+    contexto,
+    estado: normalizarEstadoConversa(contexto.conversa),
+    plano: normalizarPlanoAssistente(data.resposta_ia_json),
+  };
+}
+
+async function replanejarComClarificacoes(params: {
+  contextoOriginal: Record<string, unknown>;
+  estado: EstadoConversaAssistente;
+  planoAtual: PlanoAssistenteFluxos;
+  empresaId: string;
+  usuarioId: string;
+  setores: AssistenteSetor[];
+  variaveis: AssistenteVariavel[];
+  midias: AssistenteMidia[];
+}) {
+  await verificarSaldoTokensIa(params.empresaId);
+
+  const respostas = params.estado.respostas
+    .filter((resposta) => resposta.pergunta_id.startsWith("clarificacao:"))
+    .map((resposta) => ({
+      pergunta: resposta.pergunta,
+      resposta: resposta.resposta,
+    }));
+  const geracao = await solicitarPlanoAssistente({
+    modo: "criar_fluxo",
+    contexto: {
+      contexto_original: params.contextoOriginal,
+      plano_provisorio: params.planoAtual,
+      respostas_de_esclarecimento: respostas,
+    },
+    instrucaoAdicional: `
+As duvidas do plano provisorio ja foram respondidas pelo usuario.
+- Trate as respostas como decisoes definitivas.
+- Recrie o plano completo incorporando cada resposta.
+- Nao faca novas perguntas e retorne clarificacoes como array vazio.
+- Preserve todos os textos e requisitos explicitos do pedido original que nao foram alterados pelas respostas.
+    `.trim(),
+  });
+
+  await registrarUsoTokensIa({
+    empresaId: params.empresaId,
+    usuarioId: params.usuarioId,
+    origem: "assistente_fluxos",
+    modelo: MODELOS_ASSISTENTE_FLUXOS,
+    uso: geracao.uso,
+    metadata: {
+      modo: "criar_fluxo",
+      etapa: "replanejar_apos_clarificacoes",
+      total_clarificacoes: respostas.length,
+    },
+  });
+
+  const reparo = await repararPlanoAssistenteSeNecessario({
+    plano: {
+      ...geracao.plano,
+      clarificacoes: [],
+    },
+    contexto: {
+      contexto_original: params.contextoOriginal,
+      respostas_de_esclarecimento: respostas,
+    },
+    empresaId: params.empresaId,
+    usuarioId: params.usuarioId,
+    setores: params.setores,
+    variaveis: params.variaveis,
+    midias: params.midias,
+    etapaUso: "reparar_apos_clarificacoes",
+  });
+
+  return reparo.plano;
+}
+
+function respostaConversaAssistente(params: {
+  sessaoId: string;
+  plano: PlanoAssistenteFluxos;
+  estado: EstadoConversaAssistente;
+  mensagem?: string;
+}) {
+  const pergunta = proximaPerguntaAssistente({
+    perguntas: params.estado.perguntas,
+    respondidas: params.estado.perguntas_respondidas,
+  });
+  const respondidas = params.estado.perguntas_respondidas.length;
+  const total = params.estado.perguntas.length;
+
+  return NextResponse.json({
+    ok: true,
+    proposta_id: params.sessaoId,
+    sessao_id: params.sessaoId,
+    modo: "criar_fluxo",
+    fase: pergunta ? "coletando" : "pronto",
+    mensagem:
+      params.mensagem ||
+      (pergunta
+        ? "Preparei o rascunho. Agora preciso confirmar alguns detalhes."
+        : "Todas as informacoes foram confirmadas. Revise o plano antes de criar."),
+    pergunta,
+    progresso: {
+      respondidas,
+      total,
+    },
+    historico: params.estado.respostas.map((resposta) => ({
+      pergunta:
+        resposta.pergunta ||
+        params.estado.perguntas.find(
+          (perguntaItem) => perguntaItem.id === resposta.pergunta_id
+        )?.mensagem ||
+        resposta.pergunta_id,
+      resposta: resposta.resposta,
+    })),
+    plano: params.plano,
+  });
+}
+
+async function responderConversaAssistente(params: {
+  sessaoId: string;
+  perguntaId: string;
+  resposta: unknown;
+  empresaId: string;
+  usuarioId: string;
+}) {
+  const [sessaoAtual, contextoEmpresa] = await Promise.all([
+    buscarSessaoAssistente(params),
+    buscarContextoEmpresa(params.empresaId),
+  ]);
+  const perguntaAtual = proximaPerguntaAssistente({
+    perguntas: sessaoAtual.estado.perguntas,
+    respondidas: sessaoAtual.estado.perguntas_respondidas,
+  });
+
+  if (!perguntaAtual || perguntaAtual.id !== params.perguntaId) {
+    throw new Error("Responda a pergunta atual antes de continuar.");
+  }
+
+  if (perguntaAtual.bloqueada) {
+    throw new Error(perguntaAtual.ajuda || "Esta pergunta ainda nao pode ser respondida.");
+  }
+
+  if (perguntaAtual.campo === "clarificacao") {
+    const respostaInformada = texto(params.resposta, 1000);
+
+    if (!respostaInformada) {
+      throw new Error("Esta resposta e obrigatoria.");
+    }
+
+    const opcao =
+      perguntaAtual.tipo === "selecao"
+        ? perguntaAtual.opcoes.find((item) => item.id === respostaInformada)
+        : null;
+
+    if (perguntaAtual.tipo === "selecao" && !opcao) {
+      throw new Error("Selecione uma das respostas sugeridas.");
+    }
+
+    const resumoResposta = opcao?.label || respostaInformada;
+    let estado: EstadoConversaAssistente = {
+      ...sessaoAtual.estado,
+      perguntas_respondidas: [
+        ...sessaoAtual.estado.perguntas_respondidas,
+        perguntaAtual.id,
+      ],
+      respostas: [
+        ...sessaoAtual.estado.respostas,
+        {
+          pergunta_id: perguntaAtual.id,
+          pergunta: perguntaAtual.mensagem,
+          resposta: resumoResposta,
+          respondida_em: new Date().toISOString(),
+        },
+      ],
+    };
+    let plano = sessaoAtual.plano;
+    const proximaClarificacao = proximaPerguntaAssistente({
+      perguntas: estado.perguntas,
+      respondidas: estado.perguntas_respondidas,
+    });
+
+    if (!proximaClarificacao) {
+      const { conversa: _conversa, ...contextoOriginal } =
+        sessaoAtual.contexto;
+      void _conversa;
+      plano = await replanejarComClarificacoes({
+        contextoOriginal,
+        estado,
+        planoAtual: sessaoAtual.plano,
+        empresaId: params.empresaId,
+        usuarioId: params.usuarioId,
+        setores: contextoEmpresa.setores,
+        variaveis: contextoEmpresa.variaveis,
+        midias: contextoEmpresa.midias,
+      });
+      estado = {
+        ...estado,
+        perguntas: criarPerguntasAssistenteFluxo({
+          plano,
+          setores: contextoEmpresa.setores,
+          midias: contextoEmpresa.midias,
+        }),
+        perguntas_respondidas: [],
+      };
+    }
+
+    const { error } = await supabaseAdmin
+      .from("automacao_assistente_ia_execucoes")
+      .update({
+        contexto_json: {
+          ...sessaoAtual.contexto,
+          conversa: estado,
+        },
+        resposta_ia_json: plano,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", params.sessaoId)
+      .eq("empresa_id", params.empresaId)
+      .eq("usuario_id", params.usuarioId)
+      .eq("status", "processando");
+
+    if (error) {
+      throw new Error(`Nao foi possivel salvar a resposta: ${error.message}`);
+    }
+
+    return respostaConversaAssistente({
+      sessaoId: params.sessaoId,
+      plano,
+      estado,
+      mensagem: proximaClarificacao
+        ? `Entendido: ${resumoResposta}.`
+        : "Obrigado. Atualizei o rascunho com as suas respostas.",
+    });
+  }
+
+  const aplicada = aplicarRespostaPerguntaAssistente({
+    plano: sessaoAtual.plano,
+    pergunta: perguntaAtual,
+    resposta: params.resposta,
+    setores: contextoEmpresa.setores,
+    midias: contextoEmpresa.midias,
+  });
+  const estado: EstadoConversaAssistente = {
+    ...sessaoAtual.estado,
+    perguntas_respondidas: [
+      ...sessaoAtual.estado.perguntas_respondidas,
+      perguntaAtual.id,
+    ],
+    respostas: [
+      ...sessaoAtual.estado.respostas,
+      {
+        pergunta_id: perguntaAtual.id,
+        pergunta: perguntaAtual.mensagem,
+        resposta: aplicada.resumoResposta,
+        respondida_em: new Date().toISOString(),
+      },
+    ],
+  };
+  const { error } = await supabaseAdmin
+    .from("automacao_assistente_ia_execucoes")
+    .update({
+      contexto_json: {
+        ...sessaoAtual.contexto,
+        conversa: estado,
+      },
+      resposta_ia_json: aplicada.plano,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.sessaoId)
+    .eq("empresa_id", params.empresaId)
+    .eq("usuario_id", params.usuarioId)
+    .eq("status", "processando");
+
+  if (error) {
+    throw new Error(`Nao foi possivel salvar a resposta: ${error.message}`);
+  }
+
+  return respostaConversaAssistente({
+    sessaoId: params.sessaoId,
+    plano: aplicada.plano,
+    estado,
+    mensagem: `Entendido: ${aplicada.resumoResposta}.`,
+  });
+}
+
+async function atualizarConversaAssistente(params: {
+  sessaoId: string;
+  empresaId: string;
+  usuarioId: string;
+}) {
+  const [sessaoAtual, contextoEmpresa] = await Promise.all([
+    buscarSessaoAssistente(params),
+    buscarContextoEmpresa(params.empresaId),
+  ]);
+  const perguntas = criarPerguntasAssistenteFluxo({
+    plano: sessaoAtual.plano,
+    setores: contextoEmpresa.setores,
+    midias: contextoEmpresa.midias,
+  });
+  const idsAtuais = new Set(perguntas.map((pergunta) => pergunta.id));
+  const estado: EstadoConversaAssistente = {
+    ...sessaoAtual.estado,
+    perguntas,
+    perguntas_respondidas: sessaoAtual.estado.perguntas_respondidas.filter(
+      (id) => idsAtuais.has(id)
+    ),
+  };
+  const { error } = await supabaseAdmin
+    .from("automacao_assistente_ia_execucoes")
+    .update({
+      contexto_json: {
+        ...sessaoAtual.contexto,
+        conversa: estado,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.sessaoId)
+    .eq("empresa_id", params.empresaId)
+    .eq("usuario_id", params.usuarioId)
+    .eq("status", "processando");
+
+  if (error) {
+    throw new Error(`Nao foi possivel atualizar as opcoes: ${error.message}`);
+  }
+
+  return respostaConversaAssistente({
+    sessaoId: params.sessaoId,
+    plano: sessaoAtual.plano,
+    estado,
+    mensagem: "Atualizei as opcoes com os dados atuais da empresa.",
+  });
+}
+
+async function concluirConversaAssistente(params: {
+  sessaoId: string;
+  empresaId: string;
+  usuarioId: string;
+}) {
+  const [sessaoAtual, contextoEmpresa] = await Promise.all([
+    buscarSessaoAssistente(params),
+    buscarContextoEmpresa(params.empresaId),
+  ]);
+  const pendente = proximaPerguntaAssistente({
+    perguntas: sessaoAtual.estado.perguntas,
+    respondidas: sessaoAtual.estado.perguntas_respondidas,
+  });
+
+  if (pendente) {
+    throw new Error("Responda todas as perguntas do assistente antes de criar o fluxo.");
+  }
+
+  const compilacao = compilarPlanoAssistente({
+    modo: "criar_fluxo",
+    plano: sessaoAtual.plano,
+    fluxoAtual: null,
+    setores: contextoEmpresa.setores,
+    variaveis: contextoEmpresa.variaveis,
+    midias: contextoEmpresa.midias,
+  });
+
+  const errosBloqueantes = errosQueBloqueiamCriacao(
+    compilacao.validacao.erros
+  );
+  const pendenciasAtivacao = compilacao.validacao.erros.filter(
+    (erro) => !errosBloqueantes.includes(erro)
+  );
+
+  if (errosBloqueantes.length > 0) {
+    const detalhes = errosBloqueantes
+      .slice(0, 6)
+      .map((item) => item.mensagem)
+      .join(" ");
+    throw new Error(
+      `O rascunho ainda possui informacoes invalidas e nao foi criado. ${detalhes}`
+    );
+  }
+
+  const materializacao = await materializarFluxoAssistente({
+    empresaId: params.empresaId,
+    usuarioId: params.usuarioId,
+    modo: "criar_fluxo",
+    instrucao: sessaoAtual.estado.instrucao || sessaoAtual.sessao.instrucao,
+    plano: sessaoAtual.plano,
+    estrutura: {
+      nos: compilacao.nos,
+      conexoes: compilacao.conexoes,
+    },
+  });
+  const aplicadaAt = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from("automacao_assistente_ia_execucoes")
+    .update({
+      automacao_id: materializacao.fluxo.id,
+      fluxo_gerado_json: materializacao.fluxoGerado,
+      status: "concluido",
+      aplicada: true,
+      aplicada_at: aplicadaAt,
+      updated_at: aplicadaAt,
+    })
+    .eq("id", params.sessaoId)
+    .eq("empresa_id", params.empresaId)
+    .eq("usuario_id", params.usuarioId)
+    .eq("status", "processando");
+
+  if (error) {
+    console.warn("[assistente-fluxos] fluxo criado, mas sessao nao atualizada", error);
+  }
+
+  return NextResponse.json({
+    ok: true,
+    proposta_id: params.sessaoId,
+    sessao_id: params.sessaoId,
+    fase: "concluido",
+    modo: "criar_fluxo",
+    plano: sessaoAtual.plano,
+    resumo: compilacao.resumo,
+    fluxo_gerado: materializacao.fluxoGerado,
+    fluxo_criado: materializacao.fluxo,
+    materializado: true,
+    validacao: {
+      valido: true,
+      erros: [],
+      avisos: [...compilacao.validacao.avisos, ...pendenciasAtivacao],
+    },
+    estatisticas: compilacao.estatisticas,
+    avisos: [
+      ...sessaoAtual.plano.avisos,
+      ...(pendenciasAtivacao.length > 0
+        ? [
+            "O rascunho foi criado sem uma midia selecionada. Escolha a midia no bloco antes de ativar o fluxo.",
+          ]
+        : []),
+    ],
+  });
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const modo = normalizarModo(body?.modo);
+  const acao = texto(body?.acao, 40) || "gerar";
   const instrucao = texto(body?.instrucao, 4000);
   const fluxoId = texto(body?.fluxo_id || body?.fluxoId, 120);
+  const sessaoId = texto(body?.sessao_id || body?.sessaoId, 120);
 
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    if (
+      !process.env.OPENAI_API_KEY &&
+      !["retomar", "responder", "atualizar", "criar"].includes(acao)
+    ) {
       return NextResponse.json(
         { ok: false, error: "OPENAI_API_KEY nao configurada." },
         { status: 500 }
@@ -882,6 +1646,68 @@ export async function POST(request: Request) {
         { ok: false, error: "Usuario sem empresa vinculada." },
         { status: 400 }
       );
+    }
+
+    if (modo === "criar_fluxo" && acao === "responder") {
+      if (!sessaoId) {
+        return NextResponse.json(
+          { ok: false, error: "Sessao do assistente nao informada." },
+          { status: 400 }
+        );
+      }
+
+      return responderConversaAssistente({
+        sessaoId,
+        perguntaId: texto(body?.pergunta_id, 240),
+        resposta: body?.resposta,
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+      });
+    }
+
+    if (modo === "criar_fluxo" && acao === "retomar") {
+      if (!sessaoId) {
+        return NextResponse.json(
+          { ok: false, error: "Sessao do assistente nao informada." },
+          { status: 400 }
+        );
+      }
+
+      return atualizarConversaAssistente({
+        sessaoId,
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+      });
+    }
+
+    if (modo === "criar_fluxo" && acao === "atualizar") {
+      if (!sessaoId) {
+        return NextResponse.json(
+          { ok: false, error: "Sessao do assistente nao informada." },
+          { status: 400 }
+        );
+      }
+
+      return atualizarConversaAssistente({
+        sessaoId,
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+      });
+    }
+
+    if (modo === "criar_fluxo" && acao === "criar") {
+      if (!sessaoId) {
+        return NextResponse.json(
+          { ok: false, error: "Sessao do assistente nao informada." },
+          { status: 400 }
+        );
+      }
+
+      return concluirConversaAssistente({
+        sessaoId,
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+      });
     }
 
     if (
@@ -944,6 +1770,16 @@ export async function POST(request: Request) {
       recursos: {
         setores: contextoEmpresa.setores,
         variaveis: contextoEmpresa.variaveis,
+        midias_disponiveis: contextoEmpresa.midias.reduce(
+          (total, midia) => ({
+            ...total,
+            [midia.tipo]: (total[midia.tipo] || 0) + 1,
+          }),
+          { imagem: 0, video: 0, audio: 0, arquivo: 0 } as Record<
+            AssistenteMidia["tipo"],
+            number
+          >
+        ),
       },
       fluxo_atual: {
         id: fluxo?.id || null,
@@ -954,32 +1790,63 @@ export async function POST(request: Request) {
       },
     };
 
-    const resposta = await openai.responses.create({
-      model: MODELOS_ASSISTENTE_FLUXOS,
-      input: [
-        {
-          role: "system",
-          content: montarPromptSistema(modo),
-        },
-        {
-          role: "user",
-          content: JSON.stringify(contexto),
-        },
-      ],
-      max_output_tokens: 4200,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "plano_assistente_fluxos",
-          strict: true,
-          schema: planoAssistenteSchema as Record<string, unknown>,
-        },
-      },
+    const geracao = await solicitarPlanoAssistente({
+      modo,
+      contexto,
     });
+    let plano = geracao.plano;
+    const uso = geracao.uso;
 
-    const plano = normalizarPlanoAssistente(
-      JSON.parse(resposta.output_text || "{}")
-    );
+    if (modo === "criar_fluxo" && acao === "preparar") {
+      await registrarUsoTokensIa({
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+        origem: "assistente_fluxos",
+        modelo: MODELOS_ASSISTENTE_FLUXOS,
+        uso,
+        metadata: {
+          fluxo_id: null,
+          modo,
+          etapa: "preparar_conversa",
+        },
+      });
+
+      if (plano.clarificacoes.length === 0) {
+        const reparo = await repararPlanoAssistenteSeNecessario({
+          plano,
+          contexto,
+          empresaId: usuario.empresa_id,
+          usuarioId: usuario.id,
+          setores: contextoEmpresa.setores,
+          variaveis: contextoEmpresa.variaveis,
+          midias: contextoEmpresa.midias,
+          etapaUso: "reparar_rascunho_inicial",
+        });
+        plano = reparo.plano;
+      }
+
+      const perguntas = criarPerguntasAssistenteFluxo({
+        plano,
+        setores: contextoEmpresa.setores,
+        midias: contextoEmpresa.midias,
+      });
+      const sessao = await criarSessaoAssistente({
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+        instrucao: contexto.instrucao,
+        contexto,
+        plano,
+        perguntas,
+        tokensEntrada: uso.inputTokens,
+        tokensSaida: uso.outputTokens,
+      });
+
+      return respostaConversaAssistente({
+        sessaoId: sessao.id,
+        plano,
+        estado: sessao.estado,
+      });
+    }
 
     const compilacao = compilarPlanoAssistente({
       modo,
@@ -987,6 +1854,7 @@ export async function POST(request: Request) {
       fluxoAtual,
       setores: contextoEmpresa.setores,
       variaveis: contextoEmpresa.variaveis,
+      midias: contextoEmpresa.midias,
     });
 
     if (modo !== "analisar_fluxo" && !compilacao.validacao.valido) {
@@ -999,9 +1867,6 @@ export async function POST(request: Request) {
         `A IA gerou um fluxo incompleto e ele nao foi criado. ${detalhes}`
       );
     }
-
-    const uso = extrairUsoTokensIa(resposta.usage);
-
     await registrarUsoTokensIa({
       empresaId: usuario.empresa_id,
       usuarioId: usuario.id,
