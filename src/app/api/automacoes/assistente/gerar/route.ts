@@ -903,6 +903,7 @@ Regras:
 - Para rotas de opcoes, use condicao "resposta_contem" e valor igual ao id da opcao.
 - Toda opcao de pergunta_opcoes ou pergunta_botoes deve possuir exatamente uma rota.
 - Antes de finalizar, confira a contagem: cada opcao/botao deve aparecer uma unica vez em rotas, sem excecao.
+- Duas opcoes da mesma pergunta nunca devem apontar para o mesmo destino. Crie uma etapa/ref propria para cada ramo e replique as etapas seguintes necessarias para manter os caminhos separados.
 - Nunca crie rota "sempre" saindo de pergunta_opcoes ou pergunta_botoes.
 - Conecte todas as etapas. Nenhuma etapa pode ficar orfa ou sem caminho a partir de inicio.
 - O inicio deve apontar para a primeira etapa real solicitada pelo usuario.
@@ -1008,6 +1009,7 @@ Voce esta reparando um plano que falhou na validacao tecnica.
 - Corrija somente o necessario para resolver todos os erros informados.
 - Preserve textos, intencao, opcoes e caminhos corretos do pedido original.
 - Garanta exatamente uma rota para cada opcao e conecte todas as etapas a partir do inicio.
+- Nunca deixe duas opcoes da mesma pergunta apontarem para o mesmo bloco; se necessario, duplique o destino e as etapas seguintes do ramo.
 - Para erros de captura, use variavel personalizada (por exemplo nome_cliente), tipo_captura valido e reutilize {{variavel}} em uma mensagem posterior.
 - Nao gere novas clarificacoes durante o reparo; retorne clarificacoes como array vazio.
     `.trim(),

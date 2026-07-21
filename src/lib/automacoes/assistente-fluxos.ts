@@ -751,23 +751,66 @@ function garantirUsoCapturas(
   return resultado;
 }
 
-export function completarRotasDeOpcoesPlano(
-  plano: PlanoAssistenteFluxos
-): PlanoAssistenteFluxos {
-  const rotas = [...plano.rotas];
+function criarRefEtapaClonada(
+  etapaRef: string,
+  opcao: PlanoAssistenteOpcao,
+  refsExistentes: Set<string>
+) {
+  const base = normalizarRef(etapaRef) || "etapa";
+  const sufixo = normalizarRef(opcao.id || opcao.texto) || "opcao";
+  let ref = `${base}__${sufixo}`;
+  let indice = 2;
 
-  for (let index = 0; index < plano.etapas.length; index += 1) {
-    const etapa = plano.etapas[index];
-    if (!["pergunta_opcoes", "pergunta_botoes"].includes(etapa.tipo)) {
-      continue;
-    }
+  while (refsExistentes.has(ref)) {
+    ref = `${base}__${sufixo}_${indice}`;
+    indice += 1;
+  }
+
+  refsExistentes.add(ref);
+  return ref;
+}
+
+/**
+ * Completa rotas ausentes e evita que duas opções de uma mesma pergunta
+ * terminem no mesmo bloco. Quando isso acontece, clona o destino e toda a
+ * saída imediata do bloco para preservar o caminho daquela opção.
+ *
+ * A regra é aplicada apenas à proposta da IA. Fluxos editados manualmente
+ * continuam podendo convergir intencionalmente para um bloco compartilhado.
+ */
+export function completarRotasDeOpcoesPlano(
+  plano: PlanoAssistenteFluxos,
+  opcoes?: { preencherRotasAusentes?: boolean }
+): PlanoAssistenteFluxos {
+  const preencherRotasAusentes = opcoes?.preencherRotasAusentes !== false;
+  const etapas = plano.etapas.map((etapa) => ({
+    ...etapa,
+    opcoes: [...(etapa.opcoes || [])],
+  }));
+  const rotas = plano.rotas.map((rota) => ({ ...rota }));
+  const refsExistentes = new Set(etapas.map((etapa) => etapa.ref));
+  const fila = etapas
+    .filter((etapa) =>
+      ["pergunta_opcoes", "pergunta_botoes"].includes(etapa.tipo)
+    )
+    .map((etapa) => etapa.ref);
+  const processadas = new Set<string>();
+
+  while (fila.length > 0) {
+    const etapaRef = fila.shift();
+    if (!etapaRef || processadas.has(etapaRef)) continue;
+    processadas.add(etapaRef);
+
+    const indiceEtapa = etapas.findIndex((etapa) => etapa.ref === etapaRef);
+    const etapa = indiceEtapa >= 0 ? etapas[indiceEtapa] : null;
+    if (!etapa) continue;
 
     const opcoes = etapa.opcoes || [];
     const saidas = rotas.filter((rota) => rota.origem === etapa.ref);
     const destinoFallback =
       saidas.find((rota) => Boolean(rota.valor))?.destino ||
       saidas[0]?.destino ||
-      plano.etapas[index + 1]?.ref;
+      etapas[indiceEtapa + 1]?.ref;
 
     if (!destinoFallback) continue;
 
@@ -775,27 +818,110 @@ export function completarRotasDeOpcoesPlano(
       const valor = normalizarChaveVariavel(opcao.id || opcao.texto);
       if (!valor) continue;
 
-      const rotaExiste = rotas.some(
+      const rotasDaOpcao = rotas.filter(
         (rota) =>
           rota.origem === etapa.ref &&
-          normalizarChaveVariavel(rota.valor) === valor
+          normalizarChaveVariavel(rota.valor) === valor &&
+          !["timeout", "timeout_sem_resposta"].includes(
+            normalizarRef(rota.condicao)
+          )
       );
 
-      if (rotaExiste) continue;
+      if (rotasDaOpcao.length === 0 && preencherRotasAusentes) {
+        rotas.push({
+          origem: etapa.ref,
+          destino: destinoFallback,
+          condicao: "resposta_contem",
+          valor,
+          rotulo: opcao.texto || valor,
+          descricao_ia: null,
+          timeout_segundos: null,
+        });
+        continue;
+      }
 
-      rotas.push({
-        origem: etapa.ref,
-        destino: destinoFallback,
-        condicao: "resposta_contem",
-        valor,
-        rotulo: opcao.texto || valor,
-        descricao_ia: null,
-        timeout_segundos: null,
-      });
+      // Rotas duplicadas para a mesma resposta devem continuar sendo erro de
+      // validação; não transforme uma duplicidade em dois caminhos válidos.
+      if (rotasDaOpcao.length !== 1) continue;
+    }
+
+    const rotasPorDestino = new Map<string, Array<{
+      rota: PlanoAssistenteRota;
+      opcao: PlanoAssistenteOpcao;
+    }>>();
+
+    for (const opcao of opcoes) {
+      const valor = normalizarChaveVariavel(opcao.id || opcao.texto);
+      if (!valor) continue;
+
+      const rota = rotas.find(
+        (item) =>
+          item.origem === etapa.ref &&
+          normalizarChaveVariavel(item.valor) === valor &&
+          !["timeout", "timeout_sem_resposta"].includes(
+            normalizarRef(item.condicao)
+          )
+      );
+
+      if (!rota) continue;
+
+      rotasPorDestino.set(rota.destino, [
+        ...(rotasPorDestino.get(rota.destino) || []),
+        { rota, opcao },
+      ]);
+    }
+
+    for (const [destinoRef, itens] of rotasPorDestino.entries()) {
+      if (itens.length <= 1) continue;
+
+      const destinoOriginal = etapas.find((item) => item.ref === destinoRef);
+      if (!destinoOriginal) continue;
+
+      // A primeira opção mantém o bloco original; as demais recebem uma
+      // cópia para que cada saída da pergunta tenha um destino visual próprio.
+      for (let indice = 1; indice < itens.length; indice += 1) {
+        const item = itens[indice];
+        const novoRef = criarRefEtapaClonada(
+          destinoOriginal.ref,
+          item.opcao,
+          refsExistentes
+        );
+        const tituloBase = destinoOriginal.titulo || destinoOriginal.tipo;
+        const titulo = `${tituloBase} · ${item.opcao.texto || item.opcao.id}`
+          .slice(0, 120)
+          .trim();
+
+        etapas.push({
+          ...destinoOriginal,
+          ref: novoRef,
+          titulo,
+          opcoes: [...(destinoOriginal.opcoes || [])],
+        });
+        item.rota.destino = novoRef;
+
+        const saidasDestino = rotas.filter(
+          (rota) => rota.origem === destinoOriginal.ref
+        );
+
+        for (const saida of saidasDestino) {
+          rotas.push({
+            ...saida,
+            origem: novoRef,
+            destino:
+              saida.destino === destinoOriginal.ref
+                ? novoRef
+                : saida.destino,
+          });
+        }
+
+        if (["pergunta_opcoes", "pergunta_botoes"].includes(destinoOriginal.tipo)) {
+          fila.push(novoRef);
+        }
+      }
     }
   }
 
-  return { ...plano, rotas };
+  return { ...plano, etapas, rotas };
 }
 
 function normalizarMensagemRevisada(
@@ -1703,6 +1829,11 @@ export function compilarPlanoAssistente(params: {
   midias?: AssistenteMidia[];
 }): ResultadoCompilacaoAssistente {
   const substituirTudo = params.modo === "criar_fluxo";
+  const planoCompilado = substituirTudo
+    ? completarRotasDeOpcoesPlano(params.plano, {
+        preencherRotasAusentes: false,
+      })
+    : params.plano;
   const setores = params.setores || [];
   const midias = params.midias || [];
   const nosBase = substituirTudo
@@ -1752,7 +1883,7 @@ export function compilarPlanoAssistente(params: {
     nos = resultado.nos;
     mensagensRevisadas = resultado.total;
   } else {
-    const etapas = [...params.plano.etapas];
+    const etapas = [...planoCompilado.etapas];
 
     if (substituirTudo && !etapas.some((etapa) => etapa.tipo === "inicio")) {
       etapas.unshift({
@@ -1795,7 +1926,7 @@ export function compilarPlanoAssistente(params: {
 
     const nosPorId = new Map(nos.map((no) => [no.id, no]));
     const novasConexoes: AssistenteAutomacaoConexao[] = [];
-    const rotasResolvidas = params.plano.rotas
+    const rotasResolvidas = planoCompilado.rotas
       .map((rota) => ({
         rota,
         origem: resolverNoPorRef(rota.origem, refs, nosPorId),

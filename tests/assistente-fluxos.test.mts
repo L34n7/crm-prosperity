@@ -880,3 +880,73 @@ test("assistente completa a rota ausente de cada opcao de botoes", () => {
   assert.deepEqual(valores, ["a", "b"]);
   assert.equal(resultado.validacao.valido, true);
 });
+
+test("assistente cria um destino diferente para cada opcao mesmo quando a IA agrupou a proxima etapa", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Pergunta com ramificacoes",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      {
+        ref: "pergunta",
+        tipo: "pergunta_botoes",
+        titulo: "Perfil",
+        mensagem: "Qual perfil?",
+        opcoes: [
+          { id: "a", texto: "A" },
+          { id: "b", texto: "B" },
+        ],
+      },
+      {
+        ref: "proxima",
+        tipo: "mensagem",
+        titulo: "Proxima etapa",
+        mensagem: "Vamos continuar.",
+        opcoes: [],
+      },
+      {
+        ref: "fim",
+        tipo: "encerrar",
+        titulo: "Fim",
+        mensagem: "Encerrado.",
+        resultado: "positivo",
+        opcoes: [],
+      },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "pergunta", condicao: "sempre" },
+      {
+        origem: "pergunta",
+        destino: "proxima",
+        condicao: "resposta_contem",
+        valor: "a",
+      },
+      {
+        origem: "pergunta",
+        destino: "proxima",
+        condicao: "resposta_contem",
+        valor: "b",
+      },
+      { origem: "proxima", destino: "fim", condicao: "sempre" },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({
+    modo: "criar_fluxo",
+    plano,
+  });
+  const pergunta = resultado.nos.find((no) => no.tipo_no === "enviar_botoes");
+  const saidas = resultado.conexoes.filter(
+    (conexao) => conexao.no_origem_id === pergunta?.id
+  );
+
+  assert.equal(saidas.length, 2);
+  assert.equal(new Set(saidas.map((conexao) => conexao.no_destino_id)).size, 2);
+  assert.equal(
+    resultado.nos.filter((no) => no.titulo.startsWith("Proxima etapa")).length,
+    2
+  );
+  assert.equal(resultado.validacao.valido, true);
+});
