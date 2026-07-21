@@ -122,12 +122,6 @@ export function criarPerguntasAssistenteFluxo(params: {
       const midiasCompativeis = params.midias.filter(
         (midia) => midia.tipo === tipoMidia
       );
-      const sugestao = midiasCompativeis.some(
-        (midia) => midia.id === etapa.midia_id
-      )
-        ? etapa.midia_id
-        : null;
-
       perguntas.push({
         id: `midia:${etapa.ref}`,
         etapa_ref: etapa.ref,
@@ -140,7 +134,10 @@ export function criarPerguntasAssistenteFluxo(params: {
             : `Você pode continuar sem mídia e selecioná-la depois, antes de ativar o fluxo.`,
         obrigatoria: false,
         bloqueada: false,
-        valor_sugerido: sugestao,
+        // O tipo da mídia não é suficiente para concluir que seu conteúdo
+        // corresponde ao pedido (ex.: uma arte de planos não é "antes e
+        // depois"). Exija uma escolha consciente do usuário.
+        valor_sugerido: null,
         opcoes: midiasCompativeis.map((midia) => ({
           id: midia.id,
           label: midia.nome,

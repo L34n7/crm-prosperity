@@ -89,6 +89,109 @@ function garantirInicio(
   };
 }
 
+function ehConfirmacaoHorario(no: AssistenteAutomacaoNo) {
+  if (no.tipo_no !== "enviar_botoes") return false;
+  const botoes = Array.isArray(no.configuracao_json?.botoes)
+    ? no.configuracao_json.botoes
+    : [];
+  const ids = new Set(
+    botoes.map((botao) => normalizarId(botao?.id)).filter(Boolean)
+  );
+  return ids.has("confirmar_horario") && ids.has("escolher_outro_horario");
+}
+
+function garantirConfirmacoesAgenda(params: {
+  nos: AssistenteAutomacaoNo[];
+  conexoes: AssistenteAutomacaoConexao[];
+  avisos: string[];
+}) {
+  const nos = [...params.nos];
+  let conexoes = [...params.conexoes];
+  const nosPorId = new Map(nos.map((no) => [no.id, no]));
+
+  for (const escolher of nos.filter(
+    (no) => no.tipo_no === "agenda_escolher_horario"
+  )) {
+    const saidas = conexoes.filter(
+      (conexao) => conexao.no_origem_id === escolher.id
+    );
+    if (saidas.some((conexao) => {
+      const destino = nosPorId.get(conexao.no_destino_id);
+      return destino ? ehConfirmacaoHorario(destino) : false;
+    })) {
+      continue;
+    }
+
+    const agendaId = String(escolher.configuracao_json?.agenda_id || "");
+    const criar =
+      nos.find(
+        (no) =>
+          no.tipo_no === "agenda_criar_agendamento" &&
+          agendaId &&
+          String(no.configuracao_json?.agenda_id || "") === agendaId
+      ) || nos.find((no) => no.tipo_no === "agenda_criar_agendamento");
+    if (!criar) continue;
+
+    const confirmacao: AssistenteAutomacaoNo = {
+      id: randomUUID(),
+      tipo_no: "enviar_botoes",
+      titulo: "Confirmar horário",
+      descricao: null,
+      posicao_x: escolher.posicao_x + 300,
+      posicao_y: escolher.posicao_y,
+      configuracao_json: {
+        mensagem:
+          "Confirma o horário escolhido para {{agenda_data_nova}} às {{agenda_hora_nova}}?",
+        delay_segundos: 3,
+        botoes: [
+          { id: "confirmar_horario", titulo: "Sim" },
+          { id: "escolher_outro_horario", titulo: "Escolher outro" },
+        ],
+        max_tentativas_invalidas: 3,
+        max_tentativas_sem_resposta: 3,
+        acao_excesso_tentativas: "transferir_atendimento",
+        setor_excesso_tentativas: null,
+        mensagem_excesso_tentativas:
+          "Não consegui confirmar o horário. Vou encaminhar você para um atendente.",
+        notificar_excesso_tentativas: true,
+        notificar_email_excesso_tentativas: true,
+      },
+      delay_segundos: 3,
+    };
+
+    nos.push(confirmacao);
+    nosPorId.set(confirmacao.id, confirmacao);
+    conexoes = conexoes.filter(
+      (conexao) =>
+        conexao.no_origem_id !== escolher.id ||
+        conexao.condicao_json?.tipo === "timeout_sem_resposta"
+    );
+    conexoes.push(
+      criarConexaoSempre(escolher.id, confirmacao.id, conexoes.length + 1),
+      criarConexaoOpcao({
+        origem: confirmacao.id,
+        destino: criar.id,
+        opcao: { id: "confirmar_horario", titulo: "Sim" },
+        ordem: conexoes.length + 2,
+      }),
+      criarConexaoOpcao({
+        origem: confirmacao.id,
+        destino: escolher.id,
+        opcao: {
+          id: "escolher_outro_horario",
+          titulo: "Escolher outro",
+        },
+        ordem: conexoes.length + 3,
+      })
+    );
+    params.avisos.push(
+      `Foi adicionada confirmação antes de criar o agendamento em “${escolher.titulo}”.`
+    );
+  }
+
+  return { nos, conexoes };
+}
+
 export function repararGrafoAssistente(params: {
   nos: AssistenteAutomacaoNo[];
   conexoes: AssistenteAutomacaoConexao[];
@@ -221,6 +324,14 @@ export function repararGrafoAssistente(params: {
     );
     conexoes.push(...novas, ...timeout);
   }
+
+  const confirmacoesAgenda = garantirConfirmacoesAgenda({
+    nos,
+    conexoes,
+    avisos,
+  });
+  nos = confirmacoesAgenda.nos;
+  conexoes = confirmacoesAgenda.conexoes;
 
   const destinoInicioExistente = params.conexoes
     .filter((conexao) => conexao.no_origem_id === inicio.id)

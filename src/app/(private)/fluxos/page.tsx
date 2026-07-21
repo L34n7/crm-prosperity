@@ -6624,15 +6624,25 @@ function validarFluxoAntesDeAtivar(params?: {
         return `O bloco "${node.data?.titulo}" pode ter no máximo 3 botões.`;
       }
 
-      const botaoInvalido = config.botoes.some(
-        (botao: any) =>
-          !String(botao.id || "").trim() ||
-          !String(botao.titulo || "").trim() ||
-          String(botao.titulo || "").length > 20
-      );
+      const idsBotoes = new Set<string>();
+      for (const botao of config.botoes as any[]) {
+        const id = String(botao.id || "").trim();
+        const titulo = String(botao.titulo || "").trim();
 
-      if (botaoInvalido) {
-        return `O bloco "${node.data?.titulo}" tem botão inválido. Verifique ID e título.`;
+        if (!id) {
+          return `O bloco "${node.data?.titulo}" possui um botão sem ID.`;
+        }
+        if (idsBotoes.has(id)) {
+          return `O bloco "${node.data?.titulo}" possui o ID de botão duplicado "${id}".`;
+        }
+        if (!titulo) {
+          return `O bloco "${node.data?.titulo}" possui um botão sem título.`;
+        }
+        if (titulo.length > 20) {
+          return `O botão "${titulo}" do bloco "${node.data?.titulo}" possui ${titulo.length} caracteres. O limite é 20.`;
+        }
+
+        idsBotoes.add(id);
       }
     }
 

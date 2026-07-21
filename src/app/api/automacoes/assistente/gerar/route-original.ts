@@ -893,11 +893,11 @@ Tipos de etapa permitidos:
 
 Regras:
 - Use apenas setores recebidos no contexto. Preencha setor_id quando souber.
-- Para pergunta_botoes, gere no maximo 3 opcoes.
+- Para pergunta_botoes, gere no maximo 3 opcoes. Cada titulo deve ter no maximo 20 caracteres na contagem JavaScript; prefira texto sem emoji quando o emoji fizer ultrapassar esse limite.
 - Para capturar_resposta, use somente uma variavel personalizada em snake_case. Nunca use variaveis fixas do contato como nome, email, telefone, numero, origem ou status_lead. Para capturar o nome, use a chave nome_cliente e tipo_captura nome.
 - Tipos de captura permitidos: texto, nome, cpf, cnpj, email, telefone, numero, data, cep ou moeda. Nunca use "livre"; para texto livre use "texto".
 - Toda variavel capturada deve ser utilizada em uma etapa posterior, com a sintaxe {{chave}}. Se o pedido nao precisar reutilizar a resposta, nao crie o bloco de captura.
-- Para etapas de midia, indique apenas o tipo adequado. A midia real sera escolhida pelo usuario depois.
+- Para etapas de midia, indique apenas o tipo adequado. Nunca escolha midia_id por conta propria nem associe uma midia somente pelo tipo do arquivo; a midia real sera confirmada explicitamente pelo usuario depois.
 - Para redirect, sugira mensagem e botao_texto com ate 20 caracteres. Extraia a URL do pedido quando existir; ela sera confirmada pelo usuario.
 - Para pergunta_livre_ia, crie rotas com condicao "ia" e descricao_ia clara.
 - Para rotas de opcoes, use condicao "resposta_contem" e valor igual ao id da opcao.

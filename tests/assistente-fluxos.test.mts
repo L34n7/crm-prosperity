@@ -570,6 +570,7 @@ test("assistente coleta midia, URL e setor antes de compilar", () => {
         tipo: "midia_arquivo",
         titulo: "Enviar catalogo",
         mensagem: "Segue nosso catalogo.",
+        midia_id: "midia-catalogo",
         midia_tipo: "arquivo",
         opcoes: [],
       },
@@ -613,6 +614,7 @@ test("assistente coleta midia, URL e setor antes de compilar", () => {
     perguntas.map((pergunta) => pergunta.campo),
     ["midia_id", "url", "setor_id"]
   );
+  assert.equal(perguntas[0]?.valor_sugerido, null);
 
   const respostas = [
     "midia-catalogo",
@@ -947,6 +949,133 @@ test("assistente cria um destino diferente para cada opcao mesmo quando a IA agr
   assert.equal(
     resultado.nos.filter((no) => no.titulo.startsWith("Proxima etapa")).length,
     2
+  );
+  assert.equal(resultado.validacao.valido, true);
+});
+
+test("assistente normaliza titulos de botoes e sincroniza rotulos das conexoes", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Botoes longos",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      {
+        ref: "menu",
+        tipo: "pergunta_botoes",
+        titulo: "Dúvidas Frequentes",
+        mensagem: "Como deseja seguir?",
+        opcoes: [
+          { id: "especialista", texto: "👩‍⚕️ Falar com Especialista" },
+          { id: "localizacao", texto: "🗺️ Abrir Localização" },
+        ],
+      },
+      { ref: "fim_a", tipo: "encerrar", titulo: "Fim A", opcoes: [] },
+      { ref: "fim_b", tipo: "encerrar", titulo: "Fim B", opcoes: [] },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "menu", condicao: "sempre" },
+      {
+        origem: "menu",
+        destino: "fim_a",
+        condicao: "resposta_contem",
+        valor: "especialista",
+        rotulo: "👩‍⚕️ Falar com Especialista",
+      },
+      {
+        origem: "menu",
+        destino: "fim_b",
+        condicao: "resposta_contem",
+        valor: "localizacao",
+        rotulo: "🗺️ Abrir Localização",
+      },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({ modo: "criar_fluxo", plano });
+  const menu = resultado.nos.find((no) => no.titulo === "Dúvidas Frequentes");
+  const botoes = menu?.configuracao_json.botoes || [];
+  const rotulos = resultado.conexoes
+    .filter((conexao) => conexao.no_origem_id === menu?.id)
+    .map((conexao) => conexao.rotulo);
+
+  assert.deepEqual(
+    botoes.map((botao) => botao.titulo),
+    ["Falar especialista", "Abrir Localização"]
+  );
+  assert.deepEqual(rotulos, ["Falar especialista", "Abrir Localização"]);
+  assert.equal(botoes.every((botao) => botao.titulo.length <= 20), true);
+  assert.equal(resultado.validacao.valido, true);
+});
+
+test("assistente confirma o horario antes de criar o agendamento", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Agendamento confirmado",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      {
+        ref: "escolher",
+        tipo: "agenda_escolher_horario",
+        titulo: "Escolher horário",
+        agenda_id: "agenda-teste",
+        opcoes: [],
+      },
+      {
+        ref: "criar",
+        tipo: "agenda_criar_agendamento",
+        titulo: "Criar agendamento",
+        agenda_id: "agenda-teste",
+        opcoes: [],
+      },
+      { ref: "fim", tipo: "encerrar", titulo: "Fim", opcoes: [] },
+    ],
+    rotas: [
+      { origem: "inicio", destino: "escolher", condicao: "sempre" },
+      { origem: "escolher", destino: "criar", condicao: "sempre" },
+      { origem: "criar", destino: "fim", condicao: "sempre" },
+    ],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({ modo: "criar_fluxo", plano });
+  const escolher = resultado.nos.find(
+    (no) => no.tipo_no === "agenda_escolher_horario"
+  );
+  const criar = resultado.nos.find(
+    (no) => no.tipo_no === "agenda_criar_agendamento"
+  );
+  const confirmar = resultado.nos.find(
+    (no) => no.titulo === "Confirmar horário"
+  );
+  const saidasConfirmacao = resultado.conexoes.filter(
+    (conexao) => conexao.no_origem_id === confirmar?.id
+  );
+
+  assert.ok(escolher && criar && confirmar);
+  assert.ok(
+    resultado.conexoes.some(
+      (conexao) =>
+        conexao.no_origem_id === escolher.id &&
+        conexao.no_destino_id === confirmar.id &&
+        conexao.condicao_json.tipo === "sempre"
+    )
+  );
+  assert.ok(
+    saidasConfirmacao.some(
+      (conexao) =>
+        conexao.condicao_json.valor === "confirmar_horario" &&
+        conexao.no_destino_id === criar.id
+    )
+  );
+  assert.ok(
+    saidasConfirmacao.some(
+      (conexao) =>
+        conexao.condicao_json.valor === "escolher_outro_horario" &&
+        conexao.no_destino_id === escolher.id
+    )
   );
   assert.equal(resultado.validacao.valido, true);
 });

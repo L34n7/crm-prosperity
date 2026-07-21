@@ -210,6 +210,26 @@ function texto(valor: unknown, limite = 1200) {
     .slice(0, limite);
 }
 
+/** Mantém o título dentro do limite de 20 unidades UTF-16 do WhatsApp. */
+export function normalizarTituloBotao(valor: unknown) {
+  const original = texto(valor, 80);
+  if (original.length <= 20) return original;
+
+  let titulo = original.replace(/^[^\p{L}\p{N}]+/u, "");
+
+  if (titulo.length <= 20) return titulo;
+
+  titulo = titulo.replace(/\bfalar com especialista\b/i, "Falar especialista");
+  if (titulo.length <= 20) return titulo;
+
+  titulo = titulo.replace(/\bfalar com\b/i, "Falar c/");
+  if (titulo.length <= 20) return titulo;
+
+  while (titulo.length > 20) titulo = titulo.slice(0, -1);
+
+  return titulo.replace(/\s+\S*$/, "").trim() || titulo.trim();
+}
+
 function objeto(valor: unknown): Record<string, unknown> {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as Record<string, unknown>)
@@ -563,7 +583,10 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {
         const opcao = objeto(opcaoRaw);
         return {
           id: texto(opcao.id, 80),
-          texto: texto(opcao.texto, 80),
+          texto:
+            tipo === "pergunta_botoes"
+              ? normalizarTituloBotao(opcao.texto)
+              : texto(opcao.texto, 80),
         };
       })
     : [];
@@ -998,7 +1021,7 @@ export function normalizarPlanoAssistente(
   let etapas: PlanoAssistenteEtapa[] = Array.isArray(item.etapas)
     ? (item.etapas.map(normalizarEtapa).filter(Boolean) as PlanoAssistenteEtapa[])
     : [];
-  const rotas = Array.isArray(item.rotas)
+  let rotas = Array.isArray(item.rotas)
     ? item.rotas.map(normalizarRota).filter(Boolean)
     : [];
   const mensagensRevisadas = Array.isArray(item.mensagens_revisadas)
@@ -1025,6 +1048,24 @@ export function normalizarPlanoAssistente(
     etapas,
     rotas as PlanoAssistenteRota[]
   );
+
+  const rotulosBotoes = new Map<string, string>();
+  for (const etapa of etapas) {
+    if (etapa.tipo !== "pergunta_botoes") continue;
+    for (const opcao of etapa.opcoes) {
+      rotulosBotoes.set(
+        `${etapa.ref}:${normalizarChaveVariavel(opcao.id)}`,
+        opcao.texto
+      );
+    }
+  }
+  rotas = (rotas as PlanoAssistenteRota[]).map((rota) => ({
+    ...rota,
+    rotulo:
+      rotulosBotoes.get(
+        `${rota.origem}:${normalizarChaveVariavel(rota.valor)}`
+      ) || rota.rotulo,
+  }));
 
   return {
     nome_fluxo: texto(item.nome_fluxo, 120),
@@ -1581,6 +1622,42 @@ export function validarFluxoAssistente(params: {
           mensagem: `O bloco "${no.titulo}" possui mais de 3 botoes.`,
           no_id: no.id,
         });
+      }
+
+      const ids = new Set<string>();
+      for (const botao of botoes) {
+        const id = texto(botao.id, 160);
+        const titulo = texto(botao.titulo, 80);
+
+        if (!id) {
+          erros.push({
+            codigo: "BOTAO_ID_AUSENTE",
+            mensagem: `O bloco "${no.titulo}" possui um botao sem ID.`,
+            no_id: no.id,
+          });
+        } else if (ids.has(id)) {
+          erros.push({
+            codigo: "BOTAO_ID_DUPLICADO",
+            mensagem: `O bloco "${no.titulo}" possui o ID de botao duplicado "${id}".`,
+            no_id: no.id,
+          });
+        }
+
+        if (!titulo) {
+          erros.push({
+            codigo: "BOTAO_TITULO_AUSENTE",
+            mensagem: `O bloco "${no.titulo}" possui um botao sem titulo.`,
+            no_id: no.id,
+          });
+        } else if (titulo.length > 20) {
+          erros.push({
+            codigo: "BOTAO_TITULO_LONGO",
+            mensagem: `O botao "${titulo}" do bloco "${no.titulo}" possui ${titulo.length} caracteres; o limite e 20.`,
+            no_id: no.id,
+          });
+        }
+
+        if (id) ids.add(id);
       }
     }
 
