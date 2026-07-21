@@ -7,9 +7,11 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const requestPreparada = await prepararSessaoAntesDeCriar(request);
-  const requestComTerminal = await garantirTerminalAntesDeCriar(requestPreparada);
   const requestCanonical = await canonicalizarSessaoAntesDeCriar(
-    requestComTerminal
+    requestPreparada
   );
-  return executarAssistente(requestCanonical);
+  const requestComTerminal = await garantirTerminalAntesDeCriar(
+    requestCanonical
+  );
+  return executarAssistente(requestComTerminal);
 }
