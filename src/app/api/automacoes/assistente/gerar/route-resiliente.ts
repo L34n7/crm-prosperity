@@ -28,9 +28,15 @@ import {
   injetarPlanejamentoNoPayload,
   type RequisitosNormalizadosFluxo,
 } from "./route-planejamento-ia";
-import { problemasReparaveisPeloCompilador } from "./route-politica-reparo";
+import {
+  deveExecutarRevisaoFinal,
+  problemasReparaveisPeloCompilador,
+} from "./route-politica-reparo";
 
-export { problemasReparaveisPeloCompilador } from "./route-politica-reparo";
+export {
+  deveExecutarRevisaoFinal,
+  problemasReparaveisPeloCompilador,
+} from "./route-politica-reparo";
 
 export const runtime = "nodejs";
 
@@ -242,6 +248,19 @@ function instalarSdkResiliente() {
       problemas: segundaValidacao.problemas,
       json_legivel: jsonLegivel(segundaRespostaComUso),
     });
+
+    if (!deveExecutarRevisaoFinal(pipelineCompleto)) {
+      console.error("[assistente-fluxos] reparo interno encerrado apos duas tentativas", {
+        response_id: segundaRespostaComUso.id || null,
+        problemas: segundaValidacao.problemas,
+        json_legivel: jsonLegivel(segundaRespostaComUso),
+      });
+
+      // A rota original converte este JSON interrompido em uma resposta 422,
+      // sem materializar o fluxo e sem aguardar o timeout da infraestrutura.
+      substituirTextoSaida(segundaRespostaComUso, "{");
+      return segundaRespostaComUso;
+    }
 
     const terceiroPayload = prepararPayloadAssistente({
       body: bodyPlanejado,

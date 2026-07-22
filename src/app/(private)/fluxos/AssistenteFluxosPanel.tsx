@@ -128,6 +128,35 @@ type PreviaTokensAssistente = {
   }>;
 };
 
+type RespostaApiAssistente = Partial<RespostaAssistente> & {
+  ok?: boolean;
+  error?: string;
+};
+
+async function lerRespostaAssistente(
+  response: Response,
+  mensagemPadrao: string
+): Promise<RespostaApiAssistente> {
+  const corpo = await response.text();
+
+  if (corpo.trim()) {
+    try {
+      return JSON.parse(corpo) as RespostaApiAssistente;
+    } catch {
+      // Timeouts da Vercel podem chegar como texto puro (por exemplo,
+      // "An error occurred..."). Nao exponha o erro de JSON ao usuario.
+    }
+  }
+
+  return {
+    ok: false,
+    error:
+      response.status >= 500 || response.status === 0
+        ? "A geração demorou mais que o limite do servidor. Tente novamente; nenhum fluxo incompleto foi criado."
+        : mensagemPadrao,
+  };
+}
+
 export type AssistenteFluxosFluxoCriado = {
   id: string;
   nome: string;
@@ -385,7 +414,10 @@ export default function AssistenteFluxosPanel({
         body: JSON.stringify(montarPayloadAssistente()),
       });
 
-      const json = await res.json();
+      const json = await lerRespostaAssistente(
+        res,
+        "Erro ao gerar sugestão."
+      );
 
       if (!res.ok || !json.ok) {
         throw new Error(json.error || "Erro ao gerar sugestão.");
@@ -434,7 +466,10 @@ export default function AssistenteFluxosPanel({
           ...payload,
         }),
       });
-      const json = await res.json();
+      const json = await lerRespostaAssistente(
+        res,
+        "Erro ao continuar o assistente."
+      );
 
       if (!res.ok || !json.ok) {
         throw new Error(json.error || "Erro ao continuar o assistente.");
@@ -499,7 +534,10 @@ export default function AssistenteFluxosPanel({
             sessao_id: sessaoId,
           }),
         });
-        const json = await res.json();
+        const json = await lerRespostaAssistente(
+          res,
+          "Sessão indisponível."
+        );
 
         if (!res.ok || !json.ok) {
           throw new Error(json.error || "Sessao indisponivel.");

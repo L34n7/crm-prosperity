@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { prepararPayloadAssistente } from "../src/app/api/automacoes/assistente/gerar/route-contexto-ia.ts";
-import { problemasReparaveisPeloCompilador } from "../src/app/api/automacoes/assistente/gerar/route-politica-reparo.ts";
+import {
+  deveExecutarRevisaoFinal,
+  problemasReparaveisPeloCompilador,
+} from "../src/app/api/automacoes/assistente/gerar/route-politica-reparo.ts";
 
 function payloadBaseAssistente() {
   return {
@@ -94,6 +97,22 @@ test("problemas topologicos reparaveis nao provocam outra reescrita completa pel
     ]),
     true
   );
+});
+
+test("referencias duplicadas seguem para consolidacao deterministica", () => {
+  assert.equal(
+    problemasReparaveisPeloCompilador([
+      "Existem etapas com referencias duplicadas: harmonizacao_facial_1_beneficios, harmonizacao_facial_1_cuidados.",
+      'O bloco "harmonizacao_menu_2" nao esta conectado ao fluxo.',
+      'A opcao "Dói?" do bloco "Dúvidas Frequentes" precisa ter uma rota.',
+    ]),
+    true
+  );
+});
+
+test("reparo interno nao inicia uma terceira chamada que pode exceder o timeout", () => {
+  assert.equal(deveExecutarRevisaoFinal(false), false);
+  assert.equal(deveExecutarRevisaoFinal(true), true);
 });
 
 test("problemas de conteudo continuam exigindo correcao pela IA", () => {
