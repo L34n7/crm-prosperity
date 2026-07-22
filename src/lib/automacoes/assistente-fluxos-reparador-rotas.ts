@@ -11,6 +11,7 @@ import {
   ehAbrirLocalizacao,
   ehAgendamento,
   ehAntesDepois,
+  ehEncerrar,
   ehEspecialista,
   ehFaq,
   ehLocalizacao,
@@ -152,6 +153,10 @@ export function escolherDestinoSemantico(params: {
   const servicoOrigem = servicoDoNo(origem);
   const origemFaq = ehMenuFaq(origem, servicoOrigem);
   const diretos: Array<AssistenteAutomacaoNo | null | undefined> = [];
+
+  if (ehEncerrar(opcao.titulo)) {
+    diretos.push(nos.find((no) => no.tipo_no === "encerrar"));
+  }
 
   if (ehMenuAntesDepois(origem) && servicoOpcao) {
     const corresponde = (no: AssistenteAutomacaoNo) =>

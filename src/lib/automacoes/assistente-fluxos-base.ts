@@ -212,6 +212,23 @@ function texto(valor: unknown, limite = 1200) {
     .slice(0, limite);
 }
 
+/**
+ * Preserva a estrutura visual das mensagens do WhatsApp. O normalizador
+ * anterior usava `texto`, que transformava todas as quebras de linha em
+ * espaços e fazia listas inteiras virarem um único parágrafo.
+ */
+function mensagemFormatada(valor: unknown, limite = 1800) {
+  return String(valor || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\s+•\s*/g, "\n• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, limite)
+    .trim();
+}
+
 /** Mantém o título dentro do limite de 20 unidades UTF-16 do WhatsApp. */
 export function normalizarTituloBotao(valor: unknown) {
   const original = texto(valor, 80);
@@ -434,7 +451,7 @@ function configuracaoPorEtapa(
   setores: AssistenteSetor[],
   midias: AssistenteMidia[]
 ) {
-  const mensagem = texto(etapa.mensagem, 1800);
+  const mensagem = mensagemFormatada(etapa.mensagem, 1800);
 
   if (tipoNo === "inicio") {
     return {};
@@ -595,7 +612,7 @@ function normalizarEtapa(valor: unknown): PlanoAssistenteEtapa | null {
 
   const etapaBase = {
     titulo: texto(item.titulo, 120) || null,
-    mensagem: texto(item.mensagem, 1800) || null,
+    mensagem: mensagemFormatada(item.mensagem, 1800) || null,
     variavel: normalizarChaveVariavel(item.variavel) || null,
     tipo_captura: normalizarChaveVariavel(item.tipo_captura) || null,
   };
@@ -954,7 +971,7 @@ function normalizarMensagemRevisada(
 ): PlanoAssistenteMensagemRevisada | null {
   const item = objeto(valor);
   const ref = normalizarRef(item.ref);
-  const mensagem = texto(item.mensagem, 1800);
+  const mensagem = mensagemFormatada(item.mensagem, 1800);
 
   if (!ref || !mensagem) return null;
 

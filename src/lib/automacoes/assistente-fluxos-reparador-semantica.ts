@@ -137,6 +137,8 @@ export const ehLocalizacao = (v: unknown) =>
   contem(v, /\b(localizacao|endereco|como chegar|mapa)\b/);
 export const ehEspecialista = (v: unknown) =>
   contem(v, /\b(especialista|atendente|atendimento humano|falar com|equipe|transferir)\b/);
+export const ehEncerrar = (v: unknown) =>
+  contem(v, /\b(encerrar|finalizar|fim do atendimento|sair)\b/);
 
 export function ehMenuPrincipal(no: AssistenteAutomacaoNo) {
   if (!ehPergunta(no)) return false;

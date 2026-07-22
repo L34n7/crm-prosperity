@@ -13,6 +13,7 @@ import {
   ehAgendamento,
   ehAntesDepois,
   ehConteudoProcedimento,
+  ehEncerrar,
   ehEspecialista,
   ehFaq,
   ehLocalizacao,
@@ -132,6 +133,242 @@ const ROTULOS_SERVICO: Record<Servico, string> = {
   melasma: "Tratamento de Melasma e Manchas",
   botox: "Aplicação de Botox",
 };
+
+const ORDEM_CONTEUDO_PROCEDIMENTO = {
+  visao_geral: 0,
+  beneficios: 1,
+  cuidados: 2,
+  resultados: 3,
+} as const;
+
+type SecaoProcedimento = keyof typeof ORDEM_CONTEUDO_PROCEDIMENTO;
+
+function formatarMensagemWhatsApp(no: AssistenteAutomacaoNo) {
+  const atual = no.configuracao_json?.mensagem;
+  if (typeof atual !== "string" || !atual.trim()) return;
+
+  let mensagem = atual
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\s+•\s*/g, "\n• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (ehLocalizacao(`${no.titulo} ${mensagem}`)) {
+    mensagem = mensagem
+      .replace(/\n•\s*/g, "\n")
+      .replace(/\n(?=(?:🕐|horario(?: de atendimento)?\b))/gi, "\n\n")
+      .replace(/\n(?=(?:segunda a sexta|sabado)\s*:)/gi, "\n\n");
+  } else {
+    mensagem = mensagem.replace(/([^\n])\n• /, "$1\n\n• ");
+  }
+
+  const servico = servicoDoNo(no);
+  if (servico) {
+    const nomeServico = normalizar(ROTULOS_SERVICO[servico]);
+    const linhas = mensagem.split("\n");
+    let nomeJaApresentado = false;
+    mensagem = linhas
+      .filter((linha) => {
+        const normalizada = normalizar(linha);
+        const apresentaNome = normalizada.includes(nomeServico);
+        const apenasNome =
+          normalizada === nomeServico ||
+          normalizada === `${nomeServico} visao geral` ||
+          (servicoDoTexto(linha) === servico &&
+            normalizada.split(" ").length <= 4 &&
+            !/\b(visao|beneficios?|indicacoes?|cuidados?|resultados?)\b/.test(
+              normalizada
+            ));
+        if (apresentaNome && !nomeJaApresentado) {
+          nomeJaApresentado = true;
+          return true;
+        }
+        return !(nomeJaApresentado && apenasNome);
+      })
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  no.configuracao_json = { ...no.configuracao_json, mensagem };
+}
+
+function secaoProcedimento(no: AssistenteAutomacaoNo): SecaoProcedimento {
+  const titulo = normalizar(no.titulo);
+  const mensagem = normalizar(no.configuracao_json?.mensagem);
+  const tituloAmbiguo =
+    /\bcuidados?\b/.test(titulo) && /\bresultados?\b/.test(titulo);
+
+  if (tituloAmbiguo) {
+    if (/\b(beneficios?|indicacoes?)\b/.test(mensagem)) return "beneficios";
+    if (/\b(cuidados?|recuperacao|duracao|tempo medio)\b/.test(mensagem)) {
+      return "cuidados";
+    }
+    if (/\b(resultados? esperados?|evolucao|efeito aparece)\b/.test(mensagem)) {
+      return "resultados";
+    }
+  }
+
+  if (/\b(beneficios?|indicacoes?)\b/.test(titulo)) return "beneficios";
+  if (/\b(cuidados?|recuperacao|duracao|tempo medio)\b/.test(titulo)) {
+    return "cuidados";
+  }
+  if (/\b(resultados? esperados?|evolucao esperada)\b/.test(titulo)) {
+    return "resultados";
+  }
+  if (/\b(beneficios?|indicacoes?)\b/.test(mensagem)) return "beneficios";
+  if (/\b(cuidados?|recuperacao|duracao|tempo medio)\b/.test(mensagem)) {
+    return "cuidados";
+  }
+  if (/\b(resultados? esperados?|evolucao|efeito aparece)\b/.test(mensagem)) {
+    return "resultados";
+  }
+  return "visao_geral";
+}
+
+function unirMensagensProcedimento(nos: AssistenteAutomacaoNo[]) {
+  const partes: string[] = [];
+  const vistas = new Set<string>();
+
+  for (const no of nos) {
+    const mensagem = String(no.configuracao_json?.mensagem || "").trim();
+    for (const parte of mensagem.split(/\n{2,}/)) {
+      const chave = normalizar(parte);
+      if (!chave || vistas.has(chave)) continue;
+      vistas.add(chave);
+      partes.push(parte.trim());
+    }
+  }
+
+  return partes.join("\n\n");
+}
+
+function consolidarConteudosProcedimento(params: {
+  nos: AssistenteAutomacaoNo[];
+  conexoes: AssistenteAutomacaoConexao[];
+  servico: Servico;
+  avisos: string[];
+}) {
+  let { nos, conexoes } = params;
+  const candidatos = nos.filter((no) =>
+    ehConteudoProcedimento(no, params.servico)
+  );
+  const porSecao = new Map<SecaoProcedimento, AssistenteAutomacaoNo[]>();
+
+  for (const no of candidatos) {
+    const secao = secaoProcedimento(no);
+    porSecao.set(secao, [...(porSecao.get(secao) || []), no]);
+  }
+
+  const remover = new Set<string>();
+  for (const [secao, blocos] of porSecao) {
+    const canonico = blocos[0];
+    if (!canonico || blocos.length === 1) continue;
+    canonico.configuracao_json = {
+      ...canonico.configuracao_json,
+      mensagem: unirMensagensProcedimento(blocos),
+    };
+    for (const duplicado of blocos.slice(1)) remover.add(duplicado.id);
+    canonico.titulo = `${ROTULOS_SERVICO[params.servico]} — ${
+      secao === "beneficios"
+        ? "Benefícios e indicações"
+        : secao === "cuidados"
+          ? "Cuidados, duração e recuperação"
+          : secao === "resultados"
+            ? "Resultados esperados"
+            : "Visão geral"
+    }`;
+  }
+
+  if (candidatos.length >= 2 && !porSecao.has("resultados")) {
+    const referencia = candidatos.at(-1)!;
+    const resultado: AssistenteAutomacaoNo = {
+      ...clonarNo(referencia),
+      id: randomUUID(),
+      titulo: `${ROTULOS_SERVICO[params.servico]} — Resultados esperados`,
+      configuracao_json: {
+        ...referencia.configuracao_json,
+        mensagem:
+          "✨ Resultados esperados\n\nOs resultados variam conforme a avaliação, o protocolo indicado e a resposta individual. A especialista explicará as expectativas de forma personalizada.",
+      },
+    };
+    nos.push(resultado);
+    params.avisos.push(
+      `Foi adicionada uma conclusão de resultados esperados para ${ROTULOS_SERVICO[params.servico]}.`
+    );
+  }
+
+  if (remover.size > 0) {
+    nos = nos.filter((no) => !remover.has(no.id));
+    conexoes = conexoes.filter(
+      (conexao) =>
+        !remover.has(conexao.no_origem_id) &&
+        !remover.has(conexao.no_destino_id)
+    );
+    params.avisos.push(
+      `Conteúdos repetidos de ${ROTULOS_SERVICO[params.servico]} foram consolidados.`
+    );
+  }
+
+  return { nos, conexoes };
+}
+
+function garantirOpcaoEncerrar(
+  menu: AssistenteAutomacaoNo | null,
+  avisos: string[]
+) {
+  if (!menu) return;
+  const opcoes = opcoesDaPergunta(menu);
+  if (opcoes.some((opcao) => ehEncerrar(opcao.titulo))) return;
+  if (opcoes.length >= 10) {
+    avisos.push(
+      "O Menu Principal já possui 10 opções e não comporta a opção de encerramento."
+    );
+    return;
+  }
+  aplicarOpcoes(menu, [
+    ...opcoes,
+    { id: "encerrar_atendimento", titulo: "Encerrar atendimento" },
+  ]);
+  avisos.push("A opção “Encerrar atendimento” foi adicionada ao Menu Principal.");
+}
+
+function propagarSetorExcessoTentativas(
+  nos: AssistenteAutomacaoNo[],
+  avisos: string[]
+) {
+  const setores = new Set(
+    nos
+      .filter((no) => no.tipo_no === "transferir_setor")
+      .map((no) => String(no.configuracao_json?.setor_id || "").trim())
+      .filter(Boolean)
+  );
+  if (setores.size !== 1) return;
+  const setorId = [...setores][0];
+  let corrigidos = 0;
+
+  for (const no of nos) {
+    const config = no.configuracao_json || {};
+    if (
+      config.acao_excesso_tentativas === "transferir_atendimento" &&
+      !String(config.setor_excesso_tentativas || "").trim()
+    ) {
+      no.configuracao_json = {
+        ...config,
+        setor_excesso_tentativas: setorId,
+      };
+      corrigidos += 1;
+    }
+  }
+
+  if (corrigidos > 0) {
+    avisos.push(
+      `O setor de transferência foi aplicado a ${corrigidos} bloco(s) com excesso de tentativas.`
+    );
+  }
+}
 
 function tituloGenerico(no: AssistenteAutomacaoNo) {
   return /^(mensagem|pergunta|pergunta com botoes|pergunta com opcoes)$/i.test(
@@ -412,6 +649,7 @@ function destinoOriginalCorresponde(params: {
     }
     return respostaCorrespondeFaq(opcao, destino);
   }
+  if (ehEncerrar(opcao.titulo)) return destino.tipo_no === "encerrar";
   if (ehVoltarMenu(opcao.titulo)) return mainMenu?.id === destino.id;
   if (servicoOpcao) {
     if (ehMenuAntesDepois(origem)) {
@@ -549,6 +787,7 @@ export function repararGrafoAssistente(params: {
   let nos = params.nos.map(clonarNo);
   let conexoes = params.conexoes.map(clonarConexao);
   const avisos: string[] = [];
+  nos.forEach(formatarMensagemWhatsApp);
   const ids = new Set(nos.map((no) => no.id));
 
   conexoes = conexoes.filter(
@@ -572,6 +811,23 @@ export function repararGrafoAssistente(params: {
   conexoes = menusConsolidados.conexoes;
   const mainMenu = melhorMenuPrincipal(nos);
   reconstruirMenusFaqMalformados(nos, avisos);
+  for (const servico of ["harmonizacao", "melasma", "botox"] as Servico[]) {
+    const consolidados = consolidarConteudosProcedimento({
+      nos,
+      conexoes,
+      servico,
+      avisos,
+    });
+    nos = consolidados.nos;
+    conexoes = consolidados.conexoes;
+  }
+  let terminal = nos.find((no) => no.tipo_no === "encerrar");
+  if (!terminal) {
+    terminal = criarNoEncerrar();
+    nos.push(terminal);
+    avisos.push("Um bloco de encerramento foi adicionado ao rascunho.");
+  }
+  garantirOpcaoEncerrar(mainMenu, avisos);
   const ordemNos = indicePorId(nos);
   const menusProcedimento = new Map<Servico, AssistenteAutomacaoNo>();
   const primeirosConteudos = new Map<Servico, AssistenteAutomacaoNo>();
@@ -584,8 +840,10 @@ export function repararGrafoAssistente(params: {
       .filter((no) => ehConteudoProcedimento(no, servico))
       .sort(
         (a, b) =>
+          ORDEM_CONTEUDO_PROCEDIMENTO[secaoProcedimento(a)] -
+            ORDEM_CONTEUDO_PROCEDIMENTO[secaoProcedimento(b)] ||
           (ordemNos.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
-          (ordemNos.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+            (ordemNos.get(b.id) ?? Number.MAX_SAFE_INTEGER)
       );
 
     if (menu) menusProcedimento.set(servico, menu);
@@ -750,6 +1008,7 @@ export function repararGrafoAssistente(params: {
   });
   nos = confirmacoesAgenda.nos;
   conexoes = confirmacoesAgenda.conexoes;
+  propagarSetorExcessoTentativas(nos, avisos);
 
   const destinoInicioExistente = params.conexoes
     .filter((conexao) => conexao.no_origem_id === inicio.id)
@@ -777,15 +1036,6 @@ export function repararGrafoAssistente(params: {
     conexoes.push(
       criarConexaoSempre(inicio.id, destinoInicio.id, conexoes.length + 1)
     );
-  }
-
-  let terminal = nos.find(ehTerminal);
-
-  if (!terminal) {
-    terminal = criarNoEncerrar();
-    nos.push(terminal);
-    nosPorId.set(terminal.id, terminal);
-    avisos.push("Um bloco de encerramento foi adicionado ao rascunho.");
   }
 
   for (const no of nos) {

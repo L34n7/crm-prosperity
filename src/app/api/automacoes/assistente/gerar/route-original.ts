@@ -897,6 +897,9 @@ Regras:
 - Organize todo fluxo em inicio, meio e fim: acolhimento e identificacao da intencao; desenvolvimento coerente de cada escolha; conversao, transferencia, retorno consciente ou encerramento.
 - Cada ramo precisa cumprir o objetivo associado a sua opcao. Nao conecte uma escolha a um destino apenas porque a estrutura ficaria tecnicamente completa.
 - Escreva de acordo com o segmento, publico e modelo de negocio da empresa. Prefira comunicacao clara, objetiva, atenta e levemente espontanea, como uma pessoa real.
+- Preserve quebras de linha. Nunca compacte endereco, horario, cuidados ou listas em uma unica linha separada por varios simbolos "•".
+- Em localizacao, use uma linha para o nome, outra para complemento/loja, outra para rua, outra para cidade/UF e outra para CEP. Separe o horario em um novo paragrafo.
+- Em orientacoes, use um titulo curto, uma linha em branco e um item por linha. Nao repita o nome do procedimento duas vezes na mesma mensagem.
 - Otimize mensagens para conversao com CTAs contextuais, sem pressao artificial, promessas enganosas ou linguagem generica.
 - Use apenas setores recebidos no contexto. Preencha setor_id quando souber.
 - Para pergunta_botoes, gere no maximo 3 opcoes. Cada titulo deve ter no maximo 20 caracteres na contagem JavaScript; prefira texto sem emoji quando o emoji fizer ultrapassar esse limite.
@@ -913,7 +916,10 @@ Regras:
 - Nunca crie rota "sempre" saindo de pergunta_opcoes ou pergunta_botoes.
 - Conecte todas as etapas. Nenhuma etapa pode ficar orfa ou sem caminho a partir de inicio.
 - O inicio e apenas tecnico, sem mensagem ou opcoes. Ele deve apontar para Boas-vindas e depois para um unico Menu Principal canonico quando houver menu.
+- Quando houver Menu Principal e existir encerramento no fluxo, inclua "Encerrar atendimento" como uma opcao desse menu, respeitando o limite de 10 opcoes.
 - Todos os retornos ao Menu Principal devem apontar para o mesmo bloco, nunca para um procedimento especifico.
+- Para cada procedimento, organize os textos nesta ordem exata: Visao geral; Beneficios e indicacoes; Cuidados, duracao e recuperacao; Resultados esperados; Proximos passos/menu do procedimento.
+- Nao crie dois blocos parcialmente duplicados de cuidados ou resultados. Em Melasma e Manchas, Resultados esperados deve explicar a evolucao esperada e nao repetir apenas as indicacoes.
 - Em FAQs, associe cada pergunta a uma resposta de intencao exata. Uma resposta FAQ deve voltar ao mesmo menu FAQ ou ao menu do procedimento e nunca apontar automaticamente para outra resposta.
 - Nunca crie ciclo composto apenas por rotas "sempre".
 - Depois de agenda_criar_agendamento, confirme usando {{agenda_data}} e {{agenda_hora}} e nunca solicite novamente nome, telefone, dia ou horario.
