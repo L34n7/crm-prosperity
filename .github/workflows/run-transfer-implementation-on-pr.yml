@@ -32,6 +32,20 @@ jobs:
         run: |
           awk '/python <<'"'"'PY'"'"'/{flag=1;next} /^[[:space:]]*PY[[:space:]]*$/{flag=0} flag { sub(/^          /, ""); print }' \
             .github/workflows/implement-transfer-distribution.yml > /tmp/aplicar-transferencia.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/aplicar-transferencia.py')
+          source = path.read_text(encoding='utf-8')
+          source = source.replace(
+              "'''      setSetores(json.setores || []);\n  } catch (error: any) {'''",
+              "'''      setSetores(json.setores || []);\n    } catch (error: any) {'''",
+          )
+          source = source.replace(
+              "'''      setSetores(json.setores || []);\n  setAtendentes(json.atendentes || []);\n  } catch (error: any) {'''",
+              "'''      setSetores(json.setores || []);\n      setAtendentes(json.atendentes || []);\n    } catch (error: any) {'''",
+          )
+          path.write_text(source, encoding='utf-8')
+          PY
           set +e
           python /tmp/aplicar-transferencia.py > /tmp/implementacao-transferencia.log 2>&1
           status=$?
