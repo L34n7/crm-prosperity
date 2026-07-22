@@ -14,6 +14,7 @@ import {
   ehEspecialista,
   ehFaq,
   ehLocalizacao,
+  ehMenuAntesDepois,
   ehMenuFaq,
   ehTerminal,
   ehValores,
@@ -159,6 +160,16 @@ export function escolherDestinoSemantico(params: {
         : mainMenu
     );
   }
+  if (ehMenuAntesDepois(origem) && servicoOpcao) {
+    diretos.push(
+      nos.find(
+        (no) =>
+          no.id !== origem.id &&
+          servicoDoNo(no) === servicoOpcao &&
+          (no.tipo_no === "enviar_imagem" || ehAntesDepois(conteudoNo(no)))
+      )
+    );
+  }
   if (servicoOpcao) {
     diretos.push(
       primeirosConteudos.get(servicoOpcao),
@@ -190,6 +201,11 @@ export function escolherDestinoSemantico(params: {
   }
   if (ehAntesDepois(opcao.titulo)) {
     diretos.push(
+      // No menu principal, a opcao generica deve abrir a galeria/menu. As
+      // imagens especificas ficam para as escolhas internas por procedimento.
+      params.mainMenu?.id === origem.id
+        ? nos.find((no) => no.id !== origem.id && ehMenuAntesDepois(no))
+        : null,
       nos.find(
         (no) =>
           no.id !== origem.id &&

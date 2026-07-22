@@ -191,6 +191,9 @@ export function respostaCorrespondeFaq(
 ) {
   const esperada = intencaoFaq(`${opcao.id} ${opcao.titulo}`);
   if (!esperada || destino.tipo_no !== "enviar_texto") return false;
+  if (!/\b(duvidas?|faq|respostas?)\b/.test(normalizar(destino.titulo))) {
+    return false;
+  }
   return intencaoFaq(conteudoNo(destino)) === esperada;
 }
 
@@ -234,6 +237,19 @@ export function ehMenuFaq(
   );
 }
 
+export function ehMenuAntesDepois(no: AssistenteAutomacaoNo) {
+  if (!ehPergunta(no)) return false;
+  const identificacao = normalizar(
+    `${no.titulo} ${no.configuracao_json?.mensagem || ""}`
+  );
+  if (!ehAntesDepois(identificacao)) return false;
+
+  const servicos = new Set(
+    opcoesNo(no).map((opcao) => servicoDoTexto(opcao.titulo)).filter(Boolean)
+  );
+  return servicos.size >= 2;
+}
+
 export function ehConteudoProcedimento(
   no: AssistenteAutomacaoNo,
   servico: Servico
@@ -242,6 +258,20 @@ export function ehConteudoProcedimento(
     return false;
   }
   const conteudo = conteudoNo(no);
+  const titulo = normalizar(no.titulo);
+
+  // Blocos de detalhamento gerados pelo normalizador mencionam duracao,
+  // recuperacao e resultados. Esses termos tambem aparecem em FAQs, mas o
+  // titulo deixa claro que fazem parte da sequencia explicativa.
+  if (
+    /\b(visao geral|beneficios?|indicacoes?|cuidados?|resultados esperados?)\b/.test(
+      titulo
+    ) &&
+    !/\b(duvida|faq|pergunta|resposta)\b/.test(titulo)
+  ) {
+    return true;
+  }
+
   return !(
     ehValores(conteudo) ||
     ehFaq(conteudo) ||

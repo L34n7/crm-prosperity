@@ -1229,6 +1229,182 @@ test("corrige FAQ por intenção exata e não cruza dor com duração", () => {
   );
 });
 
+test("reconecta cuidados, galeria e FAQ malformada sem deixar sub-ramos órfãos", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Clínica estética completa",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      {
+        ref: "menu",
+        tipo: "pergunta_opcoes",
+        titulo: "Menu Principal",
+        mensagem: "Como podemos ajudar?",
+        opcoes: [
+          { id: "harmonizacao", texto: "Harmonização Facial" },
+          { id: "melasma", texto: "Melasma e Manchas" },
+          { id: "botox", texto: "Botox" },
+          { id: "antes_depois", texto: "Antes e Depois" },
+          { id: "agendar", texto: "Agendar Avaliação" },
+          { id: "especialista", texto: "Falar com Especialista" },
+        ],
+      },
+      {
+        ref: "harm_visao",
+        tipo: "mensagem",
+        titulo: "Harmonização Facial — Visão geral",
+        mensagem: "Conheça a harmonização facial.",
+        opcoes: [],
+      },
+      {
+        ref: "harm_beneficios",
+        tipo: "mensagem",
+        titulo: "Harmonização Facial — Benefícios e indicações",
+        mensagem: "Benefícios personalizados da harmonização facial.",
+        opcoes: [],
+      },
+      {
+        ref: "harm_cuidados",
+        tipo: "mensagem",
+        titulo: "Harmonização Facial — Cuidados e resultados",
+        mensagem: "Duração, recuperação e resultados variam conforme cada paciente.",
+        opcoes: [],
+      },
+      {
+        ref: "harm_menu",
+        tipo: "pergunta_opcoes",
+        titulo: "Menu Harmonização Facial",
+        mensagem: "Como deseja continuar?",
+        opcoes: [
+          { id: "antes", texto: "Antes e Depois" },
+          { id: "valores", texto: "Valores" },
+          { id: "duvidas", texto: "Dúvidas Frequentes" },
+          { id: "agendar", texto: "Agendar" },
+          { id: "voltar", texto: "Voltar ao Menu" },
+        ],
+      },
+      {
+        ref: "faq_harm",
+        tipo: "pergunta_opcoes",
+        titulo: "Dúvidas Frequentes - Harmonização Facial",
+        mensagem: "Como deseja continuar?",
+        opcoes: [
+          { id: "antes", texto: "Antes e Depois" },
+          { id: "valores", texto: "Valores" },
+          { id: "duvidas", texto: "Dúvidas Frequentes" },
+          { id: "agendar", texto: "Agendar" },
+        ],
+      },
+      {
+        ref: "faq_resposta",
+        tipo: "mensagem",
+        titulo: "Dúvida - Harmonização Facial · Quanto tempo dura?",
+        mensagem: "A duração da harmonização facial varia conforme o protocolo.",
+        opcoes: [],
+      },
+      {
+        ref: "galeria",
+        tipo: "pergunta_opcoes",
+        titulo: "Antes e Depois",
+        mensagem: "Veja resultados reais de pacientes autorizados.",
+        opcoes: [
+          { id: "harmonizacao", texto: "Harmonização" },
+          { id: "melasma", texto: "Melasma" },
+          { id: "botox", texto: "Botox" },
+          { id: "voltar", texto: "Menu" },
+        ],
+      },
+      {
+        ref: "valores",
+        tipo: "mensagem",
+        titulo: "Valores",
+        mensagem: "O investimento varia conforme a necessidade de cada paciente.",
+        opcoes: [],
+      },
+      {
+        ref: "resultado_harm",
+        tipo: "mensagem",
+        titulo: "Antes e Depois - Harmonização Facial",
+        mensagem: "Resultados reais de harmonização facial.",
+        opcoes: [],
+      },
+      {
+        ref: "resultado_melasma",
+        tipo: "mensagem",
+        titulo: "Antes e Depois - Melasma",
+        mensagem: "Resultados reais do tratamento de melasma.",
+        opcoes: [],
+      },
+      {
+        ref: "resultado_botox",
+        tipo: "mensagem",
+        titulo: "Antes e Depois - Botox",
+        mensagem: "Resultados reais da aplicação de botox.",
+        opcoes: [],
+      },
+      {
+        ref: "escolher",
+        tipo: "agenda_escolher_horario",
+        titulo: "Escolher horário",
+        agenda_id: "agenda-teste",
+        opcoes: [],
+      },
+      {
+        ref: "criar",
+        tipo: "agenda_criar_agendamento",
+        titulo: "Criar agendamento",
+        agenda_id: "agenda-teste",
+        opcoes: [],
+      },
+      {
+        ref: "especialista",
+        tipo: "transferir",
+        titulo: "Falar com Especialista",
+        setor_id: "setor-atendimento",
+        mensagem: "Vou encaminhar você.",
+        opcoes: [],
+      },
+    ],
+    rotas: [{ origem: "inicio", destino: "menu", condicao: "sempre" }],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({
+    modo: "criar_fluxo",
+    plano,
+    setores: [{ id: "setor-atendimento", nome: "Atendimento" }],
+  });
+  const porTitulo = new Map(resultado.nos.map((no) => [no.titulo, no]));
+  const menu = porTitulo.get("Menu Principal");
+  const galeria = porTitulo.get("Antes e Depois");
+  const cuidados = porTitulo.get("Harmonização Facial — Cuidados e resultados");
+  const faq = porTitulo.get("Dúvidas Frequentes - Harmonização Facial");
+  const resposta = porTitulo.get("Dúvida - Harmonização Facial · Quanto tempo dura?");
+
+  assert.equal(
+    resultado.validacao.valido,
+    true,
+    JSON.stringify(resultado.validacao.erros)
+  );
+  assert.ok(
+    resultado.conexoes.some(
+      (conexao) =>
+        conexao.no_origem_id === menu?.id &&
+        conexao.no_destino_id === galeria?.id &&
+        conexao.condicao_json.valor === "antes_depois"
+    )
+  );
+  assert.ok(resultado.conexoes.some((conexao) => conexao.no_destino_id === cuidados?.id));
+  assert.ok(
+    resultado.conexoes.some(
+      (conexao) =>
+        conexao.no_origem_id === faq?.id &&
+        conexao.no_destino_id === resposta?.id
+    )
+  );
+});
+
 test("bloqueia ciclo composto somente por Sempre seguir", () => {
   const plano = normalizarPlanoAssistente({
     nome_fluxo: "Loop automático",

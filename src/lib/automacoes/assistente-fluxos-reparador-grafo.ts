@@ -16,7 +16,9 @@ import {
   ehEspecialista,
   ehFaq,
   ehLocalizacao,
+  ehMenuAntesDepois,
   ehMenuFaq,
+  intencaoFaq,
   ehVoltarMenu,
   ehMenuProcedimento,
   ehPergunta,
@@ -25,6 +27,7 @@ import {
   encontrarPorTipo,
   indicePorId,
   melhorMenuPrincipal,
+  normalizar,
   normalizarId,
   respostaCorrespondeFaq,
   servicoDoNo,
@@ -110,6 +113,71 @@ function ehMensagemAgendamentoConfirmado(no: AssistenteAutomacaoNo) {
   );
 }
 
+const TITULOS_INTENCAO_FAQ = {
+  dor: "Dói?",
+  duracao: "Quanto tempo dura?",
+  resultado: "Quando vejo o resultado?",
+  recorrencia: "Pode voltar?",
+  naturalidade: "O resultado fica natural?",
+  sessoes: "Quantas sessões são necessárias?",
+} as const;
+
+function reconstruirMenusFaqMalformados(
+  nos: AssistenteAutomacaoNo[],
+  avisos: string[]
+) {
+  for (const servico of ["harmonizacao", "melasma", "botox"] as Servico[]) {
+    const candidato = nos.find(
+      (no) =>
+        ehPergunta(no) &&
+        servicoDoNo(no) === servico &&
+        /\b(duvidas?|faq|frequentes?)\b/.test(
+          normalizarId(no.titulo).replace(/_/g, " ")
+        )
+    );
+    if (!candidato || ehMenuFaq(candidato, servico)) continue;
+
+    const respostas = nos.filter((no) => {
+      if (no.tipo_no !== "enviar_texto" || servicoDoNo(no) !== servico) {
+        return false;
+      }
+      return (
+        /\b(duvidas?|faq|respostas?)\b/.test(normalizar(no.titulo)) &&
+        !ehConteudoProcedimento(no, servico) &&
+        Boolean(intencaoFaq(conteudoNo(no)))
+      );
+    });
+    if (respostas.length === 0) continue;
+
+    const intencoes = new Map<
+      NonNullable<ReturnType<typeof intencaoFaq>>,
+      AssistenteAutomacaoNo
+    >();
+    for (const resposta of respostas) {
+      const intencao = intencaoFaq(conteudoNo(resposta));
+      if (intencao && !intencoes.has(intencao)) intencoes.set(intencao, resposta);
+    }
+    if (intencoes.size === 0) continue;
+
+    candidato.tipo_no = "pergunta_opcoes";
+    candidato.configuracao_json = {
+      ...candidato.configuracao_json,
+      mensagem: "Qual dúvida você gostaria de esclarecer?",
+      opcoes: [
+        ...[...intencoes.keys()].map((intencao) => ({
+          valor: `faq_${intencao}`,
+          titulo: TITULOS_INTENCAO_FAQ[intencao],
+        })),
+        { valor: "voltar", titulo: "Voltar" },
+      ],
+    };
+    delete candidato.configuracao_json.botoes;
+    avisos.push(
+      `O menu de dúvidas “${candidato.titulo}” foi reconstruído a partir das respostas existentes.`
+    );
+  }
+}
+
 function destinoOriginalCorresponde(params: {
   origem: AssistenteAutomacaoNo;
   destino: AssistenteAutomacaoNo;
@@ -133,7 +201,15 @@ function destinoOriginalCorresponde(params: {
     return respostaCorrespondeFaq(opcao, destino);
   }
   if (ehVoltarMenu(opcao.titulo)) return mainMenu?.id === destino.id;
-  if (servicoOpcao) return servicoDoNo(destino) === servicoOpcao;
+  if (servicoOpcao) {
+    if (ehMenuAntesDepois(origem)) {
+      return (
+        servicoDoNo(destino) === servicoOpcao &&
+        (destino.tipo_no === "enviar_imagem" || ehAntesDepois(conteudoNo(destino)))
+      );
+    }
+    return servicoDoNo(destino) === servicoOpcao;
+  }
   if (ehAgendamento(opcao.titulo)) {
     return destino.tipo_no === "agenda_escolher_horario";
   }
@@ -141,6 +217,9 @@ function destinoOriginalCorresponde(params: {
   if (ehLocalizacao(opcao.titulo)) return ehLocalizacao(conteudoNo(destino));
   if (ehEspecialista(opcao.titulo)) return destino.tipo_no === "transferir_setor";
   if (ehAntesDepois(opcao.titulo)) {
+    if (mainMenu?.id === origem.id && destino.tipo_no === "enviar_imagem") {
+      return false;
+    }
     return destino.tipo_no === "enviar_imagem" || ehAntesDepois(conteudoNo(destino));
   }
   if (ehValores(opcao.titulo)) return ehValores(conteudoNo(destino));
@@ -272,6 +351,7 @@ export function repararGrafoAssistente(params: {
   conexoes = inicioReparado.conexoes;
   const inicio = inicioReparado.inicio;
   const mainMenu = melhorMenuPrincipal(nos);
+  reconstruirMenusFaqMalformados(nos, avisos);
   const ordemNos = indicePorId(nos);
   const menusProcedimento = new Map<Servico, AssistenteAutomacaoNo>();
   const primeirosConteudos = new Map<Servico, AssistenteAutomacaoNo>();
@@ -418,9 +498,16 @@ export function repararGrafoAssistente(params: {
     .sort((a, b) => a.ordem - b.ordem)
     .map((conexao) => nosPorId.get(conexao.no_destino_id))
     .find((no) => no && no.id !== inicio.id);
+  const destinoInicioEhBoasVindas = Boolean(
+    destinoInicioExistente &&
+      /\b(boas vindas|bem vindo|bem vinda|seja bem vindo|seja bem vinda)\b/.test(
+        conteudoNo(destinoInicioExistente)
+      )
+  );
   const destinoInicio =
-    destinoInicioExistente ||
+    (destinoInicioEhBoasVindas ? destinoInicioExistente : null) ||
     mainMenu ||
+    destinoInicioExistente ||
     nos.find((no) => no.id !== inicio.id && !ehTerminal(no)) ||
     nos.find((no) => no.id !== inicio.id);
 
