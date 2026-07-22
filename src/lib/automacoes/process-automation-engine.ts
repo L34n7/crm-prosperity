@@ -23,6 +23,7 @@ import {
   fluxoPermiteIntegracaoWhatsapp,
   obterConfiguracaoEncerramentoInatividade,
 } from "@/lib/automacoes/normalizar-configuracao-fluxo";
+import { resolverAtribuicaoTransferencia } from "@/lib/conversas/resolver-atribuicao-transferencia";
 import {
   chaveEhVariavelFixaContato,
   chaveEhVariavelNomeWhatsapp,
@@ -4643,103 +4644,115 @@ export async function executarNo(params: {
   }
 
   if (no.tipo_no === "transferir_setor") {
-    const mensagem =
-      no.configuracao_json?.mensagem ||
-      "Vou te encaminhar para um atendente.";
+  const configTransferencia = no.configuracao_json || {};
+  const mensagem =
+    configTransferencia.mensagem ||
+    "Vou te encaminhar para um atendente.";
+  const setorDestino =
+    String(configTransferencia.setor_id || "").trim() || null;
+  const atribuicao = await resolverAtribuicaoTransferencia({
+    empresaId,
+    setorId: setorDestino,
+    estrategia: configTransferencia.estrategia_transferencia,
+    atendenteId: configTransferencia.atendente_id,
+  });
+  const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+    empresaId,
+    conversaId,
+  });
 
-    const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+  const envio = await enviarMensagemAutomacao({
+    empresaId,
+    conversaId,
+    numeroDestino,
+    conteudo: mensagem,
+    execucaoId,
+    noId: no.id,
+  });
+
+  if (
+    await interromperNoPorFalhaEnvioAutomacao({
       empresaId,
       conversaId,
-    });
-
-    const envio = await enviarMensagemAutomacao({
-      empresaId,
-      conversaId,
+      execucaoId,
+      fluxoId,
+      no,
       numeroDestino,
-      conteudo: mensagem,
-      execucaoId,
-      noId: no.id,
-    });
-
-    if (
-      await interromperNoPorFalhaEnvioAutomacao({
-        empresaId,
-        conversaId,
-        execucaoId,
-        fluxoId,
-        no,
-        numeroDestino,
-        resultado: envio,
-        tipoEnvio: "transferir_setor",
-        mensagemTexto,
-      })
-    ) {
-      return;
-    }
-
-    // 🔥 PARAR automação
-    await supabaseAdmin
-      .from("automacao_execucoes")
-      .update({
-        status: "finalizado",
-        finished_at: new Date().toISOString(),
-      })
-      .eq("id", execucaoId);
-
-    // 🔥 definir setor
-    if (no.configuracao_json?.setor_id) {
-      await supabaseAdmin
-        .from("conversas")
-        .update({
-          setor_id: no.configuracao_json.setor_id,
-        })
-        .eq("id", conversaId);
-    }
-
-    // 🔥 liberar para atendimento humano
-    await supabaseAdmin
-      .from("conversas")
-      .update({
-        status: "fila",
-        responsavel_id: null,
-        bot_ativo: false,
-        aguardando_atendente: true,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", conversaId)
-      .eq("empresa_id", empresaId);
-
-    await registrarLog({
-      empresaId,
-      execucaoId,
-      fluxoId,
-      noId: no.id,
-      tipoEvento: "execucao_transferida_atendimento",
-      descricao: "ExecuÃ§Ã£o finalizada pelo nÃ³ transferir para atendimento.",
-      entrada: no.configuracao_json,
-      saida: {
-        mensagem,
-        setor_id: no.configuracao_json?.setor_id || null,
-        conversa_protocolo_id: protocoloAtivo.id,
-      },
-    });
-
-    await registrarEventoRastreamentoFluxo({
-      empresaId,
-      conversaId,
-      execucaoId,
-      fluxoId,
-      noId: no.id,
-      tipo: "fluxo_transferido_atendimento",
-      metadata: {
-        tipo_encerramento: "transferencia_atendimento",
-        setor_id: no.configuracao_json?.setor_id || null,
-        conversa_protocolo_id: protocoloAtivo.id,
-      },
-    });
-
+      resultado: envio,
+      tipoEnvio: "transferir_setor",
+      mensagemTexto,
+    })
+  ) {
     return;
   }
+
+  const agora = new Date().toISOString();
+
+  await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      status: "finalizado",
+      finished_at: agora,
+      updated_at: agora,
+    })
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId);
+
+  await supabaseAdmin
+    .from("conversas")
+    .update({
+      setor_id: setorDestino,
+      status: atribuicao.responsavelId ? "em_atendimento" : "fila",
+      responsavel_id: atribuicao.responsavelId,
+      bot_ativo: false,
+      aguardando_atendente: !atribuicao.responsavelId,
+      updated_at: agora,
+    })
+    .eq("id", conversaId)
+    .eq("empresa_id", empresaId);
+
+  await registrarLog({
+    empresaId,
+    execucaoId,
+    fluxoId,
+    noId: no.id,
+    tipoEvento: "execucao_transferida_atendimento",
+    descricao: atribuicao.responsavelId
+      ? "Execução finalizada com transferência direta para atendente."
+      : "Execução finalizada com transferência para a fila do setor.",
+    entrada: configTransferencia,
+    saida: {
+      mensagem,
+      setor_id: setorDestino,
+      responsavel_id: atribuicao.responsavelId,
+      atendente_nome: atribuicao.atendenteNome,
+      estrategia_solicitada: atribuicao.estrategiaSolicitada,
+      estrategia_aplicada: atribuicao.estrategiaAplicada,
+      fallback_motivo: atribuicao.fallbackMotivo,
+      conversa_protocolo_id: protocoloAtivo.id,
+    },
+  });
+
+  await registrarEventoRastreamentoFluxo({
+    empresaId,
+    conversaId,
+    execucaoId,
+    fluxoId,
+    noId: no.id,
+    tipo: "fluxo_transferido_atendimento",
+    metadata: {
+      tipo_encerramento: "transferencia_atendimento",
+      setor_id: setorDestino,
+      responsavel_id: atribuicao.responsavelId,
+      estrategia_solicitada: atribuicao.estrategiaSolicitada,
+      estrategia_aplicada: atribuicao.estrategiaAplicada,
+      fallback_motivo: atribuicao.fallbackMotivo,
+      conversa_protocolo_id: protocoloAtivo.id,
+    },
+  });
+
+  return;
+}
 
   await registrarLog({
     empresaId,
@@ -7874,16 +7887,14 @@ export async function executarAcaoExcessoTentativas(params: {
   const { empresaId, conversaId, execucao, no, numeroDestino, tipo } = params;
 
   const config = no.configuracao_json || {};
-
   const mensagem =
     String(config.mensagem_excesso_tentativas || "").trim() ||
     "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.";
-
   const setorExcessoTentativas =
-    String(no.configuracao_json?.setor_excesso_tentativas || "").trim() || null;
-
-  const acao =
-    String(config.acao_excesso_tentativas || "transferir_atendimento");
+    String(config.setor_excesso_tentativas || "").trim() || null;
+  const acao = String(
+    config.acao_excesso_tentativas || "transferir_atendimento"
+  );
 
   if (mensagem) {
     await enviarMensagemAutomacao({
@@ -7913,7 +7924,6 @@ export async function executarAcaoExcessoTentativas(params: {
 
   if (config.notificar_excesso_tentativas !== false) {
     const tituloNotificacao = "Excesso de tentativas no fluxo";
-
     const mensagemNotificacao =
       tipo === "sem_resposta"
         ? `O contato excedeu o limite de tentativas sem resposta no bloco "${no.titulo}".`
@@ -7961,6 +7971,10 @@ export async function executarAcaoExcessoTentativas(params: {
         acao_executada: acao,
         bloco_titulo: no.titulo,
         bloco_tipo: no.tipo_no,
+        setor_id: setorExcessoTentativas,
+        estrategia_transferencia:
+          config.estrategia_excesso_tentativas || "fila_setor",
+        atendente_id: config.atendente_excesso_tentativas || null,
         notificar_email: config.notificar_email_excesso_tentativas !== false,
       },
     });
@@ -7983,12 +7997,14 @@ export async function executarAcaoExcessoTentativas(params: {
   }
 
   if (acao === "encerrar_fluxo") {
+    const agora = new Date().toISOString();
+
     await supabaseAdmin
       .from("automacao_execucoes")
       .update({
         status: "finalizado",
-        finished_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        finished_at: agora,
+        updated_at: agora,
       })
       .eq("id", execucao.id)
       .eq("empresa_id", empresaId);
@@ -7999,8 +8015,8 @@ export async function executarAcaoExcessoTentativas(params: {
         status: "encerrado_aut",
         bot_ativo: false,
         aguardando_atendente: false,
-        closed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        closed_at: agora,
+        updated_at: agora,
       })
       .eq("id", conversaId)
       .eq("empresa_id", empresaId);
@@ -8043,12 +8059,20 @@ export async function executarAcaoExcessoTentativas(params: {
     return;
   }
 
+  const atribuicao = await resolverAtribuicaoTransferencia({
+    empresaId,
+    setorId: setorExcessoTentativas,
+    estrategia: config.estrategia_excesso_tentativas,
+    atendenteId: config.atendente_excesso_tentativas,
+  });
+  const agora = new Date().toISOString();
+
   await supabaseAdmin
     .from("automacao_execucoes")
     .update({
       status: "finalizado",
-      finished_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      finished_at: agora,
+      updated_at: agora,
     })
     .eq("id", execucao.id)
     .eq("empresa_id", empresaId);
@@ -8056,12 +8080,12 @@ export async function executarAcaoExcessoTentativas(params: {
   await supabaseAdmin
     .from("conversas")
     .update({
-      status: "fila",
+      status: atribuicao.responsavelId ? "em_atendimento" : "fila",
       setor_id: setorExcessoTentativas,
-      responsavel_id: null,
+      responsavel_id: atribuicao.responsavelId,
       bot_ativo: false,
-      aguardando_atendente: true,
-      updated_at: new Date().toISOString(),
+      aguardando_atendente: !atribuicao.responsavelId,
+      updated_at: agora,
     })
     .eq("id", conversaId)
     .eq("empresa_id", empresaId);
@@ -8078,6 +8102,10 @@ export async function executarAcaoExcessoTentativas(params: {
       tipo_tentativa: tipo,
       acao_executada: acao,
       setor_id: setorExcessoTentativas,
+      responsavel_id: atribuicao.responsavelId,
+      estrategia_solicitada: atribuicao.estrategiaSolicitada,
+      estrategia_aplicada: atribuicao.estrategiaAplicada,
+      fallback_motivo: atribuicao.fallbackMotivo,
     },
   });
 }

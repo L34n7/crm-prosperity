@@ -103,6 +103,38 @@ type SetorOpcao = {
   nome: string;
 };
 
+type EstrategiaTransferenciaNode =
+  | "fila_setor"
+  | "atendente_especifico"
+  | "rodizio_aleatorio"
+  | "menos_conversas";
+
+type AtendenteOpcao = {
+  id: string;
+  nome: string;
+  email?: string | null;
+  setor_ids: string[];
+};
+
+function normalizarEstrategiaTransferenciaNode(
+  valor: unknown,
+  atendenteId?: unknown
+): EstrategiaTransferenciaNode {
+  const estrategia = String(valor || "").trim();
+  if (
+    estrategia === "fila_setor" ||
+    estrategia === "atendente_especifico" ||
+    estrategia === "rodizio_aleatorio" ||
+    estrategia === "menos_conversas"
+  ) {
+    return estrategia;
+  }
+
+  return String(atendenteId || "").trim()
+    ? "atendente_especifico"
+    : "fila_setor";
+}
+
 type MidiaOpcao = {
   id: string;
   nome: string;
@@ -2356,6 +2388,9 @@ function FluxosPageContent() {
   }
 
   const [setorDestino, setSetorDestino] = useState("");
+  const [estrategiaTransferenciaNode, setEstrategiaTransferenciaNode] =
+    useState<EstrategiaTransferenciaNode>("fila_setor");
+  const [atendenteDestinoNode, setAtendenteDestinoNode] = useState("");
   const fluxo = fluxoSelecionado;
   const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);
   const [confirmandoExclusaoConexao, setConfirmandoExclusaoConexao] =
@@ -2368,6 +2403,7 @@ function FluxosPageContent() {
     useState<(() => void) | null>(null);
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
+  const [atendentes, setAtendentes] = useState<AtendenteOpcao[]>([]);
   const [carregandoSetores, setCarregandoSetores] = useState(false);
   const [menuHeaderAberto, setMenuHeaderAberto] = useState(false);
   const [menuFluxo, setMenuFluxo] = useState<{
@@ -2450,6 +2486,10 @@ function FluxosPageContent() {
   const [acaoExcessoTentativasNode, setAcaoExcessoTentativasNode] =
     useState("transferir_atendimento");
   const [setorExcessoTentativasNode, setSetorExcessoTentativasNode] =
+    useState("");
+  const [estrategiaExcessoTentativasNode, setEstrategiaExcessoTentativasNode] =
+    useState<EstrategiaTransferenciaNode>("fila_setor");
+  const [atendenteExcessoTentativasNode, setAtendenteExcessoTentativasNode] =
     useState("");
   const [mensagemExcessoTentativasNode, setMensagemExcessoTentativasNode] =
     useState("Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.");
@@ -3455,7 +3495,8 @@ function FluxosPageContent() {
       }
 
       setSetores(json.setores || []);
-    } catch (error: any) {
+    setAtendentes(json.atendentes || []);
+  } catch (error: any) {
       setErro(error?.message || "Erro ao carregar setores.");
     } finally {
       setCarregandoSetores(false);
@@ -4174,6 +4215,9 @@ function abrirFluxo(fluxo: Fluxo) {
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
+              setor_excesso_tentativas: null,
+              estrategia_excesso_tentativas: "fila_setor",
+              atendente_excesso_tentativas: null,
               mensagem_excesso_tentativas:
                 "Nao consegui continuar o atendimento automatico. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
@@ -4190,6 +4234,9 @@ function abrirFluxo(fluxo: Fluxo) {
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
+              setor_excesso_tentativas: null,
+              estrategia_excesso_tentativas: "fila_setor",
+              atendente_excesso_tentativas: null,
               mensagem_excesso_tentativas:
                 "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
@@ -4206,6 +4253,9 @@ function abrirFluxo(fluxo: Fluxo) {
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
+              setor_excesso_tentativas: null,
+              estrategia_excesso_tentativas: "fila_setor",
+              atendente_excesso_tentativas: null,
               mensagem_excesso_tentativas:
                 "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
@@ -4278,6 +4328,9 @@ function abrirFluxo(fluxo: Fluxo) {
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
+              setor_excesso_tentativas: null,
+              estrategia_excesso_tentativas: "fila_setor",
+              atendente_excesso_tentativas: null,
               mensagem_excesso_tentativas:
                 "Nao consegui continuar o agendamento automatico. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
@@ -4322,6 +4375,13 @@ function abrirFluxo(fluxo: Fluxo) {
               enviar_email_agendamento: true,
               email_agendamento_origem: "contato",
               email_agendamento_variavel: "email",
+            }
+          : tipoNo === "transferir_setor"
+          ? {
+              mensagem: "Vou te encaminhar para um atendente.",
+              setor_id: "",
+              estrategia_transferencia: "fila_setor",
+              atendente_id: null,
             }
           : tipoNo === "encerrar"
           ? {
@@ -4515,6 +4575,13 @@ function offsetLabelConexao(edgeId: string) {
     );
     setRedirectUrlNode(String(configuracaoJson?.url || ""));
     setSetorDestino(configuracaoJson?.setor_id || "");
+    setEstrategiaTransferenciaNode(
+      normalizarEstrategiaTransferenciaNode(
+        configuracaoJson?.estrategia_transferencia,
+        configuracaoJson?.atendente_id
+      )
+    );
+    setAtendenteDestinoNode(String(configuracaoJson?.atendente_id || ""));
     setConfirmandoExclusaoNo(false);
     
     setCapturaVariavelNode(String(configuracaoJson?.variavel || "nome"));
@@ -4539,6 +4606,15 @@ function offsetLabelConexao(edgeId: string) {
     );
     setSetorExcessoTentativasNode(
       String(configuracaoJson?.setor_excesso_tentativas || "")
+    );
+    setEstrategiaExcessoTentativasNode(
+      normalizarEstrategiaTransferenciaNode(
+        configuracaoJson?.estrategia_excesso_tentativas,
+        configuracaoJson?.atendente_excesso_tentativas
+      )
+    );
+    setAtendenteExcessoTentativasNode(
+      String(configuracaoJson?.atendente_excesso_tentativas || "")
     );
 
     setMensagemExcessoTentativasNode(
@@ -4894,7 +4970,59 @@ async function aplicarEdicaoNoInterno() {
     return;
   }
 
-  if (tipoNodeEdicao === "botao_redirect") {
+  if (tipoNodeEdicao === "transferir_setor") {
+      if (!setorDestino) {
+        setErro("Selecione o setor destino da transferência.");
+        return;
+      }
+
+      if (estrategiaTransferenciaNode === "atendente_especifico") {
+        const atendenteValido = atendentes.some(
+          (atendente) =>
+            atendente.id === atendenteDestinoNode &&
+            atendente.setor_ids.includes(setorDestino)
+        );
+
+        if (!atendenteValido) {
+          setErro("Selecione um atendente ativo vinculado ao setor destino.");
+          return;
+        }
+      }
+    }
+
+    if (
+      acaoExcessoTentativasNode === "transferir_atendimento" &&
+      [
+        "pergunta_opcoes",
+        TIPO_NO_PERGUNTA_LIVRE_IA,
+        "enviar_botoes",
+        "capturar_resposta",
+        "agenda_buscar_agendamento",
+        "agenda_escolher_horario",
+        "avaliacao",
+        "interpretar_arquivo_ia",
+      ].includes(tipoNodeEdicao)
+    ) {
+      if (!setorExcessoTentativasNode) {
+        setErro("Selecione o setor para a transferência por excesso de tentativas ou timeout.");
+        return;
+      }
+
+      if (estrategiaExcessoTentativasNode === "atendente_especifico") {
+        const atendenteValido = atendentes.some(
+          (atendente) =>
+            atendente.id === atendenteExcessoTentativasNode &&
+            atendente.setor_ids.includes(setorExcessoTentativasNode)
+        );
+
+        if (!atendenteValido) {
+          setErro("Selecione um atendente ativo do setor para a transferência por tentativas.");
+          return;
+        }
+      }
+    }
+
+    if (tipoNodeEdicao === "botao_redirect") {
     if (!mensagemNode.trim()) {
       setErro("Informe a mensagem do Botao redirect.");
       return;
@@ -5298,6 +5426,12 @@ async function aplicarEdicaoNoInterno() {
 
         configuracao_json.setor_excesso_tentativas =
           setorExcessoTentativasNode || null;
+        configuracao_json.estrategia_excesso_tentativas =
+          estrategiaExcessoTentativasNode;
+        configuracao_json.atendente_excesso_tentativas =
+          estrategiaExcessoTentativasNode === "atendente_especifico"
+            ? atendenteExcessoTentativasNode || null
+            : null;
 
         configuracao_json.mensagem_excesso_tentativas =
           mensagemExcessoTentativasNode.trim() ||
@@ -5311,6 +5445,12 @@ async function aplicarEdicaoNoInterno() {
 
       if (tipoFinal === "transferir_setor") {
         configuracao_json.setor_id = setorDestino;
+        configuracao_json.estrategia_transferencia =
+          estrategiaTransferenciaNode;
+        configuracao_json.atendente_id =
+          estrategiaTransferenciaNode === "atendente_especifico"
+            ? atendenteDestinoNode || null
+            : null;
       }
 
       if (
@@ -6878,14 +7018,65 @@ function validarFluxoAntesDeAtivar(params?: {
     }
 
     if (
-      tipoNo === "transferir_setor" &&
-      !String(config.setor_id || "").trim()
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter um setor destino.`;
-    }
+        tipoNo === "transferir_setor" &&
+        !String(config.setor_id || "").trim()
+      ) {
+        return `O bloco "${node.data?.titulo}" precisa ter um setor destino.`;
+      }
 
-    if (
-        (
+      if (
+        tipoNo === "transferir_setor" &&
+        normalizarEstrategiaTransferenciaNode(
+          config.estrategia_transferencia,
+          config.atendente_id
+        ) === "atendente_especifico" &&
+        !String(config.atendente_id || "").trim()
+      ) {
+        return `O bloco "${node.data?.titulo}" precisa ter um atendente destino.`;
+      }
+
+      if (
+        [
+          "pergunta_opcoes",
+          TIPO_NO_PERGUNTA_LIVRE_IA,
+          "enviar_botoes",
+          "capturar_resposta",
+          "agenda_buscar_agendamento",
+          "agenda_escolher_horario",
+          "avaliacao",
+          "interpretar_arquivo_ia",
+        ].includes(tipoNo) &&
+        String(config.acao_excesso_tentativas || "transferir_atendimento") ===
+          "transferir_atendimento" &&
+        !String(config.setor_excesso_tentativas || "").trim()
+      ) {
+        return `O bloco "${node.data?.titulo}" precisa ter um setor para transferência por excesso de tentativas ou timeout.`;
+      }
+
+      if (
+        [
+          "pergunta_opcoes",
+          TIPO_NO_PERGUNTA_LIVRE_IA,
+          "enviar_botoes",
+          "capturar_resposta",
+          "agenda_buscar_agendamento",
+          "agenda_escolher_horario",
+          "avaliacao",
+          "interpretar_arquivo_ia",
+        ].includes(tipoNo) &&
+        String(config.acao_excesso_tentativas || "transferir_atendimento") ===
+          "transferir_atendimento" &&
+        normalizarEstrategiaTransferenciaNode(
+          config.estrategia_excesso_tentativas,
+          config.atendente_excesso_tentativas
+        ) === "atendente_especifico" &&
+        !String(config.atendente_excesso_tentativas || "").trim()
+      ) {
+        return `O bloco "${node.data?.titulo}" precisa ter um atendente para transferência por excesso de tentativas ou timeout.`;
+      }
+
+      if (
+          (
           tipoNo === "enviar_imagem" ||
           tipoNo === "enviar_video" ||
           tipoNo === "enviar_audio" ||
@@ -10434,27 +10625,81 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   )}
 
-                  {tipoNodeEdicao === "transferir_setor" && (
-                    <label className={styles.field}>
-                      <span className={styles.label}>Setor destino</span>
+                        {tipoNodeEdicao === "transferir_setor" && (
+                    <div className={styles.optionsBox}>
+                      <label className={styles.field}>
+                        <span className={styles.label}>Setor destino</span>
 
-                      <select
-                        className={styles.input}
-                        value={setorDestino}
-                        onChange={(e) => setSetorDestino(e.target.value)}
-                        disabled={carregandoSetores}
-                      >
-                        <option value="">
-                          {carregandoSetores ? "Carregando setores..." : "Selecione um setor"}
-                        </option>
-
-                        {setores.map((setor) => (
-                          <option key={setor.id} value={setor.id}>
-                            {setor.nome}
+                        <select
+                          className={styles.input}
+                          value={setorDestino}
+                          onChange={(e) => {
+                            setSetorDestino(e.target.value);
+                            setAtendenteDestinoNode("");
+                          }}
+                          disabled={carregandoSetores}
+                        >
+                          <option value="">
+                            {carregandoSetores ? "Carregando setores..." : "Selecione um setor"}
                           </option>
-                        ))}
-                      </select>
-                    </label>
+
+                          {setores.map((setor) => (
+                            <option key={setor.id} value={setor.id}>
+                              {setor.nome}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className={styles.field}>
+                        <span className={styles.label}>Distribuição do atendimento</span>
+                        <select
+                          className={styles.input}
+                          value={estrategiaTransferenciaNode}
+                          onChange={(e) => {
+                            const estrategia = e.target.value as EstrategiaTransferenciaNode;
+                            setEstrategiaTransferenciaNode(estrategia);
+                            if (estrategia !== "atendente_especifico") {
+                              setAtendenteDestinoNode("");
+                            }
+                          }}
+                          disabled={!setorDestino}
+                        >
+                          <option value="fila_setor">Somente fila do setor</option>
+                          <option value="atendente_especifico">Atendente específico</option>
+                          <option value="rodizio_aleatorio">Rodízio aleatório</option>
+                          <option value="menos_conversas">Atendente com menos conversas</option>
+                        </select>
+                      </label>
+
+                      {estrategiaTransferenciaNode === "atendente_especifico" && (
+                        <label className={styles.field}>
+                          <span className={styles.label}>Atendente destino</span>
+                          <select
+                            className={styles.input}
+                            value={atendenteDestinoNode}
+                            onChange={(e) => setAtendenteDestinoNode(e.target.value)}
+                            disabled={!setorDestino || carregandoSetores}
+                          >
+                            <option value="">Selecione um atendente</option>
+                            {atendentes
+                              .filter((atendente) =>
+                                atendente.setor_ids.includes(setorDestino)
+                              )
+                              .map((atendente) => (
+                                <option key={atendente.id} value={atendente.id}>
+                                  {atendente.nome}
+                                  {atendente.email ? ` — ${atendente.email}` : ""}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                      )}
+
+                      <p className={styles.help}>
+                        No rodízio aleatório o sistema escolhe um usuário ativo do setor. Em menos conversas, considera os atendimentos ainda abertos atribuídos a cada usuário.
+                      </p>
+                    </div>
                   )}
                   
                   {tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (
@@ -10622,10 +10867,8 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         </label>
                       </div>
 
-                      <label className={styles.field}>
-                        <span className={styles.label}>
-                          Quando exceder
-                        </span>
+                            <div className={styles.field}>
+                        <span className={styles.label}>Quando exceder</span>
 
                         <select
                           className={styles.input}
@@ -10637,32 +10880,25 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           <option value="transferir_atendimento">
                             Transferir para atendimento
                           </option>
-
-                          <option value="encerrar_fluxo">
-                            Encerrar fluxo
-                          </option>
-
-                          <option value="reiniciar_fluxo">
-                            Reiniciar fluxo
-                          </option>
+                          <option value="encerrar_fluxo">Encerrar fluxo</option>
+                          <option value="reiniciar_fluxo">Reiniciar fluxo</option>
                         </select>
-                        {acaoExcessoTentativasNode === "transferir_atendimento" && (
-                          <label className={styles.field}>
-                            <span className={styles.label}>
-                              Setor do atendimento
-                            </span>
+                      </div>
 
+                      {acaoExcessoTentativasNode === "transferir_atendimento" && (
+                        <>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Setor do atendimento</span>
                             <select
                               className={styles.input}
                               value={setorExcessoTentativasNode}
-                              onChange={(e) =>
-                                setSetorExcessoTentativasNode(e.target.value)
-                              }
+                              onChange={(e) => {
+                                setSetorExcessoTentativasNode(e.target.value);
+                                setAtendenteExcessoTentativasNode("");
+                              }}
+                              disabled={carregandoSetores}
                             >
-                              <option value="">
-                                Selecione um setor
-                              </option>
-
+                              <option value="">Selecione um setor</option>
                               {setores.map((setor) => (
                                 <option key={setor.id} value={setor.id}>
                                   {setor.nome}
@@ -10670,8 +10906,57 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               ))}
                             </select>
                           </label>
-                        )}
-                      </label>
+
+                          <label className={styles.field}>
+                            <span className={styles.label}>Distribuição do atendimento</span>
+                            <select
+                              className={styles.input}
+                              value={estrategiaExcessoTentativasNode}
+                              onChange={(e) => {
+                                const estrategia = e.target.value as EstrategiaTransferenciaNode;
+                                setEstrategiaExcessoTentativasNode(estrategia);
+                                if (estrategia !== "atendente_especifico") {
+                                  setAtendenteExcessoTentativasNode("");
+                                }
+                              }}
+                              disabled={!setorExcessoTentativasNode}
+                            >
+                              <option value="fila_setor">Somente fila do setor</option>
+                              <option value="atendente_especifico">Atendente específico</option>
+                              <option value="rodizio_aleatorio">Rodízio aleatório</option>
+                              <option value="menos_conversas">Atendente com menos conversas</option>
+                            </select>
+                          </label>
+
+                          {estrategiaExcessoTentativasNode === "atendente_especifico" && (
+                            <label className={styles.field}>
+                              <span className={styles.label}>Atendente destino</span>
+                              <select
+                                className={styles.input}
+                                value={atendenteExcessoTentativasNode}
+                                onChange={(e) =>
+                                  setAtendenteExcessoTentativasNode(e.target.value)
+                                }
+                                disabled={!setorExcessoTentativasNode || carregandoSetores}
+                              >
+                                <option value="">Selecione um atendente</option>
+                                {atendentes
+                                  .filter((atendente) =>
+                                    atendente.setor_ids.includes(
+                                      setorExcessoTentativasNode
+                                    )
+                                  )
+                                  .map((atendente) => (
+                                    <option key={atendente.id} value={atendente.id}>
+                                      {atendente.nome}
+                                      {atendente.email ? ` — ${atendente.email}` : ""}
+                                    </option>
+                                  ))}
+                              </select>
+                            </label>
+                          )}
+                        </>
+                      )}
 
                       <label className={styles.field}>
                         <span className={styles.label}>
