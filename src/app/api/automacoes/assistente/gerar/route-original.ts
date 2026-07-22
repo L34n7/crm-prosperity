@@ -22,6 +22,7 @@ import {
   proximaPerguntaAssistente,
   type PerguntaAssistenteFluxo,
 } from "@/lib/automacoes/assistente-fluxos-conversa";
+import { aplicarClarificacaoAgendaJaResolvida } from "./route-confirmar-agenda";
 import {
   extrairUsoTokensIa,
   registrarUsoTokensIa,
@@ -1388,19 +1389,29 @@ async function responderConversaAssistente(params: {
     });
 
     if (!proximaClarificacao) {
-      const { conversa: _conversa, ...contextoOriginal } =
-        sessaoAtual.contexto;
-      void _conversa;
-      plano = await replanejarComClarificacoes({
-        contextoOriginal,
-        estado,
-        planoAtual: sessaoAtual.plano,
-        empresaId: params.empresaId,
-        usuarioId: params.usuarioId,
-        setores: contextoEmpresa.setores,
-        variaveis: contextoEmpresa.variaveis,
-        midias: contextoEmpresa.midias,
+      const agendaConfirmada = aplicarClarificacaoAgendaJaResolvida({
+        plano: sessaoAtual.plano,
+        pergunta: perguntaAtual,
+        resposta: respostaInformada,
       });
+
+      if (agendaConfirmada) {
+        plano = agendaConfirmada.plano;
+      } else {
+        const { conversa: _conversa, ...contextoOriginal } =
+          sessaoAtual.contexto;
+        void _conversa;
+        plano = await replanejarComClarificacoes({
+          contextoOriginal,
+          estado,
+          planoAtual: sessaoAtual.plano,
+          empresaId: params.empresaId,
+          usuarioId: params.usuarioId,
+          setores: contextoEmpresa.setores,
+          variaveis: contextoEmpresa.variaveis,
+          midias: contextoEmpresa.midias,
+        });
+      }
       estado = {
         ...estado,
         perguntas: criarPerguntasAssistenteFluxo({

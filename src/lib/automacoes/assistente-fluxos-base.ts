@@ -68,6 +68,8 @@ export type PlanoAssistenteEtapa = {
   url: string | null;
   botao_texto: string | null;
   opcoes: PlanoAssistenteOpcao[];
+  agenda_id?: string | null;
+  agenda_nome?: string | null;
 };
 
 export type PlanoAssistenteRota = {
