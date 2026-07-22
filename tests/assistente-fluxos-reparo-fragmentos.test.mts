@@ -329,3 +329,61 @@ test("ordena procedimentos, consolida cuidados e completa menu e setor", () => {
   assert.equal(mensagemLocal.includes(" • "), false);
   assert.equal(mensagemLocal.includes("\n\n🕐 Horário"), true);
 });
+
+test("consolida menus principais duplicados e remove FAQ recursiva sem rota", () => {
+  const nos: AssistenteAutomacaoNo[] = [
+    no("inicio", "inicio", "Início", ""),
+    no("main-1", "pergunta_opcoes", "Menu Principal", "Como podemos ajudar?", [
+      { id: "harm", titulo: "Harmonização" },
+      { id: "melasma", titulo: "Melasma" },
+      { id: "botox", titulo: "Botox" },
+      { id: "valores", titulo: "Valores" },
+      { id: "agenda", titulo: "Agendar" },
+      { id: "local", titulo: "Localização" },
+    ]),
+    no("main-2", "pergunta_opcoes", "Menu Principal", "Como podemos ajudar?", [
+      { id: "especialista", titulo: "Especialista" },
+    ]),
+    no("harm-texto", "enviar_texto", "Harmonização Facial — Visão geral", "Explicação."),
+    no("harm-menu", "enviar_botoes", "Menu Harmonização", "Próximos passos", [
+      { id: "faq", titulo: "Dúvidas Frequentes" },
+      { id: "menu", titulo: "Menu" },
+    ]),
+    no("faq", "enviar_botoes", "Dúvidas Frequentes - Harmonização Facial", "Dúvidas", [
+      { id: "faq", titulo: "Dúvidas Frequentes" },
+      { id: "valores", titulo: "Valores" },
+    ]),
+    no("faq-dor", "enviar_texto", "Dúvida - Harmonização Facial", "O desconforto costuma ser leve."),
+    no("valores", "enviar_texto", "Valores", "O investimento depende da avaliação."),
+    no("transferir", "transferir_setor", "Falar com especialista", "Aguarde."),
+    no("fim", "encerrar", "Encerrar", "Até logo."),
+  ];
+  nos.find((item) => item.id === "transferir")!.configuracao_json.setor_id = "setor-clinica";
+
+  const resultado = repararGrafoAssistente({
+    nos,
+    conexoes: [sempre("inicio", "main-1", 1)],
+    estrito: true,
+  });
+  const alcancaveis = idsAlcancaveis(resultado.nos, resultado.conexoes);
+  assert.equal(
+    resultado.nos.every((item) => alcancaveis.has(item.id)),
+    true,
+    "nenhum bloco consolidado deve permanecer isolado"
+  );
+  const menusPrincipais = resultado.nos.filter((item) =>
+    item.titulo === "Menu Principal"
+  );
+  assert.equal(menusPrincipais.length, 1);
+  assert.equal(alcancaveis.has(menusPrincipais[0].id), true);
+
+  const menuFaq = resultado.nos.find((item) => item.id === "faq")!;
+  assert.equal(
+    opcoesNo(menuFaq).some((opcao) => opcao.titulo === "Dúvidas Frequentes"),
+    false
+  );
+  assert.equal(
+    resultado.conexoes.filter((item) => item.no_origem_id === menuFaq.id).length,
+    opcoesNo(menuFaq).length
+  );
+});

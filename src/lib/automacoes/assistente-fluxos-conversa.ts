@@ -35,6 +35,104 @@ function texto(valor: unknown, limite = 1800) {
   return String(valor || "").trim().slice(0, limite);
 }
 
+const TIPOS_COM_EXCESSO_TENTATIVAS = new Set([
+  "pergunta_opcoes",
+  "pergunta_botoes",
+  "pergunta_livre_ia",
+  "capturar_resposta",
+  "avaliacao",
+]);
+
+function descricaoCaminho(
+  plano: PlanoAssistenteFluxos,
+  etapa: PlanoAssistenteEtapa
+) {
+  const entradas = plano.rotas.filter((rota) => rota.destino === etapa.ref);
+  const partes = entradas.slice(0, 2).map((rota) => {
+    const origem = plano.etapas.find((item) => item.ref === rota.origem);
+    const opcao = origem?.opcoes.find(
+      (item) => item.id === rota.valor || item.texto === rota.rotulo
+    );
+    const origemTitulo = rotuloEtapa(origem, rota.origem);
+    const escolha = texto(opcao?.texto || rota.rotulo || rota.valor, 80);
+    return escolha ? `${origemTitulo} → ${escolha}` : origemTitulo;
+  });
+
+  if (partes.length > 0) return partes.join(" ou ");
+  return texto(etapa.titulo, 120) || etapa.ref;
+}
+
+function opcoesSetor(setores: AssistenteSetor[]) {
+  return setores.map((setor) => ({
+    id: setor.id,
+    label: setor.nome,
+    descricao: null,
+  }));
+}
+
+function rotuloEtapa(etapa: PlanoAssistenteEtapa | undefined, fallback: string) {
+  const titulo = texto(etapa?.titulo, 120);
+  if (titulo) return titulo;
+  const ref = texto(etapa?.ref || fallback, 120);
+  if (normalizar(ref) === "inicio") return "Início";
+  return ref.replace(/[_-]+/g, " ").replace(/^./, (letra) => letra.toUpperCase());
+}
+
+function perguntaSetorExcessoTentativas(params: {
+  plano: PlanoAssistenteFluxos;
+  etapa: PlanoAssistenteEtapa;
+  setores: AssistenteSetor[];
+}): PerguntaAssistenteFluxo {
+  const opcoes = opcoesSetor(params.setores);
+  const caminhoAnterior = descricaoCaminho(params.plano, params.etapa);
+  const tituloEtapa = texto(params.etapa.titulo, 120) || params.etapa.ref;
+  const caminho = caminhoAnterior === tituloEtapa
+    ? tituloEtapa
+    : `${caminhoAnterior} → ${tituloEtapa}`;
+  const sugestao = params.setores.some(
+    (setor) => setor.id === params.etapa.setor_id
+  )
+    ? params.etapa.setor_id
+    : null;
+
+  return {
+    id: `setor_excesso:${params.etapa.ref}`,
+    etapa_ref: params.etapa.ref,
+    campo: "setor_id",
+    tipo: "selecao",
+    mensagem: `Se o contato exceder as tentativas no caminho “${caminho}”, para qual setor ele deve ser transferido?`,
+    ajuda:
+      opcoes.length > 0
+        ? `Este encaminhamento ocorre quando não há uma resposta válida no bloco “${tituloEtapa}”. Confirme o setor adequado para esse assunto.`
+        : "Cadastre e ative um setor antes de concluir este fluxo.",
+    obrigatoria: true,
+    bloqueada: opcoes.length === 0,
+    valor_sugerido: sugestao,
+    opcoes,
+  };
+}
+
+function adicionarConfirmacoesExcesso(params: {
+  plano: PlanoAssistenteFluxos;
+  setores: AssistenteSetor[];
+  perguntas: PerguntaAssistenteFluxo[];
+}) {
+  const existentes = new Set(params.perguntas.map((pergunta) => pergunta.id));
+  const perguntas = [...params.perguntas];
+
+  for (const etapa of params.plano.etapas) {
+    if (!TIPOS_COM_EXCESSO_TENTATIVAS.has(etapa.tipo)) continue;
+    const pergunta = perguntaSetorExcessoTentativas({
+      plano: params.plano,
+      etapa,
+      setores: params.setores,
+    });
+    if (!existentes.has(pergunta.id)) perguntas.push(pergunta);
+  }
+
+  return perguntas;
+}
+
 function normalizar(valor: unknown) {
   return texto(valor)
     .toLowerCase()
@@ -108,30 +206,26 @@ function encontrarEtapaTransferencia(
 }
 
 function perguntaTecnicaDeSetor(params: {
+  plano: PlanoAssistenteFluxos;
   clarificacao: PlanoAssistenteClarificacao;
   etapa: PlanoAssistenteEtapa;
   setores: AssistenteSetor[];
 }): PerguntaAssistenteFluxo {
-  const opcoes = params.setores.map((setor) => ({
-    id: setor.id,
-    label: setor.nome,
-    descricao: null,
-  }));
+  const opcoes = opcoesSetor(params.setores);
   const sugestao = params.setores.some(
     (setor) => setor.id === params.etapa.setor_id
   )
     ? params.etapa.setor_id
     : null;
   const titulo = texto(params.etapa.titulo, 120);
+  const caminho = descricaoCaminho(params.plano, params.etapa);
 
   return {
     id: `setor:${params.etapa.ref}`,
     etapa_ref: params.etapa.ref,
     campo: "setor_id",
     tipo: "selecao",
-    mensagem: titulo
-      ? `Para qual setor o contato deve ser encaminhado na etapa “${titulo}”?`
-      : "Para qual setor o contato deve ser encaminhado quando solicitar atendimento humano?",
+    mensagem: `No caminho “${caminho}”, para qual setor o contato deve ser encaminhado${titulo ? ` pelo bloco “${titulo}”` : ""}?`,
     ajuda:
       opcoes.length > 0
         ? "Escolha um setor ativo da sua empresa. Esta confirmação não altera os demais caminhos do fluxo."
@@ -186,7 +280,33 @@ export function criarPerguntasAssistenteFluxo(params: Parameters<
   typeof criarPerguntasOriginais
 >[0]) {
   if (params.plano.clarificacoes.length === 0) {
-    return removerSugestaoDeUrl(criarPerguntasOriginais(params));
+    const originais = criarPerguntasOriginais(params).map((pergunta) => {
+      if (pergunta.campo !== "setor_id") return pergunta;
+      const etapa = params.plano.etapas.find(
+        (item) => item.ref === pergunta.etapa_ref
+      );
+      if (!etapa || etapa.tipo !== "transferir") return pergunta;
+      return perguntaTecnicaDeSetor({
+        plano: params.plano,
+        clarificacao: {
+          id: pergunta.id,
+          pergunta: pergunta.mensagem,
+          motivo: pergunta.ajuda,
+          tipo: "selecao",
+          opcoes: [],
+          valor_sugerido: pergunta.valor_sugerido,
+        },
+        etapa,
+        setores: params.setores,
+      });
+    });
+    return removerSugestaoDeUrl(
+      adicionarConfirmacoesExcesso({
+        plano: params.plano,
+        setores: params.setores,
+        perguntas: originais,
+      })
+    );
   }
 
   return removerSugestaoDeUrl(
@@ -196,6 +316,7 @@ export function criarPerguntasAssistenteFluxo(params: Parameters<
 
         if (etapa) {
           return perguntaTecnicaDeSetor({
+            plano: params.plano,
             clarificacao,
             etapa,
             setores: params.setores,

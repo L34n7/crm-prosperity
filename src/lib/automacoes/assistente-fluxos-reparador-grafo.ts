@@ -504,6 +504,32 @@ function consolidarMenusFragmentados(params: {
   const principal = melhorMenuPrincipal(nos);
 
   if (principal) {
+    const menusPrincipaisDuplicados = nos.filter(
+      (no) => no.id !== principal.id && ehMenuPrincipal(no)
+    );
+    if (menusPrincipaisDuplicados.length > 0) {
+      aplicarOpcoes(principal, [
+        ...opcoesDaPergunta(principal),
+        ...menusPrincipaisDuplicados.flatMap(opcoesDaPergunta),
+      ]);
+      const duplicadosIds = new Set(
+        menusPrincipaisDuplicados.map((no) => no.id)
+      );
+      conexoes = conexoes.map((conexao) => ({
+        ...conexao,
+        no_origem_id: duplicadosIds.has(conexao.no_origem_id)
+          ? principal.id
+          : conexao.no_origem_id,
+        no_destino_id: duplicadosIds.has(conexao.no_destino_id)
+          ? principal.id
+          : conexao.no_destino_id,
+      }));
+      menusPrincipaisDuplicados.forEach((no) => remover.add(no.id));
+      params.avisos.push(
+        `${menusPrincipaisDuplicados.length} Menu(s) Principal(is) duplicado(s) foram consolidados.`
+      );
+    }
+
     for (const no of nos) {
       if (
         no.id !== principal.id &&
@@ -584,7 +610,7 @@ function reconstruirMenusFaqMalformados(
           normalizarId(no.titulo).replace(/_/g, " ")
         )
     );
-    if (!candidato || ehMenuFaq(candidato, servico)) continue;
+    if (!candidato) continue;
 
     const respostas = nos.filter((no) => {
       if (no.tipo_no !== "enviar_texto" || servicoDoNo(no) !== servico) {
@@ -596,8 +622,6 @@ function reconstruirMenusFaqMalformados(
         Boolean(intencaoFaq(conteudoNo(no)))
       );
     });
-    if (respostas.length === 0) continue;
-
     const intencoes = new Map<
       NonNullable<ReturnType<typeof intencaoFaq>>,
       AssistenteAutomacaoNo
@@ -606,21 +630,38 @@ function reconstruirMenusFaqMalformados(
       const intencao = intencaoFaq(conteudoNo(resposta));
       if (intencao && !intencoes.has(intencao)) intencoes.set(intencao, resposta);
     }
-    if (intencoes.size === 0) continue;
+    const opcoesAtuais = opcoesDaPergunta(candidato);
+    const possuiOpcaoRecursiva = opcoesAtuais.some(
+      (opcao) => ehFaq(opcao.titulo) && !intencaoFaq(`${opcao.id} ${opcao.titulo}`)
+    );
+    const possuiPerguntasConcretas = opcoesAtuais.some((opcao) =>
+      Boolean(intencaoFaq(`${opcao.id} ${opcao.titulo}`))
+    );
+    if (!possuiOpcaoRecursiva && possuiPerguntasConcretas) continue;
 
-    candidato.tipo_no = "pergunta_opcoes";
+    const navegacao = opcoesAtuais.filter(
+      (opcao) => !ehFaq(opcao.titulo) && !intencaoFaq(`${opcao.id} ${opcao.titulo}`)
+    );
+    const opcoesFaq = [...intencoes.keys()].map((intencao) => ({
+      id: `faq_${intencao}`,
+      titulo: TITULOS_INTENCAO_FAQ[intencao],
+    }));
+    const opcoesFinais = [
+      ...opcoesFaq,
+      ...navegacao,
+      ...(navegacao.some((opcao) => ehVoltarMenu(opcao.titulo))
+        ? []
+        : [{ id: "voltar", titulo: "Voltar" }]),
+    ];
+    if (opcoesFinais.length === 0) continue;
+
+    aplicarOpcoes(candidato, opcoesFinais);
     candidato.configuracao_json = {
       ...candidato.configuracao_json,
-      mensagem: "Qual dúvida você gostaria de esclarecer?",
-      opcoes: [
-        ...[...intencoes.keys()].map((intencao) => ({
-          valor: `faq_${intencao}`,
-          titulo: TITULOS_INTENCAO_FAQ[intencao],
-        })),
-        { valor: "voltar", titulo: "Voltar" },
-      ],
+      mensagem: opcoesFaq.length > 0
+        ? "Qual dúvida você gostaria de esclarecer?"
+        : "Como você deseja continuar?",
     };
-    delete candidato.configuracao_json.botoes;
     avisos.push(
       `O menu de dúvidas “${candidato.titulo}” foi reconstruído a partir das respostas existentes.`
     );

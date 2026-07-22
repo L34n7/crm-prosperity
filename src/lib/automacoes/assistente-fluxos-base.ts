@@ -393,12 +393,12 @@ function tipoNoEsperaResposta(tipoNo: string) {
   ].includes(tipoNo);
 }
 
-function baseTentativas() {
+function baseTentativas(etapa?: PlanoAssistenteEtapa) {
   return {
     max_tentativas_invalidas: 3,
     max_tentativas_sem_resposta: 3,
     acao_excesso_tentativas: "transferir_atendimento",
-    setor_excesso_tentativas: null,
+    setor_excesso_tentativas: etapa?.setor_id || null,
     mensagem_excesso_tentativas:
       "Nao consegui continuar o atendimento automatico. Vou te encaminhar para um atendente.",
     notificar_excesso_tentativas: true,
@@ -480,7 +480,7 @@ function configuracaoPorEtapa(
               { valor: "opcao_1", titulo: "Opcao 1" },
               { valor: "opcao_2", titulo: "Opcao 2" },
             ],
-      ...baseTentativas(),
+      ...baseTentativas(etapa),
     };
   }
 
@@ -500,7 +500,7 @@ function configuracaoPorEtapa(
               { id: "sim", titulo: "Sim" },
               { id: "nao", titulo: "Nao" },
             ],
-      ...baseTentativas(),
+      ...baseTentativas(etapa),
     };
   }
 
@@ -508,7 +508,7 @@ function configuracaoPorEtapa(
     return {
       mensagem: mensagem || "Como posso te ajudar?",
       delay_segundos: 3,
-      ...baseTentativas(),
+      ...baseTentativas(etapa),
     };
   }
 
@@ -525,7 +525,7 @@ function configuracaoPorEtapa(
       mensagem_erro:
         "Nao consegui identificar essa informacao. Por favor, envie novamente.",
       max_tentativas: 3,
-      ...baseTentativas(),
+      ...baseTentativas(etapa),
     };
   }
 
@@ -584,7 +584,7 @@ function configuracaoPorEtapa(
       mensagem_comentario:
         "Obrigado! Agora escreva um comentario sobre seu atendimento.",
       mensagem_erro: "Por favor, responda com uma nota de 1 a 5.",
-      ...baseTentativas(),
+      ...baseTentativas(etapa),
     };
   }
 
