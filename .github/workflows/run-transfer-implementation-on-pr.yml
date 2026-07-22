@@ -36,6 +36,43 @@ jobs:
           from pathlib import Path
           path = Path('/tmp/aplicar-transferencia.py')
           source = path.read_text(encoding='utf-8')
+          original = '''def replace_once(path: str, old: str, new: str) -> None:
+              content = read(path)
+              count = content.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: esperado 1 trecho, encontrado {count}: {old[:120]!r}")
+              write(path, content.replace(old, new, 1))'''
+          resiliente = '''def replace_once(path: str, old: str, new: str) -> None:
+              content = read(path)
+              count = content.count(old)
+              if count == 1:
+                  write(path, content.replace(old, new, 1))
+                  return
+              if count > 1:
+                  raise RuntimeError(f"{path}: esperado 1 trecho, encontrado {count}: {old[:120]!r}")
+
+              linhas = old.splitlines()
+              pattern = "\\n".join(
+                  r"[ \\t]*" + re.escape(linha.lstrip()) for linha in linhas
+              )
+              matches = list(re.finditer(pattern, content, flags=re.MULTILINE))
+              if len(matches) != 1:
+                  raise RuntimeError(
+                      f"{path}: esperado 1 trecho flexivel, encontrado {len(matches)}: {old[:120]!r}"
+                  )
+
+              match = matches[0]
+              primeira_linha = match.group(0).splitlines()[0]
+              base = primeira_linha[: len(primeira_linha) - len(primeira_linha.lstrip())]
+              novo_deduzido = textwrap.dedent(new)
+              replacement = "\\n".join(
+                  base + linha if linha else ""
+                  for linha in novo_deduzido.splitlines()
+              )
+              write(path, content[: match.start()] + replacement + content[match.end() :])'''
+          if original not in source:
+              raise RuntimeError('Nao foi possivel preparar a funcao de substituicao resiliente.')
+          source = source.replace(original, resiliente, 1)
           source = source.replace(
               "'''      setSetores(json.setores || []);\n  } catch (error: any) {'''",
               "'''      setSetores(json.setores || []);\n    } catch (error: any) {'''",
