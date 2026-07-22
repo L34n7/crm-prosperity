@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/tmp/aplicar-transferencia.py", line 476, in <module>
+    replace_once(
+  File "/tmp/aplicar-transferencia.py", line 19, in replace_once
+    raise RuntimeError(f"{path}: esperado 1 trecho, encontrado {count}: {old[:120]!r}")
+RuntimeError: src/app/(private)/fluxos/page.tsx: esperado 1 trecho, encontrado 0: '      setSetores(json.setores || []);\n  } catch (error: any) {'
