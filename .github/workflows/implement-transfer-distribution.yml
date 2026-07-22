@@ -1,0 +1,1481 @@
+name: Implementar distribuicao de atendentes
+
+on:
+  push:
+    branches:
+      - feat/transferencia-atendentes
+    paths:
+      - .github/workflows/implement-transfer-distribution.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Aplicar alteracoes
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+          import textwrap
+
+          ROOT = Path.cwd()
+
+          def read(path: str) -> str:
+              return (ROOT / path).read_text(encoding="utf-8")
+
+          def write(path: str, content: str) -> None:
+              target = ROOT / path
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(content, encoding="utf-8")
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              content = read(path)
+              count = content.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: esperado 1 trecho, encontrado {count}: {old[:120]!r}")
+              write(path, content.replace(old, new, 1))
+
+          pure_strategy = r'''export type EstrategiaTransferenciaAtendente =
+            | "fila_setor"
+            | "atendente_especifico"
+            | "rodizio_aleatorio"
+            | "menos_conversas";
+
+          export type CandidatoTransferenciaAtendente = {
+            id: string;
+            nome?: string | null;
+            cargaAtual?: number;
+          };
+
+          const ESTRATEGIAS_VALIDAS = new Set<EstrategiaTransferenciaAtendente>([
+            "fila_setor",
+            "atendente_especifico",
+            "rodizio_aleatorio",
+            "menos_conversas",
+          ]);
+
+          export function normalizarEstrategiaTransferenciaAtendente(
+            valor: unknown,
+            atendenteId?: unknown
+          ): EstrategiaTransferenciaAtendente {
+            const estrategia = String(valor || "").trim() as EstrategiaTransferenciaAtendente;
+
+            if (ESTRATEGIAS_VALIDAS.has(estrategia)) {
+              return estrategia;
+            }
+
+            return String(atendenteId || "").trim()
+              ? "atendente_especifico"
+              : "fila_setor";
+          }
+
+          function indiceAleatorio(tamanho: number, random: () => number) {
+            if (tamanho <= 1) return 0;
+            const valor = Number(random());
+            const normalizado = Number.isFinite(valor)
+              ? Math.min(0.999999999, Math.max(0, valor))
+              : 0;
+            return Math.floor(normalizado * tamanho);
+          }
+
+          export function selecionarAtendenteTransferencia(params: {
+            estrategia: EstrategiaTransferenciaAtendente;
+            candidatos: CandidatoTransferenciaAtendente[];
+            atendenteId?: string | null;
+            random?: () => number;
+          }): CandidatoTransferenciaAtendente | null {
+            const candidatos = params.candidatos.filter((item) => Boolean(item?.id));
+
+            if (params.estrategia === "fila_setor" || candidatos.length === 0) {
+              return null;
+            }
+
+            if (params.estrategia === "atendente_especifico") {
+              const atendenteId = String(params.atendenteId || "").trim();
+              if (!atendenteId) return null;
+              return candidatos.find((item) => item.id === atendenteId) || null;
+            }
+
+            const random = params.random || Math.random;
+
+            if (params.estrategia === "rodizio_aleatorio") {
+              return candidatos[indiceAleatorio(candidatos.length, random)] || null;
+            }
+
+            const menorCarga = Math.min(
+              ...candidatos.map((item) => Math.max(0, Number(item.cargaAtual || 0)))
+            );
+            const empatados = candidatos.filter(
+              (item) => Math.max(0, Number(item.cargaAtual || 0)) === menorCarga
+            );
+
+            return empatados[indiceAleatorio(empatados.length, random)] || null;
+          }
+          '''
+          write(
+              "src/lib/conversas/estrategia-transferencia.ts",
+              textwrap.dedent(pure_strategy).lstrip(),
+          )
+
+          resolver = r'''import { getSupabaseAdmin } from "@/lib/supabase/admin";
+          import {
+            normalizarEstrategiaTransferenciaAtendente,
+            selecionarAtendenteTransferencia,
+            type EstrategiaTransferenciaAtendente,
+          } from "@/lib/conversas/estrategia-transferencia";
+
+          const supabaseAdmin = getSupabaseAdmin();
+
+          const STATUS_CONVERSAS_EM_CARGA = [
+            "aberta",
+            "fila",
+            "bot",
+            "em_atendimento",
+            "aguardando_cliente",
+          ];
+
+          export type ResultadoAtribuicaoTransferencia = {
+            setorId: string | null;
+            responsavelId: string | null;
+            atendenteNome: string | null;
+            estrategiaSolicitada: EstrategiaTransferenciaAtendente;
+            estrategiaAplicada: EstrategiaTransferenciaAtendente;
+            fallbackMotivo: string | null;
+          };
+
+          function resultadoFila(params: {
+            setorId: string | null;
+            estrategia: EstrategiaTransferenciaAtendente;
+            motivo?: string | null;
+          }): ResultadoAtribuicaoTransferencia {
+            return {
+              setorId: params.setorId,
+              responsavelId: null,
+              atendenteNome: null,
+              estrategiaSolicitada: params.estrategia,
+              estrategiaAplicada: "fila_setor",
+              fallbackMotivo: params.motivo || null,
+            };
+          }
+
+          export async function resolverAtribuicaoTransferencia(params: {
+            empresaId: string;
+            setorId?: string | null;
+            estrategia?: unknown;
+            atendenteId?: unknown;
+          }): Promise<ResultadoAtribuicaoTransferencia> {
+            const setorId = String(params.setorId || "").trim() || null;
+            const atendenteId = String(params.atendenteId || "").trim() || null;
+            const estrategia = normalizarEstrategiaTransferenciaAtendente(
+              params.estrategia,
+              atendenteId
+            );
+
+            if (!setorId) {
+              return resultadoFila({
+                setorId: null,
+                estrategia,
+                motivo: "setor_nao_informado",
+              });
+            }
+
+            if (estrategia === "fila_setor") {
+              return resultadoFila({ setorId, estrategia });
+            }
+
+            try {
+              const { data: vinculos, error: vinculosError } = await supabaseAdmin
+                .from("usuarios_setores")
+                .select("usuario_id")
+                .eq("setor_id", setorId);
+
+              if (vinculosError) {
+                throw vinculosError;
+              }
+
+              const usuarioIds = Array.from(
+                new Set(
+                  (vinculos || [])
+                    .map((item) => String(item.usuario_id || "").trim())
+                    .filter(Boolean)
+                )
+              );
+
+              if (usuarioIds.length === 0) {
+                return resultadoFila({
+                  setorId,
+                  estrategia,
+                  motivo: "setor_sem_atendentes",
+                });
+              }
+
+              const { data: usuarios, error: usuariosError } = await supabaseAdmin
+                .from("usuarios")
+                .select("id, nome")
+                .eq("empresa_id", params.empresaId)
+                .eq("status", "ativo")
+                .in("id", usuarioIds);
+
+              if (usuariosError) {
+                throw usuariosError;
+              }
+
+              const cargas = new Map<string, number>();
+              const idsAtivos = (usuarios || []).map((usuario) => usuario.id);
+
+              if (estrategia === "menos_conversas" && idsAtivos.length > 0) {
+                const { data: conversas, error: conversasError } = await supabaseAdmin
+                  .from("conversas")
+                  .select("responsavel_id")
+                  .eq("empresa_id", params.empresaId)
+                  .in("responsavel_id", idsAtivos)
+                  .in("status", STATUS_CONVERSAS_EM_CARGA);
+
+                if (conversasError) {
+                  throw conversasError;
+                }
+
+                for (const conversa of conversas || []) {
+                  const responsavelId = String(conversa.responsavel_id || "").trim();
+                  if (!responsavelId) continue;
+                  cargas.set(responsavelId, (cargas.get(responsavelId) || 0) + 1);
+                }
+              }
+
+              const candidatos = (usuarios || []).map((usuario) => ({
+                id: usuario.id,
+                nome: usuario.nome,
+                cargaAtual: cargas.get(usuario.id) || 0,
+              }));
+
+              const selecionado = selecionarAtendenteTransferencia({
+                estrategia,
+                candidatos,
+                atendenteId,
+              });
+
+              if (!selecionado) {
+                return resultadoFila({
+                  setorId,
+                  estrategia,
+                  motivo:
+                    estrategia === "atendente_especifico"
+                      ? "atendente_indisponivel_ou_fora_do_setor"
+                      : "sem_atendentes_ativos",
+                });
+              }
+
+              return {
+                setorId,
+                responsavelId: selecionado.id,
+                atendenteNome: selecionado.nome || null,
+                estrategiaSolicitada: estrategia,
+                estrategiaAplicada: estrategia,
+                fallbackMotivo: null,
+              };
+            } catch (error) {
+              console.error(
+                "[TRANSFERENCIA_ATENDENTE] Falha ao selecionar atendente; usando fila do setor:",
+                error
+              );
+
+              return resultadoFila({
+                setorId,
+                estrategia,
+                motivo: "erro_ao_distribuir_atendente",
+              });
+            }
+          }
+          '''
+          write(
+              "src/lib/conversas/resolver-atribuicao-transferencia.ts",
+              textwrap.dedent(resolver).lstrip(),
+          )
+
+          api_route = r'''import { NextResponse } from "next/server";
+          import { createClient } from "@/lib/supabase/server";
+          import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+          const supabaseAdmin = getSupabaseAdmin();
+
+          export async function GET() {
+            try {
+              const supabase = await createClient();
+
+              const {
+                data: { user },
+                error: authError,
+              } = await supabase.auth.getUser();
+
+              if (authError || !user) {
+                return NextResponse.json(
+                  { ok: false, error: "Não autenticado." },
+                  { status: 401 }
+                );
+              }
+
+              const { data: usuarioSistema, error: usuarioError } = await supabaseAdmin
+                .from("usuarios")
+                .select("empresa_id")
+                .eq("auth_user_id", user.id)
+                .single();
+
+              if (usuarioError || !usuarioSistema?.empresa_id) {
+                return NextResponse.json(
+                  { ok: false, error: "Usuário sem empresa vinculada." },
+                  { status: 403 }
+                );
+              }
+
+              const empresaId = usuarioSistema.empresa_id;
+              const { data: setores, error: setoresError } = await supabaseAdmin
+                .from("setores")
+                .select("id, nome")
+                .eq("empresa_id", empresaId)
+                .eq("ativo", true)
+                .order("ordem_exibicao", { ascending: true })
+                .order("nome", { ascending: true });
+
+              if (setoresError) {
+                throw setoresError;
+              }
+
+              const setorIds = (setores || []).map((setor) => setor.id);
+              let vinculos: Array<{ usuario_id: string; setor_id: string }> = [];
+
+              if (setorIds.length > 0) {
+                const { data, error } = await supabaseAdmin
+                  .from("usuarios_setores")
+                  .select("usuario_id, setor_id")
+                  .in("setor_id", setorIds);
+
+                if (error) throw error;
+                vinculos = data || [];
+              }
+
+              const usuarioIds = Array.from(
+                new Set(vinculos.map((item) => item.usuario_id).filter(Boolean))
+              );
+              let usuarios: Array<{ id: string; nome: string; email: string | null }> = [];
+
+              if (usuarioIds.length > 0) {
+                const { data, error } = await supabaseAdmin
+                  .from("usuarios")
+                  .select("id, nome, email")
+                  .eq("empresa_id", empresaId)
+                  .eq("status", "ativo")
+                  .in("id", usuarioIds)
+                  .order("nome", { ascending: true });
+
+                if (error) throw error;
+                usuarios = data || [];
+              }
+
+              const setoresPorUsuario = new Map<string, string[]>();
+              for (const vinculo of vinculos) {
+                setoresPorUsuario.set(vinculo.usuario_id, [
+                  ...(setoresPorUsuario.get(vinculo.usuario_id) || []),
+                  vinculo.setor_id,
+                ]);
+              }
+
+              return NextResponse.json({
+                ok: true,
+                setores: setores || [],
+                atendentes: usuarios.map((usuario) => ({
+                  ...usuario,
+                  setor_ids: Array.from(
+                    new Set(setoresPorUsuario.get(usuario.id) || [])
+                  ),
+                })),
+              });
+            } catch (error: any) {
+              return NextResponse.json(
+                {
+                  ok: false,
+                  error: error?.message || "Erro ao carregar setores.",
+                },
+                { status: 500 }
+              );
+            }
+          }
+          '''
+          write(
+              "src/app/api/setores/opcoes/route.ts",
+              textwrap.dedent(api_route).lstrip(),
+          )
+
+          page_path = "src/app/(private)/fluxos/page.tsx"
+
+          replace_once(
+              page_path,
+              '''type SetorOpcao = {
+            id: string;
+            nome: string;
+          };
+
+          type MidiaOpcao = {''',
+              '''type SetorOpcao = {
+            id: string;
+            nome: string;
+          };
+
+          type EstrategiaTransferenciaNode =
+            | "fila_setor"
+            | "atendente_especifico"
+            | "rodizio_aleatorio"
+            | "menos_conversas";
+
+          type AtendenteOpcao = {
+            id: string;
+            nome: string;
+            email?: string | null;
+            setor_ids: string[];
+          };
+
+          function normalizarEstrategiaTransferenciaNode(
+            valor: unknown,
+            atendenteId?: unknown
+          ): EstrategiaTransferenciaNode {
+            const estrategia = String(valor || "").trim();
+            if (
+              estrategia === "fila_setor" ||
+              estrategia === "atendente_especifico" ||
+              estrategia === "rodizio_aleatorio" ||
+              estrategia === "menos_conversas"
+            ) {
+              return estrategia;
+            }
+
+            return String(atendenteId || "").trim()
+              ? "atendente_especifico"
+              : "fila_setor";
+          }
+
+          type MidiaOpcao = {''',
+          )
+
+          replace_once(
+              page_path,
+              '''  const [setorDestino, setSetorDestino] = useState("");
+            const fluxo = fluxoSelecionado;''',
+              '''  const [setorDestino, setSetorDestino] = useState("");
+            const [estrategiaTransferenciaNode, setEstrategiaTransferenciaNode] =
+              useState<EstrategiaTransferenciaNode>("fila_setor");
+            const [atendenteDestinoNode, setAtendenteDestinoNode] = useState("");
+            const fluxo = fluxoSelecionado;''',
+          )
+
+          replace_once(
+              page_path,
+              '''  const [setores, setSetores] = useState<SetorOpcao[]>([]);
+            const [carregandoSetores, setCarregandoSetores] = useState(false);''',
+              '''  const [setores, setSetores] = useState<SetorOpcao[]>([]);
+            const [atendentes, setAtendentes] = useState<AtendenteOpcao[]>([]);
+            const [carregandoSetores, setCarregandoSetores] = useState(false);''',
+          )
+
+          replace_once(
+              page_path,
+              '''  const [setorExcessoTentativasNode, setSetorExcessoTentativasNode] =
+              useState("");
+            const [mensagemExcessoTentativasNode, setMensagemExcessoTentativasNode] =''',
+              '''  const [setorExcessoTentativasNode, setSetorExcessoTentativasNode] =
+              useState("");
+            const [estrategiaExcessoTentativasNode, setEstrategiaExcessoTentativasNode] =
+              useState<EstrategiaTransferenciaNode>("fila_setor");
+            const [atendenteExcessoTentativasNode, setAtendenteExcessoTentativasNode] =
+              useState("");
+            const [mensagemExcessoTentativasNode, setMensagemExcessoTentativasNode] =''',
+          )
+
+          replace_once(
+              page_path,
+              '''      setSetores(json.setores || []);
+            } catch (error: any) {''',
+              '''      setSetores(json.setores || []);
+              setAtendentes(json.atendentes || []);
+            } catch (error: any) {''',
+          )
+
+          page = read(page_path)
+          page, defaults_count = re.subn(
+              r'(?m)^(\s*)acao_excesso_tentativas: "transferir_atendimento",\n\1mensagem_excesso_tentativas:',
+              r'\1acao_excesso_tentativas: "transferir_atendimento",\n\1setor_excesso_tentativas: null,\n\1estrategia_excesso_tentativas: "fila_setor",\n\1atendente_excesso_tentativas: null,\n\1mensagem_excesso_tentativas:',
+              page,
+          )
+          if defaults_count < 4:
+              raise RuntimeError(f"Defaults de excesso alterados em apenas {defaults_count} pontos")
+          write(page_path, page)
+
+          replace_once(
+              page_path,
+              '''          : tipoNo === "encerrar"
+                    ? {
+                        mensagem: "",
+                        resultado_fluxo: "positivo",
+                        valor_conversao_tipo: "sem_valor",
+                      }''',
+              '''          : tipoNo === "transferir_setor"
+                    ? {
+                        mensagem: "Vou te encaminhar para um atendente.",
+                        setor_id: "",
+                        estrategia_transferencia: "fila_setor",
+                        atendente_id: null,
+                      }
+                    : tipoNo === "encerrar"
+                    ? {
+                        mensagem: "",
+                        resultado_fluxo: "positivo",
+                        valor_conversao_tipo: "sem_valor",
+                      }''',
+          )
+
+          replace_once(
+              page_path,
+              '''    setSetorDestino(configuracaoJson?.setor_id || "");
+              setConfirmandoExclusaoNo(false);''',
+              '''    setSetorDestino(configuracaoJson?.setor_id || "");
+              setEstrategiaTransferenciaNode(
+                normalizarEstrategiaTransferenciaNode(
+                  configuracaoJson?.estrategia_transferencia,
+                  configuracaoJson?.atendente_id
+                )
+              );
+              setAtendenteDestinoNode(String(configuracaoJson?.atendente_id || ""));
+              setConfirmandoExclusaoNo(false);''',
+          )
+
+          replace_once(
+              page_path,
+              '''    setSetorExcessoTentativasNode(
+                String(configuracaoJson?.setor_excesso_tentativas || "")
+              );
+
+              setMensagemExcessoTentativasNode(''',
+              '''    setSetorExcessoTentativasNode(
+                String(configuracaoJson?.setor_excesso_tentativas || "")
+              );
+              setEstrategiaExcessoTentativasNode(
+                normalizarEstrategiaTransferenciaNode(
+                  configuracaoJson?.estrategia_excesso_tentativas,
+                  configuracaoJson?.atendente_excesso_tentativas
+                )
+              );
+              setAtendenteExcessoTentativasNode(
+                String(configuracaoJson?.atendente_excesso_tentativas || "")
+              );
+
+              setMensagemExcessoTentativasNode(''',
+          )
+
+          replace_once(
+              page_path,
+              '''  if (tipoNodeEdicao === "botao_redirect") {''',
+              '''  if (tipoNodeEdicao === "transferir_setor") {
+                if (!setorDestino) {
+                  setErro("Selecione o setor destino da transferência.");
+                  return;
+                }
+
+                if (estrategiaTransferenciaNode === "atendente_especifico") {
+                  const atendenteValido = atendentes.some(
+                    (atendente) =>
+                      atendente.id === atendenteDestinoNode &&
+                      atendente.setor_ids.includes(setorDestino)
+                  );
+
+                  if (!atendenteValido) {
+                    setErro("Selecione um atendente ativo vinculado ao setor destino.");
+                    return;
+                  }
+                }
+              }
+
+              if (
+                acaoExcessoTentativasNode === "transferir_atendimento" &&
+                [
+                  "pergunta_opcoes",
+                  TIPO_NO_PERGUNTA_LIVRE_IA,
+                  "enviar_botoes",
+                  "capturar_resposta",
+                  "agenda_buscar_agendamento",
+                  "agenda_escolher_horario",
+                  "avaliacao",
+                  "interpretar_arquivo_ia",
+                ].includes(tipoNodeEdicao)
+              ) {
+                if (!setorExcessoTentativasNode) {
+                  setErro("Selecione o setor para a transferência por excesso de tentativas ou timeout.");
+                  return;
+                }
+
+                if (estrategiaExcessoTentativasNode === "atendente_especifico") {
+                  const atendenteValido = atendentes.some(
+                    (atendente) =>
+                      atendente.id === atendenteExcessoTentativasNode &&
+                      atendente.setor_ids.includes(setorExcessoTentativasNode)
+                  );
+
+                  if (!atendenteValido) {
+                    setErro("Selecione um atendente ativo do setor para a transferência por tentativas.");
+                    return;
+                  }
+                }
+              }
+
+              if (tipoNodeEdicao === "botao_redirect") {''',
+          )
+
+          replace_once(
+              page_path,
+              '''        configuracao_json.setor_excesso_tentativas =
+                    setorExcessoTentativasNode || null;
+
+                  configuracao_json.mensagem_excesso_tentativas =''',
+              '''        configuracao_json.setor_excesso_tentativas =
+                    setorExcessoTentativasNode || null;
+                  configuracao_json.estrategia_excesso_tentativas =
+                    estrategiaExcessoTentativasNode;
+                  configuracao_json.atendente_excesso_tentativas =
+                    estrategiaExcessoTentativasNode === "atendente_especifico"
+                      ? atendenteExcessoTentativasNode || null
+                      : null;
+
+                  configuracao_json.mensagem_excesso_tentativas =''',
+          )
+
+          replace_once(
+              page_path,
+              '''      if (tipoFinal === "transferir_setor") {
+                  configuracao_json.setor_id = setorDestino;
+                }''',
+              '''      if (tipoFinal === "transferir_setor") {
+                  configuracao_json.setor_id = setorDestino;
+                  configuracao_json.estrategia_transferencia =
+                    estrategiaTransferenciaNode;
+                  configuracao_json.atendente_id =
+                    estrategiaTransferenciaNode === "atendente_especifico"
+                      ? atendenteDestinoNode || null
+                      : null;
+                }''',
+          )
+
+          replace_once(
+              page_path,
+              '''    if (
+                  tipoNo === "transferir_setor" &&
+                  !String(config.setor_id || "").trim()
+                ) {
+                  return `O bloco "${node.data?.titulo}" precisa ter um setor destino.`;
+                }
+
+                if (
+                    (''',
+              '''    if (
+                  tipoNo === "transferir_setor" &&
+                  !String(config.setor_id || "").trim()
+                ) {
+                  return `O bloco "${node.data?.titulo}" precisa ter um setor destino.`;
+                }
+
+                if (
+                  tipoNo === "transferir_setor" &&
+                  normalizarEstrategiaTransferenciaNode(
+                    config.estrategia_transferencia,
+                    config.atendente_id
+                  ) === "atendente_especifico" &&
+                  !String(config.atendente_id || "").trim()
+                ) {
+                  return `O bloco "${node.data?.titulo}" precisa ter um atendente destino.`;
+                }
+
+                if (
+                  [
+                    "pergunta_opcoes",
+                    TIPO_NO_PERGUNTA_LIVRE_IA,
+                    "enviar_botoes",
+                    "capturar_resposta",
+                    "agenda_buscar_agendamento",
+                    "agenda_escolher_horario",
+                    "avaliacao",
+                    "interpretar_arquivo_ia",
+                  ].includes(tipoNo) &&
+                  String(config.acao_excesso_tentativas || "transferir_atendimento") ===
+                    "transferir_atendimento" &&
+                  !String(config.setor_excesso_tentativas || "").trim()
+                ) {
+                  return `O bloco "${node.data?.titulo}" precisa ter um setor para transferência por excesso de tentativas ou timeout.`;
+                }
+
+                if (
+                  [
+                    "pergunta_opcoes",
+                    TIPO_NO_PERGUNTA_LIVRE_IA,
+                    "enviar_botoes",
+                    "capturar_resposta",
+                    "agenda_buscar_agendamento",
+                    "agenda_escolher_horario",
+                    "avaliacao",
+                    "interpretar_arquivo_ia",
+                  ].includes(tipoNo) &&
+                  String(config.acao_excesso_tentativas || "transferir_atendimento") ===
+                    "transferir_atendimento" &&
+                  normalizarEstrategiaTransferenciaNode(
+                    config.estrategia_excesso_tentativas,
+                    config.atendente_excesso_tentativas
+                  ) === "atendente_especifico" &&
+                  !String(config.atendente_excesso_tentativas || "").trim()
+                ) {
+                  return `O bloco "${node.data?.titulo}" precisa ter um atendente para transferência por excesso de tentativas ou timeout.`;
+                }
+
+                if (
+                    (''',
+          )
+
+          transfer_ui_old = '''                  {tipoNodeEdicao === "transferir_setor" && (
+                        <label className={styles.field}>
+                          <span className={styles.label}>Setor destino</span>
+
+                          <select
+                            className={styles.input}
+                            value={setorDestino}
+                            onChange={(e) => setSetorDestino(e.target.value)}
+                            disabled={carregandoSetores}
+                          >
+                            <option value="">
+                              {carregandoSetores ? "Carregando setores..." : "Selecione um setor"}
+                            </option>
+
+                            {setores.map((setor) => (
+                              <option key={setor.id} value={setor.id}>
+                                {setor.nome}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}'''
+          transfer_ui_new = '''                  {tipoNodeEdicao === "transferir_setor" && (
+                        <div className={styles.optionsBox}>
+                          <label className={styles.field}>
+                            <span className={styles.label}>Setor destino</span>
+
+                            <select
+                              className={styles.input}
+                              value={setorDestino}
+                              onChange={(e) => {
+                                setSetorDestino(e.target.value);
+                                setAtendenteDestinoNode("");
+                              }}
+                              disabled={carregandoSetores}
+                            >
+                              <option value="">
+                                {carregandoSetores ? "Carregando setores..." : "Selecione um setor"}
+                              </option>
+
+                              {setores.map((setor) => (
+                                <option key={setor.id} value={setor.id}>
+                                  {setor.nome}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className={styles.field}>
+                            <span className={styles.label}>Distribuição do atendimento</span>
+                            <select
+                              className={styles.input}
+                              value={estrategiaTransferenciaNode}
+                              onChange={(e) => {
+                                const estrategia = e.target.value as EstrategiaTransferenciaNode;
+                                setEstrategiaTransferenciaNode(estrategia);
+                                if (estrategia !== "atendente_especifico") {
+                                  setAtendenteDestinoNode("");
+                                }
+                              }}
+                              disabled={!setorDestino}
+                            >
+                              <option value="fila_setor">Somente fila do setor</option>
+                              <option value="atendente_especifico">Atendente específico</option>
+                              <option value="rodizio_aleatorio">Rodízio aleatório</option>
+                              <option value="menos_conversas">Atendente com menos conversas</option>
+                            </select>
+                          </label>
+
+                          {estrategiaTransferenciaNode === "atendente_especifico" && (
+                            <label className={styles.field}>
+                              <span className={styles.label}>Atendente destino</span>
+                              <select
+                                className={styles.input}
+                                value={atendenteDestinoNode}
+                                onChange={(e) => setAtendenteDestinoNode(e.target.value)}
+                                disabled={!setorDestino || carregandoSetores}
+                              >
+                                <option value="">Selecione um atendente</option>
+                                {atendentes
+                                  .filter((atendente) =>
+                                    atendente.setor_ids.includes(setorDestino)
+                                  )
+                                  .map((atendente) => (
+                                    <option key={atendente.id} value={atendente.id}>
+                                      {atendente.nome}
+                                      {atendente.email ? ` — ${atendente.email}` : ""}
+                                    </option>
+                                  ))}
+                              </select>
+                            </label>
+                          )}
+
+                          <p className={styles.help}>
+                            No rodízio aleatório o sistema escolhe um usuário ativo do setor. Em menos conversas, considera os atendimentos ainda abertos atribuídos a cada usuário.
+                          </p>
+                        </div>
+                      )}'''
+          replace_once(page_path, transfer_ui_old, transfer_ui_new)
+
+          excess_ui_old = '''                      <label className={styles.field}>
+                            <span className={styles.label}>
+                              Quando exceder
+                            </span>
+
+                            <select
+                              className={styles.input}
+                              value={acaoExcessoTentativasNode}
+                              onChange={(e) =>
+                                setAcaoExcessoTentativasNode(e.target.value)
+                              }
+                            >
+                              <option value="transferir_atendimento">
+                                Transferir para atendimento
+                              </option>
+
+                              <option value="encerrar_fluxo">
+                                Encerrar fluxo
+                              </option>
+
+                              <option value="reiniciar_fluxo">
+                                Reiniciar fluxo
+                              </option>
+                            </select>
+                            {acaoExcessoTentativasNode === "transferir_atendimento" && (
+                              <label className={styles.field}>
+                                <span className={styles.label}>
+                                  Setor do atendimento
+                                </span>
+
+                                <select
+                                  className={styles.input}
+                                  value={setorExcessoTentativasNode}
+                                  onChange={(e) =>
+                                    setSetorExcessoTentativasNode(e.target.value)
+                                  }
+                                >
+                                  <option value="">
+                                    Selecione um setor
+                                  </option>
+
+                                  {setores.map((setor) => (
+                                    <option key={setor.id} value={setor.id}>
+                                      {setor.nome}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                          </label>'''
+          excess_ui_new = '''                      <div className={styles.field}>
+                            <span className={styles.label}>Quando exceder</span>
+
+                            <select
+                              className={styles.input}
+                              value={acaoExcessoTentativasNode}
+                              onChange={(e) =>
+                                setAcaoExcessoTentativasNode(e.target.value)
+                              }
+                            >
+                              <option value="transferir_atendimento">
+                                Transferir para atendimento
+                              </option>
+                              <option value="encerrar_fluxo">Encerrar fluxo</option>
+                              <option value="reiniciar_fluxo">Reiniciar fluxo</option>
+                            </select>
+                          </div>
+
+                          {acaoExcessoTentativasNode === "transferir_atendimento" && (
+                            <>
+                              <label className={styles.field}>
+                                <span className={styles.label}>Setor do atendimento</span>
+                                <select
+                                  className={styles.input}
+                                  value={setorExcessoTentativasNode}
+                                  onChange={(e) => {
+                                    setSetorExcessoTentativasNode(e.target.value);
+                                    setAtendenteExcessoTentativasNode("");
+                                  }}
+                                  disabled={carregandoSetores}
+                                >
+                                  <option value="">Selecione um setor</option>
+                                  {setores.map((setor) => (
+                                    <option key={setor.id} value={setor.id}>
+                                      {setor.nome}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <label className={styles.field}>
+                                <span className={styles.label}>Distribuição do atendimento</span>
+                                <select
+                                  className={styles.input}
+                                  value={estrategiaExcessoTentativasNode}
+                                  onChange={(e) => {
+                                    const estrategia = e.target.value as EstrategiaTransferenciaNode;
+                                    setEstrategiaExcessoTentativasNode(estrategia);
+                                    if (estrategia !== "atendente_especifico") {
+                                      setAtendenteExcessoTentativasNode("");
+                                    }
+                                  }}
+                                  disabled={!setorExcessoTentativasNode}
+                                >
+                                  <option value="fila_setor">Somente fila do setor</option>
+                                  <option value="atendente_especifico">Atendente específico</option>
+                                  <option value="rodizio_aleatorio">Rodízio aleatório</option>
+                                  <option value="menos_conversas">Atendente com menos conversas</option>
+                                </select>
+                              </label>
+
+                              {estrategiaExcessoTentativasNode === "atendente_especifico" && (
+                                <label className={styles.field}>
+                                  <span className={styles.label}>Atendente destino</span>
+                                  <select
+                                    className={styles.input}
+                                    value={atendenteExcessoTentativasNode}
+                                    onChange={(e) =>
+                                      setAtendenteExcessoTentativasNode(e.target.value)
+                                    }
+                                    disabled={!setorExcessoTentativasNode || carregandoSetores}
+                                  >
+                                    <option value="">Selecione um atendente</option>
+                                    {atendentes
+                                      .filter((atendente) =>
+                                        atendente.setor_ids.includes(
+                                          setorExcessoTentativasNode
+                                        )
+                                      )
+                                      .map((atendente) => (
+                                        <option key={atendente.id} value={atendente.id}>
+                                          {atendente.nome}
+                                          {atendente.email ? ` — ${atendente.email}` : ""}
+                                        </option>
+                                      ))}
+                                  </select>
+                                </label>
+                              )}
+                            </>
+                          )}'''
+          replace_once(page_path, excess_ui_old, excess_ui_new)
+
+          engine_path = "src/lib/automacoes/process-automation-engine.ts"
+          replace_once(
+              engine_path,
+              '''import {
+            fluxoPermiteIntegracaoWhatsapp,
+            obterConfiguracaoEncerramentoInatividade,
+          } from "@/lib/automacoes/normalizar-configuracao-fluxo";''',
+              '''import {
+            fluxoPermiteIntegracaoWhatsapp,
+            obterConfiguracaoEncerramentoInatividade,
+          } from "@/lib/automacoes/normalizar-configuracao-fluxo";
+          import { resolverAtribuicaoTransferencia } from "@/lib/conversas/resolver-atribuicao-transferencia";''',
+          )
+
+          engine = read(engine_path)
+          transfer_start = engine.index('  if (no.tipo_no === "transferir_setor") {')
+          transfer_end_marker = '''  await registrarLog({
+              empresaId,
+              execucaoId,
+              fluxoId,
+              noId: no.id,
+              tipoEvento: "tipo_no_nao_implementado",'''
+          transfer_end = engine.index(transfer_end_marker, transfer_start)
+          new_transfer_block = r'''  if (no.tipo_no === "transferir_setor") {
+            const configTransferencia = no.configuracao_json || {};
+            const mensagem =
+              configTransferencia.mensagem ||
+              "Vou te encaminhar para um atendente.";
+            const setorDestino =
+              String(configTransferencia.setor_id || "").trim() || null;
+            const atribuicao = await resolverAtribuicaoTransferencia({
+              empresaId,
+              setorId: setorDestino,
+              estrategia: configTransferencia.estrategia_transferencia,
+              atendenteId: configTransferencia.atendente_id,
+            });
+            const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
+              empresaId,
+              conversaId,
+            });
+
+            const envio = await enviarMensagemAutomacao({
+              empresaId,
+              conversaId,
+              numeroDestino,
+              conteudo: mensagem,
+              execucaoId,
+              noId: no.id,
+            });
+
+            if (
+              await interromperNoPorFalhaEnvioAutomacao({
+                empresaId,
+                conversaId,
+                execucaoId,
+                fluxoId,
+                no,
+                numeroDestino,
+                resultado: envio,
+                tipoEnvio: "transferir_setor",
+                mensagemTexto,
+              })
+            ) {
+              return;
+            }
+
+            const agora = new Date().toISOString();
+
+            await supabaseAdmin
+              .from("automacao_execucoes")
+              .update({
+                status: "finalizado",
+                finished_at: agora,
+                updated_at: agora,
+              })
+              .eq("id", execucaoId)
+              .eq("empresa_id", empresaId);
+
+            await supabaseAdmin
+              .from("conversas")
+              .update({
+                setor_id: setorDestino,
+                status: atribuicao.responsavelId ? "em_atendimento" : "fila",
+                responsavel_id: atribuicao.responsavelId,
+                bot_ativo: false,
+                aguardando_atendente: !atribuicao.responsavelId,
+                updated_at: agora,
+              })
+              .eq("id", conversaId)
+              .eq("empresa_id", empresaId);
+
+            await registrarLog({
+              empresaId,
+              execucaoId,
+              fluxoId,
+              noId: no.id,
+              tipoEvento: "execucao_transferida_atendimento",
+              descricao: atribuicao.responsavelId
+                ? "Execução finalizada com transferência direta para atendente."
+                : "Execução finalizada com transferência para a fila do setor.",
+              entrada: configTransferencia,
+              saida: {
+                mensagem,
+                setor_id: setorDestino,
+                responsavel_id: atribuicao.responsavelId,
+                atendente_nome: atribuicao.atendenteNome,
+                estrategia_solicitada: atribuicao.estrategiaSolicitada,
+                estrategia_aplicada: atribuicao.estrategiaAplicada,
+                fallback_motivo: atribuicao.fallbackMotivo,
+                conversa_protocolo_id: protocoloAtivo.id,
+              },
+            });
+
+            await registrarEventoRastreamentoFluxo({
+              empresaId,
+              conversaId,
+              execucaoId,
+              fluxoId,
+              noId: no.id,
+              tipo: "fluxo_transferido_atendimento",
+              metadata: {
+                tipo_encerramento: "transferencia_atendimento",
+                setor_id: setorDestino,
+                responsavel_id: atribuicao.responsavelId,
+                estrategia_solicitada: atribuicao.estrategiaSolicitada,
+                estrategia_aplicada: atribuicao.estrategiaAplicada,
+                fallback_motivo: atribuicao.fallbackMotivo,
+                conversa_protocolo_id: protocoloAtivo.id,
+              },
+            });
+
+            return;
+          }
+
+          '''
+          engine = engine[:transfer_start] + textwrap.dedent(new_transfer_block) + engine[transfer_end:]
+          write(engine_path, engine)
+
+          engine = read(engine_path)
+          excess_start = engine.index("export async function executarAcaoExcessoTentativas(params: {")
+          excess_end = engine.index("export async function registrarTentativaBloco(params: {", excess_start)
+          new_excess = r'''export async function executarAcaoExcessoTentativas(params: {
+            empresaId: string;
+            conversaId: string;
+            execucao: any;
+            no: any;
+            numeroDestino: string;
+            tipo: "resposta_invalida" | "sem_resposta";
+          }) {
+            const { empresaId, conversaId, execucao, no, numeroDestino, tipo } = params;
+
+            const config = no.configuracao_json || {};
+            const mensagem =
+              String(config.mensagem_excesso_tentativas || "").trim() ||
+              "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.";
+            const setorExcessoTentativas =
+              String(config.setor_excesso_tentativas || "").trim() || null;
+            const acao = String(
+              config.acao_excesso_tentativas || "transferir_atendimento"
+            );
+
+            if (mensagem) {
+              await enviarMensagemAutomacao({
+                empresaId,
+                conversaId,
+                numeroDestino,
+                conteudo: mensagem,
+                execucaoId: execucao.id,
+                noId: no.id,
+              });
+            }
+
+            await registrarLog({
+              empresaId,
+              execucaoId: execucao.id,
+              fluxoId: execucao.fluxo_id,
+              noId: no.id,
+              tipoEvento: "excesso_tentativas",
+              descricao: `Cliente excedeu o limite de tentativas: ${tipo}.`,
+              entrada: {
+                tipo,
+                acao,
+                configuracao_json: config,
+              },
+              saida: {},
+            });
+
+            if (config.notificar_excesso_tentativas !== false) {
+              const tituloNotificacao = "Excesso de tentativas no fluxo";
+              const mensagemNotificacao =
+                tipo === "sem_resposta"
+                  ? `O contato excedeu o limite de tentativas sem resposta no bloco "${no.titulo}".`
+                  : `O contato excedeu o limite de respostas inválidas no bloco "${no.titulo}".`;
+
+              const { data: contato } = execucao?.contato_id
+                ? await supabaseAdmin
+                    .from("contatos")
+                    .select("nome, telefone")
+                    .eq("id", execucao.contato_id)
+                    .eq("empresa_id", empresaId)
+                    .maybeSingle()
+                : { data: null };
+
+              const { data: fluxo } = await supabaseAdmin
+                .from("automacao_fluxos")
+                .select("nome")
+                .eq("id", execucao.fluxo_id)
+                .eq("empresa_id", empresaId)
+                .maybeSingle();
+
+              const { data: setorDestino } = setorExcessoTentativas
+                ? await supabaseAdmin
+                    .from("setores")
+                    .select("nome")
+                    .eq("id", setorExcessoTentativas)
+                    .eq("empresa_id", empresaId)
+                    .maybeSingle()
+                : { data: null };
+
+              await supabaseAdmin.from("notificacoes").insert({
+                empresa_id: empresaId,
+                conversa_id: conversaId,
+                contato_id: execucao?.contato_id || null,
+                automacao_execucao_id: execucao.id,
+                automacao_fluxo_id: execucao.fluxo_id,
+                automacao_no_id: no.id,
+                tipo: "automacao",
+                titulo: tituloNotificacao,
+                mensagem: mensagemNotificacao,
+                lida: false,
+                metadata_json: {
+                  origem: "excesso_tentativas",
+                  tipo_tentativa: tipo,
+                  acao_executada: acao,
+                  bloco_titulo: no.titulo,
+                  bloco_tipo: no.tipo_no,
+                  setor_id: setorExcessoTentativas,
+                  estrategia_transferencia:
+                    config.estrategia_excesso_tentativas || "fila_setor",
+                  atendente_id: config.atendente_excesso_tentativas || null,
+                  notificar_email: config.notificar_email_excesso_tentativas !== false,
+                },
+              });
+
+              if (config.notificar_email_excesso_tentativas !== false) {
+                await sendAutomationNotificationEmail({
+                  empresaId,
+                  conversaId,
+                  titulo: tituloNotificacao,
+                  mensagem: mensagemNotificacao,
+                  fluxoNome: fluxo?.nome || null,
+                  blocoTitulo: no.titulo || null,
+                  blocoTipo: no.tipo_no || null,
+                  contatoNome: contato?.nome || null,
+                  contatoTelefone: contato?.telefone || numeroDestino || null,
+                  setorDestino: setorDestino?.nome || null,
+                  tipoNotificacao: "excesso_tentativas",
+                });
+              }
+            }
+
+            if (acao === "encerrar_fluxo") {
+              const agora = new Date().toISOString();
+
+              await supabaseAdmin
+                .from("automacao_execucoes")
+                .update({
+                  status: "finalizado",
+                  finished_at: agora,
+                  updated_at: agora,
+                })
+                .eq("id", execucao.id)
+                .eq("empresa_id", empresaId);
+
+              await supabaseAdmin
+                .from("conversas")
+                .update({
+                  status: "encerrado_aut",
+                  bot_ativo: false,
+                  aguardando_atendente: false,
+                  closed_at: agora,
+                  updated_at: agora,
+                })
+                .eq("id", conversaId)
+                .eq("empresa_id", empresaId);
+
+              const tipoEventoRastreamento: TipoEventoFluxoRastreamento =
+                tipo === "sem_resposta"
+                  ? "fluxo_incompleto_timeout"
+                  : "fluxo_finalizado";
+
+              await registrarEventoRastreamentoFluxo({
+                empresaId,
+                conversaId,
+                execucaoId: execucao.id,
+                fluxoId: execucao.fluxo_id,
+                noId: no.id,
+                tipo: tipoEventoRastreamento,
+                resultado: tipo === "sem_resposta" ? null : "negativo",
+                metadata: {
+                  tipo_encerramento: "excesso_tentativas",
+                  tipo_tentativa: tipo,
+                  acao_executada: acao,
+                },
+              });
+
+              return;
+            }
+
+            if (acao === "reiniciar_fluxo") {
+              await supabaseAdmin
+                .from("automacao_execucoes")
+                .update({
+                  no_atual_id: null,
+                  status: "finalizado",
+                  finished_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", execucao.id)
+                .eq("empresa_id", empresaId);
+
+              return;
+            }
+
+            const atribuicao = await resolverAtribuicaoTransferencia({
+              empresaId,
+              setorId: setorExcessoTentativas,
+              estrategia: config.estrategia_excesso_tentativas,
+              atendenteId: config.atendente_excesso_tentativas,
+            });
+            const agora = new Date().toISOString();
+
+            await supabaseAdmin
+              .from("automacao_execucoes")
+              .update({
+                status: "finalizado",
+                finished_at: agora,
+                updated_at: agora,
+              })
+              .eq("id", execucao.id)
+              .eq("empresa_id", empresaId);
+
+            await supabaseAdmin
+              .from("conversas")
+              .update({
+                status: atribuicao.responsavelId ? "em_atendimento" : "fila",
+                setor_id: setorExcessoTentativas,
+                responsavel_id: atribuicao.responsavelId,
+                bot_ativo: false,
+                aguardando_atendente: !atribuicao.responsavelId,
+                updated_at: agora,
+              })
+              .eq("id", conversaId)
+              .eq("empresa_id", empresaId);
+
+            await registrarEventoRastreamentoFluxo({
+              empresaId,
+              conversaId,
+              execucaoId: execucao.id,
+              fluxoId: execucao.fluxo_id,
+              noId: no.id,
+              tipo: "fluxo_transferido_atendimento",
+              metadata: {
+                tipo_encerramento: "excesso_tentativas_transferencia",
+                tipo_tentativa: tipo,
+                acao_executada: acao,
+                setor_id: setorExcessoTentativas,
+                responsavel_id: atribuicao.responsavelId,
+                estrategia_solicitada: atribuicao.estrategiaSolicitada,
+                estrategia_aplicada: atribuicao.estrategiaAplicada,
+                fallback_motivo: atribuicao.fallbackMotivo,
+              },
+            });
+          }
+
+          '''
+          engine = engine[:excess_start] + textwrap.dedent(new_excess) + engine[excess_end:]
+          write(engine_path, engine)
+
+          tests = r'''import assert from "node:assert/strict";
+          import test from "node:test";
+          import {
+            normalizarEstrategiaTransferenciaAtendente,
+            selecionarAtendenteTransferencia,
+          } from "../src/lib/conversas/estrategia-transferencia.ts";
+
+          const candidatos = [
+            { id: "a", nome: "Ana", cargaAtual: 4 },
+            { id: "b", nome: "Bruno", cargaAtual: 1 },
+            { id: "c", nome: "Carla", cargaAtual: 1 },
+          ];
+
+          test("mantem compatibilidade com configuracao antiga", () => {
+            assert.equal(
+              normalizarEstrategiaTransferenciaAtendente(undefined, undefined),
+              "fila_setor"
+            );
+            assert.equal(
+              normalizarEstrategiaTransferenciaAtendente(undefined, "b"),
+              "atendente_especifico"
+            );
+          });
+
+          test("seleciona somente o atendente especifico valido", () => {
+            assert.equal(
+              selecionarAtendenteTransferencia({
+                estrategia: "atendente_especifico",
+                candidatos,
+                atendenteId: "b",
+              })?.id,
+              "b"
+            );
+            assert.equal(
+              selecionarAtendenteTransferencia({
+                estrategia: "atendente_especifico",
+                candidatos,
+                atendenteId: "inexistente",
+              }),
+              null
+            );
+          });
+
+          test("rodizio aleatorio usa apenas candidatos disponiveis", () => {
+            assert.equal(
+              selecionarAtendenteTransferencia({
+                estrategia: "rodizio_aleatorio",
+                candidatos,
+                random: () => 0.8,
+              })?.id,
+              "c"
+            );
+          });
+
+          test("menos conversas escolhe a menor carga e desempata aleatoriamente", () => {
+            assert.equal(
+              selecionarAtendenteTransferencia({
+                estrategia: "menos_conversas",
+                candidatos,
+                random: () => 0,
+              })?.id,
+              "b"
+            );
+            assert.equal(
+              selecionarAtendenteTransferencia({
+                estrategia: "menos_conversas",
+                candidatos,
+                random: () => 0.9,
+              })?.id,
+              "c"
+            );
+          });
+
+          test("fila do setor nao atribui responsavel", () => {
+            assert.equal(
+              selecionarAtendenteTransferencia({
+                estrategia: "fila_setor",
+                candidatos,
+              }),
+              null
+            );
+          });
+          '''
+          write(
+              "tests/transferencia-atendente.test.mts",
+              textwrap.dedent(tests).lstrip(),
+          )
+
+          workflow = ROOT / ".github/workflows/implement-transfer-distribution.yml"
+          workflow.unlink()
+          PY
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Validar TypeScript
+        run: npx tsc --noEmit
+
+      - name: Testar distribuicao
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/transferencia-atendente.test.mts
+
+      - name: Publicar alteracoes na branch
+        shell: bash
+        run: |
+          git config user.name "CRM Prosperity Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Adicionar distribuicao de atendentes nas transferencias"
+          git push origin HEAD
