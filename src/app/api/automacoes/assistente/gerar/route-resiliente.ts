@@ -28,6 +28,9 @@ import {
   injetarPlanejamentoNoPayload,
   type RequisitosNormalizadosFluxo,
 } from "./route-planejamento-ia";
+import { problemasReparaveisPeloCompilador } from "./route-politica-reparo";
+
+export { problemasReparaveisPeloCompilador } from "./route-politica-reparo";
 
 export const runtime = "nodejs";
 
@@ -84,6 +87,16 @@ function escolherRascunhoMaisRecente(
   return jsonLegivel(atual)
     ? extrairTextoSaida(atual)
     : extrairTextoSaida(anterior);
+}
+
+function planoPodeSeguirParaCompilador(validacao: {
+  valido: boolean;
+  problemas: string[];
+}) {
+  return (
+    validacao.valido ||
+    problemasReparaveisPeloCompilador(validacao.problemas)
+  );
 }
 
 function instalarSdkResiliente() {
@@ -164,7 +177,7 @@ function instalarSdkResiliente() {
         somarUsoRespostas(respostaTextos, resposta);
 
         const validacaoDepoisDaCopy = validarQualidadePlano(resposta, contexto);
-        if (!validacaoDepoisDaCopy.valido) {
+        if (!planoPodeSeguirParaCompilador(validacaoDepoisDaCopy)) {
           substituirTextoSaida(resposta, planoAntesDaCopy);
           console.warn("[assistente-fluxos] copy otimizada rejeitada; preservando o plano valido", {
             problemas: validacaoDepoisDaCopy.problemas,
@@ -179,7 +192,15 @@ function instalarSdkResiliente() {
       return resposta;
     };
 
-    if (primeiraValidacao.valido) return finalizarComTextos(primeiraResposta);
+    if (planoPodeSeguirParaCompilador(primeiraValidacao)) {
+      if (!primeiraValidacao.valido) {
+        console.info("[assistente-fluxos] encaminhando rotas ausentes ao compilador seguro", {
+          response_id: primeiraResposta.id || null,
+          problemas: primeiraValidacao.problemas,
+        });
+      }
+      return finalizarComTextos(primeiraResposta);
+    }
 
     console.warn("[assistente-fluxos] repetindo plano incompleto", {
       response_id: primeiraResposta.id || null,
@@ -212,7 +233,7 @@ function instalarSdkResiliente() {
       contexto
     );
 
-    if (segundaValidacao.valido) {
+    if (planoPodeSeguirParaCompilador(segundaValidacao)) {
       return finalizarComTextos(segundaRespostaComUso);
     }
 
@@ -245,7 +266,7 @@ function instalarSdkResiliente() {
     );
     const terceiraValidacao = validarQualidadePlano(respostaComUso, contexto);
 
-    if (!terceiraValidacao.valido) {
+    if (!planoPodeSeguirParaCompilador(terceiraValidacao)) {
       console.error("[assistente-fluxos] plano incompleto apos revisao final", {
         response_id: respostaComUso.id || null,
         problemas: terceiraValidacao.problemas,
@@ -259,7 +280,7 @@ function instalarSdkResiliente() {
       substituirTextoSaida(respostaComUso, "{");
     }
 
-    return terceiraValidacao.valido
+    return planoPodeSeguirParaCompilador(terceiraValidacao)
       ? finalizarComTextos(respostaComUso)
       : respostaComUso;
   };

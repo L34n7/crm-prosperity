@@ -1326,3 +1326,110 @@ test("assistente confirma o horario antes de criar o agendamento", () => {
   );
   assert.equal(resultado.validacao.valido, true);
 });
+
+test("compilador reconstrui jornada desconectada sem pular boas-vindas", () => {
+  const plano = normalizarPlanoAssistente({
+    nome_fluxo: "Clinica",
+    etapas: [
+      { ref: "inicio", tipo: "inicio", opcoes: [] },
+      {
+        ref: "boas_vindas",
+        tipo: "mensagem",
+        titulo: "Boas-vindas",
+        mensagem: "Seja bem-vindo.",
+        opcoes: [],
+      },
+      {
+        ref: "menu",
+        tipo: "pergunta_botoes",
+        titulo: "Menu Principal",
+        mensagem: "Como podemos ajudar?",
+        opcoes: [
+          { id: "agendar", texto: "Agendar Avaliacao" },
+          { id: "especialista", texto: "Falar com Especialista" },
+        ],
+      },
+      {
+        ref: "escolher",
+        tipo: "agenda_escolher_horario",
+        titulo: "Escolher horario",
+        agenda_id: "agenda-teste",
+        opcoes: [],
+      },
+      {
+        ref: "confirmar",
+        tipo: "pergunta_botoes",
+        titulo: "Confirmar agendamento",
+        mensagem: "Confirma o horario?",
+        opcoes: [
+          { id: "confirmar_horario", texto: "Sim" },
+          { id: "escolher_outro_horario", texto: "Escolher outro" },
+        ],
+      },
+      {
+        ref: "criar",
+        tipo: "agenda_criar_agendamento",
+        titulo: "Criar agendamento",
+        agenda_id: "agenda-teste",
+        opcoes: [],
+      },
+      {
+        ref: "confirmado",
+        tipo: "mensagem",
+        titulo: "Agendamento confirmado",
+        mensagem: "Agendamento confirmado com sucesso.",
+        opcoes: [],
+      },
+      {
+        ref: "transferir",
+        tipo: "transferir",
+        titulo: "Falar com especialista",
+        setor_id: "setor-atendimento",
+        mensagem: "Vou encaminhar voce.",
+        opcoes: [],
+      },
+    ],
+    rotas: [{ origem: "inicio", destino: "boas_vindas", condicao: "sempre" }],
+    mensagens_revisadas: [],
+    variaveis_sugeridas: [],
+    avisos: [],
+  });
+
+  const resultado = compilarPlanoAssistente({
+    modo: "criar_fluxo",
+    plano,
+    setores: [{ id: "setor-atendimento", nome: "Atendimento" }],
+  });
+  const porTitulo = new Map(resultado.nos.map((no) => [no.titulo, no]));
+  const inicio = resultado.nos.find((no) => no.tipo_no === "inicio");
+  const boasVindas = porTitulo.get("Boas-vindas");
+  const confirmar = porTitulo.get("Confirmar agendamento");
+  const criar = porTitulo.get("Criar agendamento");
+  const confirmado = porTitulo.get("Agendamento confirmado");
+
+  assert.equal(resultado.validacao.valido, true, JSON.stringify(resultado.validacao.erros));
+  assert.equal(
+    resultado.conexoes.find((conexao) => conexao.no_origem_id === inicio?.id)
+      ?.no_destino_id,
+    boasVindas?.id
+  );
+  assert.equal(
+    resultado.nos.filter((no) => no.titulo === "Confirmar agendamento").length,
+    1
+  );
+  assert.ok(
+    resultado.conexoes.some(
+      (conexao) =>
+        conexao.no_origem_id === confirmar?.id &&
+        conexao.no_destino_id === criar?.id &&
+        conexao.condicao_json.valor === "confirmar_horario"
+    )
+  );
+  assert.ok(
+    resultado.conexoes.some(
+      (conexao) =>
+        conexao.no_origem_id === criar?.id &&
+        conexao.no_destino_id === confirmado?.id
+    )
+  );
+});

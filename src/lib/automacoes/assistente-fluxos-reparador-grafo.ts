@@ -103,6 +103,13 @@ function ehConfirmacaoHorario(no: AssistenteAutomacaoNo) {
   return ids.has("confirmar_horario") && ids.has("escolher_outro_horario");
 }
 
+function ehMensagemAgendamentoConfirmado(no: AssistenteAutomacaoNo) {
+  if (no.tipo_no !== "enviar_texto") return false;
+  return /\b(agendamento confirmado|horario confirmado|horario reservado|agendado com sucesso)\b/.test(
+    conteudoNo(no)
+  );
+}
+
 function destinoOriginalCorresponde(params: {
   origem: AssistenteAutomacaoNo;
   destino: AssistenteAutomacaoNo;
@@ -175,38 +182,44 @@ function garantirConfirmacoesAgenda(params: {
       ) || nos.find((no) => no.tipo_no === "agenda_criar_agendamento");
     if (!criar) continue;
 
-    const confirmacao: AssistenteAutomacaoNo = {
-      id: randomUUID(),
-      tipo_no: "enviar_botoes",
-      titulo: "Confirmar horário",
-      descricao: null,
-      posicao_x: escolher.posicao_x + 300,
-      posicao_y: escolher.posicao_y,
-      configuracao_json: {
-        mensagem:
-          "Confirma o horário escolhido para {{agenda_data_nova}} às {{agenda_hora_nova}}?",
+    const confirmacaoExistente = nos.find(
+      (no) => no.id !== escolher.id && ehConfirmacaoHorario(no)
+    );
+    const confirmacao: AssistenteAutomacaoNo =
+      confirmacaoExistente || {
+        id: randomUUID(),
+        tipo_no: "enviar_botoes",
+        titulo: "Confirmar horário",
+        descricao: null,
+        posicao_x: escolher.posicao_x + 300,
+        posicao_y: escolher.posicao_y,
+        configuracao_json: {
+          mensagem:
+            "Confirma o horário escolhido para {{agenda_data_nova}} às {{agenda_hora_nova}}?",
+          delay_segundos: 3,
+          botoes: [
+            { id: "confirmar_horario", titulo: "Sim" },
+            { id: "escolher_outro_horario", titulo: "Escolher outro" },
+          ],
+          max_tentativas_invalidas: 3,
+          max_tentativas_sem_resposta: 3,
+          acao_excesso_tentativas: "transferir_atendimento",
+          setor_excesso_tentativas: null,
+          mensagem_excesso_tentativas:
+            "Não consegui confirmar o horário. Vou encaminhar você para um atendente.",
+          notificar_excesso_tentativas: true,
+          notificar_email_excesso_tentativas: true,
+        },
         delay_segundos: 3,
-        botoes: [
-          { id: "confirmar_horario", titulo: "Sim" },
-          { id: "escolher_outro_horario", titulo: "Escolher outro" },
-        ],
-        max_tentativas_invalidas: 3,
-        max_tentativas_sem_resposta: 3,
-        acao_excesso_tentativas: "transferir_atendimento",
-        setor_excesso_tentativas: null,
-        mensagem_excesso_tentativas:
-          "Não consegui confirmar o horário. Vou encaminhar você para um atendente.",
-        notificar_excesso_tentativas: true,
-        notificar_email_excesso_tentativas: true,
-      },
-      delay_segundos: 3,
-    };
+      };
 
-    nos.push(confirmacao);
-    nosPorId.set(confirmacao.id, confirmacao);
+    if (!confirmacaoExistente) {
+      nos.push(confirmacao);
+      nosPorId.set(confirmacao.id, confirmacao);
+    }
     conexoes = conexoes.filter(
       (conexao) =>
-        conexao.no_origem_id !== escolher.id ||
+        ![escolher.id, confirmacao.id].includes(conexao.no_origem_id) ||
         conexao.condicao_json?.tipo === "timeout_sem_resposta"
     );
     conexoes.push(
@@ -228,7 +241,9 @@ function garantirConfirmacoesAgenda(params: {
       })
     );
     params.avisos.push(
-      `Foi adicionada confirmação antes de criar o agendamento em “${escolher.titulo}”.`
+      confirmacaoExistente
+        ? `A confirmação existente foi conectada ao agendamento em “${escolher.titulo}”.`
+        : `Foi adicionada confirmação antes de criar o agendamento em “${escolher.titulo}”.`
     );
   }
 
@@ -404,8 +419,8 @@ export function repararGrafoAssistente(params: {
     .map((conexao) => nosPorId.get(conexao.no_destino_id))
     .find((no) => no && no.id !== inicio.id);
   const destinoInicio =
-    mainMenu ||
     destinoInicioExistente ||
+    mainMenu ||
     nos.find((no) => no.id !== inicio.id && !ehTerminal(no)) ||
     nos.find((no) => no.id !== inicio.id);
 
@@ -444,6 +459,11 @@ export function repararGrafoAssistente(params: {
     if (no.tipo_no === "agenda_escolher_horario") {
       destino =
         encontrarPorTipo(nos, ["agenda_criar_agendamento"]) || null;
+    } else if (no.tipo_no === "agenda_criar_agendamento") {
+      destino =
+        nos.find(
+          (item) => item.id !== no.id && ehMensagemAgendamentoConfirmado(item)
+        ) || mainMenu;
     } else if (servico && ehFaq(conteudoNo(no))) {
       destino =
         menusFaq.get(servico) ||
@@ -452,7 +472,6 @@ export function repararGrafoAssistente(params: {
     } else if (servico && ehConteudoProcedimento(no, servico)) {
       destino = menusProcedimento.get(servico) || mainMenu;
     } else if (
-      no.tipo_no === "agenda_criar_agendamento" ||
       no.tipo_no === "botao_redirect" ||
       no.tipo_no === "enviar_imagem" ||
       ehValores(conteudoNo(no)) ||

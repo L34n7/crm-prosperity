@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { prepararPayloadAssistente } from "../src/app/api/automacoes/assistente/gerar/route-contexto-ia.ts";
+import { problemasReparaveisPeloCompilador } from "../src/app/api/automacoes/assistente/gerar/route-politica-reparo.ts";
 
 function payloadBaseAssistente() {
   return {
@@ -81,4 +82,25 @@ test("revisao final recebe o plano corrigido e somente as pendencias restantes",
   assert.match(sistema, /altere somente o necessario/i);
   assert.ok(sistema.includes(rascunho));
   assert.match(sistema, /opcao "Agendar" precisa ter uma rota/);
+});
+
+test("rotas ausentes reparaveis nao provocam outra reescrita completa pela IA", () => {
+  assert.equal(
+    problemasReparaveisPeloCompilador([
+      'O bloco "Menu Principal" nao esta conectado ao fluxo.',
+      'O bloco "Harmonizacao Facial" nao esta conectado ao fluxo.',
+      'A opcao "Antes e Depois" do bloco "Menu Principal" precisa ter uma rota.',
+    ]),
+    true
+  );
+});
+
+test("problemas de conteudo continuam exigindo correcao pela IA", () => {
+  assert.equal(
+    problemasReparaveisPeloCompilador([
+      'O bloco "Menu Principal" nao esta conectado ao fluxo.',
+      'O menu do procedimento "Botox" omitiu: Duvidas Frequentes.',
+    ]),
+    false
+  );
 });
