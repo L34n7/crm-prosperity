@@ -8,10 +8,8 @@ import {
 } from "./route-contexto-ia";
 import { completarRespostaPlano } from "./route-completar-estrutura";
 import {
-  extrairTextoSaida,
   repararRespostaPlano,
   somarUsoRespostas,
-  substituirTextoSaida,
   validarQualidadePlano,
   type RespostaOpenAI,
 } from "./route-validacao-ia";
@@ -20,18 +18,13 @@ import {
   persistirInstrucaoCompleta,
 } from "./route-sessao-contexto";
 import {
-  aplicarTextosOtimizados,
-  criarPayloadOtimizacaoTextos,
   criarPayloadPlanejamento,
   devePlanejarJornada,
   extrairRequisitosNormalizados,
   injetarPlanejamentoNoPayload,
   type RequisitosNormalizadosFluxo,
 } from "./route-planejamento-ia";
-import {
-  deveExecutarRevisaoFinal,
-  problemasReparaveisPeloCompilador,
-} from "./route-politica-reparo";
+import { problemasReparaveisPeloCompilador } from "./route-politica-reparo";
 
 export {
   deveExecutarRevisaoFinal,
@@ -50,6 +43,7 @@ type ObjetoJson = Record<string, unknown>;
 const contextoAssistenteFluxos = new AsyncLocalStorage<ContextoAssistenteFluxos>();
 let sdkResilienteInstalado = false;
 let moduloOriginalPromise: Promise<typeof import("./route-original")> | null = null;
+const LIMITE_PIPELINE_IA_MS = 210_000;
 
 const LIMITE_SAIDA_ASSISTENTE = (() => {
   const configurado = Number(
@@ -58,25 +52,10 @@ const LIMITE_SAIDA_ASSISTENTE = (() => {
   if (!Number.isFinite(configurado)) return 16000;
   return Math.max(6000, Math.min(24000, Math.floor(configurado)));
 })();
-const LIMITE_SAIDA_REPETICAO = Math.min(
-  24000,
-  Math.max(LIMITE_SAIDA_ASSISTENTE, 22000)
-);
-const LIMITE_SAIDA_REVISAO = LIMITE_SAIDA_REPETICAO;
-
 function objeto(valor: unknown): ObjetoJson {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as ObjetoJson)
     : {};
-}
-
-function jsonLegivel(resposta: RespostaOpenAI) {
-  try {
-    const valor = JSON.parse(extrairTextoSaida(resposta));
-    return Boolean(valor && typeof valor === "object" && !Array.isArray(valor));
-  } catch {
-    return false;
-  }
 }
 
 function repararECompletar(
@@ -86,23 +65,12 @@ function repararECompletar(
   return completarRespostaPlano(repararRespostaPlano(resposta, contexto), contexto);
 }
 
-function escolherRascunhoMaisRecente(
-  atual: RespostaOpenAI,
-  anterior: RespostaOpenAI
-) {
-  return jsonLegivel(atual)
-    ? extrairTextoSaida(atual)
-    : extrairTextoSaida(anterior);
-}
-
-function planoPodeSeguirParaCompilador(validacao: {
-  valido: boolean;
-  problemas: string[];
-}) {
-  return (
-    validacao.valido ||
-    problemasReparaveisPeloCompilador(validacao.problemas)
-  );
+function opcoesComPrazo(options: unknown, prazoFinal: number) {
+  const restante = Math.max(1_000, prazoFinal - Date.now());
+  return {
+    ...objeto(options),
+    signal: AbortSignal.timeout(restante),
+  };
 }
 
 function instalarSdkResiliente() {
@@ -128,12 +96,13 @@ function instalarSdkResiliente() {
     let requisitos: RequisitosNormalizadosFluxo | null = null;
     let respostaPlanejamento: RespostaOpenAI | null = null;
     let bodyPlanejado = body;
+    const prazoFinal = Date.now() + LIMITE_PIPELINE_IA_MS;
 
     if (pipelineCompleto) {
       respostaPlanejamento = await criarOriginal.call(
         this,
         criarPayloadPlanejamento({ body, contexto }),
-        options
+        opcoesComPrazo(options, prazoFinal)
       );
       requisitos = extrairRequisitosNormalizados(respostaPlanejamento);
 
@@ -152,156 +121,34 @@ function instalarSdkResiliente() {
       repetir: false,
       contexto,
     });
-    let primeiraResposta = repararECompletar(
-      await criarOriginal.call(this, primeiroPayload, options),
+    let respostaPlano = repararECompletar(
+      await criarOriginal.call(
+        this,
+        primeiroPayload,
+        opcoesComPrazo(options, prazoFinal)
+      ),
       contexto
     );
     if (respostaPlanejamento) {
-      primeiraResposta = somarUsoRespostas(
+      respostaPlano = somarUsoRespostas(
         respostaPlanejamento,
-        primeiraResposta
+        respostaPlano
       );
     }
-    const primeiraValidacao = validarQualidadePlano(primeiraResposta, contexto);
+    const validacao = validarQualidadePlano(respostaPlano, contexto);
 
-    const finalizarComTextos = async (resposta: RespostaOpenAI) => {
-      if (!pipelineCompleto || !requisitos) return resposta;
-
-      try {
-        const planoAntesDaCopy = extrairTextoSaida(resposta);
-        const plano = objeto(JSON.parse(extrairTextoSaida(resposta)));
-        const respostaTextos = await criarOriginal.call(
-          this,
-          criarPayloadOtimizacaoTextos({
-            body,
-            plano,
-            requisitos,
-          }),
-          options
-        );
-        aplicarTextosOtimizados(resposta, respostaTextos);
-        somarUsoRespostas(respostaTextos, resposta);
-
-        const validacaoDepoisDaCopy = validarQualidadePlano(resposta, contexto);
-        if (!planoPodeSeguirParaCompilador(validacaoDepoisDaCopy)) {
-          substituirTextoSaida(resposta, planoAntesDaCopy);
-          console.warn("[assistente-fluxos] copy otimizada rejeitada; preservando o plano valido", {
-            problemas: validacaoDepoisDaCopy.problemas,
-          });
-        }
-      } catch (error) {
-        console.warn("[assistente-fluxos] nao foi possivel otimizar os textos; preservando o grafo valido", {
-          erro: String(error || ""),
-        });
-      }
-
-      return resposta;
-    };
-
-    if (planoPodeSeguirParaCompilador(primeiraValidacao)) {
-      if (!primeiraValidacao.valido) {
-        console.info("[assistente-fluxos] encaminhando rotas ausentes ao compilador seguro", {
-          response_id: primeiraResposta.id || null,
-          problemas: primeiraValidacao.problemas,
-        });
-      }
-      return finalizarComTextos(primeiraResposta);
-    }
-
-    console.warn("[assistente-fluxos] repetindo plano incompleto", {
-      response_id: primeiraResposta.id || null,
-      problemas: primeiraValidacao.problemas,
-      output_length: extrairTextoSaida(primeiraResposta).length,
-      limite_inicial: LIMITE_SAIDA_ASSISTENTE,
-      limite_repeticao: LIMITE_SAIDA_REPETICAO,
-    });
-
-    const segundoPayload = prepararPayloadAssistente({
-      body: bodyPlanejado,
-      limite: LIMITE_SAIDA_REPETICAO,
-      repetir: true,
-      fase: "estrutura",
-      problemas: primeiraValidacao.problemas,
-      rascunhoAnterior: extrairTextoSaida(primeiraResposta),
-      contexto,
-    });
-    const segundaResposta = await criarOriginal.call(
-      this,
-      segundoPayload,
-      options
-    );
-    const segundaRespostaComUso = repararECompletar(
-      somarUsoRespostas(primeiraResposta, segundaResposta),
-      contexto
-    );
-    const segundaValidacao = validarQualidadePlano(
-      segundaRespostaComUso,
-      contexto
-    );
-
-    if (planoPodeSeguirParaCompilador(segundaValidacao)) {
-      return finalizarComTextos(segundaRespostaComUso);
-    }
-
-    console.warn("[assistente-fluxos] revisando plano ainda incompleto", {
-      response_id: segundaRespostaComUso.id || null,
-      problemas: segundaValidacao.problemas,
-      json_legivel: jsonLegivel(segundaRespostaComUso),
-    });
-
-    if (!deveExecutarRevisaoFinal(pipelineCompleto)) {
-      console.error("[assistente-fluxos] reparo interno encerrado apos duas tentativas", {
-        response_id: segundaRespostaComUso.id || null,
-        problemas: segundaValidacao.problemas,
-        json_legivel: jsonLegivel(segundaRespostaComUso),
+    if (!validacao.valido) {
+      console.info("[assistente-fluxos] encaminhando plano ao compilador deterministico", {
+        response_id: respostaPlano.id || null,
+        problemas: validacao.problemas,
+        reparaveis: problemasReparaveisPeloCompilador(validacao.problemas),
       });
-
-      // A rota original converte este JSON interrompido em uma resposta 422,
-      // sem materializar o fluxo e sem aguardar o timeout da infraestrutura.
-      substituirTextoSaida(segundaRespostaComUso, "{");
-      return segundaRespostaComUso;
     }
 
-    const terceiroPayload = prepararPayloadAssistente({
-      body: bodyPlanejado,
-      limite: LIMITE_SAIDA_REVISAO,
-      repetir: true,
-      fase: "revisao",
-      problemas: segundaValidacao.problemas,
-      rascunhoAnterior: escolherRascunhoMaisRecente(
-        segundaRespostaComUso,
-        primeiraResposta
-      ),
-      contexto,
-    });
-    const terceiraResposta = await criarOriginal.call(
-      this,
-      terceiroPayload,
-      options
-    );
-    const respostaComUso = repararECompletar(
-      somarUsoRespostas(segundaRespostaComUso, terceiraResposta),
-      contexto
-    );
-    const terceiraValidacao = validarQualidadePlano(respostaComUso, contexto);
-
-    if (!planoPodeSeguirParaCompilador(terceiraValidacao)) {
-      console.error("[assistente-fluxos] plano incompleto apos revisao final", {
-        response_id: respostaComUso.id || null,
-        problemas: terceiraValidacao.problemas,
-        json_legivel: jsonLegivel(respostaComUso),
-      });
-
-      // Nunca deixe uma revisao estruturalmente incompleta seguir
-      // para o compilador. Invalidar o JSON faz a rota original interromper
-      // antes da materializacao e antes do registro de consumo; executarAssistente
-      // converte a falha em 422.
-      substituirTextoSaida(respostaComUso, "{");
-    }
-
-    return planoPodeSeguirParaCompilador(terceiraValidacao)
-      ? finalizarComTextos(respostaComUso)
-      : respostaComUso;
+    // Nao existe nova chamada probabilistica para copy, reparo ou revisao.
+    // O plano semantico ja orientou a escrita final; estrutura, rotas e
+    // garantias de execucao pertencem ao compilador deterministico.
+    return respostaPlano;
   };
 }
 
@@ -350,7 +197,7 @@ export async function executarAssistente(request: Request) {
           ok: false,
           code: "RESPOSTA_IA_INCOMPLETA",
           error:
-            "A IA nao conseguiu concluir uma estrutura completa e valida apos as etapas de estrutura, correcao e revisao. Nenhum fluxo incompleto foi criado e nenhum token foi debitado.",
+            "A IA nao conseguiu concluir o plano conversacional. Nenhum fluxo incompleto foi criado e nenhum token foi debitado.",
         },
         { status: 422 }
       );

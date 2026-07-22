@@ -61,6 +61,15 @@ test("reconhece menu simples e prioriza naturalidade sobre resultado generico", 
   );
 });
 
+test("prioriza recorrencia mesmo quando a resposta menciona resultados", () => {
+  assert.equal(
+    intencaoFaq(
+      "A manutenção dos resultados ajuda a controlar quando o melasma volta."
+    ),
+    "recorrencia"
+  );
+});
+
 test("consolida telas fragmentadas e respostas de FAQ sem titulo", () => {
   const nos: AssistenteAutomacaoNo[] = [
     no("inicio", "inicio", "Início", ""),

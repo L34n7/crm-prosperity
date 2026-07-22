@@ -180,11 +180,11 @@ export function intencaoFaq(valor: unknown): IntencaoFaq | null {
   if (/\b(quantas sessoes|numero de sessoes|sessoes necessarias)\b/.test(alvo)) {
     return "sessoes";
   }
-  if (/\b(quando vejo|em quanto tempo|resultado|resultados|efeito aparece)\b/.test(alvo)) {
-    return "resultado";
-  }
   if (/\b(volta|retorna|reaparece|recorrencia|manutencao)\b/.test(alvo)) {
     return "recorrencia";
+  }
+  if (/\b(quando vejo|em quanto tempo|resultado|resultados|efeito aparece)\b/.test(alvo)) {
+    return "resultado";
   }
   return null;
 }

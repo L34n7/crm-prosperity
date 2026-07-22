@@ -115,10 +115,10 @@ test("referencias duplicadas seguem para consolidacao deterministica", () => {
 
 test("reparo interno nao inicia uma terceira chamada que pode exceder o timeout", () => {
   assert.equal(deveExecutarRevisaoFinal(false), false);
-  assert.equal(deveExecutarRevisaoFinal(true), true);
+  assert.equal(deveExecutarRevisaoFinal(true), false);
 });
 
-test("problemas de conteudo continuam exigindo correcao pela IA", () => {
+test("problemas de conteudo nao sao confundidos com reparos topologicos", () => {
   assert.equal(
     problemasReparaveisPeloCompilador([
       'O bloco "Menu Principal" nao esta conectado ao fluxo.',

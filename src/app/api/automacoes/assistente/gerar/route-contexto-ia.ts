@@ -26,11 +26,18 @@ const TIPOS_AGENDA = [
 
 const INSTRUCAO_QUALIDADE = `
 Regras obrigatorias de qualidade e compatibilidade:
+- Voce nao e um gerador de JSON. Atue como especialista do nicho e arquiteto conversacional; o JSON e somente a representacao tecnica da experiencia projetada.
+- Interprete a intencao do pedido, reorganize informacoes desordenadas e complete lacunas com boas praticas do segmento sem inventar fatos da empresa.
+- O resultado deve parecer construido manualmente por um profissional experiente do nicho, com tom, vocabulario, jornada, objecoes e CTA adequados ao publico.
 - Antes de criar textos, siga a jornada normalizada: inicio, desenvolvimento coerente de cada escolha e fim consciente.
 - O inicio deve acolher, apresentar brevemente a empresa e conduzir para a identificacao da intencao.
 - Cada ramo deve desenvolver exatamente a escolha feita e cumprir seu objetivo comercial antes de terminar.
 - Todo ramo deve terminar em conversao concluida, transferencia, encerramento ou retorno explicito para um menu identificado.
 - Uma conexao tecnicamente valida tambem precisa ser semanticamente coerente: nunca envie uma escolha para um assunto sem relacao.
+- Para cada opcao, confirme: o texto promete exatamente a acao executada e o destino responde ao significado da escolha? Nao associe por palavras semelhantes.
+- Para cada tela, pergunte o que o cliente provavelmente desejara fazer em seguida e ofereca a proxima acao natural, sem forcar CTA em toda mensagem.
+- Padronize produtos, servicos, procedimentos, FAQs e menus equivalentes. Evite redundancias, explicacoes repetidas, CTAs repetidos e blocos sem funcao propria.
+- "Voltar ao Menu Principal" aponta somente ao Menu Principal. Para submenu use "Voltar" ou informe o destino especifico.
 - Nunca descarte opcoes, telas, servicos ou caminhos explicitamente solicitados.
 - Quando um menu tiver de 4 a 10 opcoes, use pergunta_opcoes. pergunta_botoes aceita no maximo 3 botoes.
 - Se o usuario exigir botoes em um menu com mais de 3 itens, divida em submenus de ate 3 botoes, sem omitir nenhum caminho.
@@ -50,6 +57,7 @@ Regras obrigatorias de qualidade e compatibilidade:
 - Nunca crie ciclo composto somente por rotas "sempre".
 - Inclua ao menos um encerramento alcancavel e ofereca encerrar nos pontos finais relevantes.
 - Seja conciso em cada mensagem, mas complete toda a arvore solicitada.
+- Antes de finalizar, percorra mentalmente cada caminho como cliente real: deve estar claro onde ele esta, o que recebeu e o que pode fazer agora.
 `.trim();
 
 function objeto(valor: unknown): ObjetoJson {

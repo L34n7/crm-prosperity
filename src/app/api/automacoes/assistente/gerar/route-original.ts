@@ -40,8 +40,9 @@ const openai = new OpenAI({
 
 const supabaseAdmin = getSupabaseAdmin();
 
-const MODELOS_ASSISTENTE_FLUXOS =
-  process.env.OPENAI_ASSISTENTE_FLUXOS_MODEL || "gpt-5.4-mini";
+// Mantido fixo de proposito: planejamento e geracao usam o mesmo modelo,
+// independentemente de configuracoes antigas deixadas no ambiente.
+const MODELOS_ASSISTENTE_FLUXOS = "gpt-5.4-mini";
 const PREFIXO_FLUXO_IA = "✨ IA - ";
 
 const MODOS_PERMITIDOS = new Set<ModoAssistenteFluxos>([
@@ -1008,43 +1009,11 @@ async function repararPlanoAssistenteSeNecessario(params: {
     return { plano, compilacao, reparado: false };
   }
 
-  await verificarSaldoTokensIa(params.empresaId);
-
-  const reparo = await solicitarPlanoAssistente({
-    modo: "criar_fluxo",
-    contexto: {
-      contexto_original: params.contexto,
-      plano_invalido: plano,
-      erros_validacao: errosIniciais.map((erro) => ({
-        codigo: erro.codigo,
-        mensagem: erro.mensagem,
-      })),
-    },
-    instrucaoAdicional: `
-Voce esta reparando um plano que falhou na validacao tecnica.
-- Corrija somente o necessario para resolver todos os erros informados.
-- Preserve textos, intencao, opcoes e caminhos corretos do pedido original.
-- Garanta exatamente uma rota para cada opcao e conecte todas as etapas a partir do inicio.
-- Nunca deixe duas opcoes da mesma pergunta apontarem para o mesmo bloco; se necessario, duplique o destino e as etapas seguintes do ramo.
-- Para erros de captura, use variavel personalizada (por exemplo nome_cliente), tipo_captura valido e reutilize {{variavel}} em uma mensagem posterior.
-- Nao gere novas clarificacoes durante o reparo; retorne clarificacoes como array vazio.
-    `.trim(),
-  });
-
-  await registrarUsoTokensIa({
-    empresaId: params.empresaId,
-    usuarioId: params.usuarioId,
-    origem: "assistente_fluxos",
-    modelo: MODELOS_ASSISTENTE_FLUXOS,
-    uso: reparo.uso,
-    metadata: {
-      modo: "criar_fluxo",
-      etapa: params.etapaUso,
-      reparo_automatico: true,
-    },
-  });
-
-  plano = completarRotasDeOpcoesPlano(reparo.plano);
+  // O reparo tecnico nao volta para a IA. A compilacao segura ja normaliza
+  // opcoes, reconstrui rotas, cria destinos seguros e remove fragmentos
+  // inalcançaveis de forma deterministica. Uma nova geracao probabilistica
+  // aumentava a latencia e podia reintroduzir incoerencias ja corrigidas.
+  plano = completarRotasDeOpcoesPlano(plano);
   compilacao = compilar(plano);
   const errosRestantes = errosQueExigemReparo(compilacao.validacao.erros);
 
@@ -1054,7 +1023,7 @@ Voce esta reparando um plano que falhou na validacao tecnica.
       .map((erro) => erro.mensagem)
       .join(" ");
     throw new Error(
-      `A IA nao conseguiu corrigir completamente o rascunho. ${detalhes}`
+      `O compilador nao conseguiu garantir a qualidade do rascunho. ${detalhes}`
     );
   }
 

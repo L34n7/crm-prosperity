@@ -50,6 +50,18 @@ const requisitos: RequisitosNormalizadosFluxo = {
   objetivo_principal: "receber pedidos",
   conversao_esperada: "pedido confirmado",
   inicio: ["boas-vindas", "apresentacao", "menu de produtos"],
+  jornada: [
+    {
+      id: "menu_produtos",
+      titulo: "Produtos",
+      proposito: "ajudar o cliente a escolher",
+      ordem_conteudo: ["apresentar categorias", "pedir escolha"],
+      opcoes: [
+        { texto: "Pães", intencao: "ver pães", destino: "catalogo_paes" },
+      ],
+      proximo: null,
+    },
+  ],
   ramos: [
     {
       id: "pao",
@@ -62,6 +74,7 @@ const requisitos: RequisitosNormalizadosFluxo = {
   finais_permitidos: ["pedido confirmado", "encerramento"],
   adaptacoes_crm: [],
   ambiguidades_essenciais: [],
+  criterios_qualidade: ["cada produto leva ao catálogo correspondente"],
 };
 
 test("planejamento antecede somente a geracao principal de criar fluxo", () => {
@@ -89,6 +102,8 @@ test("planejamento antecede somente a geracao principal de criar fluxo", () => {
   const payload = criarPayloadPlanejamento({ body, contexto });
   assert.match(String(payload.input[0].content), /inicio, meio e fim/i);
   assert.match(String(payload.input[0].content), /cada escolha/i);
+  assert.match(String(payload.input[0].content), /nao e o objetivo/i);
+  assert.match(String(payload.input[0].content), /especialista do nicho/i);
 });
 
 test("requisitos normalizados entram no contexto sem substituir o pedido", () => {
@@ -102,7 +117,8 @@ test("requisitos normalizados entram no contexto sem substituir o pedido", () =>
     conteudo.requisitos_normalizados.objetivo_principal,
     "receber pedidos"
   );
-  assert.match(String(input[0].content), /contrato da jornada/i);
+  assert.match(String(input[0].content), /como contrato/i);
+  assert.match(String(input[0].content), /nao dependa de uma revisao posterior/i);
 });
 
 test("otimizacao altera apenas mensagens de refs existentes", () => {

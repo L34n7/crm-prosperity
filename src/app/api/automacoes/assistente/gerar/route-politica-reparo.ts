@@ -23,5 +23,6 @@ export function problemasReparaveisPeloCompilador(problemas: string[]) {
  * geracao principal, que tambem construiu o contrato completo da jornada.
  */
 export function deveExecutarRevisaoFinal(pipelineCompleto: boolean) {
-  return pipelineCompleto;
+  void pipelineCompleto;
+  return false;
 }

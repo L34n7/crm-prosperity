@@ -23,6 +23,18 @@ export type RequisitosNormalizadosFluxo = {
   objetivo_principal: string;
   conversao_esperada: string;
   inicio: string[];
+  jornada: Array<{
+    id: string;
+    titulo: string;
+    proposito: string;
+    ordem_conteudo: string[];
+    opcoes: Array<{
+      texto: string;
+      intencao: string;
+      destino: string;
+    }>;
+    proximo: string | null;
+  }>;
   ramos: Array<{
     id: string;
     entrada: string;
@@ -33,6 +45,7 @@ export type RequisitosNormalizadosFluxo = {
   finais_permitidos: string[];
   adaptacoes_crm: string[];
   ambiguidades_essenciais: string[];
+  criterios_qualidade: string[];
 };
 
 const requisitosSchema = {
@@ -64,6 +77,41 @@ const requisitosSchema = {
     objetivo_principal: { type: "string" },
     conversao_esperada: { type: "string" },
     inicio: { type: "array", items: { type: "string" } },
+    jornada: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          id: { type: "string" },
+          titulo: { type: "string" },
+          proposito: { type: "string" },
+          ordem_conteudo: { type: "array", items: { type: "string" } },
+          opcoes: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                texto: { type: "string" },
+                intencao: { type: "string" },
+                destino: { type: "string" },
+              },
+              required: ["texto", "intencao", "destino"],
+            },
+          },
+          proximo: { type: ["string", "null"] },
+        },
+        required: [
+          "id",
+          "titulo",
+          "proposito",
+          "ordem_conteudo",
+          "opcoes",
+          "proximo",
+        ],
+      },
+    },
     ramos: {
       type: "array",
       items: {
@@ -82,6 +130,7 @@ const requisitosSchema = {
     finais_permitidos: { type: "array", items: { type: "string" } },
     adaptacoes_crm: { type: "array", items: { type: "string" } },
     ambiguidades_essenciais: { type: "array", items: { type: "string" } },
+    criterios_qualidade: { type: "array", items: { type: "string" } },
   },
   required: [
     "negocio",
@@ -89,10 +138,12 @@ const requisitosSchema = {
     "objetivo_principal",
     "conversao_esperada",
     "inicio",
+    "jornada",
     "ramos",
     "finais_permitidos",
     "adaptacoes_crm",
     "ambiguidades_essenciais",
+    "criterios_qualidade",
   ],
 };
 
@@ -143,6 +194,9 @@ export function criarPayloadPlanejamento(params: {
   contexto: ContextoAssistenteFluxos;
 }) {
   const original = contextoUsuario(params.body);
+  const pedido = String(
+    params.contexto.instrucaoCompleta || original.instrucao || ""
+  );
 
   return {
     model: params.body.model,
@@ -150,28 +204,40 @@ export function criarPayloadPlanejamento(params: {
       {
         role: "system",
         content: `
-Voce e analista de processos, jornada do cliente e automacao de atendimento.
-Antes de desenhar blocos, converta o pedido livre em um contrato logico compativel com o CRM.
+Voce e o planejador principal de experiencias conversacionais do CRM Prosperity.
+Atue em conjunto como interpretador da intencao, especialista do nicho, arquiteto
+conversacional e especialista em conversao. O JSON nao e o objetivo: ele apenas
+registra a experiencia que voce projetou antes da implementacao tecnica.
 
 Regras obrigatorias:
 - Preserve todos os requisitos e fatos explicitos do pedido.
+- Interprete pedidos incompletos, desorganizados ou contraditorios e reorganize-os sem perder a intencao original.
+- Complete lacunas com boas praticas reais do segmento, usando vocabulario, jornada, objecoes e CTAs naturais daquele nicho.
 - Adapte incompatibilidades para os tipos e limites tecnicos recebidos, sem omitir caminhos.
 - Organize a jornada em inicio, meio e fim.
 - O inicio deve acolher, contextualizar a empresa e identificar a intencao.
 - Cada escolha deve abrir um ramo coerente que desenvolva o objetivo daquela escolha.
 - Cada ramo deve terminar em objetivo concluido, transferencia, encerramento ou retorno consciente a um menu identificado.
-- Nunca use "voltar" sem informar o destino exato.
+- Para cada tela, defina proposito, ordem do conteudo e o que o cliente provavelmente desejara fazer depois.
+- Para cada opcao, declare texto, intencao semantica e id conceitual do destino. Nunca escolha destinos por semelhanca de palavras.
+- Nunca use "voltar ao menu" para um submenu. Use "Voltar", "Voltar ao procedimento" ou "Voltar ao Menu Principal" conforme o destino real.
 - Diferencie agendamento automatico pelo CRM de coleta manual para atendimento humano.
+- Padronize jornadas equivalentes: produtos, servicos, procedimentos, FAQs e menus semelhantes devem seguir estruturas semelhantes.
+- Cada FAQ deve responder exclusivamente a pergunta escolhida. Dor, duracao, recorrencia, naturalidade, resultado e sessoes sao intencoes diferentes.
+- Mantenha a leitura confortavel no WhatsApp: titulos curtos, frases curtas, listas, quebras de linha e emojis discretos.
+- Reduza redundancias e CTAs repetidos. O CTA deve aparecer quando for o proximo passo natural, sem insistencia.
+- Respeite terminais: transferencia e encerramento nao possuem continuacao.
 - Registre ambiguidades somente quando mudarem materialmente a jornada; nao pergunte por dados que a interface confirma.
 - Identifique segmento, publico, oferta, termos naturais e restricoes de comunicacao.
-- Nao escreva as mensagens finais e nao crie blocos ou rotas nesta etapa.
+- Percorra mentalmente todos os caminhos e registre criterios de qualidade especificos para validar a experiencia final.
+- Nao crie tipos de bloco, ids de banco, conexoes ou propriedades internas nesta etapa.
 Retorne somente JSON conforme o schema.
         `.trim(),
       },
       {
         role: "user",
         content: JSON.stringify({
-          pedido: params.contexto.instrucaoCompleta || original.instrucao,
+          pedido,
           empresa: original.empresa || null,
           recursos: {
             ...objeto(original.recursos),
@@ -180,7 +246,10 @@ Retorne somente JSON conforme o schema.
         }),
       },
     ],
-    max_output_tokens: 5000,
+    max_output_tokens: Math.min(
+      10000,
+      Math.max(5000, Math.ceil(pedido.length * 1.5))
+    ),
     text: {
       format: {
         type: "json_schema",
@@ -214,9 +283,12 @@ export function injetarPlanejamentoNoPayload(
   if (sistema && typeof sistema.content === "string") {
     sistema.content = `${sistema.content}\n\n${[
       "Construa o fluxo a partir dos requisitos normalizados abaixo.",
-      "Trate-os como contrato da jornada: nao omita ramos e nao altere o objetivo de uma escolha.",
-      "Primeiro transforme inicio, ramos e finais em etapas e rotas; os textos devem servir a funcao definida para cada ponto.",
-      "Toda rota deve avancar de forma semanticamente coerente ate conversao, transferencia, retorno consciente ou encerramento.",
+      "Eles representam uma experiencia conversacional ja projetada, nao uma sugestao de JSON.",
+      "Trate jornada, intencao e destino conceitual como contrato: nao omita ramos e nao altere o significado de uma escolha.",
+      "Converta cada tela conceitual em etapas reais do CRM; os textos devem cumprir o proposito e respeitar a ordem de conteudo definida.",
+      "Associe opcoes por significado e funcao na jornada, nunca apenas por palavras semelhantes.",
+      "Antes de responder, percorra mentalmente todos os caminhos e confirme os criterios_qualidade.",
+      "A resposta ja deve conter copy final especializada, curta e natural; nao dependa de uma revisao posterior.",
     ].join("\n")}`;
   }
 

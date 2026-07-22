@@ -18,6 +18,7 @@ import {
   prepararPlanoBaseComAgenda,
 } from "./assistente-fluxos-agenda";
 import { repararGrafoAssistente } from "./assistente-fluxos-reparador-grafo";
+import { validarExperienciaConversacional } from "./assistente-fluxos-validador-ux";
 import {
   conteudoNo,
   ehAgendamento,
@@ -469,6 +470,10 @@ export function compilarPlanoAssistente(params: {
   );
   const errosCicloAutomatico = validarCiclosAutomaticos(grafoOrganizado);
   const errosSemanticos = validarCoerenciaSemantica(grafoOrganizado);
+  const validacaoUx =
+    params.modo === "criar_fluxo"
+      ? validarExperienciaConversacional(grafoOrganizado)
+      : { erros: [], avisos: [] };
   const avisosReparo = grafoOrganizado.avisos.map(
     (mensagem, indice): ValidacaoItemAssistente => ({
       codigo: `REPARO_GRAFO_${indice + 1}`,
@@ -481,7 +486,8 @@ export function compilarPlanoAssistente(params: {
         errosOriginaisBloqueantes.length +
         errosSempre.length +
         errosCicloAutomatico.length +
-        errosSemanticos.length ===
+        errosSemanticos.length +
+        validacaoUx.erros.length ===
       0,
     erros: [
       ...validacaoBase.erros,
@@ -489,11 +495,13 @@ export function compilarPlanoAssistente(params: {
       ...errosSempre,
       ...errosCicloAutomatico,
       ...errosSemanticos,
+      ...validacaoUx.erros,
     ],
     avisos: [
       ...validacaoBase.avisos,
       ...avisosAgenda(grafoOrganizado.nos),
       ...avisosReparo,
+      ...validacaoUx.avisos,
     ],
   };
 
