@@ -26,6 +26,7 @@ import {
   respostaCorrespondeFaq,
   servicoDoNo,
   servicoDoTexto,
+  type IntencaoFaq,
   type OpcaoNo,
   type Servico,
 } from "./assistente-fluxos-reparador-semantica";
@@ -127,6 +128,66 @@ export function criarNoFallback(opcao: OpcaoNo): AssistenteAutomacaoNo {
   };
 }
 
+const ROTULOS_SERVICO: Record<Servico, string> = {
+  harmonizacao: "Harmonização Facial",
+  melasma: "Tratamento de Melasma e Manchas",
+  botox: "Aplicação de Botox",
+};
+
+const RESPOSTAS_FAQ: Record<IntencaoFaq, string> = {
+  dor: "A sensibilidade varia de pessoa para pessoa. Durante a avaliação, a especialista explica as medidas de conforto indicadas para o procedimento.",
+  duracao: "A duração do procedimento e dos resultados varia conforme o protocolo e as características de cada paciente.",
+  resultado: "O prazo para perceber os resultados depende do procedimento e da resposta individual. A evolução esperada será explicada na avaliação.",
+  recorrencia: "A manutenção dos resultados depende do procedimento, dos cuidados e da resposta individual. A especialista indicará o acompanhamento adequado.",
+  naturalidade: "O planejamento é personalizado para preservar a naturalidade e respeitar as características de cada paciente.",
+  sessoes: "A quantidade de sessões é definida após a avaliação, de acordo com as necessidades e os objetivos de cada paciente.",
+};
+
+export function criarNoRespostaFaq(params: {
+  opcao: OpcaoNo;
+  servico: Servico;
+  intencao: IntencaoFaq;
+}): AssistenteAutomacaoNo {
+  const servico = ROTULOS_SERVICO[params.servico];
+  return {
+    id: randomUUID(),
+    tipo_no: "enviar_texto",
+    titulo: `Resposta FAQ ${servico} — ${params.opcao.titulo}`.slice(0, 120),
+    descricao: null,
+    posicao_x: 0,
+    posicao_y: 0,
+    configuracao_json: {
+      mensagem: `${RESPOSTAS_FAQ[params.intencao]}\n\n📅 Agende uma avaliação para receber uma orientação personalizada.`,
+    },
+    delay_segundos: 3,
+  };
+}
+
+export function criarNoRedirectLocalizacao(
+  origem: AssistenteAutomacaoNo
+): AssistenteAutomacaoNo {
+  const endereco = String(origem.configuracao_json?.mensagem || origem.titulo)
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 900);
+  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}`;
+
+  return {
+    id: randomUUID(),
+    tipo_no: "botao_redirect",
+    titulo: "Abrir localização",
+    descricao: null,
+    posicao_x: 0,
+    posicao_y: 0,
+    configuracao_json: {
+      mensagem: "Toque no botão abaixo para abrir a localização no mapa.",
+      botao_texto: "Abrir mapa",
+      url,
+    },
+    delay_segundos: 3,
+  };
+}
+
 export function escolherDestinoSemantico(params: {
   origem: AssistenteAutomacaoNo;
   opcao: OpcaoNo;
@@ -196,7 +257,13 @@ export function escolherDestinoSemantico(params: {
   if (ehAgendamento(opcao.titulo)) {
     diretos.push(
       encontrarPorTipo(nos, ["agenda_escolher_horario"]),
-      encontrarPorTipo(nos, ["agenda_criar_agendamento"])
+      encontrarPorTipo(nos, ["agenda_criar_agendamento"]),
+      nos.find(
+        (no) =>
+          no.id !== origem.id &&
+          no.tipo_no === "enviar_texto" &&
+          ehAgendamento(conteudoNo(no))
+      )
     );
   }
   if (ehAbrirLocalizacao(opcao.titulo)) {

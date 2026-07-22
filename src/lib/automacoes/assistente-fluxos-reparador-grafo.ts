@@ -41,6 +41,9 @@ import {
   criarConexaoOpcao,
   criarConexaoSempre,
   criarNoEncerrar,
+  criarNoFallback,
+  criarNoRedirectLocalizacao,
+  criarNoRespostaFaq,
   deduplicarSempre,
   escolherDestinoSemantico,
   idsAlcancaveis,
@@ -998,6 +1001,16 @@ export function repararGrafoAssistente(params: {
           ordemNos,
         });
 
+      // “Abrir localização” nunca pode cair em uma tela aproximada. Se a IA
+      // apontou para boas-vindas, menu ou qualquer outro tipo, descarte o
+      // palpite e materialize abaixo um redirect válido.
+      if (
+        ehAbrirLocalizacao(opcao.titulo) &&
+        destino?.tipo_no !== "botao_redirect"
+      ) {
+        destino = null;
+      }
+
       if (!destino && ehVoltarMenu(opcao.titulo)) {
         destino =
           (destinoAtual && destinoAtual.id !== pergunta.id
@@ -1009,10 +1022,31 @@ export function repararGrafoAssistente(params: {
       }
 
       if (!destino) {
-        avisos.push(
-          `A opção “${opcao.titulo}” não possui um destino semanticamente seguro. O plano deve ser gerado novamente.`
-        );
-        continue;
+        const intencao = intencaoFaq(`${opcao.id} ${opcao.titulo}`);
+
+        if (ehMenuFaq(pergunta, servicoOrigem) && servicoOrigem && intencao) {
+          destino = criarNoRespostaFaq({
+            opcao,
+            servico: servicoOrigem,
+            intencao,
+          });
+          avisos.push(
+            `A resposta ausente para “${opcao.titulo}” em “${pergunta.titulo}” foi criada com conteúdo seguro.`
+          );
+        } else if (ehAbrirLocalizacao(opcao.titulo)) {
+          destino = criarNoRedirectLocalizacao(pergunta);
+          avisos.push(
+            `A opção “${opcao.titulo}” recebeu um link de pesquisa no mapa criado a partir do endereço informado.`
+          );
+        } else {
+          destino = criarNoFallback(opcao);
+          avisos.push(
+            `A opção “${opcao.titulo}” recebeu uma tela de continuidade porque a IA não forneceu um destino utilizável.`
+          );
+        }
+
+        nos.push(destino);
+        nosPorId.set(destino.id, destino);
       }
 
       if (params.estrito !== false && usadas.has(destino.id)) {
@@ -1242,8 +1276,15 @@ export function repararGrafoAssistente(params: {
   );
 
   if (aindaInalcancaveis.length > 0) {
+    const remover = new Set(aindaInalcancaveis.map((no) => no.id));
+    nos = nos.filter((no) => !remover.has(no.id));
+    conexoes = conexoes.filter(
+      (conexao) =>
+        !remover.has(conexao.no_origem_id) &&
+        !remover.has(conexao.no_destino_id)
+    );
     avisos.push(
-      `${aindaInalcancaveis.length} bloco(s) permaneceram inalcançáveis porque não havia relação segura para inseri-los. A validação deve bloquear o plano e solicitar nova geração.`
+      `${aindaInalcancaveis.length} fragmento(s) inalcançável(is) sem relação segura foram removidos do fluxo final.`
     );
   }
 

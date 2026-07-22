@@ -143,7 +143,7 @@ test("compila plano de criacao em nos e conexoes validos", () => {
   assert.equal(transferencia?.configuracao_json.setor_id, "setor-comercial");
 });
 
-test("validador bloqueia quando opcao de pergunta nao possui rota", () => {
+test("compilador cria destino seguro quando uma opcao nao possui rota", () => {
   const plano = normalizarPlanoAssistente({
     nome_fluxo: "Fluxo incompleto",
     objetivo: "Testar avisos",
@@ -219,10 +219,16 @@ test("validador bloqueia quando opcao de pergunta nao possui rota", () => {
     plano,
   });
 
-  assert.equal(resultado.validacao.valido, false);
+  const pergunta = resultado.nos.find((no) => no.titulo === "Pergunta");
+  const saidas = resultado.conexoes.filter(
+    (conexao) => conexao.no_origem_id === pergunta?.id
+  );
+
+  assert.equal(resultado.validacao.valido, true);
+  assert.equal(saidas.length, 2);
   assert.ok(
-    resultado.validacao.erros.some(
-      (erro) => erro.codigo === "OPCAO_SEM_ROTA"
+    saidas.some(
+      (conexao) => conexao.condicao_json.valor === "b"
     )
   );
 });
@@ -346,7 +352,7 @@ test("validador bloqueia pergunta com rota duplicada e incondicional", () => {
   );
 });
 
-test("validador bloqueia bloco de mensagem desconectado", () => {
+test("compilador remove fragmento de mensagem desconectado", () => {
   const plano = normalizarPlanoAssistente({
     nome_fluxo: "Fluxo com saudacao orfa",
     objetivo: "Testar bloco desconectado",
@@ -410,14 +416,10 @@ test("validador bloqueia bloco de mensagem desconectado", () => {
     plano,
   });
 
-  assert.equal(resultado.validacao.valido, false);
-  assert.ok(
-    resultado.validacao.erros.some(
-      (erro) =>
-        erro.codigo === "BLOCO_SEM_ENTRADA" &&
-        erro.no_id ===
-          resultado.nos.find((no) => no.titulo === "Saudacao")?.id
-    )
+  assert.equal(resultado.validacao.valido, true);
+  assert.equal(
+    resultado.nos.some((no) => no.titulo === "Saudacao"),
+    false
   );
 });
 

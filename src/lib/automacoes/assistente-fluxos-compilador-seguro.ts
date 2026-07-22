@@ -20,8 +20,13 @@ import {
 import { repararGrafoAssistente } from "./assistente-fluxos-reparador-grafo";
 import {
   conteudoNo,
+  ehAgendamento,
+  ehAntesDepois,
+  ehEspecialista,
   ehFaq,
+  ehLocalizacao,
   ehMenuFaq,
+  ehValores,
   normalizar,
   normalizarId,
   opcoesNo,
@@ -226,6 +231,16 @@ function validarCoerenciaSemantica(params: {
         (item) =>
           item.id === normalizarId(saida.condicao_json?.valor || saida.rotulo)
       );
+      if (
+        opcao &&
+        (ehAntesDepois(opcao.titulo) ||
+          ehValores(opcao.titulo) ||
+          ehAgendamento(opcao.titulo) ||
+          ehLocalizacao(opcao.titulo) ||
+          ehEspecialista(opcao.titulo))
+      ) {
+        continue;
+      }
       if (
         !opcao ||
         destino.tipo_no !== "enviar_texto" ||
