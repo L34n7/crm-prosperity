@@ -178,6 +178,8 @@ export function prepararPayloadAssistente(params: {
   limite: number;
   repetir: boolean;
   problemas?: string[];
+  rascunhoAnterior?: string;
+  fase?: "estrutura" | "revisao";
   contexto: ContextoAssistenteFluxos;
 }) {
   const payload = structuredClone(params.body);
@@ -193,14 +195,23 @@ export function prepararPayloadAssistente(params: {
   anexarInstrucaoSistema(payload, INSTRUCAO_QUALIDADE);
 
   if (params.repetir) {
+    const fase = params.fase === "revisao" ? "revisao final" : "correcao estrutural";
+    const rascunho = String(params.rascunhoAnterior || "").trim();
+
     anexarInstrucaoSistema(
       payload,
       [
-        "A tentativa anterior foi rejeitada porque a estrutura ficou incompleta ou ambigua.",
-        "Gere novamente o plano completo e corrija obrigatoriamente estes pontos:",
+        `Esta e a fase de ${fase} do mesmo plano.`,
+        "Nao recomecar do zero e nao remover blocos, rotas ou conteudos que ja estejam corretos.",
+        "Use o rascunho integral abaixo como base e altere somente o necessario para corrigir os problemas listados.",
+        "Problemas que ainda precisam ser corrigidos:",
         ...(params.problemas || []).map((problema) => `- ${problema}`),
+        rascunho ? "Rascunho integral da fase anterior:" : "",
+        rascunho,
         "Retorne somente o JSON final conforme o schema.",
-      ].join("\n")
+      ]
+        .filter(Boolean)
+        .join("\n")
     );
   }
 

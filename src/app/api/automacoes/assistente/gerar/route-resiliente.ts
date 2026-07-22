@@ -44,6 +44,7 @@ const LIMITE_SAIDA_REPETICAO = Math.min(
   24000,
   Math.max(LIMITE_SAIDA_ASSISTENTE, 22000)
 );
+const LIMITE_SAIDA_REVISAO = LIMITE_SAIDA_REPETICAO;
 
 function objeto(valor: unknown): ObjetoJson {
   return valor && typeof valor === "object" && !Array.isArray(valor)
@@ -65,6 +66,15 @@ function repararECompletar(
   contexto: ContextoAssistenteFluxos
 ) {
   return completarRespostaPlano(repararRespostaPlano(resposta, contexto), contexto);
+}
+
+function escolherRascunhoMaisRecente(
+  atual: RespostaOpenAI,
+  anterior: RespostaOpenAI
+) {
+  return jsonLegivel(atual)
+    ? extrairTextoSaida(atual)
+    : extrairTextoSaida(anterior);
 }
 
 function instalarSdkResiliente() {
@@ -112,7 +122,9 @@ function instalarSdkResiliente() {
       body,
       limite: LIMITE_SAIDA_REPETICAO,
       repetir: true,
+      fase: "estrutura",
       problemas: primeiraValidacao.problemas,
+      rascunhoAnterior: extrairTextoSaida(primeiraResposta),
       contexto,
     });
     const segundaResposta = await criarOriginal.call(
@@ -120,22 +132,57 @@ function instalarSdkResiliente() {
       segundoPayload,
       options
     );
-    const respostaComUso = repararECompletar(
+    const segundaRespostaComUso = repararECompletar(
       somarUsoRespostas(primeiraResposta, segundaResposta),
       contexto
     );
-    const segundaValidacao = validarQualidadePlano(respostaComUso, contexto);
+    const segundaValidacao = validarQualidadePlano(
+      segundaRespostaComUso,
+      contexto
+    );
 
-    if (!segundaValidacao.valido) {
-      console.error("[assistente-fluxos] plano incompleto apos repeticao", {
+    if (segundaValidacao.valido) return segundaRespostaComUso;
+
+    console.warn("[assistente-fluxos] revisando plano ainda incompleto", {
+      response_id: segundaRespostaComUso.id || null,
+      problemas: segundaValidacao.problemas,
+      json_legivel: jsonLegivel(segundaRespostaComUso),
+    });
+
+    const terceiroPayload = prepararPayloadAssistente({
+      body,
+      limite: LIMITE_SAIDA_REVISAO,
+      repetir: true,
+      fase: "revisao",
+      problemas: segundaValidacao.problemas,
+      rascunhoAnterior: escolherRascunhoMaisRecente(
+        segundaRespostaComUso,
+        primeiraResposta
+      ),
+      contexto,
+    });
+    const terceiraResposta = await criarOriginal.call(
+      this,
+      terceiroPayload,
+      options
+    );
+    const respostaComUso = repararECompletar(
+      somarUsoRespostas(segundaRespostaComUso, terceiraResposta),
+      contexto
+    );
+    const terceiraValidacao = validarQualidadePlano(respostaComUso, contexto);
+
+    if (!terceiraValidacao.valido) {
+      console.error("[assistente-fluxos] plano incompleto apos revisao final", {
         response_id: respostaComUso.id || null,
-        problemas: segundaValidacao.problemas,
+        problemas: terceiraValidacao.problemas,
         json_legivel: jsonLegivel(respostaComUso),
       });
 
-      // Nunca deixe uma segunda resposta estruturalmente incompleta seguir
+      // Nunca deixe uma revisao estruturalmente incompleta seguir
       // para o compilador. Invalidar o JSON faz a rota original interromper
-      // antes da materializacao; executarAssistente converte a falha em 422.
+      // antes da materializacao e antes do registro de consumo; executarAssistente
+      // converte a falha em 422.
       substituirTextoSaida(respostaComUso, "{");
     }
 
@@ -188,7 +235,7 @@ export async function executarAssistente(request: Request) {
           ok: false,
           code: "RESPOSTA_IA_INCOMPLETA",
           error:
-            "A IA nao conseguiu concluir uma estrutura completa e valida mesmo apos uma nova tentativa. Nenhum fluxo incompleto foi criado.",
+            "A IA nao conseguiu concluir uma estrutura completa e valida apos as etapas de estrutura, correcao e revisao. Nenhum fluxo incompleto foi criado e nenhum token foi debitado.",
         },
         { status: 422 }
       );
