@@ -84,9 +84,10 @@ test("revisao final recebe o plano corrigido e somente as pendencias restantes",
   assert.match(sistema, /opcao "Agendar" precisa ter uma rota/);
 });
 
-test("rotas ausentes reparaveis nao provocam outra reescrita completa pela IA", () => {
+test("problemas topologicos reparaveis nao provocam outra reescrita completa pela IA", () => {
   assert.equal(
     problemasReparaveisPeloCompilador([
+      "A rota antes_e_depois_agendar -> agendar_avaliacao referencia um bloco inexistente.",
       'O bloco "Menu Principal" nao esta conectado ao fluxo.',
       'O bloco "Harmonizacao Facial" nao esta conectado ao fluxo.',
       'A opcao "Antes e Depois" do bloco "Menu Principal" precisa ter uma rota.',

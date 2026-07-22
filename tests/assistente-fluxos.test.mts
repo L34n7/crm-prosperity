@@ -1389,7 +1389,20 @@ test("compilador reconstrui jornada desconectada sem pular boas-vindas", () => {
         opcoes: [],
       },
     ],
-    rotas: [{ origem: "inicio", destino: "boas_vindas", condicao: "sempre" }],
+    rotas: [
+      { origem: "inicio", destino: "boas_vindas", condicao: "sempre" },
+      {
+        origem: "menu",
+        destino: "agendar_avaliacao_inexistente",
+        condicao: "resposta_contem",
+        valor: "agendar",
+      },
+      {
+        origem: "menu_inexistente",
+        destino: "transferir",
+        condicao: "sempre",
+      },
+    ],
     mensagens_revisadas: [],
     variaveis_sugeridas: [],
     avisos: [],
@@ -1408,6 +1421,14 @@ test("compilador reconstrui jornada desconectada sem pular boas-vindas", () => {
   const confirmado = porTitulo.get("Agendamento confirmado");
 
   assert.equal(resultado.validacao.valido, true, JSON.stringify(resultado.validacao.erros));
+  assert.equal(
+    resultado.conexoes.some(
+      (conexao) =>
+        conexao.no_origem_id === "menu_inexistente" ||
+        conexao.no_destino_id === "agendar_avaliacao_inexistente"
+    ),
+    false
+  );
   assert.equal(
     resultado.conexoes.find((conexao) => conexao.no_origem_id === inicio?.id)
       ?.no_destino_id,
