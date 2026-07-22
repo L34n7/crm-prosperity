@@ -892,6 +892,11 @@ Tipos de etapa permitidos:
 - avaliacao: coleta nota de atendimento.
 
 Regras:
+- Para criar_fluxo, use requisitos_normalizados como contrato obrigatorio da jornada quando esse campo existir no contexto.
+- Organize todo fluxo em inicio, meio e fim: acolhimento e identificacao da intencao; desenvolvimento coerente de cada escolha; conversao, transferencia, retorno consciente ou encerramento.
+- Cada ramo precisa cumprir o objetivo associado a sua opcao. Nao conecte uma escolha a um destino apenas porque a estrutura ficaria tecnicamente completa.
+- Escreva de acordo com o segmento, publico e modelo de negocio da empresa. Prefira comunicacao clara, objetiva, atenta e levemente espontanea, como uma pessoa real.
+- Otimize mensagens para conversao com CTAs contextuais, sem pressao artificial, promessas enganosas ou linguagem generica.
 - Use apenas setores recebidos no contexto. Preencha setor_id quando souber.
 - Para pergunta_botoes, gere no maximo 3 opcoes. Cada titulo deve ter no maximo 20 caracteres na contagem JavaScript; prefira texto sem emoji quando o emoji fizer ultrapassar esse limite.
 - Para capturar_resposta, use somente uma variavel personalizada em snake_case. Nunca use variaveis fixas do contato como nome, email, telefone, numero, origem ou status_lead. Para capturar o nome, use a chave nome_cliente e tipo_captura nome.

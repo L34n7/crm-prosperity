@@ -19,6 +19,15 @@ import {
   carregarContextoAssistente,
   persistirInstrucaoCompleta,
 } from "./route-sessao-contexto";
+import {
+  aplicarTextosOtimizados,
+  criarPayloadOtimizacaoTextos,
+  criarPayloadPlanejamento,
+  devePlanejarJornada,
+  extrairRequisitosNormalizados,
+  injetarPlanejamentoNoPayload,
+  type RequisitosNormalizadosFluxo,
+} from "./route-planejamento-ia";
 
 export const runtime = "nodejs";
 
@@ -96,19 +105,81 @@ function instalarSdkResiliente() {
     const contexto = contextoAssistenteFluxos.getStore();
     if (!contexto?.ativo) return criarOriginal.call(this, body, options);
 
+    const pipelineCompleto = devePlanejarJornada(body, contexto);
+    let requisitos: RequisitosNormalizadosFluxo | null = null;
+    let respostaPlanejamento: RespostaOpenAI | null = null;
+    let bodyPlanejado = body;
+
+    if (pipelineCompleto) {
+      respostaPlanejamento = await criarOriginal.call(
+        this,
+        criarPayloadPlanejamento({ body, contexto }),
+        options
+      );
+      requisitos = extrairRequisitosNormalizados(respostaPlanejamento);
+
+      if (requisitos) {
+        bodyPlanejado = injetarPlanejamentoNoPayload(body, requisitos);
+      } else {
+        console.warn("[assistente-fluxos] planejamento inicial ilegivel; seguindo com o pedido original", {
+          response_id: respostaPlanejamento.id || null,
+        });
+      }
+    }
+
     const primeiroPayload = prepararPayloadAssistente({
-      body,
+      body: bodyPlanejado,
       limite: LIMITE_SAIDA_ASSISTENTE,
       repetir: false,
       contexto,
     });
-    const primeiraResposta = repararECompletar(
+    let primeiraResposta = repararECompletar(
       await criarOriginal.call(this, primeiroPayload, options),
       contexto
     );
+    if (respostaPlanejamento) {
+      primeiraResposta = somarUsoRespostas(
+        respostaPlanejamento,
+        primeiraResposta
+      );
+    }
     const primeiraValidacao = validarQualidadePlano(primeiraResposta, contexto);
 
-    if (primeiraValidacao.valido) return primeiraResposta;
+    const finalizarComTextos = async (resposta: RespostaOpenAI) => {
+      if (!pipelineCompleto || !requisitos) return resposta;
+
+      try {
+        const planoAntesDaCopy = extrairTextoSaida(resposta);
+        const plano = objeto(JSON.parse(extrairTextoSaida(resposta)));
+        const respostaTextos = await criarOriginal.call(
+          this,
+          criarPayloadOtimizacaoTextos({
+            body,
+            plano,
+            requisitos,
+          }),
+          options
+        );
+        aplicarTextosOtimizados(resposta, respostaTextos);
+        somarUsoRespostas(respostaTextos, resposta);
+
+        const validacaoDepoisDaCopy = validarQualidadePlano(resposta, contexto);
+        if (!validacaoDepoisDaCopy.valido) {
+          substituirTextoSaida(resposta, planoAntesDaCopy);
+          console.warn("[assistente-fluxos] copy otimizada rejeitada; preservando o plano valido", {
+            problemas: validacaoDepoisDaCopy.problemas,
+          });
+        }
+      } catch (error) {
+        console.warn("[assistente-fluxos] nao foi possivel otimizar os textos; preservando o grafo valido", {
+          erro: String(error || ""),
+        });
+      }
+
+      return resposta;
+    };
+
+    if (primeiraValidacao.valido) return finalizarComTextos(primeiraResposta);
 
     console.warn("[assistente-fluxos] repetindo plano incompleto", {
       response_id: primeiraResposta.id || null,
@@ -119,7 +190,7 @@ function instalarSdkResiliente() {
     });
 
     const segundoPayload = prepararPayloadAssistente({
-      body,
+      body: bodyPlanejado,
       limite: LIMITE_SAIDA_REPETICAO,
       repetir: true,
       fase: "estrutura",
@@ -141,7 +212,9 @@ function instalarSdkResiliente() {
       contexto
     );
 
-    if (segundaValidacao.valido) return segundaRespostaComUso;
+    if (segundaValidacao.valido) {
+      return finalizarComTextos(segundaRespostaComUso);
+    }
 
     console.warn("[assistente-fluxos] revisando plano ainda incompleto", {
       response_id: segundaRespostaComUso.id || null,
@@ -150,7 +223,7 @@ function instalarSdkResiliente() {
     });
 
     const terceiroPayload = prepararPayloadAssistente({
-      body,
+      body: bodyPlanejado,
       limite: LIMITE_SAIDA_REVISAO,
       repetir: true,
       fase: "revisao",
@@ -186,7 +259,9 @@ function instalarSdkResiliente() {
       substituirTextoSaida(respostaComUso, "{");
     }
 
-    return respostaComUso;
+    return terceiraValidacao.valido
+      ? finalizarComTextos(respostaComUso)
+      : respostaComUso;
   };
 }
 

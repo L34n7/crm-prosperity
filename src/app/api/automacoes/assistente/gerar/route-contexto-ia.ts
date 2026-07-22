@@ -26,6 +26,11 @@ const TIPOS_AGENDA = [
 
 const INSTRUCAO_QUALIDADE = `
 Regras obrigatorias de qualidade e compatibilidade:
+- Antes de criar textos, siga a jornada normalizada: inicio, desenvolvimento coerente de cada escolha e fim consciente.
+- O inicio deve acolher, apresentar brevemente a empresa e conduzir para a identificacao da intencao.
+- Cada ramo deve desenvolver exatamente a escolha feita e cumprir seu objetivo comercial antes de terminar.
+- Todo ramo deve terminar em conversao concluida, transferencia, encerramento ou retorno explicito para um menu identificado.
+- Uma conexao tecnicamente valida tambem precisa ser semanticamente coerente: nunca envie uma escolha para um assunto sem relacao.
 - Nunca descarte opcoes, telas, servicos ou caminhos explicitamente solicitados.
 - Quando um menu tiver de 4 a 10 opcoes, use pergunta_opcoes. pergunta_botoes aceita no maximo 3 botoes.
 - Se o usuario exigir botoes em um menu com mais de 3 itens, divida em submenus de ate 3 botoes, sem omitir nenhum caminho.
