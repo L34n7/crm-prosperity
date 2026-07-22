@@ -122,7 +122,7 @@ function contem(valor: unknown, expressao: RegExp) {
 }
 
 export const ehVoltarMenu = (v: unknown) =>
-  contem(v, /\b(voltar|menu principal|inicio)\b/);
+  contem(v, /\b(voltar|menu( principal)?|inicio)\b/);
 export const ehAgendamento = (v: unknown) =>
   contem(v, /\b(agendar|agendamento|avaliacao|marcar horario)\b/);
 export const ehValores = (v: unknown) =>
@@ -130,7 +130,7 @@ export const ehValores = (v: unknown) =>
 export const ehAntesDepois = (v: unknown) =>
   contem(v, /\b(antes e depois|resultado real|resultados reais|galeria|foto|imagem)\b/);
 export const ehFaq = (v: unknown) =>
-  contem(v, /\b(duvida|faq|frequente|doi|quanto tempo|duracao|sessoes)\b/);
+  contem(v, /\b(duvidas?|faq|frequentes?|doi|quanto tempo|duracao|sessoes)\b/);
 export const ehAbrirLocalizacao = (v: unknown) =>
   contem(v, /\b(abrir localizacao|abrir mapa|google maps|ver mapa)\b/);
 export const ehLocalizacao = (v: unknown) =>
@@ -169,18 +169,20 @@ export function ehMenuPrincipal(no: AssistenteAutomacaoNo) {
 export function intencaoFaq(valor: unknown): IntencaoFaq | null {
   const alvo = normalizar(valor);
   if (/\b(doi|dor|dolor|sensibilidade|desconforto)\b/.test(alvo)) return "dor";
-  if (/\b(quanto tempo dura|duracao|durar|efeito dura)\b/.test(alvo)) {
+  if (/\b(quanto (tempo )?dura|duracao|durar|efeito dura)\b/.test(alvo)) {
     return "duracao";
+  }
+  if (/\b(natural|naturalidade|artificial|preservar.*identidade|leveza|elegante)\b/.test(alvo)) {
+    return "naturalidade";
+  }
+  if (/\b(quantas sessoes|numero de sessoes|sessoes necessarias)\b/.test(alvo)) {
+    return "sessoes";
   }
   if (/\b(quando vejo|em quanto tempo|resultado|resultados|efeito aparece)\b/.test(alvo)) {
     return "resultado";
   }
   if (/\b(volta|retorna|reaparece|recorrencia|manutencao)\b/.test(alvo)) {
     return "recorrencia";
-  }
-  if (/\b(natural|naturalidade|artificial)\b/.test(alvo)) return "naturalidade";
-  if (/\b(quantas sessoes|numero de sessoes|sessoes necessarias)\b/.test(alvo)) {
-    return "sessoes";
   }
   return null;
 }
@@ -259,6 +261,8 @@ export function ehConteudoProcedimento(
   }
   const conteudo = conteudoNo(no);
   const titulo = normalizar(no.titulo);
+
+  if (/\b(duvida|faq|pergunta|resposta)\b/.test(titulo)) return false;
 
   // Blocos de detalhamento gerados pelo normalizador mencionam duracao,
   // recuperacao e resultados. Esses termos tambem aparecem em FAQs, mas o

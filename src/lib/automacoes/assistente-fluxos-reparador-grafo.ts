@@ -18,6 +18,7 @@ import {
   ehLocalizacao,
   ehMenuAntesDepois,
   ehMenuFaq,
+  ehMenuPrincipal,
   intencaoFaq,
   ehVoltarMenu,
   ehMenuProcedimento,
@@ -96,14 +97,18 @@ function garantirInicio(
 }
 
 function ehConfirmacaoHorario(no: AssistenteAutomacaoNo) {
-  if (no.tipo_no !== "enviar_botoes") return false;
-  const botoes = Array.isArray(no.configuracao_json?.botoes)
-    ? no.configuracao_json.botoes
-    : [];
-  const ids = new Set(
-    botoes.map((botao) => normalizarId(botao?.id)).filter(Boolean)
+  if (!ehPergunta(no)) return false;
+  const opcoes = opcoesDaPergunta(no);
+  return (
+    opcoes.some((opcao) =>
+      /\b(confirmar|confirmo|sim)\b/.test(normalizar(`${opcao.id} ${opcao.titulo}`))
+    ) &&
+    opcoes.some((opcao) =>
+      /\b(escolher|outro|alterar|trocar)\b/.test(
+        normalizar(`${opcao.id} ${opcao.titulo}`)
+      )
+    )
   );
-  return ids.has("confirmar_horario") && ids.has("escolher_outro_horario");
 }
 
 function ehMensagemAgendamentoConfirmado(no: AssistenteAutomacaoNo) {
@@ -121,6 +126,213 @@ const TITULOS_INTENCAO_FAQ = {
   naturalidade: "O resultado fica natural?",
   sessoes: "Quantas sessões são necessárias?",
 } as const;
+
+const ROTULOS_SERVICO: Record<Servico, string> = {
+  harmonizacao: "Harmonização Facial",
+  melasma: "Tratamento de Melasma e Manchas",
+  botox: "Aplicação de Botox",
+};
+
+function tituloGenerico(no: AssistenteAutomacaoNo) {
+  return /^(mensagem|pergunta|pergunta com botoes|pergunta com opcoes)$/i.test(
+    normalizar(no.titulo)
+  );
+}
+
+/**
+ * A IA às vezes divide uma tela longa em blocos contíguos sem repetir o nome
+ * do procedimento. O compilador preserva a ordem original, então podemos
+ * herdar o contexto até surgir outro procedimento ou uma seção global.
+ */
+function enriquecerTitulosPorContexto(nos: AssistenteAutomacaoNo[]) {
+  let servicoAtual: Servico | null = null;
+  let contextoFaq = false;
+  let intencoesFaqPendentes: Array<NonNullable<ReturnType<typeof intencaoFaq>>> = [];
+
+  for (const no of nos) {
+    const titulo = normalizar(no.titulo);
+    const secaoGlobal =
+      no.tipo_no.startsWith("agenda_") ||
+      ehTerminal(no) ||
+      /\b(valores?|antes e depois|localizacao|especialista|encerrar)\b/.test(
+        titulo
+      );
+
+    if (secaoGlobal && !servicoDoNo(no)) {
+      servicoAtual = null;
+      contextoFaq = false;
+      intencoesFaqPendentes = [];
+      continue;
+    }
+
+    const servicoExplicito = servicoDoNo(no);
+    if (servicoExplicito) {
+      servicoAtual = servicoExplicito;
+      contextoFaq =
+        ehMenuFaq(no, servicoExplicito) ||
+        /\b(duvida|faq)\b/.test(titulo);
+      if (ehMenuFaq(no, servicoExplicito)) {
+        intencoesFaqPendentes = opcoesDaPergunta(no)
+          .map((opcao) => intencaoFaq(`${opcao.id} ${opcao.titulo}`))
+          .filter(Boolean) as Array<NonNullable<ReturnType<typeof intencaoFaq>>>;
+      }
+      if (tituloGenerico(no)) {
+        const rotulo = ROTULOS_SERVICO[servicoExplicito];
+        no.titulo = contextoFaq
+          ? ehPergunta(no)
+            ? `Dúvidas - ${rotulo}`
+            : `Dúvida - ${rotulo}`
+          : ehPergunta(no)
+            ? `${rotulo} · Próximos passos`
+            : `${rotulo} · Detalhes`;
+      }
+      continue;
+    }
+
+    if (!servicoAtual || !tituloGenerico(no)) continue;
+
+    const rotulo = ROTULOS_SERVICO[servicoAtual];
+    if (contextoFaq) {
+      if (ehPergunta(no)) {
+        no.titulo = `Dúvidas - ${rotulo} · Continuar`;
+      } else {
+        const intencao = intencoesFaqPendentes.shift();
+        no.titulo = intencao
+          ? `Dúvida - ${rotulo} · ${TITULOS_INTENCAO_FAQ[intencao]}`
+          : `Dúvida - ${rotulo}`;
+      }
+    } else {
+      if (ehPergunta(no)) {
+        no.titulo = `${rotulo} · Próximos passos`;
+      } else {
+        const conteudo = normalizar(no.configuracao_json?.mensagem);
+        no.titulo = /\b(cuidado|recuperacao|tempo medio)\b/.test(conteudo)
+          ? `${rotulo} — Cuidados e recuperação`
+          : /\b(resultados? esperados?|aparencia|expressao suavizada)\b/.test(
+                conteudo
+              )
+            ? `${rotulo} — Resultados esperados`
+            : `${rotulo} — Visão geral`;
+      }
+    }
+  }
+}
+
+function aplicarOpcoes(no: AssistenteAutomacaoNo, opcoes: ReturnType<typeof opcoesDaPergunta>) {
+  const unicas = new Map<string, (typeof opcoes)[number]>();
+  for (const opcao of opcoes) {
+    const chave = normalizarId(opcao.titulo) || opcao.id;
+    if (!unicas.has(chave)) unicas.set(chave, opcao);
+  }
+  const finais = [...unicas.values()];
+
+  if (finais.length > 3) {
+    no.tipo_no = "pergunta_opcoes";
+    no.configuracao_json = {
+      ...no.configuracao_json,
+      opcoes: finais.map((opcao) => ({ valor: opcao.id, titulo: opcao.titulo })),
+    };
+    delete no.configuracao_json.botoes;
+  } else {
+    no.tipo_no = "enviar_botoes";
+    no.configuracao_json = {
+      ...no.configuracao_json,
+      botoes: finais.map((opcao) => ({ id: opcao.id, titulo: opcao.titulo })),
+    };
+    delete no.configuracao_json.opcoes;
+  }
+}
+
+function aplicarOpcoesFaq(
+  no: AssistenteAutomacaoNo,
+  opcoes: ReturnType<typeof opcoesDaPergunta>
+) {
+  const unicas = new Map<string, (typeof opcoes)[number]>();
+  for (const opcao of opcoes) {
+    const intencao = intencaoFaq(`${opcao.id} ${opcao.titulo}`);
+    const chave = intencao || normalizarId(opcao.titulo) || opcao.id;
+    if (!unicas.has(chave)) unicas.set(chave, opcao);
+  }
+  aplicarOpcoes(no, [...unicas.values()]);
+}
+
+function consolidarMenusFragmentados(params: {
+  nos: AssistenteAutomacaoNo[];
+  conexoes: AssistenteAutomacaoConexao[];
+  avisos: string[];
+}) {
+  let nos = params.nos;
+  let conexoes = params.conexoes;
+  const remover = new Set<string>();
+  const principal = melhorMenuPrincipal(nos);
+
+  if (principal) {
+    for (const no of nos) {
+      if (
+        no.id !== principal.id &&
+        ehPergunta(no) &&
+        !ehMenuPrincipal(no) &&
+        /\b(mais opcoes|ultimas opcoes|continuacao do menu)\b/.test(conteudoNo(no))
+      ) {
+        remover.add(no.id);
+      }
+    }
+  }
+
+  for (const servico of ["harmonizacao", "melasma", "botox"] as Servico[]) {
+    const candidatos = nos.filter(
+      (no) =>
+        !remover.has(no.id) &&
+        ehMenuProcedimento(no, servico) &&
+        !/\b(duvidas?|faq)\b/.test(normalizar(no.titulo))
+    );
+    if (candidatos.length > 1) {
+      const canonico = candidatos[0];
+      aplicarOpcoes(
+        canonico,
+        candidatos.flatMap((candidato) => opcoesDaPergunta(candidato))
+      );
+      for (const duplicado of candidatos.slice(1)) remover.add(duplicado.id);
+      params.avisos.push(
+        `Os menus fragmentados de ${ROTULOS_SERVICO[servico]} foram consolidados em uma única pergunta.`
+      );
+    }
+
+    const menusFaqDoServico = nos.filter(
+      (no) =>
+        !remover.has(no.id) &&
+        ehMenuFaq(no, servico) &&
+        /\b(duvidas?|faq|frequentes?)\b/.test(normalizar(no.titulo))
+    );
+    if (menusFaqDoServico.length > 1) {
+      const faqCanonica = menusFaqDoServico[0];
+      aplicarOpcoesFaq(
+        faqCanonica,
+        menusFaqDoServico.flatMap((menu) => opcoesDaPergunta(menu))
+      );
+      for (const duplicada of menusFaqDoServico.slice(1)) {
+        remover.add(duplicada.id);
+      }
+      params.avisos.push(
+        `As perguntas duplicadas de FAQ de ${ROTULOS_SERVICO[servico]} foram consolidadas.`
+      );
+    }
+  }
+
+  if (remover.size > 0) {
+    nos = nos.filter((no) => !remover.has(no.id));
+    conexoes = conexoes.filter(
+      (conexao) =>
+        !remover.has(conexao.no_origem_id) &&
+        !remover.has(conexao.no_destino_id)
+    );
+    params.avisos.push(
+      `${remover.size} fragmento(s) redundante(s) de menu foram removidos.`
+    );
+  }
+
+  return { nos, conexoes };
+}
 
 function reconstruirMenusFaqMalformados(
   nos: AssistenteAutomacaoNo[],
@@ -350,6 +562,14 @@ export function repararGrafoAssistente(params: {
   nos = inicioReparado.nos;
   conexoes = inicioReparado.conexoes;
   const inicio = inicioReparado.inicio;
+  enriquecerTitulosPorContexto(nos);
+  const menusConsolidados = consolidarMenusFragmentados({
+    nos,
+    conexoes,
+    avisos,
+  });
+  nos = menusConsolidados.nos;
+  conexoes = menusConsolidados.conexoes;
   const mainMenu = melhorMenuPrincipal(nos);
   reconstruirMenusFaqMalformados(nos, avisos);
   const ordemNos = indicePorId(nos);
@@ -387,6 +607,44 @@ export function repararGrafoAssistente(params: {
   }
 
   const nosPorId = new Map(nos.map((no) => [no.id, no]));
+  const menuAntesDepois =
+    nos.find(ehMenuAntesDepois) ||
+    nos.find((no, indice) => {
+      if (!ehPergunta(no)) return false;
+      const servicos = new Set(
+        opcoesDaPergunta(no)
+          .map((opcao) => servicoDoTexto(opcao.titulo))
+          .filter(Boolean)
+      );
+      const anterior = nos[indice - 1];
+      return Boolean(
+        servicos.size >= 2 && anterior && ehAntesDepois(conteudoNo(anterior))
+      );
+    }) ||
+    null;
+  const indiceMenuAntesDepois = menuAntesDepois
+    ? (ordemNos.get(menuAntesDepois.id) ?? -1)
+    : -1;
+  if (menuAntesDepois && !ehMenuAntesDepois(menuAntesDepois)) {
+    menuAntesDepois.titulo = "Antes e Depois · Escolha o procedimento";
+  }
+  const menuDepoisDaGaleria =
+    indiceMenuAntesDepois >= 0
+      ? nos.find((no) => {
+          const indice = ordemNos.get(no.id) ?? Number.MAX_SAFE_INTEGER;
+          const opcoes = opcoesDaPergunta(no);
+          return (
+            ehPergunta(no) &&
+            indice > indiceMenuAntesDepois &&
+            indice <= indiceMenuAntesDepois + 2 &&
+            opcoes.length >= 2 &&
+            opcoes.every(
+              (opcao) =>
+                ehAgendamento(opcao.titulo) || ehVoltarMenu(opcao.titulo)
+            )
+          );
+        }) || null
+      : null;
 
   for (const pergunta of nos.filter(ehPergunta)) {
     const timeout = conexoes
@@ -558,9 +816,10 @@ export function repararGrafoAssistente(params: {
         mainMenu;
     } else if (servico && ehConteudoProcedimento(no, servico)) {
       destino = menusProcedimento.get(servico) || mainMenu;
+    } else if (no.tipo_no === "enviar_imagem") {
+      destino = menuDepoisDaGaleria || mainMenu;
     } else if (
       no.tipo_no === "botao_redirect" ||
-      no.tipo_no === "enviar_imagem" ||
       ehValores(conteudoNo(no)) ||
       ehLocalizacao(conteudoNo(no)) ||
       ehAntesDepois(conteudoNo(no))
@@ -601,6 +860,66 @@ export function repararGrafoAssistente(params: {
     );
     avisos.push(
       `${duplicados.size} bloco(s) duplicado(s) e desconectado(s) foram consolidado(s).`
+    );
+  }
+
+  alcancaveis = idsAlcancaveis(nos, conexoes);
+  const faqAlcancaveis = nos.filter(
+    (no) => alcancaveis.has(no.id) && ehMenuFaq(no, servicoDoNo(no))
+  );
+  const respostasFaqAlcancaveis = nos.filter(
+    (no) =>
+      alcancaveis.has(no.id) &&
+      no.tipo_no === "enviar_texto" &&
+      /\b(duvida|faq|resposta)\b/.test(normalizar(no.titulo))
+  );
+  const faqRedundantes = new Set<string>();
+
+  for (const no of nos.filter((item) => !alcancaveis.has(item.id))) {
+    const servico = servicoDoNo(no);
+    if (!servico) continue;
+
+    if (ehMenuFaq(no, servico)) {
+      const intencoes = new Set(
+        opcoesDaPergunta(no)
+          .map((opcao) => intencaoFaq(`${opcao.id} ${opcao.titulo}`))
+          .filter(Boolean)
+      );
+      const coberto = faqAlcancaveis.some((menu) => {
+        if (servicoDoNo(menu) !== servico) return false;
+        const existentes = new Set(
+          opcoesDaPergunta(menu)
+            .map((opcao) => intencaoFaq(`${opcao.id} ${opcao.titulo}`))
+            .filter(Boolean)
+        );
+        return [...intencoes].every((intencao) => existentes.has(intencao));
+      });
+      if (coberto) faqRedundantes.add(no.id);
+      continue;
+    }
+
+    const intencao = intencaoFaq(conteudoNo(no));
+    if (
+      intencao &&
+      respostasFaqAlcancaveis.some(
+        (resposta) =>
+          servicoDoNo(resposta) === servico &&
+          intencaoFaq(conteudoNo(resposta)) === intencao
+      )
+    ) {
+      faqRedundantes.add(no.id);
+    }
+  }
+
+  if (faqRedundantes.size > 0) {
+    nos = nos.filter((no) => !faqRedundantes.has(no.id));
+    conexoes = conexoes.filter(
+      (conexao) =>
+        !faqRedundantes.has(conexao.no_origem_id) &&
+        !faqRedundantes.has(conexao.no_destino_id)
+    );
+    avisos.push(
+      `${faqRedundantes.size} bloco(s) de FAQ redundante(s) foram consolidados.`
     );
   }
 

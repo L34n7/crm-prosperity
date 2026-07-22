@@ -153,6 +153,18 @@ export function escolherDestinoSemantico(params: {
   const origemFaq = ehMenuFaq(origem, servicoOrigem);
   const diretos: Array<AssistenteAutomacaoNo | null | undefined> = [];
 
+  if (ehMenuAntesDepois(origem) && servicoOpcao) {
+    const corresponde = (no: AssistenteAutomacaoNo) =>
+      no.id !== origem.id &&
+      (!servicoDoNo(no) || servicoDoNo(no) === servicoOpcao);
+    const imagem =
+      nos.find((no) => no.tipo_no === "enviar_imagem" && corresponde(no)) ||
+      nos.find((no) => ehAntesDepois(conteudoNo(no)) && corresponde(no));
+    // O chamador clonará a mídia quando outra opção da mesma galeria já a
+    // estiver usando, mantendo um ramo independente para cada procedimento.
+    if (imagem) return imagem;
+  }
+
   if (ehVoltarMenu(opcao.titulo)) {
     diretos.push(
       origemFaq && servicoOrigem
@@ -197,7 +209,23 @@ export function escolherDestinoSemantico(params: {
     );
   }
   if (ehEspecialista(opcao.titulo)) {
-    diretos.push(encontrarPorTipo(nos, ["transferir_setor"]));
+    diretos.push(
+      nos.find(
+        (no) =>
+          no.id !== origem.id &&
+          no.tipo_no === "enviar_texto" &&
+          ehEspecialista(no.titulo)
+      ),
+      nos.find(
+        (no) =>
+          no.id !== origem.id &&
+          no.tipo_no === "enviar_texto" &&
+          ehEspecialista(conteudoNo(no)) &&
+          !ehValores(conteudoNo(no)) &&
+          !ehAgendamento(conteudoNo(no))
+      ),
+      encontrarPorTipo(nos, ["transferir_setor"])
+    );
   }
   if (ehAntesDepois(opcao.titulo)) {
     diretos.push(
