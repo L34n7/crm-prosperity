@@ -1,6 +1,7 @@
 import Sidebar from "@/components/Sidebar";
 import AssinaturaStatusGuard from "@/components/AssinaturaStatusGuard";
 import WhatsAppMetaBlockNotice from "@/components/WhatsAppMetaBlockNotice";
+import WhatsAppConnectionTestNotice from "@/components/WhatsAppConnectionTestNotice";
 import WhatsAppDisparoProgressCard from "@/components/WhatsAppDisparoProgressCard";
 import { HeaderUserProvider } from "@/components/header-user-context";
 import { HeaderSummaryProvider } from "@/components/header-summary-context";
@@ -48,6 +49,7 @@ export default function CrmShell({
 
           <div className={styles.contentArea}>
             <WhatsAppMetaBlockNotice />
+            <WhatsAppConnectionTestNotice />
             {children}
           </div>
 
