@@ -5,8 +5,8 @@ export function isConversaHistoricoImportado(conversa: {
   historico_importado?: boolean | null;
   origem_atendimento?: string | null;
 }) {
-  return (
-    conversa.historico_importado === true ||
-    conversa.origem_atendimento === "historico_coexistence"
-  );
+  // O marcador historico_importado permanece verdadeiro depois que uma
+  // conversa histórica é reativada. O bloqueio de edição deve valer somente
+  // enquanto ela ainda estiver no estado exclusivo de histórico.
+  return conversa.origem_atendimento === "historico_coexistence";
 }
