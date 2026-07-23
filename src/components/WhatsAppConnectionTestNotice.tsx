@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import styles from "./WhatsAppConnectionTestNotice.module.css";
 
 type IntegracaoPendente = {
@@ -9,22 +11,24 @@ type IntegracaoPendente = {
   nome_conexao?: string | null;
   numero?: string | null;
   setup_completed_at?: string | null;
+  mensagem_integracao_validada?: string | null;
 };
 
 type StatusResponse = {
   ok: boolean;
+  empresa_id?: string | null;
   pendentes?: IntegracaoPendente[];
 };
 
-type ConversaRealtime = {
-  integracao_whatsapp_id?: string | null;
-  last_inbound_message_at?: string | null;
-};
+const SUPORTE_URL = montarWhatsappUrl(
+  "Olá! Concluí o onboarding do WhatsApp no CRM Prosperity, mas a mensagem de teste não chegou ao CRM. Preciso de ajuda para validar a integração."
+);
 
 export default function WhatsAppConnectionTestNotice() {
-  const supabase = useMemo(() => createClient(), []);
   const [pendentes, setPendentes] = useState<IntegracaoPendente[]>([]);
+  const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+  const supabase = useMemo(() => createClient(), []);
 
   const carregarStatus = useCallback(async () => {
     try {
@@ -38,6 +42,7 @@ export default function WhatsAppConnectionTestNotice() {
       const data = (await response.json()) as StatusResponse;
       if (!data.ok) return;
 
+      setEmpresaId(data.empresa_id || null);
       setPendentes(data.pendentes || []);
     } catch {
       // O alerta não deve bloquear o uso do CRM em caso de falha temporária.
@@ -49,40 +54,29 @@ export default function WhatsAppConnectionTestNotice() {
   }, [carregarStatus]);
 
   useEffect(() => {
-    const idsPendentes = new Set(pendentes.map((integracao) => integracao.id));
-
-    if (idsPendentes.size === 0) return;
+    if (!empresaId) return;
 
     const channel = supabase
-      .channel("whatsapp-connection-test")
+      .channel(`whatsapp-integration-validation:${empresaId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "conversas" },
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "integracoes_whatsapp",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
         (payload) => {
-          const conversa = payload.new as ConversaRealtime;
+          const registro = payload.new as {
+            id?: string;
+            mensagem_integracao_validada?: string | null;
+          };
 
-          if (
-            conversa.integracao_whatsapp_id &&
-            idsPendentes.has(conversa.integracao_whatsapp_id) &&
-            conversa.last_inbound_message_at
-          ) {
-            void carregarStatus();
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "conversas" },
-        (payload) => {
-          const conversa = payload.new as ConversaRealtime;
+          if (!registro.id || !registro.mensagem_integracao_validada) return;
 
-          if (
-            conversa.integracao_whatsapp_id &&
-            idsPendentes.has(conversa.integracao_whatsapp_id) &&
-            conversa.last_inbound_message_at
-          ) {
-            void carregarStatus();
-          }
+          setPendentes((atuais) =>
+            atuais.filter((integracao) => integracao.id !== registro.id)
+          );
         }
       )
       .subscribe();
@@ -90,7 +84,7 @@ export default function WhatsAppConnectionTestNotice() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [carregarStatus, pendentes, supabase]);
+  }, [empresaId, supabase]);
 
   useEffect(() => {
     function abrirModalAposOnboarding() {
@@ -125,10 +119,10 @@ export default function WhatsAppConnectionTestNotice() {
     <>
       <section className={styles.banner} role="status">
         <div>
-          <strong>Confirme o recebimento de mensagens no WhatsApp</strong>
+          <strong>Valide o recebimento de mensagens do WhatsApp</strong>
           <p>
             Envie uma mensagem de outro celular para {integracao.numero || "o número conectado"}.
-            O aviso desaparecerá automaticamente quando o CRM receber a primeira mensagem.
+            Se não chegar, refaça a conexão ou fale com o suporte.
           </p>
         </div>
         <button type="button" onClick={() => setModalAberto(true)}>
@@ -167,8 +161,24 @@ export default function WhatsAppConnectionTestNotice() {
               <li>Envie uma mensagem simples, como “Teste”.</li>
               <li>Aguarde a conversa aparecer no CRM.</li>
             </ol>
+            <div className={styles.troubleshooting}>
+              <strong>A mensagem não apareceu?</strong>
+              <p>
+                Confirme o número, desconecte a integração e faça o onboarding novamente.
+                Caso o problema persista, entre em contato com o suporte.
+              </p>
+            </div>
+            <div className={styles.actions}>
+              <Link href="/perfil-whatsapp">Refazer conexão</Link>
+              <a href={SUPORTE_URL} target="_blank" rel="noreferrer">
+                Falar com o suporte
+              </a>
+              <button type="button" onClick={() => setModalAberto(false)}>
+                Já enviei a mensagem
+              </button>
+            </div>
             <p className={styles.hint}>
-              Assim que a primeira mensagem chegar, este alerta será removido automaticamente.
+              O alerta permanecerá no topo e será removido automaticamente quando o CRM receber a primeira mensagem.
             </p>
           </section>
         </div>
