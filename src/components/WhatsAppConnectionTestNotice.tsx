@@ -20,6 +20,9 @@ type StatusResponse = {
   pendentes?: IntegracaoPendente[];
 };
 
+const whatsappComercial =
+  process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975233266";
+
 const SUPORTE_URL = montarWhatsappUrl(
   "Olá! Concluí o onboarding do WhatsApp no CRM Prosperity, mas a mensagem de teste não chegou ao CRM. Preciso de ajuda para validar a integração."
 );
@@ -169,13 +172,17 @@ export default function WhatsAppConnectionTestNotice() {
               </p>
             </div>
             <div className={styles.actions}>
-              <Link href="/perfil-whatsapp">Refazer conexão</Link>
-              <a href={SUPORTE_URL} target="_blank" rel="noreferrer">
-                Falar com o suporte
-              </a>
               <button type="button" onClick={() => setModalAberto(false)}>
-                Já enviei a mensagem
+                Já enviei mensagem
               </button>
+              <Link href="/perfil-whatsapp">Refazer conexão</Link>
+              <a
+                href={SUPORTE_URL.replace(/phone=[^&]+/, `phone=${whatsappComercial}`)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Falar com suporte
+              </a>
             </div>
             <p className={styles.hint}>
               O alerta permanecerá no topo e será removido automaticamente quando o CRM receber a primeira mensagem.
