@@ -1,0 +1,104 @@
+name: Ajustar card de conteúdo indisponível
+
+on:
+  push:
+    paths:
+      - ".github/workflows/one-off-align-unavailable-card.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Ajustar alinhamento do card
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/app/(private)/conversas/page.tsx")
+          content = path.read_text(encoding="utf-8")
+
+          old_metadata = '    tipo_original_whatsapp?: string | null;\n'
+          new_metadata = (
+              '    tipo_original_whatsapp?: string | null;\n'
+              '    coex_direction?: "inbound" | "outbound" | string | null;\n'
+          )
+          if old_metadata not in content:
+              raise SystemExit("Ponto de tipagem da direção não encontrado")
+          content = content.replace(old_metadata, new_metadata, 1)
+
+          marker = '''function getPreviewConversa(conversa: Conversa) {
+            const preview = (conversa.ultima_mensagem || "").trim();
+
+            if (preview) {
+              return preview;
+            }
+
+            return "Sem mensagens";
+          }
+          '''
+          helper = marker + '''
+          function mensagemEhSaida(msg: Mensagem) {
+            return (
+              msg.origem === "enviada" ||
+              msg.remetente_tipo === "usuario" ||
+              msg.metadata_json?.coex_direction === "outbound"
+            );
+          }
+          '''
+          if marker not in content:
+              raise SystemExit("Ponto de inserção do helper não encontrado")
+          content = content.replace(marker, helper, 1)
+
+          old_direction = '''                    const isOutgoing = msg.origem === "enviada";
+                    const isAutomatic = msg.origem === "automatica";
+          '''
+          new_direction = '''                    const isOutgoing = mensagemEhSaida(msg);
+                    const alinharCardADireita =
+                      isOutgoing || msg.tipo_mensagem === "unsupported";
+                    const isAutomatic = msg.origem === "automatica";
+          '''
+          if old_direction not in content:
+              raise SystemExit("Cálculo de direção da mensagem não encontrado")
+          content = content.replace(old_direction, new_direction, 1)
+
+          old_row = '''                          isOutgoing
+                            ? styles.messageRowOutgoing
+                            : styles.messageRowIncoming
+          '''
+          new_row = '''                          alinharCardADireita
+                            ? styles.messageRowOutgoing
+                            : styles.messageRowIncoming
+          '''
+          if old_row not in content:
+              raise SystemExit("Classe de alinhamento da linha não encontrada")
+          content = content.replace(old_row, new_row, 1)
+
+          path.write_text(content, encoding="utf-8")
+          PY
+
+          rm -f .github/workflows/one-off-align-unavailable-card.yml
+
+      - name: Validar alteração
+        shell: bash
+        run: |
+          grep -q 'const alinharCardADireita' 'src/app/(private)/conversas/page.tsx'
+          grep -q 'msg.tipo_mensagem === "unsupported"' 'src/app/(private)/conversas/page.tsx'
+
+      - name: Commitar na main
+        shell: bash
+        run: |
+          git config user.name "CRM Prosperity Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add 'src/app/(private)/conversas/page.tsx' .github/workflows/one-off-align-unavailable-card.yml
+          git commit -m "fix: alinhar conteúdo indisponível à direita [skip ci]"
+          git push origin HEAD:main
