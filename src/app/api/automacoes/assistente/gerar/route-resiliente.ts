@@ -6,6 +6,7 @@ import {
   prepararPayloadAssistente,
   type ContextoAssistenteFluxos,
 } from "./route-contexto-ia";
+import { registrarDiagnosticoIa } from "./route-diagnostico-ia";
 import { completarRespostaPlano } from "./route-completar-estrutura";
 import {
   repararRespostaPlano,
@@ -99,12 +100,29 @@ function instalarSdkResiliente() {
     const prazoFinal = Date.now() + LIMITE_PIPELINE_IA_MS;
 
     if (pipelineCompleto) {
+      const payloadPlanejamento = criarPayloadPlanejamento({ body, contexto });
+      await registrarDiagnosticoIa({
+        contexto,
+        fase: "planejamento_request",
+        payload: payloadPlanejamento,
+      });
+
       respostaPlanejamento = await criarOriginal.call(
         this,
-        criarPayloadPlanejamento({ body, contexto }),
+        payloadPlanejamento,
         opcoesComPrazo(options, prazoFinal)
       );
       requisitos = extrairRequisitosNormalizados(respostaPlanejamento);
+
+      await registrarDiagnosticoIa({
+        contexto,
+        fase: "planejamento_response",
+        resposta: respostaPlanejamento,
+        metadados: {
+          requisitos_extraidos: requisitos,
+          requisitos_validos: Boolean(requisitos),
+        },
+      });
 
       if (requisitos) {
         bodyPlanejado = injetarPlanejamentoNoPayload(body, requisitos);
@@ -121,14 +139,36 @@ function instalarSdkResiliente() {
       repetir: false,
       contexto,
     });
-    let respostaPlano = repararECompletar(
-      await criarOriginal.call(
-        this,
-        primeiroPayload,
-        opcoesComPrazo(options, prazoFinal)
-      ),
-      contexto
+
+    await registrarDiagnosticoIa({
+      contexto,
+      fase: "geracao_request",
+      payload: primeiroPayload,
+      metadados: {
+        planejamento_aplicado: Boolean(requisitos),
+      },
+    });
+
+    const respostaBruta = await criarOriginal.call(
+      this,
+      primeiroPayload,
+      opcoesComPrazo(options, prazoFinal)
     );
+
+    await registrarDiagnosticoIa({
+      contexto,
+      fase: "geracao_response_bruta",
+      resposta: respostaBruta,
+    });
+
+    let respostaPlano = repararECompletar(respostaBruta, contexto);
+
+    await registrarDiagnosticoIa({
+      contexto,
+      fase: "geracao_response_normalizada",
+      resposta: respostaPlano,
+    });
+
     if (respostaPlanejamento) {
       respostaPlano = somarUsoRespostas(
         respostaPlanejamento,
@@ -136,6 +176,17 @@ function instalarSdkResiliente() {
       );
     }
     const validacao = validarQualidadePlano(respostaPlano, contexto);
+
+    await registrarDiagnosticoIa({
+      contexto,
+      fase: "validacao_pre_compilador",
+      resposta: respostaPlano,
+      problemas: validacao.problemas,
+      metadados: {
+        valido: validacao.valido,
+        reparaveis: problemasReparaveisPeloCompilador(validacao.problemas),
+      },
+    });
 
     if (!validacao.valido) {
       console.info("[assistente-fluxos] encaminhando plano ao compilador deterministico", {
@@ -145,9 +196,6 @@ function instalarSdkResiliente() {
       });
     }
 
-    // Nao existe nova chamada probabilistica para copy, reparo ou revisao.
-    // O plano semantico ja orientou a escrita final; estrutura, rotas e
-    // garantias de execucao pertencem ao compilador deterministico.
     return respostaPlano;
   };
 }
@@ -189,6 +237,16 @@ export async function executarAssistente(request: Request) {
         .catch(() => null as ObjetoJson | null);
       const mensagem =
         corpo && typeof corpo.error === "string" ? corpo.error : "";
+
+      await registrarDiagnosticoIa({
+        contexto: contextoRequisicao.contexto,
+        fase: "erro_final_rota",
+        problemas: mensagem ? [mensagem] : [],
+        metadados: {
+          status_http: response.status,
+          corpo,
+        },
+      });
 
       if (!erroJsonIncompleto(mensagem)) return response;
 
