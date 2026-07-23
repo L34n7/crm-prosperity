@@ -75,9 +75,10 @@ function alcancaTipo(params: {
 }
 
 /**
- * Valida a promessa feita ao cliente, alem da integridade tecnica do grafo.
- * Somente incoerencias objetivas bloqueiam a criacao; preferencias de escrita
- * viram avisos para nao rejeitar jornadas legitimas de nichos diferentes.
+ * Mantem como erros apenas incoerencias tecnicas do grafo. Interpretacoes
+ * semanticas de linguagem natural sao registradas como avisos, pois a IA e a
+ * fonte de verdade para a intencao conversacional e o rascunho pode ser revisto
+ * antes da ativacao.
  */
 export function validarExperienciaConversacional(params: {
   nos: AssistenteAutomacaoNo[];
@@ -135,7 +136,7 @@ export function validarExperienciaConversacional(params: {
 
       if (/\b(voltar ao menu principal|menu principal)\b/.test(tituloNormalizado)) {
         if (!ehMenuPrincipal(destino)) {
-          erros.push({
+          avisos.push({
             codigo: "UX_RETORNO_MENU_INCORRETO",
             mensagem: `A opção “${titulo}” de “${no.titulo}” não retorna ao Menu Principal.`,
             no_id: no.id,
@@ -146,9 +147,9 @@ export function validarExperienciaConversacional(params: {
       }
 
       if (ehAbrirLocalizacao(titulo) && destino.tipo_no !== "botao_redirect") {
-        erros.push({
+        avisos.push({
           codigo: "UX_ACAO_LOCALIZACAO_INCORRETA",
-          mensagem: `A opção “${titulo}” deve abrir uma localização real.`,
+          mensagem: `A opção “${titulo}” deveria abrir uma localização real.`,
           no_id: no.id,
           conexao_id: saida.id,
         });
@@ -164,9 +165,9 @@ export function validarExperienciaConversacional(params: {
           conexoes: params.conexoes,
         })
       ) {
-        erros.push({
+        avisos.push({
           codigo: "UX_TRANSFERENCIA_AUSENTE",
-          mensagem: `A opção “${titulo}” promete atendimento humano, mas não termina em transferência.`,
+          mensagem: `A opção “${titulo}” parece oferecer atendimento humano, mas não termina em transferência.`,
           no_id: no.id,
           conexao_id: saida.id,
         });
@@ -182,9 +183,9 @@ export function validarExperienciaConversacional(params: {
           conexoes: params.conexoes,
         })
       ) {
-        erros.push({
+        avisos.push({
           codigo: "UX_ENCERRAMENTO_AUSENTE",
-          mensagem: `A opção “${titulo}” não conduz ao encerramento prometido.`,
+          mensagem: `A opção “${titulo}” parece indicar encerramento, mas não chega a um bloco de encerramento.`,
           no_id: no.id,
           conexao_id: saida.id,
         });
@@ -202,9 +203,9 @@ export function validarExperienciaConversacional(params: {
         marcarIntencaoFaqNoDestino(opcao, destino);
 
         if (!respostaFaqCompativel(opcao, destino)) {
-          erros.push({
+          avisos.push({
             codigo: "UX_FAQ_RESPOSTA_INCOMPATIVEL",
-            mensagem: `A resposta escolhida para “${titulo}” não responde exatamente essa dúvida.`,
+            mensagem: `Revise se a resposta escolhida para “${titulo}” atende exatamente essa dúvida.`,
             no_id: no.id,
             conexao_id: saida.id,
           });
