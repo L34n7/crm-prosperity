@@ -201,6 +201,7 @@ async function reabrirConversaEncerrada(
       status: "fila",
       canal: "whatsapp",
       origem_atendimento: "reativacao",
+      historico_importado: false,
       prioridade: "media",
       assunto: "Atendimento iniciado via WhatsApp",
       started_at: now,
