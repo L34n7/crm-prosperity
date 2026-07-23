@@ -9,6 +9,7 @@ import {
 import { registrarDiagnosticoIa } from "./route-diagnostico-ia";
 import { completarRespostaPlano } from "./route-completar-estrutura";
 import {
+  extrairTextoSaida,
   repararRespostaPlano,
   somarUsoRespostas,
   validarQualidadePlano,
@@ -45,6 +46,7 @@ const contextoAssistenteFluxos = new AsyncLocalStorage<ContextoAssistenteFluxos>
 let sdkResilienteInstalado = false;
 let moduloOriginalPromise: Promise<typeof import("./route-original")> | null = null;
 const LIMITE_PIPELINE_IA_MS = 210_000;
+const MAX_TENTATIVAS_CORRECAO_IA = 2;
 
 const LIMITE_SAIDA_ASSISTENTE = (() => {
   const configurado = Number(
@@ -169,13 +171,7 @@ function instalarSdkResiliente() {
       resposta: respostaPlano,
     });
 
-    if (respostaPlanejamento) {
-      respostaPlano = somarUsoRespostas(
-        respostaPlanejamento,
-        respostaPlano
-      );
-    }
-    const validacao = validarQualidadePlano(respostaPlano, contexto);
+    let validacao = validarQualidadePlano(respostaPlano, contexto);
 
     await registrarDiagnosticoIa({
       contexto,
@@ -188,11 +184,76 @@ function instalarSdkResiliente() {
       },
     });
 
+    for (
+      let tentativa = 1;
+      !validacao.valido && tentativa <= MAX_TENTATIVAS_CORRECAO_IA;
+      tentativa += 1
+    ) {
+      const rascunhoAnterior = extrairTextoSaida(respostaPlano);
+      const payloadCorrecao = prepararPayloadAssistente({
+        body: bodyPlanejado,
+        limite: LIMITE_SAIDA_ASSISTENTE,
+        repetir: true,
+        problemas: validacao.problemas,
+        rascunhoAnterior,
+        fase: "estrutura",
+        contexto,
+      });
+
+      await registrarDiagnosticoIa({
+        contexto,
+        fase: `correcao_ia_request_${tentativa}`,
+        payload: payloadCorrecao,
+        problemas: validacao.problemas,
+        metadados: {
+          tentativa,
+          estrategia: "ia_reconstroi_grafo_com_refs_congeladas",
+        },
+      });
+
+      const respostaCorrigidaBruta = await criarOriginal.call(
+        this,
+        payloadCorrecao,
+        opcoesComPrazo(options, prazoFinal)
+      );
+
+      await registrarDiagnosticoIa({
+        contexto,
+        fase: `correcao_ia_response_bruta_${tentativa}`,
+        resposta: respostaCorrigidaBruta,
+        metadados: { tentativa },
+      });
+
+      const respostaCorrigida = repararECompletar(
+        respostaCorrigidaBruta,
+        contexto
+      );
+      respostaPlano = somarUsoRespostas(respostaPlano, respostaCorrigida);
+      validacao = validarQualidadePlano(respostaPlano, contexto);
+
+      await registrarDiagnosticoIa({
+        contexto,
+        fase: `correcao_ia_validacao_${tentativa}`,
+        resposta: respostaPlano,
+        problemas: validacao.problemas,
+        metadados: {
+          tentativa,
+          valido: validacao.valido,
+        },
+      });
+    }
+
+    if (respostaPlanejamento) {
+      respostaPlano = somarUsoRespostas(
+        respostaPlanejamento,
+        respostaPlano
+      );
+    }
+
     if (!validacao.valido) {
-      console.info("[assistente-fluxos] encaminhando plano ao compilador deterministico", {
+      console.warn("[assistente-fluxos] IA nao eliminou todas as inconsistencias estruturais", {
         response_id: respostaPlano.id || null,
         problemas: validacao.problemas,
-        reparaveis: problemasReparaveisPeloCompilador(validacao.problemas),
       });
     }
 
@@ -214,7 +275,6 @@ function erroJsonIncompleto(error: unknown) {
 
 export async function executarAssistente(request: Request) {
   const body = objeto(await request.clone().json().catch(() => ({})));
-  const contextoRequisicao = await carregarContextoAssistente(body);
   const moduloOriginal = await carregarModuloOriginal();
 
   return contextoAssistenteFluxos.run(
