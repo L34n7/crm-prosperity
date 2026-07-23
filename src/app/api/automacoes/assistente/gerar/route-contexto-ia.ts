@@ -1,3 +1,5 @@
+import { INSTRUCAO_ARQUITETURA_FLUXOS } from "./route-arquitetura-fluxos-ia.ts";
+
 export type AgendaAssistente = {
   id: string;
   nome: string;
@@ -24,41 +26,7 @@ const TIPOS_AGENDA = [
   "agenda_cancelar_agendamento",
 ];
 
-const INSTRUCAO_QUALIDADE = `
-Regras obrigatorias de qualidade e compatibilidade:
-- Voce nao e um gerador de JSON. Atue como especialista do nicho e arquiteto conversacional; o JSON e somente a representacao tecnica da experiencia projetada.
-- Interprete a intencao do pedido, reorganize informacoes desordenadas e complete lacunas com boas praticas do segmento sem inventar fatos da empresa.
-- O resultado deve parecer construido manualmente por um profissional experiente do nicho, com tom, vocabulario, jornada, objecoes e CTA adequados ao publico.
-- Antes de criar textos, siga a jornada normalizada: inicio, desenvolvimento coerente de cada escolha e fim consciente.
-- O inicio deve acolher, apresentar brevemente a empresa e conduzir para a identificacao da intencao.
-- Cada ramo deve desenvolver exatamente a escolha feita e cumprir seu objetivo comercial antes de terminar.
-- Todo ramo deve terminar em conversao concluida, transferencia, encerramento ou retorno explicito para um menu identificado.
-- Uma conexao tecnicamente valida tambem precisa ser semanticamente coerente: nunca envie uma escolha para um assunto sem relacao.
-- Para cada opcao, confirme: o texto promete exatamente a acao executada e o destino responde ao significado da escolha? Nao associe por palavras semelhantes.
-- Para cada tela, pergunte o que o cliente provavelmente desejara fazer em seguida e ofereca a proxima acao natural, sem forcar CTA em toda mensagem.
-- Padronize produtos, servicos, procedimentos, FAQs e menus equivalentes. Evite redundancias, explicacoes repetidas, CTAs repetidos e blocos sem funcao propria.
-- "Voltar ao Menu Principal" aponta somente ao Menu Principal. Para submenu use "Voltar" ou informe o destino especifico.
-- Nunca descarte opcoes, telas, servicos ou caminhos explicitamente solicitados.
-- Quando um menu tiver de 4 a 10 opcoes, use pergunta_opcoes. pergunta_botoes aceita no maximo 3 botoes.
-- Se o usuario exigir botoes em um menu com mais de 3 itens, divida em submenus de ate 3 botoes, sem omitir nenhum caminho.
-- Cada opcao deve possuir exatamente uma rota propria.
-- O bloco inicio e apenas tecnico: nao coloque mensagem nem opcoes nele. Crie Boas-vindas e um Menu Principal reais depois do inicio.
-- Crie um unico Menu Principal canonico com titulo "Menu Principal" e mensagem de abertura. Todos os retornos "Menu Principal" devem apontar para ele.
-- Qualquer bloco que nao seja pergunta pode possuir no maximo uma conexao com condicao "sempre". Nunca crie duas rotas "sempre" saindo do mesmo bloco.
-- Quando o pedido mencionar fotos, imagens, galeria ou "antes e depois", crie bloco midia_imagem. A interface confirmara qual imagem da biblioteca sera utilizada.
-- Tipos de agenda disponiveis: agenda_escolher_horario, agenda_criar_agendamento, agenda_buscar_agendamento, agenda_remarcar_agendamento e agenda_cancelar_agendamento.
-- Quando o pedido mencionar agendar, marcar horario ou avaliacao, use agenda_escolher_horario, uma confirmacao Sim/Escolher outro e somente depois agenda_criar_agendamento. Use somente agenda_id recebido em recursos.agendas.
-- Depois de agenda_criar_agendamento, confirme com {{agenda_data}} e {{agenda_hora}}. Nunca solicite novamente nome, telefone, dia ou horario.
-- Se houver mais de uma agenda ativa e o pedido nao indicar qual usar, crie uma clarificacao curta para o usuario escolher a agenda.
-- Para localizacao, crie uma mensagem com o endereco e depois uma pergunta_botoes com ate 3 opcoes, incluindo abrir localizacao, agendar e voltar ao menu. Use redirect para abrir o mapa.
-- Solicitar especialista, atendente ou atendimento humano exige uma etapa transferir.
-- Quando o usuario pedir explicacao, beneficios, indicacoes, cuidados, duracao, recuperacao e resultados, distribua o conteudo em pelo menos 3 blocos de mensagem por procedimento antes do menu de navegacao.
-- Duvidas frequentes devem ser navegaveis por pergunta_opcoes ou pergunta_botoes, com respostas curtas em blocos separados. Cada pergunta deve apontar para a resposta de intencao exata; dor nao pode apontar para duracao. Cada resposta volta ao mesmo menu FAQ ou ao menu do procedimento e nunca envia automaticamente outra resposta.
-- Nunca crie ciclo composto somente por rotas "sempre".
-- Inclua ao menos um encerramento alcancavel e ofereca encerrar nos pontos finais relevantes.
-- Seja conciso em cada mensagem, mas complete toda a arvore solicitada.
-- Antes de finalizar, percorra mentalmente cada caminho como cliente real: deve estar claro onde ele esta, o que recebeu e o que pode fazer agora.
-`.trim();
+const INSTRUCAO_QUALIDADE = INSTRUCAO_ARQUITETURA_FLUXOS;
 
 function objeto(valor: unknown): ObjetoJson {
   return valor && typeof valor === "object" && !Array.isArray(valor)
