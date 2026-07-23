@@ -1,8 +1,8 @@
-const WHATSAPP_COMERCIAL_NUMERO_PADRAO = "5531975233266";
+const NEXT_PUBLIC_WHATSAPP_COMERCIAL = "5531975233266";
 
 export const WHATSAPP_COMERCIAL_NUMERO =
   process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL?.trim() ||
-  WHATSAPP_COMERCIAL_NUMERO_PADRAO;
+  NEXT_PUBLIC_WHATSAPP_COMERCIAL;
 
 export function montarWhatsappUrl(mensagem?: string) {
   const params = new URLSearchParams({
