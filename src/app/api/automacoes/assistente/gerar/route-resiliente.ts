@@ -45,8 +45,8 @@ type ObjetoJson = Record<string, unknown>;
 const contextoAssistenteFluxos = new AsyncLocalStorage<ContextoAssistenteFluxos>();
 let sdkResilienteInstalado = false;
 let moduloOriginalPromise: Promise<typeof import("./route-original")> | null = null;
-const LIMITE_PIPELINE_IA_MS = 210_000;
-const MAX_TENTATIVAS_CORRECAO_IA = 2;
+const LIMITE_PIPELINE_IA_MS = 270_000;
+const MAX_TENTATIVAS_CORRECAO_IA = 1;
 
 const LIMITE_SAIDA_ASSISTENTE = (() => {
   const configurado = Number(
@@ -172,6 +172,9 @@ function instalarSdkResiliente() {
     });
 
     let validacao = validarQualidadePlano(respostaPlano, contexto);
+    const reparaveisPeloCompilador = problemasReparaveisPeloCompilador(
+      validacao.problemas
+    );
 
     await registrarDiagnosticoIa({
       contexto,
@@ -180,13 +183,18 @@ function instalarSdkResiliente() {
       problemas: validacao.problemas,
       metadados: {
         valido: validacao.valido,
-        reparaveis: problemasReparaveisPeloCompilador(validacao.problemas),
+        reparaveis: reparaveisPeloCompilador,
+        estrategia: reparaveisPeloCompilador
+          ? "delegar_reparo_estrutural_ao_compilador"
+          : "corrigir_com_ia",
       },
     });
 
     for (
       let tentativa = 1;
-      !validacao.valido && tentativa <= MAX_TENTATIVAS_CORRECAO_IA;
+      !validacao.valido &&
+      !reparaveisPeloCompilador &&
+      tentativa <= MAX_TENTATIVAS_CORRECAO_IA;
       tentativa += 1
     ) {
       const rascunhoAnterior = extrairTextoSaida(respostaPlano);
@@ -250,7 +258,7 @@ function instalarSdkResiliente() {
       );
     }
 
-    if (!validacao.valido) {
+    if (!validacao.valido && !reparaveisPeloCompilador) {
       console.warn("[assistente-fluxos] IA nao eliminou todas as inconsistencias estruturais", {
         response_id: respostaPlano.id || null,
         problemas: validacao.problemas,
@@ -268,7 +276,7 @@ async function carregarModuloOriginal() {
 }
 
 function erroJsonIncompleto(error: unknown) {
-  return /unterminated string|unexpected end of json|json at position|json\.parse|valid json|expected property name/i.test(
+  return /unterminated string|unexpected end of json|json at position|json\.parse|valid json|expected property name|request was aborted|aborted/i.test(
     String(error || "")
   );
 }
@@ -316,7 +324,7 @@ export async function executarAssistente(request: Request) {
           ok: false,
           code: "RESPOSTA_IA_INCOMPLETA",
           error:
-            "A IA nao conseguiu concluir o plano conversacional. Nenhum fluxo incompleto foi criado e nenhum token foi debitado.",
+            "A IA nao conseguiu concluir o plano conversacional dentro do tempo disponivel. Nenhum fluxo incompleto foi criado.",
         },
         { status: 422 }
       );
