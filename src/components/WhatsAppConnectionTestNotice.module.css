@@ -47,7 +47,9 @@
 
 .modal {
   position: relative;
-  width: min(480px, 100%);
+  width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 18px;
   background: var(--background, #fff);
@@ -107,6 +109,38 @@
   font-size: 20px;
 }
 
+.troubleshooting {
+  margin-top: 18px;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  padding: 14px 16px;
+}
+
+.troubleshooting p {
+  margin: 5px 0 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.actions a,
+.actions button {
+  border: 1px solid rgba(14, 165, 233, 0.32);
+  border-radius: 9px;
+  background: rgba(14, 165, 233, 0.08);
+  color: inherit;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
 .hint {
   margin-bottom: 0;
   color: #64748b;
@@ -130,5 +164,15 @@
 
   .modal {
     padding: 24px 20px;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .actions a,
+  .actions button {
+    width: 100%;
+    text-align: center;
   }
 }
