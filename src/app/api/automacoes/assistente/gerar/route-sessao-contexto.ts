@@ -31,6 +31,7 @@ function objeto(valor: unknown): ObjetoJson {
 export async function carregarContextoAssistente(body: ObjetoJson) {
   const resultado = await getUsuarioContexto();
   const modo = texto(body.modo, 80) || "criar_fluxo";
+  const sessaoId = texto(body.sessao_id || body.sessaoId, 120) || null;
 
   if (!resultado.ok || !resultado.usuario.empresa_id) {
     return {
@@ -39,6 +40,9 @@ export async function carregarContextoAssistente(body: ObjetoJson) {
         modo,
         instrucaoCompleta: limparSeparadores(texto(body.instrucao)),
         agendas: [] as AgendaAssistente[],
+        empresaId: null,
+        usuarioId: null,
+        sessaoId,
       } satisfies ContextoAssistenteFluxos,
       empresaId: null as string | null,
       usuarioId: null as string | null,
@@ -47,7 +51,6 @@ export async function carregarContextoAssistente(body: ObjetoJson) {
 
   const empresaId = resultado.usuario.empresa_id;
   const usuarioId = resultado.usuario.id;
-  const sessaoId = texto(body.sessao_id || body.sessaoId, 120);
   let instrucaoCompleta = limparSeparadores(texto(body.instrucao));
 
   if (!instrucaoCompleta && sessaoId) {
@@ -91,6 +94,9 @@ export async function carregarContextoAssistente(body: ObjetoJson) {
         duracao_minutos: agenda.duracao_minutos ?? null,
         janela_dias: agenda.janela_dias ?? null,
       })),
+      empresaId,
+      usuarioId,
+      sessaoId,
     } satisfies ContextoAssistenteFluxos,
     empresaId,
     usuarioId,
