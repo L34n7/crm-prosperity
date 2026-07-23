@@ -8887,7 +8887,9 @@ const templateFooterTexto = useMemo(() => {
                                 }
 
                                 const msg = item.valor;
-                                const isOutgoing = msg.origem === "enviada";
+                                const isConteudoIndisponivel = msg.tipo_mensagem === "unsupported";
+                                const isOutgoing =
+                                  msg.origem === "enviada" && !isConteudoIndisponivel;
                                 const isAutomatic = msg.origem === "automatica";
                                 const isSystem = msg.remetente_tipo === "sistema";
                                 const isMensagemDoSistema = mensagemFoiEnviadaPeloSistema(msg);
