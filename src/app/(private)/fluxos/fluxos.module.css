@@ -418,16 +418,16 @@
   border-color: var(--crm-primary-border);
 }
 
-.badgeRed {
+.badgeYellow {
   background: var(--crm-warning-bg);
   color: var(--crm-warning-text);
   border-color: var(--crm-warning-border);
 }
 
-.badgeYellow {
-  background: #fffded;
-  color: #d59500;
-  border-color: #ffd324;
+.badgeRed {
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-strong);
+  border-color:var(--crm-danger-border);
 }
 
 .badgeGray {
