@@ -14,6 +14,9 @@ export type ContextoAssistenteFluxos = {
   modo: string;
   instrucaoCompleta: string;
   agendas: AgendaAssistente[];
+  empresaId?: string | null;
+  usuarioId?: string | null;
+  sessaoId?: string | null;
 };
 
 type ObjetoJson = Record<string, unknown>;
