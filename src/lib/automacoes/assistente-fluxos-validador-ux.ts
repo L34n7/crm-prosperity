@@ -4,6 +4,11 @@ import type {
   ValidacaoItemAssistente,
 } from "./assistente-fluxos-base";
 import {
+  ehOpcaoNavegacaoFaq,
+  marcarIntencaoFaqNoDestino,
+  respostaFaqCompativel,
+} from "./assistente-fluxos-faq-semantica";
+import {
   conteudoNo,
   ehAbrirLocalizacao,
   ehEncerrar,
@@ -15,7 +20,6 @@ import {
   normalizar,
   normalizarId,
   opcoesNo,
-  respostaCorrespondeFaq,
 } from "./assistente-fluxos-reparador-semantica";
 
 const TIPOS_TERMINAIS = new Set(["encerrar", "transferir_setor"]);
@@ -187,17 +191,24 @@ export function validarExperienciaConversacional(params: {
         continue;
       }
 
-      if (
-        intencaoFaq(`${opcao.id} ${titulo}`) &&
-        ehFaq(`${no.titulo} ${conteudoNo(no)}`) &&
-        !respostaCorrespondeFaq(opcao, destino)
-      ) {
-        erros.push({
-          codigo: "UX_FAQ_RESPOSTA_INCOMPATIVEL",
-          mensagem: `A resposta escolhida para “${titulo}” não responde exatamente essa dúvida.`,
-          no_id: no.id,
-          conexao_id: saida.id,
-        });
+      const origemEhFaq = ehFaq(`${no.titulo} ${conteudoNo(no)}`);
+      const intencaoPergunta = intencaoFaq(`${opcao.id} ${titulo}`);
+
+      if (origemEhFaq && ehOpcaoNavegacaoFaq(opcao)) {
+        continue;
+      }
+
+      if (origemEhFaq && intencaoPergunta) {
+        marcarIntencaoFaqNoDestino(opcao, destino);
+
+        if (!respostaFaqCompativel(opcao, destino)) {
+          erros.push({
+            codigo: "UX_FAQ_RESPOSTA_INCOMPATIVEL",
+            mensagem: `A resposta escolhida para “${titulo}” não responde exatamente essa dúvida.`,
+            no_id: no.id,
+            conexao_id: saida.id,
+          });
+        }
       }
     }
   }
