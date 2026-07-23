@@ -275,6 +275,7 @@ function erroJsonIncompleto(error: unknown) {
 
 export async function executarAssistente(request: Request) {
   const body = objeto(await request.clone().json().catch(() => ({})));
+  const contextoRequisicao = await carregarContextoAssistente(body);
   const moduloOriginal = await carregarModuloOriginal();
 
   return contextoAssistenteFluxos.run(
