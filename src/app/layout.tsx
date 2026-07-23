@@ -14,7 +14,7 @@ const siteUrl = (() => {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
 
-  return "https://crmprosperity.com.br";
+  return "https://crmprosperity.com";
 })();
 
 const title = "CRM Prosperity | CRM com IA para WhatsApp";
@@ -49,21 +49,20 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon.ico?v=5", type: "image/x-icon" },
-      { url: "/favicon-16x16.png?v=5", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png?v=5", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-48x48.png?v=5", sizes: "48x48", type: "image/png" },
+      { url: "/favicon.ico", type: "image/x-icon" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
     ],
-    shortcut: [{ url: "/favicon.ico?v=5", type: "image/x-icon" }],
+    shortcut: [{ url: "/favicon.ico", type: "image/x-icon" }],
     apple: [
       {
-        url: "/apple-touch-icon.png?v=5",
+        url: "/apple-touch-icon.png",
         sizes: "180x180",
         type: "image/png",
       },
     ],
   },
-  manifest: "/manifest.webmanifest",
+  manifest: "/site.webmanifest",
   openGraph: {
     type: "website",
     locale: "pt_BR",
@@ -149,25 +148,26 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.ico?v=5" sizes="any" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
         <link
           rel="icon"
-          href="/favicon-32x32.png?v=5"
+          href="/favicon-32x32.png"
           type="image/png"
           sizes="32x32"
         />
         <link
           rel="icon"
-          href="/favicon-16x16.png?v=5"
+          href="/favicon-16x16.png"
           type="image/png"
           sizes="16x16"
         />
-        <link rel="shortcut icon" href="/favicon.ico?v=5" />
+        <link rel="shortcut icon" href="/favicon.ico" />
         <link
           rel="apple-touch-icon"
-          href="/apple-touch-icon.png?v=5"
+          href="/apple-touch-icon.png"
           sizes="180x180"
         />
+        <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body className="antialiased">
         <Script id="crm-theme-bootstrap" strategy="beforeInteractive">
