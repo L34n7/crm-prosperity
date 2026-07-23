@@ -40,6 +40,15 @@ type FindOrCreateConversationParams = {
   integracaoWhatsappId: string;
 };
 
+type TipoProtocolo = "abertura" | "reabertura";
+
+const STATUS_ENCERRADOS = new Set([
+  "encerrada",
+  "encerrado_manual",
+  "encerrado_24h",
+  "encerrado_aut",
+]);
+
 function formatarDataProtocolo(data: Date) {
   const ano = data.getFullYear();
   const mes = String(data.getMonth() + 1).padStart(2, "0");
@@ -55,7 +64,58 @@ async function gerarProtocolo(empresaId: string) {
   return `ATD-${dataBase}-${randomUUID()}`;
 }
 
-async function garantirProtocoloAtivo(conversa: WhatsAppConversation) {
+async function buscarConversaOperacional(params: FindOrCreateConversationParams) {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data, error } = await supabaseAdmin
+    .from("conversas")
+    .select("*")
+    .eq("empresa_id", params.empresaId)
+    .eq("contato_id", params.contatoId)
+    .eq("integracao_whatsapp_id", params.integracaoWhatsappId)
+    .eq("canal", "whatsapp")
+    .or(
+      "origem_atendimento.is.null,origem_atendimento.neq.historico_coexistence"
+    )
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Erro ao buscar conversa existente: ${error.message}`);
+  }
+
+  return (data as WhatsAppConversation | null) || null;
+}
+
+async function buscarConversaHistorica(params: FindOrCreateConversationParams) {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data, error } = await supabaseAdmin
+    .from("conversas")
+    .select("*")
+    .eq("empresa_id", params.empresaId)
+    .eq("contato_id", params.contatoId)
+    .eq("integracao_whatsapp_id", params.integracaoWhatsappId)
+    .eq("canal", "whatsapp")
+    .eq("origem_atendimento", "historico_coexistence")
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Erro ao buscar conversa histórica existente: ${error.message}`
+    );
+  }
+
+  return (data as WhatsAppConversation | null) || null;
+}
+
+async function garantirProtocoloAtivo(
+  conversa: WhatsAppConversation,
+  tipo: TipoProtocolo = "abertura",
+  startedAt?: string
+) {
   const supabaseAdmin = getSupabaseAdmin();
 
   async function buscarProtocoloAtivo() {
@@ -84,7 +144,7 @@ async function garantirProtocoloAtivo(conversa: WhatsAppConversation) {
     return protocoloAtivo;
   }
 
-  const now = new Date().toISOString();
+  const now = startedAt || new Date().toISOString();
   const protocoloGerado = await gerarProtocolo(conversa.empresa_id);
 
   const { data, error } = await supabaseAdmin
@@ -93,7 +153,7 @@ async function garantirProtocoloAtivo(conversa: WhatsAppConversation) {
       empresa_id: conversa.empresa_id,
       conversa_id: conversa.id,
       protocolo: protocoloGerado,
-      tipo: "abertura",
+      tipo,
       ativo: true,
       started_at: now,
       created_at: now,
@@ -117,12 +177,13 @@ async function garantirProtocoloAtivo(conversa: WhatsAppConversation) {
   }
 
   if (!data) {
-    throw new Error("Erro ao garantir protocolo ativo da conversa: sem retorno do banco");
+    throw new Error(
+      "Erro ao garantir protocolo ativo da conversa: sem retorno do banco"
+    );
   }
 
   return data;
 }
-
 
 async function reabrirConversaEncerrada(
   conversa: WhatsAppConversation,
@@ -131,15 +192,13 @@ async function reabrirConversaEncerrada(
   const supabaseAdmin = getSupabaseAdmin();
   const now = new Date().toISOString();
 
-  const statusInicial = "fila";
-
   const { data: conversaReaberta, error: updateError } = await supabaseAdmin
     .from("conversas")
     .update({
       integracao_whatsapp_id: integracaoWhatsappId,
       setor_id: null,
       responsavel_id: null,
-      status: statusInicial,
+      status: "fila",
       canal: "whatsapp",
       origem_atendimento: "reativacao",
       prioridade: "media",
@@ -155,12 +214,27 @@ async function reabrirConversaEncerrada(
     .single();
 
   if (updateError || !conversaReaberta) {
+    if (updateError?.code === "23505") {
+      const conversaCriadaPorOutroProcesso = await buscarConversaOperacional({
+        empresaId: conversa.empresa_id,
+        contatoId: conversa.contato_id,
+        integracaoWhatsappId,
+      });
+
+      if (conversaCriadaPorOutroProcesso) {
+        await garantirProtocoloAtivo(conversaCriadaPorOutroProcesso);
+        return conversaCriadaPorOutroProcesso;
+      }
+    }
+
     throw new Error(
       `Erro ao reabrir conversa encerrada: ${
         updateError?.message ?? "sem retorno do banco"
       }`
     );
   }
+
+  const conversaAtualizada = conversaReaberta as WhatsAppConversation;
 
   const { error: fecharProtocolosError } = await supabaseAdmin
     .from("conversa_protocolos")
@@ -177,28 +251,9 @@ async function reabrirConversaEncerrada(
     );
   }
 
-  const protocoloGerado = await gerarProtocolo(conversa.empresa_id);
+  await garantirProtocoloAtivo(conversaAtualizada, "reabertura", now);
 
-  const { error: insertProtocoloError } = await supabaseAdmin
-    .from("conversa_protocolos")
-    .insert({
-      empresa_id: conversa.empresa_id,
-      conversa_id: conversa.id,
-      protocolo: protocoloGerado,
-      tipo: "reabertura",
-      ativo: true,
-      started_at: now,
-      created_at: now,
-      updated_at: now,
-    });
-
-  if (insertProtocoloError) {
-    throw new Error(
-      `Erro ao criar protocolo de reabertura: ${insertProtocoloError.message}`
-    );
-  }
-
-  return conversaReaberta as WhatsAppConversation;
+  return conversaAtualizada;
 }
 
 export async function findOrCreateWhatsAppConversation({
@@ -206,8 +261,6 @@ export async function findOrCreateWhatsAppConversation({
   contatoId,
   integracaoWhatsappId,
 }: FindOrCreateConversationParams): Promise<WhatsAppConversation> {
-  const supabaseAdmin = getSupabaseAdmin();
-
   if (!empresaId) {
     throw new Error("empresaId é obrigatório para localizar/criar conversa");
   }
@@ -222,51 +275,35 @@ export async function findOrCreateWhatsAppConversation({
     );
   }
 
-  const { data: existingConversation, error: findError } = await supabaseAdmin
-    .from("conversas")
-    .select("*")
-    .eq("empresa_id", empresaId)
-    .eq("contato_id", contatoId)
-    .eq("integracao_whatsapp_id", integracaoWhatsappId)
-    .eq("canal", "whatsapp")
-    .neq("origem_atendimento", "historico_coexistence")
-    .neq("historico_importado", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (findError) {
-    throw new Error(
-      `Erro ao buscar conversa existente: ${findError.message}`
-    );
-  }
+  const params = { empresaId, contatoId, integracaoWhatsappId };
+  const existingConversation = await buscarConversaOperacional(params);
 
   if (
     existingConversation &&
     !isConversaHistoricoImportado(existingConversation)
   ) {
-    const conversaExistente = existingConversation as WhatsAppConversation;
-
-    const statusEncerrados = [
-      "encerrada",
-      "encerrado_manual",
-      "encerrado_24h",
-      "encerrado_aut",
-    ];
-
-    if (statusEncerrados.includes(conversaExistente.status || "")) {
+    if (STATUS_ENCERRADOS.has(existingConversation.status || "")) {
       return await reabrirConversaEncerrada(
-        conversaExistente,
+        existingConversation,
         integracaoWhatsappId
       );
     }
 
-    await garantirProtocoloAtivo(conversaExistente);
-    return conversaExistente;
+    await garantirProtocoloAtivo(existingConversation);
+    return existingConversation;
   }
 
+  const historicalConversation = await buscarConversaHistorica(params);
+
+  if (historicalConversation) {
+    return await reabrirConversaEncerrada(
+      historicalConversation,
+      integracaoWhatsappId
+    );
+  }
+
+  const supabaseAdmin = getSupabaseAdmin();
   const now = new Date().toISOString();
-  const statusInicial = "fila";
 
   const { data: newConversation, error: insertError } = await supabaseAdmin
     .from("conversas")
@@ -276,7 +313,7 @@ export async function findOrCreateWhatsAppConversation({
       setor_id: null,
       responsavel_id: null,
       integracao_whatsapp_id: integracaoWhatsappId,
-      status: statusInicial,
+      status: "fila",
       canal: "whatsapp",
       origem_atendimento: "entrada_cliente",
       prioridade: "media",
@@ -292,37 +329,12 @@ export async function findOrCreateWhatsAppConversation({
 
   if (insertError) {
     if (insertError.code === "23505") {
-      const { data: conversaCriadaPorOutroProcesso, error: buscarError } =
-        await supabaseAdmin
-          .from("conversas")
-          .select("*")
-          .eq("empresa_id", empresaId)
-          .eq("contato_id", contatoId)
-          .eq("integracao_whatsapp_id", integracaoWhatsappId)
-          .eq("canal", "whatsapp")
-          .neq("origem_atendimento", "historico_coexistence")
-          .neq("historico_importado", true)
-          .in("status", [
-            "aberta",
-            "bot",
-            "fila",
-            "em_atendimento",
-            "aguardando_cliente",
-          ])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-      if (buscarError) {
-        throw new Error(
-          `Erro ao buscar conversa criada por outro processo: ${buscarError.message}`
-        );
-      }
+      const conversaCriadaPorOutroProcesso =
+        await buscarConversaOperacional(params);
 
       if (conversaCriadaPorOutroProcesso) {
-        const conversa = conversaCriadaPorOutroProcesso as WhatsAppConversation;
-        await garantirProtocoloAtivo(conversa);
-        return conversa;
+        await garantirProtocoloAtivo(conversaCriadaPorOutroProcesso);
+        return conversaCriadaPorOutroProcesso;
       }
     }
 
@@ -332,10 +344,13 @@ export async function findOrCreateWhatsAppConversation({
   }
 
   if (!newConversation) {
-    throw new Error("Erro ao criar conversa automaticamente: sem retorno do banco");
+    throw new Error(
+      "Erro ao criar conversa automaticamente: sem retorno do banco"
+    );
   }
 
-  await garantirProtocoloAtivo(newConversation as WhatsAppConversation);
+  const conversaCriada = newConversation as WhatsAppConversation;
+  await garantirProtocoloAtivo(conversaCriada);
 
-  return newConversation as WhatsAppConversation;
+  return conversaCriada;
 }
