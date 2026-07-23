@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import styles from "./WhatsAppConnectionTestNotice.module.css";
 
 type IntegracaoPendente = {
@@ -15,9 +16,13 @@ type StatusResponse = {
   pendentes?: IntegracaoPendente[];
 };
 
-const POLLING_MS = 15000;
+type ConversaRealtime = {
+  integracao_whatsapp_id?: string | null;
+  last_inbound_message_at?: string | null;
+};
 
 export default function WhatsAppConnectionTestNotice() {
+  const supabase = useMemo(() => createClient(), []);
   const [pendentes, setPendentes] = useState<IntegracaoPendente[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
 
@@ -41,9 +46,51 @@ export default function WhatsAppConnectionTestNotice() {
 
   useEffect(() => {
     void carregarStatus();
-    const intervalId = window.setInterval(carregarStatus, POLLING_MS);
-    return () => window.clearInterval(intervalId);
   }, [carregarStatus]);
+
+  useEffect(() => {
+    const idsPendentes = new Set(pendentes.map((integracao) => integracao.id));
+
+    if (idsPendentes.size === 0) return;
+
+    const channel = supabase
+      .channel("whatsapp-connection-test")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "conversas" },
+        (payload) => {
+          const conversa = payload.new as ConversaRealtime;
+
+          if (
+            conversa.integracao_whatsapp_id &&
+            idsPendentes.has(conversa.integracao_whatsapp_id) &&
+            conversa.last_inbound_message_at
+          ) {
+            void carregarStatus();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "conversas" },
+        (payload) => {
+          const conversa = payload.new as ConversaRealtime;
+
+          if (
+            conversa.integracao_whatsapp_id &&
+            idsPendentes.has(conversa.integracao_whatsapp_id) &&
+            conversa.last_inbound_message_at
+          ) {
+            void carregarStatus();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [carregarStatus, pendentes, supabase]);
 
   useEffect(() => {
     function abrirModalAposOnboarding() {
