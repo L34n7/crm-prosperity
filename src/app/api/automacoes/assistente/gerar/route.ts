@@ -2,6 +2,7 @@ import { executarAssistente } from "./route-resiliente";
 import { prepararSessaoAntesDeCriar } from "./route-preparar-criacao";
 import { garantirTerminalAntesDeCriar } from "./route-garantir-terminal";
 import { canonicalizarSessaoAntesDeCriar } from "./route-deduplicar-opcoes";
+import { executarAssistenteComDistribuicao } from "./route-distribuicao-atendimento";
 
 export const runtime = "nodejs";
 
@@ -13,5 +14,8 @@ export async function POST(request: Request) {
   const requestComTerminal = await garantirTerminalAntesDeCriar(
     requestCanonical
   );
-  return executarAssistente(requestComTerminal);
+  return executarAssistenteComDistribuicao(
+    requestComTerminal,
+    executarAssistente
+  );
 }

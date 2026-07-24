@@ -39,6 +39,13 @@ export type ContextoSugestaoDescricaoIA = {
   outrasConexoes?: string[];
 };
 
+function limparTexto(valor: unknown, limite: number) {
+  return String(valor || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, limite);
+}
+
 function primeiroTextoUtil(...valores: Array<string | null | undefined>) {
   const genericos = new Set([
     "nova condicao",
@@ -58,49 +65,64 @@ function primeiroTextoUtil(...valores: Array<string | null | undefined>) {
 
   return (
     valores
-      .map((valor) => String(valor || "").replace(/\s+/g, " ").trim())
+      .map((valor) => limparTexto(valor, 220))
       .find((valor) => valor && !genericos.has(valor.toLowerCase())) || ""
   );
 }
 
-function contextoPergunta(pergunta?: string | null) {
-  const texto = String(pergunta || "").replace(/\s+/g, " ").trim();
+function listarAlternativas(valores?: string[]) {
+  const unicas = Array.from(
+    new Set(
+      (valores || [])
+        .map((valor) => limparTexto(valor, 80))
+        .filter(Boolean)
+    )
+  ).slice(0, 5);
 
-  return texto ? ` em resposta a pergunta "${texto}"` : "";
+  if (unicas.length === 0) return "";
+  return unicas.map((valor) => `“${valor}”`).join(", ");
 }
 
 export function gerarSugestaoDescricaoIAComContexto(
   contexto: ContextoSugestaoDescricaoIA
 ) {
-  const alvo = primeiroTextoUtil(
-    contexto.nomeConexao,
+  const respostaEsperada = primeiroTextoUtil(
     contexto.textoOpcao,
+    contexto.nomeConexao,
     contexto.idResposta,
     contexto.destinoTitulo,
     contexto.destinoMensagem,
     contexto.destinoTipo
   );
 
-  if (!alvo) {
+  if (!respostaEsperada) {
     return "";
   }
 
-  const base = gerarSugestaoDescricaoIA(alvo);
-  const pergunta = contextoPergunta(contexto.pergunta);
-  const destino = primeiroTextoUtil(
+  const pergunta = limparTexto(contexto.pergunta, 180);
+  const destinoTitulo = primeiroTextoUtil(
     contexto.destinoTitulo,
-    contexto.destinoMensagem,
     contexto.destinoTipo
   );
+  const destinoMensagem = limparTexto(contexto.destinoMensagem, 150);
+  const alternativas = listarAlternativas(contexto.outrasConexoes);
 
-  if (base && !base.includes(`"${alvo}"`)) {
-    return pergunta
-      ? base.replace("quando o cliente", `quando${pergunta} o cliente`)
-      : base;
-  }
+  const partes = [
+    pergunta
+      ? `Interprete a resposta do cliente à pergunta “${pergunta}”.`
+      : "Interprete a resposta do cliente neste bloco de pergunta.",
+    `Use esta conexão somente quando a resposta indicar a escolha ou intenção equivalente a “${respostaEsperada}”.`,
+    "Aceite senônimos, variações de escrita, erros de digitação, respostas curtas e frases naturais que mantenham essa mesma intenção.",
+    destinoTitulo || destinoMensagem
+      ? `O destino desta escolha é “${destinoTitulo || respostaEsperada}”${
+          destinoMensagem ? `, com a resposta “${destinoMensagem}”` : ""
+        }.`
+      : "",
+    alternativas
+      ? `Não use esta rota quando a intenção corresponder a outra opção: ${alternativas}.`
+      : "Não use esta rota para negação, dúvida genérica ou assunto diferente.",
+    "Se a resposta for ambígua ou misturar intenções, não force esta conexão.",
+  ].filter(Boolean);
 
-  const detalheDestino =
-    destino && destino !== alvo ? `, especialmente sobre ${destino}` : "";
-
-  return `Use esta conexao quando${pergunta} a intencao do cliente estiver relacionada a "${alvo}"${detalheDestino}.`;
+  return partes.join(" ").slice(0, 500);
 }

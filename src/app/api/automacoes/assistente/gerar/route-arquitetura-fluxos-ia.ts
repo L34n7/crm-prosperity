@@ -23,6 +23,9 @@ PRIORIDADE 1 — SEGURANCA, EXECUCAO E INTEGRIDADE DO GRAFO
 - Toda opcao de pergunta deve possuir exatamente uma rota propria.
 - Nenhuma opcao pode possuir duas rotas, e duas opcoes da mesma pergunta nao podem apontar para o mesmo destino imediato.
 - pergunta_opcoes e pergunta_botoes nunca possuem rota de condicao sempre.
+- Para toda saida de pergunta_opcoes e pergunta_botoes, use condicao "ia", valor igual ao id da opcao, rotulo igual ao texto da opcao e descricao_ia detalhada.
+- A descricao_ia deve informar: a pergunta feita, a escolha esperada, sinonimos e variacoes aceitaveis, o significado do bloco de destino, as demais opcoes que devem ser excluidas e a orientacao de nao forcar a rota em respostas ambiguas.
+- A descricao_ia nao pode se limitar a repetir o rotulo. Ela deve ensinar o classificador a distinguir a intencao desta opcao das demais saidas do mesmo bloco.
 - Uma etapa que nao espera resposta possui no maximo uma rota sempre.
 - Nunca crie auto-conexao nem ciclo formado exclusivamente por rotas sempre.
 - transferir e encerrar sao terminais absolutos: nao possuem nenhuma rota de saida.
@@ -78,6 +81,7 @@ PRIORIDADE 5 — VARIAVEIS, RECURSOS E CONFIGURACOES
 - Tipos de captura permitidos: texto, nome, cpf, cnpj, email, telefone, numero, data, cep e moeda. Nunca use livre.
 - Toda variavel capturada deve aparecer em uma mensagem posterior como {{chave}}; se nao houver uso, nao crie a captura.
 - Para transferencia, use setor_id somente quando corresponder a um setor fornecido. Quando houver ambiguidade, mantenha a etapa transferir e permita que a interface confirme o setor.
+- A interface confirmara separadamente o setor, a distribuicao do atendimento e, quando a estrategia for atendente_especifico, o atendente destino. Nao invente atendente_id.
 - Para midia, informe o tipo e a funcao da etapa; nao associe uma midia somente por semelhanca de nome.
 - Para redirect, use URL fornecida ou claramente derivavel do pedido. Nao invente dominio da empresa.
 - Para agenda automatica, use somente agenda_id recebido em recursos.agendas. Havendo mais de uma agenda sem criterio de escolha, gere clarificacao.
@@ -109,7 +113,7 @@ B. Defina o unico inicio e, quando aplicavel, o unico Menu Principal.
 C. Para cada opcao, escreva internamente a intencao e o tipo de destino obrigatorio: conteudo, submenu, FAQ, agenda, redirect, transferencia, encerramento ou retorno.
 D. Desenhe cada ramo completo antes de passar ao proximo.
 E. Crie todas as etapas com refs unicas antes de criar as rotas.
-F. Crie as rotas usando somente refs existentes e valor igual ao id da opcao.
+F. Crie as rotas usando somente refs existentes, condicao ia nas saidas de pergunta_opcoes e pergunta_botoes, valor igual ao id da opcao e descricao_ia discriminativa.
 G. Percorra o grafo a partir do inicio e confirme que todas as etapas sao alcancaveis.
 H. Percorra cada opcao como um cliente real e confirme que a promessa e cumprida.
 I. Verifique terminais, ciclos, duplicidades, rotas ausentes e destinos repetidos.
@@ -123,6 +127,7 @@ Antes de retornar, valide silenciosamente:
 - Toda rota aponta para etapas existentes?
 - Todas as etapas sao alcancaveis?
 - Cada opcao possui exatamente uma rota?
+- Todas as saidas de pergunta_opcoes e pergunta_botoes usam IA e possuem descricao_ia capaz de distinguir a opcao das alternativas?
 - Nenhuma pergunta possui rota sempre?
 - Nenhum bloco comum possui duas rotas sempre?
 - Nenhuma transferencia ou encerramento possui saida?

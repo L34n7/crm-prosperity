@@ -3,9 +3,10 @@ import { validarFluxoAssistente as validarFluxoAssistenteEstrito } from "./assis
 export {
   compilarPlanoAssistente,
   normalizarPlanoAssistente,
-} from "./assistente-fluxos-compilador-seguro.ts";
+} from "./assistente-fluxos-conexoes-ia.ts";
 export { completarRotasDeOpcoesPlano } from "./assistente-fluxos-base.ts";
 export type * from "./assistente-fluxos-base.ts";
+export type { EstrategiaDistribuicaoAtendimento } from "./assistente-fluxos-conexoes-ia.ts";
 
 /**
  * A importacao por codigo cria propositalmente um rascunho incompleto:
