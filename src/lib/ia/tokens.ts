@@ -80,6 +80,15 @@ export async function verificarSaldoTokensIa(empresaId: string) {
   return saldo;
 }
 
+function modeloEfetivo(params: { origem: string; modelo: string }) {
+  if (params.origem !== "assistente_fluxos") return params.modelo;
+
+  // A rota historica ainda informa o nome antigo ao registrar o consumo, mas a
+  // chamada real e substituida pelo pipeline do Prompt Mestre antes de chegar a
+  // OpenAI. Grave o modelo efetivamente utilizado para manter o extrato correto.
+  return process.env.OPENAI_ASSISTENTE_FLUXOS_MODEL || "gpt-5.5";
+}
+
 export async function registrarUsoTokensIa(params: {
   empresaId: string;
   origem: string;
@@ -88,15 +97,19 @@ export async function registrarUsoTokensIa(params: {
   usuarioId?: string | null;
   metadata?: Record<string, any>;
 }) {
+  const modelo = modeloEfetivo(params);
   const { data, error } = await supabaseAdmin.rpc("registrar_uso_tokens_ia", {
     p_empresa_id: params.empresaId,
     p_origem: params.origem,
-    p_modelo: params.modelo,
+    p_modelo: modelo,
     p_tokens_total: params.uso.totalTokens,
     p_tokens_input: params.uso.inputTokens,
     p_tokens_output: params.uso.outputTokens,
     p_usuario_id: params.usuarioId ?? null,
-    p_metadata_json: params.metadata ?? {},
+    p_metadata_json: {
+      ...(params.metadata ?? {}),
+      modelo_efetivo: modelo,
+    },
   });
 
   if (error) {

@@ -2,37 +2,56 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import OpenAI from "openai";
 
-import type { ContextoAssistenteFluxos } from "./route-contexto-ia";
-import { prepararPayloadAssistente } from "./route-contexto-ia";
-import { carregarContextoAssistente, persistirInstrucaoCompleta } from "./route-sessao-contexto";
+import { validarPlanoAssistenteEstrutural } from "@/lib/automacoes/assistente-fluxos-validacao-estrutural";
+import {
+  prepararPayloadAssistente,
+  type ContextoAssistenteFluxos,
+} from "./route-contexto-ia";
+import { VERSAO_PROMPT_MESTRE_FLUXOS } from "./route-arquitetura-fluxos-ia";
 import { registrarDiagnosticoIa } from "./route-diagnostico-ia";
+import {
+  extrairTextoSaida,
+  substituirTextoSaida,
+  type RespostaOpenAI,
+} from "./route-validacao-ia";
+import {
+  carregarContextoAssistente,
+  persistirInstrucaoCompleta,
+} from "./route-sessao-contexto";
 
 export const runtime = "nodejs";
-
-type RespostaOpenAI = {
-  id?: string;
-  usage?: Record<string, unknown> | null;
-  [chave: string]: unknown;
-};
 
 type CriarResposta = (
   body: Record<string, unknown>,
   options?: unknown
 ) => Promise<RespostaOpenAI>;
-
 type PrototipoResponses = { create: CriarResposta };
 type ObjetoJson = Record<string, unknown>;
 
-const contextoAssistenteFluxos = new AsyncLocalStorage<ContextoAssistenteFluxos>();
+const contextoAssistenteFluxos =
+  new AsyncLocalStorage<ContextoAssistenteFluxos>();
 let sdkInstalado = false;
-let moduloOriginalPromise: Promise<typeof import("./route-original")> | null = null;
+let moduloOriginalPromise: Promise<typeof import("./route-original")> | null =
+  null;
+
+const MODELO_ASSISTENTE_FLUXOS =
+  process.env.OPENAI_ASSISTENTE_FLUXOS_MODEL || "gpt-5.5";
+
+const ESFORCO_RACIOCINIO = (() => {
+  const informado = String(
+    process.env.OPENAI_ASSISTENTE_FLUXOS_REASONING_EFFORT || "high"
+  ).toLowerCase();
+  return ["none", "low", "medium", "high", "xhigh"].includes(informado)
+    ? informado
+    : "high";
+})();
 
 const LIMITE_SAIDA_ASSISTENTE = (() => {
   const configurado = Number(
-    process.env.OPENAI_ASSISTENTE_FLUXOS_MAX_OUTPUT_TOKENS || 24000
+    process.env.OPENAI_ASSISTENTE_FLUXOS_MAX_OUTPUT_TOKENS || 32000
   );
-  if (!Number.isFinite(configurado)) return 24000;
-  return Math.max(8000, Math.min(32000, Math.floor(configurado)));
+  if (!Number.isFinite(configurado)) return 32000;
+  return Math.max(12000, Math.min(48000, Math.floor(configurado)));
 })();
 
 const LIMITE_CHAMADA_IA_MS = 235_000;
@@ -43,11 +62,47 @@ function objeto(valor: unknown): ObjetoJson {
     : {};
 }
 
+function normalizarRespostaFinal(resposta: RespostaOpenAI) {
+  const texto = extrairTextoSaida(resposta);
+  if (!texto) {
+    throw new Error(
+      "RESPOSTA_IA_ESTRUTURALMENTE_INVALIDA: a IA nao retornou o JSON final."
+    );
+  }
+
+  let plano: ObjetoJson;
+  try {
+    plano = objeto(JSON.parse(texto));
+  } catch (error) {
+    throw new Error(
+      `RESPOSTA_IA_ESTRUTURALMENTE_INVALIDA: JSON invalido: ${
+        error instanceof Error ? error.message : "falha de leitura"
+      }.`
+    );
+  }
+
+  // Nao existe segunda etapa de IA. O plano precisa ser definitivo.
+  plano.clarificacoes = [];
+  const problemas = validarPlanoAssistenteEstrutural(plano);
+
+  if (problemas.length > 0) {
+    const detalhes = problemas
+      .slice(0, 12)
+      .map((problema) => problema.mensagem)
+      .join(" ");
+    throw new Error(
+      `RESPOSTA_IA_ESTRUTURALMENTE_INVALIDA: ${detalhes}`
+    );
+  }
+
+  substituirTextoSaida(resposta, JSON.stringify(plano));
+  return plano;
+}
+
 /**
- * A IA recebe o pedido, os recursos reais, o schema e o prompt padrao completo
- * em uma unica chamada. Planejamento e revisoes adicionais do sistema foram
- * removidos para impedir que respostas posteriores sobrescrevam um fluxo que
- * ja estava coerente ou aumentem o consumo sem garantir melhoria.
+ * Uma unica chamada recebe Prompt Mestre, pedido, recursos e schema. O modelo
+ * planeja e revisa internamente. Depois da resposta, o sistema apenas confirma
+ * se o JSON e estruturalmente persistivel; nao corrige significado ou caminhos.
  */
 function instalarSdkUmaChamada() {
   if (sdkInstalado) return;
@@ -71,18 +126,28 @@ function instalarSdkUmaChamada() {
     const payload = prepararPayloadAssistente({
       body,
       limite: LIMITE_SAIDA_ASSISTENTE,
-      repetir: false,
       contexto,
     });
 
+    payload.model = MODELO_ASSISTENTE_FLUXOS;
+    payload.reasoning = {
+      ...objeto(payload.reasoning),
+      effort: ESFORCO_RACIOCINIO,
+    };
+    payload.prompt_cache_key = VERSAO_PROMPT_MESTRE_FLUXOS;
+
     await registrarDiagnosticoIa({
       contexto,
-      fase: "geracao_unica_request",
+      fase: "geracao_prompt_mestre_request",
       payload,
       metadados: {
-        estrategia: "prompt_padrao_completo_uma_unica_chamada",
-        planejamento_no_sistema: false,
-        revisao_no_sistema: false,
+        estrategia: "uma_ia_um_prompt_mestre_um_json_final",
+        modelo: MODELO_ASSISTENTE_FLUXOS,
+        reasoning_effort: ESFORCO_RACIOCINIO,
+        prompt_mestre_versao: VERSAO_PROMPT_MESTRE_FLUXOS,
+        planejamento_adicional_no_sistema: false,
+        revisao_adicional_no_sistema: false,
+        reparo_semantico_no_sistema: false,
       },
     });
 
@@ -91,15 +156,36 @@ function instalarSdkUmaChamada() {
       signal: AbortSignal.timeout(LIMITE_CHAMADA_IA_MS),
     });
 
+    let plano: ObjetoJson | null = null;
+    let erroEstrutural: string | null = null;
+
+    try {
+      plano = normalizarRespostaFinal(resposta);
+    } catch (error) {
+      erroEstrutural =
+        error instanceof Error ? error.message : "Falha estrutural desconhecida.";
+    }
+
     await registrarDiagnosticoIa({
       contexto,
-      fase: "geracao_unica_response",
+      fase: erroEstrutural
+        ? "geracao_prompt_mestre_estrutura_invalida"
+        : "geracao_prompt_mestre_response",
       resposta,
+      problemas: erroEstrutural ? [erroEstrutural] : [],
       metadados: {
-        estrategia: "ia_planeja_revisa_e_entrega_fluxo_final",
+        estrategia: "ia_entrega_fluxo_final_sem_reparo",
+        modelo: MODELO_ASSISTENTE_FLUXOS,
+        prompt_mestre_versao: VERSAO_PROMPT_MESTRE_FLUXOS,
+        validacao_aplicada: "json_schema_refs_ids",
+        validacao_semantica: false,
+        reparo_semantico: false,
+        etapas: Array.isArray(plano?.etapas) ? plano.etapas.length : null,
+        rotas: Array.isArray(plano?.rotas) ? plano.rotas.length : null,
       },
     });
 
+    if (erroEstrutural) throw new Error(erroEstrutural);
     return resposta;
   };
 }
@@ -127,7 +213,29 @@ export async function executarAssistente(request: Request) {
         usuarioId: contextoRequisicao.usuarioId,
       });
 
-      return response;
+      if (response.status !== 500) return response;
+
+      const corpo = await response
+        .clone()
+        .json()
+        .catch(() => null as ObjetoJson | null);
+      const mensagem = String(corpo?.error || "");
+
+      if (!mensagem.includes("RESPOSTA_IA_ESTRUTURALMENTE_INVALIDA")) {
+        return response;
+      }
+
+      return Response.json(
+        {
+          ok: false,
+          code: "RESPOSTA_IA_ESTRUTURALMENTE_INVALIDA",
+          error: mensagem.replace(
+            /^.*RESPOSTA_IA_ESTRUTURALMENTE_INVALIDA:\s*/,
+            ""
+          ),
+        },
+        { status: 422 }
+      );
     }
   );
 }

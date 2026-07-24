@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type {
   AgendaAssistente,
   ContextoAssistenteFluxos,
+  MidiaAssistente,
 } from "./route-contexto-ia";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -40,6 +41,7 @@ export async function carregarContextoAssistente(body: ObjetoJson) {
         modo,
         instrucaoCompleta: limparSeparadores(texto(body.instrucao)),
         agendas: [] as AgendaAssistente[],
+        midias: [] as MidiaAssistente[],
         empresaId: null,
         usuarioId: null,
         sessaoId,
@@ -70,30 +72,59 @@ export async function carregarContextoAssistente(body: ObjetoJson) {
     );
   }
 
-  const { data: agendas } = await supabaseAdmin
-    .from("agenda_calendarios")
-    .select(
-      "id, nome, descricao, timezone, duracao_minutos, janela_dias, status"
+  const [{ data: agendas }, { data: midias }] = await Promise.all([
+    supabaseAdmin
+      .from("agenda_calendarios")
+      .select(
+        "id, nome, descricao, timezone, duracao_minutos, janela_dias, status"
+      )
+      .eq("empresa_id", empresaId)
+      .eq("status", "ativo")
+      .order("nome", { ascending: true }),
+    supabaseAdmin
+      .from("midias")
+      .select("id, nome, tipo, url")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: false })
+      .limit(120),
+  ]);
+
+  const agendasAtivas = ((agendas || []) as Array<
+    AgendaAssistente & { status?: string }
+  >).map((agenda) => ({
+    id: agenda.id,
+    nome: agenda.nome,
+    descricao: agenda.descricao || null,
+    timezone: agenda.timezone || null,
+    duracao_minutos: agenda.duracao_minutos ?? null,
+    janela_dias: agenda.janela_dias ?? null,
+  }));
+
+  const midiasDisponiveis = ((midias || []) as Array<{
+    id: string;
+    nome: string;
+    tipo: string;
+    url: string;
+  }>)
+    .filter(
+      (midia): midia is MidiaAssistente =>
+        Boolean(midia.id && midia.nome && midia.url) &&
+        ["imagem", "video", "audio", "arquivo"].includes(midia.tipo)
     )
-    .eq("empresa_id", empresaId)
-    .eq("status", "ativo")
-    .order("nome", { ascending: true });
+    .map((midia) => ({
+      id: midia.id,
+      nome: midia.nome,
+      tipo: midia.tipo,
+      url: midia.url,
+    }));
 
   return {
     contexto: {
       ativo: true,
       modo,
       instrucaoCompleta,
-      agendas: ((agendas || []) as Array<
-        AgendaAssistente & { status?: string }
-      >).map((agenda) => ({
-        id: agenda.id,
-        nome: agenda.nome,
-        descricao: agenda.descricao || null,
-        timezone: agenda.timezone || null,
-        duracao_minutos: agenda.duracao_minutos ?? null,
-        janela_dias: agenda.janela_dias ?? null,
-      })),
+      agendas: agendasAtivas,
+      midias: midiasDisponiveis,
       empresaId,
       usuarioId,
       sessaoId,

@@ -1,4 +1,7 @@
-import { INSTRUCAO_ARQUITETURA_FLUXOS } from "./route-arquitetura-fluxos-ia.ts";
+import {
+  INSTRUCAO_ARQUITETURA_FLUXOS,
+  VERSAO_PROMPT_MESTRE_FLUXOS,
+} from "./route-arquitetura-fluxos-ia.ts";
 
 export type AgendaAssistente = {
   id: string;
@@ -9,11 +12,19 @@ export type AgendaAssistente = {
   janela_dias: number | null;
 };
 
+export type MidiaAssistente = {
+  id: string;
+  nome: string;
+  tipo: "imagem" | "video" | "audio" | "arquivo";
+  url: string;
+};
+
 export type ContextoAssistenteFluxos = {
   ativo: true;
   modo: string;
   instrucaoCompleta: string;
   agendas: AgendaAssistente[];
+  midias: MidiaAssistente[];
   empresaId?: string | null;
   usuarioId?: string | null;
   sessaoId?: string | null;
@@ -27,6 +38,13 @@ const TIPOS_AGENDA = [
   "agenda_buscar_agendamento",
   "agenda_remarcar_agendamento",
   "agenda_cancelar_agendamento",
+];
+
+const ESTRATEGIAS_DISTRIBUICAO = [
+  "fila_setor",
+  "atendente_especifico",
+  "rodizio_aleatorio",
+  "menos_conversas",
 ];
 
 function objeto(valor: unknown): ObjetoJson {
@@ -44,89 +62,123 @@ function localizarMensagem(
   return mensagem ? objeto(mensagem) : null;
 }
 
-function anexarInstrucaoSistema(payload: ObjetoJson, instrucao: string) {
-  const mensagem = localizarMensagem(payload, "system");
+function textoConteudoMensagem(mensagem: ObjetoJson | null) {
+  if (!mensagem) return "";
+  if (typeof mensagem.content === "string") return mensagem.content;
+  if (!Array.isArray(mensagem.content)) return "";
+
+  return mensagem.content
+    .map(objeto)
+    .filter((item) => item.type === "input_text")
+    .map((item) => String(item.text || ""))
+    .join("");
+}
+
+function definirConteudoMensagem(mensagem: ObjetoJson | null, texto: string) {
   if (!mensagem) return;
+  mensagem.content = texto;
+}
 
-  if (typeof mensagem.content === "string") {
-    if (!mensagem.content.includes(instrucao)) {
-      mensagem.content = `${mensagem.content}\n\n${instrucao}`;
-    }
-    return;
-  }
-
-  if (Array.isArray(mensagem.content)) {
-    mensagem.content = [
-      ...mensagem.content,
-      { type: "input_text", text: instrucao },
-    ];
+function contextoOriginal(payload: ObjetoJson) {
+  const bruto = textoConteudoMensagem(localizarMensagem(payload, "user"));
+  try {
+    return objeto(JSON.parse(bruto));
+  } catch {
+    return {};
   }
 }
 
-function atualizarContextoRecursivo(
-  valor: unknown,
+function modoPrompt(modo: string) {
+  return [
+    "",
+    "======================================================================",
+    "CONTRATO DESTA EXECUCAO",
+    "======================================================================",
+    `Modo solicitado: ${modo}.`,
+    `Versao do Prompt Mestre: ${VERSAO_PROMPT_MESTRE_FLUXOS}.`,
+    "Planeje e revise internamente, mas responda uma unica vez.",
+    "Nao gere clarificacoes. Use clarificacoes: [].",
+    "Nao dependa de reparo, revisao ou interpretacao posterior do backend.",
+    "O schema JSON estrito enviado no response_format e o contrato formal da resposta.",
+  ].join("\n");
+}
+
+function substituirPromptSistema(
+  payload: ObjetoJson,
   contexto: ContextoAssistenteFluxos
 ) {
-  if (!valor || typeof valor !== "object") return;
-
-  if (Array.isArray(valor)) {
-    valor.forEach((item) => atualizarContextoRecursivo(item, contexto));
-    return;
-  }
-
-  const registro = valor as ObjetoJson;
-
-  if (
-    contexto.instrucaoCompleta &&
-    Object.prototype.hasOwnProperty.call(registro, "instrucao")
-  ) {
-    registro.instrucao = contexto.instrucaoCompleta;
-  }
-
-  if (Object.prototype.hasOwnProperty.call(registro, "recursos")) {
-    const recursos = objeto(registro.recursos);
-    recursos.agendas = contexto.agendas;
-    registro.recursos = recursos;
-  }
-
-  Object.values(registro).forEach((item) =>
-    atualizarContextoRecursivo(item, contexto)
+  const mensagem = localizarMensagem(payload, "system");
+  definirConteudoMensagem(
+    mensagem,
+    `${INSTRUCAO_ARQUITETURA_FLUXOS}${modoPrompt(contexto.modo)}`
   );
 }
 
-function injetarContextoCompleto(
+function organizarContextoUsuario(
   payload: ObjetoJson,
   contexto: ContextoAssistenteFluxos
 ) {
   const mensagem = localizarMensagem(payload, "user");
-  if (!mensagem || typeof mensagem.content !== "string") return;
+  if (!mensagem) return;
 
-  try {
-    const conteudo = JSON.parse(mensagem.content) as unknown;
-    atualizarContextoRecursivo(conteudo, contexto);
+  const raiz = contextoOriginal(payload);
+  const recursos = objeto(raiz.recursos);
+  const fluxoAtual = objeto(raiz.fluxo_atual);
 
-    const raiz = objeto(conteudo);
-    if (!Object.prototype.hasOwnProperty.call(raiz, "recursos")) {
-      raiz.recursos = { agendas: contexto.agendas };
-    }
+  const conteudoOrganizado = {
+    secao_solicitacao_usuario: {
+      titulo: "SOLICITACAO DO USUARIO",
+      texto: contexto.instrucaoCompleta,
+      regra:
+        "Preserve todos os requisitos explicitos. Nao resuma, nao omita e nao reinterpretar para simplificar.",
+    },
+    secao_empresa: {
+      titulo: "EMPRESA",
+      dados: objeto(raiz.empresa),
+    },
+    secao_recursos_disponiveis: {
+      titulo: "RECURSOS DISPONIVEIS",
+      setores: Array.isArray(recursos.setores) ? recursos.setores : [],
+      agendas: contexto.agendas,
+      midias: contexto.midias,
+      variaveis: Array.isArray(recursos.variaveis) ? recursos.variaveis : [],
+      regra:
+        "IDs desta secao sao a unica fonte valida. Nao invente setor, agenda, midia ou variavel existente.",
+    },
+    secao_fluxo_atual: {
+      titulo: "FLUXO ATUAL",
+      aplicavel: contexto.modo !== "criar_fluxo",
+      dados:
+        contexto.modo !== "criar_fluxo" && Object.keys(fluxoAtual).length > 0
+          ? fluxoAtual
+          : null,
+    },
+    secao_schema_json: {
+      titulo: "SCHEMA JSON",
+      fornecido_em: "response_format.text.format.schema",
+      nome: "plano_assistente_fluxos",
+      strict: true,
+      regra:
+        "Responda exclusivamente no schema. Nao adicione campos e nao remova campos obrigatorios.",
+    },
+    secao_contrato_saida: {
+      titulo: "CONTRATO DE SAIDA",
+      modo: contexto.modo,
+      uma_unica_resposta: true,
+      planejamento_interno: true,
+      revisao_interna: true,
+      planejamento_posterior_no_sistema: false,
+      revisao_posterior_no_sistema: false,
+      reparo_semantico_no_sistema: false,
+      clarificacoes: [],
+      formato: "JSON final completo",
+    },
+  };
 
-    raiz.contrato_execucao = {
-      objetivo: "entregar_fluxo_final_completo_em_uma_unica_resposta",
-      pedido_usuario: contexto.instrucaoCompleta,
-      planejamento_interno_obrigatorio: true,
-      revisao_interna_obrigatoria: true,
-      planejamento_adicional_no_sistema: false,
-      revisao_adicional_no_sistema: false,
-      regras_obrigatorias: "PROMPT PADRAO OBRIGATORIO DO ARQUITETO DE FLUXOS",
-    };
-
-    mensagem.content = JSON.stringify(conteudo);
-  } catch {
-    // Mantem o payload original quando a mensagem nao e um contexto JSON.
-  }
+  definirConteudoMensagem(mensagem, JSON.stringify(conteudoOrganizado));
 }
 
-function expandirSchemaAgenda(payload: ObjetoJson) {
+function expandirSchemaEtapas(payload: ObjetoJson) {
   const text = objeto(payload.text);
   const format = objeto(text.format);
   const schema = objeto(format.schema);
@@ -145,13 +197,36 @@ function expandirSchemaAgenda(payload: ObjetoJson) {
   propriedadesEtapa.tipo = tipo;
   propriedadesEtapa.agenda_id = { type: ["string", "null"] };
   propriedadesEtapa.agenda_nome = { type: ["string", "null"] };
+  propriedadesEtapa.estrategia_transferencia = {
+    type: ["string", "null"],
+    enum: [...ESTRATEGIAS_DISTRIBUICAO, null],
+  };
+  propriedadesEtapa.atendente_id = { type: ["string", "null"] };
+  propriedadesEtapa.setor_excesso_tentativas = {
+    type: ["string", "null"],
+  };
+  propriedadesEtapa.estrategia_excesso_tentativas = {
+    type: ["string", "null"],
+    enum: [...ESTRATEGIAS_DISTRIBUICAO, null],
+  };
+  propriedadesEtapa.atendente_excesso_tentativas = {
+    type: ["string", "null"],
+  };
   items.properties = propriedadesEtapa;
 
   const obrigatorios = Array.isArray(items.required)
     ? [...items.required]
     : [];
 
-  for (const campo of ["agenda_id", "agenda_nome"]) {
+  for (const campo of [
+    "agenda_id",
+    "agenda_nome",
+    "estrategia_transferencia",
+    "atendente_id",
+    "setor_excesso_tentativas",
+    "estrategia_excesso_tentativas",
+    "atendente_excesso_tentativas",
+  ]) {
     if (!obrigatorios.includes(campo)) obrigatorios.push(campo);
   }
 
@@ -167,10 +242,6 @@ function expandirSchemaAgenda(payload: ObjetoJson) {
 export function prepararPayloadAssistente(params: {
   body: Record<string, unknown>;
   limite: number;
-  repetir: boolean;
-  problemas?: string[];
-  rascunhoAnterior?: string;
-  fase?: "estrutura" | "revisao";
   contexto: ContextoAssistenteFluxos;
 }) {
   const payload = structuredClone(params.body);
@@ -181,9 +252,9 @@ export function prepararPayloadAssistente(params: {
     params.limite
   );
 
-  expandirSchemaAgenda(payload);
-  injetarContextoCompleto(payload, params.contexto);
-  anexarInstrucaoSistema(payload, INSTRUCAO_ARQUITETURA_FLUXOS);
+  expandirSchemaEtapas(payload);
+  substituirPromptSistema(payload, params.contexto);
+  organizarContextoUsuario(payload, params.contexto);
 
   return payload;
 }
