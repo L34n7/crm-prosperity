@@ -9,7 +9,9 @@ function normalizarTexto(valor: string | null | undefined) {
     .toLowerCase();
 }
 
-function ehCardConteudoIndisponivel(elemento: HTMLElement) {
+function ehConteudoIndisponivel(elemento: Element | null) {
+  if (!(elemento instanceof HTMLElement)) return false;
+
   const texto = normalizarTexto(elemento.textContent);
 
   return (
@@ -20,53 +22,127 @@ function ehCardConteudoIndisponivel(elemento: HTMLElement) {
   );
 }
 
-function removerAjuste(mensagem: HTMLElement) {
-  mensagem.style.removeProperty("justify-content");
-  mensagem.style.removeProperty("width");
-  mensagem.style.removeProperty("align-self");
+function ehContainerDaTimeline(elemento: HTMLElement) {
+  const classes = String(elemento.className || "");
 
-  const card = mensagem.firstElementChild as HTMLElement | null;
+  return (
+    classes.includes("messagesStack") ||
+    classes.includes("timelineArea") ||
+    classes.includes("timelineWrapper")
+  );
+}
+
+function encontrarLinhaDoCard(elemento: HTMLElement) {
+  const linhaPorClasse = elemento.closest<HTMLElement>(
+    '[id^="mensagem-"], [class*="messageRow"], [class*="systemMessageRow"]'
+  );
+
+  if (linhaPorClasse) return linhaPorClasse;
+
+  let atual: HTMLElement | null = elemento;
+  let linhaFlexivel: HTMLElement | null = null;
+
+  while (atual?.parentElement) {
+    const pai = atual.parentElement;
+
+    if (ehContainerDaTimeline(pai)) break;
+
+    const estilo = window.getComputedStyle(atual);
+    const retanguloAtual = atual.getBoundingClientRect();
+    const retanguloElemento = elemento.getBoundingClientRect();
+
+    if (
+      estilo.display.includes("flex") &&
+      estilo.flexDirection !== "column" &&
+      retanguloAtual.width >= retanguloElemento.width + 40
+    ) {
+      linhaFlexivel = atual;
+    }
+
+    atual = pai;
+  }
+
+  return linhaFlexivel;
+}
+
+function encontrarCardDireto(linha: HTMLElement, elemento: HTMLElement) {
+  let card = elemento;
+
+  while (card.parentElement && card.parentElement !== linha) {
+    card = card.parentElement;
+  }
+
+  return card.parentElement === linha ? card : linha.firstElementChild as HTMLElement | null;
+}
+
+function removerAjuste(linha: HTMLElement) {
+  linha.style.removeProperty("justify-content");
+  linha.style.removeProperty("width");
+  linha.style.removeProperty("align-self");
+
+  const card = linha.querySelector<HTMLElement>(
+    '[data-card-conteudo-indisponivel-direita="true"]'
+  );
 
   if (card) {
     card.style.removeProperty("margin-left");
     card.style.removeProperty("margin-right");
     card.style.removeProperty("align-self");
+    delete card.dataset.cardConteudoIndisponivelDireita;
   }
 
-  delete mensagem.dataset.conteudoIndisponivelDireita;
+  delete linha.dataset.conteudoIndisponivelDireita;
 }
 
-function alinharCardADireita(mensagem: HTMLElement) {
-  mensagem.style.setProperty("justify-content", "flex-end", "important");
-  mensagem.style.setProperty("width", "100%", "important");
-  mensagem.style.setProperty("align-self", "stretch", "important");
-
-  const card = mensagem.firstElementChild as HTMLElement | null;
+function alinharCardADireita(linha: HTMLElement, card: HTMLElement | null) {
+  linha.style.setProperty("display", "flex", "important");
+  linha.style.setProperty("justify-content", "flex-end", "important");
+  linha.style.setProperty("width", "100%", "important");
+  linha.style.setProperty("align-self", "stretch", "important");
 
   if (card) {
     card.style.setProperty("margin-left", "auto", "important");
     card.style.setProperty("margin-right", "0", "important");
     card.style.setProperty("align-self", "flex-end", "important");
+    card.dataset.cardConteudoIndisponivelDireita = "true";
   }
 
-  mensagem.dataset.conteudoIndisponivelDireita = "true";
+  linha.dataset.conteudoIndisponivelDireita = "true";
 }
 
 function ajustarAlinhamentoCards() {
-  const mensagens = document.querySelectorAll<HTMLElement>('[id^="mensagem-"]');
+  const linhasAjustadas = document.querySelectorAll<HTMLElement>(
+    '[data-conteudo-indisponivel-direita="true"]'
+  );
 
-  mensagens.forEach((mensagem) => {
-    const deveAlinharDireita = ehCardConteudoIndisponivel(mensagem);
-    const foiAjustada = mensagem.dataset.conteudoIndisponivelDireita === "true";
-
-    if (deveAlinharDireita) {
-      alinharCardADireita(mensagem);
-      return;
+  linhasAjustadas.forEach((linha) => {
+    if (!ehConteudoIndisponivel(linha)) {
+      removerAjuste(linha);
     }
+  });
 
-    if (foiAjustada) {
-      removerAjuste(mensagem);
-    }
+  const raiz =
+    document.querySelector<HTMLElement>('[class*="timelineArea"]') || document.body;
+
+  const elementos = raiz.querySelectorAll<HTMLElement>("div, article, section, p, span");
+  const linhasProcessadas = new Set<HTMLElement>();
+
+  elementos.forEach((elemento) => {
+    if (!ehConteudoIndisponivel(elemento)) return;
+
+    const filhoTambemIdentificado = Array.from(elemento.children).some((filho) =>
+      ehConteudoIndisponivel(filho)
+    );
+
+    if (filhoTambemIdentificado) return;
+
+    const linha = encontrarLinhaDoCard(elemento);
+
+    if (!linha || linhasProcessadas.has(linha)) return;
+
+    const card = encontrarCardDireto(linha, elemento);
+    alinharCardADireita(linha, card);
+    linhasProcessadas.add(linha);
   });
 }
 
@@ -94,8 +170,11 @@ export default function ConteudoIndisponivelAlignment() {
       characterData: true,
     });
 
+    window.addEventListener("resize", agendarAjuste);
+
     return () => {
       observer.disconnect();
+      window.removeEventListener("resize", agendarAjuste);
 
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
