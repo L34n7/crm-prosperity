@@ -18,6 +18,7 @@ import { registrarDiagnosticoIa } from "./route-diagnostico-ia";
 import {
   extrairTextoSaida,
   somarUsoRespostas,
+  substituirTextoSaida,
   validarQualidadePlano,
   type RespostaOpenAI,
 } from "./route-validacao-ia";
@@ -234,6 +235,35 @@ function validarPlanoCompleto(params: {
       ].slice(0, 30),
     };
   }
+}
+
+function anexarPendenciasAoPlano(
+  resposta: RespostaOpenAI,
+  problemas: string[]
+) {
+  if (problemas.length === 0) return resposta;
+
+  try {
+    const plano = objeto(JSON.parse(extrairTextoSaida(resposta) || "{}"));
+    const avisosAtuais = Array.isArray(plano.avisos)
+      ? plano.avisos.map((aviso) => texto(aviso, 800)).filter(Boolean)
+      : [];
+    const novosAvisos = problemas.map(
+      (problema) => `Pendencia detectada no rascunho: ${texto(problema, 800)}`
+    );
+
+    plano.avisos = [
+      ...avisosAtuais,
+      "O fluxo foi criado como rascunho mesmo com pendencias, para permitir a inspecao do resultado produzido pela IA.",
+      ...novosAvisos,
+    ].filter((aviso, indice, todos) => todos.indexOf(aviso) === indice);
+
+    substituirTextoSaida(resposta, JSON.stringify(plano));
+  } catch {
+    // O JSON invalido continua sendo tratado pelo fluxo de erro existente.
+  }
+
+  return resposta;
 }
 
 function instrucaoRevisaoIntegral(problemas: string[]) {
@@ -509,32 +539,39 @@ function instalarSdkResiliente() {
     }
 
     if (!validacao.valido) {
+      anexarPendenciasAoPlano(respostaPlano, validacao.problemas);
+
       await registrarDiagnosticoIa({
         contexto,
-        fase: "validacao_final_reprovada",
+        fase: "validacao_final_com_pendencias",
         resposta: respostaPlano,
         problemas: validacao.problemas,
         metadados: {
           tempo_restante_ms: Math.max(0, prazoFinal - Date.now()),
-          encaminhado_ao_compilador: false,
+          encaminhado_ao_compilador: true,
+          bloqueou_criacao: false,
+          estrategia: "criar_rascunho_para_inspecao",
         },
       });
 
-      const detalhes = validacao.problemas.slice(0, 8).join(" ");
-      throw new Error(
-        `PLANO_IA_ESTRUTURALMENTE_INVALIDO: A IA revisou o fluxo, mas ainda restaram inconsistencias. ${detalhes}`
+      console.warn(
+        "[assistente-fluxos] rascunho encaminhado com pendencias para inspecao",
+        {
+          response_id: respostaPlano.id || null,
+          problemas: validacao.problemas,
+        }
       );
+    } else {
+      await registrarDiagnosticoIa({
+        contexto,
+        fase: "validacao_final_aprovada",
+        resposta: respostaPlano,
+        metadados: {
+          encaminhado_ao_compilador: true,
+          estrategia: "compilador_materializa_plano_validado",
+        },
+      });
     }
-
-    await registrarDiagnosticoIa({
-      contexto,
-      fase: "validacao_final_aprovada",
-      resposta: respostaPlano,
-      metadados: {
-        encaminhado_ao_compilador: true,
-        estrategia: "compilador_apenas_materializa_plano_validado",
-      },
-    });
 
     return respostaPlano;
   };
