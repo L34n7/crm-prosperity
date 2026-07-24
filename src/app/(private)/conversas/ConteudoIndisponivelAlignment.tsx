@@ -42,10 +42,10 @@ function encontrarLinhaDoCard(elemento: HTMLElement) {
   let atual: HTMLElement | null = elemento;
   let linhaFlexivel: HTMLElement | null = null;
 
-  while (atual?.parentElement) {
-    const pai = atual.parentElement;
+  while (atual) {
+    const pai: HTMLElement | null = atual.parentElement;
 
-    if (ehContainerDaTimeline(pai)) break;
+    if (!pai || ehContainerDaTimeline(pai)) break;
 
     const estilo = window.getComputedStyle(atual);
     const retanguloAtual = atual.getBoundingClientRect();
@@ -72,7 +72,9 @@ function encontrarCardDireto(linha: HTMLElement, elemento: HTMLElement) {
     card = card.parentElement;
   }
 
-  return card.parentElement === linha ? card : linha.firstElementChild as HTMLElement | null;
+  return card.parentElement === linha
+    ? card
+    : (linha.firstElementChild as HTMLElement | null);
 }
 
 function removerAjuste(linha: HTMLElement) {
