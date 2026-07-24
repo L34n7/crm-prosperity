@@ -1,7 +1,14 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
-import "./assistente-fixes.css";
+import FluxoIaAtivacaoModal from "./FluxoIaAtivacaoModal";
 
 export default function FluxosLayout({ children }: { children: ReactNode }) {
-  return children;
+  return (
+    <>
+      {children}
+      <Suspense fallback={null}>
+        <FluxoIaAtivacaoModal />
+      </Suspense>
+    </>
+  );
 }
