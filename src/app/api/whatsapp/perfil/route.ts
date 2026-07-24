@@ -56,12 +56,180 @@ type IntegracaoWhatsapp = {
   token_ref: string | null;
 };
 
+type PhoneInfoMeta = {
+  verified_name?: string;
+  display_phone_number?: string;
+  status?: string;
+  name_status?: string;
+  new_name_status?: string;
+  quality_rating?: string;
+  messaging_limit_tier?: string;
+  account_mode?: string;
+};
+
+type BusinessProfileMeta = {
+  about?: string | null;
+  address?: string | null;
+  description?: string | null;
+  email?: string | null;
+  profile_picture_url?: string | null;
+  websites?: string[] | null;
+  vertical?: string | null;
+};
+
+type BusinessProfileUpdate = {
+  about: string;
+  address: string;
+  description: string;
+  email: string;
+  websites: string[];
+  vertical: string;
+};
+
+class MetaApiError extends Error {
+  status: number;
+  meta: unknown;
+
+  constructor(message: string, status = 400, meta: unknown = null) {
+    super(message);
+    this.name = "MetaApiError";
+    this.status = status;
+    this.meta = meta;
+  }
+}
+
+function isMetaApiError(error: unknown): error is MetaApiError {
+  return error instanceof MetaApiError;
+}
+
 function extrairToken(integracao: IntegracaoWhatsapp) {
   return getWhatsAppAccessToken(integracao) || null;
 }
 
 function jsonErro(error: string, status = 400, extra?: unknown) {
   return NextResponse.json({ ok: false, error, extra }, { status });
+}
+
+function objetoConfig(configJson: ConfigJson) {
+  return configJson && typeof configJson === "object" && !Array.isArray(configJson)
+    ? configJson
+    : {};
+}
+
+function normalizarStatus(valor: unknown) {
+  return String(valor || "").trim().toLowerCase();
+}
+
+function isErroMetaTemporario(body: MetaErrorBody) {
+  const message = body?.error?.message?.trim().toLowerCase();
+  const code = Number(body?.error?.code);
+  return code === 131000 && Boolean(message?.includes("something went wrong"));
+}
+
+function isErroPermissaoPerfilMeta(body: MetaErrorBody) {
+  const code = Number(body?.error?.code);
+  const texto = [
+    body?.error?.message,
+    body?.error?.error_data?.details,
+    body?.error?.error_user_msg,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    code === 10 ||
+    code === 200 ||
+    texto.includes("does not have permission") ||
+    texto.includes("permission for this action") ||
+    texto.includes("permissions you are using")
+  );
+}
+
+function criarDiagnosticoPermissaoPerfil(metaJson: MetaErrorBody) {
+  return {
+    motivo: "profile_permission_denied",
+    codigoMeta: Number(metaJson?.error?.code) || null,
+    titulo: "Perfil do WhatsApp temporariamente indisponível",
+    descricao:
+      "A conexão continua cadastrada no CRM, mas a Meta não autorizou a consulta do perfil comercial com o token atual. Você ainda pode desconectar a integração e refazer a conexão.",
+    detalheTecnico:
+      metaJson?.error?.error_data?.details?.trim() ||
+      metaJson?.error?.message?.trim() ||
+      null,
+    acaoCliente:
+      "Desconecte a integração no CRM e refaça o onboarding com um usuário administrador do portfólio empresarial, aceitando todas as permissões solicitadas pela Meta.",
+    acaoInterna:
+      "O CRM manteve a integração disponível para gerenciamento e desconexão, sem alterar o status do número por causa desta falha de perfil.",
+    metaManagerUrl:
+      "https://business.facebook.com/latest/whatsapp_manager/phone_numbers",
+    helpWhatsappUrl: null,
+    bloqueiaOperacao: false,
+  };
+}
+
+function normalizarTextoPerfil(valor: unknown) {
+  return typeof valor === "string" ? valor.trim() : "";
+}
+
+function normalizarWebsitesPerfil(valor: unknown) {
+  return Array.isArray(valor)
+    ? valor.map((item) => normalizarTextoPerfil(item)).filter(Boolean)
+    : [];
+}
+
+function perfilMetaCorrespondeAoPayload(
+  perfil: BusinessProfileMeta,
+  payload: BusinessProfileUpdate
+) {
+  return (
+    normalizarTextoPerfil(perfil.about) === payload.about &&
+    normalizarTextoPerfil(perfil.address) === payload.address &&
+    normalizarTextoPerfil(perfil.description) === payload.description &&
+    normalizarTextoPerfil(perfil.email) === payload.email &&
+    normalizarTextoPerfil(perfil.vertical) === payload.vertical &&
+    JSON.stringify(normalizarWebsitesPerfil(perfil.websites)) ===
+      JSON.stringify(payload.websites)
+  );
+}
+
+function extrairMensagemMeta(body: MetaErrorBody, fallback: string) {
+  const message = body?.error?.message?.trim();
+  const details = body?.error?.error_data?.details?.trim();
+  const fallbackLower = fallback.toLowerCase();
+
+  if (isErroPermissaoPerfilMeta(body)) {
+    return "A Meta não autorizou esta operação com o token atual. Reconecte a integração com um administrador do portfólio empresarial e aceite todas as permissões solicitadas.";
+  }
+
+  if (message?.includes("Param websites")) {
+    return "Um dos sites informados não é válido. Use uma URL completa começando com https:// ou http://.";
+  }
+
+  if (Number(body?.error?.code) === 100) {
+    return (
+      details ||
+      fallback ||
+      "A Meta recusou algum parâmetro enviado. Revise os dados do perfil e tente novamente."
+    );
+  }
+
+  if (
+    isErroMetaTemporario(body) &&
+    (fallbackLower.includes("upload") || fallbackLower.includes("foto"))
+  ) {
+    return "A Meta recusou o upload da foto. Verifique se META_APP_ID é o App ID correto do aplicativo usado no Embedded Signup e tente novamente com uma imagem PNG ou JPG de até 5 MB.";
+  }
+
+  if (isErroMetaTemporario(body)) {
+    return "A Meta retornou um erro temporário ao confirmar o perfil. A alteração pode levar alguns segundos para aparecer no WhatsApp.";
+  }
+
+  if (message && details && !message.includes(details)) {
+    return `${message} ${details}`;
+  }
+
+  return message || details || fallback;
 }
 
 async function buscarIntegracao(
@@ -95,7 +263,6 @@ async function buscarIntegracao(
 
 async function buscarAdministradorEmpresa(empresaId: string) {
   const supabase = await createClient();
-
   const { data, error } = await supabase
     .from("usuarios")
     .select("id, nome, email, created_at")
@@ -117,126 +284,6 @@ async function buscarAdministradorEmpresa(empresaId: string) {
         email: data.email || null,
       }
     : null;
-}
-
-type PhoneInfoMeta = {
-  verified_name?: string;
-  display_phone_number?: string;
-  status?: string;
-  name_status?: string;
-  new_name_status?: string;
-  quality_rating?: string;
-  messaging_limit_tier?: string;
-  account_mode?: string;
-};
-
-type BusinessProfileMeta = {
-  about?: string | null;
-  address?: string | null;
-  description?: string | null;
-  email?: string | null;
-  websites?: string[] | null;
-  vertical?: string | null;
-};
-
-type BusinessProfileUpdate = {
-  about: string;
-  address: string;
-  description: string;
-  email: string;
-  websites: string[];
-  vertical: string;
-};
-
-class MetaApiError extends Error {
-  status: number;
-  meta: unknown;
-
-  constructor(message: string, status = 400, meta: unknown = null) {
-    super(message);
-    this.name = "MetaApiError";
-    this.status = status;
-    this.meta = meta;
-  }
-}
-
-function isMetaApiError(error: unknown): error is MetaApiError {
-  return error instanceof MetaApiError;
-}
-
-function isErroMetaTemporario(body: MetaErrorBody) {
-  const message = body?.error?.message?.trim().toLowerCase();
-  const code = Number(body?.error?.code);
-
-  return code === 131000 && Boolean(message?.includes("something went wrong"));
-}
-
-function normalizarTextoPerfil(valor: unknown) {
-  return typeof valor === "string" ? valor.trim() : "";
-}
-
-function normalizarWebsitesPerfil(valor: unknown) {
-  return Array.isArray(valor)
-    ? valor
-        .map((item) => normalizarTextoPerfil(item))
-        .filter(Boolean)
-    : [];
-}
-
-function perfilMetaCorrespondeAoPayload(
-  perfil: BusinessProfileMeta,
-  payload: BusinessProfileUpdate
-) {
-  return (
-    normalizarTextoPerfil(perfil.about) === payload.about &&
-    normalizarTextoPerfil(perfil.address) === payload.address &&
-    normalizarTextoPerfil(perfil.description) === payload.description &&
-    normalizarTextoPerfil(perfil.email) === payload.email &&
-    normalizarTextoPerfil(perfil.vertical) === payload.vertical &&
-    JSON.stringify(normalizarWebsitesPerfil(perfil.websites)) ===
-      JSON.stringify(payload.websites)
-  );
-}
-
-function extrairMensagemMeta(body: MetaErrorBody, fallback: string) {
-  const message = body?.error?.message?.trim();
-  const details = body?.error?.error_data?.details?.trim();
-  const fallbackLower = fallback.toLowerCase();
-
-  if (message?.includes("Param websites")) {
-    return "Um dos sites informados não é válido. Use uma URL completa começando com https:// ou http://.";
-  }
-
-  if (Number(body?.error?.code) === 100) {
-    return (
-      details ||
-      fallback ||
-      "A Meta recusou algum parâmetro enviado. Revise os dados do perfil e tente novamente."
-    );
-  }
-  
-  if (
-    isErroMetaTemporario(body) &&
-    (fallbackLower.includes("upload") || fallbackLower.includes("foto"))
-  ) {
-    return "A Meta recusou o upload da foto. Verifique se META_APP_ID é o App ID correto do aplicativo usado no Embedded Signup e tente novamente com uma imagem PNG ou JPG de até 5 MB.";
-  }
-
-  if (isErroMetaTemporario(body)) {
-    return "A Meta retornou um erro temporario ao confirmar o perfil. A foto pode levar alguns segundos para aparecer no WhatsApp.";
-  }
-
-  if (message && details && !message.includes(details)) {
-    return `${message} ${details}`;
-  }
-
-  return message || details || fallback;
-}
-
-function objetoConfig(configJson: ConfigJson) {
-  return configJson && typeof configJson === "object" && !Array.isArray(configJson)
-    ? configJson
-    : {};
 }
 
 function normalizarStatusIntegracaoWhatsapp(valor?: string | null) {
@@ -262,10 +309,8 @@ function montarIntegracaoResposta(
     phone_number_id: integracao.phone_number_id,
     verified_name: overrides.verified_name ?? integracao.verified_name,
     phone_number_display_name:
-      overrides.phone_number_display_name ??
-      integracao.phone_number_display_name,
-    display_phone_number:
-      overrides.display_phone_number ?? integracao.numero,
+      overrides.phone_number_display_name ?? integracao.phone_number_display_name,
+    display_phone_number: overrides.display_phone_number ?? integracao.numero,
     name_status:
       overrides.name_status ??
       overrides.phone_number_status ??
@@ -295,9 +340,9 @@ function montarIntegracaoResposta(
       overrides.onboarding_erro ?? integracao.onboarding_erro ?? null,
     modo_integracao:
       overrides.modo_integracao ?? integracao.modo_integracao ?? "cloud_api",
-    coex_status:
-      overrides.coex_status ?? integracao.coex_status ?? null,
+    coex_status: overrides.coex_status ?? integracao.coex_status ?? null,
     posicao: overrides.posicao ?? integracao.posicao ?? null,
+    waba_id: integracao.waba_id,
   };
 }
 
@@ -311,7 +356,6 @@ async function marcarIntegracaoComDiagnosticoMeta(params: {
   const supabase = await createClient();
   const agora = new Date().toISOString();
   const configAtual = objetoConfig(integracao.config_json);
-
   const payload: Record<string, unknown> = {
     onboarding_status: "erro",
     onboarding_erro: diagnostico.descricao,
@@ -329,10 +373,7 @@ async function marcarIntegracaoComDiagnosticoMeta(params: {
     diagnostico.statusIntegracao
   );
 
-  if (statusIntegracao) {
-    payload.status = statusIntegracao;
-  }
-
+  if (statusIntegracao) payload.status = statusIntegracao;
   if (diagnostico.statusNumeroMeta) {
     payload.phone_number_status = diagnostico.statusNumeroMeta;
   }
@@ -364,31 +405,39 @@ async function marcarIntegracaoRecuperadaSeNecessario(params: {
   const { integracao, empresaId, phoneJson } = params;
   const configAtual = objetoConfig(integracao.config_json);
   const diagnosticoAnterior = configAtual.whatsapp_meta_diagnostic;
-
   const eraBloqueioMeta =
     diagnosticoAnterior &&
     typeof diagnosticoAnterior === "object" &&
     "motivo" in diagnosticoAnterior &&
     diagnosticoAnterior.motivo === "business_account_locked";
 
-  const phoneNumberStatus =
-    phoneJson?.status || phoneJson?.name_status || null;
-  const statusNormalizado = String(phoneNumberStatus || "").toLowerCase();
+  const statusAnteriorBloqueado = [
+    "banned",
+    "banido",
+    "blocked",
+    "bloqueado",
+    "restricted",
+  ].includes(normalizarStatus(integracao.phone_number_status));
+  const phoneNumberStatus = phoneJson?.status || phoneJson?.name_status || null;
+  const statusAtualBloqueado = [
+    "banned",
+    "banido",
+    "blocked",
+    "bloqueado",
+    "restricted",
+  ].includes(normalizarStatus(phoneNumberStatus));
 
   if (
-    !["bloqueado", "erro"].includes(integracao.status) ||
-    !eraBloqueioMeta ||
     !phoneJson ||
-    ["banned", "banido", "blocked", "bloqueado", "restricted"].includes(
-      statusNormalizado
-    )
+    !phoneNumberStatus ||
+    statusAtualBloqueado ||
+    (!eraBloqueioMeta && !statusAnteriorBloqueado)
   ) {
     return null;
   }
 
   const supabase = await createClient();
   const agora = new Date().toISOString();
-
   const payload = {
     status: "ativa",
     onboarding_status: "concluido",
@@ -399,6 +448,9 @@ async function marcarIntegracaoRecuperadaSeNecessario(params: {
     config_json: {
       ...configAtual,
       whatsapp_meta_diagnostic: null,
+      whatsapp_last_meta_error: null,
+      whatsapp_last_meta_error_at: null,
+      whatsapp_meta_operational_block_applied_at: null,
       whatsapp_meta_recovered_at: agora,
     },
   };
@@ -428,10 +480,7 @@ async function salvarSaudeMetaIntegracao(params: {
   phoneJson: PhoneInfoMeta | null;
 }) {
   const { integracao, empresaId, phoneJson } = params;
-
-  if (!phoneJson) {
-    return null;
-  }
+  if (!phoneJson) return null;
 
   const supabase = await createClient();
   const agora = new Date().toISOString();
@@ -515,6 +564,337 @@ async function salvarSaudeMetaIntegracao(params: {
   return overrides;
 }
 
+async function consultarPhoneInfoMeta(
+  integracao: IntegracaoWhatsapp,
+  token: string
+) {
+  const response = await fetch(
+    `https://graph.facebook.com/${GRAPH_VERSION}/${integracao.phone_number_id}?fields=verified_name,display_phone_number,status,name_status,new_name_status,quality_rating,messaging_limit_tier,account_mode`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    }
+  );
+  const json = (await response.json()) as PhoneInfoMeta & MetaErrorBody;
+  return { response, json };
+}
+
+function montarOverridesResposta(
+  integracao: IntegracaoWhatsapp,
+  phoneJson: PhoneInfoMeta | null,
+  saudeOverrides: Partial<IntegracaoWhatsapp> | null,
+  recuperacaoOverrides: Partial<IntegracaoWhatsapp> | null
+) {
+  return {
+    ...(saudeOverrides || {}),
+    ...(recuperacaoOverrides || {}),
+    verified_name:
+      phoneJson?.verified_name || integracao.verified_name || null,
+    phone_number_display_name:
+      phoneJson?.verified_name || integracao.phone_number_display_name || null,
+    display_phone_number: phoneJson?.display_phone_number || integracao.numero,
+    name_status: phoneJson?.name_status || null,
+    new_name_status: phoneJson?.new_name_status || null,
+    phone_number_status:
+      phoneJson?.status ||
+      phoneJson?.name_status ||
+      recuperacaoOverrides?.phone_number_status ||
+      saudeOverrides?.phone_number_status ||
+      integracao.phone_number_status,
+    quality_rating:
+      phoneJson?.quality_rating ||
+      saudeOverrides?.quality_rating ||
+      integracao.quality_rating,
+  };
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const contexto = await getUsuarioContexto();
+    if (!contexto.ok) return jsonErro(contexto.error, contexto.status);
+
+    const empresaId = contexto.usuario.empresa_id;
+    if (!empresaId) return jsonErro("Usuário sem empresa vinculada.", 403);
+
+    const [limiteIntegracoesWhatsapp, todasIntegracoesWhatsapp] =
+      await Promise.all([
+        obterLimiteIntegracoesWhatsapp(empresaId),
+        listarIntegracoesWhatsappDaEmpresa(empresaId),
+      ]);
+    const proximaPosicaoIntegracao = calcularProximaPosicaoLivre(
+      todasIntegracoesWhatsapp,
+      limiteIntegracoesWhatsapp
+    );
+    const { searchParams } = new URL(req.url);
+    const integracaoId = searchParams.get("integracao_id");
+    const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
+      usuario: contexto.usuario,
+      empresaId,
+    });
+    const idsIntegracoesPermitidas = new Set(acessoIntegracoes.idsPermitidos);
+    const integracoes = (await buscarIntegracao(empresaId, null)).filter((item) =>
+      idsIntegracoesPermitidas.has(item.id)
+    );
+
+    if (integracaoId && !idsIntegracoesPermitidas.has(integracaoId)) {
+      return jsonErro("Sem acesso a esta integração WhatsApp.", 403);
+    }
+
+    const integracaoSelecionada =
+      integracoes.find((item) => item.id === integracaoId) ||
+      integracoes.find((item) => isWhatsAppProfileMetaAvailable(item)) ||
+      integracoes[0] ||
+      null;
+
+    const administradorPromise = buscarAdministradorEmpresa(empresaId);
+    const baseResposta = {
+      limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
+      total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
+      proxima_posicao: proximaPosicaoIntegracao,
+      pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
+    };
+
+    if (!integracaoSelecionada) {
+      return NextResponse.json({
+        ok: true,
+        onboarding_incompleto: true,
+        onboarding_redirect: "/configurar-ambiente",
+        message: "Conclua a configuração do WhatsApp para liberar o perfil.",
+        integracoes: [],
+        integracao: null,
+        ...baseResposta,
+        administrador: await administradorPromise,
+        limite_meta: null,
+        perfil: null,
+      });
+    }
+
+    if (!isWhatsAppProfileMetaAvailable(integracaoSelecionada)) {
+      const onboardingRedirect = `/configurar-ambiente?integracao_id=${encodeURIComponent(
+        integracaoSelecionada.id
+      )}&retomar=1`;
+      return NextResponse.json({
+        ok: true,
+        onboarding_incompleto: true,
+        onboarding_redirect: onboardingRedirect,
+        message: "Esta conexão ainda não concluiu o onboarding do WhatsApp.",
+        integracoes: integracoes.map((item) => montarIntegracaoResposta(item)),
+        integracao: montarIntegracaoResposta(integracaoSelecionada),
+        ...baseResposta,
+        administrador: await administradorPromise,
+        limite_meta: null,
+        perfil: null,
+      });
+    }
+
+    if (!integracaoSelecionada.phone_number_id) {
+      return NextResponse.json({
+        ok: true,
+        perfil_indisponivel: true,
+        diagnostico: {
+          motivo: "missing_phone_number_id",
+          codigoMeta: null,
+          titulo: "Número do WhatsApp não identificado",
+          descricao:
+            "A integração existe no CRM, mas o identificador do número não foi salvo. Você pode desconectar e refazer a conexão.",
+          detalheTecnico: null,
+          acaoCliente: "Desconecte a integração e refaça o onboarding.",
+          acaoInterna: null,
+          metaManagerUrl: null,
+          helpWhatsappUrl: null,
+          bloqueiaOperacao: false,
+        },
+        integracoes: integracoes.map((item) => montarIntegracaoResposta(item)),
+        integracao: montarIntegracaoResposta(integracaoSelecionada),
+        ...baseResposta,
+        administrador: await administradorPromise,
+        limite_meta: null,
+        perfil: null,
+      });
+    }
+
+    const token = extrairToken(integracaoSelecionada);
+    if (!token) {
+      return NextResponse.json({
+        ok: true,
+        perfil_indisponivel: true,
+        diagnostico: {
+          motivo: "missing_access_token",
+          codigoMeta: null,
+          titulo: "Token da Meta não encontrado",
+          descricao:
+            "A integração continua disponível no CRM, mas não possui um token válido para consultar o perfil. Você pode desconectar e refazer a conexão.",
+          detalheTecnico: null,
+          acaoCliente: "Desconecte a integração e refaça o onboarding.",
+          acaoInterna: null,
+          metaManagerUrl: null,
+          helpWhatsappUrl: null,
+          bloqueiaOperacao: false,
+        },
+        integracoes: integracoes.map((item) => montarIntegracaoResposta(item)),
+        integracao: montarIntegracaoResposta(integracaoSelecionada),
+        ...baseResposta,
+        administrador: await administradorPromise,
+        limite_meta: null,
+        perfil: null,
+      });
+    }
+
+    let phoneJson: PhoneInfoMeta | null = null;
+    let phoneErrorJson: MetaErrorBody | null = null;
+    const phoneResult = await consultarPhoneInfoMeta(integracaoSelecionada, token);
+
+    if (phoneResult.response.ok) {
+      phoneJson = phoneResult.json;
+    } else {
+      phoneErrorJson = phoneResult.json;
+      console.warn("[WHATSAPP PHONE INFO ERROR]", phoneResult.json);
+    }
+
+    const saudeOverrides = await salvarSaudeMetaIntegracao({
+      integracao: integracaoSelecionada,
+      empresaId,
+      phoneJson,
+    });
+    const recuperacaoOverrides = await marcarIntegracaoRecuperadaSeNecessario({
+      integracao: integracaoSelecionada,
+      empresaId,
+      phoneJson,
+    });
+    const overridesResposta = montarOverridesResposta(
+      integracaoSelecionada,
+      phoneJson,
+      saudeOverrides,
+      recuperacaoOverrides
+    );
+    const integracaoResumoLimite = {
+      ...integracaoSelecionada,
+      ...overridesResposta,
+    };
+    const [limiteMeta, administrador] = await Promise.all([
+      obterResumoLimiteMeta({ empresaId, integracao: integracaoResumoLimite }),
+      administradorPromise,
+    ]);
+
+    const respostaComum = {
+      integracoes: integracoes.map((item) =>
+        item.id === integracaoSelecionada.id
+          ? montarIntegracaoResposta(item, overridesResposta)
+          : montarIntegracaoResposta(item)
+      ),
+      integracao: montarIntegracaoResposta(
+        integracaoSelecionada,
+        overridesResposta
+      ),
+      ...baseResposta,
+      administrador,
+      limite_meta: limiteMeta,
+    };
+
+    const fields =
+      "about,address,description,email,profile_picture_url,websites,vertical";
+    const metaRes = await fetch(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${integracaoSelecionada.phone_number_id}/whatsapp_business_profile?fields=${encodeURIComponent(
+        fields
+      )}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }
+    );
+    const metaJson = (await metaRes.json()) as MetaErrorBody & {
+      data?: BusinessProfileMeta[];
+    } & BusinessProfileMeta;
+
+    if (!metaRes.ok) {
+      const diagnostico = diagnosticarErroMetaWhatsapp(
+        metaJson,
+        "Erro ao buscar perfil no Meta."
+      );
+
+      if (diagnostico.bloqueiaOperacao) {
+        await marcarIntegracaoComDiagnosticoMeta({
+          integracao: integracaoSelecionada,
+          empresaId,
+          diagnostico,
+          metaResponse: metaJson,
+        });
+        const overridesBloqueio = {
+          ...overridesResposta,
+          status: diagnostico.statusIntegracao || integracaoSelecionada.status,
+          phone_number_status:
+            diagnostico.statusNumeroMeta ||
+            overridesResposta.phone_number_status ||
+            integracaoSelecionada.phone_number_status,
+          onboarding_erro: diagnostico.descricao,
+        };
+
+        return NextResponse.json({
+          ok: true,
+          blocked: true,
+          diagnostico,
+          meta: metaJson,
+          integracoes: integracoes.map((item) =>
+            item.id === integracaoSelecionada.id
+              ? montarIntegracaoResposta(item, overridesBloqueio)
+              : montarIntegracaoResposta(item)
+          ),
+          integracao: montarIntegracaoResposta(
+            integracaoSelecionada,
+            overridesBloqueio
+          ),
+          ...baseResposta,
+          administrador,
+          limite_meta: limiteMeta,
+          perfil: null,
+        });
+      }
+
+      const diagnosticoPerfil = isErroPermissaoPerfilMeta(metaJson)
+        ? criarDiagnosticoPermissaoPerfil(metaJson)
+        : {
+            ...diagnostico,
+            titulo: "Não foi possível carregar o perfil do WhatsApp",
+            descricao:
+              "A integração continua disponível para gerenciamento e desconexão, mas a Meta não retornou os dados do perfil neste momento.",
+            bloqueiaOperacao: false,
+          };
+
+      return NextResponse.json({
+        ok: true,
+        perfil_indisponivel: true,
+        diagnostico: diagnosticoPerfil,
+        meta: metaJson,
+        ...respostaComum,
+        perfil: null,
+      });
+    }
+
+    if (phoneErrorJson && isErroPermissaoPerfilMeta(phoneErrorJson)) {
+      console.warn(
+        "[WHATSAPP PHONE INFO PERMISSION ERROR] Perfil carregado, mas status do número não pôde ser atualizado.",
+        phoneErrorJson
+      );
+    }
+
+    const perfil = Array.isArray(metaJson?.data) ? metaJson.data[0] : metaJson;
+    return NextResponse.json({
+      ok: true,
+      diagnostico: null,
+      ...respostaComum,
+      perfil,
+    });
+  } catch (error: unknown) {
+    console.error("[WHATSAPP PERFIL GET ERROR]", error);
+    return jsonErro(
+      error instanceof Error ? error.message : "Erro interno ao buscar perfil.",
+      500
+    );
+  }
+}
+
 function isFotoPerfilValida(file: File) {
   return PROFILE_PHOTO_TYPES.has(file.type) && file.size <= MAX_PROFILE_PHOTO_BYTES;
 }
@@ -551,283 +931,6 @@ function resolverAppIdPerfil(integracao: IntegracaoWhatsapp) {
   return { ok: true as const, appId };
 }
 
-export async function GET(req: NextRequest) {
-  try {
-    const contexto = await getUsuarioContexto();
-    console.log("[PERFIL] CONTEXTO:", contexto);
-    console.log("[PERFIL] EMPRESA:", contexto.ok ? contexto.usuario.empresa_id : null);
-
-    if (!contexto.ok) {
-      return jsonErro(contexto.error, contexto.status);
-    }
-
-    const empresaId = contexto.usuario.empresa_id;
-
-    if (!empresaId) {
-      return jsonErro("Usuário sem empresa vinculada.", 403);
-    }
-
-    const [limiteIntegracoesWhatsapp, todasIntegracoesWhatsapp] =
-      await Promise.all([
-        obterLimiteIntegracoesWhatsapp(empresaId),
-        listarIntegracoesWhatsappDaEmpresa(empresaId),
-      ]);
-    const proximaPosicaoIntegracao = calcularProximaPosicaoLivre(
-      todasIntegracoesWhatsapp,
-      limiteIntegracoesWhatsapp
-    );
-
-    const { searchParams } = new URL(req.url);
-    const integracaoId = searchParams.get("integracao_id");
-
-    const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
-      usuario: contexto.usuario,
-      empresaId,
-    });
-    const idsIntegracoesPermitidas = new Set(acessoIntegracoes.idsPermitidos);
-    const integracoes = (await buscarIntegracao(empresaId, null)).filter(
-      (item) => idsIntegracoesPermitidas.has(item.id)
-    );
-
-    if (integracaoId && !idsIntegracoesPermitidas.has(integracaoId)) {
-      return jsonErro("Sem acesso a esta integraÃ§Ã£o WhatsApp.", 403);
-    }
-
-    const integracaoSelecionada =
-      integracoes.find((item) => item.id === integracaoId) ||
-      integracoes.find((item) =>
-        isWhatsAppProfileMetaAvailable(item)
-      ) ||
-      integracoes[0] ||
-      null;
-
-    if (!integracaoSelecionada) {
-      return NextResponse.json({
-        ok: true,
-        onboarding_incompleto: true,
-        onboarding_redirect: "/configurar-ambiente",
-        message:
-          "Conclua a configuração do WhatsApp para liberar o perfil.",
-        integracoes: [],
-        integracao: null,
-        limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
-        total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
-        proxima_posicao: proximaPosicaoIntegracao,
-        pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
-        administrador: await buscarAdministradorEmpresa(empresaId),
-        limite_meta: null,
-        perfil: null,
-      });
-    }
-
-    if (!isWhatsAppProfileMetaAvailable(integracaoSelecionada)) {
-      const onboardingRedirect = `/configurar-ambiente?integracao_id=${encodeURIComponent(
-        integracaoSelecionada.id
-      )}&retomar=1`;
-
-      return NextResponse.json({
-        ok: true,
-        onboarding_incompleto: true,
-        onboarding_redirect: onboardingRedirect,
-        message:
-          "Esta conexão ainda não concluiu o onboarding do WhatsApp.",
-        integracoes: integracoes.map((item) =>
-          montarIntegracaoResposta(item)
-        ),
-        integracao: montarIntegracaoResposta(integracaoSelecionada),
-        limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
-        total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
-        proxima_posicao: proximaPosicaoIntegracao,
-        pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
-        administrador: await buscarAdministradorEmpresa(empresaId),
-        limite_meta: null,
-        perfil: null,
-      });
-    }
-
-    if (!integracaoSelecionada.phone_number_id) {
-      return jsonErro("Essa integração não possui phone_number_id.", 400);
-    }
-
-    const token = extrairToken(integracaoSelecionada)
-
-    if (!token) {
-      return jsonErro(
-        "Token da Meta não encontrado no config_json da integração.",
-        400
-      );
-    }
-
-    const fields =
-      "about,address,description,email,profile_picture_url,websites,vertical";
-
-    const metaRes = await fetch(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${integracaoSelecionada.phone_number_id}/whatsapp_business_profile?fields=${encodeURIComponent(
-        fields
-      )}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-      }
-    );
-
-    const metaJson = await metaRes.json();
-
-    if (!metaRes.ok) {
-      const diagnostico = diagnosticarErroMetaWhatsapp(
-        metaJson,
-        "Erro ao buscar perfil no Meta."
-      );
-
-      if (diagnostico.bloqueiaOperacao) {
-        await marcarIntegracaoComDiagnosticoMeta({
-          integracao: integracaoSelecionada,
-          empresaId,
-          diagnostico,
-          metaResponse: metaJson,
-        });
-
-        const overridesBloqueio = {
-          status: diagnostico.statusIntegracao || integracaoSelecionada.status,
-          phone_number_status:
-            diagnostico.statusNumeroMeta ||
-            integracaoSelecionada.phone_number_status,
-          onboarding_erro: diagnostico.descricao,
-        };
-
-        return NextResponse.json({
-          ok: true,
-          blocked: true,
-          diagnostico,
-          meta: metaJson,
-          integracoes: integracoes.map((item) =>
-            item.id === integracaoSelecionada.id
-              ? montarIntegracaoResposta(item, overridesBloqueio)
-              : montarIntegracaoResposta(item)
-          ),
-          integracao: montarIntegracaoResposta(
-            integracaoSelecionada,
-            overridesBloqueio
-          ),
-          limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
-          total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
-          proxima_posicao: proximaPosicaoIntegracao,
-          pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
-          perfil: null,
-        });
-      }
-
-      return jsonErro(
-        extrairMensagemMeta(metaJson, "Erro ao buscar perfil no Meta."),
-        metaRes.status,
-        metaJson
-      );
-    }
-
-    const perfil = Array.isArray(metaJson?.data) ? metaJson.data[0] : metaJson;
-
-    let phoneJson: PhoneInfoMeta | null = null;
-
-    const phoneRes = await fetch(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${integracaoSelecionada.phone_number_id}?fields=verified_name,display_phone_number,status,name_status,new_name_status,quality_rating,messaging_limit_tier,account_mode`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-      }
-    );
-
-    phoneJson = (await phoneRes.json()) as PhoneInfoMeta;
-
-    if (!phoneRes.ok) {
-      console.warn("[WHATSAPP PHONE INFO ERROR]", phoneJson);
-      phoneJson = null;
-    }
-
-    const saudeOverrides = await salvarSaudeMetaIntegracao({
-      integracao: integracaoSelecionada,
-      empresaId,
-      phoneJson,
-    });
-
-    const recuperacaoOverrides = await marcarIntegracaoRecuperadaSeNecessario({
-      integracao: integracaoSelecionada,
-      empresaId,
-      phoneJson,
-    });
-
-    const overridesResposta = {
-      ...(saudeOverrides || {}),
-      ...(recuperacaoOverrides || {}),
-      verified_name:
-        phoneJson?.verified_name ||
-        integracaoSelecionada.verified_name ||
-        null,
-      phone_number_display_name:
-        phoneJson?.verified_name ||
-        integracaoSelecionada.phone_number_display_name ||
-        null,
-      display_phone_number:
-        phoneJson?.display_phone_number || integracaoSelecionada.numero,
-      name_status: phoneJson?.name_status || null,
-      new_name_status: phoneJson?.new_name_status || null,
-      phone_number_status:
-        phoneJson?.status ||
-        phoneJson?.name_status ||
-        recuperacaoOverrides?.phone_number_status ||
-        saudeOverrides?.phone_number_status ||
-        integracaoSelecionada.phone_number_status,
-      quality_rating:
-        phoneJson?.quality_rating ||
-        saudeOverrides?.quality_rating ||
-        integracaoSelecionada.quality_rating,
-    };
-
-    const integracaoResumoLimite = {
-      ...integracaoSelecionada,
-      ...overridesResposta,
-    };
-    const limiteMeta = await obterResumoLimiteMeta({
-      empresaId,
-      integracao: integracaoResumoLimite,
-    });
-
-    const administrador = await buscarAdministradorEmpresa(empresaId);
-
-    return NextResponse.json({
-      ok: true,
-      diagnostico: null,
-      integracoes: integracoes.map((item) =>
-        item.id === integracaoSelecionada.id
-          ? montarIntegracaoResposta(item, overridesResposta)
-          : montarIntegracaoResposta(item)
-      ),
-      integracao: montarIntegracaoResposta(
-        integracaoSelecionada,
-        overridesResposta
-      ),
-      limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
-      total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
-      proxima_posicao: proximaPosicaoIntegracao,
-      pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
-      administrador,
-      limite_meta: limiteMeta,
-      perfil,
-    });
-  } catch (error: unknown) {
-    console.error("[WHATSAPP PERFIL GET ERROR]", error);
-    return jsonErro(
-      error instanceof Error ? error.message : "Erro interno ao buscar perfil.",
-      500
-    );
-  }
-}
-
 async function uploadFotoPerfil(params: {
   appId: string;
   token: string;
@@ -845,7 +948,6 @@ async function uploadFotoPerfil(params: {
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-
   const sessionUrl = new URL(
     `https://graph.facebook.com/${GRAPH_VERSION}/${appId}/uploads`
   );
@@ -855,32 +957,18 @@ async function uploadFotoPerfil(params: {
 
   const sessionRes = await fetch(sessionUrl.toString(), {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
-
   const sessionJson = await sessionRes.json();
 
   if (!sessionRes.ok || !sessionJson?.id) {
-    const sessionErrorMessage = extrairMensagemMeta(
-      sessionJson,
-      "Erro ao criar sessão de upload da foto no Meta."
-    );
-
-    if (sessionJson && typeof sessionJson === "object") {
-      sessionJson.error = {
-        ...(sessionJson.error || {}),
-        message: sessionErrorMessage,
-      };
-    }
-
-    if (sessionErrorMessage) {
-      throw new MetaApiError(sessionErrorMessage, sessionRes.status, sessionJson);
-    }
-
     throw new MetaApiError(
-      sessionJson?.error?.message || "Erro ao criar sessão de upload da foto."
+      extrairMensagemMeta(
+        sessionJson,
+        "Erro ao criar sessão de upload da foto no Meta."
+      ),
+      sessionRes.status,
+      sessionJson
     );
   }
 
@@ -896,28 +984,13 @@ async function uploadFotoPerfil(params: {
       body: buffer,
     }
   );
-
   const uploadJson = await uploadRes.json();
 
   if (!uploadRes.ok || !uploadJson?.h) {
-    const uploadErrorMessage = extrairMensagemMeta(
-      uploadJson,
-      "Erro ao enviar foto para o Meta."
-    );
-
-    if (uploadJson && typeof uploadJson === "object") {
-      uploadJson.error = {
-        ...(uploadJson.error || {}),
-        message: uploadErrorMessage,
-      };
-    }
-
-    if (uploadErrorMessage) {
-      throw new MetaApiError(uploadErrorMessage, uploadRes.status, uploadJson);
-    }
-
     throw new MetaApiError(
-      uploadJson?.error?.message || "Erro ao enviar foto para o Meta."
+      extrairMensagemMeta(uploadJson, "Erro ao enviar foto para o Meta."),
+      uploadRes.status,
+      uploadJson
     );
   }
 
@@ -929,13 +1002,10 @@ async function marcarIntegracaoSincronizada(
   empresaId: string
 ) {
   const supabase = await createClient();
-
+  const agora = new Date().toISOString();
   await supabase
     .from("integracoes_whatsapp")
-    .update({
-      ultimo_sync_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update({ ultimo_sync_at: agora, updated_at: agora })
     .eq("id", integracaoId)
     .eq("empresa_id", empresaId);
 }
@@ -955,33 +1025,15 @@ async function confirmarAtualizacaoPerfil(params: {
       )}`,
       {
         method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       }
     );
-
     const metaJson = await metaRes.json();
-
-    if (!metaRes.ok) {
-      console.warn(
-        "[WHATSAPP PERFIL PATCH CONFIRMATION ERROR]",
-        metaJson
-      );
-      return false;
-    }
-
-    const perfil = Array.isArray(metaJson?.data)
-      ? metaJson.data[0]
-      : metaJson;
-
+    if (!metaRes.ok) return false;
+    const perfil = Array.isArray(metaJson?.data) ? metaJson.data[0] : metaJson;
     return Boolean(
-      perfil &&
-        perfilMetaCorrespondeAoPayload(
-          perfil as BusinessProfileMeta,
-          payload
-        )
+      perfil && perfilMetaCorrespondeAoPayload(perfil, payload)
     );
   } catch (error) {
     console.warn("[WHATSAPP PERFIL PATCH CONFIRMATION ERROR]", error);
@@ -992,19 +1044,12 @@ async function confirmarAtualizacaoPerfil(params: {
 export async function PATCH(req: NextRequest) {
   try {
     const contexto = await getUsuarioContexto();
-
-    if (!contexto.ok) {
-      return jsonErro(contexto.error, contexto.status);
-    }
+    if (!contexto.ok) return jsonErro(contexto.error, contexto.status);
 
     const empresaId = contexto.usuario.empresa_id;
-
-    if (!empresaId) {
-      return jsonErro("Usuário sem empresa vinculada.", 403);
-    }
+    if (!empresaId) return jsonErro("Usuário sem empresa vinculada.", 403);
 
     const formData = await req.formData();
-
     const integracaoId = String(formData.get("integracao_id") || "");
     const about = String(formData.get("about") || "").trim();
     const address = String(formData.get("address") || "").trim();
@@ -1015,15 +1060,9 @@ export async function PATCH(req: NextRequest) {
     const vertical = String(formData.get("vertical") || "").trim();
     const foto = formData.get("profile_picture");
 
-    if (!integracaoId) {
-      return jsonErro("Selecione uma integração.", 400);
-    }
-
+    if (!integracaoId) return jsonErro("Selecione uma integração.", 400);
     const [integracao] = await buscarIntegracao(empresaId, integracaoId);
-
-    if (!integracao) {
-      return jsonErro("Integração não encontrada.", 404);
-    }
+    if (!integracao) return jsonErro("Integração não encontrada.", 404);
 
     if (!isWhatsAppProfileMetaAvailable(integracao)) {
       return jsonErro(
@@ -1052,7 +1091,6 @@ export async function PATCH(req: NextRequest) {
     }
 
     const token = extrairToken(integracao);
-
     if (!token) {
       return jsonErro(
         "Token da Meta não encontrado no config_json da integração.",
@@ -1060,77 +1098,52 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-  const websitesBrutos = [website1, website2]
-    .map((site) => site?.trim())
-    .filter(Boolean) as string[];
+    const websitesBrutos = [website1, website2]
+      .map((site) => site.trim())
+      .filter(Boolean);
+    const siteInvalido = websitesBrutos.find((site) => {
+      try {
+        const url = new URL(site);
+        return url.protocol !== "http:" && url.protocol !== "https:";
+      } catch {
+        return true;
+      }
+    });
 
-  const siteInvalido = websitesBrutos.find((site) => {
-    try {
-      const url = new URL(site);
-      return url.protocol !== "http:" && url.protocol !== "https:";
-    } catch {
-      return true;
+    if (siteInvalido) {
+      return jsonErro(
+        `O site "${siteInvalido}" não é válido. Informe uma URL completa começando com https:// ou http://.`,
+        400
+      );
     }
-  });
 
-  if (siteInvalido) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: `O site "${siteInvalido}" não é válido. Informe uma URL completa começando com https:// ou http://.`,
-      },
-      { status: 400 }
-    );
-  }
-
-  const websites = websitesBrutos;
-
-  const dadosPerfil: BusinessProfileUpdate = {
-    about,
-    address,
-    description,
-    email,
-    websites,
-    vertical,
-  };
-
-  const payload: Record<string, unknown> = {
-    messaging_product: "whatsapp",
-    about: about ?? "",
-    address: address ?? "",
-    description: description ?? "",
-    email: email ?? "",
-    websites,
-  };
-
-  if (vertical) {
-    payload.vertical = vertical;
-  }
+    const dadosPerfil: BusinessProfileUpdate = {
+      about,
+      address,
+      description,
+      email,
+      websites: websitesBrutos,
+      vertical,
+    };
+    const payload: Record<string, unknown> = {
+      messaging_product: "whatsapp",
+      about,
+      address,
+      description,
+      email,
+      websites: websitesBrutos,
+    };
+    if (vertical) payload.vertical = vertical;
 
     let atualizacaoComFoto = false;
-
     if (foto instanceof File && foto.size > 0) {
       const appIdResult = resolverAppIdPerfil(integracao);
-      if (!appIdResult.ok) {
-        return jsonErro(appIdResult.error, 400);
-      }
-
-      const appId = appIdResult.appId;
-
-      if (!appId) {
-        return jsonErro(
-          "META_APP_ID não configurado no .env. Ele é necessário para atualizar a foto.",
-          400
-        );
-      }
-
-      const handle = await uploadFotoPerfil({
-        appId,
+      if (!appIdResult.ok) return jsonErro(appIdResult.error, 400);
+      payload.profile_picture_handle = await uploadFotoPerfil({
+        appId: appIdResult.appId,
         token,
         file: foto,
       });
-
-      payload.profile_picture_handle = handle;
       atualizacaoComFoto = true;
     }
 
@@ -1145,7 +1158,6 @@ export async function PATCH(req: NextRequest) {
         body: JSON.stringify(payload),
       }
     );
-
     const metaJson = await metaRes.json();
 
     if (!metaRes.ok) {
@@ -1154,12 +1166,10 @@ export async function PATCH(req: NextRequest) {
         payload,
         metaJson,
       });
-      if (isErroMetaTemporario(metaJson)) {
-        console.warn("[WHATSAPP PERFIL PATCH META TEMPORARY ERROR]", metaJson);
 
+      if (isErroMetaTemporario(metaJson)) {
         if (atualizacaoComFoto) {
           await marcarIntegracaoSincronizada(integracao.id, empresaId);
-
           return NextResponse.json(
             {
               ok: true,
@@ -1177,14 +1187,11 @@ export async function PATCH(req: NextRequest) {
           token,
           payload: dadosPerfil,
         });
-
         if (atualizacaoConfirmada) {
           await marcarIntegracaoSincronizada(integracao.id, empresaId);
-
           return NextResponse.json({
             ok: true,
-            message:
-              "Perfil atualizado com sucesso.",
+            message: "Perfil atualizado com sucesso.",
             meta: metaJson,
             confirmed_after_temporary_error: true,
           });
@@ -1201,7 +1208,6 @@ export async function PATCH(req: NextRequest) {
         metaJson,
         "Erro ao atualizar perfil no Meta."
       );
-
       if (diagnostico.bloqueiaOperacao) {
         await marcarIntegracaoComDiagnosticoMeta({
           integracao,
@@ -1209,7 +1215,6 @@ export async function PATCH(req: NextRequest) {
           diagnostico,
           metaResponse: metaJson,
         });
-
         return NextResponse.json(
           {
             ok: false,
@@ -1229,7 +1234,6 @@ export async function PATCH(req: NextRequest) {
     }
 
     await marcarIntegracaoSincronizada(integracao.id, empresaId);
-
     return NextResponse.json({
       ok: true,
       message: "Perfil atualizado com sucesso.",
@@ -1240,7 +1244,6 @@ export async function PATCH(req: NextRequest) {
     if (isMetaApiError(error)) {
       return jsonErro(error.message, error.status, error.meta);
     }
-
     return jsonErro(
       error instanceof Error
         ? error.message
