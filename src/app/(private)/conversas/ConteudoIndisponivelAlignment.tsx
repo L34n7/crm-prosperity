@@ -20,6 +20,38 @@ function ehCardConteudoIndisponivel(elemento: HTMLElement) {
   );
 }
 
+function removerAjuste(mensagem: HTMLElement) {
+  mensagem.style.removeProperty("justify-content");
+  mensagem.style.removeProperty("width");
+  mensagem.style.removeProperty("align-self");
+
+  const card = mensagem.firstElementChild as HTMLElement | null;
+
+  if (card) {
+    card.style.removeProperty("margin-left");
+    card.style.removeProperty("margin-right");
+    card.style.removeProperty("align-self");
+  }
+
+  delete mensagem.dataset.conteudoIndisponivelDireita;
+}
+
+function alinharCardADireita(mensagem: HTMLElement) {
+  mensagem.style.setProperty("justify-content", "flex-end", "important");
+  mensagem.style.setProperty("width", "100%", "important");
+  mensagem.style.setProperty("align-self", "stretch", "important");
+
+  const card = mensagem.firstElementChild as HTMLElement | null;
+
+  if (card) {
+    card.style.setProperty("margin-left", "auto", "important");
+    card.style.setProperty("margin-right", "0", "important");
+    card.style.setProperty("align-self", "flex-end", "important");
+  }
+
+  mensagem.dataset.conteudoIndisponivelDireita = "true";
+}
+
 function ajustarAlinhamentoCards() {
   const mensagens = document.querySelectorAll<HTMLElement>('[id^="mensagem-"]');
 
@@ -28,14 +60,12 @@ function ajustarAlinhamentoCards() {
     const foiAjustada = mensagem.dataset.conteudoIndisponivelDireita === "true";
 
     if (deveAlinharDireita) {
-      mensagem.style.justifyContent = "flex-end";
-      mensagem.dataset.conteudoIndisponivelDireita = "true";
+      alinharCardADireita(mensagem);
       return;
     }
 
     if (foiAjustada) {
-      mensagem.style.removeProperty("justify-content");
-      delete mensagem.dataset.conteudoIndisponivelDireita;
+      removerAjuste(mensagem);
     }
   });
 }
