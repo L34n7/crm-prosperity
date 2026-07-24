@@ -22,6 +22,7 @@ const CHAVES_REFERENCIA_MIDIA = [
   "arquivo_id",
   "storage_path",
   "storagePath",
+  "midia_removida",
 ];
 
 type MidiaParaRemocaoFluxos = {
@@ -64,8 +65,8 @@ function configuracaoUsaMidia(
 
 function removerCamposMidiaConfiguracao(
   configuracao: unknown,
-  midia: MidiaParaRemocaoFluxos,
-  removidaEm: string
+  removidaEm: string,
+  registrarRemocao: boolean
 ) {
   const config = {
     ...configuracaoComoObjeto(configuracao),
@@ -75,12 +76,12 @@ function removerCamposMidiaConfiguracao(
     delete config[chave];
   }
 
-  config.midia_removida = {
-    id: midia.id,
-    nome: midia.nome,
-    removida_em: removidaEm,
-    motivo: "midia_excluida_biblioteca",
-  };
+  if (registrarRemocao) {
+    config.midia_removida = {
+      removida_em: removidaEm,
+      motivo: "midia_excluida_biblioteca",
+    };
+  }
 
   return config;
 }
@@ -96,9 +97,8 @@ async function removerMidiaDosFluxos(params: {
 
   const { data: nosMidia, error: nosError } = await supabaseAdmin
     .from("automacao_nos")
-    .select("id, fluxo_id, titulo, tipo_no, configuracao_json")
+    .select("id, fluxo_id, titulo, tipo_no, ativo, configuracao_json")
     .eq("empresa_id", empresaId)
-    .eq("ativo", true)
     .in("tipo_no", TIPOS_NO_MIDIA);
 
   if (nosError) {
@@ -110,10 +110,14 @@ async function removerMidiaDosFluxos(params: {
   const nosAfetados = (nosMidia || []).filter((no) =>
     configuracaoUsaMidia(no.configuracao_json, midia)
   );
+  const nosAtivosAfetados = nosAfetados.filter((no) => no.ativo === true);
+  const nosInativosAfetados = nosAfetados.filter((no) => no.ativo !== true);
 
   if (nosAfetados.length === 0) {
     return {
       total_blocos_afetados: 0,
+      total_blocos_ativos_afetados: 0,
+      total_blocos_inativos_higienizados: 0,
       total_fluxos_afetados: 0,
       total_fluxos_pausados: 0,
       blocos_afetados: [],
@@ -122,8 +126,10 @@ async function removerMidiaDosFluxos(params: {
     };
   }
 
-  const fluxoIds = Array.from(
-    new Set(nosAfetados.map((no) => String(no.fluxo_id)).filter(Boolean))
+  const fluxoIds: string[] = Array.from(
+    new Set<string>(
+      nosAtivosAfetados.map((no: any) => String(no.fluxo_id)).filter(Boolean)
+    )
   );
 
   const { data: fluxos, error: fluxosError } =
@@ -141,8 +147,8 @@ async function removerMidiaDosFluxos(params: {
     );
   }
 
-  const fluxosPorId = new Map(
-    (fluxos || []).map((fluxo) => [String(fluxo.id), fluxo])
+  const fluxosPorId = new Map<string, any>(
+    (fluxos || []).map((fluxo: any) => [String(fluxo.id), fluxo])
   );
 
   for (const no of nosAfetados) {
@@ -151,8 +157,8 @@ async function removerMidiaDosFluxos(params: {
       .update({
         configuracao_json: removerCamposMidiaConfiguracao(
           no.configuracao_json,
-          midia,
-          removidaEm
+          removidaEm,
+          no.ativo === true
         ),
         updated_at: removidaEm,
       })
@@ -166,9 +172,9 @@ async function removerMidiaDosFluxos(params: {
     }
   }
 
-  const fluxoIdsPausar = (fluxos || [])
-    .filter((fluxo) => String(fluxo.status || "") === "ativo")
-    .map((fluxo) => String(fluxo.id));
+  const fluxoIdsPausar: string[] = (fluxos || [])
+    .filter((fluxo: any) => String(fluxo.status || "") === "ativo")
+    .map((fluxo: any) => String(fluxo.id));
 
   if (fluxoIdsPausar.length > 0) {
     const { error: pausarError } = await supabaseAdmin
@@ -188,7 +194,7 @@ async function removerMidiaDosFluxos(params: {
     }
   }
 
-  const fluxoIdsPausados = new Set(fluxoIdsPausar);
+  const fluxoIdsPausados = new Set<string>(fluxoIdsPausar);
   const fluxosAfetados = fluxoIds.map((fluxoId) => {
     const fluxo = fluxosPorId.get(fluxoId);
     const statusAnterior = String(fluxo?.status || "");
@@ -206,6 +212,8 @@ async function removerMidiaDosFluxos(params: {
 
   return {
     total_blocos_afetados: nosAfetados.length,
+    total_blocos_ativos_afetados: nosAtivosAfetados.length,
+    total_blocos_inativos_higienizados: nosInativosAfetados.length,
     total_fluxos_afetados: fluxoIds.length,
     total_fluxos_pausados: fluxoIdsPausar.length,
     blocos_afetados: nosAfetados.map((no) => ({
@@ -213,6 +221,7 @@ async function removerMidiaDosFluxos(params: {
       fluxo_id: no.fluxo_id,
       titulo: no.titulo,
       tipo_no: no.tipo_no,
+      ativo: no.ativo === true,
     })),
     fluxos_afetados: fluxosAfetados,
     fluxos_pausados: fluxosAfetados.filter((fluxo) => fluxo.pausado),
@@ -312,10 +321,11 @@ export async function GET(req: NextRequest) {
       throw error;
     }
 
-    const { data: todasMidias, error: resumoError } = await contexto.supabaseAdmin
-      .from("midias")
-      .select("tipo, tamanho_bytes")
-      .eq("empresa_id", contexto.usuarioSistema.empresa_id);
+    const { data: todasMidias, error: resumoError } =
+      await contexto.supabaseAdmin
+        .from("midias")
+        .select("tipo, tamanho_bytes")
+        .eq("empresa_id", contexto.usuarioSistema.empresa_id);
 
     if (resumoError) {
       throw resumoError;
@@ -409,7 +419,7 @@ export async function DELETE(req: NextRequest) {
       ok: true,
       message:
         impactoFluxos.total_blocos_afetados > 0
-          ? "Midia excluida e removida dos fluxos afetados."
+          ? "Midia excluida e referencias removidas dos blocos afetados."
           : "Mídia excluída definitivamente.",
       impacto: impactoFluxos,
       storage_removido: storageRemovido,
