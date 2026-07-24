@@ -3,26 +3,43 @@ import Header from "@/components/Header";
 import AgendaEnhancer from "./AgendaEnhancer";
 
 const styles = `
+.agendaTemplateShell {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .agendaTemplateShell > .a2 > header {
   display: none !important;
+}
+
+.agendaTemplateShell .a2 {
+  height: calc(100dvh - 54px) !important;
+  min-height: 0 !important;
+  overflow: hidden;
 }
 
 .agendaTemplateShell .a2 .wrap {
   width: 100%;
   max-width: none;
-  padding: 8px 24px 28px;
+  height: 100%;
+  min-height: 0;
+  padding: 6px 24px 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .agendaTemplateShell .a2 .head {
-  min-height: 70px;
-  margin: 0 0 10px;
-  padding: 10px 14px;
+  flex: 0 0 auto;
+  min-height: 62px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
   border-radius: 18px;
   align-items: center;
 }
 
 .agendaTemplateShell .a2 .head > .agendaGoogleHeaderSlot {
-  min-width: 260px;
+  min-width: 250px;
   flex: 1;
 }
 
@@ -74,64 +91,48 @@ const styles = `
 
 .agendaTemplateShell .a2 .head .btn,
 .agendaTemplateShell .a2 .head .select {
-  height: 38px;
-  min-height: 38px;
+  height: 36px;
+  min-height: 36px;
   border-radius: 11px;
 }
 
+.agendaTemplateShell .a2 .banner {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+}
+
 .agendaTemplateShell .a2 .stats {
-  height: 52px;
-  margin: 0 0 10px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0;
-  border: 1px solid var(--crm-border);
-  border-radius: 16px;
-  background: var(--crm-surface);
-  box-shadow: var(--crm-shadow-xs);
-  overflow: hidden;
-}
-
-.agendaTemplateShell .a2 .stat {
-  min-height: 0;
-  height: 50px;
-  padding: 7px 12px;
-  border: 0;
-  border-right: 1px solid var(--crm-border);
-  border-radius: 0;
-  box-shadow: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.agendaTemplateShell .a2 .stat:last-child {
-  border-right: 0;
-}
-
-.agendaTemplateShell .a2 .stat::before {
-  display: none;
-}
-
-.agendaTemplateShell .a2 .stat small {
-  color: var(--crm-text-muted);
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.15;
-  text-transform: uppercase;
-  letter-spacing: .03em;
-}
-
-.agendaTemplateShell .a2 .stat b {
-  margin: 0;
-  color: var(--crm-text-strong);
-  font-size: 20px;
-  line-height: 1;
+  display: none !important;
 }
 
 .agendaTemplateShell .a2 .layout {
+  flex: 1;
+  min-height: 0;
+  height: auto;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 10px;
+  align-items: stretch;
+}
+
+.agendaTemplateShell .a2 .layout > .card:first-child {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agendaTemplateShell .a2 .aside {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.agendaTemplateShell .a2 .aside > .side:first-child {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .agendaTemplateShell .a2 .aside > .side:nth-child(2) {
@@ -139,56 +140,65 @@ const styles = `
 }
 
 .agendaTemplateShell .a2 .toolbar {
-  min-height: 70px;
-  padding: 10px 12px;
+  flex: 0 0 auto;
+  min-height: 58px;
+  padding: 8px 10px;
 }
 
 .agendaTemplateShell .a2 .grid {
+  flex: 1;
+  min-height: 0;
   min-width: 840px;
-  padding: 0;
-  gap: 0;
+  padding: 4px;
+  gap: 4px;
+  overflow: hidden;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: 27px repeat(6, minmax(0, 1fr));
   background: var(--crm-surface-soft);
 }
 
 .agendaTemplateShell .a2 .wd {
-  height: 29px;
+  height: auto;
+  min-height: 0;
   padding: 0;
-  border-right: 1px solid var(--crm-border);
-  background: var(--crm-surface-soft);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   display: grid;
   place-items: center;
 }
 
-.agendaTemplateShell .a2 .wd:nth-child(7) {
-  border-right: 0;
-}
-
 .agendaTemplateShell .a2 .day {
   width: 100%;
-  height: 112px;
-  min-height: 112px;
-  max-height: 112px;
+  height: auto;
+  min-height: 0;
+  max-height: none;
   padding: 5px;
-  border: 0;
-  border-right: 1px solid var(--crm-border);
-  border-bottom: 1px solid var(--crm-border);
-  border-radius: 0;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface);
   overflow: hidden;
   transform: none !important;
   box-shadow: none;
 }
 
-.agendaTemplateShell .a2 .day:nth-child(7n) {
-  border-right: 0;
+.agendaTemplateShell .a2 .day:hover {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.agendaTemplateShell .a2 .day.muted {
+  background: var(--crm-surface-soft);
 }
 
 .agendaTemplateShell .a2 .day.selected {
-  box-shadow: inset 0 0 0 2px var(--crm-primary);
+  border-color: var(--crm-primary);
+  box-shadow: inset 0 0 0 1px var(--crm-primary);
 }
 
 .agendaTemplateShell .a2 .dh {
-  min-height: 22px;
-  height: 22px;
+  min-height: 21px;
+  height: 21px;
 }
 
 .agendaTemplateShell .a2 .num {
@@ -205,8 +215,8 @@ const styles = `
 }
 
 .agendaTemplateShell .a2 .event {
-  min-height: 20px;
-  height: 20px;
+  min-height: 19px;
+  height: 19px;
   margin-top: 3px;
   padding: 2px 5px;
   border-radius: 5px;
@@ -232,11 +242,15 @@ const styles = `
 .agendaTemplateShell .a2 .day > .pill {
   min-height: 16px;
   height: 16px;
-  margin-top: 2px;
-  padding: 0 3px;
+  margin: 3px 4px 0;
+  padding: 0 5px;
   border: 0;
-  background: transparent;
+  border-radius: 6px;
+  background: var(--crm-surface-muted);
   color: var(--crm-text-strong);
+  display: inline-flex;
+  align-items: center;
+  line-height: 16px;
   font-size: 9px;
   font-weight: 900;
 }
@@ -245,57 +259,149 @@ const styles = `
   padding: 11px;
 }
 
+.agendaTemplateShell .a2 .overlay .section .search {
+  position: relative;
+  width: 100%;
+  display: block;
+}
+
+.agendaTemplateShell .a2 .overlay .section .search svg {
+  position: absolute;
+  left: 11px !important;
+  top: 50% !important;
+  z-index: 2;
+  color: var(--crm-text-soft);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.agendaTemplateShell .a2 .overlay .section .search input {
+  width: 100% !important;
+  height: 38px;
+  padding: 0 12px 0 34px !important;
+  border: 1px solid var(--crm-border-strong) !important;
+  border-radius: 10px !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-text-strong) !important;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.agendaTemplateShell .a2 .overlay .section .search input:focus {
+  border-color: var(--crm-primary-strong) !important;
+  box-shadow: var(--crm-focus-ring);
+}
+
+.agendaTemplateShell .a2 .overlay .section .results {
+  margin-top: 6px;
+  border-color: var(--crm-border);
+  background: var(--crm-surface);
+}
+
+.agendaTemplateShell .a2 .overlay .section .result {
+  color: var(--crm-text);
+  background: var(--crm-surface);
+}
+
+.agendaTemplateShell .a2 .overlay .section .result:hover {
+  background: var(--crm-primary-soft);
+}
+
 .agendaTemplateShell .a2 .modal .agendaGoogleConfigCard {
+  grid-column: 1 / -1;
   display: grid !important;
-  grid-template-columns: auto 1fr;
-  gap: 8px 12px;
-  margin-top: 14px;
-  padding: 13px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "icon title actions"
+    "icon status actions";
+  align-items: center;
+  gap: 3px 12px;
+  min-height: 76px;
+  margin: 2px 0 0;
+  padding: 12px 13px;
   border: 1px solid var(--crm-primary-border);
   border-radius: 14px;
-  background: var(--crm-primary-soft);
+  background:
+    linear-gradient(135deg, var(--crm-primary-soft) 0%, var(--crm-surface) 72%);
   box-shadow: none;
 }
 
-.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard h3 {
-  margin: 0;
-  color: var(--crm-text-strong);
-  font-size: 13px;
-}
-
-.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard .mini {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-}
-
-.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard .mini:last-child {
-  grid-column: 1 / -1;
-  margin-top: 0 !important;
-}
-
-.agendaGoogleCreateOption {
-  margin-top: 14px;
-  padding: 13px;
-  border: 1px solid var(--crm-primary-border);
-  border-radius: 14px;
-  background: var(--crm-primary-soft);
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-
-.agendaGoogleCreateIcon {
-  width: 38px;
-  height: 38px;
+.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard::before {
+  content: "G";
+  grid-area: icon;
+  width: 42px;
+  height: 42px;
   border: 1px solid var(--crm-primary-border);
   border-radius: 12px;
   background: var(--crm-surface);
   color: var(--crm-primary-text);
   display: grid;
   place-items: center;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
+  box-shadow: var(--crm-shadow-xs);
+}
+
+.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard h3 {
+  grid-area: title;
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard .mini:first-of-type {
+  grid-area: status;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard .mini:last-of-type {
+  grid-area: actions;
+  margin-top: 0 !important;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard .pill {
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+}
+
+.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard .btn {
+  min-height: 34px;
+  height: 34px !important;
+  border-radius: 10px;
+}
+
+.agendaGoogleCreateOption {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  padding: 12px 13px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, var(--crm-primary-soft) 0%, var(--crm-surface) 72%);
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.agendaGoogleCreateIcon {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-primary-text);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 900;
+  box-shadow: var(--crm-shadow-xs);
 }
 
 .agendaGoogleCreateText {
@@ -331,13 +437,55 @@ const styles = `
   accent-color: var(--crm-primary-strong);
 }
 
+@media (max-height: 760px) and (min-width: 761px) {
+  .agendaTemplateShell .a2 .head {
+    min-height: 54px;
+    padding-block: 6px;
+  }
+
+  .agendaTemplateShell .a2 .toolbar {
+    min-height: 52px;
+    padding-block: 6px;
+  }
+
+  .agendaTemplateShell .a2 .grid {
+    grid-template-rows: 24px repeat(6, minmax(0, 1fr));
+  }
+
+  .agendaTemplateShell .a2 .event {
+    min-height: 17px;
+    height: 17px;
+  }
+}
+
 @media (max-width: 1100px) {
+  .agendaTemplateShell .a2 {
+    height: auto !important;
+    min-height: calc(100dvh - 54px) !important;
+    overflow: visible;
+  }
+
+  .agendaTemplateShell,
+  .agendaTemplateShell .a2 .wrap {
+    overflow: visible;
+  }
+
+  .agendaTemplateShell .a2 .wrap {
+    height: auto;
+  }
+
   .agendaTemplateShell .a2 .layout {
     grid-template-columns: 1fr;
   }
 
   .agendaTemplateShell .a2 .aside {
-    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+
+  .agendaTemplateShell .a2 .aside > .side:first-child {
+    height: auto;
+    max-height: 480px;
   }
 }
 
@@ -367,22 +515,29 @@ const styles = `
     width: 100%;
   }
 
-  .agendaTemplateShell .a2 .stats {
-    display: flex;
+  .agendaTemplateShell .a2 .layout > .card:first-child {
     overflow-x: auto;
   }
 
-  .agendaTemplateShell .a2 .stat {
-    min-width: 150px;
-    flex: 0 0 150px;
-  }
-
   .agendaGoogleCreateOption {
-    grid-template-columns: 38px 1fr;
+    grid-template-columns: 42px 1fr;
   }
 
   .agendaGoogleCreateToggle {
     grid-column: 1 / -1;
+  }
+
+  .agendaTemplateShell .a2 .modal .agendaGoogleConfigCard {
+    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-areas:
+      "icon title"
+      "icon status"
+      "actions actions";
+  }
+
+  .agendaTemplateShell .a2 .modal .agendaGoogleConfigCard .mini:last-of-type {
+    margin-top: 8px !important;
+    justify-content: flex-start;
   }
 }
 `;

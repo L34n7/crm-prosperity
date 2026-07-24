@@ -62,8 +62,9 @@ export default function AgendaEnhancer() {
         shell.querySelectorAll<HTMLElement>(".a2 .aside .side, .a2 .modal .side")
       );
       googleCardOriginal =
-        cards.find((card) => texto(card.querySelector("h3")).includes("Google Calendar")) ||
-        null;
+        cards.find((card) =>
+          texto(card.querySelector("h3")).includes("Google Calendar")
+        ) || null;
 
       if (googleCardOriginal && !googleCardParentOriginal) {
         googleCardParentOriginal = googleCardOriginal.parentElement;
@@ -101,7 +102,8 @@ export default function AgendaEnhancer() {
 
       const status = texto(cardGoogle.querySelector(".pill"));
       const email = texto(cardGoogle.querySelector(".mini span:not(.pill)"));
-      const conectado = status.toLowerCase().includes("conectado") &&
+      const conectado =
+        status.toLowerCase().includes("conectado") &&
         !status.toLowerCase().includes("desconectado");
       const detalhe = resumo.querySelector("small");
       const ponto = resumo.querySelector(".agendaGoogleStatusDot");
@@ -150,6 +152,32 @@ export default function AgendaEnhancer() {
       }
     }
 
+    function localizarCampoDescricao(modal: HTMLElement) {
+      return Array.from(
+        modal.querySelectorAll<HTMLElement>(".body > .form > .field")
+      ).find(
+        (campo) =>
+          texto(campo.querySelector("label")).toLocaleLowerCase("pt-BR") ===
+          "descrição"
+      );
+    }
+
+    function inserirDepoisDaDescricao(
+      modal: HTMLElement,
+      elemento: HTMLElement
+    ) {
+      const campoDescricao = localizarCampoDescricao(modal);
+      const formulario = modal.querySelector<HTMLElement>(".body > .form");
+
+      if (campoDescricao?.parentElement) {
+        campoDescricao.insertAdjacentElement("afterend", elemento);
+      } else if (formulario) {
+        formulario.appendChild(elemento);
+      } else {
+        modal.querySelector<HTMLElement>(".body")?.appendChild(elemento);
+      }
+    }
+
     function inserirGoogleNaConfiguracao(modal: HTMLElement) {
       const titulo = texto(modal.querySelector(".dhead h2"));
       const corpo = modal.querySelector<HTMLElement>(".body");
@@ -157,9 +185,9 @@ export default function AgendaEnhancer() {
 
       if (titulo.includes("Configurar agenda")) {
         const cardGoogle = localizarGoogleCard();
-        if (cardGoogle && cardGoogle.parentElement !== corpo) {
+        if (cardGoogle && !cardGoogle.classList.contains("agendaGoogleConfigCard")) {
           cardGoogle.classList.add("agendaGoogleConfigCard");
-          corpo.appendChild(cardGoogle);
+          inserirDepoisDaDescricao(modal, cardGoogle);
         }
         return;
       }
@@ -180,14 +208,16 @@ export default function AgendaEnhancer() {
           <span>Conectar após criar</span>
         </label>
       `;
-      corpo.appendChild(secao);
+      inserirDepoisDaDescricao(modal, secao);
 
       const botaoSalvar = Array.from(
         modal.querySelectorAll<HTMLButtonElement>(".foot button")
       ).find((botao) => texto(botao) === "Salvar");
       const botaoCancelar = Array.from(
         modal.querySelectorAll<HTMLButtonElement>(".foot button, .dhead button")
-      ).filter((botao) => texto(botao) === "Cancelar" || botao.closest(".dhead"));
+      ).filter(
+        (botao) => texto(botao) === "Cancelar" || Boolean(botao.closest(".dhead"))
+      );
 
       if (botaoSalvar && botaoSalvar.dataset.googleCreateBound !== "true") {
         botaoSalvar.dataset.googleCreateBound = "true";
@@ -196,7 +226,8 @@ export default function AgendaEnhancer() {
           if (!marcado) return;
 
           const agendaAnteriorId =
-            shell.querySelector<HTMLSelectElement>(".a2 .head .select")?.value || "";
+            shell.querySelector<HTMLSelectElement>(".a2 .head .select")?.value ||
+            "";
           aguardarAgendaCriada(agendaAnteriorId);
         });
       }
