@@ -109,13 +109,15 @@ export default function UnsupportedMessageEnhancer() {
   return (
     <style jsx global>{`
       [class*="timelineArea"] .unsupportedMessageRow {
-        justify-content: center !important;
-        padding-inline: 10px !important;
+        justify-content: flex-start !important;
+        padding-inline: 0 !important;
       }
 
       [class*="timelineArea"] .unsupportedMessageBubble {
         width: min(560px, 94%) !important;
         max-width: min(560px, 94%) !important;
+        margin-left: 0 !important;
+        margin-right: auto !important;
         padding: 14px 16px 10px !important;
         border: 1px solid rgba(217, 153, 20, 0.42) !important;
         border-radius: 16px !important;
