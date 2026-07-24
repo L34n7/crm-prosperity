@@ -1,21 +1,22 @@
-import { executarAssistente } from "./route-resiliente";
-import { prepararSessaoAntesDeCriar } from "./route-preparar-criacao";
-import { garantirTerminalAntesDeCriar } from "./route-garantir-terminal";
 import { canonicalizarSessaoAntesDeCriar } from "./route-deduplicar-opcoes";
 import { executarAssistenteComDistribuicao } from "./route-distribuicao-atendimento";
+import { garantirTerminalAntesDeCriar } from "./route-garantir-terminal";
+import { normalizarPedidoAssistente } from "./route-normalizar-pedido";
+import { executarComRecuperacaoSessao } from "./route-recuperacao-sessao";
+import { executarAssistente } from "./route-resiliente";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const requestPreparada = await prepararSessaoAntesDeCriar(request);
+  const requestNormalizada = await normalizarPedidoAssistente(request);
   const requestCanonical = await canonicalizarSessaoAntesDeCriar(
-    requestPreparada
+    requestNormalizada
   );
   const requestComTerminal = await garantirTerminalAntesDeCriar(
     requestCanonical
   );
-  return executarAssistenteComDistribuicao(
-    requestComTerminal,
-    executarAssistente
+
+  return executarComRecuperacaoSessao(requestComTerminal, (requestFinal) =>
+    executarAssistenteComDistribuicao(requestFinal, executarAssistente)
   );
 }
