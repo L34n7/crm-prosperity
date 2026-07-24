@@ -29,8 +29,6 @@ const TIPOS_AGENDA = [
   "agenda_cancelar_agendamento",
 ];
 
-const INSTRUCAO_QUALIDADE = INSTRUCAO_ARQUITETURA_FLUXOS;
-
 function objeto(valor: unknown): ObjetoJson {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as ObjetoJson)
@@ -42,7 +40,6 @@ function localizarMensagem(
   role: "system" | "user"
 ): ObjetoJson | null {
   if (!Array.isArray(payload.input)) return null;
-
   const mensagem = payload.input.find((item) => objeto(item).role === role);
   return mensagem ? objeto(mensagem) : null;
 }
@@ -113,6 +110,16 @@ function injetarContextoCompleto(
       raiz.recursos = { agendas: contexto.agendas };
     }
 
+    raiz.contrato_execucao = {
+      objetivo: "entregar_fluxo_final_completo_em_uma_unica_resposta",
+      pedido_usuario: contexto.instrucaoCompleta,
+      planejamento_interno_obrigatorio: true,
+      revisao_interna_obrigatoria: true,
+      planejamento_adicional_no_sistema: false,
+      revisao_adicional_no_sistema: false,
+      regras_obrigatorias: "PROMPT PADRAO OBRIGATORIO DO ARQUITETO DE FLUXOS",
+    };
+
     mensagem.content = JSON.stringify(conteudo);
   } catch {
     // Mantem o payload original quando a mensagem nao e um contexto JSON.
@@ -176,28 +183,7 @@ export function prepararPayloadAssistente(params: {
 
   expandirSchemaAgenda(payload);
   injetarContextoCompleto(payload, params.contexto);
-  anexarInstrucaoSistema(payload, INSTRUCAO_QUALIDADE);
-
-  if (params.repetir) {
-    const fase = params.fase === "revisao" ? "revisao final" : "correcao estrutural";
-    const rascunho = String(params.rascunhoAnterior || "").trim();
-
-    anexarInstrucaoSistema(
-      payload,
-      [
-        `Esta e a fase de ${fase} do mesmo plano.`,
-        "Nao recomecar do zero e nao remover blocos, rotas ou conteudos que ja estejam corretos.",
-        "Use o rascunho integral abaixo como base e altere somente o necessario para corrigir os problemas listados.",
-        "Problemas que ainda precisam ser corrigidos:",
-        ...(params.problemas || []).map((problema) => `- ${problema}`),
-        rascunho ? "Rascunho integral da fase anterior:" : "",
-        rascunho,
-        "Retorne somente o JSON final conforme o schema.",
-      ]
-        .filter(Boolean)
-        .join("\n")
-    );
-  }
+  anexarInstrucaoSistema(payload, INSTRUCAO_ARQUITETURA_FLUXOS);
 
   return payload;
 }
