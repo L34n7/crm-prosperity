@@ -4,6 +4,11 @@ import OpenAI from "openai";
 
 import { validarPlanoAssistenteEstrutural } from "@/lib/automacoes/assistente-fluxos-validacao-estrutural";
 import {
+  extrairUsoTokensIa,
+  registrarUsoTokensIa,
+  verificarSaldoTokensIa,
+} from "@/lib/ia/tokens";
+import {
   prepararPayloadAssistente,
   type ContextoAssistenteFluxos,
 } from "./route-contexto-ia";
@@ -37,12 +42,20 @@ type ObjetoJson = Record<string, unknown>;
 
 const contextoAssistenteFluxos =
   new AsyncLocalStorage<ContextoAssistenteFluxos>();
+const briefingPorContexto = new WeakMap<
+  ContextoAssistenteFluxos,
+  Promise<ObjetoJson | null>
+>();
 let sdkInstalado = false;
 let moduloOriginalPromise: Promise<typeof import("./route-original")> | null =
   null;
 
 const MODELO_ASSISTENTE_FLUXOS =
   process.env.OPENAI_ASSISTENTE_FLUXOS_MODEL || "gpt-5.5";
+const MODELO_BRIEFING_FLUXOS =
+  process.env.OPENAI_ASSISTENTE_FLUXOS_BRIEFING_MODEL || "gpt-5.4-mini";
+const VERSAO_BRIEFING_FLUXOS =
+  "crm-prosperity-briefing-estruturado-v1-2026-07-24";
 
 const ESFORCO_RACIOCINIO = (() => {
   const informado = String(
@@ -61,13 +74,193 @@ const LIMITE_SAIDA_ASSISTENTE = (() => {
   return Math.max(10000, Math.min(36000, Math.floor(configurado)));
 })();
 
-// A função da Vercel possui limite de cinco minutos. A geração fica em
-// background na OpenAI e esta rota usa chamadas curtas de consulta, reservando
-// tempo suficiente para validar, materializar e persistir o fluxo no final.
-const LIMITE_TOTAL_GERACAO_MS = 250_000;
+// O briefing usa uma chamada curta antes da geração principal. O limite da
+// geração principal reserva margem para autenticação, banco e materialização
+// dentro da função de cinco minutos da Vercel.
+const LIMITE_TOTAL_GERACAO_MS = 220_000;
 const LIMITE_REQUISICAO_OPENAI_MS = 55_000;
+const LIMITE_BRIEFING_MS = 30_000;
+const LIMITE_SAIDA_BRIEFING = 3_200;
 const INTERVALO_CONSULTA_INICIAL_MS = 1_500;
 const INTERVALO_CONSULTA_MAXIMO_MS = 6_000;
+
+const SCHEMA_BRIEFING_FLUXOS = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    titulo: { type: "string" },
+    objetivo: { type: "string" },
+    publico: { type: "string" },
+    tom_de_voz: {
+      type: "array",
+      items: { type: "string" },
+    },
+    entidades: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          tipo: { type: "string" },
+          nome: { type: "string" },
+          detalhes: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+        required: ["tipo", "nome", "detalhes"],
+      },
+    },
+    itens_principais: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          nome: { type: "string" },
+          categoria: { type: "string" },
+          conteudos_obrigatorios: {
+            type: "array",
+            items: { type: "string" },
+          },
+          acoes: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+        required: ["nome", "categoria", "conteudos_obrigatorios", "acoes"],
+      },
+    },
+    menu_principal: {
+      type: "array",
+      items: { type: "string" },
+    },
+    jornadas: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          nome: { type: "string" },
+          objetivo: { type: "string" },
+          etapas: {
+            type: "array",
+            items: { type: "string" },
+          },
+          saidas: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+        required: ["nome", "objetivo", "etapas", "saidas"],
+      },
+    },
+    faq: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          contexto: { type: "string" },
+          perguntas: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+        required: ["contexto", "perguntas"],
+      },
+    },
+    dados_a_capturar: {
+      type: "array",
+      items: { type: "string" },
+    },
+    agendamento: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        modo: {
+          type: "string",
+          enum: ["nao_solicitado", "manual", "automatico"],
+        },
+        dados: {
+          type: "array",
+          items: { type: "string" },
+        },
+        regra_confirmacao: { type: "string" },
+      },
+      required: ["modo", "dados", "regra_confirmacao"],
+    },
+    recursos_necessarios: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        midias: {
+          type: "array",
+          items: { type: "string" },
+        },
+        transferencia_humana: { type: "boolean" },
+        agenda_crm: { type: "boolean" },
+        urls: {
+          type: "array",
+          items: { type: "string" },
+        },
+        setores: {
+          type: "array",
+          items: { type: "string" },
+        },
+      },
+      required: [
+        "midias",
+        "transferencia_humana",
+        "agenda_crm",
+        "urls",
+        "setores",
+      ],
+    },
+    textos_literais: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          rotulo: { type: "string" },
+          texto: { type: "string" },
+        },
+        required: ["rotulo", "texto"],
+      },
+    },
+    regras_obrigatorias: {
+      type: "array",
+      items: { type: "string" },
+    },
+    proibicoes: {
+      type: "array",
+      items: { type: "string" },
+    },
+    requisitos_pendentes: {
+      type: "array",
+      items: { type: "string" },
+    },
+  },
+  required: [
+    "titulo",
+    "objetivo",
+    "publico",
+    "tom_de_voz",
+    "entidades",
+    "itens_principais",
+    "menu_principal",
+    "jornadas",
+    "faq",
+    "dados_a_capturar",
+    "agendamento",
+    "recursos_necessarios",
+    "textos_literais",
+    "regras_obrigatorias",
+    "proibicoes",
+    "requisitos_pendentes",
+  ],
+} as const;
 
 function objeto(valor: unknown): ObjetoJson {
   return valor && typeof valor === "object" && !Array.isArray(valor)
@@ -76,7 +269,9 @@ function objeto(valor: unknown): ObjetoJson {
 }
 
 function mensagemErro(error: unknown) {
-  return error instanceof Error ? error.message : String(error || "Erro desconhecido.");
+  return error instanceof Error
+    ? error.message
+    : String(error || "Erro desconhecido.");
 }
 
 function erroFoiAbortado(error: unknown) {
@@ -111,6 +306,212 @@ function detalheFalhaResposta(resposta: RespostaOpenAI) {
 
 function aguardar(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function extrairTextoRespostaHttp(resposta: ObjetoJson) {
+  if (typeof resposta.output_text === "string" && resposta.output_text.trim()) {
+    return resposta.output_text.trim();
+  }
+
+  if (!Array.isArray(resposta.output)) return "";
+
+  return resposta.output
+    .flatMap((item) => {
+      const saida = objeto(item);
+      return Array.isArray(saida.content) ? saida.content : [];
+    })
+    .map((item) => objeto(item))
+    .filter((item) => item.type === "output_text")
+    .map((item) => String(item.text || ""))
+    .join("")
+    .trim();
+}
+
+function briefingValido(valor: unknown): valor is ObjetoJson {
+  const briefing = objeto(valor);
+  return (
+    Boolean(String(briefing.objetivo || "").trim()) &&
+    Array.isArray(briefing.regras_obrigatorias) &&
+    Array.isArray(briefing.jornadas) &&
+    Array.isArray(briefing.menu_principal)
+  );
+}
+
+function montarInstrucaoTratada(briefing: ObjetoJson) {
+  return JSON.stringify({
+    tipo_entrada: "briefing_estruturado_aprovado_automaticamente",
+    versao: VERSAO_BRIEFING_FLUXOS,
+    contrato:
+      "Este briefing foi extraido fielmente do pedido original. Use todos os campos como requisitos da geracao. Nao resuma novamente, nao omita itens e nao invente informacoes ausentes. Textos literais devem ser preservados. Requisitos pendentes representam somente recursos ou decisoes realmente nao informados.",
+    briefing,
+  });
+}
+
+async function gerarBriefingEstruturado(
+  contexto: ContextoAssistenteFluxos
+): Promise<ObjetoJson | null> {
+  if (
+    contexto.modo !== "criar_fluxo" ||
+    contexto.instrucaoCompleta.trim().length < 80 ||
+    !process.env.OPENAI_API_KEY
+  ) {
+    return null;
+  }
+
+  await registrarDiagnosticoIa({
+    contexto,
+    fase: "briefing_estruturado_request",
+    payload: {
+      modelo: MODELO_BRIEFING_FLUXOS,
+      reasoning_effort: "low",
+      max_output_tokens: LIMITE_SAIDA_BRIEFING,
+      instrucao_caracteres: contexto.instrucaoCompleta.length,
+      versao: VERSAO_BRIEFING_FLUXOS,
+    },
+    metadados: {
+      objetivo: "tratar_e_estruturar_solicitacao_antes_da_geracao",
+    },
+  });
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: MODELO_BRIEFING_FLUXOS,
+      reasoning: { effort: "low" },
+      max_output_tokens: LIMITE_SAIDA_BRIEFING,
+      prompt_cache_key: VERSAO_BRIEFING_FLUXOS,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: `Voce e um analista de requisitos para fluxos de automacao do CRM Prosperity.
+
+Sua unica tarefa e transformar a solicitacao original em um briefing estruturado, completo e fiel.
+
+REGRAS OBRIGATORIAS
+- Nao crie o fluxo e nao crie blocos ou conexoes.
+- Nao reduza detalhes importantes para deixar o briefing menor.
+- Preserve literalmente nomes, enderecos, horarios, URLs, textos fornecidos e listas de opcoes.
+- Separe servicos, produtos, procedimentos ou assuntos sem misturar seus requisitos.
+- Distinga agenda automatica do CRM de coleta manual para confirmacao humana.
+- Registre toda regra, proibicao, CTA, retorno, transferencia, midia e dado a capturar.
+- Nao invente precos, servicos, setores, agendas, midias, URLs ou informacoes ausentes.
+- Requisitos pendentes devem conter somente ambiguidades reais que impedem uma decisao.
+- O briefing sera a unica solicitacao enviada ao modelo que criara o fluxo; portanto, nao omita nada.
+- Seja conciso: use frases curtas e nao repita a mesma regra em campos diferentes.
+- Responda exclusivamente no JSON definido pelo schema.`,
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: contexto.instrucaoCompleta,
+            },
+          ],
+        },
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "briefing_estruturado_fluxo",
+          strict: true,
+          schema: SCHEMA_BRIEFING_FLUXOS,
+        },
+      },
+    }),
+    signal: AbortSignal.timeout(LIMITE_BRIEFING_MS),
+  });
+
+  const respostaJson = objeto(await response.json().catch(() => ({})));
+
+  if (!response.ok) {
+    const erro = objeto(respostaJson.error);
+    throw new Error(
+      `BRIEFING_IA_FALHOU: ${String(
+        erro.message || `HTTP ${response.status}`
+      )}`
+    );
+  }
+
+  const texto = extrairTextoRespostaHttp(respostaJson);
+  let briefing: ObjetoJson;
+
+  try {
+    briefing = objeto(JSON.parse(texto));
+  } catch (error) {
+    throw new Error(
+      `BRIEFING_IA_FALHOU: JSON invalido: ${mensagemErro(error)}`
+    );
+  }
+
+  if (!briefingValido(briefing)) {
+    throw new Error(
+      "BRIEFING_IA_FALHOU: a resposta nao contem os campos minimos obrigatorios."
+    );
+  }
+
+  const uso = extrairUsoTokensIa(respostaJson.usage);
+
+  if (contexto.empresaId && uso.totalTokens > 0) {
+    await registrarUsoTokensIa({
+      empresaId: contexto.empresaId,
+      usuarioId: contexto.usuarioId,
+      origem: "assistente_fluxos_briefing",
+      modelo: MODELO_BRIEFING_FLUXOS,
+      uso,
+      metadata: {
+        etapa: "briefing_estruturado",
+        modo: contexto.modo,
+        versao: VERSAO_BRIEFING_FLUXOS,
+      },
+    });
+    await verificarSaldoTokensIa(contexto.empresaId);
+  }
+
+  await registrarDiagnosticoIa({
+    contexto,
+    fase: "briefing_estruturado_response",
+    payload: briefing,
+    metadados: {
+      modelo: MODELO_BRIEFING_FLUXOS,
+      versao: VERSAO_BRIEFING_FLUXOS,
+      tokens_input: uso.inputTokens,
+      tokens_output: uso.outputTokens,
+      briefing_caracteres: JSON.stringify(briefing).length,
+    },
+  });
+
+  return briefing;
+}
+
+async function obterBriefingEstruturado(contexto: ContextoAssistenteFluxos) {
+  const existente = briefingPorContexto.get(contexto);
+  if (existente) return existente;
+
+  const geracao = gerarBriefingEstruturado(contexto).catch(async (error) => {
+    await registrarDiagnosticoIa({
+      contexto,
+      fase: "briefing_estruturado_fallback",
+      problemas: [mensagemErro(error)],
+      metadados: {
+        estrategia:
+          "continuar_com_pedido_original_quando_o_briefing_nao_ficar_disponivel",
+      },
+    });
+    return null;
+  });
+
+  briefingPorContexto.set(contexto, geracao);
+  return geracao;
 }
 
 async function aguardarRespostaBackground(params: {
@@ -198,10 +599,10 @@ function normalizarRespostaFinal(resposta: RespostaOpenAI) {
 }
 
 /**
- * Uma unica chamada recebe Prompt Mestre, pedido, recursos e schema. O modelo
- * planeja e revisa internamente. A resposta roda em background para nao manter
- * uma conexao HTTP longa com a OpenAI; o mesmo response_id e consultado ate o
- * JSON final ficar pronto. Nao existe uma segunda geração nem reparo semantico.
+ * A solicitacao original passa primeiro por uma IA curta que gera um briefing
+ * estruturado e fiel. O Prompt Mestre recebe esse briefing, os recursos e o
+ * schema em uma unica chamada principal. Nao existe revisao ou reparo semantico
+ * posterior da estrutura produzida.
  */
 function instalarSdkUmaChamada() {
   if (sdkInstalado) return;
@@ -223,10 +624,19 @@ function instalarSdkUmaChamada() {
     const contexto = contextoAssistenteFluxos.getStore();
     if (!contexto?.ativo) return criarOriginal.call(this, body, options);
 
+    const briefing = await obterBriefingEstruturado(contexto);
+    const instrucaoTratada = briefing
+      ? montarInstrucaoTratada(briefing)
+      : contexto.instrucaoCompleta;
+    const contextoTratado: ContextoAssistenteFluxos = {
+      ...contexto,
+      instrucaoCompleta: instrucaoTratada,
+    };
+
     const payload = prepararPayloadAssistente({
       body,
       limite: LIMITE_SAIDA_ASSISTENTE,
-      contexto,
+      contexto: contextoTratado,
     });
 
     payload.model = MODELO_ASSISTENTE_FLUXOS;
@@ -243,11 +653,16 @@ function instalarSdkUmaChamada() {
       fase: "geracao_prompt_mestre_request",
       payload,
       metadados: {
-        estrategia: "uma_ia_um_prompt_mestre_um_json_final_background",
+        estrategia:
+          "briefing_estruturado_mais_prompt_mestre_um_json_final_background",
         modelo: MODELO_ASSISTENTE_FLUXOS,
         reasoning_effort: ESFORCO_RACIOCINIO,
         max_output_tokens: LIMITE_SAIDA_ASSISTENTE,
         prompt_mestre_versao: VERSAO_PROMPT_MESTRE_FLUXOS,
+        briefing_estruturado: Boolean(briefing),
+        briefing_versao: briefing ? VERSAO_BRIEFING_FLUXOS : null,
+        instrucao_original_caracteres: contexto.instrucaoCompleta.length,
+        instrucao_tratada_caracteres: instrucaoTratada.length,
         background: true,
         planejamento_adicional_no_sistema: false,
         revisao_adicional_no_sistema: false,
@@ -274,6 +689,7 @@ function instalarSdkUmaChamada() {
           response_id: respostaInicial.id || null,
           status: respostaInicial.status || null,
           background: true,
+          briefing_estruturado: Boolean(briefing),
         },
       });
 
@@ -296,6 +712,7 @@ function instalarSdkUmaChamada() {
         metadados: {
           modelo: MODELO_ASSISTENTE_FLUXOS,
           background: true,
+          briefing_estruturado: Boolean(briefing),
         },
       });
 
@@ -323,6 +740,8 @@ function instalarSdkUmaChamada() {
         estrategia: "ia_entrega_fluxo_final_sem_reparo_background",
         modelo: MODELO_ASSISTENTE_FLUXOS,
         prompt_mestre_versao: VERSAO_PROMPT_MESTRE_FLUXOS,
+        briefing_estruturado: Boolean(briefing),
+        briefing_versao: briefing ? VERSAO_BRIEFING_FLUXOS : null,
         response_id: resposta.id || null,
         background: true,
         validacao_aplicada: "json_schema_refs_ids",
@@ -365,7 +784,7 @@ function respostaErroConhecido(mensagem: string) {
         ok: false,
         code: "GERACAO_IA_TIMEOUT",
         error:
-          "A IA ainda não concluiu o fluxo dentro do tempo seguro do servidor. A geração foi interrompida sem salvar um fluxo incompleto. Tente novamente com uma solicitação um pouco mais objetiva.",
+          "A IA ainda não concluiu o fluxo dentro do tempo seguro do servidor. O pedido já foi tratado em um briefing estruturado, mas a geração principal continuou processando além do limite. Nenhum fluxo incompleto foi salvo.",
       },
       { status: 504 }
     );
