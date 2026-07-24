@@ -6,41 +6,18 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 
-const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; // 82800 segundos = 23 horas
+const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60;
 const TIPOS_NO_MIDIA = new Set([
   "enviar_imagem",
   "enviar_video",
   "enviar_audio",
   "enviar_arquivo",
 ]);
-
-function normalizarDelaySegundosApi(valor: unknown) {
-  if (valor === null || valor === undefined || valor === "") {
-    return null;
-  }
-
-  const numero = Number(valor);
-
-  if (!Number.isFinite(numero)) {
-    throw new Error("O delay informado é inválido.");
-  }
-
-  const delayInteiro = Math.floor(numero);
-
-  if (delayInteiro < 0) {
-    throw new Error("O delay não pode ser negativo.");
-  }
-
-  if (delayInteiro > LIMITE_DELAY_SEGUNDOS) {
-    throw new Error(
-      "O tempo máximo de delay permitido é de 23 horas, equivalente a 82.800 segundos."
-    );
-  }
-
-  return delayInteiro;
-}
+const CODIGO_ESTRUTURA_DESATUALIZADA = "ESTRUTURA_FLUXO_DESATUALIZADA";
 
 const supabaseAdmin = getSupabaseAdmin();
+
+type RegistroEstrutura = Record<string, unknown>;
 
 type ResumoConexaoAuditoria = {
   id: string;
@@ -74,8 +51,129 @@ type AlteracaoNoAuditoria = {
   depois: ResumoNoAuditoria | null;
 };
 
+function normalizarDelaySegundosApi(valor: unknown) {
+  if (valor === null || valor === undefined || valor === "") return null;
+
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) {
+    throw new Error("O delay informado é inválido.");
+  }
+
+  const delayInteiro = Math.floor(numero);
+  if (delayInteiro < 0) {
+    throw new Error("O delay não pode ser negativo.");
+  }
+
+  if (delayInteiro > LIMITE_DELAY_SEGUNDOS) {
+    throw new Error(
+      "O tempo máximo de delay permitido é de 23 horas, equivalente a 82.800 segundos."
+    );
+  }
+
+  return delayInteiro;
+}
+
+function idsUnicos(registros: RegistroEstrutura[]) {
+  return Array.from(
+    new Set(
+      registros
+        .map((registro) => String(registro?.id || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function respostaEstruturaDesatualizada(params: {
+  tipo: "bloco" | "conexao";
+  idsConflitantes: string[];
+}) {
+  const substantivo = params.tipo === "bloco" ? "blocos" : "conexões";
+
+  return NextResponse.json(
+    {
+      ok: false,
+      code: CODIGO_ESTRUTURA_DESATUALIZADA,
+      error:
+        `A tela estava com dados de outro fluxo (${params.idsConflitantes.length} ${substantivo}). ` +
+        "A gravação foi cancelada para proteger os dados. Reabra o fluxo e tente novamente.",
+      recarregar_estrutura: true,
+      ids_conflitantes: params.idsConflitantes.slice(0, 20),
+    },
+    { status: 409 }
+  );
+}
+
+async function validarPertencimentoEstrutura(params: {
+  empresaId: string;
+  fluxoId: string;
+  nos: RegistroEstrutura[];
+  conexoes: RegistroEstrutura[];
+}) {
+  const idsNos = idsUnicos(params.nos);
+  const idsConexoes = idsUnicos(params.conexoes);
+
+  const [nosExistentes, conexoesExistentes] = await Promise.all([
+    idsNos.length > 0
+      ? supabaseAdmin
+          .from("automacao_nos")
+          .select("id, empresa_id, fluxo_id")
+          .in("id", idsNos)
+      : Promise.resolve({ data: [], error: null }),
+    idsConexoes.length > 0
+      ? supabaseAdmin
+          .from("automacao_conexoes")
+          .select("id, empresa_id, fluxo_id")
+          .in("id", idsConexoes)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (nosExistentes.error) {
+    throw new Error(
+      `Erro ao validar pertencimento dos blocos: ${nosExistentes.error.message}`
+    );
+  }
+
+  if (conexoesExistentes.error) {
+    throw new Error(
+      `Erro ao validar pertencimento das conexões: ${conexoesExistentes.error.message}`
+    );
+  }
+
+  const nosConflitantes = (nosExistentes.data || [])
+    .filter(
+      (no) =>
+        String(no.empresa_id) !== params.empresaId ||
+        String(no.fluxo_id) !== params.fluxoId
+    )
+    .map((no) => String(no.id));
+
+  if (nosConflitantes.length > 0) {
+    return respostaEstruturaDesatualizada({
+      tipo: "bloco",
+      idsConflitantes: nosConflitantes,
+    });
+  }
+
+  const conexoesConflitantes = (conexoesExistentes.data || [])
+    .filter(
+      (conexao) =>
+        String(conexao.empresa_id) !== params.empresaId ||
+        String(conexao.fluxo_id) !== params.fluxoId
+    )
+    .map((conexao) => String(conexao.id));
+
+  if (conexoesConflitantes.length > 0) {
+    return respostaEstruturaDesatualizada({
+      tipo: "conexao",
+      idsConflitantes: conexoesConflitantes,
+    });
+  }
+
+  return null;
+}
+
 function resumirConexaoAuditoria(
-  conexao: Record<string, unknown>,
+  conexao: RegistroEstrutura,
   index?: number
 ): ResumoConexaoAuditoria {
   return {
@@ -93,11 +191,14 @@ function resumirConexaoAuditoria(
 }
 
 function listarConexoesAlteradas(
-  conexoesAntes: Record<string, unknown>[],
-  conexoesDepois: Record<string, unknown>[]
+  conexoesAntes: RegistroEstrutura[],
+  conexoesDepois: RegistroEstrutura[]
 ) {
   const antesPorId = new Map(
-    conexoesAntes.map((conexao) => [conexao.id, resumirConexaoAuditoria(conexao)])
+    conexoesAntes.map((conexao) => [
+      conexao.id,
+      resumirConexaoAuditoria(conexao),
+    ])
   );
   const depoisPorId = new Map(
     conexoesDepois.map((conexao, index) => [
@@ -111,17 +212,16 @@ function listarConexoesAlteradas(
     .map((id) => {
       const antes = antesPorId.get(id) || null;
       const depois = depoisPorId.get(id) || null;
-
       return JSON.stringify(antes) === JSON.stringify(depois)
         ? null
-        : { id, antes, depois };
+        : { id: String(id), antes, depois };
     })
     .filter(
       (item): item is AlteracaoConexaoAuditoria => item !== null
     );
 }
 
-function resumirNoAuditoria(no: Record<string, unknown>): ResumoNoAuditoria {
+function resumirNoAuditoria(no: RegistroEstrutura): ResumoNoAuditoria {
   return {
     id: String(no.id || ""),
     tipo_no: String(no.tipo_no || ""),
@@ -136,8 +236,8 @@ function resumirNoAuditoria(no: Record<string, unknown>): ResumoNoAuditoria {
 }
 
 function listarNosAlterados(
-  nosAntes: Record<string, unknown>[],
-  nosDepois: Record<string, unknown>[]
+  nosAntes: RegistroEstrutura[],
+  nosDepois: RegistroEstrutura[]
 ) {
   const antesPorId = new Map(
     nosAntes.map((no) => [no.id, resumirNoAuditoria(no)])
@@ -151,25 +251,23 @@ function listarNosAlterados(
     .map((id) => {
       const antes = antesPorId.get(id) || null;
       const depois = depoisPorId.get(id) || null;
-
       return JSON.stringify(antes) === JSON.stringify(depois)
         ? null
-        : { id, antes, depois };
+        : { id: String(id), antes, depois };
     })
     .filter((item): item is AlteracaoNoAuditoria => item !== null);
 }
 
-function validarMidiasObrigatoriasNos(nos: Array<Record<string, unknown>>) {
+function validarMidiasObrigatoriasNos(nos: RegistroEstrutura[]) {
   for (const no of nos) {
     const tipoNo = String(no?.tipo_no || "").trim();
-
     if (!TIPOS_NO_MIDIA.has(tipoNo)) continue;
 
-    const configuracao: Record<string, unknown> =
+    const configuracao: RegistroEstrutura =
       no?.configuracao_json &&
       typeof no.configuracao_json === "object" &&
       !Array.isArray(no.configuracao_json)
-        ? (no.configuracao_json as Record<string, unknown>)
+        ? (no.configuracao_json as RegistroEstrutura)
         : {};
 
     if (!String(configuracao.midia_url || "").trim()) {
@@ -182,7 +280,7 @@ function validarMidiasObrigatoriasNos(nos: Array<Record<string, unknown>>) {
 }
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -197,7 +295,6 @@ export async function GET(
     }
 
     const { usuario } = resultadoContexto;
-
     const { data: fluxo, error: fluxoError } = await supabaseAdmin
       .from("automacao_fluxos")
       .select("*")
@@ -212,32 +309,33 @@ export async function GET(
       );
     }
 
-    const { data: nos, error: nosError } = await supabaseAdmin
-      .from("automacao_nos")
-      .select("*")
-      .eq("fluxo_id", id)
-      .eq("empresa_id", usuario.empresa_id)
-      .eq("ativo", true)
-      .order("created_at", { ascending: true });
+    const [nosResult, conexoesResult] = await Promise.all([
+      supabaseAdmin
+        .from("automacao_nos")
+        .select("*")
+        .eq("fluxo_id", id)
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("ativo", true)
+        .order("created_at", { ascending: true }),
+      supabaseAdmin
+        .from("automacao_conexoes")
+        .select("*")
+        .eq("fluxo_id", id)
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("ativo", true)
+        .order("ordem", { ascending: true }),
+    ]);
 
-    if (nosError) {
+    if (nosResult.error) {
       return NextResponse.json(
-        { ok: false, error: nosError.message },
+        { ok: false, error: nosResult.error.message },
         { status: 500 }
       );
     }
 
-    const { data: conexoes, error: conexoesError } = await supabaseAdmin
-      .from("automacao_conexoes")
-      .select("*")
-      .eq("fluxo_id", id)
-      .eq("empresa_id", usuario.empresa_id)
-      .eq("ativo", true)
-      .order("ordem", { ascending: true });
-
-    if (conexoesError) {
+    if (conexoesResult.error) {
       return NextResponse.json(
-        { ok: false, error: conexoesError.message },
+        { ok: false, error: conexoesResult.error.message },
         { status: 500 }
       );
     }
@@ -245,12 +343,15 @@ export async function GET(
     return NextResponse.json({
       ok: true,
       fluxo,
-      nos: nos || [],
-      conexoes: conexoes || [],
+      nos: nosResult.data || [],
+      conexoes: conexoesResult.data || [],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Erro interno.",
+      },
       { status: 500 }
     );
   }
@@ -274,9 +375,10 @@ export async function PUT(
 
     const { usuario } = resultadoContexto;
     const body = await req.json();
-
-    const nos = Array.isArray(body?.nos) ? body.nos : [];
-    const conexoes = Array.isArray(body?.conexoes) ? body.conexoes : [];
+    const nos: RegistroEstrutura[] = Array.isArray(body?.nos) ? body.nos : [];
+    const conexoes: RegistroEstrutura[] = Array.isArray(body?.conexoes)
+      ? body.conexoes
+      : [];
 
     const { data: fluxo, error: fluxoError } = await supabaseAdmin
       .from("automacao_fluxos")
@@ -291,25 +393,6 @@ export async function PUT(
         { status: 404 }
       );
     }
-
-    const [{ data: nosAntes }, { data: conexoesAntes }] = await Promise.all([
-      supabaseAdmin
-        .from("automacao_nos")
-        .select(
-          "id, tipo_no, titulo, descricao, configuracao_json, delay_segundos, ativo"
-        )
-        .eq("fluxo_id", id)
-        .eq("empresa_id", usuario.empresa_id)
-        .eq("ativo", true),
-      supabaseAdmin
-        .from("automacao_conexoes")
-        .select(
-          "id, no_origem_id, no_destino_id, rotulo, ordem, condicao_json, usar_ia, descricao_ia, ativo"
-        )
-        .eq("fluxo_id", id)
-        .eq("empresa_id", usuario.empresa_id)
-        .eq("ativo", true),
-    ]);
 
     for (const no of nos) {
       const noId = String(no?.id || "").trim();
@@ -330,12 +413,20 @@ export async function PUT(
       }
 
       if (tipoNo !== "inicio") {
-        normalizarDelaySegundosApi(no?.delay_segundos);
+        normalizarDelaySegundosApi(no.delay_segundos);
       }
     }
 
-    const erroMidiaObrigatoria = validarMidiasObrigatoriasNos(nos);
+    const respostaConflito = await validarPertencimentoEstrutura({
+      empresaId: String(usuario.empresa_id),
+      fluxoId: id,
+      nos,
+      conexoes,
+    });
 
+    if (respostaConflito) return respostaConflito;
+
+    const erroMidiaObrigatoria = validarMidiasObrigatoriasNos(nos);
     if (erroMidiaObrigatoria) {
       return NextResponse.json(
         { ok: false, error: erroMidiaObrigatoria },
@@ -343,16 +434,41 @@ export async function PUT(
       );
     }
 
+    const [nosAntesResult, conexoesAntesResult] = await Promise.all([
+      supabaseAdmin
+        .from("automacao_nos")
+        .select(
+          "id, tipo_no, titulo, descricao, configuracao_json, delay_segundos, ativo"
+        )
+        .eq("fluxo_id", id)
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("ativo", true),
+      supabaseAdmin
+        .from("automacao_conexoes")
+        .select(
+          "id, no_origem_id, no_destino_id, rotulo, ordem, condicao_json, usar_ia, descricao_ia, ativo"
+        )
+        .eq("fluxo_id", id)
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("ativo", true),
+    ]);
+
+    if (nosAntesResult.error || conexoesAntesResult.error) {
+      throw new Error(
+        nosAntesResult.error?.message ||
+          conexoesAntesResult.error?.message ||
+          "Erro ao carregar estrutura atual."
+      );
+    }
+
+    const nosAntes = (nosAntesResult.data || []) as RegistroEstrutura[];
+    const conexoesAntes = (conexoesAntesResult.data || []) as RegistroEstrutura[];
     const agora = new Date().toISOString();
-    const conexoesAlteradas = listarConexoesAlteradas(
-      conexoesAntes || [],
-      conexoes
-    );
-    const nosAlterados = listarNosAlterados(nosAntes || [], nos);
+    const conexoesAlteradas = listarConexoesAlteradas(conexoesAntes, conexoes);
+    const nosAlterados = listarNosAlterados(nosAntes, nos);
 
-    const nosParaSalvar = nos.map((no: any) => {
+    const nosParaSalvar = nos.map((no) => {
       const tipoNo = String(no.tipo_no || "");
-
       return {
         id: no.id,
         tipo_no: tipoNo,
@@ -368,21 +484,18 @@ export async function PUT(
       };
     });
 
-    const conexoesParaSalvar = conexoes.map(
-      (conexao: any, index: number) => ({
-        id: conexao.id,
-        no_origem_id: conexao.no_origem_id,
-        no_destino_id: conexao.no_destino_id,
-        condicao_json: conexao.condicao_json || {},
-        rotulo: conexao.rotulo || null,
-        ordem: Number(conexao.ordem || index + 1),
-
-        usar_ia: conexao.usar_ia === true,
-        descricao_ia: conexao.descricao_ia
-          ? String(conexao.descricao_ia).trim()
-          : null,
-      })
-    );
+    const conexoesParaSalvar = conexoes.map((conexao, index) => ({
+      id: conexao.id,
+      no_origem_id: conexao.no_origem_id,
+      no_destino_id: conexao.no_destino_id,
+      condicao_json: conexao.condicao_json || {},
+      rotulo: conexao.rotulo || null,
+      ordem: Number(conexao.ordem || index + 1),
+      usar_ia: conexao.usar_ia === true,
+      descricao_ia: conexao.descricao_ia
+        ? String(conexao.descricao_ia).trim()
+        : null,
+    }));
 
     const { error: salvarEstruturaError } = await supabaseAdmin.rpc(
       "salvar_estrutura_automacao_fluxo_atomica",
@@ -431,8 +544,8 @@ export async function PUT(
       usuario_nome: usuario.nome,
       usuario_email: usuario.email,
       antes: {
-        nos: nosAntes?.length || 0,
-        conexoes: conexoesAntes?.length || 0,
+        nos: nosAntes.length,
+        conexoes: conexoesAntes.length,
         nos_alterados: nosAlterados.map((item) => item.antes),
         conexoes_alteradas: conexoesAlteradas.map((item) => item.antes),
       },
@@ -446,12 +559,9 @@ export async function PUT(
       user_agent: auditMeta.user_agent,
     });
 
-    return NextResponse.json({
-      ok: true,
-    });
-  } catch (error: any) {
-    const mensagem = error?.message || "Erro interno.";
-
+    return NextResponse.json({ ok: true });
+  } catch (error: unknown) {
+    const mensagem = error instanceof Error ? error.message : "Erro interno.";
     const erroDeValidacaoDelay =
       mensagem.includes("delay") ||
       mensagem.includes("23 horas") ||
@@ -487,7 +597,6 @@ export async function DELETE(req: NextRequest) {
     }
 
     const id = String(body?.id || "").trim();
-
     if (!id) {
       return NextResponse.json(
         { ok: false, error: "ID do fluxo é obrigatório." },
@@ -535,12 +644,13 @@ export async function DELETE(req: NextRequest) {
       user_agent: auditMeta.user_agent,
     });
 
-    return NextResponse.json({
-      ok: true,
-    });
-  } catch (error: any) {
+    return NextResponse.json({ ok: true });
+  } catch (error: unknown) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno." },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Erro interno.",
+      },
       { status: 500 }
     );
   }
