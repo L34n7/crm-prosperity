@@ -5,6 +5,7 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
   criarStateGoogleCalendar,
   criarUrlAutorizacaoGoogleCalendar,
+  desvincularGoogleCalendar,
   sincronizarAgendaGoogleCalendar,
 } from "@/lib/agendas/google-calendar";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -54,10 +55,27 @@ export async function GET(
 
     const { data: integracao } = await contexto.supabase
       .from("agenda_google_integracoes")
-      .select("google_email, sync_ativo, conectado_em, ultima_sincronizacao_em")
+      .select(
+        "google_email, sync_ativo, conectado_em, ultima_sincronizacao_em, ultima_sincronizacao_incremental_em, sync_token, channel_id, channel_expiration_at, ultimo_webhook_em, sync_status, ultimo_erro"
+      )
       .eq("empresa_id", contexto.usuario.empresa_id)
       .eq("agenda_id", id)
       .maybeSingle();
+
+    let conflitosRecentes = 0;
+
+    if (integracao) {
+      const desde = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { count } = await contexto.supabase
+        .from("agenda_google_eventos")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", contexto.usuario.empresa_id)
+        .eq("agenda_id", id)
+        .neq("conflito_status", "sem_conflito")
+        .gte("updated_at", desde);
+
+      conflitosRecentes = count || 0;
+    }
 
     return NextResponse.json({
       ok: true,
@@ -68,6 +86,21 @@ export async function GET(
             sync_ativo: integracao.sync_ativo,
             conectado_em: integracao.conectado_em,
             ultima_sincronizacao_em: integracao.ultima_sincronizacao_em,
+            ultima_sincronizacao_incremental_em:
+              integracao.ultima_sincronizacao_incremental_em,
+            bidirecional_ativa: Boolean(
+              integracao.sync_token &&
+                integracao.channel_id &&
+                integracao.sync_ativo &&
+                integracao.sync_status !== "erro" &&
+                (!integracao.channel_expiration_at ||
+                  new Date(integracao.channel_expiration_at).getTime() > Date.now())
+            ),
+            canal_expira_em: integracao.channel_expiration_at,
+            ultimo_webhook_em: integracao.ultimo_webhook_em,
+            sync_status: integracao.sync_status || "ativo",
+            ultimo_erro: integracao.ultimo_erro,
+            conflitos_recentes: conflitosRecentes,
           }
         : { conectado: false },
     });
@@ -117,13 +150,10 @@ export async function DELETE(
       return NextResponse.json({ ok: false, error: contexto.error }, { status: contexto.status });
     }
 
-    const { error } = await contexto.supabase
-      .from("agenda_google_integracoes")
-      .delete()
-      .eq("empresa_id", contexto.usuario.empresa_id)
-      .eq("agenda_id", id);
-
-    if (error) throw new Error(`Erro ao desvincular Google Calendar: ${error.message}`);
+    await desvincularGoogleCalendar({
+      empresaId: contexto.usuario.empresa_id!,
+      agendaId: id,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {
