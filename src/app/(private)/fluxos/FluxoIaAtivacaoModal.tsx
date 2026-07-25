@@ -137,8 +137,9 @@ function aplicarSelecaoNaPrevia() {
       }
 
       usados.add(visivel);
-      visivel.textContent = String(opcao.textContent || "").trim();
-      visivel.className = opcao.className;
+      const texto = String(opcao.textContent || "").trim();
+      if (visivel.textContent !== texto) visivel.textContent = texto;
+      if (visivel.className !== opcao.className) visivel.className = opcao.className;
       visivel.style.removeProperty("display");
       visivel.style.cursor = "pointer";
       visivel.setAttribute("role", "button");
@@ -201,10 +202,25 @@ export default function FluxoIaAtivacaoModal() {
   const [erro, setErro] = useState("");
 
   useEffect(() => {
+    let frameId: number | null = null;
+    const observer = new MutationObserver(() => {
+      if (frameId !== null) return;
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        observer.disconnect();
+        aplicarSelecaoNaPrevia();
+        observer.observe(document.body, { childList: true, subtree: true });
+      });
+    });
+
     aplicarSelecaoNaPrevia();
-    const observer = new MutationObserver(aplicarSelecaoNaPrevia);
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+
+    return () => {
+      observer.disconnect();
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
   }, []);
 
   useEffect(() => {
