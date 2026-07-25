@@ -3,12 +3,21 @@
 import { useEffect } from "react";
 
 const CONNECT_FLAG = "crm:agenda:conectar-google-apos-criar";
-const STYLE_ID = "agenda-premium-v5";
+const STYLE_ID = "agenda-premium-v6";
 
 type Nicho = { codigo: string; nome: string; grupo: string };
 type Relacionado = { tipos: string[]; titulo: string; dica: string; botao: string };
 
-const TODOS = ["imovel", "veiculo", "procedimento", "oportunidade", "ordem_servico", "processo", "outro"];
+const TODOS = [
+  "imovel",
+  "veiculo",
+  "procedimento",
+  "oportunidade",
+  "ordem_servico",
+  "processo",
+  "outro",
+];
+
 const POR_NICHO: Record<string, Relacionado> = {
   imobiliaria: {
     tipos: ["imovel"],
@@ -46,39 +55,47 @@ const CSS = `
 .agendaTemplateShell .a2 .head.agendaHeadPremium{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:8px!important;padding:8px 10px!important}
 .agendaTemplateShell .a2 .head.agendaHeadPremium>.agendaGoogleSlot,.agendaTemplateShell .a2 .head.agendaHeadPremium>.agendaActionsPremium{display:contents!important}
 .agendaAgendaSelect{order:1;min-width:220px!important;max-width:300px;flex:0 1 260px}.agendaConfigBtn{order:2}.agendaSyncBtn{order:3;min-width:118px;border-color:var(--crm-primary-border)!important;background:linear-gradient(135deg,var(--crm-primary-soft),var(--crm-surface))!important;color:var(--crm-primary-text)!important}.agendaSyncBtn:hover:not(:disabled){border-color:var(--crm-primary-strong)!important}.agendaSyncIcon{width:21px;height:21px;border-radius:7px;background:var(--crm-primary-strong);color:var(--crm-text-inverse);display:grid;place-items:center;font-size:14px}.agendaRefreshBtn{order:7;margin-left:auto}.agendaNewBtn{order:8}.agendaNewAppointmentBtn{order:9}
-.agendaTemplateShell .a2 .agendaGoogleHeaderSummary{order:4;min-width:220px;max-width:310px;height:36px;padding:0 10px 0 8px;border:1px solid var(--crm-border);border-radius:11px;background:linear-gradient(135deg,var(--crm-surface),var(--crm-surface-soft));display:flex;align-items:center;gap:8px;box-shadow:inset 0 1px 0 color-mix(in srgb,white 65%,transparent)}.agendaTemplateShell .a2 .agendaGoogleHeaderSummary.isConnected{border-color:var(--crm-success-border)}.agendaGoogleHeaderText{min-width:0;display:grid!important;gap:0!important}.agendaGoogleHeaderText strong{font-size:10px!important;line-height:1.15;color:var(--crm-text-strong)!important}.agendaGoogleHeaderText small{max-width:235px!important;font-size:9px!important;line-height:1.25;color:var(--crm-text-muted)!important;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.agendaGoogleMiniMark,.agendaGoogleMark,.agendaGoogleCreateIcon{position:relative;flex:0 0 auto;background:conic-gradient(from -45deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75% 100%)!important;overflow:hidden}.agendaGoogleMiniMark{width:24px;height:24px;border-radius:8px}.agendaGoogleMark{grid-area:brand;width:52px;height:52px;border-radius:16px;box-shadow:0 10px 24px color-mix(in srgb,#4285f4 20%,transparent)}.agendaGoogleMiniMark:before,.agendaGoogleMark:before,.agendaGoogleCreateIcon:before{content:"";position:absolute;inset:22% 18% 16%;border-radius:3px;background:#fff;box-shadow:inset 0 5px 0 #4285f4}.agendaGoogleMiniMark:after,.agendaGoogleMark:after,.agendaGoogleCreateIcon:after{content:"";position:absolute;left:31%;right:31%;top:47%;height:2px;border-radius:99px;background:#34a853;box-shadow:0 5px 0 #fbbc05}
-.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard{position:relative;grid-column:1/-1;display:grid!important;grid-template-columns:56px minmax(0,1fr) auto!important;grid-template-areas:"brand title actions" "brand subtitle actions" "brand status actions"!important;align-items:center;gap:3px 14px!important;min-height:104px!important;margin:4px 0 2px!important;padding:16px 17px!important;border:1px solid color-mix(in srgb,var(--crm-primary-border) 78%,var(--crm-border))!important;border-radius:18px!important;background:radial-gradient(circle at 92% 5%,color-mix(in srgb,#4285f4 11%,transparent),transparent 35%),radial-gradient(circle at 4% 95%,color-mix(in srgb,#34a853 9%,transparent),transparent 34%),linear-gradient(135deg,var(--crm-surface),var(--crm-surface-soft))!important;box-shadow:0 14px 34px color-mix(in srgb,var(--crm-primary-strong) 8%,transparent),inset 0 1px 0 color-mix(in srgb,white 75%,transparent)!important;overflow:hidden}.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard:before{content:none!important;display:none!important}.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard:after{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75% 100%)}
-.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard h3{grid-area:title!important;margin:0!important;font-size:15px!important;color:var(--crm-text-strong)!important}.agendaGoogleSubtitle{grid-area:subtitle;margin:0;color:var(--crm-text-muted);font-size:10px;line-height:1.35}.agendaGoogleState{grid-area:status!important;margin-top:4px;justify-content:flex-start!important;flex-wrap:wrap!important;gap:6px!important}.agendaGoogleState>span:not(.pill):not(.agendaGoogleOfficial){max-width:250px;color:var(--crm-text-muted)!important;font-size:9px!important;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.agendaGoogleOfficial{min-height:20px;padding:0 7px;border:1px solid color-mix(in srgb,#4285f4 25%,var(--crm-border));border-radius:999px;background:color-mix(in srgb,#4285f4 7%,var(--crm-surface));color:color-mix(in srgb,#4285f4 70%,var(--crm-text-strong));display:inline-flex;align-items:center;font-size:8px;font-weight:900}.agendaGoogleCardActions{grid-area:actions!important;margin:0!important;justify-content:flex-end!important;flex-wrap:nowrap!important;gap:7px!important}.agendaGoogleCardActions .btn{min-height:36px!important;height:36px!important;border-radius:11px!important}.agendaGooglePrimary{border-color:var(--crm-primary-strong)!important;background:var(--crm-primary-strong)!important;color:var(--crm-text-inverse)!important}.agendaGoogleDanger{width:36px;padding:0!important;border-color:var(--crm-danger-border)!important;background:var(--crm-danger-bg)!important;color:var(--crm-danger-text)!important}.agendaGoogleConfigCard[data-connected="false"] .pill{border-color:var(--crm-border-strong)!important;background:var(--crm-surface-muted)!important;color:var(--crm-text-muted)!important}
-.agendaGoogleCreateOption{position:relative;grid-column:1/-1;margin:4px 0 2px!important;padding:15px 16px!important;border:1px solid color-mix(in srgb,var(--crm-primary-border) 78%,var(--crm-border))!important;border-radius:18px!important;background:radial-gradient(circle at 92% 5%,color-mix(in srgb,#4285f4 10%,transparent),transparent 35%),linear-gradient(135deg,var(--crm-surface),var(--crm-surface-soft))!important;display:grid;grid-template-columns:52px minmax(0,1fr) auto!important;align-items:center;gap:13px!important;box-shadow:0 12px 28px color-mix(in srgb,var(--crm-primary-strong) 7%,transparent);overflow:hidden}.agendaGoogleCreateOption:after{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75% 100%)}.agendaGoogleCreateIcon{width:50px!important;height:50px!important;border:0!important;border-radius:15px!important;color:transparent!important;font-size:0!important}.agendaGoogleCreateText{min-width:0;display:grid;gap:3px}.agendaGoogleCreateText strong{font-size:14px!important;color:var(--crm-text-strong)}.agendaGoogleCreateText span{max-width:390px;font-size:10px!important;line-height:1.4;color:var(--crm-text-muted)}.agendaGoogleCreateToggle{min-height:36px;padding:0 11px;border:1px solid var(--crm-primary-border);border-radius:11px;background:var(--crm-primary-soft);color:var(--crm-primary-text);display:flex;align-items:center;gap:8px;font-size:10px;font-weight:900;cursor:pointer}
+.agendaTemplateShell .a2 .agendaGoogleHeaderSummary{order:4;min-width:220px;max-width:310px;height:36px;padding:0 10px 0 8px;border:1px solid var(--crm-border);border-radius:11px;background:var(--crm-surface);display:flex;align-items:center;gap:8px;box-shadow:inset 0 1px 0 color-mix(in srgb,white 65%,transparent)}.agendaTemplateShell .a2 .agendaGoogleHeaderSummary.isConnected{border-color:var(--crm-success-border)}.agendaGoogleHeaderText{min-width:0;display:grid!important;gap:1px!important}.agendaGoogleHeaderText strong{font-size:11px!important;line-height:1.2;color:var(--crm-text-strong)!important;background:transparent!important}.agendaGoogleHeaderText small{max-width:235px!important;font-size:9.5px!important;line-height:1.25;color:var(--crm-text-muted)!important;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.agendaGoogleMiniMark,.agendaGoogleMark,.agendaGoogleCreateIcon{position:relative;flex:0 0 auto;background:conic-gradient(from -45deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75% 100%)!important;overflow:hidden}.agendaGoogleMiniMark{width:24px;height:24px;border-radius:8px}.agendaGoogleMark{grid-area:brand;width:44px;height:44px;border-radius:13px;box-shadow:0 7px 18px color-mix(in srgb,#4285f4 18%,transparent)}.agendaGoogleMiniMark:before,.agendaGoogleMark:before,.agendaGoogleCreateIcon:before{content:"";position:absolute;inset:22% 18% 16%;border-radius:3px;background:#fff;box-shadow:inset 0 5px 0 #4285f4}.agendaGoogleMiniMark:after,.agendaGoogleMark:after,.agendaGoogleCreateIcon:after{content:"";position:absolute;left:31%;right:31%;top:47%;height:2px;border-radius:99px;background:#34a853;box-shadow:0 5px 0 #fbbc05}
+.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard{position:relative;grid-column:1/-1;display:grid!important;grid-template-columns:46px minmax(0,1fr) auto!important;grid-template-areas:"brand title actions" "brand subtitle actions" "brand status actions"!important;grid-template-rows:auto auto auto!important;align-items:center!important;align-content:center!important;gap:2px 12px!important;width:100%!important;height:auto!important;min-height:82px!important;margin:6px 0 2px!important;padding:11px 13px!important;border:1px solid color-mix(in srgb,var(--crm-primary-border) 72%,var(--crm-border))!important;border-radius:16px!important;background:linear-gradient(135deg,var(--crm-surface),color-mix(in srgb,var(--crm-surface-soft) 70%,var(--crm-surface)))!important;box-shadow:0 9px 24px color-mix(in srgb,var(--crm-primary-strong) 6%,transparent),inset 0 1px 0 color-mix(in srgb,white 72%,transparent)!important;overflow:hidden!important}.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard:before{content:none!important;display:none!important}.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard:after{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75% 100%)}
+.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard h3{grid-area:title!important;width:auto!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:var(--crm-text-strong)!important;font-size:17px!important;font-weight:900!important;line-height:1.2!important}.agendaGoogleSubtitle{grid-area:subtitle;margin:1px 0 0!important;color:var(--crm-text-muted)!important;font-size:11.5px!important;line-height:1.35!important}.agendaGoogleState{grid-area:status!important;min-height:22px!important;margin-top:4px!important;padding:0!important;justify-content:flex-start!important;align-items:center!important;flex-wrap:wrap!important;gap:6px!important;background:transparent!important}.agendaGoogleState>span:not(.pill):not(.agendaGoogleOfficial){max-width:320px;color:var(--crm-text-muted)!important;font-size:10.5px!important;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.agendaGoogleState .pill{min-height:21px!important;padding:0 8px!important;font-size:9px!important}.agendaGoogleOfficial{min-height:21px;padding:0 8px;border:1px solid color-mix(in srgb,#4285f4 25%,var(--crm-border));border-radius:999px;background:color-mix(in srgb,#4285f4 6%,var(--crm-surface));color:color-mix(in srgb,#4285f4 72%,var(--crm-text-strong));display:inline-flex;align-items:center;font-size:9px;font-weight:900}.agendaGoogleCardActions{grid-area:actions!important;margin:0!important;padding:0!important;justify-content:flex-end!important;align-items:center!important;flex-wrap:nowrap!important;gap:7px!important;background:transparent!important}.agendaGoogleCardActions .btn{min-height:38px!important;height:38px!important;border-radius:11px!important;font-size:12px!important}.agendaGooglePrimary{border-color:var(--crm-primary-strong)!important;background:var(--crm-primary-strong)!important;color:var(--crm-text-inverse)!important}.agendaGoogleDanger{width:38px!important;padding:0!important;border-color:var(--crm-danger-border)!important;background:var(--crm-danger-bg)!important;color:var(--crm-danger-text)!important}.agendaGoogleConfigCard[data-connected="false"] .pill{border-color:var(--crm-border-strong)!important;background:var(--crm-surface-muted)!important;color:var(--crm-text-muted)!important}
+.agendaGoogleCreateOption{position:relative;grid-column:1/-1;margin:4px 0 2px!important;padding:15px 16px!important;border:1px solid color-mix(in srgb,var(--crm-primary-border) 78%,var(--crm-border))!important;border-radius:18px!important;background:linear-gradient(135deg,var(--crm-surface),var(--crm-surface-soft))!important;display:grid;grid-template-columns:52px minmax(0,1fr) auto!important;align-items:center;gap:13px!important;box-shadow:0 12px 28px color-mix(in srgb,var(--crm-primary-strong) 7%,transparent);overflow:hidden}.agendaGoogleCreateOption:after{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75% 100%)}.agendaGoogleCreateIcon{width:50px!important;height:50px!important;border:0!important;border-radius:15px!important;color:transparent!important;font-size:0!important}.agendaGoogleCreateText{min-width:0;display:grid;gap:3px}.agendaGoogleCreateText strong{font-size:14px!important;color:var(--crm-text-strong)}.agendaGoogleCreateText span{max-width:390px;font-size:10px!important;line-height:1.4;color:var(--crm-text-muted)}.agendaGoogleCreateToggle{min-height:36px;padding:0 11px;border:1px solid var(--crm-primary-border);border-radius:11px;background:var(--crm-primary-soft);color:var(--crm-primary-text);display:flex;align-items:center;gap:8px;font-size:10px;font-weight:900;cursor:pointer}
 .agendaNichoBadge{min-height:21px;padding:0 8px;border:1px solid var(--crm-primary-border);border-radius:999px;background:var(--crm-primary-soft);color:var(--crm-primary-text);display:inline-flex;align-items:center;font-size:8px;font-weight:900}.agendaNichoSection select[data-niche-locked="true"]{border-color:var(--crm-primary-border)!important;background:var(--crm-primary-soft)!important;color:var(--crm-primary-text)!important;font-weight:800;opacity:1!important;cursor:default}
-@media(max-width:1220px){.agendaTemplateShell .a2 .head.agendaHeadPremium{flex-wrap:wrap}.agendaRefreshBtn{margin-left:0}.agendaNewBtn{margin-left:auto}}@media(max-width:860px){.agendaTemplateShell .a2 .head.agendaHeadPremium{flex-direction:row!important;align-items:center!important}.agendaAgendaSelect{flex:1 1 220px;max-width:none}.agendaTemplateShell .a2 .agendaGoogleHeaderSummary{order:5;flex:1 1 100%;max-width:none}.agendaRefreshBtn{order:6}.agendaNewBtn{order:7;margin-left:0}.agendaNewAppointmentBtn{order:8}.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard{grid-template-columns:50px minmax(0,1fr)!important;grid-template-areas:"brand title" "brand subtitle" "brand status" "actions actions"!important}.agendaGoogleCardActions{margin-top:10px!important;justify-content:flex-start!important}.agendaGoogleCreateOption{grid-template-columns:50px 1fr!important}.agendaGoogleCreateToggle{grid-column:1/-1}}
+@media(max-width:1220px){.agendaTemplateShell .a2 .head.agendaHeadPremium{flex-wrap:wrap}.agendaRefreshBtn{margin-left:0}.agendaNewBtn{margin-left:auto}}@media(max-width:860px){.agendaTemplateShell .a2 .head.agendaHeadPremium{flex-direction:row!important;align-items:center!important}.agendaAgendaSelect{flex:1 1 220px;max-width:none}.agendaTemplateShell .a2 .agendaGoogleHeaderSummary{order:5;flex:1 1 100%;max-width:none}.agendaRefreshBtn{order:6}.agendaNewBtn{order:7;margin-left:0}.agendaNewAppointmentBtn{order:8}.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard{grid-template-columns:46px minmax(0,1fr)!important;grid-template-areas:"brand title" "brand subtitle" "brand status" "actions actions"!important;padding:12px!important}.agendaGoogleCardActions{margin-top:8px!important;justify-content:flex-start!important}.agendaGoogleCreateOption{grid-template-columns:50px 1fr!important}.agendaGoogleCreateToggle{grid-column:1/-1}}
 `;
 
-function txt(el: Element | null) {
-  return el?.textContent?.trim() || "";
+function txt(element: Element | null) {
+  return element?.textContent?.trim() || "";
 }
 
 function norm(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function setButtonText(button: HTMLButtonElement, value: string) {
   const node = Array.from(button.childNodes).find(
     (item) => item.nodeType === Node.TEXT_NODE && item.textContent?.trim()
   );
-  if (node) node.textContent = value;
-  else {
-    const span = button.querySelector("span");
-    if (span) span.textContent = value;
-    else button.append(document.createTextNode(value));
+
+  if (node) {
+    node.textContent = value;
+    return;
   }
+
+  const span = button.querySelector("span");
+  if (span) span.textContent = value;
+  else button.append(document.createTextNode(value));
 }
 
 function setIconTitle(element: HTMLElement, value: string) {
   const node = Array.from(element.childNodes).find(
     (item) => item.nodeType === Node.TEXT_NODE && item.textContent?.trim()
   );
+
   if (node) node.textContent = value;
   else element.append(document.createTextNode(value));
 }
@@ -86,11 +103,13 @@ function setIconTitle(element: HTMLElement, value: string) {
 function waitNewCalendar(previousId: string) {
   const started = Date.now();
   window.sessionStorage.setItem(CONNECT_FLAG, previousId);
+
   const timer = window.setInterval(() => {
     const select = document.querySelector<HTMLSelectElement>(
       ".agendaTemplateShell .a2 .head .select"
     );
     const id = select?.value || "";
+
     if (id && id !== previousId) {
       window.clearInterval(timer);
       window.sessionStorage.removeItem(CONNECT_FLAG);
@@ -104,9 +123,8 @@ function waitNewCalendar(previousId: string) {
 
 export default function AgendaEnhancer() {
   useEffect(() => {
-    const shellElement = document.querySelector<HTMLElement>(".agendaTemplateShell");
-    if (!shellElement) return;
-    const shell: HTMLElement = shellElement;
+    const shell = document.querySelector<HTMLElement>(".agendaTemplateShell");
+    if (!shell) return;
 
     let googleCard: HTMLElement | null = null;
     let googleParent: HTMLElement | null = null;
@@ -116,6 +134,7 @@ export default function AgendaEnhancer() {
 
     let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
     const ownsStyle = !style;
+
     if (!style) {
       style = document.createElement("style");
       style.id = STYLE_ID;
@@ -134,19 +153,36 @@ export default function AgendaEnhancer() {
     void fetch("/api/agendas/contexto", { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json();
-        if (response.ok && data?.ok && data?.nicho?.codigo) niche = data.nicho as Nicho;
+        if (response.ok && data?.ok && data?.nicho?.codigo) {
+          niche = data.nicho as Nicho;
+        }
       })
       .catch(() => undefined)
       .finally(schedule);
 
+    const rememberHome = (card: HTMLElement) => {
+      const parent = card.parentElement;
+      if (!parent || card.closest(".modal")) return;
+      googleParent = parent;
+    };
+
     const findGoogle = () => {
-      if (googleCard?.isConnected) return googleCard;
+      if (googleCard?.isConnected) {
+        rememberHome(googleCard);
+        return googleCard;
+      }
+
+      googleCard = null;
+      if (googleParent && !googleParent.isConnected) googleParent = null;
+
+      const cards = Array.from(
+        shell.querySelectorAll<HTMLElement>(".a2 .aside .side, .a2 .modal .side")
+      );
       googleCard =
-        Array.from(
-          shell.querySelectorAll<HTMLElement>(".a2 .aside .side, .a2 .modal .side")
-        ).find((card) => txt(card.querySelector("h3")).includes("Google Calendar")) ||
+        cards.find((card) => txt(card.querySelector("h3")).includes("Google Calendar")) ||
         null;
-      if (googleCard && !googleParent) googleParent = googleCard.parentElement;
+
+      if (googleCard) rememberHome(googleCard);
       return googleCard;
     };
 
@@ -160,6 +196,7 @@ export default function AgendaEnhancer() {
         buttons.find((button) =>
           ["sincronizar", "conectar"].some((name) => norm(txt(button)).includes(name))
         ) || null;
+
       return { connected, email, buttons, primary };
     };
 
@@ -179,7 +216,8 @@ export default function AgendaEnhancer() {
       if (title && !card.querySelector(".agendaGoogleSubtitle")) {
         const subtitle = document.createElement("p");
         subtitle.className = "agendaGoogleSubtitle";
-        subtitle.textContent = "Sincronize horários, alterações e compromissos com segurança.";
+        subtitle.textContent =
+          "Sincronize horários, alterações e compromissos com segurança.";
         title.insertAdjacentElement("afterend", subtitle);
       }
 
@@ -199,6 +237,7 @@ export default function AgendaEnhancer() {
       state.buttons.forEach((button) => {
         const name = norm(txt(button));
         button.classList.remove("agendaGooglePrimary", "agendaGoogleDanger");
+
         if (name.includes("sincronizar") || name.includes("conectar")) {
           button.classList.add("agendaGooglePrimary");
         } else {
@@ -206,6 +245,7 @@ export default function AgendaEnhancer() {
           button.title = "Desvincular Google Calendar";
         }
       });
+
       return state;
     };
 
@@ -223,6 +263,7 @@ export default function AgendaEnhancer() {
 
       const state = googleState(card);
       let summary = slot.querySelector<HTMLElement>(".agendaGoogleHeaderSummary");
+
       if (!summary) {
         summary = document.createElement("div");
         summary.className = "agendaGoogleHeaderSummary";
@@ -230,6 +271,7 @@ export default function AgendaEnhancer() {
           '<span class="agendaGoogleMiniMark" aria-hidden="true"></span><div class="agendaGoogleHeaderText"><strong>Google Calendar</strong><small></small></div>';
         slot.appendChild(summary);
       }
+
       summary.classList.toggle("isConnected", state.connected);
       const small = summary.querySelector("small");
       const detail = state.connected
@@ -237,9 +279,10 @@ export default function AgendaEnhancer() {
         : "Não conectado";
       if (small && small.textContent !== detail) small.textContent = detail;
 
-      actions.querySelector<HTMLSelectElement>("select.select")?.classList.add(
-        "agendaAgendaSelect"
-      );
+      actions
+        .querySelector<HTMLSelectElement>("select.select")
+        ?.classList.add("agendaAgendaSelect");
+
       const buttons = Array.from(actions.querySelectorAll<HTMLButtonElement>("button"));
       const config = buttons.find((button) => norm(txt(button)).includes("configurar"));
       const refresh = buttons.find(
@@ -267,6 +310,7 @@ export default function AgendaEnhancer() {
           '<span class="agendaSyncIcon" aria-hidden="true">↻</span><span class="agendaSyncLabel"></span>';
         actions.appendChild(sync);
       }
+
       const label = sync.querySelector(".agendaSyncLabel");
       if (label) label.textContent = state.connected ? "Sincronizar" : "Conectar";
       sync.disabled = !state.primary || state.primary.disabled;
@@ -280,11 +324,29 @@ export default function AgendaEnhancer() {
       });
     };
 
-    const restoreGoogle = () => {
-      if (googleCard && googleParent && googleCard.parentElement !== googleParent) {
-        googleCard.classList.remove("agendaGoogleConfigCard");
-        googleParent.appendChild(googleCard);
+    const findCurrentHome = () => {
+      if (googleParent?.isConnected) return googleParent;
+
+      const aside = shell.querySelector<HTMLElement>(".a2 .aside");
+      if (aside?.isConnected) {
+        googleParent = aside;
+        return aside;
       }
+
+      return null;
+    };
+
+    const restoreGoogle = () => {
+      if (!googleCard?.isConnected) {
+        googleCard = null;
+        return;
+      }
+
+      const home = findCurrentHome();
+      if (!home || googleCard.parentElement === home) return;
+
+      googleCard.classList.remove("agendaGoogleConfigCard");
+      home.appendChild(googleCard);
     };
 
     const descriptionField = (modal: HTMLElement) =>
@@ -295,6 +357,7 @@ export default function AgendaEnhancer() {
     const insertAfterDescription = (modal: HTMLElement, element: HTMLElement) => {
       const field = descriptionField(modal);
       const form = modal.querySelector<HTMLElement>(".body > .form");
+
       if (field?.parentElement) field.insertAdjacentElement("afterend", element);
       else if (form) form.appendChild(element);
       else modal.querySelector<HTMLElement>(".body")?.appendChild(element);
@@ -307,10 +370,12 @@ export default function AgendaEnhancer() {
 
       if (title.includes("Configurar agenda")) {
         const card = findGoogle();
-        if (card) {
-          decorateGoogleCard(card);
-          const field = descriptionField(modal);
-          if (field && card.previousElementSibling !== field) insertAfterDescription(modal, card);
+        if (!card) return;
+
+        decorateGoogleCard(card);
+        const field = descriptionField(modal);
+        if (field && card.previousElementSibling !== field) {
+          insertAfterDescription(modal, card);
         }
         return;
       }
@@ -386,10 +451,12 @@ export default function AgendaEnhancer() {
           Array.from(select.options).forEach((option) => {
             if (!config.tipos.includes(option.value)) option.remove();
           });
+
           if (!config.tipos.includes(select.value)) {
             select.value = config.tipos[0];
             select.dispatchEvent(new Event("change", { bubbles: true }));
           }
+
           const locked = config.tipos.length === 1;
           select.disabled = locked;
           select.dataset.nicheLocked = String(locked);
@@ -402,8 +469,10 @@ export default function AgendaEnhancer() {
         decorateGoogleCard(card);
         arrangeHeader(card);
       }
+
       fixMore();
       filterRelated();
+
       const modal = shell.querySelector<HTMLElement>(".a2 .modalbg .modal");
       if (modal) placeGoogleInModal(modal);
       else restoreGoogle();
