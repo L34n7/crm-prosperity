@@ -1,12 +1,12 @@
 export const VERSAO_REGRAS_RECURSOS_FLUXOS =
-  "crm-prosperity-recursos-confirmaveis-v1-2026-07-25";
+  "crm-prosperity-recursos-confirmaveis-v2-2026-07-25";
 
 const MARCADOR_REGRAS_RECURSOS = `[REGRAS_TECNICAS_${VERSAO_REGRAS_RECURSOS_FLUXOS}]`;
 
 const REGRAS_RECURSOS_FLUXOS = `
 ${MARCADOR_REGRAS_RECURSOS}
 
-REGRAS TECNICAS OBRIGATORIAS DE RECURSOS
+REGRAS TECNICAS OBRIGATORIAS DE RECURSOS E CAPTURA
 
 1. TRANSFERENCIA PARA SETOR
 - Todo bloco de transferencia deve usar o tipo transferir.
@@ -43,14 +43,47 @@ E proibido, quando a acao externa foi solicitada:
 - usar URL interna do editor do CRM;
 - deixar a opcao apontando para um bloco que nao seja redirect.
 
-CHECKLIST OBRIGATORIO
+4. AGENDAMENTO MANUAL E CAPTURAS
+Considere agendamento manual quando o pedido disser que o cliente deve informar dados e que a equipe confirmara o horario posteriormente.
+
+No agendamento manual:
+- nao use blocos agenda_*;
+- crie uma etapa capturar_resposta separada para cada dado solicitado;
+- use uma variavel valida e especifica para cada captura;
+- reutilize todas as variaveis em um resumo posterior;
+- confirme que os dados foram recebidos;
+- informe que a equipe confirmara o horario;
+- siga para transferencia humana ou retorno ao menu conforme o pedido.
+
+Sequencia obrigatoria quando o pedido solicitar nome, telefone, melhor dia e melhor horario:
+- mensagem curta de introducao;
+- captura do nome;
+- captura do telefone;
+- captura do melhor dia;
+- captura do melhor horario;
+- resumo com as quatro variaveis;
+- confirmacao de recebimento;
+- proximo passo solicitado.
+
+E proibido:
+- substituir as capturas por uma unica mensagem pedindo para o cliente enviar todos os dados livremente;
+- criar apenas um botao de atendente depois da solicitacao de dados;
+- capturar varios dados diferentes na mesma variavel;
+- capturar um dado e nao reutilizar sua variavel;
+- omitir capturas para reduzir o tamanho do fluxo.
+
+No briefing, registre os mesmos dados em dados_a_capturar, agendamento.dados e na jornada de agendamento manual.
+
+CHECKLIST OBRIGATORIO DA IA
 [ ] Cada transferencia possui uma etapa transferir real.
 [ ] Cada bloco que aguarda resposta possui configuracao de excesso e timeout confirmavel.
-[ ] Toda acao externa explicita possui uma etapa redirect alcançavel.
+[ ] Toda acao externa explicita possui uma etapa redirect alcancavel.
 [ ] Redirect sem link fornecido usa url: null, nunca texto substituto.
+[ ] Cada dado solicitado no agendamento manual possui uma captura propria.
+[ ] Todas as variaveis capturadas aparecem em resumo ou confirmacao posterior.
 [ ] Nenhum ID de setor ou URL foi inventado.
 
-Se qualquer item falhar, corrija o JSON antes de responder.
+Revise e corrija o proprio JSON antes de responder. O backend nao fara reparo semantico e nao bloqueara o fluxo por avaliacao subjetiva.
 `.trim();
 
 function objeto(valor: unknown): Record<string, unknown> {
@@ -60,9 +93,8 @@ function objeto(valor: unknown): Record<string, unknown> {
 }
 
 /**
- * Acrescenta regras deterministicas ao pedido antes da criacao do briefing.
- * Assim o briefing estruturado preserva as decisoes e a geracao principal recebe
- * as mesmas exigencias sem adicionar uma segunda IA de revisao.
+ * Acrescenta regras ao pedido antes do briefing e da geracao principal.
+ * As regras orientam a IA, sem criar uma etapa posterior de revisao ou reparo.
  */
 export async function anexarRegrasRecursosAoPedido(request: Request) {
   if (request.method !== "POST") return request;

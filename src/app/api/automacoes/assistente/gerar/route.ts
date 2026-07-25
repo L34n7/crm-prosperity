@@ -1,23 +1,33 @@
-import { reconciliarConsumosIaPendentes } from "./openai-retrieve-compat";
-
 import { executarAssistenteComDistribuicao } from "./route-distribuicao-atendimento";
 import { executarComRecuperacaoSessao } from "./route-recuperacao-sessao";
-import { executarAssistente } from "./route-resiliente";
 import { anexarRegrasRecursosAoPedido } from "./route-regras-recursos";
+import {
+  configurarModelosFluxosIa,
+  habilitarBriefingFluxosIa,
+} from "./route-runtime-config";
 
 export const runtime = "nodejs";
 
 /**
- * Pipeline deliberadamente curto:
- * pedido original + regras tecnicas -> Prompt Mestre + recursos + schema ->
- * uma IA em background -> confirmacao de recursos concretos ->
- * validacao estrutural -> persistencia.
+ * Pipeline:
+ * pedido original + regras tecnicas -> briefing estruturado com GPT-5.4 mini ->
+ * Prompt Mestre + recursos + schema -> geracao final com GPT-5.4 mini ->
+ * confirmacao de recursos concretos -> validacao estrutural -> persistencia.
  *
- * O briefing por IA fica desativado. A geracao longa e retomada pelo mesmo
- * response_id. Respostas terminais com consumo sao registradas mesmo quando
- * nenhum fluxo pode ser materializado.
+ * Nao existe validacao semantica, reparo automatico ou segunda geracao de
+ * revisao. Quando o briefing falha, o comportamento anterior de continuar com
+ * o pedido original permanece ativo.
  */
 export async function POST(request: Request) {
+  configurarModelosFluxosIa();
+
+  const { reconciliarConsumosIaPendentes } = await import(
+    "./openai-retrieve-compat"
+  );
+  habilitarBriefingFluxosIa();
+
+  const { executarAssistente } = await import("./route-resiliente");
+
   await reconciliarConsumosIaPendentes();
   const requestComRegras = await anexarRegrasRecursosAoPedido(request);
 
