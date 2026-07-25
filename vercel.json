@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/google_calendar_sync?limit=30",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/agenda_automacoes?limit=50",
+      "schedule": "* * * * *"
     }
   ]
 }

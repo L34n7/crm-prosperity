@@ -37,6 +37,27 @@ function getConteudoPadraoPorTipo(tipoMensagem: string) {
   }
 }
 
+function agendaActionPayload(metadataJson: Record<string, unknown> | null) {
+  const metadata = (metadataJson || {}) as {
+    interactive?: {
+      button_reply?: { id?: unknown };
+      list_reply?: { id?: unknown };
+    };
+    button?: { payload?: unknown };
+    button_reply?: { id?: unknown };
+  };
+  const payload = String(
+    metadata.interactive?.button_reply?.id ||
+      metadata.interactive?.list_reply?.id ||
+      metadata.button?.payload ||
+      metadata.button_reply?.id ||
+      ""
+  ).trim();
+  return /^agenda_(confirmar|cancelar|reagendar):[0-9a-f-]{36}$/i.test(
+    payload
+  );
+}
+
 export async function saveIncomingWhatsAppMessage({
   empresaId,
   conversaId,
@@ -163,8 +184,15 @@ export async function saveIncomingWhatsAppMessage({
     );
   }
 
+  /*
+   * O webhook consulta novamente mensagens marcadas como duplicadas antes de
+   * chamar o motor de fluxos. Para respostas rápidas da agenda, a trigger do
+   * banco já processou a ação e marcou automacao_processada durante o INSERT.
+   * Recarregar essa mensagem impede que Confirmar/Cancelar/Reagendar também
+   * iniciem um fluxo padrão por engano.
+   */
   return {
-    duplicated: false,
+    duplicated: agendaActionPayload(metadataJson),
     messageId: insertedMessage.id,
   };
 }

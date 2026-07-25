@@ -4,16 +4,19 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-function botoesDoTemplate(payload: unknown) {
-  const componentes = Array.isArray((payload as any)?.components)
+function templateButtons(payload: unknown) {
+  const components = Array.isArray((payload as any)?.components)
     ? (payload as any).components
     : [];
-  const componente = componentes.find(
+  const component = components.find(
     (item: any) => String(item?.type || "").toUpperCase() === "BUTTONS"
   );
 
-  return Array.isArray(componente?.buttons)
-    ? componente.buttons
+  return Array.isArray(component?.buttons)
+    ? component.buttons
+        .filter(
+          (item: any) => String(item?.type || "").toUpperCase() === "QUICK_REPLY"
+        )
         .map((item: any) => String(item?.text || "").trim())
         .filter(Boolean)
     : [];
@@ -21,16 +24,16 @@ function botoesDoTemplate(payload: unknown) {
 
 export async function GET() {
   try {
-    const resultado = await getUsuarioContexto();
-    if (!resultado.ok) {
+    const result = await getUsuarioContexto();
+    if (!result.ok) {
       return NextResponse.json(
-        { ok: false, error: resultado.error },
-        { status: resultado.status }
+        { ok: false, error: result.error },
+        { status: result.status }
       );
     }
 
-    const empresaId = resultado.usuario.empresa_id;
-    if (!empresaId) {
+    const companyId = result.usuario.empresa_id;
+    if (!companyId) {
       return NextResponse.json(
         { ok: false, error: "Usuario sem empresa vinculada." },
         { status: 400 }
@@ -38,41 +41,46 @@ export async function GET() {
     }
 
     const supabase = getSupabaseAdmin();
-    const [integracoesResult, templatesResult, fluxosResult] = await Promise.all([
+    const [integrationsResult, templatesResult, flowsResult] = await Promise.all([
       supabase
         .from("integracoes_whatsapp")
         .select("id, nome_conexao, status, provider, modo_integracao")
-        .eq("empresa_id", empresaId)
+        .eq("empresa_id", companyId)
         .eq("status", "ativa")
+        .not("phone_number_id", "is", null)
         .order("nome_conexao", { ascending: true }),
       supabase
         .from("whatsapp_templates")
-        .select("id, nome, idioma, categoria, status, integracao_whatsapp_id, payload")
-        .eq("empresa_id", empresaId)
+        .select(
+          "id, nome, idioma, categoria, status, integracao_whatsapp_id, payload"
+        )
+        .eq("empresa_id", companyId)
         .ilike("status", "approved")
         .ilike("categoria", "utility")
         .order("nome", { ascending: true }),
       supabase
         .from("automacao_fluxos")
         .select("id, nome, status")
-        .eq("empresa_id", empresaId)
-        .neq("status", "arquivado")
+        .eq("empresa_id", companyId)
+        .eq("status", "ativo")
         .order("nome", { ascending: true }),
     ]);
 
-    if (integracoesResult.error) {
-      throw new Error(`Erro ao buscar integrações: ${integracoesResult.error.message}`);
+    if (integrationsResult.error) {
+      throw new Error(
+        `Erro ao buscar integrações: ${integrationsResult.error.message}`
+      );
     }
     if (templatesResult.error) {
       throw new Error(`Erro ao buscar templates: ${templatesResult.error.message}`);
     }
-    if (fluxosResult.error) {
-      throw new Error(`Erro ao buscar fluxos: ${fluxosResult.error.message}`);
+    if (flowsResult.error) {
+      throw new Error(`Erro ao buscar fluxos: ${flowsResult.error.message}`);
     }
 
     return NextResponse.json({
       ok: true,
-      integracoes: integracoesResult.data || [],
+      integracoes: integrationsResult.data || [],
       templates: (templatesResult.data || []).map((template: any) => ({
         id: template.id,
         nome: template.nome,
@@ -80,9 +88,10 @@ export async function GET() {
         categoria: template.categoria,
         status: template.status,
         integracao_whatsapp_id: template.integracao_whatsapp_id,
-        botoes: botoesDoTemplate(template.payload),
+        botoes: templateButtons(template.payload),
       })),
-      fluxos: fluxosResult.data || [],
+      fluxos: flowsResult.data || [],
+      execucao_automatica_ativa: true,
     });
   } catch (error) {
     return NextResponse.json(
