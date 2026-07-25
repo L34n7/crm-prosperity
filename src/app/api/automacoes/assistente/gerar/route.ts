@@ -9,11 +9,12 @@ export const runtime = "nodejs";
 
 /**
  * Pipeline deliberadamente curto:
- * pedido original + regras tecnicas -> briefing estruturado ->
- * Prompt Mestre + recursos + schema -> uma IA em background ->
- * confirmacao de recursos concretos -> validacao estrutural -> persistencia.
+ * pedido original + regras tecnicas -> Prompt Mestre + recursos + schema ->
+ * uma IA em background -> confirmacao de recursos concretos ->
+ * validacao estrutural -> persistencia.
  *
- * A geracao longa e retomada pelo mesmo response_id, sem iniciar outra IA.
+ * O briefing por IA fica desativado. A geracao longa e retomada pelo mesmo
+ * response_id, sem iniciar outra IA e sem salvar respostas incompletas.
  */
 export async function POST(request: Request) {
   const requestComRegras = await anexarRegrasRecursosAoPedido(request);
