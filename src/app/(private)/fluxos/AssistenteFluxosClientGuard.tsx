@@ -5,18 +5,26 @@ import { useEffect } from "react";
 export const LIMITE_PEDIDO_IA = 20_000;
 const CHAVE_SESSAO = "prosperity:assistente-fluxos:sessao";
 const SELETOR_CONTADOR = "[data-contador-pedido-ia]";
+const SELETOR_AJUDA_GATILHOS = "[data-ajuda-gatilhos-lote]";
 const CODIGO_GERACAO_PENDENTE = "GERACAO_IA_EM_PROCESSAMENTO";
 const INTERVALO_CONSULTA_MS = 5_000;
 const TEMPO_MAXIMO_CONSULTA_MS = 9 * 60_000;
 
+function urlRequisicao(input: RequestInfo | URL) {
+  return typeof input === "string"
+    ? input
+    : input instanceof URL
+      ? input.toString()
+      : input.url;
+}
+
 function endpointAssistente(input: RequestInfo | URL) {
-  const url =
-    typeof input === "string"
-      ? input
-      : input instanceof URL
-        ? input.toString()
-        : input.url;
-  return url.includes("/api/automacoes/assistente/gerar");
+  return urlRequisicao(input).includes("/api/automacoes/assistente/gerar");
+}
+
+function endpointGatilhos(input: RequestInfo | URL) {
+  const url = urlRequisicao(input).split("?")[0];
+  return /\/api\/automacoes\/[^/]+\/gatilhos\/?$/.test(url);
 }
 
 function corpoJson(init?: RequestInit) {
@@ -29,6 +37,52 @@ function corpoJson(init?: RequestInit) {
   } catch {
     return null;
   }
+}
+
+function palavrasChaveDoValor(valor: unknown) {
+  return Array.from(
+    new Set(
+      String(valor || "")
+        .split(/[,;\n]+/)
+        .map((item) => item.trim().toLocaleLowerCase("pt-BR"))
+        .filter(Boolean)
+    )
+  );
+}
+
+function prepararLotePalavrasChave(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): { input: RequestInfo | URL; init?: RequestInit } {
+  if (
+    !endpointGatilhos(input) ||
+    String(init?.method || "GET").toUpperCase() !== "POST"
+  ) {
+    return { input, init };
+  }
+
+  const body = corpoJson(init);
+  const condicao = String(body?.condicao || "contem");
+  const palavras = palavrasChaveDoValor(body?.valor);
+
+  if (condicao === "regex" || palavras.length < 2) {
+    return { input, init };
+  }
+
+  const url = urlRequisicao(input);
+  const [caminho, query = ""] = url.split("?");
+  const urlLote = `${caminho.replace(/\/$/, "")}/lote${query ? `?${query}` : ""}`;
+
+  return {
+    input: urlLote,
+    init: {
+      ...init,
+      body: JSON.stringify({
+        ...body,
+        valores: palavras,
+      }),
+    },
+  };
 }
 
 async function lerJsonResposta(response: Response) {
@@ -107,13 +161,46 @@ function instalarLimitePrompt() {
   label.appendChild(contador);
 }
 
+function instalarCadastroMultiploPalavrasChave() {
+  const inputs = Array.from(document.querySelectorAll("input")).filter((item) =>
+    String(item.getAttribute("placeholder") || "")
+      .toLocaleLowerCase("pt-BR")
+      .includes("suporte, login, senha")
+  );
+
+  for (const input of inputs) {
+    if (!(input instanceof HTMLInputElement)) continue;
+
+    input.placeholder = "Ex: suporte, login, senha";
+    const container = input.parentElement;
+    if (!container || container.querySelector(SELETOR_AJUDA_GATILHOS)) continue;
+
+    const ajuda = document.createElement("small");
+    ajuda.dataset.ajudaGatilhosLote = "true";
+    ajuda.textContent =
+      "Cadastre várias palavras de uma vez separando por vírgula ou ponto e vírgula.";
+    ajuda.style.display = "block";
+    ajuda.style.marginTop = "6px";
+    ajuda.style.opacity = "0.72";
+    ajuda.style.lineHeight = "1.4";
+    container.appendChild(ajuda);
+  }
+}
+
+function instalarAprimoramentos() {
+  instalarLimitePrompt();
+  instalarCadastroMultiploPalavrasChave();
+}
+
 export default function AssistenteFluxosClientGuard() {
   useEffect(() => {
     const originalFetch = window.fetch.bind(window);
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requisicao = prepararLotePalavrasChave(input, init);
+
       try {
-        const response = await originalFetch(input, init);
+        const response = await originalFetch(requisicao.input, requisicao.init);
         return endpointAssistente(input)
           ? acompanharGeracaoAssincrona(response, originalFetch)
           : response;
@@ -146,8 +233,8 @@ export default function AssistenteFluxosClientGuard() {
       }
     };
 
-    instalarLimitePrompt();
-    const observer = new MutationObserver(instalarLimitePrompt);
+    instalarAprimoramentos();
+    const observer = new MutationObserver(instalarAprimoramentos);
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
