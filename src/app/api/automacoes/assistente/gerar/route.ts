@@ -1,4 +1,4 @@
-import "./openai-retrieve-compat";
+import { reconciliarConsumosIaPendentes } from "./openai-retrieve-compat";
 
 import { executarAssistenteComDistribuicao } from "./route-distribuicao-atendimento";
 import { executarComRecuperacaoSessao } from "./route-recuperacao-sessao";
@@ -14,9 +14,11 @@ export const runtime = "nodejs";
  * validacao estrutural -> persistencia.
  *
  * O briefing por IA fica desativado. A geracao longa e retomada pelo mesmo
- * response_id, sem iniciar outra IA e sem salvar respostas incompletas.
+ * response_id. Respostas terminais com consumo sao registradas mesmo quando
+ * nenhum fluxo pode ser materializado.
  */
 export async function POST(request: Request) {
+  await reconciliarConsumosIaPendentes();
   const requestComRegras = await anexarRegrasRecursosAoPedido(request);
 
   return executarComRecuperacaoSessao(requestComRegras, (requestFinal) =>
