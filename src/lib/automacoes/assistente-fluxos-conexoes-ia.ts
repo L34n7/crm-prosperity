@@ -28,6 +28,12 @@ type EtapaDistribuicao = PlanoAssistenteEtapa & {
   atendente_excesso_tentativas?: string | null;
 };
 
+type OpcaoMapeada = {
+  idAnterior: string;
+  idVisivel: string;
+  titulo: string;
+};
+
 function objeto(valor: unknown): Record<string, unknown> {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as Record<string, unknown>)
@@ -70,6 +76,101 @@ function estrategiaOpcional(valor: unknown, atendente?: unknown) {
     : null;
 }
 
+function normalizarComparacao(valor: unknown) {
+  return texto(valor, 1000)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function otimizarEspacamentoMensagem(valor: unknown) {
+  const mensagem = texto(valor, 4000);
+  if (!mensagem) return null;
+
+  const compactada = mensagem
+    .split(/\r?\n/)
+    .map((linha) => linha.trimEnd())
+    .join("\n")
+    .replace(/\n[ \t]+\n/g, "\n\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const blocosUsados = new Set<string>();
+  const blocos = compactada.split(/\n{2,}/).filter((bloco) => {
+    const chave = normalizarComparacao(bloco);
+    if (!chave || blocosUsados.has(chave)) return false;
+    blocosUsados.add(chave);
+    return true;
+  });
+
+  return blocos.join("\n\n").trim() || null;
+}
+
+function removerPrefixoOpcao(linha: string) {
+  return linha
+    .trim()
+    .replace(/^[-•*▪◦‣]\s*/u, "")
+    .replace(/^(?:\d{1,2}|[A-Za-z])(?:[.)\]:-]|\s+-)\s*/u, "")
+    .trim();
+}
+
+function mensagemSemListaDuplicada(
+  mensagem: string | null,
+  opcoes: PlanoAssistenteOpcao[],
+  tituloEtapa: string | null
+) {
+  if (!mensagem || opcoes.length === 0) return mensagem;
+
+  const titulos = new Set(
+    opcoes
+      .map((item) => normalizarComparacao(item.texto))
+      .filter(Boolean)
+  );
+  if (titulos.size === 0) return mensagem;
+
+  const linhas = mensagem.split(/\r?\n/);
+  const filtradas = linhas.filter((linha) => {
+    const semPrefixo = removerPrefixoOpcao(linha);
+    const normalizada = normalizarComparacao(semPrefixo);
+    if (!normalizada) return true;
+    if (titulos.has(normalizada)) return false;
+
+    const partes = semPrefixo.split(/\s+-\s+/);
+    const ultimaParte = partes.length > 1 ? partes[partes.length - 1] : "";
+    return !ultimaParte || !titulos.has(normalizarComparacao(ultimaParte));
+  });
+
+  const resultado = filtradas
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (!resultado) return "Selecione uma opção para continuar.";
+
+  const mensagemNormalizada = normalizarComparacao(resultado);
+  const tituloNormalizado = normalizarComparacao(tituloEtapa);
+  const introducaoGenerica = [
+    "selecione uma opcao para seguir com seu atendimento",
+    "selecione uma opcao para continuar",
+    "selecione uma opcao para seguir",
+    "como deseja seguir agora",
+    "como voce deseja seguir agora",
+    "como voce quer seguir agora",
+  ].includes(mensagemNormalizada);
+
+  if (!introducaoGenerica) return resultado;
+  if (/faq|duvida/.test(tituloNormalizado)) {
+    return "Selecione a dúvida que deseja consultar.";
+  }
+  if (/pos faq|pos agendamento/.test(tituloNormalizado)) {
+    return "Escolha como deseja continuar.";
+  }
+  return "Escolha uma opção para continuar.";
+}
+
 function opcao(valor: unknown): PlanoAssistenteOpcao {
   const item = objeto(valor);
   return {
@@ -84,7 +185,7 @@ function etapa(valor: unknown): EtapaDistribuicao {
     ref: texto(item.ref, 180),
     tipo: texto(item.tipo, 80),
     titulo: textoOuNull(item.titulo, 160),
-    mensagem: textoOuNull(item.mensagem, 4000),
+    mensagem: otimizarEspacamentoMensagem(item.mensagem),
     variavel: textoOuNull(item.variavel, 160),
     tipo_captura: textoOuNull(item.tipo_captura, 80),
     setor_id: textoOuNull(item.setor_id, 160),
@@ -132,6 +233,87 @@ function rota(valor: unknown): PlanoAssistenteRota {
   };
 }
 
+function normalizarIdsVisiveisDasOpcoes(params: {
+  etapas: EtapaDistribuicao[];
+  rotas: PlanoAssistenteRota[];
+}) {
+  const mapeamentos = new Map<string, OpcaoMapeada[]>();
+
+  const etapas = params.etapas.map((item) => {
+    if (!item.ref || item.opcoes.length === 0) return item;
+
+    const opcoesOriginais = item.opcoes;
+    const opcoes = opcoesOriginais.map((opcaoAtual, indice) => ({
+      ...opcaoAtual,
+      id: String(indice + 1),
+    }));
+
+    mapeamentos.set(
+      item.ref,
+      opcoesOriginais.map((opcaoAtual, indice) => ({
+        idAnterior: texto(opcaoAtual.id, 160),
+        idVisivel: String(indice + 1),
+        titulo: texto(opcaoAtual.texto, 240),
+      }))
+    );
+
+    return {
+      ...item,
+      mensagem: mensagemSemListaDuplicada(
+        item.mensagem,
+        opcoes,
+        item.titulo
+      ),
+      opcoes,
+    };
+  });
+
+  const idsUsadosPorOrigem = new Map<string, Set<string>>();
+  const rotas = params.rotas.map((item) => {
+    const opcoes = mapeamentos.get(item.origem);
+    if (!opcoes || !item.valor) return item;
+
+    const usados = idsUsadosPorOrigem.get(item.origem) || new Set<string>();
+    idsUsadosPorOrigem.set(item.origem, usados);
+
+    const valor = normalizarComparacao(item.valor);
+    const rotulo = normalizarComparacao(item.rotulo);
+    const disponiveis = opcoes.filter((opcaoAtual) => !usados.has(opcaoAtual.idVisivel));
+
+    const escolhida =
+      disponiveis.find(
+        (opcaoAtual) =>
+          normalizarComparacao(opcaoAtual.idAnterior) === valor &&
+          Boolean(rotulo) &&
+          normalizarComparacao(opcaoAtual.titulo) === rotulo
+      ) ||
+      disponiveis.find(
+        (opcaoAtual) => normalizarComparacao(opcaoAtual.idAnterior) === valor
+      ) ||
+      disponiveis.find(
+        (opcaoAtual) =>
+          Boolean(rotulo) && normalizarComparacao(opcaoAtual.titulo) === rotulo
+      ) ||
+      (() => {
+        const indice = Number(item.valor);
+        return Number.isInteger(indice) && indice >= 1 && indice <= opcoes.length
+          ? opcoes[indice - 1]
+          : null;
+      })();
+
+    if (!escolhida) return item;
+    usados.add(escolhida.idVisivel);
+
+    return {
+      ...item,
+      valor: escolhida.idVisivel,
+      rotulo: item.rotulo || escolhida.titulo || escolhida.idVisivel,
+    };
+  });
+
+  return { etapas, rotas };
+}
+
 function mensagemRevisada(valor: unknown): PlanoAssistenteMensagemRevisada {
   const item = objeto(valor);
   return {
@@ -163,20 +345,25 @@ function clarificacao(valor: unknown): PlanoAssistenteClarificacao {
 }
 
 /**
- * Le o JSON estruturado sem completar rotas, renomear refs, inserir blocos ou
- * reescrever mensagens. Pequenos limites existem apenas para proteger os campos
- * persistidos; a arquitetura e a intencao permanecem exatamente as da IA.
+ * Le o JSON estruturado e normaliza somente dados tecnicos seguros: limites de
+ * campos, IDs visiveis das respostas e listas de opcoes repetidas na mensagem.
+ * A arquitetura, os destinos e a intencao permanecem exatamente as da IA.
  */
 export function normalizarPlanoAssistente(
   valor: unknown
 ): PlanoAssistenteFluxos {
   const raiz = objeto(valor);
+  const estrutura = normalizarIdsVisiveisDasOpcoes({
+    etapas: Array.isArray(raiz.etapas) ? raiz.etapas.map(etapa) : [],
+    rotas: Array.isArray(raiz.rotas) ? raiz.rotas.map(rota) : [],
+  });
+
   return {
     nome_fluxo: texto(raiz.nome_fluxo, 160),
     objetivo: texto(raiz.objetivo, 1200),
     resumo: texto(raiz.resumo, 1800),
-    etapas: Array.isArray(raiz.etapas) ? raiz.etapas.map(etapa) : [],
-    rotas: Array.isArray(raiz.rotas) ? raiz.rotas.map(rota) : [],
+    etapas: estrutura.etapas,
+    rotas: estrutura.rotas,
     mensagens_revisadas: Array.isArray(raiz.mensagens_revisadas)
       ? raiz.mensagens_revisadas.map(mensagemRevisada)
       : [],
