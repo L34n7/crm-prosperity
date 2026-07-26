@@ -4,6 +4,15 @@ import AssistenteFluxosClientGuard from "./AssistenteFluxosClientGuard";
 import FluxoIaAtivacaoModal from "./FluxoIaAtivacaoModal";
 
 const ESTILOS_BOTOES_PREVIA = `
+  [class*="flowItemTitle"] {
+    display: block !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+
   [class*="whatsappFlowBubbleRow"]:has([class*="whatsappFlowButtons"])
     + [class*="whatsappFlowJourneySelector"]
     [class*="whatsappFlowJourneyOptions"] button {
