@@ -4959,6 +4959,18 @@ async function registrarCapturaRespostaAutomacao(params: {
     };
   }
 
+  // A variável é a informação essencial para esta execução. A cópia
+  // permanente no contato é deliberadamente secundária: uma indisponibilidade
+  // dessa tabela jamais pode interromper o atendimento automático.
+  await persistirInformacaoCapturaContato({
+    empresaId,
+    execucao,
+    no,
+    tipoCaptura,
+    chave,
+    validacao,
+  });
+
   await supabaseAdmin
     .from("automacao_execucoes")
     .update({
@@ -5004,6 +5016,153 @@ async function registrarCapturaRespostaAutomacao(params: {
     valido: true,
     excedeuTentativas: false,
   };
+}
+
+const TIPOS_CAPTURA_CONTATO = new Set([
+  "nome",
+  "email",
+  "telefone",
+  "cpf",
+  "cnpj",
+  "data",
+  "cep",
+  "numero",
+  "moeda",
+  "texto",
+]);
+
+async function persistirInformacaoCapturaContato(params: {
+  empresaId: string;
+  execucao: {
+    id: string;
+    contato_id?: string | null;
+    fluxo_id?: string | null;
+  };
+  no: { id: string };
+  tipoCaptura: string;
+  chave: string;
+  validacao: ReturnType<typeof validarCaptura>;
+}) {
+  const { empresaId, execucao, no, chave, validacao } = params;
+  const tipo = String(params.tipoCaptura || "texto").trim().toLowerCase();
+  const tipoCaptura = TIPOS_CAPTURA_CONTATO.has(tipo) ? tipo : "texto";
+  const contatoId = String(execucao?.contato_id || "").trim();
+
+  if (!contatoId || !validacao.valido || !validacao.valorNormalizado) return;
+
+  try {
+    const { data: contato, error: contatoError } = await supabaseAdmin
+      .from("contatos")
+      .select("id, nome, email, telefone")
+      .eq("id", contatoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (contatoError) throw contatoError;
+    if (!contato) return;
+
+    const valorPrincipalNormalizado =
+      tipoCaptura === "nome"
+        ? validarCaptura("nome", String(contato.nome || "")).valorNormalizado
+        : tipoCaptura === "email"
+          ? validarCaptura("email", String(contato.email || "")).valorNormalizado
+          : tipoCaptura === "telefone"
+            ? validarCaptura("telefone", String(contato.telefone || "")).valorNormalizado
+            : "";
+
+    if (
+      valorPrincipalNormalizado &&
+      valorPrincipalNormalizado === validacao.valorNormalizado
+    ) {
+      return;
+    }
+
+    const { data: existente, error: existenteError } = await supabaseAdmin
+      .from("contato_informacoes_captura")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("contato_id", contatoId)
+      .eq("tipo", tipoCaptura)
+      .eq("valor_normalizado", validacao.valorNormalizado)
+      .eq("ativo", true)
+      .maybeSingle();
+
+    if (existenteError) throw existenteError;
+    if (existente) return;
+
+    // A tabela mantém a maior sequência já usada, inclusive para itens
+    // excluídos. Recalculamos em uma tentativa curta para cobrir duas
+    // respostas simultâneas do mesmo contato/tipo.
+    for (let tentativa = 0; tentativa < 2; tentativa += 1) {
+      const { data: ultima, error: ultimaError } = await supabaseAdmin
+        .from("contato_informacoes_captura")
+        .select("sequencia")
+        .eq("empresa_id", empresaId)
+        .eq("contato_id", contatoId)
+        .eq("tipo", tipoCaptura)
+        .order("sequencia", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (ultimaError) throw ultimaError;
+
+      const sequencia = Number(ultima?.sequencia ?? -1) + 1;
+      const { error: insertError } = await supabaseAdmin
+        .from("contato_informacoes_captura")
+        .insert({
+          empresa_id: empresaId,
+          contato_id: contatoId,
+          tipo: tipoCaptura,
+          nome_campo: "pendente",
+          sequencia,
+          valor: validacao.valorLimpo,
+          valor_normalizado: validacao.valorNormalizado,
+          precisao_data: validacao.precisaoData,
+          fluxo_id: execucao.fluxo_id,
+          no_id: no.id,
+          execucao_id: execucao.id,
+          variavel_origem: chave,
+          metadata_json: {
+            valor_original: validacao.valorFormatado,
+            formato_data: validacao.formatoData,
+            origem: "automacao",
+          },
+        });
+
+      if (!insertError) return;
+
+      if (insertError.code !== "23505" || tentativa === 1) {
+        throw insertError;
+      }
+
+      const { data: duplicada } = await supabaseAdmin
+        .from("contato_informacoes_captura")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("contato_id", contatoId)
+        .eq("tipo", tipoCaptura)
+        .eq("valor_normalizado", validacao.valorNormalizado)
+        .eq("ativo", true)
+        .maybeSingle();
+
+      if (duplicada) return;
+    }
+  } catch (error) {
+    console.error("[AUTOMATION_ENGINE] Erro ao persistir captura no contato:", error);
+
+    await registrarLog({
+      empresaId,
+      execucaoId: execucao.id,
+      fluxoId: execucao.fluxo_id,
+      noId: no.id,
+      tipoEvento: "captura_contato_falhou",
+      descricao: "A captura foi mantida na execução, mas não foi salva no contato.",
+      entrada: { tipo_captura: tipoCaptura, chave, valor: validacao.valorLimpo },
+      saida: {},
+    }).catch((logError) =>
+      console.error("[AUTOMATION_ENGINE] Erro ao registrar falha de captura:", logError)
+    );
+  }
 }
 
 function extrairIndiceOpcaoAgenda(mensagemTexto: string) {

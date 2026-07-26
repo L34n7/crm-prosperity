@@ -58,6 +58,17 @@ type Contato = {
   updated_at?: string;
 };
 
+type InformacaoCaptura = {
+  id: string;
+  tipo: string;
+  nome_campo: string;
+  valor: string;
+  capturado_em: string;
+  atualizado_em: string;
+  variavel_origem?: string | null;
+  automacao_fluxos?: { nome?: string | null } | { nome?: string | null }[] | null;
+};
+
 type CampanhaRastreamento = {
   id: string;
   nome: string;
@@ -286,6 +297,15 @@ export default function ContatosPage() {
   );
   const [origemEmMassa, setOrigemEmMassa] = useState(MANTER_VALOR_EM_MASSA);
   const [atualizandoEmMassa, setAtualizandoEmMassa] = useState(false);
+  const [informacoesCapturaPorContato, setInformacoesCapturaPorContato] = useState<
+    Record<string, InformacaoCaptura[]>
+  >({});
+  const [carregandoInformacoesCaptura, setCarregandoInformacoesCaptura] =
+    useState<string | null>(null);
+  const [editandoInformacaoCaptura, setEditandoInformacaoCaptura] = useState<
+    { contatoId: string; id: string; valor: string } | null
+  >(null);
+  const [salvandoInformacaoCaptura, setSalvandoInformacaoCaptura] = useState(false);
 
   const [abaPreviewImportacao, setAbaPreviewImportacao] = useState<
     "alertas" | "validos" | "duplicados_banco" | "duplicados_arquivo" | "invalidos"
@@ -874,8 +894,79 @@ export default function ContatosPage() {
     }
   }
 
+  async function carregarInformacoesCaptura(contatoId: string) {
+    setCarregandoInformacoesCaptura(contatoId);
+    try {
+      const response = await fetch(
+        `/api/contatos/${contatoId}/informacoes-captura`,
+        { cache: "no-store" }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Erro ao carregar informações.");
+      setInformacoesCapturaPorContato((atual) => ({
+        ...atual,
+        [contatoId]: Array.isArray(data.informacoes) ? data.informacoes : [],
+      }));
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao carregar informações de captura.");
+    } finally {
+      setCarregandoInformacoesCaptura(null);
+    }
+  }
+
+  function obterNomeFluxo(informacao: InformacaoCaptura) {
+    const relacao = informacao.automacao_fluxos;
+    const fluxo = Array.isArray(relacao) ? relacao[0] : relacao;
+    return fluxo?.nome || "Registro manual";
+  }
+
+  async function salvarInformacaoCaptura() {
+    if (!editandoInformacaoCaptura) return;
+    setSalvandoInformacaoCaptura(true);
+    try {
+      const response = await fetch(
+        `/api/contatos/${editandoInformacaoCaptura.contatoId}/informacoes-captura`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editandoInformacaoCaptura.id,
+            valor: editandoInformacaoCaptura.valor,
+          }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Erro ao atualizar informação.");
+      setMensagem(data.message || "Informação atualizada.");
+      await carregarInformacoesCaptura(editandoInformacaoCaptura.contatoId);
+      setEditandoInformacaoCaptura(null);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao atualizar informação.");
+    } finally {
+      setSalvandoInformacaoCaptura(false);
+    }
+  }
+
+  async function excluirInformacaoCaptura(contatoId: string, informacaoId: string) {
+    if (!window.confirm("Excluir esta informação capturada?")) return;
+    try {
+      const response = await fetch(
+        `/api/contatos/${contatoId}/informacoes-captura/${informacaoId}`,
+        { method: "DELETE" }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Erro ao excluir informação.");
+      setMensagem(data.message || "Informação excluída.");
+      await carregarInformacoesCaptura(contatoId);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao excluir informação.");
+    }
+  }
+
   function toggleExpandir(contatoId: string) {
-    setExpandidoId((atual) => (atual === contatoId ? null : contatoId));
+    const vaiExpandir = expandidoId !== contatoId;
+    setExpandidoId(vaiExpandir ? contatoId : null);
+    if (vaiExpandir) void carregarInformacoesCaptura(contatoId);
   }
 
   function abrirModalExcluir(contato: Contato) {
@@ -2080,6 +2171,126 @@ export default function ContatosPage() {
                                 {contato.observacoes || "Sem observações"}
                               </span>
                             </div>
+
+                            <section className={styles.captureInfoSection}>
+                              <div className={styles.captureInfoHeader}>
+                                <div>
+                                  <span className={styles.infoLabel}>
+                                    Informações de captura
+                                  </span>
+                                  <p>
+                                    Dados salvos pelos fluxos, separados dos dados principais do contato.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  className={styles.captureRefreshButton}
+                                  onClick={() => void carregarInformacoesCaptura(contato.id)}
+                                  disabled={carregandoInformacoesCaptura === contato.id}
+                                >
+                                  {carregandoInformacoesCaptura === contato.id
+                                    ? "Atualizando..."
+                                    : "Atualizar"}
+                                </button>
+                              </div>
+
+                              {carregandoInformacoesCaptura === contato.id ? (
+                                <div className={styles.captureEmpty}>Carregando informações...</div>
+                              ) : (informacoesCapturaPorContato[contato.id] || []).length === 0 ? (
+                                <div className={styles.captureEmpty}>
+                                  Nenhuma informação foi capturada por um fluxo ainda.
+                                </div>
+                              ) : (
+                                <div className={styles.captureInfoList}>
+                                  {(informacoesCapturaPorContato[contato.id] || []).map(
+                                    (informacao) => {
+                                      const estaEditando =
+                                        editandoInformacaoCaptura?.id === informacao.id;
+
+                                      return (
+                                        <article
+                                          className={styles.captureInfoItem}
+                                          key={informacao.id}
+                                        >
+                                          <div className={styles.captureInfoContent}>
+                                            <strong>{informacao.nome_campo}</strong>
+                                            {estaEditando ? (
+                                              <div className={styles.captureEditRow}>
+                                                <input
+                                                  className={styles.input}
+                                                  value={editandoInformacaoCaptura.valor}
+                                                  onChange={(e) =>
+                                                    setEditandoInformacaoCaptura((atual) =>
+                                                      atual
+                                                        ? { ...atual, valor: e.target.value }
+                                                        : atual
+                                                    )
+                                                  }
+                                                />
+                                                <button
+                                                  type="button"
+                                                  className={styles.primaryButton}
+                                                  onClick={() => void salvarInformacaoCaptura()}
+                                                  disabled={salvandoInformacaoCaptura}
+                                                >
+                                                  Salvar
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  className={styles.secondaryButton}
+                                                  onClick={() => setEditandoInformacaoCaptura(null)}
+                                                  disabled={salvandoInformacaoCaptura}
+                                                >
+                                                  Cancelar
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <span className={styles.captureInfoValue}>
+                                                {informacao.valor}
+                                              </span>
+                                            )}
+                                            <small>
+                                              {obterNomeFluxo(informacao)} · {new Date(
+                                                informacao.capturado_em
+                                              ).toLocaleString("pt-BR")}
+                                            </small>
+                                          </div>
+                                          {!estaEditando && (
+                                            <div className={styles.captureInfoActions}>
+                                              <button
+                                                type="button"
+                                                className={styles.rowActionButton}
+                                                onClick={() =>
+                                                  setEditandoInformacaoCaptura({
+                                                    contatoId: contato.id,
+                                                    id: informacao.id,
+                                                    valor: informacao.valor,
+                                                  })
+                                                }
+                                              >
+                                                Editar
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className={styles.captureDeleteButton}
+                                                onClick={() =>
+                                                  void excluirInformacaoCaptura(
+                                                    contato.id,
+                                                    informacao.id
+                                                  )
+                                                }
+                                              >
+                                                Excluir
+                                              </button>
+                                            </div>
+                                          )}
+                                        </article>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              )}
+                            </section>
 
                             {contato.telefone_revisar && (
                               <div className={styles.infoBlockFull}>

@@ -236,6 +236,101 @@
   font-size: 15px;
 }
 
+.captureInfoSection {
+  grid-column: 1 / -1;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.captureInfoHeader,
+.captureInfoItem,
+.captureInfoActions,
+.captureEditRow {
+  display: flex;
+  align-items: center;
+}
+
+.captureInfoHeader {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.captureInfoHeader p,
+.captureInfoContent small {
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.captureRefreshButton,
+.captureDeleteButton {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.captureRefreshButton { color: var(--crm-primary); }
+.captureDeleteButton { color: var(--crm-danger-text); }
+
+.captureInfoList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.captureInfoItem {
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  padding: 11px 12px;
+}
+
+.captureInfoContent {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.captureInfoValue {
+  color: var(--crm-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.captureInfoActions,
+.captureEditRow {
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.captureEditRow .input { min-width: 190px; }
+
+.captureEmpty {
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  padding: 12px 0 2px;
+}
+
+@media (max-width: 680px) {
+  .captureInfoHeader,
+  .captureInfoItem,
+  .captureEditRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .captureInfoActions { justify-content: flex-end; }
+  .captureEditRow .input { min-width: 0; width: 100%; }
+}
+
 .list {
   display: flex;
   flex-direction: column;
