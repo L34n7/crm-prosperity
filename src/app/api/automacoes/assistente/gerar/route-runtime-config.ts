@@ -1,11 +1,12 @@
 type ObjetoJson = Record<string, unknown>;
 
 const MODELO_FLUXOS = "gpt-5.4-mini";
-const MODELO_BRIEFING = "gpt-5.4-mini";
+const MODELO_BRIEFING = "gpt-5.4";
+const ESFORCO_BRIEFING = "medium";
 const LIMITE_SAIDA_FLUXO = 28_000;
 const LIMITE_SAIDA_BRIEFING = 6_000;
 const VERSAO_BRIEFING =
-  "crm-prosperity-briefing-estruturado-v3-2026-07-25";
+  "crm-prosperity-briefing-estruturado-v4-2026-07-26";
 
 // Capturado antes de openai-retrieve-compat instalar o bypass do briefing.
 const fetchNativo = globalThis.fetch.bind(globalThis);
@@ -87,6 +88,9 @@ function reforcarPromptBriefing(input: unknown) {
 - Nunca transforme uma coleta de dados em uma unica mensagem pedindo para o cliente enviar tudo livremente.
 - Nunca substitua blocos de captura por um botao de atendente.
 - Preserve menus, perguntas de FAQ, respostas especificas, transferencias, midias, URLs e textos literais.
+- Quando o usuario disser "botao", "botoes" ou "todo fluxo deve possuir botoes", interprete como opcoes visiveis de navegacao. Ate 3 opcoes podem ser pergunta_botoes; 4 a 10 opcoes devem ser pergunta_opcoes/menu.
+- Quando houver varios procedimentos, servicos ou categorias e o pedido mencionar fotos, galeria, portfolio, antes e depois ou resultados visuais, registre a necessidade de midia/bloco separado por contexto. Nao reduza isso a uma unica galeria generica, exceto se o usuario pedir explicitamente galeria geral.
+- Cada opcao visivel do briefing deve ter uma saida correspondente, e cada saida deve corresponder a uma opcao visivel.
 - Nao invente recursos nem remova requisitos para simplificar o fluxo.`,
       },
     ],
@@ -111,7 +115,7 @@ function prepararBodyOpenAI(body: ObjetoJson) {
     return {
       ...body,
       model: MODELO_BRIEFING,
-      reasoning: { ...objeto(body.reasoning), effort: "low" },
+      reasoning: { ...objeto(body.reasoning), effort: ESFORCO_BRIEFING },
       max_output_tokens: LIMITE_SAIDA_BRIEFING,
       prompt_cache_key: VERSAO_BRIEFING,
       input: reforcarPromptBriefing(body.input),
@@ -137,6 +141,8 @@ function prepararBodyOpenAI(body: ObjetoJson) {
 export function configurarModelosFluxosIa() {
   process.env.OPENAI_ASSISTENTE_FLUXOS_MODEL = MODELO_FLUXOS;
   process.env.OPENAI_ASSISTENTE_FLUXOS_BRIEFING_MODEL = MODELO_BRIEFING;
+  process.env.OPENAI_ASSISTENTE_FLUXOS_BRIEFING_REASONING_EFFORT =
+    ESFORCO_BRIEFING;
   process.env.OPENAI_ASSISTENTE_FLUXOS_REASONING_EFFORT = "low";
   process.env.OPENAI_ASSISTENTE_FLUXOS_MAX_OUTPUT_TOKENS = String(
     LIMITE_SAIDA_FLUXO

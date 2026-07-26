@@ -34,6 +34,15 @@ type OpcaoMapeada = {
   titulo: string;
 };
 
+const TIPOS_PERGUNTA = new Set(["pergunta_opcoes", "pergunta_botoes"]);
+const TIPOS_MIDIA = new Set([
+  "midia_imagem",
+  "midia_video",
+  "midia_audio",
+  "midia_arquivo",
+]);
+const LIMITE_OPCOES_MENU = 10;
+
 function objeto(valor: unknown): Record<string, unknown> {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as Record<string, unknown>)
@@ -84,6 +93,16 @@ function normalizarComparacao(valor: unknown) {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizarRefTecnica(valor: unknown) {
+  return (
+    normalizarComparacao(valor)
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "")
+      .slice(0, 120) || "item"
+  );
 }
 
 function otimizarEspacamentoMensagem(valor: unknown) {
@@ -233,6 +252,178 @@ function rota(valor: unknown): PlanoAssistenteRota {
   };
 }
 
+function ehPergunta(etapa: EtapaDistribuicao) {
+  return TIPOS_PERGUNTA.has(etapa.tipo);
+}
+
+function ehRotaNormalDeResposta(rotaAtual: PlanoAssistenteRota) {
+  const condicao = normalizarRefTecnica(rotaAtual.condicao);
+  return (
+    Boolean(rotaAtual.origem && rotaAtual.destino && rotaAtual.valor) &&
+    !["sempre", "timeout", "timeout_sem_resposta"].includes(condicao)
+  );
+}
+
+function contemAntesDepois(valor: unknown) {
+  const normalizado = normalizarComparacao(valor);
+  return /\bantes\b/.test(normalizado) && /\bdepois\b/.test(normalizado);
+}
+
+function contextoIgnoradoParaAntesDepois(etapaAtual: EtapaDistribuicao) {
+  const normalizado = normalizarComparacao(
+    `${etapaAtual.ref} ${etapaAtual.titulo || ""}`
+  );
+  return (
+    /\b(menu principal|principal|galeria|portfolio|faq|duvidas?)\b/.test(
+      normalizado
+    ) || contemAntesDepois(normalizado)
+  );
+}
+
+function limparNomeContexto(etapaAtual: EtapaDistribuicao) {
+  const base = texto(etapaAtual.titulo || etapaAtual.ref, 160)
+    .replace(/^ações?\s+(?:da|do|de)\s+/i, "")
+    .replace(/^menu\s+(?:da|do|de)?\s*/i, "")
+    .replace(/^procedimento\s*\|\s*/i, "")
+    .replace(/\s*\|\s*.+$/i, "")
+    .trim();
+
+  return base || texto(etapaAtual.ref, 160) || "contexto";
+}
+
+function refUnica(base: string, existentes: Set<string>) {
+  let ref = normalizarRefTecnica(base);
+  let indice = 2;
+  while (existentes.has(ref)) {
+    ref = `${normalizarRefTecnica(base)}_${indice}`;
+    indice += 1;
+  }
+  existentes.add(ref);
+  return ref;
+}
+
+function tipoMidiaPorEtapa(tipo: string, atual: string | null) {
+  if (tipo === "midia_imagem") return "imagem";
+  if (tipo === "midia_video") return "video";
+  if (tipo === "midia_audio") return "audio";
+  if (tipo === "midia_arquivo") return "arquivo";
+  return atual;
+}
+
+function normalizarTipoMenusPorQuantidade(etapas: EtapaDistribuicao[]) {
+  return etapas.map((item) => {
+    if (item.tipo !== "pergunta_botoes" || item.opcoes.length <= 3) {
+      return item;
+    }
+
+    return {
+      ...item,
+      tipo: "pergunta_opcoes",
+    };
+  });
+}
+
+function normalizarAntesDepoisPorContexto(params: {
+  etapas: EtapaDistribuicao[];
+  rotas: PlanoAssistenteRota[];
+}) {
+  const etapas = params.etapas.map((item) => ({
+    ...item,
+    opcoes: [...(item.opcoes || [])],
+  }));
+  const rotas = params.rotas.map((item) => ({ ...item }));
+  const avisos: string[] = [];
+  const porRef = new Map(etapas.map((item) => [item.ref, item]));
+  const refsExistentes = new Set(etapas.map((item) => item.ref));
+
+  const rotasAntesDepois = rotas.filter((rotaAtual) => {
+    if (!ehRotaNormalDeResposta(rotaAtual)) return false;
+    const destino = porRef.get(rotaAtual.destino);
+    return (
+      contemAntesDepois(`${rotaAtual.rotulo || ""} ${rotaAtual.valor || ""}`) &&
+      Boolean(destino) &&
+      (TIPOS_MIDIA.has(destino?.tipo || "") ||
+        contemAntesDepois(`${destino?.titulo || ""} ${destino?.mensagem || ""}`))
+    );
+  });
+
+  const porDestino = new Map<string, PlanoAssistenteRota[]>();
+  for (const rotaAtual of rotasAntesDepois) {
+    porDestino.set(rotaAtual.destino, [
+      ...(porDestino.get(rotaAtual.destino) || []),
+      rotaAtual,
+    ]);
+  }
+
+  for (const [destinoRef, rotasDoDestino] of porDestino.entries()) {
+    if (rotasDoDestino.length < 2) continue;
+    const destino = porRef.get(destinoRef);
+    if (!destino) continue;
+
+    const contextuais = rotasDoDestino.filter((rotaAtual) => {
+      const origem = porRef.get(rotaAtual.origem);
+      return Boolean(
+        origem &&
+          ehPergunta(origem) &&
+          !contextoIgnoradoParaAntesDepois(origem)
+      );
+    });
+
+    if (contextuais.length < 2) continue;
+
+    for (const rotaAtual of contextuais) {
+      const origem = porRef.get(rotaAtual.origem);
+      if (!origem) continue;
+
+      const contexto = limparNomeContexto(origem);
+      const novaRef = refUnica(
+        `${destinoRef}_${normalizarRefTecnica(contexto)}`,
+        refsExistentes
+      );
+      const tituloBase = destino.titulo || "Antes e Depois";
+      const titulo = `${tituloBase.split("|")[0].trim()} | ${contexto}`
+        .slice(0, 160)
+        .trim();
+      const mensagemBase =
+        destino.mensagem ||
+        "Confira os resultados visuais autorizados deste procedimento.";
+      const mensagem = `Antes e depois de ${contexto}.\n\n${mensagemBase}`
+        .replace(/\n{3,}/g, "\n\n")
+        .slice(0, 4000)
+        .trim();
+
+      etapas.push({
+        ...destino,
+        ref: novaRef,
+        titulo,
+        mensagem,
+        midia_id: null,
+        midia_nome: null,
+        midia_tipo: tipoMidiaPorEtapa(destino.tipo, destino.midia_tipo),
+        midia_url: null,
+        opcoes: [...(destino.opcoes || [])],
+      });
+
+      rotaAtual.destino = novaRef;
+      rotas.push({
+        origem: novaRef,
+        destino: origem.ref,
+        condicao: "sempre",
+        valor: null,
+        rotulo: "Voltar ao procedimento",
+        descricao_ia: null,
+        timeout_segundos: null,
+      });
+
+      avisos.push(
+        `Criado antes e depois especifico para ${contexto} com midia pendente.`
+      );
+    }
+  }
+
+  return { etapas, rotas, avisos };
+}
+
 function normalizarIdsVisiveisDasOpcoes(params: {
   etapas: EtapaDistribuicao[];
   rotas: PlanoAssistenteRota[];
@@ -314,6 +505,52 @@ function normalizarIdsVisiveisDasOpcoes(params: {
   return { etapas, rotas };
 }
 
+function sincronizarRotasComOpcoesVisiveis(params: {
+  etapas: EtapaDistribuicao[];
+  rotas: PlanoAssistenteRota[];
+}) {
+  const avisos: string[] = [];
+  const etapas = params.etapas.map((item) => ({
+    ...item,
+    opcoes: [...(item.opcoes || [])],
+  }));
+  const porRef = new Map(etapas.map((item) => [item.ref, item]));
+
+  for (const rotaAtual of params.rotas) {
+    if (!ehRotaNormalDeResposta(rotaAtual)) continue;
+
+    const origem = porRef.get(rotaAtual.origem);
+    if (!origem || !ehPergunta(origem)) continue;
+
+    const valor = texto(rotaAtual.valor, 200);
+    if (!valor) continue;
+
+    const valoresVisiveis = new Set(
+      origem.opcoes.map((opcaoAtual) => texto(opcaoAtual.id, 200))
+    );
+
+    if (valoresVisiveis.has(valor)) continue;
+    if (origem.opcoes.length >= LIMITE_OPCOES_MENU) continue;
+
+    origem.opcoes.push({
+      id: valor,
+      texto:
+        texto(rotaAtual.rotulo, 240) ||
+        `Opção ${String(origem.opcoes.length + 1)}`,
+    });
+
+    if (origem.opcoes.length > 3 && origem.tipo === "pergunta_botoes") {
+      origem.tipo = "pergunta_opcoes";
+    }
+
+    avisos.push(
+      `A rota "${rotaAtual.rotulo || valor}" foi adicionada como opcao visivel.`
+    );
+  }
+
+  return { etapas, avisos };
+}
+
 function mensagemRevisada(valor: unknown): PlanoAssistenteMensagemRevisada {
   const item = objeto(valor);
   return {
@@ -345,24 +582,33 @@ function clarificacao(valor: unknown): PlanoAssistenteClarificacao {
 }
 
 /**
- * Le o JSON estruturado e normaliza somente dados tecnicos seguros: limites de
- * campos, IDs visiveis das respostas e listas de opcoes repetidas na mensagem.
- * A arquitetura, os destinos e a intencao permanecem exatamente as da IA.
+ * Le o JSON estruturado e normaliza dados tecnicos seguros antes da
+ * materializacao: limites de menus, IDs visiveis, rotas que perderiam opcao
+ * visivel e midias de antes/depois por contexto.
  */
 export function normalizarPlanoAssistente(
   valor: unknown
 ): PlanoAssistenteFluxos {
   const raiz = objeto(valor);
-  const estrutura = normalizarIdsVisiveisDasOpcoes({
-    etapas: Array.isArray(raiz.etapas) ? raiz.etapas.map(etapa) : [],
-    rotas: Array.isArray(raiz.rotas) ? raiz.rotas.map(rota) : [],
+  const etapasBase = normalizarTipoMenusPorQuantidade(
+    Array.isArray(raiz.etapas) ? raiz.etapas.map(etapa) : []
+  );
+  const rotasBase = Array.isArray(raiz.rotas) ? raiz.rotas.map(rota) : [];
+  const antesDepois = normalizarAntesDepoisPorContexto({
+    etapas: etapasBase,
+    rotas: rotasBase,
   });
+  const estrutura = normalizarIdsVisiveisDasOpcoes({
+    etapas: normalizarTipoMenusPorQuantidade(antesDepois.etapas),
+    rotas: antesDepois.rotas,
+  });
+  const sincronizadas = sincronizarRotasComOpcoesVisiveis(estrutura);
 
   return {
     nome_fluxo: texto(raiz.nome_fluxo, 160),
     objetivo: texto(raiz.objetivo, 1200),
     resumo: texto(raiz.resumo, 1800),
-    etapas: estrutura.etapas,
+    etapas: normalizarTipoMenusPorQuantidade(sincronizadas.etapas),
     rotas: estrutura.rotas,
     mensagens_revisadas: Array.isArray(raiz.mensagens_revisadas)
       ? raiz.mensagens_revisadas.map(mensagemRevisada)
@@ -373,9 +619,13 @@ export function normalizarPlanoAssistente(
     clarificacoes: Array.isArray(raiz.clarificacoes)
       ? raiz.clarificacoes.map(clarificacao)
       : [],
-    avisos: Array.isArray(raiz.avisos)
-      ? raiz.avisos.map((aviso) => texto(aviso, 1000)).filter(Boolean)
-      : [],
+    avisos: [
+      ...(Array.isArray(raiz.avisos)
+        ? raiz.avisos.map((aviso) => texto(aviso, 1000)).filter(Boolean)
+        : []),
+      ...antesDepois.avisos,
+      ...sincronizadas.avisos,
+    ],
   };
 }
 
