@@ -48,6 +48,7 @@ import {
   normalizarTexto,
   resolverRespostaInterativa,
 } from "./resposta-conexao-policy";
+import { validarCaptura } from "./captura-normalizacao";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -91,10 +92,6 @@ function perf(label: string, inicio: number, extra?: Record<string, any>) {
     tempo_ms: Date.now() - inicio,
     ...(extra || {}),
   });
-}
-
-function somenteDigitos(valor: string) {
-  return String(valor || "").replace(/\D/g, "");
 }
 
 type TipoEventoFluxoRastreamento =
@@ -527,129 +524,6 @@ export async function registrarEventoRastreamentoFluxo(params: {
       );
     }
   }
-}
-
-function validarCpf(cpfEntrada: string) {
-  const cpf = somenteDigitos(cpfEntrada);
-
-  if (cpf.length !== 11) return false;
-  if (/^(\d)\1+$/.test(cpf)) return false;
-
-  let soma = 0;
-
-  for (let i = 0; i < 9; i++) {
-    soma += Number(cpf[i]) * (10 - i);
-  }
-
-  let digito1 = 11 - (soma % 11);
-  if (digito1 >= 10) digito1 = 0;
-
-  soma = 0;
-
-  for (let i = 0; i < 10; i++) {
-    soma += Number(cpf[i]) * (11 - i);
-  }
-
-  let digito2 = 11 - (soma % 11);
-  if (digito2 >= 10) digito2 = 0;
-
-  return digito1 === Number(cpf[9]) && digito2 === Number(cpf[10]);
-}
-
-function validarCaptura(tipo: string, valorOriginal: string) {
-  const valor = String(valorOriginal || "").trim();
-  const digitos = somenteDigitos(valor);
-
-  if (!valor) {
-    return { valido: false, valorLimpo: "", valorFormatado: "" };
-  }
-
-  if (tipo === "texto") {
-    return { valido: true, valorLimpo: valor, valorFormatado: valor };
-  }
-
-  if (tipo === "nome") {
-    const pareceFrase =
-      valor.split(/\s+/).length > 5 ||
-      /\b(quero|preciso|boleto|conta|pagamento|segunda via|atendente)\b/i.test(valor);
-
-    const valido =
-      /^[A-Za-zÀ-ÿ'´`^~\s]{2,80}$/.test(valor) &&
-      !/\d/.test(valor) &&
-      !pareceFrase;
-
-    return { valido, valorLimpo: valor, valorFormatado: valor };
-  }
-
-  if (tipo === "cpf") {
-    return {
-      valido: validarCpf(valor),
-      valorLimpo: digitos,
-      valorFormatado:
-        digitos.length === 11
-          ? `${digitos.slice(0, 3)}.${digitos.slice(3, 6)}.${digitos.slice(6, 9)}-${digitos.slice(9)}`
-          : valor,
-    };
-  }
-
-  if (tipo === "cnpj") {
-    return {
-      valido: digitos.length === 14 && !/^(\d)\1+$/.test(digitos),
-      valorLimpo: digitos,
-      valorFormatado: valor,
-    };
-  }
-
-  if (tipo === "email") {
-    const valido = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(valor);
-    return { valido, valorLimpo: valor.toLowerCase(), valorFormatado: valor.toLowerCase() };
-  }
-
-  if (tipo === "telefone") {
-    return {
-      valido: digitos.length >= 10 && digitos.length <= 13,
-      valorLimpo: digitos,
-      valorFormatado: valor,
-    };
-  }
-
-  if (tipo === "numero") {
-    return {
-      valido: /^-?\d+([.,]\d+)?$/.test(valor),
-      valorLimpo: valor.replace(",", "."),
-      valorFormatado: valor,
-    };
-  }
-
-  if (tipo === "data") {
-    const valido =
-      /^\d{2}\/\d{2}\/\d{4}$/.test(valor) ||
-      /^\d{4}-\d{2}-\d{2}$/.test(valor);
-
-    return { valido, valorLimpo: valor, valorFormatado: valor };
-  }
-
-  if (tipo === "cep") {
-    return {
-      valido: digitos.length === 8,
-      valorLimpo: digitos,
-      valorFormatado:
-        digitos.length === 8 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : valor,
-    };
-  }
-
-  if (tipo === "moeda") {
-    const normalizado = valor.replace(/[R$\s.]/g, "").replace(",", ".");
-    const numero = Number(normalizado);
-
-    return {
-      valido: Number.isFinite(numero) && numero >= 0,
-      valorLimpo: String(numero),
-      valorFormatado: valor,
-    };
-  }
-
-  return { valido: true, valorLimpo: valor, valorFormatado: valor };
 }
 
 function aguardar(ms: number) {
@@ -5063,6 +4937,9 @@ async function registrarCapturaRespostaAutomacao(params: {
           tipo_captura: tipoCaptura,
           valor_original: mensagemTexto,
           valor_formatado: validacao.valorFormatado,
+          valor_normalizado: validacao.valorNormalizado,
+          precisao_data: validacao.precisaoData,
+          formato_data: validacao.formatoData,
         },
         updated_at: new Date().toISOString(),
       },
@@ -5116,6 +4993,9 @@ async function registrarCapturaRespostaAutomacao(params: {
       chave,
       valor: validacao.valorLimpo,
       valor_formatado: validacao.valorFormatado,
+      valor_normalizado: validacao.valorNormalizado,
+      precisao_data: validacao.precisaoData,
+      formato_data: validacao.formatoData,
     },
   });
 
