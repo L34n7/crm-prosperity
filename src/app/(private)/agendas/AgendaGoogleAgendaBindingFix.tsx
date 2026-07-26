@@ -6,6 +6,7 @@ const STYLE_ID = "agenda-google-agenda-binding-fix";
 const CSS = `
 .agendaTemplateShell .agendaGoogleHeaderSummary[hidden],
 .agendaTemplateShell .agendaGoogleLegacyHidden{display:none!important}
+.agendaTemplateShell .a2 .head .actions>select.select+button.btn{display:none!important}
 .agendaTemplateShell .agendaGoogleBindingCard{position:relative}
 .agendaTemplateShell .agendaGoogleBindingCard[data-loading="true"]{opacity:.78}
 .agendaTemplateShell .agendaGoogleBindingCard .agendaGoogleBindingStatus{max-width:320px;color:var(--crm-text-muted);font-size:10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -40,6 +41,14 @@ function setText(element: Element | null, value: string) {
 
 function selectedAgendaId(shell: HTMLElement) {
   return shell.querySelector<HTMLSelectElement>(".a2 .head select.select")?.value || "";
+}
+
+function legacyRefreshButton(shell: HTMLElement) {
+  const select = shell.querySelector<HTMLSelectElement>(".a2 .head .actions > select.select");
+  const next = select?.nextElementSibling;
+  return next instanceof HTMLButtonElement && !next.classList.contains("agendaHeaderSync")
+    ? next
+    : null;
 }
 
 function insertAfterDescription(modal: HTMLElement, element: HTMLElement) {
@@ -192,6 +201,7 @@ export default function AgendaGoogleAgendaBindingFix() {
           throw new Error(data?.error || "Erro ao sincronizar Google Calendar.");
         }
         await load(true);
+        legacyRefreshButton(shell)?.click();
       } catch (error) {
         window.alert(error instanceof Error ? error.message : "Erro ao sincronizar Google Calendar.");
       } finally {
