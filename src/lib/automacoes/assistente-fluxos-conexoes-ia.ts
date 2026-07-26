@@ -551,6 +551,129 @@ function sincronizarRotasComOpcoesVisiveis(params: {
   return { etapas, avisos };
 }
 
+function mensagemDeCaminhoIntermediario(rotulo: string) {
+  const normalizado = normalizarComparacao(rotulo);
+
+  if (/\bmorar\b|\bmoradia\b|\bresidir\b|\buso proprio\b/.test(normalizado)) {
+    return "Perfeito. Vou seguir considerando conforto, localização, lazer, segurança e qualidade de vida para morar.";
+  }
+
+  if (/\binvestir\b|\binvestimento\b|\brentabilidade\b|\bvalorizacao\b|\bliquidez\b/.test(normalizado)) {
+    return "Excelente. Vou seguir considerando valorização, liquidez e potencial de retorno.";
+  }
+
+  if (/\brecursos proprios\b|\ba vista\b|\bavista\b|\bcapital proprio\b/.test(normalizado)) {
+    return "Ótimo. Com recursos próprios, o especialista pode avaliar condições mais estratégicas para uma negociação direta.";
+  }
+
+  if (/\bfinanciamento\b|\bfinanciar\b|\bcredito\b|\bbanco\b/.test(normalizado)) {
+    return "Perfeito. Com financiamento, o especialista pode orientar sobre simulação, entrada e possibilidades de aprovação.";
+  }
+
+  return `Perfeito. Vou seguir considerando a opção: ${rotulo}.`;
+}
+
+function etapaMensagemIntermediaria(params: {
+  ref: string;
+  rotulo: string;
+}): EtapaDistribuicao {
+  const rotulo = texto(params.rotulo, 120) || "opção escolhida";
+
+  return {
+    ref: params.ref,
+    tipo: "mensagem",
+    titulo: `Caminho | ${rotulo}`.slice(0, 160),
+    mensagem: mensagemDeCaminhoIntermediario(rotulo),
+    variavel: null,
+    tipo_captura: null,
+    setor_id: null,
+    setor_nome: null,
+    resultado: null,
+    midia_id: null,
+    midia_nome: null,
+    midia_tipo: null,
+    midia_url: null,
+    url: null,
+    botao_texto: null,
+    opcoes: [],
+    agenda_id: null,
+    agenda_nome: null,
+    estrategia_transferencia: null,
+    atendente_id: null,
+    setor_excesso_tentativas: null,
+    estrategia_excesso_tentativas: null,
+    atendente_excesso_tentativas: null,
+  };
+}
+
+function normalizarRotasConvergentesComIntermediarios(params: {
+  etapas: EtapaDistribuicao[];
+  rotas: PlanoAssistenteRota[];
+}) {
+  const etapas = params.etapas.map((item) => ({
+    ...item,
+    opcoes: [...(item.opcoes || [])],
+  }));
+  const rotas = params.rotas.map((item) => ({ ...item }));
+  const avisos: string[] = [];
+  const porRef = new Map(etapas.map((item) => [item.ref, item]));
+  const refsExistentes = new Set(etapas.map((item) => item.ref));
+  const rotasPorOrigemDestino = new Map<string, PlanoAssistenteRota[]>();
+
+  for (const rotaAtual of rotas) {
+    if (!ehRotaNormalDeResposta(rotaAtual)) continue;
+    const origem = porRef.get(rotaAtual.origem);
+    if (!origem || !ehPergunta(origem)) continue;
+    if (!porRef.has(rotaAtual.destino)) continue;
+
+    const chave = `${rotaAtual.origem}::${rotaAtual.destino}`;
+    rotasPorOrigemDestino.set(chave, [
+      ...(rotasPorOrigemDestino.get(chave) || []),
+      rotaAtual,
+    ]);
+  }
+
+  for (const rotasConvergentes of rotasPorOrigemDestino.values()) {
+    if (rotasConvergentes.length < 2) continue;
+
+    const origem = porRef.get(rotasConvergentes[0]?.origem);
+    const destinoOriginal = rotasConvergentes[0]?.destino;
+    if (!origem || !destinoOriginal) continue;
+
+    for (const rotaAtual of rotasConvergentes) {
+      const rotulo =
+        texto(rotaAtual.rotulo, 120) ||
+        origem.opcoes.find(
+          (opcaoAtual) => texto(opcaoAtual.id, 200) === texto(rotaAtual.valor, 200)
+        )?.texto ||
+        texto(rotaAtual.valor, 120) ||
+        "opção escolhida";
+      const novaRef = refUnica(
+        `${origem.ref}_${normalizarRefTecnica(rotulo)}_caminho`,
+        refsExistentes
+      );
+
+      etapas.push(etapaMensagemIntermediaria({ ref: novaRef, rotulo }));
+      rotaAtual.destino = novaRef;
+      rotas.push({
+        origem: novaRef,
+        destino: destinoOriginal,
+        condicao: "sempre",
+        valor: null,
+        rotulo: "Seguir caminho",
+        descricao_ia: null,
+        timeout_segundos: null,
+      });
+    }
+
+    avisos.push(
+      `Criados caminhos intermediarios para evitar saidas duplicadas de "${origem.titulo || origem.ref}" para o mesmo bloco.`
+    );
+  }
+
+  return { etapas, rotas, avisos };
+}
+
 function mensagemRevisada(valor: unknown): PlanoAssistenteMensagemRevisada {
   const item = objeto(valor);
   return {
@@ -584,7 +707,7 @@ function clarificacao(valor: unknown): PlanoAssistenteClarificacao {
 /**
  * Le o JSON estruturado e normaliza dados tecnicos seguros antes da
  * materializacao: limites de menus, IDs visiveis, rotas que perderiam opcao
- * visivel e midias de antes/depois por contexto.
+ * visivel, midias de antes/depois por contexto e saidas convergentes.
  */
 export function normalizarPlanoAssistente(
   valor: unknown
@@ -602,14 +725,18 @@ export function normalizarPlanoAssistente(
     etapas: normalizarTipoMenusPorQuantidade(antesDepois.etapas),
     rotas: antesDepois.rotas,
   });
-  const sincronizadas = sincronizarRotasComOpcoesVisiveis(estrutura);
+  const convergentes = normalizarRotasConvergentesComIntermediarios(estrutura);
+  const sincronizadas = sincronizarRotasComOpcoesVisiveis({
+    etapas: convergentes.etapas,
+    rotas: convergentes.rotas,
+  });
 
   return {
     nome_fluxo: texto(raiz.nome_fluxo, 160),
     objetivo: texto(raiz.objetivo, 1200),
     resumo: texto(raiz.resumo, 1800),
     etapas: normalizarTipoMenusPorQuantidade(sincronizadas.etapas),
-    rotas: estrutura.rotas,
+    rotas: convergentes.rotas,
     mensagens_revisadas: Array.isArray(raiz.mensagens_revisadas)
       ? raiz.mensagens_revisadas.map(mensagemRevisada)
       : [],
@@ -624,6 +751,7 @@ export function normalizarPlanoAssistente(
         ? raiz.avisos.map((aviso) => texto(aviso, 1000)).filter(Boolean)
         : []),
       ...antesDepois.avisos,
+      ...convergentes.avisos,
       ...sincronizadas.avisos,
     ],
   };
