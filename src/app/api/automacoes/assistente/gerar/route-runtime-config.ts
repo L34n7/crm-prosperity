@@ -1,12 +1,13 @@
 type ObjetoJson = Record<string, unknown>;
 
 const MODELO_FLUXOS = "gpt-5.4-mini";
-const MODELO_BRIEFING = "gpt-5.4";
-const ESFORCO_BRIEFING = "medium";
+const MODELO_BRIEFING = "gpt-5.4-mini";
+const ESFORCO_BRIEFING = "low";
 const LIMITE_SAIDA_FLUXO = 28_000;
 const LIMITE_SAIDA_BRIEFING = 6_000;
+const LIMITE_TIMEOUT_BRIEFING_MS = 50_000;
 const VERSAO_BRIEFING =
-  "crm-prosperity-briefing-estruturado-v4-2026-07-26";
+  "crm-prosperity-briefing-estruturado-v5-2026-07-26";
 
 // Capturado antes de openai-retrieve-compat instalar o bypass do briefing.
 const fetchNativo = globalThis.fetch.bind(globalThis);
@@ -170,6 +171,10 @@ export function habilitarBriefingFluxosIa() {
     const initFinal: RequestInit = {
       ...init,
       body: JSON.stringify(bodyFinal),
+      signal:
+        schema === "briefing_estruturado_fluxo"
+          ? AbortSignal.timeout(LIMITE_TIMEOUT_BRIEFING_MS)
+          : init?.signal,
     };
 
     // O modulo anterior bloqueava somente esta chamada. Para o briefing usamos
