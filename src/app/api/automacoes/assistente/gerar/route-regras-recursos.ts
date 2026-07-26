@@ -1,5 +1,5 @@
 export const VERSAO_REGRAS_RECURSOS_FLUXOS =
-  "crm-prosperity-recursos-confirmaveis-v2-2026-07-25";
+  "crm-prosperity-recursos-confirmaveis-v3-2026-07-26";
 
 const MARCADOR_REGRAS_RECURSOS = `[REGRAS_TECNICAS_${VERSAO_REGRAS_RECURSOS_FLUXOS}]`;
 
@@ -55,11 +55,20 @@ No agendamento manual:
 - informe que a equipe confirmara o horario;
 - siga para transferencia humana ou retorno ao menu conforme o pedido.
 
+REGRA OBRIGATORIA PARA DATA EM AGENDAMENTO MANUAL
+- Para melhor dia, data preferida, dia desejado, disponibilidade ou quando o contato gostaria de ser atendido, use sempre tipo_captura: "texto".
+- O tipo texto e obrigatorio nesses casos porque o contato pode responder de forma natural, por exemplo: "amanha", "segunda-feira", "semana que vem", "depois do dia 10" ou "qualquer dia a tarde".
+- Nunca use tipo_captura: "data" em agendamento manual, escolha de disponibilidade ou perguntas que aceitam datas relativas e linguagem natural.
+- Use tipo_captura: "data" somente quando a resposta precisar obrigatoriamente ser digitada como data numerica e validada pelo CRM.
+- O tipo data aceita somente formatos numericos como: 26/07/2026, 26/07/26, 2026-07-26, 01/26, 01/2026 ou 01/12.
+- Exemplos adequados para tipo data: data de nascimento, data de vencimento, data de renovacao, data de emissao, data de validade ou outra data exata que obrigatoriamente deve ser numerica.
+- Quando houver duvida entre texto e data, prefira texto para nao bloquear respostas naturais do contato.
+
 Sequencia obrigatoria quando o pedido solicitar nome, telefone, melhor dia e melhor horario:
 - mensagem curta de introducao;
 - captura do nome;
 - captura do telefone;
-- captura do melhor dia;
+- captura do melhor dia com tipo_captura: "texto";
 - captura do melhor horario;
 - resumo com as quatro variaveis;
 - confirmacao de recebimento;
@@ -70,7 +79,8 @@ E proibido:
 - criar apenas um botao de atendente depois da solicitacao de dados;
 - capturar varios dados diferentes na mesma variavel;
 - capturar um dado e nao reutilizar sua variavel;
-- omitir capturas para reduzir o tamanho do fluxo.
+- omitir capturas para reduzir o tamanho do fluxo;
+- usar tipo_captura: "data" para melhor dia ou disponibilidade de agendamento manual.
 
 No briefing, registre os mesmos dados em dados_a_capturar, agendamento.dados e na jornada de agendamento manual.
 
@@ -80,6 +90,8 @@ CHECKLIST OBRIGATORIO DA IA
 [ ] Toda acao externa explicita possui uma etapa redirect alcancavel.
 [ ] Redirect sem link fornecido usa url: null, nunca texto substituto.
 [ ] Cada dado solicitado no agendamento manual possui uma captura propria.
+[ ] Melhor dia e disponibilidade de agendamento manual usam tipo_captura: "texto".
+[ ] O tipo data foi usado somente quando a resposta deve ser numerica e exata.
 [ ] Todas as variaveis capturadas aparecem em resumo ou confirmacao posterior.
 [ ] Nenhum ID de setor ou URL foi inventado.
 
