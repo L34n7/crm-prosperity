@@ -3,6 +3,7 @@
 import AgendaAutomationEnhancer from "./AgendaAutomationEnhancer";
 import AgendaAutomationRuntimeStatus from "./AgendaAutomationRuntimeStatus";
 import AgendaEnhancerLegacy from "./AgendaEnhancerLegacy";
+import AgendaGoogleAgendaBindingFix from "./AgendaGoogleAgendaBindingFix";
 
 export default function AgendaEnhancer() {
   return (
@@ -10,6 +11,7 @@ export default function AgendaEnhancer() {
       <AgendaEnhancerLegacy />
       <AgendaAutomationEnhancer />
       <AgendaAutomationRuntimeStatus />
+      <AgendaGoogleAgendaBindingFix />
     </>
   );
 }
