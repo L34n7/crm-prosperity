@@ -22,6 +22,16 @@ function templateButtons(payload: unknown) {
     : [];
 }
 
+function integrationLabel(integration: any) {
+  const name = String(integration?.nome_conexao || "WhatsApp").trim();
+  const number = String(integration?.numero || "").trim();
+  const mode =
+    String(integration?.modo_integracao || "").toLowerCase() === "coexistence"
+      ? "Coexistência"
+      : "Cloud API";
+  return [name, number, mode].filter(Boolean).join(" · ");
+}
+
 export async function GET() {
   try {
     const result = await getUsuarioContexto();
@@ -44,10 +54,11 @@ export async function GET() {
     const [integrationsResult, templatesResult, flowsResult] = await Promise.all([
       supabase
         .from("integracoes_whatsapp")
-        .select("id, nome_conexao, status, provider, modo_integracao")
+        .select(
+          "id, nome_conexao, numero, status, provider, modo_integracao, coex_status, phone_number_id"
+        )
         .eq("empresa_id", companyId)
-        .eq("status", "ativa")
-        .not("phone_number_id", "is", null)
+        .or("status.eq.ativa,coex_status.eq.ativo")
         .order("nome_conexao", { ascending: true }),
       supabase
         .from("whatsapp_templates")
@@ -78,9 +89,19 @@ export async function GET() {
       throw new Error(`Erro ao buscar fluxos: ${flowsResult.error.message}`);
     }
 
+    const integrations = (integrationsResult.data || [])
+      .filter((integration: any) => Boolean(integration.phone_number_id))
+      .map((integration: any) => ({
+        id: integration.id,
+        nome_conexao: integrationLabel(integration),
+        nome_original: integration.nome_conexao,
+        numero: integration.numero,
+        modo_integracao: integration.modo_integracao,
+      }));
+
     return NextResponse.json({
       ok: true,
-      integracoes: integrationsResult.data || [],
+      integracoes: integrations,
       templates: (templatesResult.data || []).map((template: any) => ({
         id: template.id,
         nome: template.nome,
@@ -92,6 +113,7 @@ export async function GET() {
       })),
       fluxos: flowsResult.data || [],
       execucao_automatica_ativa: true,
+      total_integracoes: integrations.length,
     });
   } catch (error) {
     return NextResponse.json(
