@@ -8,7 +8,7 @@ const SELETOR_CONTADOR = "[data-contador-pedido-ia]";
 const SELETOR_AJUDA_GATILHOS = "[data-ajuda-gatilhos-lote]";
 const CODIGO_GERACAO_PENDENTE = "GERACAO_IA_EM_PROCESSAMENTO";
 const ENDPOINT_SESSAO_ATIVA = "/api/automacoes/assistente/sessao-ativa";
-const INTERVALO_CONSULTA_MS = 5_000;
+const INTERVALO_CONSULTA_MS = 15_000;
 const TEMPO_MAXIMO_CONSULTA_MS = 9 * 60_000;
 const TENTATIVAS_REDE = 4;
 
