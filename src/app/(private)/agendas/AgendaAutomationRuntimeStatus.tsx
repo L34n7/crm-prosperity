@@ -3,6 +3,9 @@
 import { useEffect } from "react";
 
 const STYLE_ID = "agenda-automation-stage13-runtime";
+const NOTICE_TEXT =
+  "As ações ativas serão planejadas no horário configurado e poderão ser acompanhadas e canceladas em ";
+
 const CSS = `
 .agendaAutomationSection.isRuntimeActive{border-color:color-mix(in srgb,var(--crm-success-border) 78%,var(--crm-border));padding:18px}
 .agendaAutomationSection.isRuntimeActive:before{background:linear-gradient(90deg,var(--crm-success-strong),color-mix(in srgb,var(--crm-primary-strong) 65%,var(--crm-success-strong)))}
@@ -24,41 +27,63 @@ const CSS = `
 @media(max-width:760px){.agendaAutomationSection.isRuntimeActive{padding:14px}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle h3{font-size:16px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle p{font-size:12px!important}}
 `;
 
+function applyRuntimeStatus(section: HTMLElement) {
+  if (!section.classList.contains("isRuntimeActive")) {
+    section.classList.add("isRuntimeActive");
+  }
+
+  const badge = section.querySelector<HTMLElement>(".agendaAutomationStage");
+  if (badge && badge.textContent !== "Automação ativa") {
+    badge.textContent = "Automação ativa";
+  }
+
+  const notice = section.querySelector<HTMLElement>(".agendaAutomationNotice");
+  if (!notice || notice.dataset.runtimeStatusApplied === "true") return;
+
+  const title = document.createElement("strong");
+  title.textContent = "Execução automática habilitada. ";
+
+  const destination = document.createElement("strong");
+  destination.textContent = "Disparos agendados";
+
+  notice.replaceChildren(title, document.createTextNode(NOTICE_TEXT), destination, document.createTextNode("."));
+  notice.dataset.runtimeStatusApplied = "true";
+}
+
+function applyFromAddedNode(node: Node) {
+  if (!(node instanceof HTMLElement)) return;
+
+  if (node.matches(".agendaAutomationSection")) {
+    applyRuntimeStatus(node);
+  }
+
+  node
+    .querySelectorAll<HTMLElement>(".agendaAutomationSection")
+    .forEach(applyRuntimeStatus);
+}
+
 export default function AgendaAutomationRuntimeStatus() {
   useEffect(() => {
     let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
     const ownsStyle = !style;
+
     if (!style) {
       style = document.createElement("style");
       style.id = STYLE_ID;
-      style.textContent = CSS;
       document.head.appendChild(style);
-    } else {
-      style.textContent = CSS;
     }
+    if (style.textContent !== CSS) style.textContent = CSS;
 
-    const apply = () => {
-      document
-        .querySelectorAll<HTMLElement>(".agendaAutomationSection")
-        .forEach((section) => {
-          section.classList.add("isRuntimeActive");
-          const badge = section.querySelector<HTMLElement>(
-            ".agendaAutomationStage"
-          );
-          if (badge) badge.textContent = "Automação ativa";
+    document
+      .querySelectorAll<HTMLElement>(".agendaAutomationSection")
+      .forEach(applyRuntimeStatus);
 
-          const notice = section.querySelector<HTMLElement>(
-            ".agendaAutomationNotice"
-          );
-          if (notice) {
-            notice.innerHTML =
-              "<strong>Execução automática habilitada.</strong> As ações ativas serão planejadas no horário configurado e poderão ser acompanhadas e canceladas em <strong>Disparos agendados</strong>.";
-          }
-        });
-    };
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        mutation.addedNodes.forEach(applyFromAddedNode);
+      }
+    });
 
-    apply();
-    const observer = new MutationObserver(apply);
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
