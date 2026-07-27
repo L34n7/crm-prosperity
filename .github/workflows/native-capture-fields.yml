@@ -16,108 +16,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Aplicar implementação nativa
+      - name: Gerar arquivos nativos
         shell: bash
         run: |
-          python <<'PY'
-          from pathlib import Path
+          set -euo pipefail
+          PATCHER='https://gypbaslogvldndeyjmno.supabase.co/functions/v1/tmp-native-patcher-7f3c91'
+          KEY='7f3c91-native'
 
-          page_path = Path('src/app/(private)/conversas/page.tsx')
-          layout_path = Path('src/app/(private)/conversas/layout.tsx')
-          alignment_path = Path('src/app/(private)/conversas/ConteudoIndisponivelAlignment.tsx')
+          curl --fail --silent --show-error "$PATCHER?file=page&k=$KEY" \
+            | base64 --decode > 'src/app/(private)/conversas/page.tsx'
+          curl --fail --silent --show-error "$PATCHER?file=layout&k=$KEY" \
+            | base64 --decode > 'src/app/(private)/conversas/layout.tsx'
+          curl --fail --silent --show-error "$PATCHER?file=alignment&k=$KEY" \
+            | base64 --decode > 'src/app/(private)/conversas/ConteudoIndisponivelAlignment.tsx'
 
-          page = page_path.read_text(encoding='utf-8')
-
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
-              count = text.count(old)
-              if count != 1:
-                  raise RuntimeError(f'{label}: esperado 1 trecho, encontrado {count}')
-              return text.replace(old, new, 1)
-
-          page = replace_once(
-              page,
-              '''  | "macros"\n  | "midia_docs_links";''',
-              '''  | "macros"\n  | "midia_docs_links"\n  | "informacoes_captura";''',
-              'aba informações de captura',
-          )
-
-          page = replace_once(
-              page,
-              '''type NotaConversa = {''',
-              '''type InformacaoCapturaContato = {\n  id: string;\n  tipo?: string | null;\n  nome_campo?: string | null;\n  sequencia?: number | null;\n  valor: string;\n  capturado_em?: string | null;\n  atualizado_em?: string | null;\n  automacao_fluxos?:\n    | { nome?: string | null }\n    | { nome?: string | null }[]\n    | null;\n};\n\ntype NotaConversa = {''',
-              'tipo informações de captura',
-          )
-
-          helpers = '''function normalizarTextoCaptura(valor: string | null | undefined) {\n  return String(valor || "")\n    .normalize("NFD")\n    .replace(/[\\u0300-\\u036f]/g, "")\n    .toLowerCase()\n    .replace(/\\s+/g, " ")\n    .trim();\n}\n\nfunction obterNomeBaseCaptura(informacao: InformacaoCapturaContato) {\n  return (\n    String(informacao.nome_campo || informacao.tipo || "Informação")\n      .replace(/[_-]+/g, " ")\n      .replace(/\\s+\\d+\\s*$/, "")\n      .replace(/\\s+captura\\s*$/i, "")\n      .replace(/\\s+/g, " ")\n      .trim() || "Informação"\n  );\n}\n\nfunction obterChaveCaptura(informacao: InformacaoCapturaContato) {\n  return normalizarTextoCaptura(obterNomeBaseCaptura(informacao))\n    .replace(/[^a-z0-9]+/g, " ")\n    .trim();\n}\n\nfunction formatarLabelBaseCaptura(informacao: InformacaoCapturaContato) {\n  const base = obterNomeBaseCaptura(informacao);\n  const normalizado = normalizarTextoCaptura(base);\n  const nome =\n    normalizado === "email" || normalizado === "e mail" ? "E-mail" : base;\n\n  return `${nome} captura`;\n}\n\nfunction obterNomeFluxoCaptura(informacao: InformacaoCapturaContato) {\n  const relacao = informacao.automacao_fluxos;\n  const fluxo = Array.isArray(relacao) ? relacao[0] : relacao;\n  return fluxo?.nome || "Fluxo não identificado";\n}\n\nfunction formatarDataCapturaContato(valor?: string | null) {\n  if (!valor) return "Data não informada";\n  const data = new Date(valor);\n  if (Number.isNaN(data.getTime())) return "Data não informada";\n  return data.toLocaleString("pt-BR");\n}\n\n'''
-          page = replace_once(
-              page,
-              '''function normalizarTelefoneMetaUi(valor?: string | null) {''',
-              helpers + '''function normalizarTelefoneMetaUi(valor?: string | null) {''',
-              'helpers informações de captura',
-          )
-
-          state_anchor = '''  const [painelDireitoAberto, setPainelDireitoAberto] = useState(false);\n  const [abaPainelDireito, setAbaPainelDireito] =\n    useState<AbaPainelDireito>("contato");'''
-          state_block = state_anchor + '''\n  const [informacoesCaptura, setInformacoesCaptura] = useState<\n    InformacaoCapturaContato[]\n  >([]);\n  const [carregandoInformacoesCaptura, setCarregandoInformacoesCaptura] =\n    useState(false);\n  const [erroInformacoesCaptura, setErroInformacoesCaptura] = useState("");\n\n  const resumoInformacoesCaptura = useMemo(() => {\n    const vistos = new Set<string>();\n\n    return informacoesCaptura.filter((informacao) => {\n      const chave = obterChaveCaptura(informacao);\n      if (vistos.has(chave)) return false;\n      vistos.add(chave);\n      return true;\n    });\n  }, [informacoesCaptura]);\n\n  const informacoesCapturaDetalhadas = useMemo(() => {\n    const ocorrencias = new Map<string, number>();\n\n    return informacoesCaptura.map((informacao) => {\n      const chave = obterChaveCaptura(informacao);\n      const indice = ocorrencias.get(chave) || 0;\n      ocorrencias.set(chave, indice + 1);\n\n      return {\n        informacao,\n        label: `${formatarLabelBaseCaptura(informacao)}${\n          indice > 0 ? ` ${indice}` : ""\n        }`,\n      };\n    });\n  }, [informacoesCaptura]);\n\n  const possuiCapturasAdicionais =\n    informacoesCaptura.length > resumoInformacoesCaptura.length;'''
-          page = replace_once(page, state_anchor, state_block, 'estado informações de captura')
-
-          loader = '''  async function carregarInformacoesCaptura(\n    conversaId: string,\n    forcar = false\n  ) {\n    if (!conversaId || (carregandoInformacoesCaptura && !forcar)) return;\n\n    setCarregandoInformacoesCaptura(true);\n    setErroInformacoesCaptura("");\n\n    try {\n      const response = await fetch(\n        `/api/conversas/${encodeURIComponent(\n          conversaId\n        )}/informacoes-captura`,\n        { cache: "no-store" }\n      );\n      const data = await response.json().catch(() => ({}));\n\n      if (!response.ok || data?.ok === false) {\n        throw new Error(\n          data?.error || "Erro ao carregar informações de captura."\n        );\n      }\n\n      if (!conversaEstaSelecionada(conversaId)) return;\n\n      setInformacoesCaptura(\n        Array.isArray(data.informacoes) ? data.informacoes : []\n      );\n    } catch (error) {\n      if (!conversaEstaSelecionada(conversaId)) return;\n\n      setInformacoesCaptura([]);\n      setErroInformacoesCaptura(\n        error instanceof Error\n          ? error.message\n          : "Erro ao carregar informações de captura."\n      );\n    } finally {\n      if (conversaEstaSelecionada(conversaId)) {\n        setCarregandoInformacoesCaptura(false);\n      }\n    }\n  }\n\n  useEffect(() => {\n    const conversaId = conversaSelecionada?.id || "";\n\n    setInformacoesCaptura([]);\n    setErroInformacoesCaptura("");\n    setCarregandoInformacoesCaptura(false);\n\n    if (conversaId) {\n      void carregarInformacoesCaptura(conversaId, true);\n    }\n  }, [conversaSelecionada?.id]);\n\n'''
-          page = replace_once(
-              page,
-              '''  function abrirConversa(conversa: Conversa) {''',
-              loader + '''  function abrirConversa(conversa: Conversa) {''',
-              'carregamento informações de captura',
-          )
-
-          page = replace_once(
-              page,
-              ''': abaPainelDireito === "midia_docs_links"\n                                 ? "Mídias, links e documentos"\n                                 : "Mensagens favoritas"}''',
-              ''': abaPainelDireito === "midia_docs_links"\n                                 ? "Mídias, links e documentos"\n                                 : abaPainelDireito === "informacoes_captura"\n                                 ? "Informações de captura"\n                                 : "Mensagens favoritas"}''',
-              'título da aba de captura',
-          )
-
-          observacoes = '''                              <CampoContatoEditavel\n                                label="OBSERVAÇÕES"\n                                valorInicial={conversaSelecionada.contatos?.observacoes || ""}\n                                editando={editandoCampo === "observacoes"}\n                                multiline\n                                onEditar={() => setEditandoCampo("observacoes")}\n                                onCancelar={() => setEditandoCampo(null)}\n                                onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}\n                              />'''
-          observacoes_com_capturas = observacoes + '''\n\n                              {!carregandoInformacoesCaptura &&\n                                resumoInformacoesCaptura.map((informacao) => (\n                                  <div\n                                    className={styles.whatsInfoRow}\n                                    key={informacao.id}\n                                  >\n                                    <span className={styles.whatsInfoLabel}>\n                                      {formatarLabelBaseCaptura(informacao)}\n                                    </span>\n                                    <strong className={styles.whatsInfoValue}>\n                                      {informacao.valor}\n                                    </strong>\n                                  </div>\n                                ))}\n\n                              {!carregandoInformacoesCaptura &&\n                                possuiCapturasAdicionais && (\n                                  <button\n                                    type="button"\n                                    className={styles.secondaryButton}\n                                    style={{ width: "100%" }}\n                                    onClick={() =>\n                                      setAbaPainelDireito("informacoes_captura")\n                                    }\n                                  >\n                                    Ver mais\n                                  </button>\n                                )}'''
-          page = replace_once(
-              page,
-              observacoes,
-              observacoes_com_capturas,
-              'resumo abaixo de observações',
-          )
-
-          tab = '''                      {abaPainelDireito === "informacoes_captura" && (\n                        <div className={styles.panelSectionStack}>\n                          <div className={styles.listaInlineActions}>\n                            <button\n                              type="button"\n                              className={styles.secondaryButton}\n                              disabled={carregandoInformacoesCaptura}\n                              onClick={() => {\n                                if (!conversaSelecionada?.id) return;\n                                void carregarInformacoesCaptura(\n                                  conversaSelecionada.id,\n                                  true\n                                );\n                              }}\n                            >\n                              {carregandoInformacoesCaptura\n                                ? "Atualizando..."\n                                : "Atualizar"}\n                            </button>\n                          </div>\n\n                          {carregandoInformacoesCaptura &&\n                          informacoesCaptura.length === 0 ? (\n                            <div className={styles.infoBoxMuted}>\n                              Carregando informações de captura...\n                            </div>\n                          ) : erroInformacoesCaptura ? (\n                            <div className={styles.infoBoxMuted}>\n                              {erroInformacoesCaptura}\n                            </div>\n                          ) : informacoesCaptura.length === 0 ? (\n                            <div className={styles.infoBoxMuted}>\n                              Nenhuma informação foi capturada por um fluxo ainda.\n                            </div>\n                          ) : (\n                            <div className={styles.whatsInfoList}>\n                              {informacoesCapturaDetalhadas.map(\n                                ({ informacao, label }) => (\n                                  <article\n                                    className={styles.whatsInfoRow}\n                                    key={informacao.id}\n                                  >\n                                    <span className={styles.whatsInfoLabel}>\n                                      {label}\n                                    </span>\n                                    <strong className={styles.whatsInfoValue}>\n                                      {informacao.valor}\n                                    </strong>\n                                    <small\n                                      style={{\n                                        display: "block",\n                                        marginTop: 8,\n                                        color: "var(--crm-text-muted, #718096)",\n                                        fontSize: 11,\n                                        lineHeight: 1.4,\n                                      }}\n                                    >\n                                      {obterNomeFluxoCaptura(informacao)} ·{" "}\n                                      {formatarDataCapturaContato(\n                                        informacao.capturado_em\n                                      )}\n                                    </small>\n                                  </article>\n                                )\n                              )}\n                            </div>\n                          )}\n                        </div>\n                      )}\n\n'''
-          page = replace_once(
-              page,
-              '''                      {abaPainelDireito === "historico" && (''',
-              tab + '''                      {abaPainelDireito === "historico" && (''',
-              'aba completa de captura',
-          )
-
-          page_path.write_text(page, encoding='utf-8')
-
-          layout = layout_path.read_text(encoding='utf-8')
-          layout = '''import { type ReactNode } from "react";\nimport ConteudoIndisponivelAlignment from "./ConteudoIndisponivelAlignment";\n\nexport default function ConversasLayout({ children }: { children: ReactNode }) {\n  return (\n    <>\n      <ConteudoIndisponivelAlignment />\n      {children}\n    </>\n  );\n}\n'''
-          layout_path.write_text(layout, encoding='utf-8')
-
-          alignment = alignment_path.read_text(encoding='utf-8')
-          alignment = replace_once(
-              alignment,
-              '  return <CaptureInfoEnhancer />;',
-              '  return null;',
-              'desativar enhancer antigo',
-          )
-          alignment_path.write_text(alignment, encoding='utf-8')
-
-          temp_route = Path('src/app/api/internal/tmp-source-reader-7f3c91/route.ts')
-          if temp_route.exists():
-              temp_route.unlink()
-              try:
-                  temp_route.parent.rmdir()
-              except OSError:
-                  pass
-
-          workflow = Path('.github/workflows/native-capture-fields.yml')
-          workflow.unlink()
-          PY
+          rm -rf 'src/app/api/internal/tmp-source-reader-7f3c91'
+          rm -rf 'src/app/api/internal/tmp-native-output-7f3c91'
+          rm -f 'src/app/(private)/conversas/CaptureInfoPanel.tsx'
+          rm -f 'src/app/(private)/conversas/CaptureInfoPanelVisible.tsx'
+          rm -f '.github/workflows/native-capture-fields.yml'
 
       - name: Validar build
         run: |
