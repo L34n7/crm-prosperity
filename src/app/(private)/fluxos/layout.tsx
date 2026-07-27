@@ -1,5 +1,6 @@
 import { Suspense, type ReactNode } from "react";
 
+import AssistenteConfirmacaoAnterior from "./AssistenteConfirmacaoAnterior";
 import AssistenteFluxosClientGuard from "./AssistenteFluxosClientGuard";
 import FluxoIaAtivacaoModal from "./FluxoIaAtivacaoModal";
 
@@ -11,6 +12,88 @@ const ESTILOS_BOTOES_PREVIA = `
     white-space: normal !important;
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
+  }
+
+  [class*="editorPanel"] > [class*="editorHeader"] {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: start !important;
+    gap: 16px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+  }
+
+  [class*="editorPanel"] > [class*="editorHeader"] > div:first-child {
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: initial !important;
+  }
+
+  [class*="editorPanel"] > [class*="editorHeader"] [class*="editorTitle"] {
+    display: -webkit-box !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+    font-size: 22px !important;
+    line-height: 1.15 !important;
+  }
+
+  [class*="editorPanel"] > [class*="editorHeader"] [class*="headerActions"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    justify-self: end !important;
+    flex: initial !important;
+  }
+
+  [class*="editorPanel"] > [class*="editorHeader"] [class*="headerActionsButtons"] {
+    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+  }
+
+  .assistantPreviousConfirmationButton {
+    order: -1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 40px;
+    border: 1px solid var(--crm-border-strong);
+    border-radius: 14px;
+    background: var(--crm-surface);
+    color: var(--crm-text-strong);
+    padding: 9px 13px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .assistantPreviousConfirmationButton:hover:not(:disabled) {
+    border-color: var(--crm-primary-border);
+    background: var(--crm-surface-subtle);
+  }
+
+  .assistantPreviousConfirmationButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+
+  @media (max-width: 1180px) {
+    [class*="editorPanel"] > [class*="editorHeader"] {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    [class*="editorPanel"] > [class*="editorHeader"] [class*="headerActions"] {
+      width: 100% !important;
+      justify-self: stretch !important;
+    }
   }
 
   [class*="whatsappFlowBubbleRow"]:has([class*="whatsappFlowButtons"])
@@ -64,6 +147,7 @@ export default function FluxosLayout({ children }: { children: ReactNode }) {
     <>
       {children}
       <AssistenteFluxosClientGuard />
+      <AssistenteConfirmacaoAnterior />
       <Suspense fallback={null}>
         <FluxoIaAtivacaoModal />
       </Suspense>
