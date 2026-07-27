@@ -1,5 +1,5 @@
 import { Suspense, type ReactNode } from "react";
-import CaptureInfoPanel from "./CaptureInfoPanel";
+import CaptureInfoPanelVisible from "./CaptureInfoPanelVisible";
 import ConteudoIndisponivelAlignment from "./ConteudoIndisponivelAlignment";
 
 export default function ConversasLayout({ children }: { children: ReactNode }) {
@@ -7,7 +7,7 @@ export default function ConversasLayout({ children }: { children: ReactNode }) {
     <>
       <ConteudoIndisponivelAlignment />
       <Suspense fallback={null}>
-        <CaptureInfoPanel />
+        <CaptureInfoPanelVisible />
       </Suspense>
       {children}
     </>
