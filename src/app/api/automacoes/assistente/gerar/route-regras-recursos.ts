@@ -1,5 +1,5 @@
 export const VERSAO_REGRAS_RECURSOS_FLUXOS =
-  "crm-prosperity-recursos-confirmaveis-v4-2026-07-26";
+  "crm-prosperity-recursos-confirmaveis-v5-2026-07-26";
 
 const MARCADOR_REGRAS_RECURSOS = `[REGRAS_TECNICAS_${VERSAO_REGRAS_RECURSOS_FLUXOS}]`;
 
@@ -97,7 +97,6 @@ No briefing, registre os mesmos dados em dados_a_capturar, agendamento.dados e n
 - Otimizar nao significa inventar novo objetivo. Otimizar significa criar caminhos, mensagens de transicao, retornos e encerramentos coerentes com a mesma intencao do pedido.
 - Cada escolha relevante do contato deve gerar consequencia real no fluxo.
 - Se duas ou mais opcoes diferentes de uma mesma pergunta apontariam para o mesmo destino, crie obrigatoriamente um bloco intermediario para cada opcao antes de voltar ao destino comum.
-- Botoes de escolha nao devem virar variaveis apenas por terem sido clicados. A escolha deve ser representada pelo caminho do fluxo.
 - Excecao: opcoes equivalentes, como "Sim", "Confirmo" e "Pode seguir", podem apontar para o mesmo destino quando tiverem exatamente a mesma intencao.
 - Opcoes com intencoes diferentes nunca devem sair direto para o mesmo bloco. Exemplos: Morar/Investir, Comprar/Alugar, Recursos proprios/Financiamento, Pessoa fisica/Empresa, Urgente/Sem pressa.
 
@@ -110,6 +109,19 @@ No briefing, registre os mesmos dados em dados_a_capturar, agendamento.dados e n
 - Educacao/curso: para interesse, destaque objetivo do aluno, formato, suporte e proximo passo; para matricula, destaque orientacao e condicoes.
 - A mensagem intermediaria deve ter no maximo 2 frases curtas e seguir automaticamente para o proximo bloco.
 
+8. COPY CRIATIVA E ATENDIMENTO COM FOCO EM CONVERSAO
+- Escreva como um copywriter profissional de marketing digital aplicado ao atendimento: claro, humano, persuasivo, contextual e orientado ao proximo passo.
+- A copy deve melhorar a experiencia do contato sem alterar a intencao, prometer o que nao foi informado ou inventar beneficios, precos, prazos, resultados, garantias ou condicoes.
+- Transforme informacoes do pedido em mensagens mais naturais e envolventes, mantendo fatos, nomes, valores e detalhes importantes.
+- Use criatividade dentro do contexto: crie transicoes, microcopy, CTAs e encerramentos que facam sentido para o nicho, para o momento da conversa e para a escolha feita pelo contato.
+- Evite mensagens frias, roboticas, genericas ou que poderiam servir para qualquer empresa.
+- Nao exagere em adjetivos, gatilhos ou urgencia artificial. A persuasao deve parecer consultiva, elegante e util.
+- Sempre que houver uma escolha do contato, a proxima mensagem deve reconhecer a escolha e conduzir a conversa com uma justificativa coerente.
+- Em handoff humano, prepare o contato para a transferencia com contexto, seguranca e expectativa clara sobre o proximo passo.
+- Em fluxos comerciais, valorize beneficio, desejo, objecao, confianca e facilidade de decisao sem pressionar o cliente.
+- Em fluxos de suporte, priorize acolhimento, clareza, diagnostico e resolucao.
+- Em fluxos de agendamento, reduza atrito, confirme dados e deixe claro que o contato deu o proximo passo corretamente.
+
 CHECKLIST OBRIGATORIO DA IA
 [ ] Cada transferencia possui uma etapa transferir real.
 [ ] Cada bloco que aguarda resposta possui configuracao de excesso e timeout confirmavel.
@@ -120,8 +132,8 @@ CHECKLIST OBRIGATORIO DA IA
 [ ] O tipo data foi usado somente quando a resposta deve ser numerica e exata.
 [ ] Todas as variaveis capturadas aparecem em resumo ou confirmacao posterior.
 [ ] Nenhuma escolha com intencao diferente sai direto para o mesmo bloco sem caminho intermediario.
-[ ] Botoes clicados nao foram transformados em variaveis sem necessidade.
 [ ] O tom, emojis, persona, nomes, valores e diferenciais do prompt foram preservados quando tecnicamente possivel.
+[ ] A copy melhora o atendimento de forma criativa, contextual, humana e coerente com o nicho.
 [ ] Nenhum ID de setor ou URL foi inventado.
 
 Revise e corrija o proprio JSON antes de responder. O backend tambem fara normalizacoes estruturais de seguranca e nao bloqueara o fluxo por avaliacao subjetiva.
