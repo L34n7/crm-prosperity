@@ -6,21 +6,11 @@ import {
 } from "@/lib/auth/get-usuario-contexto";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 import {
-  normalizarClassificacaoLead,
-  statusLeadLegadoDaClassificacao,
-} from "@/lib/leads/classificacao";
-import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
-
-type StatusLead =
-  | "novo"
-  | "qualificado"
-  | "cliente"
-  | "perdido";
 
 type ContatoImportacao = {
   nome?: string | null;
@@ -30,8 +20,6 @@ type ContatoImportacao = {
   origem?: string | null;
   origem_importacao?: string | null;
   campanha?: string | null;
-  status_lead?: StatusLead;
-  classificacao?: string | null;
   observacoes?: string | null;
   telefone_revisar?: boolean;
 };
@@ -133,11 +121,6 @@ export async function POST(request: Request) {
 
       telefonesLote.add(telefone);
 
-      const classificacaoLead = normalizarClassificacaoLead(
-        contato.classificacao ?? contato.status_lead,
-        "novo"
-      );
-
       registros.push({
         empresa_id: usuario.empresa_id,
         nome: contato.nome?.trim() || null,
@@ -148,9 +131,9 @@ export async function POST(request: Request) {
           contato.origem?.trim() ||
           null,
         campanha: contato.campanha?.trim() || null,
-        classificacao: classificacaoLead,
-        classificacao_atualizada_em: new Date().toISOString(),
-        status_lead: statusLeadLegadoDaClassificacao(classificacaoLead),
+        classificacao: null,
+        classificacao_atualizada_em: null,
+        status_lead: "novo",
         observacoes: contato.observacoes?.trim() || null,
         telefone_revisar:
           Boolean(contato.telefone_revisar) || telefone.length < 10,
