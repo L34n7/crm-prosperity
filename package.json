@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/aplicar-campos-captura-conversas.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/aplicar-campos-captura-conversas.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
