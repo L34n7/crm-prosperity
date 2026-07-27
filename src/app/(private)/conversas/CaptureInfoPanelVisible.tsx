@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useSearchParams } from "next/navigation";
 
 type InformacaoCaptura = {
   id: string;
@@ -19,7 +18,18 @@ type InformacaoCaptura = {
 type ContatoBusca = {
   id?: string | null;
   telefone?: string | null;
+  email?: string | null;
   conversa_id?: string | null;
+};
+
+type IdentidadePainel = {
+  telefone: string;
+  email: string;
+};
+
+type ContextoPainel = IdentidadePainel & {
+  lista: HTMLElement;
+  observacoes: HTMLElement;
 };
 
 type ItemDetalhado = {
@@ -27,8 +37,8 @@ type ItemDetalhado = {
   label: string;
 };
 
-const STYLE_ID = "capture-info-visible-panel-style";
-const SUMMARY_HOST = "capture-info-visible-panel-summary";
+const STYLE_ID = "capture-info-visible-panel-v4-style";
+const SUMMARY_HOST = "capture-info-visible-panel-v4-summary";
 
 const CSS = `
 [data-conversas-capture-summary-host],
@@ -36,7 +46,8 @@ const CSS = `
 [data-capture-info-panel-v2-summary],
 [data-capture-info-panel-v2-overlay],
 [data-capture-info-panel-v3-summary],
-[data-capture-info-panel-v3-overlay] {
+[data-capture-info-panel-v3-overlay],
+[data-capture-info-visible-panel-summary] {
   display: none !important;
 }
 
@@ -44,8 +55,8 @@ const CSS = `
   display: contents !important;
 }
 
-.captureInfoVisibleRow,
-.captureInfoVisibleItem {
+.captureInfoVisibleV4Row,
+.captureInfoVisibleV4Item {
   box-sizing: border-box;
   width: 100%;
   border: 1px solid var(--crm-border-soft, #dce5ea);
@@ -54,7 +65,7 @@ const CSS = `
   padding: 14px;
 }
 
-.captureInfoVisibleLabel {
+.captureInfoVisibleV4Label {
   display: block;
   color: var(--crm-text-soft, #8aa0a8);
   font-size: 11px;
@@ -63,7 +74,7 @@ const CSS = `
   text-transform: uppercase;
 }
 
-.captureInfoVisibleValue {
+.captureInfoVisibleV4Value {
   display: block;
   margin-top: 6px;
   color: var(--crm-text-strong, #102638);
@@ -73,7 +84,7 @@ const CSS = `
   overflow-wrap: anywhere;
 }
 
-.captureInfoVisibleMore {
+.captureInfoVisibleV4More {
   box-sizing: border-box;
   width: 100%;
   border: 1px solid var(--crm-border, #d8e0eb);
@@ -87,7 +98,7 @@ const CSS = `
   cursor: pointer;
 }
 
-.captureInfoVisibleOverlay {
+.captureInfoVisibleV4Overlay {
   position: fixed;
   inset: 0;
   z-index: 10000;
@@ -97,7 +108,7 @@ const CSS = `
   color: var(--crm-text-strong, #102638);
 }
 
-.captureInfoVisibleHeader {
+.captureInfoVisibleV4Header {
   min-height: 64px;
   display: flex;
   align-items: center;
@@ -107,8 +118,8 @@ const CSS = `
   background: var(--crm-surface, #fff);
 }
 
-.captureInfoVisibleBack,
-.captureInfoVisibleRefresh {
+.captureInfoVisibleV4Back,
+.captureInfoVisibleV4Refresh {
   border: 1px solid var(--crm-border, #d8e0eb);
   border-radius: 10px;
   background: var(--crm-surface, #fff);
@@ -120,12 +131,12 @@ const CSS = `
   cursor: pointer;
 }
 
-.captureInfoVisibleBack {
+.captureInfoVisibleV4Back {
   width: 40px;
   padding-inline: 0;
 }
 
-.captureInfoVisibleTitle {
+.captureInfoVisibleV4Title {
   min-width: 0;
   flex: 1;
   margin: 0;
@@ -133,14 +144,14 @@ const CSS = `
   font-weight: 900;
 }
 
-.captureInfoVisibleBody {
+.captureInfoVisibleV4Body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 14px 14px max(20px, env(safe-area-inset-bottom));
 }
 
-.captureInfoVisibleList {
+.captureInfoVisibleV4List {
   width: min(100%, 720px);
   margin: 0 auto;
   display: flex;
@@ -148,7 +159,7 @@ const CSS = `
   gap: 10px;
 }
 
-.captureInfoVisibleMeta {
+.captureInfoVisibleV4Meta {
   display: block;
   margin-top: 8px;
   color: var(--crm-text-muted, #718096);
@@ -156,7 +167,7 @@ const CSS = `
   line-height: 1.4;
 }
 
-.captureInfoVisibleEmpty {
+.captureInfoVisibleV4Empty {
   width: min(100%, 720px);
   margin: 0 auto;
   border: 1px dashed var(--crm-border, #d8e0eb);
@@ -168,16 +179,21 @@ const CSS = `
 }
 `;
 
-function normalizar(valor: string | null | undefined) {
+function normalizarTexto(valor: string | null | undefined) {
   return String(valor || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function normalizarTelefone(valor: string | null | undefined) {
   return String(valor || "").replace(/\D/g, "");
+}
+
+function normalizarEmail(valor: string | null | undefined) {
+  return String(valor || "").trim().toLowerCase();
 }
 
 function elementoVisivel(elemento: HTMLElement) {
@@ -194,42 +210,135 @@ function elementoVisivel(elemento: HTMLElement) {
   );
 }
 
-function encontrarListaVisivelInformacoesContato() {
-  const listas = Array.from(
-    document.querySelectorAll<HTMLElement>('[class*="whatsContactSection"]')
+function encontrarLabelsExatos(texto: string) {
+  const alvo = normalizarTexto(texto);
+  const elementos = Array.from(
+    document.querySelectorAll<HTMLElement>("span, label, p, strong, div")
+  );
+
+  return elementos.filter(
+    (elemento) =>
+      elemento.childElementCount === 0 &&
+      normalizarTexto(elemento.textContent) === alvo
+  );
+}
+
+function encontrarLinhaDoLabel(label: HTMLElement) {
+  const porClasse = label.closest<HTMLElement>('[class*="whatsInfoRow"]');
+  if (porClasse) return porClasse;
+
+  let atual: HTMLElement | null = label.parentElement;
+  let profundidade = 0;
+
+  while (atual && profundidade < 5) {
+    const pai = atual.parentElement;
+    if (!pai) break;
+
+    if (pai.children.length >= 3) return atual;
+
+    atual = pai;
+    profundidade += 1;
+  }
+
+  return label.parentElement;
+}
+
+function obterValorDaLinha(linha: HTMLElement | null, labelTexto: string) {
+  if (!linha) return "";
+
+  const input = linha.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+    "input, textarea"
+  );
+  if (input?.value) return input.value.trim();
+
+  const valorDireto = linha.querySelector<HTMLElement>(
+    '[class*="whatsInfoValue"], [class*="infoValueRow"] a, [class*="infoValueRow"] span, a'
+  );
+  const textoDireto = valorDireto?.textContent?.trim() || "";
+  if (textoDireto && normalizarTexto(textoDireto) !== normalizarTexto(labelTexto)) {
+    return textoDireto;
+  }
+
+  const candidatos = Array.from(
+    linha.querySelectorAll<HTMLElement>("strong, a, span, p, div")
   )
-    .filter((secao) => {
-      const cabecalho = secao.querySelector<HTMLElement>('[class*="whatsSectionHeader"]');
-      return normalizar(cabecalho?.textContent).includes("informacoes do contato");
-    })
-    .map((secao) => secao.querySelector<HTMLElement>('[class*="whatsInfoList"]'))
-    .filter((lista): lista is HTMLElement => Boolean(lista));
+    .map((elemento) => elemento.textContent?.trim() || "")
+    .filter(
+      (texto) =>
+        texto.length > 0 &&
+        normalizarTexto(texto) !== normalizarTexto(labelTexto) &&
+        !normalizarTexto(texto).includes("editar")
+    )
+    .sort((a, b) => b.length - a.length);
 
-  const visiveis = listas.filter(elementoVisivel);
-  if (visiveis.length === 0) return null;
-
-  return visiveis.sort((a, b) => {
-    const areaA = a.getBoundingClientRect().width * a.getBoundingClientRect().height;
-    const areaB = b.getBoundingClientRect().width * b.getBoundingClientRect().height;
-    return areaB - areaA;
-  })[0];
+  return candidatos[0] || "";
 }
 
-function encontrarLinhaPorLabel(lista: HTMLElement, labelProcurado: string) {
-  const procurado = normalizar(labelProcurado);
+function encontrarLinhaNaLista(lista: HTMLElement, labelProcurado: string) {
+  const alvo = normalizarTexto(labelProcurado);
 
-  return (
-    Array.from(lista.children).find((elemento) => {
-      const label = elemento.querySelector<HTMLElement>('[class*="whatsInfoLabel"]');
-      return normalizar(label?.textContent) === procurado;
-    }) as HTMLElement | undefined
-  ) || null;
+  for (const filho of Array.from(lista.children)) {
+    const elemento = filho as HTMLElement;
+    const labels = Array.from(
+      elemento.querySelectorAll<HTMLElement>("span, label, p, strong, div")
+    );
+
+    if (
+      labels.some(
+        (label) =>
+          label.childElementCount === 0 &&
+          normalizarTexto(label.textContent) === alvo
+      )
+    ) {
+      return elemento;
+    }
+  }
+
+  return null;
 }
 
-function obterTelefonePainel(lista: HTMLElement) {
-  const linha = encontrarLinhaPorLabel(lista, "telefone");
-  const valor = linha?.querySelector<HTMLElement>('[class*="whatsInfoValue"]');
-  return normalizarTelefone(valor?.textContent);
+function encontrarContextoPainel(): ContextoPainel | null {
+  const labelsObservacoes = encontrarLabelsExatos("observações")
+    .filter(elementoVisivel)
+    .sort((a, b) => {
+      const areaA = a.getBoundingClientRect().width * a.getBoundingClientRect().height;
+      const areaB = b.getBoundingClientRect().width * b.getBoundingClientRect().height;
+      return areaB - areaA;
+    });
+
+  for (const label of labelsObservacoes) {
+    const observacoes = encontrarLinhaDoLabel(label);
+    const lista = observacoes?.parentElement;
+    if (!observacoes || !lista) continue;
+
+    const linhaEmail = encontrarLinhaNaLista(lista, "e-mail");
+    const linhaEmpresa = encontrarLinhaNaLista(lista, "empresa");
+    const linhaCampanha = encontrarLinhaNaLista(lista, "campanha");
+
+    if (!linhaEmail && !linhaEmpresa && !linhaCampanha) continue;
+
+    const linhaTelefone = encontrarLinhaNaLista(lista, "telefone");
+    const telefone = normalizarTelefone(
+      obterValorDaLinha(linhaTelefone, "telefone") ||
+        document.querySelector<HTMLElement>('[class*="whatsContactPhone"]')
+          ?.textContent
+    );
+    const email = normalizarEmail(obterValorDaLinha(linhaEmail, "e-mail"));
+
+    return {
+      lista,
+      observacoes,
+      telefone,
+      email,
+    };
+  }
+
+  return null;
+}
+
+function obterConversaIdDaUrl() {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get("id")?.trim() || "";
 }
 
 function textoBase(informacao: InformacaoCaptura) {
@@ -244,12 +353,12 @@ function textoBase(informacao: InformacaoCaptura) {
 }
 
 function chaveGrupo(informacao: InformacaoCaptura) {
-  return normalizar(textoBase(informacao)).replace(/[^a-z0-9]+/g, " ").trim();
+  return normalizarTexto(textoBase(informacao)).replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function labelBase(informacao: InformacaoCaptura) {
   const base = textoBase(informacao);
-  const normalizado = normalizar(base);
+  const normalizado = normalizarTexto(base);
   const nome = normalizado === "email" || normalizado === "e mail" ? "E-mail" : base;
   return `${nome} captura`;
 }
@@ -273,9 +382,11 @@ async function lerJson(response: Response) {
 }
 
 export default function CaptureInfoPanelVisible() {
-  const searchParams = useSearchParams();
-  const conversaId = searchParams.get("id")?.trim() || "";
-  const [telefonePainel, setTelefonePainel] = useState("");
+  const [conversaId, setConversaId] = useState("");
+  const [identidadePainel, setIdentidadePainel] = useState<IdentidadePainel>({
+    telefone: "",
+    email: "",
+  });
   const [summaryHost, setSummaryHost] = useState<HTMLElement | null>(null);
   const [informacoes, setInformacoes] = useState<InformacaoCaptura[]>([]);
   const [carregando, setCarregando] = useState(false);
@@ -328,42 +439,49 @@ export default function CaptureInfoPanelVisible() {
       : [];
   }
 
-  async function carregarPorTelefone(telefone: string) {
-    const telefoneNormalizado = normalizarTelefone(telefone);
-    if (!telefoneNormalizado) return [];
+  async function carregarPorBusca(identidade: IdentidadePainel) {
+    const termos = [identidade.telefone, identidade.email].filter(Boolean);
 
-    const params = new URLSearchParams({
-      busca: telefoneNormalizado,
-      limite: "50",
-    });
-    const response = await fetch(`/api/contatos?${params.toString()}`, {
-      cache: "no-store",
-    });
-    const data = await lerJson(response);
+    for (const termo of termos) {
+      const params = new URLSearchParams({ busca: termo, limite: "50" });
+      const response = await fetch(`/api/contatos?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const data = await lerJson(response);
 
-    if (!response.ok || data?.ok === false) {
-      throw new Error(data?.error || "Erro ao localizar o contato da conversa.");
+      if (!response.ok || data?.ok === false) continue;
+
+      const contatos = Array.isArray(data.contatos)
+        ? (data.contatos as ContatoBusca[])
+        : [];
+      const contato =
+        contatos.find(
+          (item) =>
+            Boolean(conversaId) &&
+            String(item.conversa_id || "").trim() === conversaId
+        ) ||
+        contatos.find(
+          (item) =>
+            Boolean(identidade.telefone) &&
+            normalizarTelefone(item.telefone) === identidade.telefone
+        ) ||
+        contatos.find(
+          (item) =>
+            Boolean(identidade.email) &&
+            normalizarEmail(item.email) === identidade.email
+        ) ||
+        contatos[0];
+
+      const contatoId = String(contato?.id || "").trim();
+      if (contatoId) return carregarPorContatoId(contatoId);
     }
 
-    const contatos = Array.isArray(data.contatos)
-      ? (data.contatos as ContatoBusca[])
-      : [];
-    const exatos = contatos.filter(
-      (contato) => normalizarTelefone(contato.telefone) === telefoneNormalizado
-    );
-    const contato =
-      exatos.find((item) => conversaId && item.conversa_id === conversaId) ||
-      exatos[0] ||
-      contatos[0];
-    const contatoId = String(contato?.id || "").trim();
-
-    if (!contatoId) return [];
-    return carregarPorContatoId(contatoId);
+    return [];
   }
 
   async function carregar(forcar = false) {
-    const chave = `${conversaId}|${telefonePainel}`;
-    if (!conversaId && !telefonePainel) return;
+    const chave = `${conversaId}|${identidadePainel.telefone}|${identidadePainel.email}`;
+    if (!conversaId && !identidadePainel.telefone && !identidadePainel.email) return;
     if (!forcar && (carregandoRef.current || chaveCarregadaRef.current === chave)) {
       return;
     }
@@ -400,12 +518,20 @@ export default function CaptureInfoPanelVisible() {
         }
       }
 
-      if (dados.length === 0 && telefonePainel) {
-        dados = await carregarPorTelefone(telefonePainel);
-        if (dados.length > 0) falhaConversa = null;
+      if (dados.length === 0 && (identidadePainel.telefone || identidadePainel.email)) {
+        const dadosPorBusca = await carregarPorBusca(identidadePainel);
+        if (dadosPorBusca.length > 0) {
+          dados = dadosPorBusca;
+          falhaConversa = null;
+        }
       }
 
-      if (dados.length === 0 && falhaConversa && !telefonePainel) {
+      if (
+        dados.length === 0 &&
+        falhaConversa &&
+        !identidadePainel.telefone &&
+        !identidadePainel.email
+      ) {
         throw falhaConversa;
       }
 
@@ -421,6 +547,7 @@ export default function CaptureInfoPanelVisible() {
           : "Erro ao carregar informações de captura."
       );
       chaveCarregadaRef.current = chave;
+      console.error("[capturas-contato]", error);
     } finally {
       if (requestId === requestIdRef.current) {
         carregandoRef.current = false;
@@ -428,6 +555,22 @@ export default function CaptureInfoPanelVisible() {
       }
     }
   }
+
+  useEffect(() => {
+    const atualizarConversaId = () => {
+      const proximoId = obterConversaIdDaUrl();
+      setConversaId((atual) => (atual === proximoId ? atual : proximoId));
+    };
+
+    atualizarConversaId();
+    const intervalo = window.setInterval(atualizarConversaId, 350);
+    window.addEventListener("popstate", atualizarConversaId);
+
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener("popstate", atualizarConversaId);
+    };
+  }, []);
 
   useEffect(() => {
     requestIdRef.current += 1;
@@ -439,37 +582,43 @@ export default function CaptureInfoPanelVisible() {
   }, [conversaId]);
 
   useEffect(() => {
-    if (conversaId || telefonePainel) void carregar();
-  }, [conversaId, telefonePainel]);
+    if (conversaId || identidadePainel.telefone || identidadePainel.email) {
+      void carregar();
+    }
+  }, [conversaId, identidadePainel.telefone, identidadePainel.email]);
 
   useEffect(() => {
     let frame: number | null = null;
     let hostAtual: HTMLElement | null = null;
 
     const sincronizar = () => {
-      const lista = encontrarListaVisivelInformacoesContato();
-      const observacoes = lista ? encontrarLinhaPorLabel(lista, "observações") : null;
+      const contexto = encontrarContextoPainel();
 
-      if (!lista || !observacoes) {
+      if (!contexto) {
         if (hostAtual?.isConnected) hostAtual.remove();
         hostAtual = null;
         setSummaryHost(null);
-        setTelefonePainel("");
+        setIdentidadePainel((atual) =>
+          atual.telefone || atual.email ? { telefone: "", email: "" } : atual
+        );
         setAbaAberta(false);
         return;
       }
 
-      const telefone = obterTelefonePainel(lista);
-      setTelefonePainel((atual) => (atual === telefone ? atual : telefone));
+      setIdentidadePainel((atual) =>
+        atual.telefone === contexto.telefone && atual.email === contexto.email
+          ? atual
+          : { telefone: contexto.telefone, email: contexto.email }
+      );
 
-      let host = lista.querySelector<HTMLElement>(`[data-${SUMMARY_HOST}]`);
+      let host = contexto.lista.querySelector<HTMLElement>(`[data-${SUMMARY_HOST}]`);
       if (!host) {
         host = document.createElement("div");
         host.setAttribute(`data-${SUMMARY_HOST}`, "true");
       }
 
-      if (observacoes.nextElementSibling !== host) {
-        observacoes.insertAdjacentElement("afterend", host);
+      if (contexto.observacoes.nextElementSibling !== host) {
+        contexto.observacoes.insertAdjacentElement("afterend", host);
       }
 
       if (hostAtual && hostAtual !== host && hostAtual.isConnected) {
@@ -499,13 +648,8 @@ export default function CaptureInfoPanelVisible() {
 
     agendar();
     const observer = new MutationObserver(agendar);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["class", "style", "hidden", "aria-hidden"],
-    });
-    const intervalo = window.setInterval(agendar, 500);
+    observer.observe(document.body, { childList: true, subtree: true });
+    const intervalo = window.setInterval(agendar, 400);
     window.addEventListener("resize", agendar);
     window.addEventListener("orientationchange", agendar);
 
@@ -537,15 +681,19 @@ export default function CaptureInfoPanelVisible() {
       ? createPortal(
           <>
             {resumo.map((informacao) => (
-              <div className="captureInfoVisibleRow" key={informacao.id}>
-                <span className="captureInfoVisibleLabel">{labelBase(informacao)}</span>
-                <strong className="captureInfoVisibleValue">{informacao.valor}</strong>
+              <div className="captureInfoVisibleV4Row" key={informacao.id}>
+                <span className="captureInfoVisibleV4Label">
+                  {labelBase(informacao)}
+                </span>
+                <strong className="captureInfoVisibleV4Value">
+                  {informacao.valor}
+                </strong>
               </div>
             ))}
             {possuiDuplicadas && (
               <button
                 type="button"
-                className="captureInfoVisibleMore"
+                className="captureInfoVisibleV4More"
                 onClick={() => setAbaAberta(true)}
               >
                 Ver mais
@@ -559,20 +707,25 @@ export default function CaptureInfoPanelVisible() {
   const overlayPortal =
     typeof document !== "undefined" && abaAberta
       ? createPortal(
-          <section className="captureInfoVisibleOverlay" aria-label="Informações de captura">
-            <header className="captureInfoVisibleHeader">
+          <section
+            className="captureInfoVisibleV4Overlay"
+            aria-label="Informações de captura"
+          >
+            <header className="captureInfoVisibleV4Header">
               <button
                 type="button"
-                className="captureInfoVisibleBack"
+                className="captureInfoVisibleV4Back"
                 onClick={() => setAbaAberta(false)}
                 aria-label="Voltar para detalhes do contato"
               >
                 ←
               </button>
-              <h3 className="captureInfoVisibleTitle">Informações de captura</h3>
+              <h3 className="captureInfoVisibleV4Title">
+                Informações de captura
+              </h3>
               <button
                 type="button"
-                className="captureInfoVisibleRefresh"
+                className="captureInfoVisibleV4Refresh"
                 onClick={() => void carregar(true)}
                 disabled={carregando}
               >
@@ -580,22 +733,29 @@ export default function CaptureInfoPanelVisible() {
               </button>
             </header>
 
-            <div className="captureInfoVisibleBody">
+            <div className="captureInfoVisibleV4Body">
               {carregando && informacoes.length === 0 ? (
-                <div className="captureInfoVisibleEmpty">Carregando informações...</div>
+                <div className="captureInfoVisibleV4Empty">
+                  Carregando informações...
+                </div>
               ) : erro ? (
-                <div className="captureInfoVisibleEmpty">{erro}</div>
+                <div className="captureInfoVisibleV4Empty">{erro}</div>
               ) : informacoes.length === 0 ? (
-                <div className="captureInfoVisibleEmpty">
+                <div className="captureInfoVisibleV4Empty">
                   Nenhuma informação foi capturada por um fluxo ainda.
                 </div>
               ) : (
-                <div className="captureInfoVisibleList">
+                <div className="captureInfoVisibleV4List">
                   {detalhadas.map(({ informacao, label }) => (
-                    <article className="captureInfoVisibleItem" key={informacao.id}>
-                      <span className="captureInfoVisibleLabel">{label}</span>
-                      <strong className="captureInfoVisibleValue">{informacao.valor}</strong>
-                      <small className="captureInfoVisibleMeta">
+                    <article
+                      className="captureInfoVisibleV4Item"
+                      key={informacao.id}
+                    >
+                      <span className="captureInfoVisibleV4Label">{label}</span>
+                      <strong className="captureInfoVisibleV4Value">
+                        {informacao.valor}
+                      </strong>
+                      <small className="captureInfoVisibleV4Meta">
                         {nomeFluxo(informacao)} · {dataCaptura(informacao.capturado_em)}
                       </small>
                     </article>
