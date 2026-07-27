@@ -21,14 +21,23 @@ type ItemDetalhado = {
   label: string;
 };
 
-const STYLE_ID = "capture-info-panel-v2-style";
-const SUMMARY_HOST = "capture-info-panel-v2-summary";
-const OVERLAY_HOST = "capture-info-panel-v2-overlay";
+type ContatoBusca = {
+  id?: string | null;
+  telefone?: string | null;
+  conversa_id?: string | null;
+};
+
+const STYLE_ID = "capture-info-panel-v3-style";
+const SUMMARY_HOST = "capture-info-panel-v3-summary";
+const OVERLAY_HOST = "capture-info-panel-v3-overlay";
 
 const CSS = `
 [data-conversas-capture-summary-host] > .captureInfoSummaryRow,
 [data-conversas-capture-summary-host] > .captureInfoMoreButton,
-[data-conversas-capture-overlay-host] { display: none !important; }
+[data-conversas-capture-overlay-host],
+[data-capture-info-panel-v2-summary] > .captureInfoV2Row,
+[data-capture-info-panel-v2-summary] > .captureInfoV2More,
+[data-capture-info-panel-v2-overlay] { display: none !important; }
 [data-${SUMMARY_HOST}] { display: contents; }
 [data-${OVERLAY_HOST}] {
   position: absolute;
@@ -36,15 +45,15 @@ const CSS = `
   z-index: 60;
   pointer-events: none;
 }
-.captureInfoPanelV2Enabled { position: relative !important; }
-.captureInfoV2Row,
-.captureInfoV2Item {
+.captureInfoPanelV3Enabled { position: relative !important; }
+.captureInfoV3Row,
+.captureInfoV3Item {
   border: 1px solid var(--crm-border-soft, #e7edf3);
   border-radius: 16px;
   background: var(--crm-surface, #fff);
   padding: 14px;
 }
-.captureInfoV2Label {
+.captureInfoV3Label {
   display: block;
   color: var(--crm-text-soft, #7b8798);
   font-size: 11px;
@@ -52,7 +61,7 @@ const CSS = `
   letter-spacing: .05em;
   text-transform: uppercase;
 }
-.captureInfoV2Value {
+.captureInfoV3Value {
   display: block;
   margin-top: 6px;
   color: var(--crm-text-strong, #172033);
@@ -61,7 +70,7 @@ const CSS = `
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.captureInfoV2More {
+.captureInfoV3More {
   width: 100%;
   border: 1px solid var(--crm-border, #d8e0eb);
   border-radius: 12px;
@@ -73,8 +82,8 @@ const CSS = `
   font-weight: 800;
   cursor: pointer;
 }
-.captureInfoV2More:hover { background: var(--crm-surface-muted, #eef2f6); }
-.captureInfoV2Overlay {
+.captureInfoV3More:hover { background: var(--crm-surface-muted, #eef2f6); }
+.captureInfoV3Overlay {
   position: absolute;
   inset: 0;
   display: flex;
@@ -83,7 +92,7 @@ const CSS = `
   color: var(--crm-text-strong, #172033);
   pointer-events: auto;
 }
-.captureInfoV2Header {
+.captureInfoV3Header {
   min-height: 58px;
   display: flex;
   align-items: center;
@@ -91,8 +100,8 @@ const CSS = `
   padding: 12px 14px;
   border-bottom: 1px solid var(--crm-border-soft, #e7edf3);
 }
-.captureInfoV2Back,
-.captureInfoV2Refresh {
+.captureInfoV3Back,
+.captureInfoV3Refresh {
   border: 1px solid var(--crm-border, #d8e0eb);
   border-radius: 10px;
   background: var(--crm-surface, #fff);
@@ -103,33 +112,33 @@ const CSS = `
   font-weight: 700;
   cursor: pointer;
 }
-.captureInfoV2Back { width: 38px; padding-inline: 0; }
-.captureInfoV2Title {
+.captureInfoV3Back { width: 38px; padding-inline: 0; }
+.captureInfoV3Title {
   min-width: 0;
   flex: 1;
   margin: 0;
   font-size: 16px;
   font-weight: 800;
 }
-.captureInfoV2Body {
+.captureInfoV3Body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 14px;
 }
-.captureInfoV2List {
+.captureInfoV3List {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.captureInfoV2Meta {
+.captureInfoV3Meta {
   display: block;
   margin-top: 8px;
   color: var(--crm-text-muted, #718096);
   font-size: 11px;
   line-height: 1.4;
 }
-.captureInfoV2Empty {
+.captureInfoV3Empty {
   border: 1px dashed var(--crm-border, #d8e0eb);
   border-radius: 14px;
   padding: 18px;
@@ -147,6 +156,10 @@ function normalizar(valor: string | null | undefined) {
     .trim();
 }
 
+function normalizarTelefone(valor: string | null | undefined) {
+  return String(valor || "").replace(/\D/g, "");
+}
+
 function encontrarListaInformacoesContato() {
   const secoes = Array.from(
     document.querySelectorAll<HTMLElement>('[class*="whatsContactSection"]')
@@ -160,13 +173,25 @@ function encontrarListaInformacoesContato() {
   return secao?.querySelector<HTMLElement>('[class*="whatsInfoList"]') || null;
 }
 
-function encontrarObservacoes(lista: HTMLElement) {
+function encontrarLinhaPorLabel(lista: HTMLElement, labelProcurado: string) {
+  const procurado = normalizar(labelProcurado);
+
   return (
     Array.from(lista.children).find((elemento) => {
       const label = elemento.querySelector<HTMLElement>('[class*="whatsInfoLabel"]');
-      return normalizar(label?.textContent) === "observacoes";
+      return normalizar(label?.textContent) === procurado;
     }) as HTMLElement | undefined
   ) || null;
+}
+
+function encontrarObservacoes(lista: HTMLElement) {
+  return encontrarLinhaPorLabel(lista, "observações");
+}
+
+function obterTelefonePainel(lista: HTMLElement) {
+  const linha = encontrarLinhaPorLabel(lista, "telefone");
+  const valor = linha?.querySelector<HTMLElement>('[class*="whatsInfoValue"]');
+  return normalizarTelefone(valor?.textContent);
 }
 
 function textoBase(informacao: InformacaoCaptura) {
@@ -203,9 +228,14 @@ function dataCaptura(valor?: string | null) {
     : data.toLocaleString("pt-BR");
 }
 
+async function lerJson(response: Response) {
+  return response.json().catch(() => ({}));
+}
+
 export default function CaptureInfoPanel() {
   const searchParams = useSearchParams();
   const conversaId = searchParams.get("id")?.trim() || "";
+  const [telefonePainel, setTelefonePainel] = useState("");
   const [informacoes, setInformacoes] = useState<InformacaoCaptura[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
@@ -213,6 +243,8 @@ export default function CaptureInfoPanel() {
   const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null);
   const [abaAberta, setAbaAberta] = useState(false);
   const requestIdRef = useRef(0);
+  const chaveCarregadaRef = useRef("");
+  const carregandoRef = useRef(false);
 
   const resumo = useMemo(() => {
     const vistos = new Set<string>();
@@ -241,41 +273,138 @@ export default function CaptureInfoPanel() {
 
   const possuiDuplicadas = informacoes.length > resumo.length;
 
+  async function carregarPorContatoId(contatoId: string) {
+    const response = await fetch(
+      `/api/contatos/${encodeURIComponent(contatoId)}/informacoes-captura`,
+      { cache: "no-store" }
+    );
+    const data = await lerJson(response);
+
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || "Erro ao carregar informações de captura.");
+    }
+
+    return Array.isArray(data.informacoes)
+      ? (data.informacoes as InformacaoCaptura[])
+      : [];
+  }
+
+  async function carregarPorTelefone(telefone: string) {
+    const telefoneNormalizado = normalizarTelefone(telefone);
+    if (!telefoneNormalizado) return [];
+
+    const params = new URLSearchParams({
+      busca: telefoneNormalizado,
+      limite: "50",
+    });
+    const response = await fetch(`/api/contatos?${params.toString()}`, {
+      cache: "no-store",
+    });
+    const data = await lerJson(response);
+
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || "Erro ao localizar o contato da conversa.");
+    }
+
+    const contatos = Array.isArray(data.contatos)
+      ? (data.contatos as ContatoBusca[])
+      : [];
+    const exatos = contatos.filter(
+      (contato) => normalizarTelefone(contato.telefone) === telefoneNormalizado
+    );
+    const contato =
+      exatos.find((item) => conversaId && item.conversa_id === conversaId) ||
+      exatos[0] ||
+      contatos[0];
+    const contatoId = String(contato?.id || "").trim();
+
+    if (!contatoId) return [];
+    return carregarPorContatoId(contatoId);
+  }
+
   async function carregar(forcar = false) {
-    if (!conversaId || (carregando && !forcar)) return;
+    const chaveAtual = conversaId || telefonePainel;
+    if (!chaveAtual) return;
+    if (!forcar && (carregandoRef.current || chaveCarregadaRef.current === chaveAtual)) {
+      return;
+    }
+
     const requestId = ++requestIdRef.current;
+    carregandoRef.current = true;
     setCarregando(true);
     setErro("");
 
     try {
-      const response = await fetch(
-        `/api/conversas/${encodeURIComponent(conversaId)}/informacoes-captura`,
-        { cache: "no-store" }
-      );
-      const data = await response.json().catch(() => ({}));
+      let dados: InformacaoCaptura[] = [];
+      let erroConversa: Error | null = null;
 
-      if (!response.ok || data?.ok === false) {
-        throw new Error(data?.error || "Erro ao carregar informações de captura.");
+      if (conversaId) {
+        try {
+          const response = await fetch(
+            `/api/conversas/${encodeURIComponent(conversaId)}/informacoes-captura`,
+            { cache: "no-store" }
+          );
+          const data = await lerJson(response);
+
+          if (!response.ok || data?.ok === false) {
+            throw new Error(data?.error || "Erro ao carregar capturas pela conversa.");
+          }
+
+          dados = Array.isArray(data.informacoes)
+            ? (data.informacoes as InformacaoCaptura[])
+            : [];
+        } catch (error) {
+          erroConversa =
+            error instanceof Error
+              ? error
+              : new Error("Erro ao carregar capturas pela conversa.");
+        }
+      }
+
+      if (dados.length === 0 && telefonePainel) {
+        const dadosPorTelefone = await carregarPorTelefone(telefonePainel);
+        if (dadosPorTelefone.length > 0 || !conversaId) {
+          dados = dadosPorTelefone;
+          erroConversa = null;
+        }
+      }
+
+      if (dados.length === 0 && erroConversa && !telefonePainel) {
+        throw erroConversa;
       }
 
       if (requestId !== requestIdRef.current) return;
-      setInformacoes(Array.isArray(data.informacoes) ? data.informacoes : []);
+      setInformacoes(dados);
+      chaveCarregadaRef.current = chaveAtual;
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
       setInformacoes([]);
-      setErro(error instanceof Error ? error.message : "Erro ao carregar informações de captura.");
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao carregar informações de captura."
+      );
+      chaveCarregadaRef.current = chaveAtual;
     } finally {
-      if (requestId === requestIdRef.current) setCarregando(false);
+      if (requestId === requestIdRef.current) {
+        carregandoRef.current = false;
+        setCarregando(false);
+      }
     }
   }
 
   useEffect(() => {
     requestIdRef.current += 1;
+    carregandoRef.current = false;
+    chaveCarregadaRef.current = "";
     setInformacoes([]);
     setErro("");
     setAbaAberta(false);
-    if (conversaId) void carregar(true);
   }, [conversaId]);
+
+  useEffect(() => {
+    if (conversaId || telefonePainel) void carregar();
+  }, [conversaId, telefonePainel]);
 
   useEffect(() => {
     let frame: number | null = null;
@@ -285,6 +414,11 @@ export default function CaptureInfoPanel() {
       const observacoes = lista ? encontrarObservacoes(lista) : null;
 
       if (lista && observacoes) {
+        const telefoneAtual = obterTelefonePainel(lista);
+        setTelefonePainel((atual) =>
+          atual === telefoneAtual ? atual : telefoneAtual
+        );
+
         let host = lista.querySelector<HTMLElement>(`[data-${SUMMARY_HOST}]`);
         if (!host) {
           host = document.createElement("div");
@@ -296,12 +430,16 @@ export default function CaptureInfoPanel() {
         setSummaryHost((atual) => (atual === host ? atual : host));
       } else {
         setSummaryHost(null);
+        setTelefonePainel("");
         setAbaAberta(false);
       }
 
-      const painel = document.querySelector<HTMLElement>('aside[class*="rightPanel"]');
+      const painel =
+        lista?.closest<HTMLElement>('aside, [class*="rightPanel"]') ||
+        document.querySelector<HTMLElement>('aside[class*="rightPanel"]');
+
       if (painel) {
-        painel.classList.add("captureInfoPanelV2Enabled");
+        painel.classList.add("captureInfoPanelV3Enabled");
         let host = painel.querySelector<HTMLElement>(`[data-${OVERLAY_HOST}]`);
         if (!host) {
           host = document.createElement("div");
@@ -335,12 +473,18 @@ export default function CaptureInfoPanel() {
     agendar();
     const observer = new MutationObserver(agendar);
     observer.observe(document.body, { childList: true, subtree: true });
+    const intervalo = window.setInterval(agendar, 700);
 
     return () => {
       observer.disconnect();
+      window.clearInterval(intervalo);
       if (frame !== null) window.cancelAnimationFrame(frame);
-      document.querySelectorAll(`[data-${SUMMARY_HOST}], [data-${OVERLAY_HOST}]`).forEach((item) => item.remove());
-      document.querySelectorAll(".captureInfoPanelV2Enabled").forEach((item) => item.classList.remove("captureInfoPanelV2Enabled"));
+      document
+        .querySelectorAll(`[data-${SUMMARY_HOST}], [data-${OVERLAY_HOST}]`)
+        .forEach((item) => item.remove());
+      document
+        .querySelectorAll(".captureInfoPanelV3Enabled")
+        .forEach((item) => item.classList.remove("captureInfoPanelV3Enabled"));
       if (criouStyle) style?.remove();
     };
   }, []);
@@ -350,15 +494,15 @@ export default function CaptureInfoPanel() {
       ? createPortal(
           <>
             {resumo.map((informacao) => (
-              <div className="captureInfoV2Row" key={informacao.id}>
-                <span className="captureInfoV2Label">{labelBase(informacao)}</span>
-                <strong className="captureInfoV2Value">{informacao.valor}</strong>
+              <div className="captureInfoV3Row" key={informacao.id}>
+                <span className="captureInfoV3Label">{labelBase(informacao)}</span>
+                <strong className="captureInfoV3Value">{informacao.valor}</strong>
               </div>
             ))}
             {possuiDuplicadas && (
               <button
                 type="button"
-                className="captureInfoV2More"
+                className="captureInfoV3More"
                 onClick={() => setAbaAberta(true)}
               >
                 Ver mais
@@ -372,20 +516,20 @@ export default function CaptureInfoPanel() {
   const overlayPortal =
     overlayHost && overlayHost.isConnected && abaAberta
       ? createPortal(
-          <section className="captureInfoV2Overlay" aria-label="Informações de captura">
-            <header className="captureInfoV2Header">
+          <section className="captureInfoV3Overlay" aria-label="Informações de captura">
+            <header className="captureInfoV3Header">
               <button
                 type="button"
-                className="captureInfoV2Back"
+                className="captureInfoV3Back"
                 onClick={() => setAbaAberta(false)}
                 aria-label="Voltar para detalhes do contato"
               >
                 ←
               </button>
-              <h3 className="captureInfoV2Title">Informações de captura</h3>
+              <h3 className="captureInfoV3Title">Informações de captura</h3>
               <button
                 type="button"
-                className="captureInfoV2Refresh"
+                className="captureInfoV3Refresh"
                 onClick={() => void carregar(true)}
                 disabled={carregando}
               >
@@ -393,18 +537,22 @@ export default function CaptureInfoPanel() {
               </button>
             </header>
 
-            <div className="captureInfoV2Body">
+            <div className="captureInfoV3Body">
               {carregando && informacoes.length === 0 ? (
-                <div className="captureInfoV2Empty">Carregando informações...</div>
+                <div className="captureInfoV3Empty">Carregando informações...</div>
               ) : erro ? (
-                <div className="captureInfoV2Empty">{erro}</div>
+                <div className="captureInfoV3Empty">{erro}</div>
+              ) : informacoes.length === 0 ? (
+                <div className="captureInfoV3Empty">
+                  Nenhuma informação foi capturada por um fluxo ainda.
+                </div>
               ) : (
-                <div className="captureInfoV2List">
+                <div className="captureInfoV3List">
                   {itensDetalhados.map(({ informacao, label }) => (
-                    <article className="captureInfoV2Item" key={informacao.id}>
-                      <span className="captureInfoV2Label">{label}</span>
-                      <strong className="captureInfoV2Value">{informacao.valor}</strong>
-                      <small className="captureInfoV2Meta">
+                    <article className="captureInfoV3Item" key={informacao.id}>
+                      <span className="captureInfoV3Label">{label}</span>
+                      <strong className="captureInfoV3Value">{informacao.valor}</strong>
+                      <small className="captureInfoV3Meta">
                         {nomeFluxo(informacao)} · {dataCaptura(informacao.capturado_em)}
                       </small>
                     </article>
