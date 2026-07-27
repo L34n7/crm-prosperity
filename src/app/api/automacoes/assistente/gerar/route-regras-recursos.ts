@@ -1,12 +1,12 @@
 export const VERSAO_REGRAS_RECURSOS_FLUXOS =
-  "crm-prosperity-recursos-confirmaveis-v3-2026-07-26";
+  "crm-prosperity-recursos-confirmaveis-v4-2026-07-26";
 
 const MARCADOR_REGRAS_RECURSOS = `[REGRAS_TECNICAS_${VERSAO_REGRAS_RECURSOS_FLUXOS}]`;
 
 const REGRAS_RECURSOS_FLUXOS = `
 ${MARCADOR_REGRAS_RECURSOS}
 
-REGRAS TECNICAS OBRIGATORIAS DE RECURSOS E CAPTURA
+REGRAS TECNICAS OBRIGATORIAS DE RECURSOS, CAPTURA E OTIMIZACAO DE FLUXO
 
 1. TRANSFERENCIA PARA SETOR
 - Todo bloco de transferencia deve usar o tipo transferir.
@@ -84,6 +84,32 @@ E proibido:
 
 No briefing, registre os mesmos dados em dados_a_capturar, agendamento.dados e na jornada de agendamento manual.
 
+5. FIDELIDADE AO TOM, TEXTO E DETALHES DO PEDIDO
+- Preserve o tom original solicitado pelo usuario: premium, consultivo, acolhedor, urgente, informal, tecnico, profissional, emocional ou comercial.
+- Preserve nomes proprios, persona da assistente, nome da empresa, nome do produto/servico, valores, metragem, bairro, diferenciais, promessas permitidas e palavras de impacto fornecidas pelo usuario.
+- Nao simplifique termos comerciais importantes. Exemplos: "joia avaliada em R$ 1.400.000,00", "lazer de resort", "exclusividade", "alto padrao", "corretor especialista".
+- Preserve emojis em mensagens e botoes quando nao ultrapassarem limites tecnicos do WhatsApp e nao causarem ambiguidade.
+- Se precisar encurtar botao por limite tecnico, preserve o sentido principal e registre aviso.
+- Nao trocar copy persuasiva por texto generico quando o pedido forneceu uma frase boa e compatível com o fluxo.
+
+6. CUMPRIR O PROMPT E OTIMIZAR A ARQUITETURA DO FLUXO
+- Nao apenas copie blocos de forma mecanica. Preserve a intencao do usuario e otimize a arquitetura quando isso melhorar clareza, personalizacao, qualificacao ou handoff.
+- Otimizar nao significa inventar novo objetivo. Otimizar significa criar caminhos, mensagens de transicao, retornos e encerramentos coerentes com a mesma intencao do pedido.
+- Cada escolha relevante do contato deve gerar consequencia real no fluxo.
+- Se duas ou mais opcoes diferentes de uma mesma pergunta apontariam para o mesmo destino, crie obrigatoriamente um bloco intermediario para cada opcao antes de voltar ao destino comum.
+- Botoes de escolha nao devem virar variaveis apenas por terem sido clicados. A escolha deve ser representada pelo caminho do fluxo.
+- Excecao: opcoes equivalentes, como "Sim", "Confirmo" e "Pode seguir", podem apontar para o mesmo destino quando tiverem exatamente a mesma intencao.
+- Opcoes com intencoes diferentes nunca devem sair direto para o mesmo bloco. Exemplos: Morar/Investir, Comprar/Alugar, Recursos proprios/Financiamento, Pessoa fisica/Empresa, Urgente/Sem pressa.
+
+7. MENSAGENS INTERMEDIARIAS POR NICHO E INTENCAO
+- Quando criar caminho intermediario, escreva uma mensagem curta, contextual e coerente com o nicho. Nao use apenas "Perfeito, vamos continuar" se houver contexto suficiente.
+- Imobiliario: para morar, destaque conforto, localizacao, lazer, seguranca e qualidade de vida; para investir, destaque valorizacao, liquidez, rentabilidade e potencial de retorno; para financiamento, destaque simulacao, entrada e aprovacao; para recursos proprios, destaque negociacao direta e condicoes estrategicas.
+- Estetica/saude: para procedimento, destaque objetivo, naturalidade, seguranca, avaliacao individual e expectativa realista; para duvidas, responda com clareza e encaminhe para avaliacao quando necessario.
+- Servicos: para urgencia, destaque prioridade e proximo passo; para orcamento, destaque levantamento de dados, escopo e retorno da equipe; para suporte, destaque resolucao e triagem.
+- Ecommerce/varejo: para compra, destaque produto e proximo passo; para entrega, destaque prazo, endereco e acompanhamento; para troca, destaque politica e coleta de dados necessarios.
+- Educacao/curso: para interesse, destaque objetivo do aluno, formato, suporte e proximo passo; para matricula, destaque orientacao e condicoes.
+- A mensagem intermediaria deve ter no maximo 2 frases curtas e seguir automaticamente para o proximo bloco.
+
 CHECKLIST OBRIGATORIO DA IA
 [ ] Cada transferencia possui uma etapa transferir real.
 [ ] Cada bloco que aguarda resposta possui configuracao de excesso e timeout confirmavel.
@@ -93,9 +119,12 @@ CHECKLIST OBRIGATORIO DA IA
 [ ] Melhor dia e disponibilidade de agendamento manual usam tipo_captura: "texto".
 [ ] O tipo data foi usado somente quando a resposta deve ser numerica e exata.
 [ ] Todas as variaveis capturadas aparecem em resumo ou confirmacao posterior.
+[ ] Nenhuma escolha com intencao diferente sai direto para o mesmo bloco sem caminho intermediario.
+[ ] Botoes clicados nao foram transformados em variaveis sem necessidade.
+[ ] O tom, emojis, persona, nomes, valores e diferenciais do prompt foram preservados quando tecnicamente possivel.
 [ ] Nenhum ID de setor ou URL foi inventado.
 
-Revise e corrija o proprio JSON antes de responder. O backend nao fara reparo semantico e nao bloqueara o fluxo por avaliacao subjetiva.
+Revise e corrija o proprio JSON antes de responder. O backend tambem fara normalizacoes estruturais de seguranca e nao bloqueara o fluxo por avaliacao subjetiva.
 `.trim();
 
 function objeto(valor: unknown): Record<string, unknown> {
