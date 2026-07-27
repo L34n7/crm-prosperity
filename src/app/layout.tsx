@@ -2,6 +2,117 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
 
+const UI_CONSISTENCY_STYLES = `
+  [class*="editorPanel"] > [class*="editorHeader"] {
+    min-width: 0 !important;
+    flex-wrap: wrap !important;
+  }
+
+  [class*="editorPanel"] > [class*="editorHeader"] > div:first-child {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex: 1 1 360px !important;
+  }
+
+  [class*="editorPanel"] > [class*="editorHeader"] [class*="editorTitle"] {
+    max-width: 100% !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+
+  [class*="editorPanel"] > [class*="editorHeader"] [class*="headerActions"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex: 0 1 auto !important;
+  }
+
+  [class*="editorPanel"] > [class*="editorHeader"] [class*="headerActionsButtons"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+
+  [class*="captureInfoItem"] [class*="captureInfoContent"] > strong:first-child {
+    display: block !important;
+    margin: 0 0 2px !important;
+    color: var(--crm-text-muted) !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    line-height: 1.35 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+  }
+`;
+
+const CONTACT_CAPTURE_SORT_SCRIPT = `
+  (() => {
+    if (window.__crmContactCaptureAlphabeticalOrder) return;
+    window.__crmContactCaptureAlphabeticalOrder = true;
+
+    let frame = null;
+
+    const obterTitulo = (item) => {
+      const titulo = item.querySelector(
+        '[class*="captureInfoContent"] > strong:first-child'
+      );
+
+      return String(titulo?.textContent || "")
+        .normalize("NFD")
+        .replace(/[\\u0300-\\u036f]/g, "")
+        .trim();
+    };
+
+    const ordenarListas = () => {
+      document
+        .querySelectorAll('[class*="captureInfoList"]')
+        .forEach((lista) => {
+          const itens = Array.from(lista.children).filter(
+            (item) =>
+              item instanceof HTMLElement &&
+              String(item.className || "").includes("captureInfoItem")
+          );
+
+          if (itens.length < 2) return;
+
+          const ordenados = [...itens].sort((itemA, itemB) =>
+            obterTitulo(itemA).localeCompare(obterTitulo(itemB), "pt-BR", {
+              sensitivity: "base",
+              numeric: true,
+            })
+          );
+
+          const precisaReordenar = itens.some(
+            (item, indice) => item !== ordenados[indice]
+          );
+
+          if (!precisaReordenar) return;
+
+          const fragmento = document.createDocumentFragment();
+          ordenados.forEach((item) => fragmento.appendChild(item));
+          lista.appendChild(fragmento);
+        });
+    };
+
+    const agendarOrdenacao = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        ordenarListas();
+      });
+    };
+
+    const observer = new MutationObserver(agendarOrdenacao);
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("popstate", agendarOrdenacao);
+    agendarOrdenacao();
+  })();
+`;
+
 const siteUrl = (() => {
   const configuredUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL;
@@ -168,6 +279,7 @@ export default function RootLayout({
           sizes="180x180"
         />
         <link rel="manifest" href="/site.webmanifest" />
+        <style>{UI_CONSISTENCY_STYLES}</style>
       </head>
       <body className="antialiased">
         <Script id="crm-theme-bootstrap" strategy="beforeInteractive">
@@ -184,6 +296,9 @@ export default function RootLayout({
               }
             })();
           `}
+        </Script>
+        <Script id="crm-contact-capture-order" strategy="afterInteractive">
+          {CONTACT_CAPTURE_SORT_SCRIPT}
         </Script>
         <Script
           id="crm-organization-schema"
