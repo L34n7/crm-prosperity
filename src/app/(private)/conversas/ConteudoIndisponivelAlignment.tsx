@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 function normalizarTexto(valor: string | null | undefined) {
   return String(valor || "")
@@ -148,6 +149,558 @@ function ajustarAlinhamentoCards() {
   });
 }
 
+type InformacaoCaptura = {
+  id: string;
+  tipo?: string | null;
+  nome_campo?: string | null;
+  sequencia?: number | null;
+  valor: string;
+  capturado_em?: string | null;
+  atualizado_em?: string | null;
+  automacao_fluxos?:
+    | { nome?: string | null }
+    | { nome?: string | null }[]
+    | null;
+};
+
+type ConversaResumoApi = {
+  id?: string;
+  contatos?: {
+    id?: string;
+  } | null;
+};
+
+const CAPTURE_STYLE_ID = "conversas-capture-info-enhancer-style";
+const CAPTURE_SUMMARY_HOST = "conversas-capture-summary-host";
+const CAPTURE_OVERLAY_HOST = "conversas-capture-overlay-host";
+
+const CAPTURE_CSS = `
+[data-${CAPTURE_SUMMARY_HOST}] { display: contents; }
+[data-${CAPTURE_OVERLAY_HOST}] {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+[data-${CAPTURE_OVERLAY_HOST}] .captureInfoOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--crm-surface, #fff);
+  color: var(--crm-text-strong, #172033);
+  pointer-events: auto;
+}
+.captureInfoSummaryRow,
+.captureInfoFullItem {
+  border: 1px solid var(--crm-border-soft, #e7edf3);
+  border-radius: 16px;
+  background: var(--crm-surface, #fff);
+  padding: 14px;
+}
+.captureInfoSummaryLabel,
+.captureInfoFullLabel {
+  display: block;
+  color: var(--crm-text-soft, #7b8798);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.captureInfoSummaryValue,
+.captureInfoFullValue {
+  display: block;
+  margin-top: 6px;
+  color: var(--crm-text-strong, #172033);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.captureInfoMoreButton {
+  width: 100%;
+  border: 1px solid var(--crm-border, #d8e0eb);
+  border-radius: 12px;
+  background: var(--crm-surface-soft, #f7f9fb);
+  color: var(--crm-primary, #08785a);
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.captureInfoMoreButton:hover { background: var(--crm-surface-muted, #eef2f6); }
+.captureInfoOverlayHeader {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--crm-border-soft, #e7edf3);
+  background: var(--crm-surface, #fff);
+}
+.captureInfoOverlayBack,
+.captureInfoOverlayRefresh {
+  border: 1px solid var(--crm-border, #d8e0eb);
+  border-radius: 10px;
+  background: var(--crm-surface, #fff);
+  color: var(--crm-text-strong, #172033);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.captureInfoOverlayBack { width: 38px; padding-inline: 0; }
+.captureInfoOverlayTitle {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+.captureInfoOverlayBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+}
+.captureInfoFullList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.captureInfoFullMeta {
+  display: block;
+  margin-top: 8px;
+  color: var(--crm-text-muted, #718096);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.captureInfoEmpty {
+  border: 1px dashed var(--crm-border, #d8e0eb);
+  border-radius: 14px;
+  padding: 18px;
+  color: var(--crm-text-muted, #718096);
+  font-size: 13px;
+  text-align: center;
+}
+.captureInfoPanelEnabled { position: relative !important; }
+`;
+
+function obterConversaIdAtual() {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get("id")?.trim() || "";
+}
+
+function encontrarListaInformacoesContato() {
+  const secoes = Array.from(
+    document.querySelectorAll<HTMLElement>('[class*="whatsContactSection"]')
+  );
+
+  const secao = secoes.find((item) => {
+    const cabecalho = item.querySelector<HTMLElement>('[class*="whatsSectionHeader"]');
+    return normalizarTexto(cabecalho?.textContent).includes("informacoes do contato");
+  });
+
+  return secao?.querySelector<HTMLElement>('[class*="whatsInfoList"]') || null;
+}
+
+function encontrarLinhaPorLabel(lista: HTMLElement, label: string) {
+  const alvo = normalizarTexto(label).trim();
+
+  return (
+    Array.from(lista.children).find((elemento) => {
+      const linha = elemento as HTMLElement;
+      const textoLabel = linha.querySelector<HTMLElement>('[class*="whatsInfoLabel"]')?.textContent;
+      return normalizarTexto(textoLabel).trim() === alvo;
+    }) as HTMLElement | undefined
+  ) || null;
+}
+
+function obterTelefoneDoPainel(lista: HTMLElement) {
+  const linhaTelefone = encontrarLinhaPorLabel(lista, "telefone");
+  const valor =
+    linhaTelefone?.querySelector<HTMLElement>('[class*="whatsInfoValue"]')?.textContent ||
+    document.querySelector<HTMLElement>('[class*="whatsContactPhone"]')?.textContent ||
+    "";
+
+  return valor.trim();
+}
+
+function obterBaseCampo(nomeCampo?: string | null, tipo?: string | null) {
+  const nome = String(nomeCampo || tipo || "Informação").trim();
+  return nome.replace(/\s+\d+\s*$/, "").trim() || "Informação";
+}
+
+function formatarNomeCampoCaptura(informacao: InformacaoCaptura, incluirSequencia: boolean) {
+  const original = String(informacao.nome_campo || informacao.tipo || "Informação").trim();
+  const numeroNoNome = original.match(/\s+(\d+)\s*$/)?.[1] || "";
+  let base = obterBaseCampo(original, informacao.tipo);
+
+  if (!normalizarTexto(base).includes("captura")) {
+    base = `${base} captura`;
+  }
+
+  if (!incluirSequencia) return base;
+
+  return numeroNoNome ? `${base} ${numeroNoNome}` : base;
+}
+
+function chaveAgrupamentoCaptura(informacao: InformacaoCaptura) {
+  return normalizarTexto(obterBaseCampo(informacao.nome_campo, informacao.tipo))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function obterNomeFluxo(informacao: InformacaoCaptura) {
+  const relacao = informacao.automacao_fluxos;
+  const fluxo = Array.isArray(relacao) ? relacao[0] : relacao;
+  return fluxo?.nome || "Fluxo não identificado";
+}
+
+function formatarDataCaptura(valor?: string | null) {
+  if (!valor) return "Data não informada";
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "Data não informada";
+  return data.toLocaleString("pt-BR");
+}
+
+function CaptureInfoEnhancer() {
+  const [previewHost, setPreviewHost] = useState<HTMLElement | null>(null);
+  const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null);
+  const [informacoes, setInformacoes] = useState<InformacaoCaptura[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [abaAberta, setAbaAberta] = useState(false);
+
+  const conversaIdRef = useRef("");
+  const contatoIdRef = useRef("");
+  const carregadaParaConversaRef = useRef("");
+  const carregandoParaConversaRef = useRef("");
+  const requestIdRef = useRef(0);
+  const previewHostRef = useRef<HTMLElement | null>(null);
+
+  const resumo = useMemo(() => {
+    const vistos = new Set<string>();
+    const itens: InformacaoCaptura[] = [];
+
+    informacoes.forEach((informacao) => {
+      const chave = chaveAgrupamentoCaptura(informacao);
+      if (vistos.has(chave)) return;
+      vistos.add(chave);
+      itens.push(informacao);
+    });
+
+    return itens;
+  }, [informacoes]);
+
+  const possuiCapturasOcultas = informacoes.length > resumo.length;
+
+  async function resolverContatoId(conversaId: string, telefone: string) {
+    const termos = Array.from(
+      new Set([
+        telefone.replace(/\D/g, ""),
+        telefone.trim(),
+      ].filter((item) => item.length >= 4))
+    );
+
+    for (const termo of termos) {
+      const params = new URLSearchParams({
+        busca: termo,
+        limit: "50",
+      });
+      const response = await fetch(`/api/conversas?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data?.ok || !Array.isArray(data.conversas)) continue;
+
+      const conversa = (data.conversas as ConversaResumoApi[]).find(
+        (item) => item.id === conversaId
+      );
+      const contatoId = conversa?.contatos?.id?.trim() || "";
+
+      if (contatoId) return contatoId;
+    }
+
+    return "";
+  }
+
+  async function carregarInformacoes(forcar = false) {
+    const conversaId = conversaIdRef.current;
+    const hostAtual = previewHostRef.current;
+
+    if (!conversaId || !hostAtual?.isConnected) return;
+    if (
+      !forcar &&
+      (carregadaParaConversaRef.current === conversaId ||
+        carregandoParaConversaRef.current === conversaId)
+    ) return;
+
+    carregandoParaConversaRef.current = conversaId;
+    const requestId = ++requestIdRef.current;
+    setCarregando(true);
+    setErro("");
+
+    try {
+      let contatoId = contatoIdRef.current;
+
+      if (!contatoId) {
+        const lista = encontrarListaInformacoesContato();
+        const telefone = lista ? obterTelefoneDoPainel(lista) : "";
+        contatoId = await resolverContatoId(conversaId, telefone);
+      }
+
+      if (!contatoId) {
+        throw new Error("Não foi possível identificar o contato desta conversa.");
+      }
+
+      if (requestId !== requestIdRef.current || conversaIdRef.current !== conversaId) {
+        return;
+      }
+
+      contatoIdRef.current = contatoId;
+
+      const response = await fetch(
+        `/api/contatos/${encodeURIComponent(contatoId)}/informacoes-captura`,
+        { cache: "no-store" }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Erro ao carregar informações de captura.");
+      }
+
+      if (requestId !== requestIdRef.current || conversaIdRef.current !== conversaId) {
+        return;
+      }
+
+      setInformacoes(Array.isArray(data.informacoes) ? data.informacoes : []);
+      carregadaParaConversaRef.current = conversaId;
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+      setInformacoes([]);
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao carregar informações de captura."
+      );
+      carregadaParaConversaRef.current = conversaId;
+    } finally {
+      if (requestId === requestIdRef.current) {
+        carregandoParaConversaRef.current = "";
+        setCarregando(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    let frameId: number | null = null;
+    let intervaloId: number | null = null;
+
+    const sincronizar = () => {
+      const conversaId = obterConversaIdAtual();
+
+      if (conversaId !== conversaIdRef.current) {
+        conversaIdRef.current = conversaId;
+        contatoIdRef.current = "";
+        carregadaParaConversaRef.current = "";
+        carregandoParaConversaRef.current = "";
+        requestIdRef.current += 1;
+        setInformacoes([]);
+        setErro("");
+        setAbaAberta(false);
+      }
+
+      const lista = encontrarListaInformacoesContato();
+      const linhaObservacoes = lista
+        ? encontrarLinhaPorLabel(lista, "observacoes")
+        : null;
+
+      if (lista && linhaObservacoes) {
+        let host = lista.querySelector<HTMLElement>(`[data-${CAPTURE_SUMMARY_HOST}]`);
+
+        if (!host) {
+          host = document.createElement("div");
+          host.setAttribute(`data-${CAPTURE_SUMMARY_HOST}`, "true");
+          linhaObservacoes.insertAdjacentElement("afterend", host);
+        } else if (linhaObservacoes.nextElementSibling !== host) {
+          linhaObservacoes.insertAdjacentElement("afterend", host);
+        }
+
+        previewHostRef.current = host;
+        setPreviewHost((atual) => (atual === host ? atual : host));
+
+        if (conversaId && carregadaParaConversaRef.current !== conversaId) {
+          void carregarInformacoes();
+        }
+      } else {
+        previewHostRef.current = null;
+        setPreviewHost(null);
+        setAbaAberta(false);
+      }
+
+      const painel = document.querySelector<HTMLElement>('aside[class*="rightPanel"]');
+
+      if (painel) {
+        painel.classList.add("captureInfoPanelEnabled");
+        let host = painel.querySelector<HTMLElement>(`[data-${CAPTURE_OVERLAY_HOST}]`);
+
+        if (!host) {
+          host = document.createElement("div");
+          host.setAttribute(`data-${CAPTURE_OVERLAY_HOST}`, "true");
+          painel.appendChild(host);
+        }
+
+        setOverlayHost((atual) => (atual === host ? atual : host));
+      } else {
+        setOverlayHost(null);
+        setAbaAberta(false);
+      }
+    };
+
+    const agendar = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        sincronizar();
+      });
+    };
+
+    let style = document.getElementById(CAPTURE_STYLE_ID) as HTMLStyleElement | null;
+    const criouStyle = !style;
+
+    if (!style) {
+      style = document.createElement("style");
+      style.id = CAPTURE_STYLE_ID;
+      style.textContent = CAPTURE_CSS;
+      document.head.appendChild(style);
+    }
+
+    agendar();
+
+    const observer = new MutationObserver(agendar);
+    observer.observe(document.body, { childList: true, subtree: true });
+    intervaloId = window.setInterval(agendar, 750);
+    window.addEventListener("popstate", agendar);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("popstate", agendar);
+      if (intervaloId !== null) window.clearInterval(intervaloId);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      if (criouStyle) style?.remove();
+
+      document
+        .querySelectorAll<HTMLElement>(
+          `[data-${CAPTURE_SUMMARY_HOST}], [data-${CAPTURE_OVERLAY_HOST}]`
+        )
+        .forEach((host) => host.remove());
+      document
+        .querySelectorAll<HTMLElement>(".captureInfoPanelEnabled")
+        .forEach((painel) => painel.classList.remove("captureInfoPanelEnabled"));
+    };
+  }, []);
+
+  const abrirAba = () => {
+    setAbaAberta(true);
+    void carregarInformacoes(true);
+  };
+
+  const preview =
+    previewHost && previewHost.isConnected
+      ? createPortal(
+          !carregando && resumo.length > 0 ? (
+            <>
+              {resumo.map((informacao) => (
+                <div className="captureInfoSummaryRow" key={informacao.id}>
+                  <span className="captureInfoSummaryLabel">
+                    {formatarNomeCampoCaptura(informacao, false)}
+                  </span>
+                  <strong className="captureInfoSummaryValue">{informacao.valor}</strong>
+                </div>
+              ))}
+
+              {possuiCapturasOcultas && (
+                <button
+                  type="button"
+                  className="captureInfoMoreButton"
+                  onClick={abrirAba}
+                >
+                  Ver mais
+                </button>
+              )}
+            </>
+          ) : null,
+          previewHost
+        )
+      : null;
+
+  const overlay =
+    overlayHost && overlayHost.isConnected && abaAberta
+      ? createPortal(
+          <section className="captureInfoOverlay" aria-label="Informações de captura">
+            <header className="captureInfoOverlayHeader">
+              <button
+                type="button"
+                className="captureInfoOverlayBack"
+                onClick={() => setAbaAberta(false)}
+                aria-label="Voltar para detalhes do contato"
+                title="Voltar"
+              >
+                ←
+              </button>
+              <h3 className="captureInfoOverlayTitle">Informações de captura</h3>
+              <button
+                type="button"
+                className="captureInfoOverlayRefresh"
+                onClick={() => void carregarInformacoes(true)}
+                disabled={carregando}
+              >
+                {carregando ? "Atualizando..." : "Atualizar"}
+              </button>
+            </header>
+
+            <div className="captureInfoOverlayBody">
+              {carregando && informacoes.length === 0 ? (
+                <div className="captureInfoEmpty">Carregando informações...</div>
+              ) : erro ? (
+                <div className="captureInfoEmpty">{erro}</div>
+              ) : informacoes.length === 0 ? (
+                <div className="captureInfoEmpty">
+                  Nenhuma informação foi capturada por um fluxo ainda.
+                </div>
+              ) : (
+                <div className="captureInfoFullList">
+                  {informacoes.map((informacao) => (
+                    <article className="captureInfoFullItem" key={informacao.id}>
+                      <span className="captureInfoFullLabel">
+                        {formatarNomeCampoCaptura(informacao, true)}
+                      </span>
+                      <strong className="captureInfoFullValue">{informacao.valor}</strong>
+                      <small className="captureInfoFullMeta">
+                        {obterNomeFluxo(informacao)} · {formatarDataCaptura(informacao.capturado_em)}
+                      </small>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>,
+          overlayHost
+        )
+      : null;
+
+  return (
+    <>
+      {preview}
+      {overlay}
+    </>
+  );
+}
+
 export default function ConteudoIndisponivelAlignment() {
   useEffect(() => {
     let frameId: number | null = null;
@@ -184,5 +737,5 @@ export default function ConteudoIndisponivelAlignment() {
     };
   }, []);
 
-  return null;
+  return <CaptureInfoEnhancer />;
 }
