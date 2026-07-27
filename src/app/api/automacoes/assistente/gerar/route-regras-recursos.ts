@@ -1,12 +1,12 @@
 export const VERSAO_REGRAS_RECURSOS_FLUXOS =
-  "crm-prosperity-recursos-confirmaveis-v5-2026-07-26";
+  "crm-prosperity-recursos-confirmaveis-v6-2026-07-27";
 
 const MARCADOR_REGRAS_RECURSOS = `[REGRAS_TECNICAS_${VERSAO_REGRAS_RECURSOS_FLUXOS}]`;
 
 const REGRAS_RECURSOS_FLUXOS = `
 ${MARCADOR_REGRAS_RECURSOS}
 
-REGRAS TECNICAS OBRIGATORIAS DE RECURSOS, CAPTURA E OTIMIZACAO DE FLUXO
+REGRAS TECNICAS OBRIGATORIAS DE RECURSOS, CAPTURA, COPY E OTIMIZACAO DE FLUXO
 
 1. TRANSFERENCIA PARA SETOR
 - Todo bloco de transferencia deve usar o tipo transferir.
@@ -90,7 +90,7 @@ No briefing, registre os mesmos dados em dados_a_capturar, agendamento.dados e n
 - Nao simplifique termos comerciais importantes. Exemplos: "joia avaliada em R$ 1.400.000,00", "lazer de resort", "exclusividade", "alto padrao", "corretor especialista".
 - Preserve emojis em mensagens e botoes quando nao ultrapassarem limites tecnicos do WhatsApp e nao causarem ambiguidade.
 - Se precisar encurtar botao por limite tecnico, preserve o sentido principal e registre aviso.
-- Nao trocar copy persuasiva por texto generico quando o pedido forneceu uma frase boa e compatível com o fluxo.
+- Nao trocar copy persuasiva por texto generico quando o pedido forneceu uma frase boa e compativel com o fluxo.
 
 6. CUMPRIR O PROMPT E OTIMIZAR A ARQUITETURA DO FLUXO
 - Nao apenas copie blocos de forma mecanica. Preserve a intencao do usuario e otimize a arquitetura quando isso melhorar clareza, personalizacao, qualificacao ou handoff.
@@ -109,18 +109,37 @@ No briefing, registre os mesmos dados em dados_a_capturar, agendamento.dados e n
 - Educacao/curso: para interesse, destaque objetivo do aluno, formato, suporte e proximo passo; para matricula, destaque orientacao e condicoes.
 - A mensagem intermediaria deve ter no maximo 2 frases curtas e seguir automaticamente para o proximo bloco.
 
-8. COPY CRIATIVA E ATENDIMENTO COM FOCO EM CONVERSAO
-- Escreva como um copywriter profissional de marketing digital aplicado ao atendimento: claro, humano, persuasivo, contextual e orientado ao proximo passo.
-- A copy deve melhorar a experiencia do contato sem alterar a intencao, prometer o que nao foi informado ou inventar beneficios, precos, prazos, resultados, garantias ou condicoes.
-- Transforme informacoes do pedido em mensagens mais naturais e envolventes, mantendo fatos, nomes, valores e detalhes importantes.
-- Use criatividade dentro do contexto: crie transicoes, microcopy, CTAs e encerramentos que facam sentido para o nicho, para o momento da conversa e para a escolha feita pelo contato.
-- Evite mensagens frias, roboticas, genericas ou que poderiam servir para qualquer empresa.
-- Nao exagere em adjetivos, gatilhos ou urgencia artificial. A persuasao deve parecer consultiva, elegante e util.
-- Sempre que houver uma escolha do contato, a proxima mensagem deve reconhecer a escolha e conduzir a conversa com uma justificativa coerente.
-- Em handoff humano, prepare o contato para a transferencia com contexto, seguranca e expectativa clara sobre o proximo passo.
-- Em fluxos comerciais, valorize beneficio, desejo, objecao, confianca e facilidade de decisao sem pressionar o cliente.
+8. COPY PREMIUM, CRIATIVA E ATENDIMENTO COM FOCO EM CONVERSAO
+- Escreva como um copywriter senior de marketing digital especializado em atendimento conversacional: humano, estrategico, elegante, persuasivo e orientado ao proximo passo.
+- A copy deve parecer atendimento real, nao texto de robô. Use linguagem natural, calor humano e contexto da escolha feita pelo contato.
+- Cada mensagem deve ter uma funcao clara: acolher, gerar confianca, explicar, reduzir objecao, qualificar, orientar, conduzir para agendamento ou preparar handoff.
+- Transforme informacoes do pedido em mensagens melhores, mas nunca altere fatos, nomes, valores, enderecos, horarios, condicoes, limites ou promessas.
+- Use criatividade dentro do contexto: microcopy, transicoes, CTAs, encerramentos e justificativas que conectem a escolha do contato com o proximo passo.
+- Nao invente beneficios, precos, prazos, resultados, garantias, condicoes comerciais ou fatos tecnicos nao fornecidos.
+- Nao use urgencia artificial, promessa exagerada ou gatilho agressivo. A persuasao deve ser consultiva, segura e util.
+- Evite repeticao de frases como "a avaliação ajuda", "cada pessoa é diferente", "se quiser, podemos seguir" e "perfeito" em excesso.
+- Varie a linguagem entre caminhos diferentes. Harmonizacao, melasma, botox, suporte, imovel, curso, ecommerce e servico nao devem soar como a mesma copy com palavras trocadas.
+- Em fluxos comerciais, trabalhe desejo, beneficio, confianca, objecao e facilidade de decisao sem pressionar.
 - Em fluxos de suporte, priorize acolhimento, clareza, diagnostico e resolucao.
 - Em fluxos de agendamento, reduza atrito, confirme dados e deixe claro que o contato deu o proximo passo corretamente.
+- Em handoff humano, prepare o contato com seguranca: diga o que ja foi entendido, o que o especialista fara e o que acontece em seguida.
+- Mensagens informativas podem usar listas curtas quando isso melhora a leitura. Mensagens de menu nao devem listar as opcoes novamente.
+
+9. MENUS SEM REDUNDANCIA COM AS OPCOES VISIVEIS
+- Em perguntas com botoes ou lista de opcoes, a mensagem do bloco deve contextualizar a decisao e convidar o contato a escolher, mas nao repetir em bullets as mesmas opcoes que ja existem no campo opcoes/botoes.
+- E proibido criar mensagem de menu como: "Escolha uma opção: • Agendar • Valores • Menu" quando essas mesmas opcoes ja aparecem como botoes ou lista.
+- Mensagens de menu devem ser curtas, por exemplo: "Como deseja seguir agora?", "Escolha abaixo o melhor caminho para o seu atendimento." ou "Selecione uma opção para continuar.".
+- Se o menu tiver muitas opcoes, a mensagem pode agrupar a intencao de forma geral, mas sem duplicar os titulos das opcoes.
+- Use listas apenas em blocos informativos, respostas de FAQ, resumo de dados, beneficios, orientacoes ou detalhes do serviço. Nao use lista para repetir botoes.
+- Quando o usuario pedir "sempre utilize listas", aplique isso aos blocos informativos; para menus, a lista ja sera representada pelas opcoes visiveis do CRM.
+
+10. ANTES E DEPOIS POR CONTEXTO
+- Quando a opcao "Antes e Depois" aparecer dentro de um procedimento, produto, servico ou categoria especifica, ela deve seguir o contexto atual e abrir o antes/depois daquele contexto.
+- Quando a opcao "Antes e Depois" aparecer no menu principal, em um menu geral ou em um ponto que abrange varias categorias, crie primeiro um menu intermediario de escolha com todas as categorias relevantes antes de mostrar a midia.
+- Nunca envie a opcao geral "Antes e Depois" diretamente para a primeira categoria disponivel quando existem varias categorias no fluxo.
+- Se o pedido listar categorias para Antes e Depois, preserve esse menu: cada categoria deve apontar para seu bloco de midia ou prova social correspondente, com opcoes de agendar e voltar ao menu.
+- O retorno depois de ver um antes/depois especifico deve respeitar o contexto: se veio de um procedimento, voltar para o menu daquele procedimento; se veio do menu geral, voltar para o menu geral de Antes e Depois ou menu principal.
+- Se a mesma midia for escolhida manualmente pelo usuario para testes, preserve. Se nao houver midia especifica e o usuario nao escolheu uma midia, deixe a midia pendente para confirmacao posterior.
 
 CHECKLIST OBRIGATORIO DA IA
 [ ] Cada transferencia possui uma etapa transferir real.
@@ -132,8 +151,11 @@ CHECKLIST OBRIGATORIO DA IA
 [ ] O tipo data foi usado somente quando a resposta deve ser numerica e exata.
 [ ] Todas as variaveis capturadas aparecem em resumo ou confirmacao posterior.
 [ ] Nenhuma escolha com intencao diferente sai direto para o mesmo bloco sem caminho intermediario.
+[ ] Nenhum menu repete em sua mensagem a mesma lista de opcoes que ja aparece nos botoes/lista.
+[ ] O menu geral de Antes e Depois abrange todas as categorias quando existirem varias categorias.
+[ ] O Antes e Depois especifico respeita o contexto de origem.
 [ ] O tom, emojis, persona, nomes, valores e diferenciais do prompt foram preservados quando tecnicamente possivel.
-[ ] A copy melhora o atendimento de forma criativa, contextual, humana e coerente com o nicho.
+[ ] A copy melhora o atendimento de forma criativa, contextual, humana, persuasiva e coerente com o nicho.
 [ ] Nenhum ID de setor ou URL foi inventado.
 
 Revise e corrija o proprio JSON antes de responder. O backend tambem fara normalizacoes estruturais de seguranca e nao bloqueara o fluxo por avaliacao subjetiva.
