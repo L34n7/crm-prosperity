@@ -1,3 +1,4 @@
+# Execução da migração para implementação nativa
 name: Aplicar campos nativos de captura na conversa
 
 on:
@@ -23,7 +24,6 @@ jobs:
         run: |
           python <<'PY'
           from pathlib import Path
-          import re
 
           page_path = Path('src/app/(private)/conversas/page.tsx')
           layout_path = Path('src/app/(private)/conversas/layout.tsx')
@@ -72,7 +72,8 @@ function formatarLabelCaptura(informacao: InformacaoCapturaConversa) {
     baseNormalizada === "email" || baseNormalizada === "e mail"
       ? "E-mail"
       : baseBruta.charAt(0).toUpperCase() + baseBruta.slice(1);
-  const sequencia = numeroNome ||
+  const sequencia =
+    numeroNome ||
     (Number(informacao.sequencia || 0) > 0
       ? String(informacao.sequencia)
       : "");
