@@ -1,241 +1,301 @@
 .page {
+  position: relative;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(15, 23, 42, 0.08), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(51, 65, 85, 0.1), transparent 30%),
-    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 20px;
-  position: relative;
-  overflow: hidden;
+  padding: 28px 20px;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(16, 185, 129, 0.2), transparent 29%),
+    radial-gradient(circle at 90% 86%, rgba(14, 116, 144, 0.12), transparent 28%),
+    linear-gradient(135deg, #040b10 0%, #07151a 48%, #08131f 100%);
 }
 
-.backgroundGlowTop {
+.backgroundGlowTop,
+.backgroundGlowBottom {
   position: absolute;
-  top: -140px;
-  left: -120px;
-  width: 320px;
-  height: 320px;
-  background: rgba(15, 23, 42, 0.08);
-  filter: blur(80px);
+  width: 340px;
+  height: 340px;
   border-radius: 999px;
+  filter: blur(88px);
   pointer-events: none;
 }
 
+.backgroundGlowTop {
+  top: -170px;
+  left: -120px;
+  background: rgba(16, 185, 129, 0.2);
+}
+
 .backgroundGlowBottom {
+  right: -130px;
+  bottom: -170px;
+  background: rgba(15, 118, 110, 0.16);
+}
+
+.backgroundGrid {
   position: absolute;
-  right: -120px;
-  bottom: -140px;
-  width: 360px;
-  height: 360px;
-  background: rgba(51, 65, 85, 0.12);
-  filter: blur(90px);
-  border-radius: 999px;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 38px 38px;
+  mask-image: radial-gradient(circle at center, black, transparent 86%);
   pointer-events: none;
 }
 
 .wrapper {
   position: relative;
   z-index: 1;
-  width: 100%;
-  max-width: 1150px;
+  width: min(1120px, 100%);
+  min-height: 650px;
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: 28px;
-  align-items: stretch;
+  grid-template-columns: 1.04fr 0.96fr;
+  border: 1px solid rgba(52, 211, 153, 0.18);
+  border-radius: 32px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(14px);
 }
 
 .brandPanel {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #334155 100%);
-  color: #ffffff;
-  border-radius: 32px;
-  padding: 38px 40px 30px;
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
+  position: relative;
+  overflow: hidden;
+  padding: 40px 46px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-between;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 8% 4%, rgba(52, 211, 153, 0.15), transparent 35%),
+    linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018));
+}
+
+.brandPanel::after {
+  content: "";
+  position: absolute;
+  right: -100px;
+  bottom: -125px;
+  width: 270px;
+  height: 270px;
+  border: 1px solid rgba(52, 211, 153, 0.12);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 42px rgba(52, 211, 153, 0.025),
+    0 0 0 84px rgba(52, 211, 153, 0.018);
+  pointer-events: none;
 }
 
 .brandHeader {
-  display: flex;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
   align-items: center;
-  gap: 20px;
-  width: 100%;
+  width: fit-content;
+  gap: 22px;
+  color: #ffffff;
+  text-decoration: none;
 }
 
 .brandBadge {
-  width: 182px;
-  height: 182px;
-  margin-left: -30px;
-  margin-right: -10px;
-  flex-shrink: 0;
-  border-radius: 20px;
-  background: transparent;
-  display: flex;
+  width: 152px;
+  height: 149px;
+  flex: 0 0 152px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
 
 .brandLogo {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  display: block;
-  filter: drop-shadow(-1 1px 5px rgba(255, 255, 255, 0.053))
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.34));
 }
 
 .brandIdentity {
   min-width: 0;
-  padding-left: 20px;
-  border-left: 1px solid rgba(255, 255, 255, 0.18);
+  padding-left: 22px;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.brandName {
+  margin-top: 10px;
+  color: #ffffff;
+  font-size: 38px;
+  line-height: 1.05;
+  font-weight: 850;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+
+.brandProduct {
+  color: #c8a96b;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .eyebrow {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  margin: 34px 0 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(52, 211, 153, 0.22);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.09);
+  color: #a7f3d0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #cbd5e1;
 }
 
 .title {
-  margin: 10px -30 0 0;
-  font-size: 40px;
-  line-height: 1.08;
-  font-weight: 800;
+  position: relative;
+  z-index: 1;
+  max-width: 500px;
+  margin: 16px 0 0;
   color: #ffffff;
+  font-size: clamp(36px, 4vw, 48px);
+  line-height: 1.06;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+}
+
+.description {
+  position: relative;
+  z-index: 1;
+  max-width: 500px;
+  margin: 18px 0 0;
+  color: #cbd5e1;
+  font-size: 16px;
+  line-height: 1.68;
 }
 
 .featureList {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 28px;
+  gap: 13px;
+  margin-top: 26px;
 }
 
 .featureItem {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: 15px;
-  line-height: 1.5;
-  color: #f8fafc;
+  align-items: center;
+  gap: 11px;
+  color: #e2e8f0;
+  font-size: 14px;
+  line-height: 1.45;
 }
 
-.featureDot {
-  width: 9px;
-  height: 9px;
-  margin-top: 7px;
+.featureIcon {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(52, 211, 153, 0.26);
   border-radius: 999px;
-  background: #65ffb4;
-  opacity: 0.9;
-  flex-shrink: 0;
+  background: rgba(16, 185, 129, 0.13);
+  color: #86efac;
 }
 
 .integrationFooter {
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 18px;
+  gap: 22px;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .integrationLabel {
+  flex: 0 0 auto;
+  color: #d1fae5;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 750;
   line-height: 1.35;
-  color: #cbd5e1f2;
-  white-space: normal;
-  flex-shrink: 0;
-  margin-top: -10px;
-  margin-left: 15px;
 }
 
 .integrationBrands {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 40px;
   min-width: 0;
   flex: 1;
-  margin-right: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 22px;
 }
 
 .integrationBrand {
-  display: flex;
+  min-width: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
 }
 
 .integrationLogo {
   width: auto;
   height: 28px;
-  max-width: 110px;
+  max-width: 108px;
   object-fit: contain;
-  display: block;
-  opacity: 0.9;
+  opacity: 0.96;
 }
 
 .integrationDivider {
   width: 1px;
   height: 28px;
-  background: rgba(255, 255, 255, 0.22);
-  flex-shrink: 0;
-}
-
-.description {
-  margin: 15px 0px 5px;
-  font-size: 16px;
-  line-height: 1.7;
-  color: #e2e8f0;
-  max-width: 520px;
+  flex: 0 0 1px;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 32px;
-  padding: 34px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
+  padding: 46px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  background: rgba(255, 255, 255, 0.97);
 }
 
 .cardHeader {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .cardEyebrow {
   margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  color: #047857;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #64748b;
 }
 
 .cardTitle {
   margin: 10px 0 0;
-  font-size: 32px;
-  line-height: 1.1;
-  font-weight: 800;
   color: #0f172a;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 850;
+  letter-spacing: -0.03em;
 }
 
 .cardSubtitle {
-  margin: 12px 0 0;
-  font-size: 15px;
-  line-height: 1.7;
+  margin: 11px 0 0;
   color: #64748b;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
 .form {
@@ -251,35 +311,38 @@
 }
 
 .label {
-  font-size: 14px;
-  font-weight: 700;
   color: #334155;
+  font-size: 14px;
+  font-weight: 750;
 }
 
 .input {
   width: 100%;
   min-height: 52px;
+  padding: 0 16px;
   border: 1px solid #cbd5e1;
+  border-radius: 15px;
+  outline: none;
   background: #ffffff;
   color: #0f172a;
-  border-radius: 16px;
-  padding: 0 16px;
   font-size: 15px;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease,
-    transform 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input::placeholder {
+  color: #94a3b8;
 }
 
 .input:focus {
-  border-color: #0f172a;
-  box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.08);
+  border-color: #10b981;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
 }
 
 .passwordWrapper {
   position: relative;
-  width: 100%;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
 .passwordInput {
@@ -288,51 +351,58 @@
 
 .eyeButton {
   position: absolute;
-  right: 14px;
   top: 50%;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #64748b;
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  transition:
-    color 0.2s ease,
-    background 0.2s ease;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .eyeButton:hover {
+  background: #f1f5f9;
   color: #0f172a;
 }
 
-.eyeButton:focus-visible {
-  outline: 2px solid #0f172a;
-  outline-offset: 2px;
+.eyeButton:focus-visible,
+.formLink:focus-visible,
+.submitButton:focus-visible {
+  outline: 3px solid rgba(16, 185, 129, 0.28);
+  outline-offset: 3px;
 }
 
 .submitButton {
-  margin-top: 8px;
   width: 100%;
-  min-height: 52px;
-  border: none;
-  border-radius: 16px;
-  background: #0f172a;
+  min-height: 54px;
+  margin-top: 5px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
   color: #ffffff;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 850;
   cursor: pointer;
-  transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+  box-shadow: 0 14px 30px rgba(5, 150, 105, 0.24);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .submitButton:hover {
-  background: #111827;
   transform: translateY(-1px);
+  box-shadow: 0 18px 34px rgba(5, 150, 105, 0.3);
 }
 
 .submitButton:disabled {
@@ -341,576 +411,198 @@
   transform: none;
 }
 
+.formLinks {
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.formLink {
+  color: #047857;
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.formLink:hover {
+  color: #065f46;
+  text-decoration: underline;
+}
+
 .messageBox {
   margin-top: 18px;
-  border-radius: 16px;
-  padding: 14px 16px;
+  padding: 13px 15px;
+  border-radius: 14px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.5;
 }
 
 .messageSuccess {
+  border: 1px solid #a7f3d0;
   background: #ecfdf5;
   color: #047857;
-  border: 1px solid #a7f3d0;
 }
 
 .messageError {
+  border: 1px solid #fecaca;
   background: #fef2f2;
   color: #b91c1c;
-  border: 1px solid #fecaca;
 }
 
-@media (max-width: 980px) {
-  .backgroundGlowBottom {
-    bottom: -80px;
-  }
+.cardFooter {
+  margin: 26px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
 
+.cardFooter a {
+  color: #047857;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
   .page {
     align-items: flex-start;
-    padding: 28px 18px;
+    padding: 22px 16px;
     overflow-y: auto;
     overflow-x: hidden;
   }
 
   .wrapper {
+    min-height: auto;
     grid-template-columns: 1fr;
-    max-width: 640px;
-    gap: 20px;
+    max-width: 650px;
   }
 
   .brandPanel {
-    padding: 30px;
-    border-radius: 28px;
-  }
-
-  .brandHeader {
-    gap: 18px;
+    padding: 28px 30px;
   }
 
   .brandBadge {
-    width: 120px;
-    height: 120px;
-    margin-left: -12px;
-    margin-right: -8px;
+    width: 124px;
+    height: 121px;
+    flex-basis: 124px;
   }
 
-  .brandIdentity {
-    padding-left: 18px;
-  }
-
-  .title {
-    font-size: 34px;
-  }
-
-  .description {
-    max-width: 100%;
-  }
-
-  .card {
-    padding: 30px;
-    border-radius: 28px;
-  }
-
-  .cardTitle {
-    font-size: 28px;
-  }
-}
-
-
-@media (max-width: 640px) {
-  .backgroundGlowBottom {
-    bottom: -80px;
-  }
-
-  .page {
-    min-height: 100dvh;
-    padding: 16px 12px;
-    align-items: flex-start;
-  }
-
-  .wrapper {
-    gap: 14px;
-  }
-
-  .brandPanel {
-    padding: 22px 20px;
-    border-radius: 22px;
-  }
-
-  .brandHeader {
-    gap: 12px;
-    align-items: center;
-  }
-
-  .brandBadge {
-    width: 102px;
-    height: 102px;
-    margin-left: -8px;
-    margin-right: -6px;
-    border-radius: 16px;
-  }
-
-  .brandIdentity {
-    padding-left: 12px;
-    border-left: 1px solid rgba(255, 255, 255, 0.14);
+  .brandName {
+    font-size: 32px;
   }
 
   .eyebrow {
-    font-size: 10px;
-    letter-spacing: 0.08em;
+    margin-top: 24px;
   }
 
   .title {
-    margin-top: 6px;
-    font-size: 28px;
-    line-height: 1.12;
-  }
-
-  .description {
-    margin: 18px 0 0;
-    font-size: 14px;
-    line-height: 1.55;
+    max-width: 560px;
+    font-size: 36px;
   }
 
   .featureList {
-    margin-top: 20px;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
-  .featureItem {
-    font-size: 13.5px;
-    line-height: 1.45;
-    gap: 10px;
-  }
-
-  .featureDot {
-    width: 8px;
-    height: 8px;
-    margin-top: 6px;
+  .featureItem:last-child {
+    grid-column: 1 / -1;
   }
 
   .integrationFooter {
     margin-top: 22px;
-    padding-top: 16px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .integrationLabel {
-    margin: 0;
-    font-size: 12px;
-  }
-
-  .integrationBrands {
-    width: 100%;
-    flex: initial;
-    margin-right: 0;
-    justify-content: flex-start;
-    gap: 34px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 0;
-  }
-
-  .integrationLogo {
-    height: 28px;
-    max-width: 105px;
-    margin: 5px 0px 0px 0px;
-  }
-
-
-  .integrationDivider {
-    height: 24px;
   }
 
   .card {
-    padding: 22px 20px;
-    border-radius: 22px;
-  }
-
-  .cardHeader {
-    margin-bottom: 20px;
-  }
-
-  .cardEyebrow {
-    font-size: 11px;
-  }
-
-  .cardTitle {
-    margin-top: 8px;
-    font-size: 23px;
-    line-height: 1.15;
-  }
-
-  .cardSubtitle {
-    margin-top: 10px;
-    font-size: 14px;
-    line-height: 1.55;
-  }
-
-  .form {
-    gap: 15px;
-  }
-
-  .input {
-    min-height: 48px;
-    border-radius: 14px;
-    font-size: 14px;
-    padding: 0 14px;
-  }
-
-  .passwordInput {
-    padding-right: 50px;
-  }
-
-  .submitButton {
-    min-height: 48px;
-    border-radius: 14px;
-  }
-
-  .messageBox {
-    margin-top: 14px;
-    padding: 12px 14px;
-    font-size: 13px;
-    border-radius: 14px;
+    padding: 34px 30px;
   }
 }
 
-@media (max-width: 420px) {
-  .backgroundGlowBottom {
-    bottom: -80px;
-  }
-
+@media (max-width: 560px) {
   .page {
+    min-height: 100dvh;
     padding: 12px 10px;
   }
 
-  .brandPanel,
-  .card {
-    border-radius: 20px;
-    padding: 20px 16px;
-  }
-
-  .brandHeader {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
-
-  .brandBadge {
-    width: 98px;
-    height: 98px;  
-    margin-left: -0px;
-    margin-right: -10px;
-    margin-top: -5px;
-  }
-
-  .brandIdentity {
-    padding-left: 20px;
-  }
-
-  .eyebrow {
-    margin: 0;
-    font-size: 11px;
-  }
-
-  .title {
-    font-size: 27px;
-  }
-
-  .description {
-    margin-top: 16px;
-    font-size: 13.5px;
-  }
-
-  .featureList {
-    gap: 10px;
-  }
-
-  .featureItem {
-    font-size: 13px;
-  }
-
-  .integrationBrands {
-    gap: 18px;
-  }
-
-  .integrationLogo {
-    height: 22px;
-    max-width: 88px;
-  }
-
-  .cardTitle {
-    font-size: 21px;
-  }
-
-  .cardSubtitle {
-    font-size: 13.5px;
-  }
-}
-
-
-@media (max-width: 390px) {
-  .backgroundGlowBottom {
-    bottom: -80px;
-  }
-
-  .brandHeader {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
-
-  .brandBadge {
-    width: 98px;
-    height: 98px;  
-    margin-left: -5px;
-    margin-right: -10px;
-    margin-top: -5px;
-  }
-
-  .brandIdentity {
-    padding-left: 20px;
-  }
-
-  .title {
-    font-size: 25px;
-  }
-
-  .eyebrow {
-    font-size: 10.5px;
-  }
-
-  .description,
-  .featureList,
-  .integrationFooter {
-    display: none;
-  }
-
-  .integrationBrands {
-    gap: 14px;
-  }
-
-  .integrationLogo {
-    width: auto;
-    height: 25px;
-    max-width: 110px;
-  }
-  
-  .integrationDivider {
-    height: 20px;
-  }
-
-  .card {
-    padding: 18px 14px;
-  }
-
-  .input,
-  .submitButton {
-    min-height: 46px;
-  }
-}
-
-
-@media (max-width: 375px) {
-  .backgroundGlowBottom {
-    bottom: -80px;
-  }
-
-  .brandHeader {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
-
-  .brandBadge {
-    width: 88px;
-    height: 88px;  
-    margin-left: -5px;
-    margin-right: -10px;
-    margin-top: -5px;
-  }
-
-  .brandIdentity {
-    padding-left: 20px;
-  }
-
-  .title {
-    font-size: 24px;
-  }
-
-  .eyebrow {
-    font-size: 10.5px;
-  }
-
-  .description,
-  .featureList,
-  .integrationFooter {
-    display: none;
-  }
-
-  .integrationBrands {
-    gap: 14px;
-  }
-
-  .integrationLogo {
-    height: 20px;
-    max-width: 78px;
-  }
-
-  .integrationDivider {
-    height: 20px;
-  }
-
-  .card {
-    padding: 18px 14px;
-  }
-
-  .input,
-  .submitButton {
-    min-height: 46px;
-  }
-}
-
-@media (max-width: 360px) {
-  .backgroundGlowBottom {
-    bottom: -80px;
-  }
-
-  .brandHeader {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
-
-  .brandBadge {
-    width: 78px;
-    height: 78px;  
-    margin-left: -5px;
-    margin-right: -10px;
-    margin-top: -5px;
-  }
-
-  .brandIdentity {
-    padding-left: 20px;
-  }
-
-  .title {
-    font-size: 20px;
-  }
-
-  .eyebrow {
-    font-size: 8.5px;
-  }
-
-  .description,
-  .featureList,
-  .integrationFooter {
-    display: none;
-  }
-
-  .integrationBrands {
-    gap: 14px;
-  }
-
-  .integrationLogo {
-    height: 20px;
-    max-width: 78px;
-  }
-
-  .integrationDivider {
-    height: 20px;
-  }
-
-  .card {
-    padding: 18px 14px;
-  }
-
-  .input,
-  .submitButton {
-    min-height: 46px;
-  }
-}
-
-@media (max-width: 320px) {
-  .backgroundGlowBottom {
-    bottom: -80px;
+  .wrapper {
+    border-radius: 23px;
   }
 
   .brandPanel {
-    padding: 5px 14px;
-    border-radius: 20px;
-    justify-content: center;
+    padding: 18px 20px;
   }
 
   .brandHeader {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
-
-  .brandBadge {
-    width: 68px;
-    height: 68px;  
-    margin-left: -5px;
-    margin-right: -10px;
-    margin-top: -5px;
-  }
-
-  .brandIdentity {
-    padding-left: 20px;
-  }
-
-  .title {
-    font-size: 20px;
-  }
-
-  .eyebrow {
-    font-size: 8.5px;
-  }
-
-  .description,
-  .featureList,
-  .integrationFooter {
-    display: none;
-  }
-
-  .cardSubtitle {
-    font-size: 13px;
-  }
-
-  .integrationBrands {
+    width: 100%;
+    justify-content: center;
     gap: 14px;
   }
 
-  .integrationLogo {
-    width: auto;
-    height: 21px;
-    max-width: 110px;
+  .brandBadge {
+    width: 96px;
+    height: 94px;
+    flex-basis: 96px;
   }
 
-  .integrationDivider {
-    height: 20px;
+  .brandIdentity {
+    padding-left: 14px;
   }
 
-  .card {
-    padding: 18px 14px;
+  .brandName {
+    margin-top: 0;
+    font-size: 26px;
+    white-space: nowrap;
   }
 
-  .input,
-  .submitButton {
-    min-height: 46px;
-  }
-}
-
-@media (max-width: 430px) {
+  .brandProduct,
+  .eyebrow,
+  .title,
   .description,
   .featureList,
   .integrationFooter {
     display: none;
+  }
+
+  .card {
+    padding: 25px 20px;
+  }
+
+  .cardHeader {
+    margin-bottom: 22px;
+  }
+
+  .cardTitle {
+    font-size: 27px;
+  }
+
+  .cardSubtitle {
+    font-size: 14px;
+  }
+
+  .input {
+    min-height: 50px;
+    border-radius: 14px;
+  }
+
+  .submitButton {
+    min-height: 50px;
+    border-radius: 14px;
+  }
+
+  .formLinks {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cardFooter {
+    margin-top: 22px;
+    padding-top: 17px;
   }
 }

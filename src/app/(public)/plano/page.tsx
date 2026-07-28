@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
 import { montarWaMeUrl } from "@/lib/contatos/sistema";
 import styles from "./plano.module.css";
 
@@ -180,6 +182,18 @@ export default function PlanoPage() {
 
       <section className={styles.wrapper}>
         <div className={styles.header}>
+          <Link href="/" className={styles.brand} aria-label="Voltar para a página inicial">
+            <Image
+              src="/logo.png"
+              alt="Prosperity CRM"
+              width={64}
+              height={63}
+              className={styles.logo}
+              priority
+            />
+            <span><strong>Prosperity</strong> CRM</span>
+          </Link>
+
           <div className={styles.kicker}>Planos CRM Prosperity</div>
 
           <h1 className={styles.title}>
