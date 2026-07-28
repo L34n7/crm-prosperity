@@ -4,6 +4,10 @@ import {
   selecionarAtendenteTransferencia,
   type EstrategiaTransferenciaAtendente,
 } from "@/lib/conversas/estrategia-transferencia";
+import {
+  listarIdsUsuariosAdministradoresDaEmpresa,
+  usuarioEhAdministradorDaEmpresa,
+} from "@/lib/usuarios/administradores";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -65,6 +69,70 @@ export async function resolverAtribuicaoTransferencia(params: {
   }
 
   try {
+    if (estrategia === "atendente_especifico") {
+      if (!atendenteId) {
+        return resultadoFila({
+          setorId,
+          estrategia,
+          motivo: "atendente_nao_informado",
+        });
+      }
+
+      const { data: atendente, error: atendenteError } = await supabaseAdmin
+        .from("usuarios")
+        .select("id, nome")
+        .eq("id", atendenteId)
+        .eq("empresa_id", params.empresaId)
+        .eq("status", "ativo")
+        .maybeSingle();
+
+      if (atendenteError) {
+        throw atendenteError;
+      }
+
+      if (!atendente) {
+        return resultadoFila({
+          setorId,
+          estrategia,
+          motivo: "atendente_indisponivel",
+        });
+      }
+
+      const [ehAdministrador, vinculoSetor] = await Promise.all([
+        usuarioEhAdministradorDaEmpresa({
+          usuarioId: atendente.id,
+          empresaId: params.empresaId,
+        }),
+        supabaseAdmin
+          .from("usuarios_setores")
+          .select("usuario_id")
+          .eq("usuario_id", atendente.id)
+          .eq("setor_id", setorId)
+          .maybeSingle(),
+      ]);
+
+      if (vinculoSetor.error) {
+        throw vinculoSetor.error;
+      }
+
+      if (!ehAdministrador && !vinculoSetor.data) {
+        return resultadoFila({
+          setorId,
+          estrategia,
+          motivo: "atendente_fora_do_setor",
+        });
+      }
+
+      return {
+        setorId,
+        responsavelId: atendente.id,
+        atendenteNome: atendente.nome || null,
+        estrategiaSolicitada: estrategia,
+        estrategiaAplicada: estrategia,
+        fallbackMotivo: null,
+      };
+    }
+
     const { data: vinculos, error: vinculosError } = await supabaseAdmin
       .from("usuarios_setores")
       .select("usuario_id")
@@ -90,12 +158,27 @@ export async function resolverAtribuicaoTransferencia(params: {
       });
     }
 
+    const administradores = new Set(
+      await listarIdsUsuariosAdministradoresDaEmpresa(params.empresaId)
+    );
+    const usuarioIdsDistribuicao = usuarioIds.filter(
+      (usuarioId) => !administradores.has(usuarioId)
+    );
+
+    if (usuarioIdsDistribuicao.length === 0) {
+      return resultadoFila({
+        setorId,
+        estrategia,
+        motivo: "setor_sem_atendentes_distribuiveis",
+      });
+    }
+
     const { data: usuarios, error: usuariosError } = await supabaseAdmin
       .from("usuarios")
       .select("id, nome")
       .eq("empresa_id", params.empresaId)
       .eq("status", "ativo")
-      .in("id", usuarioIds);
+      .in("id", usuarioIdsDistribuicao);
 
     if (usuariosError) {
       throw usuariosError;
@@ -127,6 +210,7 @@ export async function resolverAtribuicaoTransferencia(params: {
       id: usuario.id,
       nome: usuario.nome,
       cargaAtual: cargas.get(usuario.id) || 0,
+      isAdministrador: false,
     }));
 
     const selecionado = selecionarAtendenteTransferencia({
@@ -139,10 +223,7 @@ export async function resolverAtribuicaoTransferencia(params: {
       return resultadoFila({
         setorId,
         estrategia,
-        motivo:
-          estrategia === "atendente_especifico"
-            ? "atendente_indisponivel_ou_fora_do_setor"
-            : "sem_atendentes_ativos",
+        motivo: "sem_atendentes_ativos",
       });
     }
 
