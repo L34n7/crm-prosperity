@@ -5,10 +5,12 @@ import { useEffect } from "react";
 const STYLE_ID = "agenda-google-agenda-binding-fix";
 const CSS = `
 .agendaTemplateShell .agendaGoogleHeaderSummary[hidden],
-.agendaTemplateShell .agendaGoogleLegacyHidden{display:none!important}
+.agendaTemplateShell .agendaGoogleLegacyHidden,
+.agendaTemplateShell .a2 .modal .agendaGoogleConfigCard:not(.agendaGoogleBindingCard){display:none!important}
 .agendaTemplateShell .a2 .head .actions>select.select+button.btn{display:none!important}
 .agendaTemplateShell .agendaGoogleBindingCard{position:relative}
 .agendaTemplateShell .agendaGoogleBindingCard[data-loading="true"]{opacity:.78}
+.agendaTemplateShell .agendaGoogleBindingCard .agendaGoogleBindingTitle{grid-area:title!important;width:auto!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:var(--crm-text-strong)!important;font-size:16px!important;font-weight:900!important;line-height:1.2!important}
 .agendaTemplateShell .agendaGoogleBindingCard .agendaGoogleBindingStatus{max-width:320px;color:var(--crm-text-muted);font-size:10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .agendaTemplateShell .agendaGoogleBindingCard .agendaGoogleBindingPrimary{min-width:138px}
 .agendaTemplateShell .agendaGoogleBindingCard .agendaGoogleBindingDisconnect{min-width:104px!important;width:auto!important;padding:0 11px!important}
@@ -64,15 +66,33 @@ function insertAfterDescription(modal: HTMLElement, element: HTMLElement) {
   else modal.querySelector<HTMLElement>(".body")?.appendChild(element);
 }
 
-function ensureBindingCard(modal: HTMLElement) {
-  let card = modal.querySelector<HTMLElement>(".agendaGoogleBindingCard");
-  if (card) return card;
+function hideLegacyGoogleCards(modal: HTMLElement) {
+  Array.from(modal.querySelectorAll<HTMLElement>(".side"))
+    .filter(
+      (card) =>
+        !card.classList.contains("agendaGoogleBindingCard") &&
+        text(card.querySelector("h3")).includes("Google Calendar")
+    )
+    .forEach((card) => {
+      card.classList.add("agendaGoogleLegacyHidden");
+      card.setAttribute("aria-hidden", "true");
+    });
+}
 
-  card = document.createElement("section");
+function ensureBindingCard(modal: HTMLElement) {
+  const cards = Array.from(
+    modal.querySelectorAll<HTMLElement>(".agendaGoogleBindingCard")
+  );
+  const [existing, ...duplicates] = cards;
+  duplicates.forEach((card) => card.remove());
+  if (existing) return existing;
+
+  const card = document.createElement("section");
   card.className = "side agendaGoogleConfigCard agendaGoogleBindingCard";
+  card.dataset.googleBindingOwner = "agenda-binding-fix";
   card.innerHTML = `
     <div class="agendaGoogleMark" aria-hidden="true"></div>
-    <h3>Google Calendar</h3>
+    <div class="agendaGoogleBindingTitle" role="heading" aria-level="3">Google Calendar</div>
     <p class="agendaGoogleSubtitle">Vincule somente esta agenda e mantenha criação, alterações e cancelamentos sincronizados.</p>
     <div class="mini agendaGoogleState">
       <span class="pill"></span>
@@ -244,6 +264,7 @@ export default function AgendaGoogleAgendaBindingFix() {
         )
         .forEach((card) => {
           card.classList.add("agendaGoogleLegacyHidden");
+          card.setAttribute("aria-hidden", "true");
           card.dataset.connected = String(connected);
           const pill = card.querySelector<HTMLElement>(".pill");
           setText(pill, connected ? "Conectado" : "Desconectado");
@@ -307,10 +328,7 @@ export default function AgendaGoogleAgendaBindingFix() {
       const modal = shell.querySelector<HTMLElement>(".a2 .modalbg .modal");
       if (!modal || !text(modal.querySelector(".dhead h2")).includes("Configurar agenda")) return;
 
-      modal
-        .querySelectorAll<HTMLElement>(".agendaGoogleConfigCard:not(.agendaGoogleBindingCard)")
-        .forEach((card) => card.classList.add("agendaGoogleLegacyHidden"));
-
+      hideLegacyGoogleCards(modal);
       const card = ensureBindingCard(modal);
       const connected = meta.conectado === true && !loading;
       card.dataset.connected = String(connected);
@@ -407,7 +425,10 @@ export default function AgendaGoogleAgendaBindingFix() {
       if (ownsStyle) style?.remove();
       shell
         .querySelectorAll<HTMLElement>(".agendaGoogleLegacyHidden")
-        .forEach((element) => element.classList.remove("agendaGoogleLegacyHidden"));
+        .forEach((element) => {
+          element.classList.remove("agendaGoogleLegacyHidden");
+          element.removeAttribute("aria-hidden");
+        });
     };
   }, []);
 
