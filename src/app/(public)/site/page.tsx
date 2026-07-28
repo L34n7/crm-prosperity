@@ -166,7 +166,7 @@ const STEPS = [
     icon: Link2,
     title: "Conecte o WhatsApp",
     description:
-      "Vincule o ambiente oficial da Meta e configure o número utilizado pela sua empresa.",
+      "Vincule o ambiente oficial da Meta e, com o modo Coexistência, mantenha o mesmo número ativo também no WhatsApp Business do smartphone.",
   },
   {
     icon: Users,
@@ -195,7 +195,7 @@ const STEPS = [
 ];
 
 const DIFFERENTIALS = [
-  "Integração oficial com o WhatsApp",
+  "API Oficial da Meta com modo Coexistência",
   "Inteligência Artificial presente em diferentes áreas",
   "Automações visuais sem programação",
   "Atendimento por múltiplos usuários",
@@ -293,6 +293,12 @@ const FAQ = [
     question: "A integração com o WhatsApp é oficial?",
     answer:
       "Sim. O CRM Prosperity utiliza a API Oficial do WhatsApp e possui um processo guiado para conectar o ambiente empresarial da Meta.",
+  },
+  {
+    question:
+      "Vou perder o WhatsApp Business do smartphone ao conectar o CRM?",
+    answer:
+      "Não. Com o modo Coexistência, você pode usar o mesmo número no CRM Prosperity e no aplicativo WhatsApp Business do smartphone ao mesmo tempo. Assim, sua empresa ganha automações, atendimento em equipe e organização sem abrir mão do uso habitual no celular.",
   },
   {
     question: "Várias pessoas podem atender pelo mesmo CRM?",
@@ -402,7 +408,7 @@ export default function SitePage() {
           <div className={styles.heroProof}>
             <span>
               <Check size={14} />
-              API Oficial da Meta
+              API Oficial da Meta + Coexistência
             </span>
             <span>
               <Check size={14} />
@@ -549,14 +555,14 @@ export default function SitePage() {
       <section className={styles.integrationsSection} id="integracoes">
         <div className={styles.sectionShell}>
           <SectionHeading
-            eyebrow="Integrações que fazem diferença"
+            eyebrow="API Oficial, Coexistência e agenda conectada"
             title={
               <>
-                Conexões oficiais para uma operação{" "}
-                <em>mais estável e integrada.</em>
+                Conecte o WhatsApp ao CRM{" "}
+                <em>sem abrir mão do aplicativo no celular.</em>
               </>
             }
-            description="O CRM Prosperity conecta o atendimento às plataformas que sustentam a rotina da sua empresa, mantendo conversas e compromissos dentro do mesmo processo."
+            description="Com o modo Coexistência da API Oficial da Meta, o mesmo número pode ser usado no CRM Prosperity e no WhatsApp Business do smartphone ao mesmo tempo. Sua empresa evolui o atendimento sem perder a praticidade que já conhece."
           />
 
           <div className={styles.integrationGrid}>
@@ -570,30 +576,31 @@ export default function SitePage() {
                     height={60}
                   />
                 </div>
-                <span>Conexão oficial</span>
+                <span>API Oficial + Coexistência</span>
               </div>
               <div className={styles.integrationCardContent}>
                 <span className={styles.integrationLabel}>
-                  WhatsApp Business Platform
+                  CRM e smartphone conectados
                 </span>
-                <h3>API Oficial do WhatsApp da Meta</h3>
+                <h3>O mesmo WhatsApp no CRM e no seu smartphone</h3>
                 <p>
-                  Conecte o número da sua empresa ao ambiente oficial da Meta e
-                  concentre o atendimento no CRM, com uma configuração guiada e
-                  estrutura preparada para a operação profissional.
+                  Conecte o número que sua empresa já utiliza ao CRM Prosperity
+                  sem deixar de usá-lo no aplicativo WhatsApp Business. Atenda
+                  pelo celular quando quiser e, ao mesmo tempo, aproveite toda a
+                  estrutura profissional do CRM.
                 </p>
                 <ul>
                   <li>
                     <Check size={15} />
-                    Conexão guiada com o ambiente empresarial da Meta
+                    Use o mesmo número no CRM e no smartphone ao mesmo tempo
                   </li>
                   <li>
                     <Check size={15} />
-                    Mensagens e atendimentos centralizados no CRM
+                    Continue acessando o WhatsApp Business pelo celular
                   </li>
                   <li>
                     <Check size={15} />
-                    Mais controle para automações, equipes e históricos
+                    Ganhe automações, atendimento em equipe e histórico no CRM
                   </li>
                 </ul>
               </div>
