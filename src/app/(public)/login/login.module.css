@@ -94,36 +94,52 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  gap: 12px;
+  gap: 22px;
   color: #ffffff;
   text-decoration: none;
 }
 
+.brandBadge {
+  width: 132px;
+  height: 129px;
+  flex: 0 0 132px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .brandLogo {
-  width: 82px;
-  height: 80px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.34));
 }
 
 .brandIdentity {
+  min-width: 0;
+  padding-left: 22px;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
   display: flex;
   flex-direction: column;
   line-height: 1;
 }
 
 .brandName {
-  font-size: 22px;
+  margin-top: 10px;
+  color: #ffffff;
+  font-size: 36px;
+  line-height: 1.05;
   font-weight: 850;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
 }
 
 .brandProduct {
-  margin-top: 7px;
   color: #c8a96b;
   font-size: 12px;
   font-weight: 850;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .eyebrow {
@@ -200,27 +216,49 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 22px;
   margin-top: 30px;
   padding-top: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
-  color: #6ee7b7;
 }
 
-.integrationFooter div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.integrationFooter strong {
+.integrationLabel {
+  flex: 0 0 auto;
   color: #d1fae5;
   font-size: 13px;
+  font-weight: 750;
+  line-height: 1.35;
 }
 
-.integrationFooter span {
-  color: #94a3b8;
-  font-size: 12px;
+.integrationBrands {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 22px;
+}
+
+.integrationBrand {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.integrationLogo {
+  width: auto;
+  height: 28px;
+  max-width: 108px;
+  object-fit: contain;
+  opacity: 0.96;
+}
+
+.integrationDivider {
+  width: 1px;
+  height: 28px;
+  flex: 0 0 1px;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .card {
@@ -449,9 +487,14 @@
     padding: 28px 30px;
   }
 
-  .brandLogo {
-    width: 68px;
-    height: 66px;
+  .brandBadge {
+    width: 108px;
+    height: 106px;
+    flex-basis: 108px;
+  }
+
+  .brandName {
+    font-size: 30px;
   }
 
   .eyebrow {
@@ -495,18 +538,29 @@
     padding: 20px;
   }
 
-  .brandLogo {
-    width: 58px;
-    height: 57px;
+  .brandHeader {
+    gap: 12px;
+  }
+
+  .brandBadge {
+    width: 78px;
+    height: 76px;
+    flex-basis: 78px;
+  }
+
+  .brandIdentity {
+    padding-left: 12px;
   }
 
   .brandName {
-    font-size: 19px;
+    margin-top: 7px;
+    font-size: 22px;
+    white-space: normal;
   }
 
   .brandProduct {
-    margin-top: 5px;
-    font-size: 10px;
+    font-size: 9px;
+    line-height: 1.3;
   }
 
   .eyebrow {
@@ -531,7 +585,27 @@
   }
 
   .integrationFooter {
-    display: none;
+    margin-top: 18px;
+    padding-top: 16px;
+    gap: 12px;
+  }
+
+  .integrationLabel {
+    font-size: 11px;
+  }
+
+  .integrationBrands {
+    justify-content: flex-end;
+    gap: 14px;
+  }
+
+  .integrationLogo {
+    height: 21px;
+    max-width: 82px;
+  }
+
+  .integrationDivider {
+    height: 22px;
   }
 
   .card {
