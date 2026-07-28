@@ -3,10 +3,6 @@ import { readFile, writeFile } from "node:fs/promises";
 const pagePath = "src/app/(private)/conversas/page.tsx";
 let page = await readFile(pagePath, "utf8");
 
-if (page.includes("onExcluir?: () => void;")) {
-  process.exit(0);
-}
-
 function replaceOnce(source, oldValue, newValue, label) {
   const occurrences = source.split(oldValue).length - 1;
   if (occurrences !== 1) {
@@ -15,7 +11,16 @@ function replaceOnce(source, oldValue, newValue, label) {
   return source.replace(oldValue, newValue);
 }
 
-const propsAnchor = `function CampoContatoEditavel({
+function replaceAllChecked(source, oldValue, newValue, expected, label) {
+  const occurrences = source.split(oldValue).length - 1;
+  if (occurrences !== expected) {
+    throw new Error(`${label}: esperado ${expected} trechos, encontrado ${occurrences}`);
+  }
+  return source.split(oldValue).join(newValue);
+}
+
+if (!page.includes("onExcluir?: () => void;")) {
+  const propsAnchor = `function CampoContatoEditavel({
   label,
   valorInicial,
   editando,
@@ -33,7 +38,7 @@ const propsAnchor = `function CampoContatoEditavel({
   onSalvar: (valor: string) => void;
 }) {`;
 
-const propsBlock = `function CampoContatoEditavel({
+  const propsBlock = `function CampoContatoEditavel({
   label,
   valorInicial,
   editando,
@@ -53,14 +58,14 @@ const propsBlock = `function CampoContatoEditavel({
   onExcluir?: () => void;
 }) {`;
 
-page = replaceOnce(
-  page,
-  propsAnchor,
-  propsBlock,
-  "propriedade de exclusão do campo editável"
-);
+  page = replaceOnce(
+    page,
+    propsAnchor,
+    propsBlock,
+    "propriedade de exclusão do campo editável"
+  );
 
-const actionsAnchor = `          <div className={styles.infoEditActions}>
+  const actionsAnchor = `          <div className={styles.infoEditActions}>
             <button
               type="button"
               className={styles.inlineCancelButton}
@@ -72,7 +77,7 @@ const actionsAnchor = `          <div className={styles.infoEditActions}>
               Cancelar
             </button>`;
 
-const actionsBlock = `          <div className={styles.infoEditActions}>
+  const actionsBlock = `          <div className={styles.infoEditActions}>
             {onExcluir && (
               <button
                 type="button"
@@ -99,15 +104,15 @@ const actionsBlock = `          <div className={styles.infoEditActions}>
               Cancelar
             </button>`;
 
-page = replaceOnce(
-  page,
-  actionsAnchor,
-  actionsBlock,
-  "botão de exclusão no editor"
-);
+  page = replaceOnce(
+    page,
+    actionsAnchor,
+    actionsBlock,
+    "botão de exclusão no editor"
+  );
 
-const functionAnchor = `  function abrirConversa(conversa: Conversa) {`;
-const functionBlock = `  function confirmarExclusaoCaptura(nomeCampo: string) {
+  const functionAnchor = `  function abrirConversa(conversa: Conversa) {`;
+  const functionBlock = `  function confirmarExclusaoCaptura(nomeCampo: string) {
     return new Promise<boolean>((resolve) => {
       const focoAnterior = document.activeElement as HTMLElement | null;
       const overflowAnterior = document.body.style.overflow;
@@ -182,7 +187,7 @@ const functionBlock = `  function confirmarExclusaoCaptura(nomeCampo: string) {
       });
 
       const descricao = document.createElement("p");
-      descricao.textContent = \`O campo “\${nomeCampo}” será removido permanentemente do contato.\`;
+      descricao.textContent = `O campo “${nomeCampo}” será removido permanentemente do contato.`;
       Object.assign(descricao.style, {
         margin: "8px 0 0",
         color: "var(--crm-text-muted, #607785)",
@@ -296,9 +301,9 @@ const functionBlock = `  function confirmarExclusaoCaptura(nomeCampo: string) {
     try {
       setErro("");
       const response = await fetch(
-        \`/api/contatos/\${encodeURIComponent(
+        `/api/contatos/${encodeURIComponent(
           contatoId
-        )}/informacoes-captura/\${encodeURIComponent(informacao.id)}\`,
+        )}/informacoes-captura/${encodeURIComponent(informacao.id)}`,
         { method: "DELETE" }
       );
       const data = await response.json().catch(() => ({}));
@@ -323,18 +328,18 @@ const functionBlock = `  function confirmarExclusaoCaptura(nomeCampo: string) {
 
 ${functionAnchor}`;
 
-page = replaceOnce(
-  page,
-  functionAnchor,
-  functionBlock,
-  "modal e função de exclusão da captura"
-);
+  page = replaceOnce(
+    page,
+    functionAnchor,
+    functionBlock,
+    "modal e função de exclusão da captura"
+  );
 
-const summaryAnchor = `                                  onSalvar={(valor) =>
+  const summaryAnchor = `                                  onSalvar={(valor) =>
                                     void salvarInformacaoCaptura(informacao, valor)
                                   }
                                 />`;
-const summaryBlock = `                                  onSalvar={(valor) =>
+  const summaryBlock = `                                  onSalvar={(valor) =>
                                     void salvarInformacaoCaptura(informacao, valor)
                                   }
                                   onExcluir={() =>
@@ -342,21 +347,21 @@ const summaryBlock = `                                  onSalvar={(valor) =>
                                   }
                                 />`;
 
-page = replaceOnce(
-  page,
-  summaryAnchor,
-  summaryBlock,
-  "exclusão no resumo das capturas"
-);
+  page = replaceOnce(
+    page,
+    summaryAnchor,
+    summaryBlock,
+    "exclusão no resumo das capturas"
+  );
 
-const detailsAnchor = `                                      onSalvar={(valor) =>
+  const detailsAnchor = `                                      onSalvar={(valor) =>
                                         void salvarInformacaoCaptura(
                                           informacao,
                                           valor
                                         )
                                       }
                                     />`;
-const detailsBlock = `                                      onSalvar={(valor) =>
+  const detailsBlock = `                                      onSalvar={(valor) =>
                                         void salvarInformacaoCaptura(
                                           informacao,
                                           valor
@@ -369,12 +374,138 @@ const detailsBlock = `                                      onSalvar={(valor) =>
                                       }
                                     />`;
 
-page = replaceOnce(
-  page,
-  detailsAnchor,
-  detailsBlock,
-  "exclusão na lista completa das capturas"
-);
+  page = replaceOnce(
+    page,
+    detailsAnchor,
+    detailsBlock,
+    "exclusão na lista completa das capturas"
+  );
 
-await writeFile(pagePath, page, "utf8");
-console.log("Exclusão dos campos capturados aplicada à página de conversas.");
+  await writeFile(pagePath, page, "utf8");
+  console.log("Exclusão dos campos capturados aplicada à página de conversas.");
+} else {
+  console.log("Exclusão dos campos capturados já aplicada à página de conversas.");
+}
+
+const trackingPagePath = "src/app/(private)/rastreamento/page.tsx";
+let trackingPage = await readFile(trackingPagePath, "utf8");
+
+if (!trackingPage.includes("CLASSIFICACOES_MANUAIS_RASTREAMENTO")) {
+  trackingPage = replaceOnce(
+    trackingPage,
+    `const EVENTOS_MANUAIS = [
+  { value: "venda_realizada", label: "Venda realizada", exigeValor: true },
+  { value: "venda_perdida", label: "Venda perdida" },
+  { value: "lead_qualificado", label: "Lead qualificado" },
+  { value: "agendamento_criado", label: "Agendamento criado" },
+  { value: "agendamento_confirmado", label: "Agendamento confirmado" },
+  { value: "entrada_grupo_confirmada", label: "Entrada no grupo confirmada" },
+  { value: "pagamento_confirmado", label: "Pagamento confirmado" },
+  { value: "objetivo_concluido", label: "Objetivo concluído" },
+  { value: "objetivo_nao_concluido", label: "Objetivo não concluído" },
+  { value: "sem_interesse", label: "Sem interesse" },
+];`,
+    `const CLASSIFICACOES_MANUAIS_RASTREAMENTO = [
+  { value: "lead_qualificado", label: "Qualificado" },
+  { value: "venda_realizada", label: "Convertido", exigeValor: true },
+  { value: "venda_perdida", label: "Perdido" },
+];
+
+const EVENTOS_MANUAIS = CLASSIFICACOES_MANUAIS_RASTREAMENTO;`,
+    "opções oficiais do registro manual no rastreamento"
+  );
+
+  trackingPage = replaceOnce(
+    trackingPage,
+    `  lead_qualificado: "Lead qualificado",`,
+    `  lead_qualificado: "Qualificado",`,
+    "rótulo do evento qualificado"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `  venda_realizada: "Venda realizada",`,
+    `  venda_realizada: "Convertido",`,
+    "rótulo do evento convertido"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `  venda_perdida: "Venda perdida",`,
+    `  venda_perdida: "Perdido",`,
+    "rótulo do evento perdido"
+  );
+
+  trackingPage = replaceOnce(
+    trackingPage,
+    `  const [eventoTipo, setEventoTipo] = useState("venda_realizada");`,
+    `  const [eventoTipo, setEventoTipo] = useState("lead_qualificado");`,
+    "classificação padrão do novo registro"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `  const [eventoEdicaoTipo, setEventoEdicaoTipo] = useState("venda_realizada");`,
+    `  const [eventoEdicaoTipo, setEventoEdicaoTipo] = useState("lead_qualificado");`,
+    "classificação padrão da edição"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `    setEventoTipo("venda_realizada");`,
+    `    setEventoTipo("lead_qualificado");`,
+    "reset da classificação do novo registro"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `    setEventoEdicaoTipo("venda_realizada");`,
+    `    setEventoEdicaoTipo("lead_qualificado");`,
+    "reset da classificação editada"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `    setEventoEdicaoTipo(eventoManualValido(evento.tipo) ? evento.tipo : "venda_realizada");`,
+    `    setEventoEdicaoTipo(eventoManualValido(evento.tipo) ? evento.tipo : "lead_qualificado");`,
+    "fallback da classificação ao editar"
+  );
+
+  trackingPage = replaceAllChecked(
+    trackingPage,
+    `<span>Evento</span>`,
+    `<span>Classificação</span>`,
+    2,
+    "rótulos dos seletores de classificação"
+  );
+
+  trackingPage = replaceOnce(
+    trackingPage,
+    `                      Registrar evento`,
+    `                      Registrar classificação`,
+    "ação de registrar classificação"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `      setMensagem("Evento comercial registrado.");`,
+    `      setMensagem("Classificação registrada.");`,
+    "mensagem de classificação registrada"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `      setMensagem("Evento comercial atualizado.");`,
+    `      setMensagem("Classificação atualizada.");`,
+    "mensagem de classificação atualizada"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `<h3>Editar evento</h3>`,
+    `<h3>Editar classificação</h3>`,
+    "título do modal de classificação"
+  );
+  trackingPage = replaceOnce(
+    trackingPage,
+    `<p>Corrija o resultado manual registrado pelo atendente.</p>`,
+    `<p>Altere a classificação comercial registrada para o contato.</p>`,
+    "descrição do modal de classificação"
+  );
+
+  await writeFile(trackingPagePath, trackingPage, "utf8");
+  console.log("Opções manuais do rastreamento padronizadas.");
+} else {
+  console.log("Opções manuais do rastreamento já estão padronizadas.");
+}
