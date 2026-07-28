@@ -254,7 +254,8 @@
 }
 
 .primaryButton,
-.secondaryButton {
+.secondaryButton,
+.helpButton {
   min-height: 54px;
   border-radius: 16px;
   font-size: 15px;
@@ -264,6 +265,30 @@
     transform 0.2s ease,
     box-shadow 0.2s ease,
     opacity 0.2s ease;
+}
+
+.helpButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid rgba(5, 150, 105, 0.28);
+  background: #ecfdf5;
+  color: #047857;
+  text-decoration: none;
+}
+
+.helpButton:hover {
+  transform: translateY(-1px);
+  border-color: rgba(5, 150, 105, 0.48);
+  background: #d1fae5;
+}
+
+.helpButton:focus-visible,
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible {
+  outline: 3px solid rgba(16, 185, 129, 0.28);
+  outline-offset: 3px;
 }
 
 .primaryButton {
@@ -359,7 +384,8 @@
   }
 
   .primaryButton,
-  .secondaryButton {
+  .secondaryButton,
+  .helpButton {
     min-height: 50px;
     font-size: 14px;
   }
