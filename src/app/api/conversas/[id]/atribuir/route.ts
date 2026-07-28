@@ -64,6 +64,8 @@ export async function POST(
       typeof body?.responsavel_id === "string"
         ? body.responsavel_id.trim()
         : null;
+    const setorSolicitadoId =
+      typeof body?.setor_id === "string" ? body.setor_id.trim() : null;
 
     if (!novoResponsavelId) {
       return NextResponse.json(
@@ -119,23 +121,68 @@ export async function POST(
       );
     }
 
-    const setorId = conversa.setor_id;
+    const setorAtualId = String(conversa.setor_id || "").trim() || null;
+    const setorDestinoId = setorSolicitadoId || setorAtualId;
 
-    if (!setorId) {
+    if (!setorDestinoId) {
       return NextResponse.json(
-        { ok: false, error: "Conversa sem setor definido" },
+        { ok: false, error: "Selecione o setor da atribuição" },
+        { status: 400 }
+      );
+    }
+
+    const { data: setorDestino, error: setorDestinoError } = await supabaseAdmin
+      .from("setores")
+      .select("id, empresa_id, ativo")
+      .eq("id", setorDestinoId)
+      .maybeSingle();
+
+    if (setorDestinoError) {
+      return NextResponse.json(
+        { ok: false, error: setorDestinoError.message },
+        { status: 500 }
+      );
+    }
+
+    if (
+      !setorDestino ||
+      setorDestino.empresa_id !== usuario.empresa_id ||
+      setorDestino.ativo !== true
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Setor inválido ou inativo" },
         { status: 400 }
       );
     }
 
     if (!isAdministrador(usuario)) {
-      const pertence = await usuarioPertenceAoSetor(usuario.id, setorId);
+      if (!setorAtualId) {
+        return NextResponse.json(
+          { ok: false, error: "Conversa sem setor definido" },
+          { status: 400 }
+        );
+      }
 
-      if (!pertence) {
+      const [pertenceAoSetorAtual, pertenceAoSetorDestino] = await Promise.all([
+        usuarioPertenceAoSetor(usuario.id, setorAtualId),
+        usuarioPertenceAoSetor(usuario.id, setorDestinoId),
+      ]);
+
+      if (!pertenceAoSetorAtual) {
         return NextResponse.json(
           {
             ok: false,
             error: "Você só pode atribuir conversas do seu setor",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (!pertenceAoSetorDestino) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Você só pode atribuir para setores aos quais pertence",
           },
           { status: 403 }
         );
@@ -177,7 +224,7 @@ export async function POST(
     }
 
     const [pertenceAoSetor, responsavelEhAdministrador] = await Promise.all([
-      usuarioPertenceAoSetor(novoResponsavelId, setorId),
+      usuarioPertenceAoSetor(novoResponsavelId, setorDestinoId),
       usuarioEhAdministradorDaEmpresa({
         usuarioId: novoResponsavelId,
         empresaId: usuario.empresa_id!,
@@ -188,7 +235,7 @@ export async function POST(
       return NextResponse.json(
         {
           ok: false,
-          error: "Usuário não pertence ao setor da conversa",
+          error: "Usuário não pertence ao setor selecionado",
         },
         { status: 400 }
       );
@@ -197,6 +244,7 @@ export async function POST(
     const { data, error } = await supabaseAdmin
       .from("conversas")
       .update({
+        setor_id: setorDestinoId,
         responsavel_id: novoResponsavelId,
         status: "em_atendimento",
         bot_ativo: false,
@@ -204,8 +252,13 @@ export async function POST(
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
+      .eq("empresa_id", usuario.empresa_id!)
       .select(`
         *,
+        setor:setores (
+          id,
+          nome
+        ),
         responsavel:usuarios (
           id,
           nome,
@@ -227,16 +280,19 @@ export async function POST(
       entidade: "conversa",
       entidade_id: id,
       acao: "conversa_atribuida",
-      descricao: "Conversa atribuida a um usuario",
+      descricao: "Conversa atribuída a um usuário",
       usuario_id: usuario.id,
       usuario_nome: usuario.nome,
       usuario_email: usuario.email,
       antes: {
+        setor_id: setorAtualId,
         responsavel_id: conversa.responsavel_id ?? null,
         status: conversa.status ?? null,
       },
       depois: {
+        setor_id: setorDestinoId,
         responsavel_id: novoResponsavelId,
+        responsavel_administrador: responsavelEhAdministrador,
         status: "em_atendimento",
       },
       ip: auditMeta.ip,
