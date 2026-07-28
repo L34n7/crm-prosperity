@@ -23,6 +23,7 @@ type OpcoesSetoresResponse = {
 
 type OpcoesUsuariosResponse = {
   ok?: boolean;
+  setores?: SetorOpcao[];
   usuarios?: Array<{
     id: string;
     nome: string | null;
@@ -88,11 +89,33 @@ function encontrarPainelAtribuicao() {
   return { painel, corpo };
 }
 
+function atualizarValorSelectReact(
+  select: HTMLSelectElement,
+  valor: string,
+  emitirEvento = true
+) {
+  const valueSetter = Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value"
+  )?.set;
+
+  if (valueSetter) {
+    valueSetter.call(select, valor);
+  } else {
+    select.value = valor;
+  }
+
+  if (emitirEvento) {
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
 export default function AssignmentSelectEnhancer() {
   useEffect(() => {
     let ativo = true;
     let framePendente: number | null = null;
-    let opcoesPromise: Promise<OpcoesSetoresResponse | null> | null = null;
+    let opcoesGeraisPromise: Promise<OpcoesSetoresResponse | null> | null = null;
+    let setoresAtribuicaoPromise: Promise<SetorOpcao[]> | null = null;
     let conversaAtiva = "";
     let setorSelecionado = "";
     let usuarioSelecionado = "";
@@ -110,8 +133,8 @@ export default function AssignmentSelectEnhancer() {
     }
 
     async function carregarOpcoesGerais() {
-      if (!opcoesPromise) {
-        opcoesPromise = fetchOriginal("/api/setores/opcoes", {
+      if (!opcoesGeraisPromise) {
+        opcoesGeraisPromise = fetchOriginal("/api/setores/opcoes", {
           cache: "no-store",
           credentials: "same-origin",
         })
@@ -122,7 +145,30 @@ export default function AssignmentSelectEnhancer() {
           .catch(() => null);
       }
 
-      return await opcoesPromise;
+      return await opcoesGeraisPromise;
+    }
+
+    async function carregarSetoresAtribuicao() {
+      if (!setoresAtribuicaoPromise) {
+        setoresAtribuicaoPromise = fetchOriginal(
+          "/api/usuarios/opcoes-atribuicao",
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          }
+        )
+          .then(async (response) => {
+            const payload = (await response.json().catch(() => null)) as
+              | OpcoesUsuariosResponse
+              | null;
+
+            if (!response.ok || !payload?.ok) return [];
+            return Array.isArray(payload.setores) ? payload.setores : [];
+          })
+          .catch(() => []);
+      }
+
+      return await setoresAtribuicaoPromise;
     }
 
     async function carregarUsuariosDoSetor(setorId: string) {
@@ -183,7 +229,7 @@ export default function AssignmentSelectEnhancer() {
       }>,
       estado: "selecione_setor" | "carregando" | "pronto" | "erro"
     ) {
-      const valorAtual = usuarioSelecionado || select.value;
+      const valorAtual = usuarioSelecionado;
       let placeholder = "Selecione um responsável";
 
       if (estado === "selecione_setor") placeholder = "Selecione primeiro o setor";
@@ -219,18 +265,21 @@ export default function AssignmentSelectEnhancer() {
 
       select.disabled = estado !== "pronto";
 
-      if (
+      const valorPermitido =
         estado === "pronto" &&
         valorAtual &&
         usuarios.some((usuario) => usuario.id === valorAtual)
-      ) {
-        select.value = valorAtual;
-      } else if (estado !== "carregando") {
-        select.value = "";
+          ? valorAtual
+          : "";
+
+      if (select.value !== valorPermitido) {
+        atualizarValorSelectReact(select, valorPermitido, false);
       }
     }
 
-    async function enriquecerPainelAtribuicao(opcoes: OpcoesSetoresResponse) {
+    async function enriquecerPainelAtribuicao(
+      setoresPermitidos: SetorOpcao[]
+    ) {
       const estrutura = encontrarPainelAtribuicao();
       if (!estrutura) return;
 
@@ -266,19 +315,16 @@ export default function AssignmentSelectEnhancer() {
         selectSetor.className = selectResponsavel.className;
         selectSetor.dataset.crmSetorAtribuicao = "true";
         selectSetor.setAttribute("aria-label", "Setor dos usuários");
-
-        const setores = Array.isArray(opcoes.setores) ? opcoes.setores : [];
         selectSetor.replaceChildren(
           criarOpcao("", "Selecione um setor"),
-          ...setores.map((setor) => criarOpcao(setor.id, setor.nome))
+          ...setoresPermitidos.map((setor) => criarOpcao(setor.id, setor.nome))
         );
-
         selectSetor.value = setorSelecionado;
 
         selectSetor.addEventListener("change", async () => {
           setorSelecionado = selectSetor?.value || "";
           usuarioSelecionado = "";
-          selectResponsavel.value = "";
+          atualizarValorSelectReact(selectResponsavel, "");
 
           if (!setorSelecionado) {
             prepararSelectResponsavel(selectResponsavel, [], "selecione_setor");
@@ -309,6 +355,8 @@ export default function AssignmentSelectEnhancer() {
         ajuda.style.fontSize = "12px";
         ajuda.style.lineHeight = "1.4";
         selectResponsavel.insertAdjacentElement("afterend", ajuda);
+
+        atualizarValorSelectReact(selectResponsavel, "");
       }
 
       painel.dataset.crmAtribuicaoSetorAtiva = setorSelecionado;
@@ -340,13 +388,20 @@ export default function AssignmentSelectEnhancer() {
     async function sincronizarInterface() {
       if (!ativo) return;
 
-      const opcoes = await carregarOpcoesGerais();
-      if (!ativo || !opcoes) return;
+      const opcoesGerais = await carregarOpcoesGerais();
+      if (!ativo) return;
 
-      aplicarRotulosAdministradores(
-        Array.isArray(opcoes.atendentes) ? opcoes.atendentes : []
-      );
-      await enriquecerPainelAtribuicao(opcoes);
+      if (opcoesGerais) {
+        aplicarRotulosAdministradores(
+          Array.isArray(opcoesGerais.atendentes) ? opcoesGerais.atendentes : []
+        );
+      }
+
+      if (!encontrarPainelAtribuicao()) return;
+
+      const setoresPermitidos = await carregarSetoresAtribuicao();
+      if (!ativo) return;
+      await enriquecerPainelAtribuicao(setoresPermitidos);
     }
 
     function agendarSincronizacao() {
