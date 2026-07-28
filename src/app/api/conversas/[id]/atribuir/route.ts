@@ -16,6 +16,7 @@ import {
   isConversaHistoricoImportado,
 } from "@/lib/conversas/historico-importado";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import { usuarioEhAdministradorDaEmpresa } from "@/lib/usuarios/administradores";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -106,7 +107,7 @@ export async function POST(
 
     if (!podeAcessarIntegracao) {
       return NextResponse.json(
-        { ok: false, error: "Sem acesso a esta integraÃ§Ã£o WhatsApp." },
+        { ok: false, error: "Sem acesso a esta integração WhatsApp." },
         { status: 403 }
       );
     }
@@ -175,12 +176,15 @@ export async function POST(
       );
     }
 
-    const pertenceAoSetor = await usuarioPertenceAoSetor(
-      novoResponsavelId,
-      setorId
-    );
+    const [pertenceAoSetor, responsavelEhAdministrador] = await Promise.all([
+      usuarioPertenceAoSetor(novoResponsavelId, setorId),
+      usuarioEhAdministradorDaEmpresa({
+        usuarioId: novoResponsavelId,
+        empresaId: usuario.empresa_id!,
+      }),
+    ]);
 
-    if (!pertenceAoSetor) {
+    if (!pertenceAoSetor && !responsavelEhAdministrador) {
       return NextResponse.json(
         {
           ok: false,
