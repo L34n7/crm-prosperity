@@ -6,6 +6,7 @@ import {
   podeAtribuirConversas,
 } from "@/lib/auth/authorization";
 import { usuarioPertenceAoSetor } from "@/lib/usuarios/setores";
+import { listarIdsUsuariosAdministradoresDaEmpresa } from "@/lib/usuarios/administradores";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -72,17 +73,20 @@ export async function GET(request: Request) {
       }
     }
 
-    const { data, error } = await supabaseAdmin
-      .from("usuarios_setores")
-      .select(`
-        usuario:usuarios (
-          id,
-          nome,
-          status,
-          empresa_id
-        )
-      `)
-      .eq("setor_id", setorId);
+    const [{ data, error }, administradorIds] = await Promise.all([
+      supabaseAdmin
+        .from("usuarios_setores")
+        .select(`
+          usuario:usuarios (
+            id,
+            nome,
+            status,
+            empresa_id
+          )
+        `)
+        .eq("setor_id", setorId),
+      listarIdsUsuariosAdministradoresDaEmpresa(usuario.empresa_id),
+    ]);
 
     if (error) {
       return NextResponse.json(
@@ -92,26 +96,61 @@ export async function GET(request: Request) {
     }
 
     const rows = (data ?? []) as unknown as UsuarioSetorComUsuario[];
+    const administradores = new Set(administradorIds);
+    const usuariosPorId = new Map<
+      string,
+      { id: string; nome: string | null; is_administrador: boolean }
+    >();
 
-    const usuarios = Array.from(
-      new Map(
-        rows
-          .map((item) => item.usuario)
-          .filter(
-            (
-              item
-            ): item is {
-              id: string;
-              nome: string | null;
-              status: string;
-              empresa_id: string;
-            } =>
-              !!item &&
-              item.status === "ativo" &&
-              item.empresa_id === usuario.empresa_id
-          )
-          .map((item) => [item.id, { id: item.id, nome: item.nome }])
-      ).values()
+    rows
+      .map((item) => item.usuario)
+      .filter(
+        (
+          item
+        ): item is {
+          id: string;
+          nome: string | null;
+          status: string;
+          empresa_id: string;
+        } =>
+          !!item &&
+          item.status === "ativo" &&
+          item.empresa_id === usuario.empresa_id
+      )
+      .forEach((item) => {
+        usuariosPorId.set(item.id, {
+          id: item.id,
+          nome: item.nome,
+          is_administrador: administradores.has(item.id),
+        });
+      });
+
+    if (administradorIds.length > 0) {
+      const { data: usuariosAdmin, error: usuariosAdminError } = await supabaseAdmin
+        .from("usuarios")
+        .select("id, nome")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("status", "ativo")
+        .in("id", administradorIds);
+
+      if (usuariosAdminError) {
+        return NextResponse.json(
+          { ok: false, error: usuariosAdminError.message },
+          { status: 500 }
+        );
+      }
+
+      for (const administrador of usuariosAdmin || []) {
+        usuariosPorId.set(administrador.id, {
+          id: administrador.id,
+          nome: administrador.nome,
+          is_administrador: true,
+        });
+      }
+    }
+
+    const usuarios = Array.from(usuariosPorId.values()).sort((a, b) =>
+      String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR")
     );
 
     return NextResponse.json({
