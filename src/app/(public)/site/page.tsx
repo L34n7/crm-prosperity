@@ -402,11 +402,11 @@ export default function SitePage() {
           <div className={styles.heroProof}>
             <span>
               <Check size={14} />
-              API Oficial do WhatsApp
+              API Oficial da Meta
             </span>
             <span>
               <Check size={14} />
-              Multiatendimento
+              Google Calendar conectado
             </span>
             <span>
               <Check size={14} />
@@ -518,10 +518,9 @@ export default function SitePage() {
               <Image
                 src="/logo.png"
                 alt="Símbolo do CRM Prosperity"
-                width={88}
-                height={88}
+                width={190}
+                height={186}
               />
-              <span>CRM Prosperity</span>
             </div>
             <div className={`${styles.orbitItem} ${styles.orbitItemOne}`}>
               <MessageCircleMore size={17} />
@@ -543,6 +542,103 @@ export default function SitePage() {
               <BarChart3 size={17} />
               Gestão
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className={styles.integrationsSection} id="integracoes">
+        <div className={styles.sectionShell}>
+          <SectionHeading
+            eyebrow="Integrações que fazem diferença"
+            title={
+              <>
+                Conexões oficiais para uma operação{" "}
+                <em>mais estável e integrada.</em>
+              </>
+            }
+            description="O CRM Prosperity conecta o atendimento às plataformas que sustentam a rotina da sua empresa, mantendo conversas e compromissos dentro do mesmo processo."
+          />
+
+          <div className={styles.integrationGrid}>
+            <article className={styles.integrationCard}>
+              <div className={styles.integrationCardTop}>
+                <div className={styles.integrationLogo}>
+                  <Image
+                    src="/meta-logo.png"
+                    alt="Meta"
+                    width={205}
+                    height={60}
+                  />
+                </div>
+                <span>Conexão oficial</span>
+              </div>
+              <div className={styles.integrationCardContent}>
+                <span className={styles.integrationLabel}>
+                  WhatsApp Business Platform
+                </span>
+                <h3>API Oficial do WhatsApp da Meta</h3>
+                <p>
+                  Conecte o número da sua empresa ao ambiente oficial da Meta e
+                  concentre o atendimento no CRM, com uma configuração guiada e
+                  estrutura preparada para a operação profissional.
+                </p>
+                <ul>
+                  <li>
+                    <Check size={15} />
+                    Conexão guiada com o ambiente empresarial da Meta
+                  </li>
+                  <li>
+                    <Check size={15} />
+                    Mensagens e atendimentos centralizados no CRM
+                  </li>
+                  <li>
+                    <Check size={15} />
+                    Mais controle para automações, equipes e históricos
+                  </li>
+                </ul>
+              </div>
+            </article>
+
+            <article className={styles.integrationCard}>
+              <div className={styles.integrationCardTop}>
+                <div
+                  className={`${styles.integrationLogo} ${styles.googleLogo}`}
+                >
+                  <Image
+                    src="/google-logo.png"
+                    alt="Google"
+                    width={230}
+                    height={60}
+                  />
+                </div>
+                <span>Agenda conectada</span>
+              </div>
+              <div className={styles.integrationCardContent}>
+                <span className={styles.integrationLabel}>
+                  Google Calendar
+                </span>
+                <h3>Agendamentos conectados ao atendimento</h3>
+                <p>
+                  Transforme uma conversa em compromisso sem perder o contexto.
+                  O CRM consulta a agenda e conduz as etapas do agendamento
+                  diretamente pelas automações.
+                </p>
+                <ul>
+                  <li>
+                    <Check size={15} />
+                    Consulta de datas e horários disponíveis
+                  </li>
+                  <li>
+                    <Check size={15} />
+                    Criação, remarcação e cancelamento de agendamentos
+                  </li>
+                  <li>
+                    <Check size={15} />
+                    Jornada conectada entre conversa, automação e agenda
+                  </li>
+                </ul>
+              </div>
+            </article>
           </div>
         </div>
       </section>
@@ -926,8 +1022,8 @@ export default function SitePage() {
                   <Image
                     src="/logo.png"
                     alt=""
-                    width={42}
-                    height={42}
+                    width={64}
+                    height={64}
                   />
                 </span>
                 <span className={styles.brandName}>

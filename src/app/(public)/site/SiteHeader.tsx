@@ -10,7 +10,7 @@ const NAVIGATION = [
   { href: "#solucao", label: "Solução" },
   { href: "#inteligencia-artificial", label: "Inteligência Artificial" },
   { href: "#recursos", label: "Recursos" },
-  { href: "#como-funciona", label: "Como funciona" },
+  { href: "#integracoes", label: "Integrações" },
   { href: "#planos", label: "Planos" },
 ];
 
@@ -61,8 +61,8 @@ export default function SiteHeader() {
             <Image
               src="/logo.png"
               alt=""
-              width={42}
-              height={42}
+              width={64}
+              height={64}
               priority
             />
           </span>
