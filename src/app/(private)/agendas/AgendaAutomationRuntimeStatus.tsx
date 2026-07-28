@@ -5,6 +5,8 @@ import { useEffect } from "react";
 const STYLE_ID = "agenda-automation-stage13-runtime";
 const NOTICE_TEXT =
   "As ações ativas serão planejadas no horário configurado e poderão ser acompanhadas e canceladas em ";
+const TEMPLATE_HELP_TEXT =
+  "Crie um template Utility aprovado pela Meta para solicitar a confirmação do agendamento ou enviar lembretes. Para confirmação, inclua os botões Confirmar, Cancelar e Reagendar.";
 
 const CSS = `
 .agendaAutomationSection.isRuntimeActive{border-color:color-mix(in srgb,var(--crm-success-border) 78%,var(--crm-border));padding:18px}
@@ -29,13 +31,53 @@ const CSS = `
 .agendaAutomationSection.isRuntimeActive .agendaAutomationCompatibility{font-size:11.5px!important;line-height:1.55!important;min-height:24px!important;margin-top:2px!important}
 .agendaAutomationSection.isRuntimeActive .agendaAutomationError{font-size:11.5px!important;line-height:1.45!important}
 .agendaAutomationSection.isRuntimeActive .agendaAutomationSaving{font-size:11px!important}
-@media(max-width:760px){.agendaAutomationSection.isRuntimeActive{padding:14px}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle h3{font-size:16px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle p{font-size:12px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCompatibility{font-size:11px!important}}
+.agendaTemplateHelpTitle{display:inline-flex!important;align-items:center;gap:6px;position:relative;overflow:visible}
+.agendaTemplateHelp{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.agendaTemplateHelpButton{width:17px;height:17px;padding:0;border:1px solid var(--crm-primary-border);border-radius:999px;background:var(--crm-primary-soft);color:var(--crm-primary-text);font-family:inherit;font-size:10px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help;transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease}
+.agendaTemplateHelpButton:hover,.agendaTemplateHelpButton:focus-visible{border-color:var(--crm-primary-strong);background:var(--crm-primary-strong);color:var(--crm-text-inverse);outline:none;transform:translateY(-1px)}
+.agendaTemplateHelpBubble{position:absolute;z-index:40;top:calc(100% + 8px);right:-8px;width:270px;max-width:min(270px,72vw);padding:10px 11px;border:1px solid var(--crm-border-strong);border-radius:11px;background:var(--crm-text-strong);color:var(--crm-text-inverse);box-shadow:0 14px 34px color-mix(in srgb,var(--crm-text-strong) 26%,transparent);font-size:11px!important;font-weight:650!important;line-height:1.5!important;text-align:left;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-4px);transition:opacity .16s ease,visibility .16s ease,transform .16s ease}
+.agendaTemplateHelpBubble:before{content:"";position:absolute;right:11px;bottom:100%;border:6px solid transparent;border-bottom-color:var(--crm-text-strong)}
+.agendaTemplateHelp:hover .agendaTemplateHelpBubble,.agendaTemplateHelp:focus-within .agendaTemplateHelpBubble{opacity:1;visibility:visible;transform:translateY(0)}
+@media(max-width:760px){.agendaAutomationSection.isRuntimeActive{padding:14px}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle h3{font-size:16px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle p{font-size:12px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCompatibility{font-size:11px!important}.agendaTemplateHelpBubble{right:-4px;width:240px;max-width:68vw}}
 `;
+
+function applyTemplateHelp(section: HTMLElement) {
+  section
+    .querySelectorAll<HTMLElement>(".agendaAutomationField > span")
+    .forEach((label, index) => {
+      if (label.dataset.templateHelpApplied === "true") return;
+      if (label.textContent?.trim() !== "Template Utility") return;
+
+      const help = document.createElement("span");
+      help.className = "agendaTemplateHelp";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "agendaTemplateHelpButton";
+      button.textContent = "?";
+      button.setAttribute("aria-label", "Orientação para criar o Template Utility");
+
+      const bubble = document.createElement("span");
+      const tooltipId = `agenda-template-help-${index}-${Date.now()}`;
+      bubble.id = tooltipId;
+      bubble.className = "agendaTemplateHelpBubble";
+      bubble.setAttribute("role", "tooltip");
+      bubble.textContent = TEMPLATE_HELP_TEXT;
+      button.setAttribute("aria-describedby", tooltipId);
+
+      help.append(button, bubble);
+      label.classList.add("agendaTemplateHelpTitle");
+      label.appendChild(help);
+      label.dataset.templateHelpApplied = "true";
+    });
+}
 
 function applyRuntimeStatus(section: HTMLElement) {
   if (!section.classList.contains("isRuntimeActive")) {
     section.classList.add("isRuntimeActive");
   }
+
+  applyTemplateHelp(section);
 
   const badge = section.querySelector<HTMLElement>(".agendaAutomationStage");
   if (badge && badge.textContent !== "Automação ativa") {
