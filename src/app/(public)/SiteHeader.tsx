@@ -121,7 +121,7 @@ export default function SiteHeader() {
     >
       <div className={styles.headerInner}>
         <Link
-          href="/site"
+          href="/"
           className={styles.brand}
           aria-label="CRM Prosperity — página inicial"
           onClick={closeMenu}
