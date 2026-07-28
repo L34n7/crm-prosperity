@@ -255,7 +255,7 @@ export async function POST(
       .eq("empresa_id", usuario.empresa_id!)
       .select(`
         *,
-        setor:setores (
+        setores:setores (
           id,
           nome
         ),
