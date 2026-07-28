@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { listarIdsUsuariosAdministradoresDaEmpresa } from "@/lib/usuarios/administradores";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -59,8 +60,14 @@ export async function GET() {
       vinculos = data || [];
     }
 
+    const administradorIds = new Set(
+      await listarIdsUsuariosAdministradoresDaEmpresa(empresaId)
+    );
     const usuarioIds = Array.from(
-      new Set(vinculos.map((item) => item.usuario_id).filter(Boolean))
+      new Set([
+        ...vinculos.map((item) => item.usuario_id).filter(Boolean),
+        ...administradorIds,
+      ])
     );
     let usuarios: Array<{ id: string; nome: string; email: string | null }> = [];
 
@@ -88,12 +95,19 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       setores: setores || [],
-      atendentes: usuarios.map((usuario) => ({
-        ...usuario,
-        setor_ids: Array.from(
-          new Set(setoresPorUsuario.get(usuario.id) || [])
-        ),
-      })),
+      atendentes: usuarios.map((usuario) => {
+        const isAdministrador = administradorIds.has(usuario.id);
+
+        return {
+          ...usuario,
+          is_administrador: isAdministrador,
+          setor_ids: isAdministrador
+            ? setorIds
+            : Array.from(
+                new Set(setoresPorUsuario.get(usuario.id) || [])
+              ),
+        };
+      }),
     });
   } catch (error: any) {
     return NextResponse.json(

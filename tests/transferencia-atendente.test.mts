@@ -11,6 +11,16 @@ const candidatos = [
   { id: "c", nome: "Carla", cargaAtual: 1 },
 ];
 
+const candidatosComAdministrador = [
+  ...candidatos,
+  {
+    id: "admin",
+    nome: "Administrador",
+    cargaAtual: 0,
+    isAdministrador: true,
+  },
+];
+
 test("mantem compatibilidade com configuracao antiga", () => {
   assert.equal(
     normalizarEstrategiaTransferenciaAtendente(undefined, undefined),
@@ -41,6 +51,17 @@ test("seleciona somente o atendente especifico valido", () => {
   );
 });
 
+test("permite administrador somente como atendente especifico", () => {
+  assert.equal(
+    selecionarAtendenteTransferencia({
+      estrategia: "atendente_especifico",
+      candidatos: candidatosComAdministrador,
+      atendenteId: "admin",
+    })?.id,
+    "admin"
+  );
+});
+
 test("rodizio aleatorio usa apenas candidatos disponiveis", () => {
   assert.equal(
     selecionarAtendenteTransferencia({
@@ -49,6 +70,17 @@ test("rodizio aleatorio usa apenas candidatos disponiveis", () => {
       random: () => 0.8,
     })?.id,
     "c"
+  );
+});
+
+test("rodizio aleatorio ignora administradores", () => {
+  assert.notEqual(
+    selecionarAtendenteTransferencia({
+      estrategia: "rodizio_aleatorio",
+      candidatos: candidatosComAdministrador,
+      random: () => 0.999,
+    })?.id,
+    "admin"
   );
 });
 
@@ -68,6 +100,17 @@ test("menos conversas escolhe a menor carga e desempata aleatoriamente", () => {
       random: () => 0.9,
     })?.id,
     "c"
+  );
+});
+
+test("menos conversas ignora administrador mesmo com carga menor", () => {
+  assert.equal(
+    selecionarAtendenteTransferencia({
+      estrategia: "menos_conversas",
+      candidatos: candidatosComAdministrador,
+      random: () => 0,
+    })?.id,
+    "b"
   );
 });
 
