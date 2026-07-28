@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import styles from "./login.module.css";
 import Link from "next/link";
-import { ArrowRight, Check, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff } from "lucide-react";
 import { enviarEventoSessao, getClientSessionId } from "@/lib/auth/browser-session";
 
 const AMBIENTE_CONFIGURADO_STORAGE_KEY = "crm_ambiente_configurado";
@@ -135,19 +135,21 @@ export default function LoginPage() {
         <div className={styles.brandPanel}>
           <div>
             <Link href="/" className={styles.brandHeader} aria-label="Ir para a página inicial">
-              <Image
-                src="/logo.png"
-                alt="CRM Prosperity"
-                width={112}
-                height={110}
-                className={styles.brandLogo}
-                priority
-              />
+              <span className={styles.brandBadge}>
+                <Image
+                  src="/logo.png"
+                  alt="CRM Prosperity"
+                  width={2096}
+                  height={2048}
+                  className={styles.brandLogo}
+                  priority
+                />
+              </span>
 
-              <div className={styles.brandIdentity}>
-                <span className={styles.brandName}>Prosperity</span>
-                <span className={styles.brandProduct}>CRM</span>
-              </div>
+              <span className={styles.brandIdentity}>
+                <span className={styles.brandProduct}>Plataforma empresarial</span>
+                <span className={styles.brandName}>CRM Prosperity</span>
+              </span>
             </Link>
 
             <p className={styles.eyebrow}>Bem-vindo de volta</p>
@@ -179,11 +181,31 @@ export default function LoginPage() {
           </div>
 
           <div className={styles.integrationFooter}>
-            <ShieldCheck size={20} aria-hidden="true" />
-            <div>
-              <strong>Ambiente seguro</strong>
-              <span>Seus dados e acessos protegidos.</span>
-            </div>
+            <span className={styles.integrationLabel}>Integração Oficial com</span>
+
+            <span className={styles.integrationBrands}>
+              <span className={styles.integrationBrand}>
+                <Image
+                  src="/meta-logo.png"
+                  alt="Meta"
+                  width={120}
+                  height={40}
+                  className={styles.integrationLogo}
+                />
+              </span>
+
+              <span className={styles.integrationDivider} aria-hidden="true" />
+
+              <span className={styles.integrationBrand}>
+                <Image
+                  src="/google-logo.png"
+                  alt="Google"
+                  width={120}
+                  height={40}
+                  className={styles.integrationLogo}
+                />
+              </span>
+            </span>
           </div>
         </div>
 
