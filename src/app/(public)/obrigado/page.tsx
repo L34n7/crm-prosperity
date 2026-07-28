@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
 import styles from "./obrigado.module.css";
 
 export default function ObrigadoPage() {
@@ -20,6 +22,18 @@ export default function ObrigadoPage() {
       <div className={styles.backgroundGrid} />
 
       <section className={styles.card}>
+        <Link href="/" className={styles.brand} aria-label="Voltar para a página inicial">
+          <Image
+            src="/logo.png"
+            alt="Prosperity CRM"
+            width={58}
+            height={57}
+            className={styles.logo}
+            priority
+          />
+          <span><strong>Prosperity</strong> CRM</span>
+        </Link>
+
         <div className={styles.successSeal}>
           <div className={styles.successSealInner}>✓</div>
         </div>

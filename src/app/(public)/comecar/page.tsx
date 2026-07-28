@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import styles from "./comecar.module.css";
 import {
@@ -150,7 +151,25 @@ export default function ComecarPage() {
 
       <section className={styles.wrapper}>
         <div className={styles.hero}>
-          <div className={styles.badge}>CRM Prosperity</div>
+          <Link href="/" className={styles.brand} aria-label="Voltar para a página inicial">
+            <Image
+              src="/logo.png"
+              alt="Prosperity CRM"
+              width={132}
+              height={129}
+              className={styles.logo}
+              priority
+            />
+            <span className={styles.brandName}>
+              <strong>Prosperity</strong>
+              <span>CRM</span>
+            </span>
+          </Link>
+
+          <div className={styles.badge}>
+            <span className={styles.badgeDot} />
+            Sua evolução começa aqui
+          </div>
 
           <h1 className={styles.heroTitle}>
             Organize atendimentos, equipe e vendas em um só lugar
@@ -179,7 +198,8 @@ export default function ComecarPage() {
           </div>
 
           <div className={styles.heroFooter}>
-            Comece agora e avance para a escolha do seu plano.
+            <strong>Cadastro rápido e seguro.</strong>
+            <span>Na próxima etapa, você escolhe o plano ideal para sua operação.</span>
           </div>
         </div>
 

@@ -3,9 +3,9 @@
   min-height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.1), transparent 28%),
-    linear-gradient(135deg, #07111f 0%, #0b1526 45%, #0f172a 100%);
+    radial-gradient(circle at 12% 10%, rgba(16, 185, 129, 0.18), transparent 30%),
+    radial-gradient(circle at 88% 86%, rgba(15, 118, 110, 0.14), transparent 28%),
+    linear-gradient(135deg, #040b10 0%, #07151a 48%, #08131f 100%);
   padding: 24px 20px 28px;
 }
 
@@ -16,7 +16,7 @@
   width: 320px;
   height: 320px;
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.18);
+  background: rgba(16, 185, 129, 0.2);
   filter: blur(80px);
   pointer-events: none;
 }
@@ -47,15 +47,39 @@
   text-align: center;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  margin: 0 auto 12px;
+  gap: 8px;
+  color: #ffffff;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.brand strong {
+  font-size: 17px;
+}
+
+.logo {
+  width: 48px;
+  height: 47px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
+}
+
 .kicker {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 8px 14px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: #cbd5e1;
+  background: rgba(16, 185, 129, 0.09);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  color: #a7f3d0;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -101,10 +125,10 @@
 }
 
 .cardAtivo {
-  border: 1px solid rgba(37, 99, 235, 0.32);
+  border: 1px solid rgba(16, 185, 129, 0.34);
   box-shadow:
     0 18px 44px rgba(0, 0, 0, 0.22),
-    0 0 0 1px rgba(37, 99, 235, 0.14);
+    0 0 0 1px rgba(16, 185, 129, 0.12);
 }
 
 .cardCotacao {
@@ -319,15 +343,15 @@
 }
 
 .primaryButton {
-  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
   color: #ffffff;
   cursor: pointer;
-  box-shadow: 0 14px 30px rgba(29, 78, 216, 0.24);
+  box-shadow: 0 14px 30px rgba(5, 150, 105, 0.24);
 }
 
 .primaryButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 34px rgba(29, 78, 216, 0.3);
+  box-shadow: 0 18px 34px rgba(5, 150, 105, 0.3);
 }
 
 .quoteButton {
@@ -354,7 +378,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: #1d4ed8;
+  color: #047857;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
