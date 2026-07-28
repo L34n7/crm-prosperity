@@ -8,6 +8,7 @@ export type CandidatoTransferenciaAtendente = {
   id: string;
   nome?: string | null;
   cargaAtual?: number;
+  isAdministrador?: boolean;
 };
 
 const ESTRATEGIAS_VALIDAS = new Set<EstrategiaTransferenciaAtendente>([
@@ -47,16 +48,24 @@ export function selecionarAtendenteTransferencia(params: {
   atendenteId?: string | null;
   random?: () => number;
 }): CandidatoTransferenciaAtendente | null {
-  const candidatos = params.candidatos.filter((item) => Boolean(item?.id));
+  const candidatosValidos = params.candidatos.filter((item) => Boolean(item?.id));
 
-  if (params.estrategia === "fila_setor" || candidatos.length === 0) {
+  if (params.estrategia === "fila_setor" || candidatosValidos.length === 0) {
     return null;
   }
 
   if (params.estrategia === "atendente_especifico") {
     const atendenteId = String(params.atendenteId || "").trim();
     if (!atendenteId) return null;
-    return candidatos.find((item) => item.id === atendenteId) || null;
+    return candidatosValidos.find((item) => item.id === atendenteId) || null;
+  }
+
+  const candidatos = candidatosValidos.filter(
+    (item) => item.isAdministrador !== true
+  );
+
+  if (candidatos.length === 0) {
+    return null;
   }
 
   const random = params.random || Math.random;
