@@ -3486,19 +3486,25 @@
   }
 }
 
-/* Readability: slightly larger supporting copy across the public site. */
-.heroEyebrow,
-.aiKicker,
-.finalCtaEyebrow {
-  font-size: 13px;
-}
-
-.heroProof span {
+/* Readability: larger supporting copy across the public site. */
+.desktopNav a,
+.headerLogin,
+.headerCta {
   font-size: 14px;
 }
 
+.heroEyebrow,
+.aiKicker,
+.finalCtaEyebrow {
+  font-size: 14px;
+}
+
+.heroProof span {
+  font-size: 15px;
+}
+
 .sectionHeading > span {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .sectionHeading > p,
@@ -3506,7 +3512,7 @@
 .showcaseCopy > p,
 .aiStatement p,
 .finalCta .sectionShell > p {
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .problemItem p,
@@ -3516,13 +3522,13 @@
 .audienceGrid p,
 .planDescription,
 .faqList details > p {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .problemConclusion p,
 .solutionPillars strong,
 .differentialsList p {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .problemConclusion span,
@@ -3532,7 +3538,7 @@
 .pricingCard li,
 .footerBrand > p,
 .footerColumn a {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .orbitItem,
@@ -3542,14 +3548,14 @@
 .planPrice del,
 .footerColumn > strong,
 .footerBottom {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .planPrice span,
 .pricingNote {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .faqList summary {
-  font-size: 16px;
+  font-size: 17px;
 }
