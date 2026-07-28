@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
@@ -17,6 +18,7 @@ const NAVIGATION = [
 export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 24);
@@ -40,12 +42,79 @@ export default function SiteHeader() {
     };
   }, [menuOpen]);
 
+  const scrollToSection = useCallback(
+    (href: string, behavior: ScrollBehavior = "smooth") => {
+      const section = document.querySelector<HTMLElement>(href);
+
+      if (!section) {
+        return;
+      }
+
+      const sectionHeading =
+        section.querySelector<HTMLElement>(
+          `.${styles.sectionHeading}, .${styles.aiHeader}`,
+        ) ?? section;
+      const headerBottom =
+        headerRef.current?.getBoundingClientRect().bottom ?? 96;
+      const viewportGap = window.innerWidth <= 720 ? 16 : 26;
+      const scrollTop =
+        window.scrollY +
+        sectionHeading.getBoundingClientRect().top -
+        headerBottom -
+        viewportGap;
+
+      window.scrollTo({
+        top: Math.max(0, scrollTop),
+        behavior,
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    function alignCurrentHash() {
+      if (window.location.hash) {
+        scrollToSection(window.location.hash, "auto");
+      }
+    }
+
+    const initialFrame = window.requestAnimationFrame(alignCurrentHash);
+    window.addEventListener("popstate", alignCurrentHash);
+
+    return () => {
+      window.cancelAnimationFrame(initialFrame);
+      window.removeEventListener("popstate", alignCurrentHash);
+    };
+  }, [scrollToSection]);
+
   function closeMenu() {
     setMenuOpen(false);
   }
 
+  function handleNavigation(
+    event: ReactMouseEvent<HTMLAnchorElement>,
+    href: string,
+  ) {
+    event.preventDefault();
+    closeMenu();
+
+    if (window.location.hash !== href) {
+      window.history.pushState(null, "", href);
+    }
+
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)")
+      .matches
+      ? "auto"
+      : "smooth";
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => scrollToSection(href, behavior));
+    });
+  }
+
   return (
     <header
+      ref={headerRef}
       className={`${styles.siteHeader} ${
         scrolled ? styles.siteHeaderScrolled : ""
       }`}
@@ -74,7 +143,11 @@ export default function SiteHeader() {
 
         <nav className={styles.desktopNav} aria-label="Navegação principal">
           {NAVIGATION.map((item) => (
-            <a key={item.href} href={item.href}>
+            <a
+              key={item.href}
+              href={item.href}
+              onClick={(event) => handleNavigation(event, item.href)}
+            >
               {item.label}
             </a>
           ))}
@@ -109,11 +182,18 @@ export default function SiteHeader() {
       >
         <nav aria-label="Navegação mobile">
           {NAVIGATION.map((item) => (
-            <a key={item.href} href={item.href} onClick={closeMenu}>
+            <a
+              key={item.href}
+              href={item.href}
+              onClick={(event) => handleNavigation(event, item.href)}
+            >
               {item.label}
             </a>
           ))}
-          <a href="#faq" onClick={closeMenu}>
+          <a
+            href="#faq"
+            onClick={(event) => handleNavigation(event, "#faq")}
+          >
             Perguntas frequentes
           </a>
         </nav>
