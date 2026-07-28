@@ -100,9 +100,9 @@
 }
 
 .brandBadge {
-  width: 132px;
-  height: 129px;
-  flex: 0 0 132px;
+  width: 152px;
+  height: 149px;
+  flex: 0 0 152px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -127,7 +127,7 @@
 .brandName {
   margin-top: 10px;
   color: #ffffff;
-  font-size: 36px;
+  font-size: 38px;
   line-height: 1.05;
   font-weight: 850;
   letter-spacing: -0.035em;
@@ -488,13 +488,13 @@
   }
 
   .brandBadge {
-    width: 108px;
-    height: 106px;
-    flex-basis: 108px;
+    width: 124px;
+    height: 121px;
+    flex-basis: 124px;
   }
 
   .brandName {
-    font-size: 30px;
+    font-size: 32px;
   }
 
   .eyebrow {
@@ -535,77 +535,38 @@
   }
 
   .brandPanel {
-    padding: 20px;
+    padding: 18px 20px;
   }
 
   .brandHeader {
-    gap: 12px;
-  }
-
-  .brandBadge {
-    width: 78px;
-    height: 76px;
-    flex-basis: 78px;
-  }
-
-  .brandIdentity {
-    padding-left: 12px;
-  }
-
-  .brandName {
-    margin-top: 7px;
-    font-size: 22px;
-    white-space: normal;
-  }
-
-  .brandProduct {
-    font-size: 9px;
-    line-height: 1.3;
-  }
-
-  .eyebrow {
-    margin-top: 18px;
-    padding: 6px 10px;
-    font-size: 10px;
-  }
-
-  .title {
-    margin-top: 12px;
-    font-size: 28px;
-  }
-
-  .description {
-    margin-top: 12px;
-    font-size: 14px;
-    line-height: 1.55;
-  }
-
-  .featureList {
-    display: none;
-  }
-
-  .integrationFooter {
-    margin-top: 18px;
-    padding-top: 16px;
-    gap: 12px;
-  }
-
-  .integrationLabel {
-    font-size: 11px;
-  }
-
-  .integrationBrands {
-    justify-content: flex-end;
+    width: 100%;
+    justify-content: center;
     gap: 14px;
   }
 
-  .integrationLogo {
-    height: 21px;
-    max-width: 82px;
+  .brandBadge {
+    width: 96px;
+    height: 94px;
+    flex-basis: 96px;
   }
 
-  .integrationDivider {
-    height: 22px;
+  .brandIdentity {
+    padding-left: 14px;
+  }
+
+  .brandName {
+    margin-top: 0;
+    font-size: 26px;
+    white-space: nowrap;
+  }
+
+  .brandProduct,
+  .eyebrow,
+  .title,
+  .description,
+  .featureList,
+  .integrationFooter {
+    display: none;
   }
 
   .card {
