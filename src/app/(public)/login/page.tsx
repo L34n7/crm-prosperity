@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import styles from "./login.module.css";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { enviarEventoSessao, getClientSessionId } from "@/lib/auth/browser-session";
 
 const AMBIENTE_CONFIGURADO_STORAGE_KEY = "crm_ambiente_configurado";
@@ -129,96 +129,84 @@ export default function LoginPage() {
     <main className={styles.page}>
       <div className={styles.backgroundGlowTop} />
       <div className={styles.backgroundGlowBottom} />
+      <div className={styles.backgroundGrid} />
 
       <section className={styles.wrapper}>
         <div className={styles.brandPanel}>
-          <div className={styles.brandHeader}>
-            <div className={styles.brandBadge}>
+          <div>
+            <Link href="/" className={styles.brandHeader} aria-label="Ir para a página inicial">
               <Image
                 src="/logo.png"
                 alt="CRM Prosperity"
-                width={2096}
-                height={2048}
+                width={112}
+                height={110}
                 className={styles.brandLogo}
                 priority
               />
-            </div>
 
-            <div className={styles.brandIdentity}>
-              <p className={styles.eyebrow}>Plataforma empresarial</p>
-              <h1 className={styles.title}>CRM Prosperity</h1>
-            </div>
-          </div>
+              <div className={styles.brandIdentity}>
+                <span className={styles.brandName}>Prosperity</span>
+                <span className={styles.brandProduct}>CRM</span>
+              </div>
+            </Link>
 
-          <p className={styles.description}>
-            Centralize o atendimento pelo WhatsApp, automatize conversas, realize
-            disparos e acompanhe a jornada dos seus leads em um único sistema.
-          </p>
+            <p className={styles.eyebrow}>Bem-vindo de volta</p>
+            <h1 className={styles.title}>
+              Seu atendimento inteligente começa aqui.
+            </h1>
 
-          <div className={styles.featureList}>
-            <div className={styles.featureItem}>
-              <span className={styles.featureDot} />
-              <span>Integração com a API Oficial do WhatsApp da Meta</span>
-            </div>
+            <p className={styles.description}>
+              Acesse sua operação, acompanhe conversas e mantenha automações,
+              equipe e oportunidades conectadas em um só lugar.
+            </p>
 
-            <div className={styles.featureItem}>
-              <span className={styles.featureDot} />
-              <span>Agenda, automações, fluxos e disparos programados</span>
-            </div>
+            <div className={styles.featureList}>
+              <div className={styles.featureItem}>
+                <span className={styles.featureIcon}><Check size={14} /></span>
+                <span>WhatsApp oficial com atendimento centralizado</span>
+              </div>
 
-            <div className={styles.featureItem}>
-              <span className={styles.featureDot} />
-              <span>Rastreamento de leads, campanhas e conversões com Pixel</span>
+              <div className={styles.featureItem}>
+                <span className={styles.featureIcon}><Check size={14} /></span>
+                <span>Inteligência Artificial integrada de ponta a ponta</span>
+              </div>
+
+              <div className={styles.featureItem}>
+                <span className={styles.featureIcon}><Check size={14} /></span>
+                <span>Automações, agenda e gestão em uma única plataforma</span>
+              </div>
             </div>
           </div>
 
           <div className={styles.integrationFooter}>
-            <span className={styles.integrationLabel}>Integração Oficial com</span>
-
-            <div className={styles.integrationBrands}>
-              <div className={styles.integrationBrand}>
-                <Image
-                  src="/meta-logo.png"
-                  alt="Meta"
-                  width={120}
-                  height={40}
-                  className={styles.integrationLogo}
-                />
-              </div>
-
-              <span className={styles.integrationDivider} />
-
-              <div className={styles.integrationBrand}>
-                <Image
-                  src="/google-logo.png"
-                  alt="Google"
-                  width={120}
-                  height={40}
-                  className={styles.integrationLogo}
-                />
-              </div>
+            <ShieldCheck size={20} aria-hidden="true" />
+            <div>
+              <strong>Ambiente seguro</strong>
+              <span>Seus dados e acessos protegidos.</span>
             </div>
           </div>
         </div>
 
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <p className={styles.cardEyebrow}>Acesso seguro</p>
+            <p className={styles.cardEyebrow}>Área do cliente</p>
             <h2 className={styles.cardTitle}>Entrar na plataforma</h2>
             <p className={styles.cardSubtitle}>
-              Informe seu e-mail e senha para acessar o painel administrativo.
+              Use seus dados de acesso para continuar.
             </p>
           </div>
 
           <form onSubmit={handleLogin} className={styles.form}>
             <div className={styles.field}>
-              <label className={styles.label}>Email</label>
+              <label htmlFor="email" className={styles.label}>E-mail</label>
               <input
+                id="email"
                 type="email"
                 className={styles.input}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="yourname@example.com"
+                placeholder="seuemail@empresa.com.br"
+                autoComplete="email"
                 required
               />
             </div>
@@ -257,40 +245,16 @@ export default function LoginPage() {
               disabled={loading}
               className={styles.submitButton}
             >
-              {loading ? "Entrando..." : "Entrar"}
+              <span>{loading ? "Entrando..." : "Entrar na plataforma"}</span>
+              {loading ? null : <ArrowRight size={19} aria-hidden="true" />}
             </button>
 
-            <div
-              style={{
-                marginTop: "12px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "12px",
-                flexWrap: "wrap",
-              }}
-            >
-              <Link
-                href="/comecar"
-                style={{
-                  fontSize: "14px",
-                  color: "#2563eb",
-                  textDecoration: "none",
-                  fontWeight: 600,
-                }}
-              >
+            <div className={styles.formLinks}>
+              <Link href="/comecar" className={styles.formLink}>
                 Ainda não tenho conta
               </Link>
 
-              <Link
-                href="/recuperar-senha"
-                style={{
-                  fontSize: "14px",
-                  color: "#2563eb",
-                  textDecoration: "none",
-                  fontWeight: 600,
-                }}
-              >
+              <Link href="/recuperar-senha" className={styles.formLink}>
                 Esqueci minha senha
               </Link>
             </div>
@@ -307,6 +271,12 @@ export default function LoginPage() {
               {mensagem}
             </div>
           )}
+
+          <p className={styles.cardFooter}>
+            Ainda precisa de ajuda?{" "}
+            <Link href="/recuperar-senha">Recupere seu acesso</Link>
+            {" "}ou fale com o suporte.
+          </p>
         </div>
       </section>
     </main>
