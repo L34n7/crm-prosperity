@@ -3,17 +3,23 @@
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { MessageCircle } from "lucide-react";
+import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import styles from "./obrigado.module.css";
+
+const PASSOS = [
+  "Verifique seu email.",
+  "Confirme sua conta.",
+  "Entre na plataforma.",
+  "Conecte seu WhatsApp oficial.",
+];
+
+const AJUDA_WHATSAPP_URL = montarWhatsappUrl(
+  "Olá! Preciso de ajuda com meu acesso ao CRM Prosperity."
+);
 
 export default function ObrigadoPage() {
   const router = useRouter();
-
-  const passos = [
-    "Verifique seu email.",
-    "Confirme sua conta.",
-    "Entre na plataforma.",
-    "Conecte seu WhatsApp oficial.",
-  ];
 
   return (
     <main className={styles.page}>
@@ -68,7 +74,7 @@ export default function ObrigadoPage() {
           </div>
 
           <div className={styles.stepsList}>
-            {passos.map((passo, index) => (
+            {PASSOS.map((passo, index) => (
               <div key={passo} className={styles.stepItem}>
                 <div className={styles.stepNumber}>{index + 1}</div>
                 <div className={styles.stepText}>{passo}</div>
@@ -91,6 +97,16 @@ export default function ObrigadoPage() {
           >
             Fazer novo cadastro
           </button>
+
+          <a
+            href={AJUDA_WHATSAPP_URL}
+            target="_blank"
+            rel="noreferrer"
+            className={styles.helpButton}
+          >
+            <MessageCircle size={19} aria-hidden="true" />
+            Solicitar ajuda pelo WhatsApp
+          </a>
         </div>
 
         <p className={styles.footerNote}>
