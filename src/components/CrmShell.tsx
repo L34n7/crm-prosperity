@@ -3,6 +3,7 @@ import AssinaturaStatusGuard from "@/components/AssinaturaStatusGuard";
 import WhatsAppMetaBlockNotice from "@/components/WhatsAppMetaBlockNotice";
 import WhatsAppConnectionTestNotice from "@/components/WhatsAppConnectionTestNotice";
 import WhatsAppDisparoProgressCard from "@/components/WhatsAppDisparoProgressCard";
+import AssignmentSelectEnhancer from "@/components/AssignmentSelectEnhancer";
 import { HeaderUserProvider } from "@/components/header-user-context";
 import { HeaderSummaryProvider } from "@/components/header-summary-context";
 import SessionActivityTracker from "@/components/SessionActivityTracker";
@@ -38,6 +39,7 @@ export default function CrmShell({
       <HeaderSummaryProvider>
         <div className={styles.shell}>
           <SessionActivityTracker />
+          <AssignmentSelectEnhancer />
 
           <Sidebar
             initialCollapsed={initialCollapsed}

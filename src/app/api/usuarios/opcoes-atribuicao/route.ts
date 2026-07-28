@@ -19,6 +19,57 @@ type UsuarioSetorComUsuario = {
   } | null;
 };
 
+async function listarSetoresPermitidos(params: {
+  usuarioId: string;
+  empresaId: string;
+  administrador: boolean;
+}) {
+  let setorIdsPermitidos: string[] | null = null;
+
+  if (!params.administrador) {
+    const { data: vinculos, error: vinculosError } = await supabaseAdmin
+      .from("usuarios_setores")
+      .select("setor_id")
+      .eq("usuario_id", params.usuarioId);
+
+    if (vinculosError) {
+      throw vinculosError;
+    }
+
+    setorIdsPermitidos = Array.from(
+      new Set(
+        (vinculos || [])
+          .map((vinculo) => String(vinculo.setor_id || "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    if (setorIdsPermitidos.length === 0) {
+      return [];
+    }
+  }
+
+  let query = supabaseAdmin
+    .from("setores")
+    .select("id, nome")
+    .eq("empresa_id", params.empresaId)
+    .eq("ativo", true)
+    .order("ordem_exibicao", { ascending: true })
+    .order("nome", { ascending: true });
+
+  if (setorIdsPermitidos) {
+    query = query.in("id", setorIdsPermitidos);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
 export async function GET(request: Request) {
   try {
     const resultado = await getUsuarioContexto();
@@ -46,17 +97,24 @@ export async function GET(request: Request) {
       );
     }
 
+    const administrador = isAdministrador(usuario);
     const { searchParams } = new URL(request.url);
-    const setorId = searchParams.get("setor_id");
+    const setorId = String(searchParams.get("setor_id") || "").trim();
 
     if (!setorId) {
-      return NextResponse.json(
-        { ok: false, error: "setor_id é obrigatório" },
-        { status: 400 }
-      );
+      const setores = await listarSetoresPermitidos({
+        usuarioId: usuario.id,
+        empresaId: usuario.empresa_id,
+        administrador,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        setores,
+      });
     }
 
-    if (!isAdministrador(usuario)) {
+    if (!administrador) {
       const usuarioLogadoPertenceAoSetor = await usuarioPertenceAoSetor(
         usuario.id,
         setorId
@@ -140,10 +198,10 @@ export async function GET(request: Request) {
         );
       }
 
-      for (const administrador of usuariosAdmin || []) {
-        usuariosPorId.set(administrador.id, {
-          id: administrador.id,
-          nome: administrador.nome,
+      for (const administradorUsuario of usuariosAdmin || []) {
+        usuariosPorId.set(administradorUsuario.id, {
+          id: administradorUsuario.id,
+          nome: administradorUsuario.nome,
           is_administrador: true,
         });
       }
