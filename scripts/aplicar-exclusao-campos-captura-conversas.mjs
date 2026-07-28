@@ -187,7 +187,7 @@ if (!page.includes("onExcluir?: () => void;")) {
       });
 
       const descricao = document.createElement("p");
-      descricao.textContent = `O campo “${nomeCampo}” será removido permanentemente do contato.`;
+      descricao.textContent = \`O campo “\${nomeCampo}” será removido permanentemente do contato.\`;
       Object.assign(descricao.style, {
         margin: "8px 0 0",
         color: "var(--crm-text-muted, #607785)",
@@ -301,9 +301,9 @@ if (!page.includes("onExcluir?: () => void;")) {
     try {
       setErro("");
       const response = await fetch(
-        `/api/contatos/${encodeURIComponent(
+        \`/api/contatos/\${encodeURIComponent(
           contatoId
-        )}/informacoes-captura/${encodeURIComponent(informacao.id)}`,
+        )}/informacoes-captura/\${encodeURIComponent(informacao.id)}\`,
         { method: "DELETE" }
       );
       const data = await response.json().catch(() => ({}));
