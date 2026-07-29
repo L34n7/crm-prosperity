@@ -8,7 +8,7 @@
   padding: 28px 20px;
   background:
     radial-gradient(circle at 10% 12%, rgba(16, 185, 129, 0.01), transparent 29%),
-    radial-gradient(circle at 90% 86%, rgba(14, 116, 144, 0.12), transparent 28%),
+    radial-gradient(circle at 90% 86%, rgba(14, 116, 144, 0.049), transparent 28%),
     linear-gradient(135deg, #040b10 0%, #07151a 48%, #08131f 100%);
 }
 
@@ -31,7 +31,7 @@
 .backgroundGlowBottom {
   right: -130px;
   bottom: -170px;
-  background: rgba(15, 118, 110, 0.16);
+  background: rgba(15, 118, 109, 0.098);
 }
 
 .backgroundGrid {
@@ -69,7 +69,7 @@
   justify-content: space-between;
   color: #ffffff;
   background:
-    radial-gradient(circle at 8% 4%, rgba(52, 211, 153, 0.15), transparent 35%),
+    radial-gradient(circle at 8% 4%, rgba(52, 211, 153, 0.20), transparent 35%),
     linear-gradient(155deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.018));
 }
 
@@ -109,8 +109,8 @@
 }
 
 .brandLogo {
-  width: 180px;
-  height: 180px;
+  width: 170px;
+  height: 170px;
   margin: 0px 0px 0px -30px;
   object-fit: contain;
   filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.34));
