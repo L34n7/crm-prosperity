@@ -12,10 +12,6 @@ import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
-import {
-  obterResultadoFluxoEventoManual,
-  tipoEventoManualValido,
-} from "@/lib/rastreamento/eventos-manuais";
 import { verificarEEncerrarConversaSe24hExpirada } from "@/lib/whatsapp/verificar-expiracao-conversas";
 import {
   CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
@@ -24,6 +20,66 @@ import {
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 const supabaseAdmin = getSupabaseAdmin();
+
+type ClassificacaoEncerramento =
+  | "qualificado"
+  | "convertido"
+  | "perdido";
+
+const CLASSIFICACOES_ENCERRAMENTO = new Set<ClassificacaoEncerramento>([
+  "qualificado",
+  "convertido",
+  "perdido",
+]);
+
+const CLASSIFICACAO_ENCERRAMENTO_LEGADA: Record<
+  string,
+  ClassificacaoEncerramento
+> = {
+  novo: "qualificado",
+  lead_qualificado: "qualificado",
+  venda_realizada: "convertido",
+  agendamento_criado: "convertido",
+  agendamento_confirmado: "convertido",
+  entrada_grupo_confirmada: "convertido",
+  pagamento_confirmado: "convertido",
+  objetivo_concluido: "convertido",
+  venda_perdida: "perdido",
+  objetivo_nao_concluido: "perdido",
+  sem_interesse: "perdido",
+};
+
+function normalizarClassificacaoEncerramento(
+  valor: unknown
+): ClassificacaoEncerramento | null {
+  const normalizado = String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  if (CLASSIFICACOES_ENCERRAMENTO.has(normalizado as ClassificacaoEncerramento)) {
+    return normalizado as ClassificacaoEncerramento;
+  }
+
+  return CLASSIFICACAO_ENCERRAMENTO_LEGADA[normalizado] || null;
+}
+
+function resultadoFluxoPorClassificacaoEncerramento(
+  classificacao: ClassificacaoEncerramento
+) {
+  if (classificacao === "convertido") return "positivo";
+  if (classificacao === "perdido") return "negativo";
+  return "neutro";
+}
+
+function statusLeadPorClassificacaoEncerramento(
+  classificacao: ClassificacaoEncerramento
+) {
+  return classificacao === "convertido" ? "cliente" : classificacao;
+}
 
 function normalizarValorResultado(valor: unknown) {
   if (valor === "" || valor === null || valor === undefined) {
@@ -477,13 +533,18 @@ export async function PUT(
   const integracao_whatsapp_id =
     body?.integracao_whatsapp_id ?? conversaAtual.integracao_whatsapp_id;
   const status = body?.status ?? conversaAtual.status;
-  const tipoEventoResultado =
-    String(body?.tipo_evento_resultado || "").trim() || "lead_qualificado";
+  const classificacaoResultadoEntrada =
+    body?.classificacao_resultado ??
+    body?.tipo_evento_resultado ??
+    "qualificado";
+  const classificacaoResultado = normalizarClassificacaoEncerramento(
+    classificacaoResultadoEntrada
+  );
   const valorResultadoNormalizado = normalizarValorResultado(
     body?.valor_resultado
   );
   const valorEventoResultado =
-    tipoEventoResultado === "venda_realizada"
+    classificacaoResultado === "convertido"
       ? valorResultadoNormalizado
       : null;
   const observacaoResultado =
@@ -552,19 +613,16 @@ export async function PUT(
   const estaEncerrando =
     novoStatusEhEncerrado && !conversaAtualEstaEncerrada;
 
-  if (
-    estaEncerrando &&
-    !tipoEventoManualValido(tipoEventoResultado)
-  ) {
+  if (estaEncerrando && !classificacaoResultado) {
     return NextResponse.json(
-      { ok: false, error: "Tipo de evento do encerramento inválido" },
+      { ok: false, error: "Classificação do encerramento inválida" },
       { status: 400 }
     );
   }
 
   if (
     estaEncerrando &&
-    tipoEventoResultado === "venda_realizada" &&
+    classificacaoResultado === "convertido" &&
     valorEventoResultado === null
   ) {
     return NextResponse.json(
@@ -1027,34 +1085,129 @@ export async function PUT(
       );
     }
 
-    const { error: eventoResultadoError } = await supabaseAdmin.rpc(
-      "rastreamento_criar_evento",
-      {
-        p_empresa_id: empresa_id,
-        p_tipo: tipoEventoResultado,
-        p_contato_id: contato_id,
-        p_conversa_id: id,
-        p_valor: valorEventoResultado,
-        p_origem_registro: "manual",
-        p_idempotency_key: `protocolo:${protocoloEncerrado.id}:resultado_encerramento`,
-        p_metadata_json: {
-          origem_interface: "conversas",
-          conversa_protocolo_id: protocoloEncerrado.id,
-          protocolo: protocoloEncerrado.protocolo,
-          observacao: observacaoResultado,
-          resultado_fluxo:
-            obterResultadoFluxoEventoManual(tipoEventoResultado),
-          finalizado_por_tipo: "atendente",
-          finalizado_por_usuario_id: usuario.id,
-          automacao_interrompida: parandoAutomacaoEEncerrando,
-        },
-        p_created_by: usuario.id,
-      }
-    );
-
-    if (eventoResultadoError) {
+    if (!classificacaoResultado) {
       return NextResponse.json(
-        { ok: false, error: eventoResultadoError.message },
+        { ok: false, error: "Classificação do encerramento inválida" },
+        { status: 400 }
+      );
+    }
+
+    const idempotencyKeyEncerramento =
+      `protocolo:${protocoloEncerrado.id}:encerramento:encerrado_manual`;
+    const metadataResultado = {
+      origem_interface: "conversas",
+      conversa_protocolo_id: protocoloEncerrado.id,
+      protocolo: protocoloEncerrado.protocolo,
+      observacao: observacaoResultado,
+      resultado: classificacaoResultado,
+      resultado_fluxo:
+        resultadoFluxoPorClassificacaoEncerramento(classificacaoResultado),
+      finalizado_por_tipo: "atendente",
+      finalizado_por_usuario_id: usuario.id,
+      automacao_interrompida: parandoAutomacaoEEncerrando,
+    };
+
+    const { data: eventoEncerramento, error: eventoBuscaError } =
+      await supabaseAdmin
+        .from("rastreamento_eventos")
+        .select("id, metadata_json")
+        .eq("empresa_id", empresa_id)
+        .eq("idempotency_key", idempotencyKeyEncerramento)
+        .maybeSingle();
+
+    if (eventoBuscaError) {
+      return NextResponse.json(
+        { ok: false, error: eventoBuscaError.message },
+        { status: 500 }
+      );
+    }
+
+    let eventoResultadoId = eventoEncerramento?.id || null;
+
+    if (eventoEncerramento) {
+      const { data: eventoAtualizado, error: eventoAtualizacaoError } =
+        await supabaseAdmin
+          .from("rastreamento_eventos")
+          .update({
+            valor: valorEventoResultado,
+            origem_registro: "manual",
+            metadata_json: {
+              ...(eventoEncerramento.metadata_json || {}),
+              ...metadataResultado,
+            },
+            created_by: usuario.id,
+          })
+          .eq("empresa_id", empresa_id)
+          .eq("id", eventoEncerramento.id)
+          .select("id")
+          .single();
+
+      if (eventoAtualizacaoError) {
+        return NextResponse.json(
+          { ok: false, error: eventoAtualizacaoError.message },
+          { status: 500 }
+        );
+      }
+
+      eventoResultadoId = eventoAtualizado.id;
+    } else {
+      const { error: eventoCriacaoError } = await supabaseAdmin.rpc(
+        "rastreamento_criar_evento",
+        {
+          p_empresa_id: empresa_id,
+          p_tipo: "conversa_encerrada_manual",
+          p_contato_id: contato_id,
+          p_conversa_id: id,
+          p_valor: valorEventoResultado,
+          p_origem_registro: "manual",
+          p_idempotency_key: idempotencyKeyEncerramento,
+          p_metadata_json: metadataResultado,
+          p_created_by: usuario.id,
+        }
+      );
+
+      if (eventoCriacaoError) {
+        return NextResponse.json(
+          { ok: false, error: eventoCriacaoError.message },
+          { status: 500 }
+        );
+      }
+
+      const { data: eventoCriado, error: eventoCriadoBuscaError } =
+        await supabaseAdmin
+          .from("rastreamento_eventos")
+          .select("id")
+          .eq("empresa_id", empresa_id)
+          .eq("idempotency_key", idempotencyKeyEncerramento)
+          .maybeSingle();
+
+      if (eventoCriadoBuscaError) {
+        return NextResponse.json(
+          { ok: false, error: eventoCriadoBuscaError.message },
+          { status: 500 }
+        );
+      }
+
+      eventoResultadoId = eventoCriado?.id || null;
+    }
+
+    const { error: classificacaoContatoError } = await supabaseAdmin
+      .from("contatos")
+      .update({
+        classificacao: classificacaoResultado,
+        status_lead:
+          statusLeadPorClassificacaoEncerramento(classificacaoResultado),
+        classificacao_atualizada_em: encerradoEm,
+        classificacao_evento_id: eventoResultadoId,
+        classificacao_protocolo_id: protocoloEncerrado.id,
+        updated_at: encerradoEm,
+      })
+      .eq("empresa_id", empresa_id)
+      .eq("id", contato_id);
+
+    if (classificacaoContatoError) {
+      return NextResponse.json(
+        { ok: false, error: classificacaoContatoError.message },
         { status: 500 }
       );
     }
@@ -1104,7 +1257,7 @@ export async function PUT(
       assunto: data.assunto,
       closed_at: data.closed_at ?? null,
       automacoes_canceladas: automacoesCanceladas,
-      tipo_evento_resultado: estaEncerrando ? tipoEventoResultado : null,
+      classificacao_resultado: estaEncerrando ? classificacaoResultado : null,
       valor_resultado: estaEncerrando ? valorEventoResultado : null,
       observacao_resultado: estaEncerrando ? observacaoResultado : null,
     },

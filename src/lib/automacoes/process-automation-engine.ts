@@ -2495,6 +2495,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           mensagemTexto: "encontrado",
           numeroDestino,
           runtimeCache,
+          permitirFallbackSempreAposValidacao: true,
         });
 
         return {
@@ -2561,6 +2562,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           mensagemTexto: "slot_escolhido",
           numeroDestino,
           runtimeCache,
+          permitirFallbackSempreAposValidacao: true,
         });
 
         return {
@@ -8206,6 +8208,7 @@ async function seguirParaProximoNo(params: {
   mensagemTexto?: string;
   numeroDestino: string;
   runtimeCache?: FluxoRuntimeCache;
+  permitirFallbackSempreAposValidacao?: boolean;
 }) {
   const {
     empresaId,
@@ -8216,6 +8219,7 @@ async function seguirParaProximoNo(params: {
     mensagemTexto,
     numeroDestino,
     runtimeCache,
+    permitirFallbackSempreAposValidacao = false,
   } = params;
 
   let conexoes: any[] = [];
@@ -8403,6 +8407,14 @@ async function seguirParaProximoNo(params: {
           });
         }
       }
+    }
+
+    if (
+      !conexaoEscolhida &&
+      permitirFallbackSempreAposValidacao &&
+      conexoesSempre.length > 0
+    ) {
+      conexaoEscolhida = conexoesSempre[0];
     }
 
     if (!conexaoEscolhida) {

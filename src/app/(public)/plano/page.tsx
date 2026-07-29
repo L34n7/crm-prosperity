@@ -113,7 +113,7 @@ export default function PlanoPage() {
       badge: "Entrada inteligente",
       recursos: [
         "2 usuários inclusos",
-        "1 milhão de tokens de IA",
+        "150 mil de tokens de IA",
         "API Oficial do WhatsApp inclusa",
         "Atendimento automatizado com IA",
         "Respostas inteligentes em tempo real",
@@ -125,7 +125,7 @@ export default function PlanoPage() {
       ],
     },
     {
-      nome: "Essencial IA PRO",
+      nome: "Essencial IA +",
       slug: "essencial",
       descricao:
         "Para equipes que precisam de mais potência, mais automação e mais inteligência artificial para escalar vendas e atendimento.",
@@ -136,7 +136,7 @@ export default function PlanoPage() {
       badge: "Mais indicado",
       recursos: [
         "6 usuários inclusos",
-        "5 milhões de tokens de IA",
+        "400 mil de tokens de IA",
         "API Oficial do WhatsApp inclusa",
         "Atendimento automatizado avançado com IA",
         "IA treinável para responder clientes",

@@ -161,8 +161,8 @@ export default function ComecarPage() {
               priority
             />
             <span className={styles.brandName}>
-              <strong>Prosperity</strong>
               <span>CRM</span>
+              <strong>Prosperity</strong>
             </span>
           </Link>
 

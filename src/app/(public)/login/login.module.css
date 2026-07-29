@@ -7,7 +7,7 @@
   justify-content: center;
   padding: 28px 20px;
   background:
-    radial-gradient(circle at 10% 12%, rgba(16, 185, 129, 0.2), transparent 29%),
+    radial-gradient(circle at 10% 12%, rgba(16, 185, 129, 0.01), transparent 29%),
     radial-gradient(circle at 90% 86%, rgba(14, 116, 144, 0.12), transparent 28%),
     linear-gradient(135deg, #040b10 0%, #07151a 48%, #08131f 100%);
 }
@@ -70,7 +70,7 @@
   color: #ffffff;
   background:
     radial-gradient(circle at 8% 4%, rgba(52, 211, 153, 0.15), transparent 35%),
-    linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018));
+    linear-gradient(155deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.018));
 }
 
 .brandPanel::after {
@@ -109,15 +109,17 @@
 }
 
 .brandLogo {
-  width: 100%;
-  height: 100%;
+  width: 180px;
+  height: 180px;
+  margin: 0px 0px 0px -30px;
   object-fit: contain;
   filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.34));
 }
 
 .brandIdentity {
   min-width: 0;
-  padding-left: 22px;
+  margin-left: -15px;
+  padding-left: 28px;
   border-left: 1px solid rgba(255, 255, 255, 0.16);
   display: flex;
   flex-direction: column;
@@ -125,7 +127,7 @@
 }
 
 .brandName {
-  margin-top: 10px;
+  margin-top: 8px;
   color: #ffffff;
   font-size: 38px;
   line-height: 1.05;
@@ -136,7 +138,7 @@
 
 .brandProduct {
   color: #c8a96b;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 850;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -147,12 +149,12 @@
   z-index: 1;
   width: fit-content;
   margin: 34px 0 0;
-  padding: 7px 12px;
+  padding: 5px 12px;
   border: 1px solid rgba(52, 211, 153, 0.22);
   border-radius: 999px;
   background: rgba(16, 185, 129, 0.09);
   color: #a7f3d0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -469,6 +471,25 @@
   text-decoration: none;
 }
 
+@media (max-width: 1024px) {
+
+  .brandLogo {
+    width: 180px;
+    height: 180px;
+    margin: 0px 0px 0px -30px;
+  }
+
+  .brandIdentity {
+    margin-left: -20px;
+    padding-left: 30px;
+  }
+
+  .brandName {
+    margin-top: 8px;
+    font-size: 32px;
+  }
+}
+
 @media (max-width: 900px) {
   .page {
     align-items: flex-start;
@@ -487,14 +508,26 @@
     padding: 28px 30px;
   }
 
+  .brandLogo {
+    width: 100px;
+    height: 100px;
+    margin: 0px 0px 0px -30px;
+  }
+
+  .brandIdentity {
+    margin-left: -25px;
+    padding-left: 28px;
+  }
+
+  .brandName {
+    margin-top: 8px;
+    font-size: 32px;
+  }
+
   .brandBadge {
     width: 124px;
     height: 121px;
     flex-basis: 124px;
-  }
-
-  .brandName {
-    font-size: 32px;
   }
 
   .eyebrow {
@@ -538,6 +571,22 @@
     padding: 18px 20px;
   }
 
+  .brandLogo {
+    width: 90px;
+    height: 90px;
+    margin: 0px 0px 0px -40px;
+  }
+
+  .brandIdentity {
+    margin-left: -35px;
+    padding-left: 15px;
+  }
+
+  .brandName {
+    margin-top: 8px;
+    font-size: 20px;
+  }
+
   .brandHeader {
     width: 100%;
     justify-content: center;
@@ -548,16 +597,6 @@
     width: 96px;
     height: 94px;
     flex-basis: 96px;
-  }
-
-  .brandIdentity {
-    padding-left: 14px;
-  }
-
-  .brandName {
-    margin-top: 0;
-    font-size: 26px;
-    white-space: nowrap;
   }
 
   .brandProduct,

@@ -25,8 +25,8 @@ const checkoutEssencial =
 
 const pacotes: PacoteTokens[] = [
   {
-    nome: "Pacote 1 mi",
-    tokens: "1.000.000 tokens",
+    nome: "Pacote 80 mil tokens",
+    tokens: "80.000 tokens",
     preco: "R$ 25",
     descricao:
       "Reforco rapido para manter automacoes, transcricoes e analises com IA funcionando ate a renovacao.",
@@ -39,15 +39,15 @@ const pacotes: PacoteTokens[] = [
     checkoutUrl: process.env.NEXT_PUBLIC_TOKEN_PACKAGE_1M_URL || "",
   },
   {
-    nome: "Pacote 5 mi",
-    tokens: "5.000.000 tokens",
+    nome: "Pacote 400 mil",
+    tokens: "400.000 tokens",
     preco: "R$ 100",
     descricao:
       "Melhor custo por volume para operacoes que usam IA com frequencia durante o atendimento. Garanta a sua operação até a renovacao",
-    economia: "Economize R$25 comparado a 5 pacotes de 1mi.",
+    economia: "Economize R$25 comparado a 5 pacotes de 80 mil.",
     recursos: [
       "Maior folga para automacoes com IA",
-      "Melhor custo por milhao de tokens",
+      "Melhor custo por mil tokens",
       "Recomendado para equipes com alto volume",
       "Mantem analises e transcricoes operando",
     ],
@@ -111,8 +111,8 @@ export default function PacotesTokensPage() {
 
           <div className={styles.heroPanel}>
             <span>Planos atuais</span>
-            <strong>Basico: 1 mi tokens</strong>
-            <strong>Essencial: 5 mi tokens</strong>
+            <strong>Basico: 80 mil tokens</strong>
+            <strong>Essencial: 400 mil tokens</strong>
             <Link href="/ia/tokens" className={styles.heroLink}>
               Ver extrato de consumo
             </Link>
@@ -176,7 +176,7 @@ export default function PacotesTokensPage() {
             <span className={styles.eyebrow}>Upgrade mensal</span>
             <h3>Plano Essencial</h3>
             <p>
-              Aumente o limite mensal para 5 milhoes de tokens e tenha mais
+              Aumente o limite mensal para 400 mil de tokens e tenha mais
               folga para automacoes com IA no atendimento.
             </p>
 

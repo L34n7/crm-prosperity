@@ -97,7 +97,7 @@ const EVENTOS_LABEL: Record<string, string> = {
   lead_criado: "Lead criado",
   conversa_iniciada: "Conversa iniciada",
   primeira_mensagem_recebida: "Primeira mensagem recebida",
-  lead_qualificado: "Lead qualificado",
+  lead_qualificado: "Qualificado",
   agendamento_criado: "Agendamento criado",
   agendamento_confirmado: "Agendamento confirmado",
   entrada_grupo_confirmada: "Entrada no grupo confirmada",
@@ -105,26 +105,21 @@ const EVENTOS_LABEL: Record<string, string> = {
   objetivo_concluido: "Objetivo concluído",
   objetivo_nao_concluido: "Objetivo não concluído",
   sem_interesse: "Sem interesse",
-  venda_realizada: "Venda realizada",
-  venda_perdida: "Venda perdida",
+  venda_realizada: "Convertido",
+  venda_perdida: "Perdido",
   fluxo_iniciado: "Fluxo iniciado",
   fluxo_finalizado: "Fluxo finalizado",
   fluxo_transferido_atendimento: "Transferido para atendimento",
   fluxo_incompleto_timeout: "Fluxo incompleto por timeout",
 };
 
-const EVENTOS_MANUAIS = [
-  { value: "venda_realizada", label: "Venda realizada", exigeValor: true },
-  { value: "venda_perdida", label: "Venda perdida" },
-  { value: "lead_qualificado", label: "Lead qualificado" },
-  { value: "agendamento_criado", label: "Agendamento criado" },
-  { value: "agendamento_confirmado", label: "Agendamento confirmado" },
-  { value: "entrada_grupo_confirmada", label: "Entrada no grupo confirmada" },
-  { value: "pagamento_confirmado", label: "Pagamento confirmado" },
-  { value: "objetivo_concluido", label: "Objetivo concluído" },
-  { value: "objetivo_nao_concluido", label: "Objetivo não concluído" },
-  { value: "sem_interesse", label: "Sem interesse" },
+const CLASSIFICACOES_MANUAIS_RASTREAMENTO = [
+  { value: "lead_qualificado", label: "Qualificado" },
+  { value: "venda_realizada", label: "Convertido", exigeValor: true },
+  { value: "venda_perdida", label: "Perdido" },
 ];
+
+const EVENTOS_MANUAIS = CLASSIFICACOES_MANUAIS_RASTREAMENTO;
 
 const EVENTOS_POR_PAGINA = 10;
 type ResultadoFluxoValor = "positivo" | "negativo" | "neutro" | "incompleto";
@@ -369,12 +364,12 @@ export default function RastreamentoPage() {
   const [linkCampanhaId, setLinkCampanhaId] = useState("");
   const [linkSlug, setLinkSlug] = useState("");
 
-  const [eventoTipo, setEventoTipo] = useState("venda_realizada");
+  const [eventoTipo, setEventoTipo] = useState("lead_qualificado");
   const [eventoContatoId, setEventoContatoId] = useState("");
   const [eventoValor, setEventoValor] = useState("");
   const [eventoEditandoId, setEventoEditandoId] = useState<string | null>(null);
   const [modalEditarEventoAberto, setModalEditarEventoAberto] = useState(false);
-  const [eventoEdicaoTipo, setEventoEdicaoTipo] = useState("venda_realizada");
+  const [eventoEdicaoTipo, setEventoEdicaoTipo] = useState("lead_qualificado");
   const [eventoEdicaoContatoId, setEventoEdicaoContatoId] = useState("");
   const [eventoEdicaoValor, setEventoEdicaoValor] = useState("");
   const [paginaEventos, setPaginaEventos] = useState(1);
@@ -664,7 +659,7 @@ export default function RastreamentoPage() {
   }
 
   function limparFormularioEvento() {
-    setEventoTipo("venda_realizada");
+    setEventoTipo("lead_qualificado");
     setEventoContatoId("");
     setEventoValor("");
   }
@@ -672,7 +667,7 @@ export default function RastreamentoPage() {
   function fecharModalEditarEvento() {
     setModalEditarEventoAberto(false);
     setEventoEditandoId(null);
-    setEventoEdicaoTipo("venda_realizada");
+    setEventoEdicaoTipo("lead_qualificado");
     setEventoEdicaoContatoId("");
     setEventoEdicaoValor("");
   }
@@ -684,7 +679,7 @@ export default function RastreamentoPage() {
     }
 
     setEventoEditandoId(evento.id);
-    setEventoEdicaoTipo(eventoManualValido(evento.tipo) ? evento.tipo : "venda_realizada");
+    setEventoEdicaoTipo(eventoManualValido(evento.tipo) ? evento.tipo : "lead_qualificado");
     setEventoEdicaoContatoId(evento.contatos?.id || "");
     setEventoEdicaoValor(
       evento.valor === null || evento.valor === undefined ? "" : String(evento.valor)
@@ -711,7 +706,7 @@ export default function RastreamentoPage() {
       }).then(lerResposta);
 
       limparFormularioEvento();
-      setMensagem("Evento comercial registrado.");
+      setMensagem("Classificação registrada.");
       await carregarDados();
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao salvar evento.");
@@ -740,7 +735,7 @@ export default function RastreamentoPage() {
       }).then(lerResposta);
 
       fecharModalEditarEvento();
-      setMensagem("Evento comercial atualizado.");
+      setMensagem("Classificação atualizada.");
       await carregarDados();
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao editar evento.");
@@ -1124,7 +1119,7 @@ export default function RastreamentoPage() {
                     <Plus size={20} />
                   </div>
                   <label className={styles.field}>
-                    <span>Evento</span>
+                    <span>Classificação</span>
                     <select
                       value={eventoTipo}
                       onChange={(event) => {
@@ -1169,7 +1164,7 @@ export default function RastreamentoPage() {
                   )}
                   <div className={styles.formActions}>
                     <button className={styles.primaryButton} disabled={salvando}>
-                      Registrar evento
+                      Registrar classificação
                     </button>
                   </div>
                 </form>
@@ -1468,8 +1463,8 @@ export default function RastreamentoPage() {
             <div className={styles.modalHeader}>
               <div>
                 <p className={styles.eyebrow}>Registro comercial</p>
-                <h3>Editar evento</h3>
-                <p>Corrija o resultado manual registrado pelo atendente.</p>
+                <h3>Editar classificação</h3>
+                <p>Altere a classificação comercial registrada para o contato.</p>
               </div>
 
               <button
@@ -1483,7 +1478,7 @@ export default function RastreamentoPage() {
 
             <div className={styles.modalBody}>
               <label className={styles.field}>
-                <span>Evento</span>
+                <span>Classificação</span>
                 <select
                   value={eventoEdicaoTipo}
                   onChange={(event) => {

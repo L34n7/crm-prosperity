@@ -101,6 +101,146 @@ type Conversa = {
   } | null;
 };
 
+type InformacaoCapturaConversa = {
+  id: string;
+  tipo?: string | null;
+  nome_campo?: string | null;
+  sequencia?: number | null;
+  valor: string;
+  capturado_em?: string | null;
+};
+
+const ORDEM_TIPOS_CAPTURA = [
+  "nome",
+  "cpf",
+  "cnpj",
+  "data",
+  "telefone",
+  "numero",
+  "email",
+  "endereco",
+  "cep",
+  "observacao",
+] as const;
+
+const ROTULOS_TIPOS_CAPTURA: Record<string, string> = {
+  nome: "Nome",
+  cpf: "CPF",
+  cnpj: "CNPJ",
+  data: "Data",
+  telefone: "Telefone",
+  numero: "Número",
+  email: "E-mail",
+  endereco: "Endereço",
+  cep: "CEP",
+  observacao: "Observação",
+};
+
+function normalizarLabelCaptura(valor: string | null | undefined) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function obterTipoCaptura(informacao: InformacaoCapturaConversa) {
+  const tipo = normalizarLabelCaptura(informacao.tipo);
+  const nomeCampo = normalizarLabelCaptura(informacao.nome_campo)
+    .replace(/\s+captura\s*$/, "")
+    .replace(/\s+\d+\s*$/, "")
+    .trim();
+
+  const normalizarTipo = (valor: string) => {
+    if (valor === "texto" || valor === "livre" || valor === "observacoes") {
+      return "observacao";
+    }
+    if (valor === "e mail") return "email";
+    return valor;
+  };
+
+  const tipoNormalizado = normalizarTipo(tipo);
+  if (ORDEM_TIPOS_CAPTURA.includes(tipoNormalizado as (typeof ORDEM_TIPOS_CAPTURA)[number])) {
+    return tipoNormalizado;
+  }
+
+  const nomeNormalizado = normalizarTipo(nomeCampo);
+  if (ORDEM_TIPOS_CAPTURA.includes(nomeNormalizado as (typeof ORDEM_TIPOS_CAPTURA)[number])) {
+    return nomeNormalizado;
+  }
+
+  return tipoNormalizado || nomeNormalizado || "outro";
+}
+
+function obterRotuloTipoCaptura(informacao: InformacaoCapturaConversa) {
+  const tipo = obterTipoCaptura(informacao);
+  if (ROTULOS_TIPOS_CAPTURA[tipo]) return ROTULOS_TIPOS_CAPTURA[tipo];
+
+  const nomeOriginal = String(
+    informacao.nome_campo || informacao.tipo || "Informação"
+  )
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+captura\s*$/i, "")
+    .replace(/\s+\d+\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return nomeOriginal.charAt(0).toUpperCase() + nomeOriginal.slice(1);
+}
+
+function formatarLabelCapturaResumo(informacao: InformacaoCapturaConversa) {
+  return `${obterRotuloTipoCaptura(informacao)} captura`;
+}
+
+function formatarLabelCapturaDetalhada(informacao: InformacaoCapturaConversa) {
+  const nomeOriginal = String(informacao.nome_campo || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+captura\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const correspondencia = nomeOriginal.match(/^(.*?)(?:\s+(\d+))?$/);
+  const numeroNome = correspondencia?.[2] || "";
+  const sequencia =
+    numeroNome ||
+    (Number(informacao.sequencia || 0) > 0
+      ? String(informacao.sequencia)
+      : "");
+
+  return `${formatarLabelCapturaResumo(informacao)}${
+    sequencia ? ` ${sequencia}` : ""
+  }`;
+}
+
+function compararInformacoesCaptura(
+  a: InformacaoCapturaConversa,
+  b: InformacaoCapturaConversa
+) {
+  const tipoA = obterTipoCaptura(a);
+  const tipoB = obterTipoCaptura(b);
+  const ordemA = ORDEM_TIPOS_CAPTURA.indexOf(
+    tipoA as (typeof ORDEM_TIPOS_CAPTURA)[number]
+  );
+  const ordemB = ORDEM_TIPOS_CAPTURA.indexOf(
+    tipoB as (typeof ORDEM_TIPOS_CAPTURA)[number]
+  );
+  const posicaoA = ordemA === -1 ? ORDEM_TIPOS_CAPTURA.length : ordemA;
+  const posicaoB = ordemB === -1 ? ORDEM_TIPOS_CAPTURA.length : ordemB;
+
+  if (posicaoA !== posicaoB) return posicaoA - posicaoB;
+
+  const sequenciaA = Number(a.sequencia || 0);
+  const sequenciaB = Number(b.sequencia || 0);
+  if (sequenciaA !== sequenciaB) return sequenciaA - sequenciaB;
+
+  return formatarLabelCapturaDetalhada(a).localeCompare(
+    formatarLabelCapturaDetalhada(b),
+    "pt-BR",
+    { numeric: true, sensitivity: "base" }
+  );
+}
+
 type IntegracaoWhatsappOpcao = {
   id: string;
   nome_conexao: string | null;
@@ -475,6 +615,7 @@ type AbaPainelDireito =
   | "listas"
   | "etiquetas"
   | "macros"
+  | "informacoes_captura"
   | "midia_docs_links";
 
 type NotaConversa = {
@@ -660,6 +801,20 @@ type RastreamentoEventoTipoManual =
   | "objetivo_concluido"
   | "objetivo_nao_concluido"
   | "sem_interesse";
+
+type ClassificacaoEncerramento =
+  | "qualificado"
+  | "convertido"
+  | "perdido";
+
+const CLASSIFICACOES_ENCERRAMENTO: Array<{
+  value: ClassificacaoEncerramento;
+  label: string;
+}> = [
+  { value: "qualificado", label: "Qualificado" },
+  { value: "convertido", label: "Convertido" },
+  { value: "perdido", label: "Perdido" },
+];
 
 type RastreamentoEventoConversa = {
   id: string;
@@ -1551,6 +1706,7 @@ function CampoContatoEditavel({
   onEditar,
   onCancelar,
   onSalvar,
+  onExcluir,
 }: {
   label: string;
   valorInicial: string;
@@ -1559,6 +1715,7 @@ function CampoContatoEditavel({
   onEditar: () => void;
   onCancelar: () => void;
   onSalvar: (valor: string) => void;
+  onExcluir?: () => void;
 }) {
   const [valor, setValor] = useState(valorInicial);
 
@@ -1590,6 +1747,21 @@ function CampoContatoEditavel({
           )}
 
           <div className={styles.infoEditActions}>
+            {onExcluir && (
+              <button
+                type="button"
+                className={styles.inlineCancelButton}
+                style={{
+                  marginRight: "auto",
+                  color: "var(--crm-danger-strong)",
+                  borderColor: "rgba(220, 38, 38, 0.3)",
+                }}
+                onClick={onExcluir}
+              >
+                Excluir
+              </button>
+            )}
+
             <button
               type="button"
               className={styles.inlineCancelButton}
@@ -2086,6 +2258,34 @@ function ConversasPageContent() {
   const [painelDireitoAberto, setPainelDireitoAberto] = useState(false);
   const [abaPainelDireito, setAbaPainelDireito] =
     useState<AbaPainelDireito>("contato");
+  const [informacoesCapturaConversa, setInformacoesCapturaConversa] = useState<
+    InformacaoCapturaConversa[]
+  >([]);
+  const [contatoCapturaId, setContatoCapturaId] = useState("");
+  const [carregandoInformacoesCaptura, setCarregandoInformacoesCaptura] =
+    useState(false);
+
+  const informacoesCapturaConversaOrdenadas = useMemo(
+    () =>
+      [...informacoesCapturaConversa]
+        .filter((informacao) => String(informacao.valor || "").trim())
+        .sort(compararInformacoesCaptura),
+    [informacoesCapturaConversa]
+  );
+
+  const informacoesCapturaResumo = useMemo(() => {
+    const tiposExibidos = new Set<string>();
+
+    return informacoesCapturaConversaOrdenadas.filter((informacao) => {
+      const tipo = obterTipoCaptura(informacao);
+      if (tiposExibidos.has(tipo)) return false;
+      tiposExibidos.add(tipo);
+      return true;
+    });
+  }, [informacoesCapturaConversaOrdenadas]);
+
+  const possuiInformacoesCapturaExtras =
+    informacoesCapturaConversaOrdenadas.length > informacoesCapturaResumo.length;
 
   const [abaMidiaDocsLinks, setAbaMidiaDocsLinks] =
     useState<AbaMidiaDocsLinks>("midia");
@@ -2096,7 +2296,7 @@ function ConversasPageContent() {
   const [novoSetorId, setNovoSetorId] = useState("");
   const [novoResponsavelId, setNovoResponsavelId] = useState("");
   const [encerramentoTipoEvento, setEncerramentoTipoEvento] =
-    useState<RastreamentoEventoTipoManual>("venda_realizada");
+    useState<ClassificacaoEncerramento>("qualificado");
   const [encerramentoValor, setEncerramentoValor] = useState("");
   const [encerramentoObservacao, setEncerramentoObservacao] = useState("");
   const [encerramentoInterrompeAutomacao, setEncerramentoInterrompeAutomacao] =
@@ -2160,6 +2360,331 @@ function ConversasPageContent() {
 
   return `${texto.slice(0, limite).trim()}...`;
 }
+
+  async function carregarInformacoesCapturaConversa(
+    conversaId: string,
+    signal?: AbortSignal
+  ) {
+    if (!conversaId) return;
+
+    setCarregandoInformacoesCaptura(true);
+
+    try {
+      const response = await fetch(
+        `/api/conversas/${encodeURIComponent(
+          conversaId
+        )}/informacoes-captura`,
+        { cache: "no-store", signal }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.ok === false) {
+        throw new Error(
+          data?.error || "Erro ao carregar informações de captura."
+        );
+      }
+
+      if (signal?.aborted || conversaSelecionadaIdRef.current !== conversaId) {
+        return;
+      }
+
+      setContatoCapturaId(String(data?.contato_id || "").trim());
+      setInformacoesCapturaConversa(
+        Array.isArray(data.informacoes)
+          ? data.informacoes.filter(
+              (informacao: InformacaoCapturaConversa) =>
+                Boolean(String(informacao?.valor || "").trim())
+            )
+          : []
+      );
+    } catch (error) {
+      if (signal?.aborted) return;
+      if (conversaSelecionadaIdRef.current !== conversaId) return;
+
+      setContatoCapturaId("");
+      setInformacoesCapturaConversa([]);
+      console.error("[capturas-conversa]", error);
+    } finally {
+      if (!signal?.aborted && conversaSelecionadaIdRef.current === conversaId) {
+        setCarregandoInformacoesCaptura(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    const conversaId = conversaSelecionada?.id || "";
+    const controller = new AbortController();
+
+    setContatoCapturaId("");
+    setInformacoesCapturaConversa([]);
+    setCarregandoInformacoesCaptura(Boolean(conversaId));
+
+    if (conversaId) {
+      void carregarInformacoesCapturaConversa(conversaId, controller.signal);
+    }
+
+    return () => controller.abort();
+  }, [conversaSelecionada?.id]);
+
+  async function salvarInformacaoCaptura(
+    informacao: InformacaoCapturaConversa,
+    valor: string
+  ) {
+    const contatoId =
+      contatoCapturaId || String(conversaSelecionada?.contatos?.id || "").trim();
+    const conversaId = conversaSelecionada?.id || "";
+    const valorLimpo = valor.trim();
+
+    if (!contatoId || !conversaId || !valorLimpo) {
+      setErro("Não foi possível identificar a informação de captura para edição.");
+      return;
+    }
+
+    try {
+      setErro("");
+      const response = await fetch(
+        `/api/contatos/${encodeURIComponent(
+          contatoId
+        )}/informacoes-captura`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: informacao.id, valor: valorLimpo }),
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.ok === false) {
+        throw new Error(
+          data?.error || "Erro ao atualizar a informação de captura."
+        );
+      }
+
+      setEditandoCampo(null);
+      setMensagemSucesso("Informação de captura atualizada.");
+      await carregarInformacoesCapturaConversa(conversaId);
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao atualizar a informação de captura."
+      );
+    }
+  }
+
+  function confirmarExclusaoCaptura(nomeCampo: string) {
+    return new Promise<boolean>((resolve) => {
+      const focoAnterior = document.activeElement as HTMLElement | null;
+      const overflowAnterior = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+
+      const overlay = document.createElement("div");
+      overlay.setAttribute("role", "presentation");
+      Object.assign(overlay.style, {
+        position: "fixed",
+        inset: "0",
+        zIndex: "30000",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        background: "rgba(15, 23, 42, 0.58)",
+        backdropFilter: "blur(3px)",
+      });
+
+      const modal = document.createElement("div");
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "captura-delete-title");
+      Object.assign(modal.style, {
+        width: "min(430px, calc(100vw - 32px))",
+        overflow: "hidden",
+        border: "1px solid var(--crm-border, #d8e1e7)",
+        borderRadius: "22px",
+        background: "var(--crm-surface, #ffffff)",
+        color: "var(--crm-text-strong, #0f2635)",
+        boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)",
+        transform: "translateY(0)",
+      });
+
+      const conteudo = document.createElement("div");
+      Object.assign(conteudo.style, {
+        display: "flex",
+        gap: "14px",
+        padding: "22px 22px 18px",
+      });
+
+      const icone = document.createElement("div");
+      icone.textContent = "!";
+      Object.assign(icone.style, {
+        flex: "0 0 44px",
+        width: "44px",
+        height: "44px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "14px",
+        background: "rgba(220, 38, 38, 0.1)",
+        color: "var(--crm-danger-strong, #b91c1c)",
+        fontSize: "22px",
+        fontWeight: "900",
+      });
+
+      const textos = document.createElement("div");
+      Object.assign(textos.style, {
+        minWidth: "0",
+        paddingTop: "1px",
+      });
+
+      const titulo = document.createElement("h2");
+      titulo.id = "captura-delete-title";
+      titulo.textContent = "Excluir informação de captura?";
+      Object.assign(titulo.style, {
+        margin: "0",
+        fontSize: "19px",
+        lineHeight: "1.25",
+        fontWeight: "800",
+      });
+
+      const descricao = document.createElement("p");
+      descricao.textContent = `O campo “${nomeCampo}” será removido permanentemente do contato.`;
+      Object.assign(descricao.style, {
+        margin: "8px 0 0",
+        color: "var(--crm-text-muted, #607785)",
+        fontSize: "14px",
+        lineHeight: "1.5",
+      });
+
+      const aviso = document.createElement("p");
+      aviso.textContent = "Esta ação não poderá ser desfeita.";
+      Object.assign(aviso.style, {
+        margin: "8px 0 0",
+        color: "var(--crm-danger-strong, #b91c1c)",
+        fontSize: "13px",
+        fontWeight: "700",
+      });
+
+      textos.append(titulo, descricao, aviso);
+      conteudo.append(icone, textos);
+
+      const rodape = document.createElement("div");
+      Object.assign(rodape.style, {
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: "10px",
+        padding: "16px 22px 20px",
+        borderTop: "1px solid var(--crm-border-soft, #e8eef2)",
+        background: "var(--crm-surface-subtle, #f8fafb)",
+      });
+
+      const cancelar = document.createElement("button");
+      cancelar.type = "button";
+      cancelar.textContent = "Cancelar";
+      Object.assign(cancelar.style, {
+        minHeight: "40px",
+        padding: "9px 15px",
+        border: "1px solid var(--crm-border, #d8e1e7)",
+        borderRadius: "12px",
+        background: "var(--crm-surface, #ffffff)",
+        color: "var(--crm-text-strong, #0f2635)",
+        font: "inherit",
+        fontSize: "13px",
+        fontWeight: "800",
+        cursor: "pointer",
+      });
+
+      const confirmar = document.createElement("button");
+      confirmar.type = "button";
+      confirmar.textContent = "Excluir campo";
+      Object.assign(confirmar.style, {
+        minHeight: "40px",
+        padding: "9px 16px",
+        border: "1px solid #b91c1c",
+        borderRadius: "12px",
+        background: "#b91c1c",
+        color: "#ffffff",
+        font: "inherit",
+        fontSize: "13px",
+        fontWeight: "800",
+        cursor: "pointer",
+        boxShadow: "0 6px 16px rgba(185, 28, 28, 0.2)",
+      });
+
+      let finalizado = false;
+      const finalizar = (resultado: boolean) => {
+        if (finalizado) return;
+        finalizado = true;
+        document.removeEventListener("keydown", aoPressionarTecla);
+        document.body.style.overflow = overflowAnterior;
+        overlay.remove();
+        focoAnterior?.focus?.();
+        resolve(resultado);
+      };
+
+      const aoPressionarTecla = (event: KeyboardEvent) => {
+        if (event.key === "Escape") finalizar(false);
+        if (event.key === "Enter") finalizar(true);
+      };
+
+      cancelar.addEventListener("click", () => finalizar(false));
+      confirmar.addEventListener("click", () => finalizar(true));
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) finalizar(false);
+      });
+      document.addEventListener("keydown", aoPressionarTecla);
+
+      rodape.append(cancelar, confirmar);
+      modal.append(conteudo, rodape);
+      overlay.append(modal);
+      document.body.append(overlay);
+      cancelar.focus();
+    });
+  }
+
+  async function excluirInformacaoCaptura(
+    informacao: InformacaoCapturaConversa
+  ) {
+    const contatoId =
+      contatoCapturaId || String(conversaSelecionada?.contatos?.id || "").trim();
+    const conversaId = conversaSelecionada?.id || "";
+
+    if (!contatoId || !conversaId) {
+      setErro("Não foi possível identificar a informação de captura para exclusão.");
+      return;
+    }
+
+    const confirmou = await confirmarExclusaoCaptura(
+      formatarLabelCapturaDetalhada(informacao)
+    );
+    if (!confirmou) return;
+
+    try {
+      setErro("");
+      const response = await fetch(
+        `/api/contatos/${encodeURIComponent(
+          contatoId
+        )}/informacoes-captura/${encodeURIComponent(informacao.id)}`,
+        { method: "DELETE" }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.ok === false) {
+        throw new Error(
+          data?.error || "Erro ao excluir a informação de captura."
+        );
+      }
+
+      setEditandoCampo(null);
+      setMensagemSucesso("Informação de captura excluída.");
+      await carregarInformacoesCapturaConversa(conversaId);
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao excluir a informação de captura."
+      );
+    }
+  }
 
   function abrirConversa(conversa: Conversa) {
     setMensagemSucesso("");
@@ -4949,7 +5474,7 @@ function ConversasPageContent() {
 
   async function confirmarEncerramento() {
     if (
-      eventoRastreamentoExigeValor(encerramentoTipoEvento) &&
+      encerramentoTipoEvento === "convertido" &&
       !encerramentoValor.trim()
     ) {
       setErro("Informe o valor da venda.");
@@ -4964,8 +5489,8 @@ function ConversasPageContent() {
     await atualizarConversa(
       {
         status: "encerrado_manual",
-        tipo_evento_resultado: encerramentoTipoEvento,
-        valor_resultado: eventoRastreamentoExigeValor(encerramentoTipoEvento)
+        classificacao_resultado: encerramentoTipoEvento,
+        valor_resultado: encerramentoTipoEvento === "convertido"
           ? encerramentoValor
           : null,
         observacao_resultado: encerramentoObservacao.trim() || null,
@@ -4995,8 +5520,8 @@ function ConversasPageContent() {
           bot_ativo: false,
           responsavel_id: null,
           acao: "parar_automacao_encerrar",
-          tipo_evento_resultado: encerramentoTipoEvento,
-          valor_resultado: eventoRastreamentoExigeValor(encerramentoTipoEvento)
+          classificacao_resultado: encerramentoTipoEvento,
+          valor_resultado: encerramentoTipoEvento === "convertido"
             ? encerramentoValor
             : null,
           observacao_resultado: encerramentoObservacao.trim() || null,
@@ -6582,7 +7107,7 @@ async function baixarConversaPDF() {
   function abrirEncerrar(interromperAutomacao = false) {
     setErro("");
     setMensagemSucesso("");
-    setEncerramentoTipoEvento("venda_realizada");
+    setEncerramentoTipoEvento("qualificado");
     setEncerramentoValor("");
     setEncerramentoObservacao("");
     setEncerramentoInterrompeAutomacao(interromperAutomacao);
@@ -8766,31 +9291,32 @@ const templateFooterTexto = useMemo(() => {
                             </p>
 
                             <label className={styles.actionLabel}>
-                              Tipo de evento
+                              Classificação do atendimento
                             </label>
                             <select
                               value={encerramentoTipoEvento}
                               onChange={(event) => {
-                                const novoTipo = event.target
-                                  .value as RastreamentoEventoTipoManual;
-                                setEncerramentoTipoEvento(novoTipo);
+                                const novaClassificacao = event.target
+                                  .value as ClassificacaoEncerramento;
+                                setEncerramentoTipoEvento(novaClassificacao);
 
-                                if (!eventoRastreamentoExigeValor(novoTipo)) {
+                                if (novaClassificacao !== "convertido") {
                                   setEncerramentoValor("");
                                 }
                               }}
                               className={styles.actionSelect}
                             >
-                              {RASTREAMENTO_EVENTOS_MANUAIS.map((evento) => (
-                                <option key={evento.value} value={evento.value}>
-                                  {evento.label}
+                              {CLASSIFICACOES_ENCERRAMENTO.map((classificacao) => (
+                                <option
+                                  key={classificacao.value}
+                                  value={classificacao.value}
+                                >
+                                  {classificacao.label}
                                 </option>
                               ))}
                             </select>
 
-                            {eventoRastreamentoExigeValor(
-                              encerramentoTipoEvento
-                            ) && (
+                            {encerramentoTipoEvento === "convertido" && (
                               <>
                                 <label className={styles.actionLabel}>
                                   Valor da venda
@@ -9908,6 +10434,8 @@ const templateFooterTexto = useMemo(() => {
                                 ? "Etiquetas"
                                 : abaPainelDireito === "macros"
                                 ? "Macros"
+                                : abaPainelDireito === "informacoes_captura"
+                                ? "Informações captura"
                                 : abaPainelDireito === "midia_docs_links"
                                 ? "Mídias, links e documentos"
                                 : "Mensagens favoritas"}
@@ -10276,6 +10804,46 @@ const templateFooterTexto = useMemo(() => {
                                 onCancelar={() => setEditandoCampo(null)}
                                 onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}
                               />
+
+                              {informacoesCapturaResumo.map((informacao) => (
+                                <CampoContatoEditavel
+                                  key={informacao.id}
+                                  label={formatarLabelCapturaResumo(
+                                    informacao
+                                  ).toUpperCase()}
+                                  valorInicial={informacao.valor}
+                                  editando={
+                                    editandoCampo === `captura:${informacao.id}`
+                                  }
+                                  multiline={obterTipoCaptura(informacao) === "observacao"}
+                                  onEditar={() =>
+                                    setEditandoCampo(`captura:${informacao.id}`)
+                                  }
+                                  onCancelar={() => setEditandoCampo(null)}
+                                  onSalvar={(valor) =>
+                                    void salvarInformacaoCaptura(informacao, valor)
+                                  }
+                                  onExcluir={() =>
+                                    void excluirInformacaoCaptura(informacao)
+                                  }
+                                />
+                              ))}
+
+                              {possuiInformacoesCapturaExtras && (
+                                <div className={styles.whatsInfoRow}>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() => {
+                                      setAbaPainelDireito("informacoes_captura");
+                                      setPainelDireitoAberto(true);
+                                      setEditandoCampo(null);
+                                    }}
+                                  >
+                                    Ver mais
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -10465,6 +11033,65 @@ const templateFooterTexto = useMemo(() => {
                                 </button>
                               )}
                             </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "informacoes_captura" && (
+                        <div className={styles.whatsContactPanel}>
+                          <div className={styles.whatsContactSection}>
+                            <div className={styles.whatsSectionHeader}>
+                              <span>Todos os campos capturados</span>
+                            </div>
+
+                            {carregandoInformacoesCaptura ? (
+                              <div className={styles.infoBoxMuted}>
+                                Carregando informações de captura...
+                              </div>
+                            ) : informacoesCapturaConversaOrdenadas.length === 0 ? (
+                              <div className={styles.infoBoxMuted}>
+                                Nenhuma informação foi capturada para este contato.
+                              </div>
+                            ) : (
+                              <div className={styles.whatsInfoList}>
+                                {informacoesCapturaConversaOrdenadas.map(
+                                  (informacao) => (
+                                    <CampoContatoEditavel
+                                      key={informacao.id}
+                                      label={formatarLabelCapturaDetalhada(
+                                        informacao
+                                      ).toUpperCase()}
+                                      valorInicial={informacao.valor}
+                                      editando={
+                                        editandoCampo ===
+                                        `captura:${informacao.id}`
+                                      }
+                                      multiline={
+                                        obterTipoCaptura(informacao) ===
+                                        "observacao"
+                                      }
+                                      onEditar={() =>
+                                        setEditandoCampo(
+                                          `captura:${informacao.id}`
+                                        )
+                                      }
+                                      onCancelar={() => setEditandoCampo(null)}
+                                      onSalvar={(valor) =>
+                                        void salvarInformacaoCaptura(
+                                          informacao,
+                                          valor
+                                        )
+                                      }
+                                      onExcluir={() =>
+                                        void excluirInformacaoCaptura(
+                                          informacao
+                                        )
+                                      }
+                                    />
+                                  )
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

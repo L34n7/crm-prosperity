@@ -301,18 +301,19 @@ export default function AgendaAutomationEnhancer() {
       const isEdit = normalizedTitle.includes("configurar agenda");
       const isNew = normalizedTitle.includes("nova agenda");
       if (!isEdit && !isNew) return;
+      const body = modal.querySelector<HTMLElement>(".body");
       const form = modal.querySelector<HTMLElement>(".body > .form");
-      if (!form) return;
+      if (!body || !form) return;
       const agendaId = isEdit ? agendaSelecionada() : "";
-      let section = form.querySelector<HTMLElement>(".agendaAutomationSection");
+      let section = modal.querySelector<HTMLElement>(".agendaAutomationSection");
       if (section && section.dataset.agendaId === agendaId && section.dataset.mode === (isEdit ? "edit" : "new")) return;
       section?.remove();
       section = criarSecao();
       section.dataset.agendaId = agendaId;
       section.dataset.mode = isEdit ? "edit" : "new";
-      const google = form.querySelector<HTMLElement>(".agendaGoogleConfigCard, .agendaGoogleCreateOption");
-      if (google) google.insertAdjacentElement("afterend", section);
-      else form.appendChild(section);
+      const availability = modal.querySelector<HTMLElement>(".availability");
+      if (availability) availability.insertAdjacentElement("afterend", section);
+      else body.appendChild(section);
 
       try {
         const loadedOptions = await carregarOpcoes();

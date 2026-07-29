@@ -3,7 +3,7 @@
   min-height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at 12% 14%, rgba(25, 210, 137, 0.18), transparent 30%),
+    radial-gradient(circle at 12% 14%, rgba(25, 210, 137, 0.08), transparent 30%),
     radial-gradient(circle at 88% 82%, rgba(15, 118, 110, 0.14), transparent 28%),
     linear-gradient(135deg, #040b10 0%, #07151a 48%, #08131f 100%);
   display: flex;
@@ -53,7 +53,7 @@
   padding: 28px 36px;
   border-radius: 28px;
   background:
-    radial-gradient(circle at 4% 2%, rgba(16, 185, 129, 0.16), transparent 34%),
+    radial-gradient(circle at 4% 2%, rgba(16, 185, 129, 0.018), transparent 34%),
     linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.025) 100%);
   border: 1px solid rgba(52, 211, 153, 0.18);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
@@ -91,8 +91,8 @@
 }
 
 .logo {
-  width: 94px;
-  height: 92px;
+  width: 180px;
+  height: 180px;
   object-fit: contain;
   filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.3));
 }
@@ -108,7 +108,8 @@
 
 .brandName strong {
   color: #ffffff;
-  font-size: 23px;
+  font-size: 58px;
+  margin-top: 5px;
   letter-spacing: 0.01em;
   text-transform: none;
 }
@@ -116,7 +117,7 @@
 .brandName span {
   margin-top: 5px;
   color: #c8a96b;
-  font-size: 12px;
+  font-size: 22px;
   font-weight: 800;
 }
 
@@ -416,6 +417,29 @@
   cursor: pointer;
 }
 
+@media (max-width: 1024px) {
+  .logo {
+    width: 180px;
+    height: 180px;
+    margin: 0px 0px 0px -20px;
+  }
+
+  .brandName strong {
+    color: #ffffff;
+    font-size: 44px;
+    margin-top: 5px;
+    letter-spacing: 0.01em;
+    text-transform: none;
+  }
+
+  .brandName span {
+    margin-top: 5px;
+    color: #c8a96b;
+    font-size: 20px;
+    font-weight: 800;
+  }
+}
+
 @media (max-width: 980px) {
   .wrapper {
     grid-template-columns: 1fr;
@@ -427,13 +451,30 @@
   }
 
   .logo {
-    width: 78px;
-    height: 76px;
+    width: 120px;
+    height: 120px;
+    margin: 0px 10px 0px 10px;
+  }
+
+  .brandName strong {
+    font-size: 44px;
+    margin-top: 5px;
+  }
+
+  .brandName span {
+    margin-top: 5px;
+    font-size: 18px;
   }
 
   .heroTitle {
     font-size: 34px;
     max-width: none;
+  }
+
+  .badge {
+    margin: 30px 0px 10px 0px;
+    padding: 5px 13px;
+    font-size: 10px;
   }
 
   .card {
@@ -452,13 +493,20 @@
     border-radius: 22px;
   }
 
-  .brandName strong {
-    font-size: 20px;
+  .logo {
+    width: 88px;
+    height: 86px;
+    margin: 0px 5px 0px 0px;
   }
 
-  .logo {
-    width: 68px;
-    height: 66px;
+  .brandName strong {
+    font-size: 28px;
+    margin-top: 5px;
+  }
+
+  .brandName span {
+    margin-top: 5px;
+    font-size: 16px;
   }
 
   .heroTitle {
@@ -469,6 +517,12 @@
     font-size: 26px;
   }
 
+  .badge {
+    margin: 20px 0px 10px 0px;
+    padding: 5px 13px;
+    font-size: 10px;
+  }
+  
   .input,
   .button {
     height: 50px;

@@ -318,7 +318,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { headers, rows } = await parseSpreadsheetFile(file);
+    let { headers, rows } = await parseSpreadsheetFile(file);
 
     if (!headers.length) {
       return NextResponse.json(
@@ -327,7 +327,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const encontrouAlgumaColunaDeTelefone = headers.some((header) =>
+    let encontrouAlgumaColunaDeTelefone = headers.some((header) =>
       [
         "telefone",
         "numero",
@@ -343,6 +343,52 @@ export async function POST(request: Request) {
         "phone 3 - value",
       ].includes(normalizeHeaderName(header))
     );
+
+    let arquivoSemCabecalho = false;
+
+    if (!encontrouAlgumaColunaDeTelefone) {
+      const linhasIncluindoPrimeira = [headers, ...rows];
+      const indicesComValor = new Set<number>();
+
+      for (const linha of linhasIncluindoPrimeira.slice(0, 100)) {
+        linha.forEach((valor, indice) => {
+          if (String(valor || "").trim()) {
+            indicesComValor.add(indice);
+          }
+        });
+      }
+
+      const indiceColunaUnica =
+        indicesComValor.size === 1
+          ? (indicesComValor.values().next().value ?? -1)
+          : -1;
+
+      if (indiceColunaUnica >= 0) {
+        const amostra = linhasIncluindoPrimeira
+          .slice(0, 50)
+          .map((linha) => String(linha[indiceColunaUnica] || "").trim())
+          .filter(Boolean);
+
+        const telefonesValidosNaAmostra = amostra.filter((valor) =>
+          telefoneImportacaoValido(
+            normalizarTelefoneBrasilParaWhatsApp(valor)
+          )
+        ).length;
+
+        const percentualValido = amostra.length
+          ? telefonesValidosNaAmostra / amostra.length
+          : 0;
+
+        if (amostra.length > 0 && percentualValido >= 0.8) {
+          headers = ["telefone"];
+          rows = linhasIncluindoPrimeira
+            .map((linha) => [String(linha[indiceColunaUnica] || "").trim()])
+            .filter((linha) => Boolean(linha[0]));
+          encontrouAlgumaColunaDeTelefone = true;
+          arquivoSemCabecalho = true;
+        }
+      }
+    }
 
     if (!encontrouAlgumaColunaDeTelefone) {
       return NextResponse.json(
@@ -386,7 +432,7 @@ export async function POST(request: Request) {
     const origemImportacaoPadrao = `Importação - ${nomeArquivoImportacao} - ${dataImportacaoTexto}`;
 
     rows.forEach((row, index) => {
-      const linhaReal = index + 2;
+      const linhaReal = index + (arquivoSemCabecalho ? 1 : 2);
 
       const nome = montarNomePorPartes(headers, row) || null;
       const telefoneOriginal = obterTelefoneDaLinha(headers, row);

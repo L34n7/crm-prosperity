@@ -1,5 +1,11 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
+export const CLASSIFICACOES_COMERCIAIS = [
+  "qualificado",
+  "convertido",
+  "perdido",
+] as const;
+
 export const CLASSIFICACOES_LEAD = [
   "novo",
   "qualificado",
@@ -20,6 +26,7 @@ export const CLASSIFICACAO_LEAD_LABEL: Record<ClassificacaoLead, string> = {
 const CLASSIFICACOES_SET = new Set<string>(CLASSIFICACOES_LEAD);
 
 const CLASSIFICACAO_LEGADA_MAP: Record<string, ClassificacaoLead> = {
+  novo: "qualificado",
   cliente: "convertido",
   venda: "convertido",
   vendido: "convertido",
@@ -42,9 +49,13 @@ function normalizarTokenClassificacao(valor: unknown) {
 
 export function normalizarClassificacaoLead(
   valor: unknown,
-  fallback: ClassificacaoLead = "novo"
+  fallback: ClassificacaoLead = "qualificado"
 ): ClassificacaoLead {
   const normalizado = normalizarTokenClassificacao(valor);
+
+  if (normalizado === "novo") {
+    return "qualificado";
+  }
 
   if (CLASSIFICACOES_SET.has(normalizado)) {
     return normalizado as ClassificacaoLead;
@@ -65,7 +76,9 @@ export function classificacaoLeadValida(valor: unknown): valor is ClassificacaoL
 export function statusLeadLegadoDaClassificacao(
   classificacao: ClassificacaoLead
 ) {
-  return classificacao === "convertido" ? "cliente" : classificacao;
+  if (classificacao === "convertido") return "cliente";
+  if (classificacao === "novo") return "qualificado";
+  return classificacao;
 }
 
 export function classificacaoLeadPorResultadoFluxo(
@@ -90,12 +103,8 @@ export function classificacaoLeadPorEventoRastreamento(
     return classificacaoLeadPorResultadoFluxo(resultadoFluxo);
   }
 
-  if (
-    [
-      "lead_criado",
-    ].includes(tipoNormalizado)
-  ) {
-    return "novo";
+  if (tipoNormalizado === "lead_criado") {
+    return "qualificado";
   }
 
   if (
