@@ -31,6 +31,29 @@ if (!page.includes("cancelConfirmBg")) {
   page = replaceOnce(page, cssAnchor, `${cssAnchor}${cancelCss}`, "estilos do modal de cancelamento");
 }
 
+if (!page.includes("agendaSideBadge-agendado")) {
+  const sideBadgeCss =
+    '.agendaSideBadge{border:1px solid transparent;font-weight:850;line-height:1.15}.agendaSideBadge-agendado{background:var(--crm-success-bg)!important;border-color:var(--crm-success-border)!important;color:var(--crm-success-text)!important}.agendaSideBadge-cancelado{background:var(--crm-danger-bg)!important;border-color:var(--crm-danger-border)!important;color:var(--crm-danger-text)!important}.agendaSideBadge-google{background:var(--crm-warning-bg)!important;border-color:var(--crm-warning-border)!important;color:var(--crm-warning-text)!important}';
+  page = replaceOnce(
+    page,
+    cssAnchor,
+    `${cssAnchor}${sideBadgeCss}`,
+    "cores dos badges laterais da agenda"
+  );
+  page = replaceOnce(
+    page,
+    '<span className={`pill ${["confirmado","realizado"].includes(a.status)?"on":""}`}>{labels[a.status]}</span>',
+    '<span className={`pill agendaSideBadge agendaSideBadge-${a.status} ${["confirmado","realizado"].includes(a.status)?"on":""}`}>{labels[a.status]}</span>',
+    "badge de status do painel lateral"
+  );
+  page = replaceOnce(
+    page,
+    '<span className="pill">Google</span>',
+    '<span className="pill agendaSideBadge agendaSideBadge-google">Google</span>',
+    "badge do Google no painel lateral"
+  );
+}
+
 const stateAnchor =
   ' const [filter,setFilter]=useState({q:"",status:"todos",tipo:"todos",resp:"todos",origem:"todos"}),[open,setOpen]=useState(false),[form,setForm]=useState<Form>(()=>blank(key(new Date()))),[contact,setContact]=useState<Contato|null>(null),[cq,setCq]=useState(""),[contacts,setContacts]=useState<Contato[]>([]);';
 if (!page.includes("cancelConfirm,setCancelConfirm")) {
