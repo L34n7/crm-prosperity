@@ -19,8 +19,7 @@ const newBlock = `  source = replaceAllRequired(
 \`,
     \`templateComListaFria &&
 \`,
-    "envio da confirmação ao backend",
-    2
+    "envio da confirmação ao backend"
   );`;
 
 if (source.includes(oldBlock)) {
