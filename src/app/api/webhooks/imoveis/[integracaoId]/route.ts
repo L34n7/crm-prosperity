@@ -16,6 +16,8 @@ import {
 export const runtime = "nodejs";
 
 const supabase = getSupabaseAdmin();
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type IntegracaoWebhook = {
   id: string;
@@ -39,6 +41,11 @@ type EventoWebhook = {
 
 function jsonErro(error: string, status: number) {
   return NextResponse.json({ ok: false, error }, { status });
+}
+
+function normalizarIntegracaoId(valor: string) {
+  const integracaoId = valor.trim();
+  return UUID_REGEX.test(integracaoId) ? integracaoId : null;
 }
 
 function valorExistente(
@@ -433,9 +440,17 @@ export async function POST(
   context: { params: Promise<{ integracaoId: string }> }
 ) {
   const { integracaoId } = await context.params;
+  const integracaoIdValido = normalizarIntegracaoId(integracaoId);
+
+  if (!integracaoIdValido) {
+    return jsonErro(
+      "URL do webhook invalida. Use somente o ID da integracao na URL e envie o segredo no cabecalho Authorization: Bearer ou X-Webhook-Token.",
+      400
+    );
+  }
 
   try {
-    const integracao = await buscarIntegracao(integracaoId);
+    const integracao = await buscarIntegracao(integracaoIdValido);
 
     if (!integracao) {
       return jsonErro("Credenciais invalidas.", 401);
