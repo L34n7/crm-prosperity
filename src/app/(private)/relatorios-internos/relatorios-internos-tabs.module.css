@@ -11,18 +11,18 @@
   gap: 12px;
   min-width: 0;
   padding: 14px 16px;
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
   text-decoration: none;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-ui-private-border-hex-e2e8f0);
   border-radius: 16px;
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease,
     transform 160ms ease;
 }
 
 .tab:hover {
-  color: #0f172a;
-  border-color: #cbd5e1;
+  color: var(--crm-ui-private-content-hex-0f172a);
+  border-color: var(--crm-ui-private-border-hex-cbd5e1);
   transform: translateY(-1px);
 }
 
@@ -40,7 +40,7 @@
 
 .tab small {
   overflow: hidden;
-  color: #94a3b8;
+  color: var(--crm-ui-private-content-hex-94a3b8);
   font-size: 0.78rem;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -48,13 +48,13 @@
 }
 
 .active {
-  color: #1d4ed8;
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  color: var(--crm-ui-private-content-hex-1d4ed8);
+  background: var(--crm-ui-private-surface-hex-eff6ff);
+  border-color: var(--crm-ui-private-border-hex-bfdbfe);
 }
 
 .active small {
-  color: #3b82f6;
+  color: var(--crm-ui-private-content-hex-3b82f6);
 }
 
 @media (max-width: 640px) {
@@ -66,19 +66,19 @@
 
 @media (prefers-color-scheme: dark) {
   .tab {
-    color: #94a3b8;
-    background: #0f172a;
-    border-color: #1e293b;
+    color: var(--crm-ui-private-content-hex-94a3b8);
+    background: var(--crm-ui-private-surface-hex-0f172a);
+    border-color: var(--crm-ui-private-border-hex-1e293b);
   }
 
   .tab:hover {
-    color: #f8fafc;
-    border-color: #334155;
+    color: var(--crm-ui-private-content-hex-f8fafc);
+    border-color: var(--crm-ui-private-border-hex-334155);
   }
 
   .active {
-    color: #93c5fd;
-    background: rgba(30, 64, 175, 0.2);
-    border-color: #1d4ed8;
+    color: var(--crm-ui-private-content-hex-93c5fd);
+    background: var(--crm-ui-private-surface-rgb-30-64-175-0-2);
+    border-color: var(--crm-ui-private-border-hex-1d4ed8);
   }
 }

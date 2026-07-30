@@ -102,7 +102,7 @@ body .a2 .btn.primary {
   border-color: transparent;
   background: var(--crm-primary-strong);
   color: var(--crm-text-inverse);
-  box-shadow: 0 10px 20px rgba(18, 52, 72, 0.14);
+  box-shadow: 0 10px 20px var(--crm-ui-private-shadow-rgb-18-52-72-0-14);
 }
 
 body .a2 .btn.primary:hover:not(:disabled) {
@@ -352,7 +352,7 @@ body .a2 .day.muted {
 body .a2 .day.selected {
   border-color: var(--crm-primary);
   background: var(--crm-primary-soft);
-  box-shadow: inset 0 0 0 1px var(--crm-primary), 0 10px 22px rgba(18, 65, 78, 0.1);
+  box-shadow: inset 0 0 0 1px var(--crm-primary), 0 10px 22px var(--crm-ui-private-shadow-rgb-18-65-78-0-1);
 }
 
 body .a2 .day.today {
@@ -602,7 +602,7 @@ body .a2 .section {
   border: 1px solid var(--crm-border);
   border-radius: 19px;
   background: var(--crm-surface);
-  box-shadow: 0 4px 14px rgba(18, 65, 78, 0.035);
+  box-shadow: 0 4px 14px var(--crm-ui-private-shadow-rgb-18-65-78-0-035);
 }
 
 body .a2 .section:last-child {
@@ -870,7 +870,7 @@ body .a2 .toggle::after {
   height: 16px;
   border-radius: 50%;
   background: var(--crm-surface);
-  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 2px 5px var(--crm-ui-private-shadow-rgb-15-23-42-0-2);
   transition: 0.18s ease;
 }
 

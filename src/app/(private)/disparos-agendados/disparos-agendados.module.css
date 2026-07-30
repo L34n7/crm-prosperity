@@ -112,7 +112,7 @@
 }
 
 .primaryButton:hover {
-  background: #000000;
+  background: var(--crm-ui-private-surface-hex-000000);
   transform: translateY(-1px);
 }
 
@@ -128,14 +128,14 @@
 }
 
 .ButtonAdd {
-  border: 1px solid #c0f3ff;
-  background: #f3fdff;
+  border: 1px solid var(--crm-ui-private-border-hex-c0f3ff);
+  background: var(--crm-ui-private-surface-hex-f3fdff);
   color: var(--crm-text-strong);
 }
 
 .ButtonAdd:hover {
-  border: 1px solid #a1eeff;
-  background: #e0faff;
+  border: 1px solid var(--crm-ui-private-border-hex-a1eeff);
+  background: var(--crm-ui-private-surface-hex-e0faff);
   color: var(--crm-text-strong);
 }
 
@@ -209,19 +209,19 @@
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 8px 20px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
 }
 
 .metricCard:hover {
-  border-color:  #cee4de;
-  background: #efffff13;
+  border-color:  var(--crm-ui-private-border-hex-cee4de);
+  background: var(--crm-ui-private-surface-hex-efffff13);
   transform: translateY(-1px);
 }
 
 .metricCardActive {
-  border-color:  #d6e3ea;
-  background: #ffffff;
-  box-shadow: 0 0 10 3px rgba(15, 42, 39, 0.05);
+  border-color:  var(--crm-ui-private-border-hex-d6e3ea);
+  background: var(--crm-surface);
+  box-shadow: 0 0 10 3px var(--crm-ui-private-shadow-rgb-15-42-39-0-05);
 }
 
 .metricCard span {
@@ -314,7 +314,7 @@
 .disparoCard:hover {
   border-color: var(--crm-primary-border);
   background: var(--crm-surface-subtle);
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 12px 26px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
   transform: translateY(-1px);
 }
 
@@ -435,9 +435,9 @@
 }
 
 .badgeCancel {
-  background: #ffdada;
-  color: #b76262;
-  border-color: #ffffff;
+  background: var(--crm-ui-private-surface-hex-ffdada);
+  color: var(--crm-ui-private-content-hex-b76262);
+  border-color: var(--crm-ui-private-border-hex-ffffff);
 }
 
 .badgeRed {
@@ -478,7 +478,7 @@
   background: var(--crm-surface);
   border: 1px solid var(--crm-border);
   border-radius: 22px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 24px 70px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
 }
 
 .propertiesHeader {
@@ -565,7 +565,7 @@
 .payloadBox {
   border: 1px solid var(--crm-warning-border);
   background: var(--crm-warning-bg);
-  color: #000000;
+  color: var(--crm-ui-private-content-hex-000000);
   border-radius: 16px;
   padding: 12px;
   display: grid;
@@ -574,7 +574,7 @@
 }
 
 .payloadBox span {
-  color: #8a8a8a;
+  color: var(--crm-ui-private-content-hex-8a8a8a);
 }
 
 .payloadBox pre {
@@ -930,9 +930,9 @@
   padding: 5px 10px;
   border-radius: 999px;
 
-  background:  #c5efff;
-  color:  #0084a5;
-  border: 1px solid  #89edff;
+  background:  var(--crm-ui-private-surface-hex-c5efff);
+  color:  var(--crm-ui-private-content-hex-0084a5);
+  border: 1px solid  var(--crm-ui-private-border-hex-89edff);
 
 
   font-size: 11px;
@@ -1105,7 +1105,7 @@
 .TextButtonRemover {
   border: none;
   background: transparent;
-  color: #6c3c3c;
+  color: var(--crm-ui-private-content-hex-6c3c3c);
 
   font-size: 13px;
   font-weight: 700;
@@ -1120,7 +1120,7 @@
 }
 
 .TextButtonRemover:hover:not(:disabled) {
-  color:  #bd5656;
+  color:  var(--crm-ui-private-content-hex-bd5656);
 }
 
 .TextButtonRemover:disabled {
@@ -1131,7 +1131,7 @@
 .TextButtonAdd {
   border: none;
   background: transparent;
-  color: #044654;
+  color: var(--crm-ui-private-content-hex-044654);
 
   font-size: 13px;
   font-weight: 700;
@@ -1146,7 +1146,7 @@
 }
 
 .TextButtonAdd:hover:not(:disabled) {
-  color:  #00abd1;
+  color:  var(--crm-ui-private-content-hex-00abd1);
 }
 
 .TextButtonAdd:disabled {
@@ -1167,8 +1167,8 @@
 }
 
 .contactCardSelected {
-  border-color: #8edac6;
-  background: #ecfffa;
+  border-color: var(--crm-ui-private-border-hex-8edac6);
+  background: var(--crm-ui-private-surface-hex-ecfffa);
 }
 
 .contactMain {
@@ -1204,7 +1204,7 @@
   padding: 4px 8px;
   font-size: 11px;
   font-weight: 700;
-  background: #f1f1f1;
+  background: var(--crm-ui-private-surface-hex-f1f1f1);
   color: var(--crm-text);
 }
 
@@ -1290,7 +1290,7 @@
 
 .disparoCustoBox {
   border: 1px solid var(--crm-primary-border);
-  background: linear-gradient(180deg, #d1fff3 0%, #ffffff 100%);
+  background: linear-gradient(180deg, var(--crm-ui-private-surface-hex-d1fff3) 0%, var(--crm-surface) 100%);
   border-radius: 18px;
   padding: 14px;
   margin-top: -5px;
@@ -1314,9 +1314,9 @@
 
 .disparoCustoCategoria {
   border-radius: 999px;
-  background: #95fff6;
-  border: 1px dashed  #009a80;
-  color: #00826c;
+  background: var(--crm-ui-private-surface-hex-95fff6);
+  border: 1px dashed  var(--crm-ui-private-border-hex-009a80);
+  color: var(--crm-ui-private-content-hex-00826c);
   padding: 5px 9px;
   font-size: 11px;
   font-weight: 900;
@@ -1355,9 +1355,9 @@
   border-radius: 0px;
   padding: 14px;
   background:
-    radial-gradient(circle at 20px 20px, rgba(15, 23, 42, 0.04) 2px, transparent 2px),
-    radial-gradient(circle at 70px 70px, rgba(15, 23, 42, 0.035) 2px, transparent 2px),
-    #efe7dc;
+    radial-gradient(circle at 20px 20px, var(--crm-ui-private-surface-rgb-15-23-42-0-04) 2px, transparent 2px),
+    radial-gradient(circle at 70px 70px, var(--crm-ui-private-surface-rgb-15-23-42-0-035) 2px, transparent 2px),
+    var(--crm-ui-private-surface-hex-efe7dc);
   background-size: 90px 90px;
 }
 
@@ -1367,7 +1367,7 @@
   background: var(--crm-surface);
   border-radius: 10px;
   padding: 8px 10px 28px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 1px 2px var(--crm-ui-private-shadow-rgb-15-23-42-0-14);
   overflow: hidden;
 }
 
@@ -1436,9 +1436,9 @@
 
 .templateVariablesHint {
   padding: 12px 14px;
-  border: 1px solid rgba(59, 130, 246, 0.18);
+  border: 1px solid var(--crm-ui-private-border-rgb-59-130-246-0-18);
   border-radius: 10px;
-  background: #94f6f020;
+  background: var(--crm-ui-private-surface-hex-94f6f020);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -1468,9 +1468,9 @@
 .templateWithoutVariables {
   margin-top: 16px;
   padding: 11px 13px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-22);
   border-radius: 9px;
-  background: #94a3b812;
+  background: var(--crm-ui-private-surface-hex-94a3b812);
   color: var(--crm-text-muted);
   font-size: 13px;
   line-height: 1.45;

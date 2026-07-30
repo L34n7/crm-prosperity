@@ -53,7 +53,7 @@
   border: 1px solid var(--crm-border);
   border-radius: 20px;
   padding: 24px;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  box-shadow: 0 1px 2px var(--crm-ui-private-shadow-rgb-16-24-40-0-04);
 }
 
 .sidebar {
@@ -381,7 +381,7 @@
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(9, 9, 11, 0.72);
+  background: var(--crm-ui-private-surface-rgb-9-9-11-0-72);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -393,7 +393,7 @@
   max-width: 720px;
   border-radius: 24px;
   background: var(--crm-surface);
-  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 20px 80px var(--crm-ui-private-shadow-rgb-0-0-0-0-25);
   overflow: hidden;
 }
 

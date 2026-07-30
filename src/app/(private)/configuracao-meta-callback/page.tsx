@@ -149,10 +149,10 @@ function CallbackContent() {
 
   const corTitulo =
     status === "sucesso"
-      ? "#166534"
+      ? "var(--crm-ui-private-content-hex-166534)"
       : status === "erro"
-      ? "#991b1b"
-      : "#0f172a";
+      ? "var(--crm-ui-private-content-hex-991b1b)"
+      : "var(--crm-ui-private-content-hex-0f172a)";
 
   const titulo =
     status === "sucesso"
@@ -167,7 +167,7 @@ function CallbackContent() {
     <main
       style={{
         minHeight: "100vh",
-        background: "#f8fafc",
+        background: "var(--crm-ui-private-decoration-hex-f8fafc)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -178,20 +178,20 @@ function CallbackContent() {
         style={{
           width: "100%",
           maxWidth: 680,
-          background: "#fff",
+          background: "var(--crm-ui-private-decoration-hex-ffffff)",
           borderRadius: 24,
           padding: 32,
-          boxShadow: "0 20px 60px rgba(15,23,42,0.08)",
-          border: "1px solid #e2e8f0",
+          boxShadow: "0 20px 60px var(--crm-ui-private-decoration-rgb-15-23-42-0-08)",
+          border: "1px solid var(--crm-ui-private-decoration-hex-e2e8f0)",
           textAlign: "center",
         }}
       >
         <h1 style={{ color: corTitulo, marginBottom: 12 }}>{titulo}</h1>
 
-        <p style={{ color: "#475569", lineHeight: 1.6 }}>{mensagem}</p>
+        <p style={{ color: "var(--crm-ui-private-content-hex-475569)", lineHeight: 1.6 }}>{mensagem}</p>
 
         {status === "carregando" && (
-          <p style={{ marginTop: 16, color: "#2563eb", fontWeight: 700 }}>
+          <p style={{ marginTop: 16, color: "var(--crm-ui-private-content-hex-2563eb)", fontWeight: 700 }}>
             Aguarde alguns segundos...
           </p>
         )}
@@ -208,8 +208,8 @@ function CallbackContent() {
               padding: "0 18px",
               borderRadius: 12,
               border: 0,
-              background: "#2563eb",
-              color: "#fff",
+              background: "var(--crm-ui-private-decoration-hex-2563eb)",
+              color: "var(--crm-text-inverse)",
               fontWeight: 800,
               cursor: "pointer",
             }}
@@ -230,8 +230,8 @@ function CallbackContent() {
               padding: "0 18px",
               borderRadius: 12,
               border: 0,
-              background: "#dc2626",
-              color: "#fff",
+              background: "var(--crm-ui-private-decoration-hex-dc2626)",
+              color: "var(--crm-text-inverse)",
               fontWeight: 800,
               cursor: "pointer",
             }}
@@ -246,11 +246,11 @@ function CallbackContent() {
               marginTop: 20,
               padding: 16,
               borderRadius: 16,
-              background: "#f1f5f9",
+              background: "var(--crm-ui-private-decoration-hex-f1f5f9)",
               textAlign: "left",
               wordBreak: "break-all",
               fontSize: 12,
-              color: "#334155",
+              color: "var(--crm-ui-private-content-hex-334155)",
             }}
           >
             <strong>Code recebido:</strong>

@@ -69,8 +69,8 @@ const ESTILOS_BOTOES_INTERATIVOS_PREVIA = `
     padding: 0 10px 10px !important;
     border: 0 !important;
     border-radius: 0 0 16px 16px !important;
-    background: #ffffff !important;
-    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08) !important;
+    background: var(--crm-surface) !important;
+    box-shadow: 0 2px 4px var(--crm-ui-private-shadow-rgb-15-23-42-0-08) !important;
   }
 
   [class*="whatsappFlowBubbleRow"]:has([class*="whatsappFlowButtons"])

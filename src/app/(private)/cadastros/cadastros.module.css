@@ -117,7 +117,7 @@
 
   cursor: pointer;
 
-  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.14);
+  box-shadow: 0 6px 16px var(--crm-ui-private-shadow-rgb-15-118-110-0-14);
 
   transition:
     transform 0.18s ease,
@@ -157,7 +157,7 @@
 .primaryButton:hover {
   transform: translateY(-1px);
   background: var(--crm-primary-strong);
-  box-shadow: 0 9px 20px rgba(15, 118, 110, 0.22);
+  box-shadow: 0 9px 20px var(--crm-ui-private-shadow-rgb-15-118-110-0-22);
   filter: brightness(1.05);
 }
 
@@ -286,7 +286,7 @@
     var(--crm-primary-strong),
     var(--crm-accent)
   );
-  color: white;
+  color: var(--crm-text-inverse);
   font-size: 13px;
   font-weight: 800;
 }
@@ -697,4 +697,3 @@
     display: none;
   }
 }
-

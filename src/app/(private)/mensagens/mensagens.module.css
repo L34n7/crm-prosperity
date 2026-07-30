@@ -81,7 +81,7 @@
 }
 
 .searchInput:focus {
-  border-color: #22c55e;
+  border-color: var(--crm-ui-private-border-hex-22c55e);
 }
 
 .sidebarList {
@@ -100,7 +100,7 @@
 .conversationButton {
   width: 100%;
   border: 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--crm-ui-private-border-hex-f3f4f6);
   background: var(--crm-surface);
   padding: 1rem;
   text-align: left;
@@ -262,7 +262,7 @@
   flex: 1;
   overflow-y: auto;
   background-color: var(--crm-surface-soft);
-  background-image: radial-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+  background-image: radial-gradient(var(--crm-ui-private-surface-rgb-0-0-0-0-03) 1px, transparent 1px);
   background-size: 18px 18px;
   padding: 1.5rem 1rem;
 }
@@ -276,12 +276,12 @@
   margin: 0 auto;
   max-width: 28rem;
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-8);
   padding: 0.75rem 1rem;
   text-align: center;
   font-size: 0.875rem;
   color: var(--crm-text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
 }
 
 .messagesStack {
@@ -297,12 +297,12 @@
 
 .dateBadge {
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-9);
   padding: 0.25rem 1rem;
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--crm-text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px var(--crm-ui-private-shadow-rgb-0-0-0-0-05);
 }
 
 .messageRow {
@@ -321,7 +321,7 @@
   max-width: 85%;
   border-radius: 1rem;
   padding: 0.75rem 1rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px var(--crm-ui-private-shadow-rgb-0-0-0-0-06);
 }
 
 .messageBubbleOutgoing {
@@ -349,7 +349,7 @@
 }
 
 .editTextarea:focus {
-  border-color: #22c55e;
+  border-color: var(--crm-ui-private-border-hex-22c55e);
 }
 
 .editActions {
@@ -465,7 +465,7 @@
 }
 
 .editButton:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--crm-ui-private-surface-rgb-0-0-0-0-05);
 }
 
 .chatFooter {
@@ -514,7 +514,7 @@
 }
 
 .messageInput:focus {
-  border-color: #22c55e;
+  border-color: var(--crm-ui-private-border-hex-22c55e);
 }
 
 .sendButton {
@@ -613,7 +613,7 @@
   max-width: 85%;
   border-radius: 1rem;
   padding: 0.75rem 1rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px var(--crm-ui-private-shadow-rgb-0-0-0-0-06);
 }
 
 .mobileMessageText {
@@ -657,7 +657,7 @@
 
   .layout {
     border-radius: 1.5rem;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 25px 50px -12px var(--crm-ui-private-shadow-rgb-0-0-0-0-25);
   }
 
   .sidebar {

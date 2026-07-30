@@ -114,8 +114,8 @@
     var(--crm-primary-strong),
     var(--crm-primary)
   );
-  color: #fff;
-  box-shadow: 0 10px 22px rgba(13, 38, 56, 0.16);
+  color: var(--crm-text-inverse);
+  box-shadow: 0 10px 22px var(--crm-ui-private-shadow-rgb-13-38-56-0-16);
 }
 .primaryButton:hover {
   transform: translateY(-1px);
@@ -681,7 +681,7 @@
 .stepDone > span {
   border-color: var(--crm-primary);
   background: var(--crm-primary);
-  color: #fff;
+  color: var(--crm-text-inverse);
 }
 .modalBody {
   overflow-y: auto;
@@ -782,7 +782,7 @@
 .queryOptionActive .radio {
   border-color: var(--crm-primary);
   background: var(--crm-primary);
-  color: #fff;
+  color: var(--crm-text-inverse);
 }
 .infoBox,
 .warningBox,
@@ -844,13 +844,13 @@
   padding: 10px;
   border: 1px solid var(--crm-border);
   border-radius: 15px;
-  background: #e8e4dc;
+  background: var(--crm-ui-private-surface-hex-e8e4dc);
 }
 .phoneHeader {
   padding: 8px;
   border-radius: 9px 9px 0 0;
-  background: #075e54;
-  color: #fff;
+  background: var(--crm-ui-private-surface-hex-075e54);
+  color: var(--crm-text-inverse);
   font-size: 10px;
   font-weight: 800;
 }
@@ -858,16 +858,16 @@
   margin: 15px 8px 8px;
   padding: 12px;
   border-radius: 8px;
-  background: #fff;
-  color: #25313a;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  background: var(--crm-surface);
+  color: var(--crm-ui-private-content-hex-25313a);
+  box-shadow: 0 2px 6px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
   font-size: 11px;
 }
 .messageBubble p {
   line-height: 1.5;
 }
 .messageBubble small {
-  color: #76838b;
+  color: var(--crm-ui-private-content-hex-76838b);
 }
 .frequencyGrid {
   display: grid;
@@ -993,7 +993,7 @@
 .consentBox input:checked + .customCheck {
   border-color: var(--crm-primary);
   background: var(--crm-primary);
-  color: #fff;
+  color: var(--crm-text-inverse);
 }
 .consentBox b {
   color: var(--crm-text-strong);

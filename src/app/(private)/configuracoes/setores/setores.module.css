@@ -221,7 +221,7 @@
 
 .itemCard:hover {
   border-color: var(--crm-border-strong);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 10px 28px var(--crm-ui-private-shadow-rgb-15-23-42-0-05);
 }
 
 .itemSummary {
@@ -383,7 +383,7 @@
   background: var(--crm-surface);
   border-radius: 28px;
   border: 1px solid var(--crm-border);
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 30px 80px var(--crm-ui-private-shadow-rgb-15-23-42-0-25);
   padding: 24px;
 }
 
@@ -471,7 +471,7 @@
   border-radius: 999px;
   background: var(--crm-surface);
   transition: transform 0.2s ease;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 4px 12px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
 }
 
 .switchInput:checked + .switchSlider {

@@ -351,7 +351,7 @@ export default function AssignmentSelectEnhancer() {
         ajuda.textContent =
           "Escolha o setor para listar seus usuários. Administradores aparecem em todos os setores.";
         ajuda.style.margin = "6px 0 0";
-        ajuda.style.color = "#64748b";
+        ajuda.style.color = "var(--crm-ui-private-content-hex-64748b)";
         ajuda.style.fontSize = "12px";
         ajuda.style.lineHeight = "1.4";
         selectResponsavel.insertAdjacentElement("afterend", ajuda);

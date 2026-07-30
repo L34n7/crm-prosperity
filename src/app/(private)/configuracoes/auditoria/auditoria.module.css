@@ -325,7 +325,7 @@
   box-sizing: border-box;
   padding: 24px;
   background: var(--crm-surface);
-  box-shadow: -16px 0 40px rgba(15, 23, 42, 0.15);
+  box-shadow: -16px 0 40px var(--crm-ui-private-shadow-rgb-15-23-42-0-15);
 }
 
 .modalHeader {

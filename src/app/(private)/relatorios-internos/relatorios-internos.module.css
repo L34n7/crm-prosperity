@@ -411,7 +411,7 @@
 
 .miniBarTop .onlineSuffix,
 .table .onlineSuffix {
-  color: #00c97c;
+  color: var(--crm-ui-private-content-hex-00c97c);
   font-weight: 900;
 }
 

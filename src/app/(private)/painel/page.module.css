@@ -16,12 +16,12 @@
 }
 
 .heroCard {
-  background: linear-gradient(135deg, #031f2b 0%, #113e50 55%, var(--crm-primary) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(135deg, var(--crm-ui-private-surface-hex-031f2b) 0%, var(--crm-ui-private-surface-hex-113e50) 55%, var(--crm-primary) 100%);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-16);
   border-radius: 28px;
   padding: 32px;
   color: var(--crm-text-inverse);
-  box-shadow: 0 24px 70px rgba(13, 38, 56, 0.28);
+  box-shadow: 0 24px 70px var(--crm-ui-private-shadow-rgb-13-38-56-0-28);
 }
 
 .heroLabel {
@@ -79,17 +79,17 @@
   justify-content: center;
   padding: 13px 18px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-1);
   color: var(--crm-text-inverse);
   font-size: 14px;
   font-weight: 700;
   text-decoration: none;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-18);
   transition: all 0.2s ease;
 }
 
 .secondaryButton:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-16);
 }
 
 .sessionCard,
@@ -259,7 +259,7 @@
   padding: 18px 22px;
   border: 1px solid var(--crm-border-soft);
   border-radius: 22px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(237, 249, 245, 0.95) 100%);
+  background: linear-gradient(135deg, var(--crm-ui-private-surface-rgb-255-255-255-0-95) 0%, var(--crm-ui-private-surface-rgb-237-249-245-0-95) 100%);
   box-shadow: var(--crm-shadow-sm);
 }
 

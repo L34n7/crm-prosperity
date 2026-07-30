@@ -56,7 +56,7 @@
   background: var(--crm-surface);
   border: 1px solid var(--crm-border);
   border-radius: 24px;
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 18px 50px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
 }
 
 .mainCard,
@@ -133,7 +133,7 @@
 .progressFill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #0847ce 0%, #09b1ff 100%);
+  background: linear-gradient(90deg, var(--crm-ui-private-surface-hex-0847ce) 0%, var(--crm-ui-private-surface-hex-09b1ff) 100%);
   transition: width 0.25s ease;
 }
 
@@ -408,7 +408,7 @@
   justify-content: space-between;
   gap: 18px;
   background:
-    radial-gradient(circle at 8% 20%, rgba(16, 185, 129, 0.14), transparent 32%),
+    radial-gradient(circle at 8% 20%, var(--crm-ui-private-surface-rgb-16-185-129-0-14), transparent 32%),
     var(--crm-surface);
 }
 
@@ -429,7 +429,7 @@
   color: var(--crm-success-text);
   background: var(--crm-success-bg);
   border: 1px solid var(--crm-success-border);
-  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.13);
+  box-shadow: 0 10px 24px var(--crm-ui-private-shadow-rgb-16-185-129-0-13);
 }
 
 .novaIntegracaoHeader span {
@@ -559,7 +559,7 @@
   border: 1px solid var(--crm-warning-border);
   border-radius: 18px;
   background:
-    radial-gradient(circle at 96% 12%, rgba(245, 158, 11, 0.13), transparent 34%),
+    radial-gradient(circle at 96% 12%, var(--crm-ui-private-surface-rgb-245-158-11-0-13), transparent 34%),
     var(--crm-warning-bg);
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
@@ -681,9 +681,9 @@
 .permissionsCard {
   margin-top: 24px;
   padding: 18px;
-  border: 1px solid rgba(37, 99, 235, 0.18);
+  border: 1px solid var(--crm-ui-private-border-rgb-37-99-235-0-18);
   border-radius: 16px;
-  background: rgba(37, 99, 235, 0.06);
+  background: var(--crm-ui-private-surface-rgb-37-99-235-0-06);
 }
 
 .permissionsTitle {
@@ -698,7 +698,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+  border-bottom: 1px solid var(--crm-ui-private-border-rgb-17-24-39-0-08);
   font-size: 13px;
 }
 
@@ -729,10 +729,10 @@
   width: 100%;
   max-width: 1120px;
   background: var(--crm-surface);
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  border: 1px solid var(--crm-ui-private-border-rgb-226-232-240-0-9);
   border-radius: 30px;
   padding: 34px;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 18px 48px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
 }
 
 .quizTop {
@@ -762,8 +762,8 @@
   padding: 38px;
   border: 1px solid var(--crm-border);
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.1), transparent 34%),
-    linear-gradient(180deg, #f2f8ff 0%, #ffffff 10%, #ffffff 100%);
+    radial-gradient(circle at top left, var(--crm-ui-private-surface-rgb-37-99-235-0-1), transparent 34%),
+    linear-gradient(180deg, var(--crm-ui-private-surface-hex-f2f8ff) 0%, var(--crm-surface) 10%, var(--crm-surface) 100%);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -938,7 +938,7 @@
 
 .integrationModeCard h1 {
   margin: -8px 0px 5px 5px;
-  color: #899790;
+  color: var(--crm-ui-private-content-hex-899790);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.15em;
@@ -948,7 +948,7 @@
 .integrationModeCard strong {
   display: block;
   margin: 0;
-  color: #123a54;
+  color: var(--crm-ui-private-content-hex-123a54);
   font-size: 16px;
   font-weight: 800;
   line-height: 1.35;
@@ -957,7 +957,7 @@
 .integrationModeCard span {
   display: block;
   margin-top: 6px;
-  color:  #526677;
+  color:  var(--crm-ui-private-content-hex-526677);
   font-size: 13px;
   font-weight: 500;
   line-height: 1.55;
@@ -985,7 +985,7 @@
   width: 100%;
   padding: 16px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-88);
   border: 1px solid var(--crm-border);
   margin-top: 14px;
 }
@@ -1211,7 +1211,7 @@
   justify-content: space-between;
   gap: 14px;
   border-color: var(--crm-success-border);
-  background: linear-gradient(80deg, #e8ffef 0%, #fafffc 100%);
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-e8ffef) 0%, var(--crm-ui-private-surface-hex-fafffc) 100%);
 }
 
 .quizInfoBoxDone span {
@@ -1281,7 +1281,7 @@
   background: var(--crm-surface);
   border-left: 1px solid var(--crm-border);
   opacity: 0;
-  box-shadow: -18px 0 45px rgba(15, 23, 42, 0);
+  box-shadow: -18px 0 45px var(--crm-ui-private-shadow-rgb-15-23-42-0);
   visibility: hidden;
   pointer-events: none;
   transform: translateX(100%);
@@ -1296,7 +1296,7 @@
   pointer-events: auto;
   opacity: 1;
   transform: translateX(0);
-  box-shadow: -18px 0 45px rgba(15, 23, 42, 0.14);
+  box-shadow: -18px 0 45px var(--crm-ui-private-shadow-rgb-15-23-42-0-14);
   transition-delay: 0s;
   border-radius: 30px 0 0 30px;
 }
@@ -1316,7 +1316,7 @@
   scrollbar-gutter: stable;
 
   scrollbar-width: thin;
-  scrollbar-color: rgba(100, 116, 139, 0.28) transparent;
+  scrollbar-color: var(--crm-ui-private-content-rgb-100-116-139-0-28) transparent;
 }
 
 .metaGuideEdgeButton {
@@ -1335,7 +1335,7 @@
   background: var(--crm-surface);
   color: var(--crm-text-muted);
 
-  box-shadow: -4px 4px 14px rgba(15, 23, 42, 0.06);
+  box-shadow: -4px 4px 14px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
 
   font-size: 24px;
   font-weight: 300;
@@ -1361,7 +1361,7 @@
   background: var(--crm-surface-soft);
   color: var(--crm-text-strong);
   border-color: var(--crm-border-strong);
-  box-shadow: -5px 5px 18px rgba(15, 23, 42, 0.09);
+  box-shadow: -5px 5px 18px var(--crm-ui-private-shadow-rgb-15-23-42-0-09);
   transform: translateY(-50%) translateX(-1px);
 }
 
@@ -1377,7 +1377,7 @@
   border-radius: 16px 0 0 16px;
   background: var(--crm-surface);
   color: var(--crm-text-strong);
-  box-shadow: -8px 8px 22px rgba(15, 23, 42, 0.12);
+  box-shadow: -8px 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-12);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1567,7 +1567,7 @@
   background: var(--crm-primary-soft-hover);
   border-color: var(--crm-primary-border);
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 20px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
 }
 
 .metaGuideWhatsappIcon {
@@ -1746,7 +1746,7 @@
   padding: 0 14px;
   border: 1px solid var(--crm-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-78);
   color: var(--crm-text-strong);
   display: inline-flex;
   align-items: center;
@@ -1754,7 +1754,7 @@
   font-size: 13px;
   font-weight: 800;
   text-decoration: none;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
   backdrop-filter: blur(10px);
   transition:
     background 0.2s ease,
@@ -1777,14 +1777,14 @@
   border: 1px solid var(--crm-border);
   border-radius: 999px;
   padding: 4px 10px 4px 4px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-82);
   color: var(--crm-text-strong);
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-family: inherit;
   cursor: pointer;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
   backdrop-filter: blur(10px);
   transition:
     background 0.2s ease,

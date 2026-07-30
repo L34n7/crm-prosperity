@@ -103,7 +103,7 @@
 
 .buyTokensButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 16px 28px rgba(29, 78, 216, 0.28);
+  box-shadow: 0 16px 28px var(--crm-ui-private-shadow-rgb-29-78-216-0-28);
 }
 
 .filtersGrid {

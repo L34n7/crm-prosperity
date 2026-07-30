@@ -4,7 +4,7 @@
   height: 100vh;
   background: var(--crm-sidebar-bg);
   border-right: 1px solid var(--crm-sidebar-border);
-  box-shadow: inset -1px 0 0 #ffffff0d, 18px 0 45px rgba(7, 28, 41, 0.08);
+  box-shadow: inset -1px 0 0 var(--crm-ui-private-shadow-hex-ffffff0d), 18px 0 45px var(--crm-ui-private-shadow-rgb-7-28-41-0-08);
   display: flex;
   flex-direction: column;
   padding: 20px 16px 16px;
@@ -190,7 +190,7 @@
 }
 
 .linkWhatsappActive {
-  background: #e2e2e2;
+  background: var(--crm-ui-private-surface-hex-e2e2e2);
   color: var(--crm-sidebar-active-text);
 }
 
@@ -231,13 +231,13 @@
 .configuracoesActive {
   background: var(--crm-success-bg-strong);
   color: var(--crm-success-strong);
-  box-shadow: 0 10px 22px rgba(22, 101, 52, 0.12);
+  box-shadow: 0 10px 22px var(--crm-ui-private-shadow-rgb-22-101-52-0-12);
   margin-bottom: 8px;
 }
 
 .configuracoesActive:hover {
-  background: #cff3e2;
-  color: #0f5132;
+  background: var(--crm-ui-private-surface-hex-cff3e2);
+  color: var(--crm-ui-private-content-hex-0f5132);
 }
 
 .configuracoesActive .linkIcon {
@@ -255,7 +255,7 @@
 .sidebarCollapsed .configuracoesActive {
   background: var(--crm-success-bg-strong);
   color: var(--crm-success-strong);
-  box-shadow: 0 8px 18px rgba(22, 101, 52, 0.14);
+  box-shadow: 0 8px 18px var(--crm-ui-private-shadow-rgb-22-101-52-0-14);
   margin-bottom: 0px;
 }
 
@@ -267,7 +267,7 @@
   min-height: 42px;
   padding: 10px 12px;
   border-radius: 26px;
-  background: #f4f4f4;
+  background: var(--crm-ui-private-surface-hex-f4f4f4);
   color: var(--crm-sidebar-text);
   border: 1px transparent;
   cursor: pointer;
@@ -351,7 +351,7 @@
 
 .submenuButton.configuracoesActive {
   background: var(--crm-success-bg-strong);
-  box-shadow: 0 8px 18px rgba(22, 101, 52, 0.14);
+  box-shadow: 0 8px 18px var(--crm-ui-private-shadow-rgb-22-101-52-0-14);
 }
 
 .submenuButton:hover {
@@ -461,9 +461,9 @@
   padding: 0 5px;
 
   border-radius: 999px;
-  border: 1px solid  #ff782aa6;
-  background: #ffc531;
-  color: #111111;
+  border: 1px solid  var(--crm-ui-private-border-hex-ff782aa6);
+  background: var(--crm-ui-private-surface-hex-ffc531);
+  color: var(--crm-ui-private-content-hex-111111);
 
   display: inline-flex;
   align-items: center;
@@ -473,14 +473,14 @@
   font-weight: 900;
   line-height: 1;
 
-  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.35);
+  box-shadow: 0 4px 10px var(--crm-ui-private-shadow-rgb-239-68-68-0-35);
 }
 
 .conversationsNotificationDot {
-  background: #2fee98;
-  border: 1px solid  #009652a6;
-  color: #000000;
-  box-shadow: 0 4px 10px rgba(34, 197, 94, 0.28);
+  background: var(--crm-ui-private-surface-hex-2fee98);
+  border: 1px solid  var(--crm-ui-private-border-hex-009652a6);
+  color: var(--crm-ui-private-content-hex-000000);
+  box-shadow: 0 4px 10px var(--crm-ui-private-shadow-rgb-34-197-94-0-28);
 }
 
 .whatsappSidebarAvatar {
@@ -491,7 +491,7 @@
   border: 1px solid var(--crm-sidebar-avatar-ring);
   background: var(--crm-surface-soft);
   display: block;
-  box-shadow: 0 4px 10px rgba(18, 65, 78, 0.144);
+  box-shadow: 0 4px 10px var(--crm-ui-private-shadow-rgb-18-65-78-0-144);
 }
 
 .planButton {
@@ -499,9 +499,9 @@
   min-height: 38px;
   margin: 0 0 8px;
   padding: 0px 15px;
-  border: 1px solid #f7fffc;
+  border: 1px solid var(--crm-ui-private-border-hex-f7fffc);
   border-radius: 22px;
-  background: #ffffff;
+  background: var(--crm-surface);
   color: var(--crm-sidebar-text);
   display: flex;
   align-items: center;
@@ -515,7 +515,7 @@
 }
 
 .planButton:hover {
-  background: #f1f8f5;
+  background: var(--crm-ui-private-surface-hex-f1f8f5);
   box-shadow: none;
 }
 
@@ -710,7 +710,7 @@
     border-right: 0;
     border-top: 1px solid var(--crm-border);
     background: var(--crm-surface);
-    box-shadow: 0 -14px 36px rgba(15, 23, 42, 0.14);
+    box-shadow: 0 -14px 36px var(--crm-ui-private-shadow-rgb-15-23-42-0-14);
     overflow: visible;
   }
 
@@ -779,21 +779,21 @@
     padding: 0 4px;
     border-radius: 999px;
     background: var(--crm-success-strong);
-    color: #000000;
+    color: var(--crm-ui-private-content-hex-000000);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 9px;
     font-weight: 900;
     line-height: 1;
-    box-shadow: 0 4px 10px rgba(34, 197, 94, 0.28);
+    box-shadow: 0 4px 10px var(--crm-ui-private-shadow-rgb-34-197-94-0-28);
   }
 
   .mobileConversationsNotificationDot {
-    background: #2fee98;
-    border: 1px solid #009652a6;
-    color: #000000;
-    box-shadow: 0 4px 10px rgba(34, 197, 94, 0.28);
+    background: var(--crm-ui-private-surface-hex-2fee98);
+    border: 1px solid var(--crm-ui-private-border-hex-009652a6);
+    color: var(--crm-ui-private-content-hex-000000);
+    box-shadow: 0 4px 10px var(--crm-ui-private-shadow-rgb-34-197-94-0-28);
   }
 
 
@@ -843,9 +843,9 @@
     width: 100%;
     flex-shrink: 0;
 
-    border: 1px solid rgba(20, 184, 166, 0.22);
+    border: 1px solid var(--crm-ui-private-border-rgb-20-184-166-0-22);
     border-radius: 16px;
-    background: linear-gradient(135deg, #ffffff 0%, #e6fff8 100%);
+    background: linear-gradient(135deg, var(--crm-surface) 0%, var(--crm-ui-private-surface-hex-e6fff8) 100%);
     overflow: hidden;
   }
 
@@ -877,7 +877,7 @@
     color: var(--crm-primary-text);
     font-size: 15px;
     font-weight: 900;
-    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+    box-shadow: 0 6px 14px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
   }
 
   .mobileWhatsappAvatar img {

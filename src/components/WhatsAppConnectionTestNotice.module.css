@@ -6,9 +6,9 @@
   justify-content: space-between;
   gap: 16px;
   padding: 12px 20px;
-  border-bottom: 1px solid rgba(14, 165, 233, 0.3);
-  background: linear-gradient(90deg, rgba(8, 47, 73, 0.98), rgba(30, 64, 175, 0.96));
-  color: #fff;
+  border-bottom: 1px solid var(--crm-ui-private-border-rgb-14-165-233-0-3);
+  background: linear-gradient(90deg, var(--crm-ui-private-surface-rgb-8-47-73-0-98), var(--crm-ui-private-surface-rgb-30-64-175-0-96));
+  color: var(--crm-text-inverse);
 }
 
 .banner strong {
@@ -19,16 +19,16 @@
 
 .banner p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.84);
+  color: var(--crm-ui-private-content-rgb-255-255-255-0-84);
   font-size: 12px;
 }
 
 .banner button {
   flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-35);
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-12);
+  color: var(--crm-text-inverse);
   padding: 8px 12px;
   font-weight: 700;
   cursor: pointer;
@@ -41,7 +41,7 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(2, 6, 23, 0.72);
+  background: var(--crm-ui-private-surface-rgb-2-6-23-0-72);
   backdrop-filter: blur(5px);
 }
 
@@ -53,12 +53,12 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-22);
   border-radius: 18px;
-  background: var(--background, #fff);
-  color: var(--foreground, #0f172a);
+  background: var(--background, var(--crm-surface));
+  color: var(--foreground, var(--crm-ui-private-content-hex-0f172a));
   padding: 28px;
-  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.35);
+  box-shadow: 0 24px 80px var(--crm-ui-private-shadow-rgb-2-6-23-0-35);
 }
 
 .close {
@@ -75,7 +75,7 @@
 .eyebrow {
   display: inline-block;
   margin-bottom: 8px;
-  color: #0284c7;
+  color: var(--crm-ui-private-content-hex-0284c7);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -97,15 +97,15 @@
   flex-direction: column;
   gap: 4px;
   margin: 18px 0;
-  border: 1px solid rgba(14, 165, 233, 0.25);
+  border: 1px solid var(--crm-ui-private-border-rgb-14-165-233-0-25);
   border-radius: 12px;
-  background: rgba(14, 165, 233, 0.08);
+  background: var(--crm-ui-private-surface-rgb-14-165-233-0-08);
   padding: 14px 16px;
 }
 
 .numberBox span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
 }
 
 .numberBox strong {
@@ -114,9 +114,9 @@
 
 .troubleshooting {
   margin-top: 18px;
-  border: 1px solid rgba(245, 158, 11, 0.32);
+  border: 1px solid var(--crm-ui-private-border-rgb-245-158-11-0-32);
   border-radius: 12px;
-  background: rgba(245, 158, 11, 0.08);
+  background: var(--crm-ui-private-surface-rgb-245-158-11-0-08);
   padding: 14px 16px;
 }
 
@@ -133,9 +133,9 @@
 
 .actions a,
 .actions button {
-  border: 1px solid rgba(14, 165, 233, 0.32);
+  border: 1px solid var(--crm-ui-private-border-rgb-14-165-233-0-32);
   border-radius: 9px;
-  background: rgba(14, 165, 233, 0.08);
+  background: var(--crm-ui-private-surface-rgb-14-165-233-0-08);
   color: inherit;
   padding: 9px 12px;
   font-size: 13px;
@@ -146,7 +146,7 @@
 
 .hint {
   margin-bottom: 0;
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
   font-size: 12px;
 }
 

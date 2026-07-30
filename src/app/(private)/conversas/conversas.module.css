@@ -100,7 +100,7 @@
 
 .primaryButton {
   border: none;
-  background: #06273c;
+  background: var(--crm-ui-private-surface-hex-06273c);
   color: var(--crm-text-inverse);
   padding: 10px 16px;
 }
@@ -209,7 +209,7 @@
 .messageInput:focus,
 .noteInput:focus {
   border-color: var(--crm-border-strong);
-  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
+  box-shadow: 0 0 0 3px var(--crm-ui-private-shadow-rgb-148-163-184-0-12);
 }
 
 .filtersGrid {
@@ -279,7 +279,7 @@
   height: 6px;
   border-radius: 999px;
   background: var(--crm-success-strong);
-  box-shadow: 0 0 0 0 #22c55eb3;
+  box-shadow: 0 0 0 0 var(--crm-ui-private-shadow-hex-22c55eb3);
   animation: quickChipRobotPulse 1.4s infinite;
   z-index: 2;
 }
@@ -291,14 +291,14 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  border: 1px solid #11ff94b3;
-  background: #83fdc7;
-  color: #000000;
+  border: 1px solid var(--crm-ui-private-border-hex-11ff94b3);
+  background: var(--crm-ui-private-surface-hex-83fdc7);
+  color: var(--crm-ui-private-content-hex-000000);
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
   text-align: center;
-  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.28);
+  box-shadow: 0 4px 10px var(--crm-ui-private-shadow-rgb-239-68-68-0-28);
   z-index: 3;
 }
 
@@ -316,21 +316,21 @@
   border-color: var(--crm-border-strong);
   background: var(--crm-surface-soft);
   color: var(--crm-text);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 2px 6px var(--crm-ui-private-shadow-rgb-15-23-42-0-12);
 }
 
 @keyframes quickChipRobotPulse {
   0% {
     transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.65);
+    box-shadow: 0 0 0 0 var(--crm-ui-private-shadow-rgb-34-197-94-0-65);
   }
   70% {
     transform: scale(1.15);
-    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+    box-shadow: 0 0 0 6px var(--crm-ui-private-shadow-rgb-34-197-94-0);
   }
   100% {
     transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    box-shadow: 0 0 0 0 var(--crm-ui-private-shadow-rgb-34-197-94-0);
   }
 }
 
@@ -361,7 +361,7 @@
   justify-content: center;
   text-align: center;
   padding: 18px;
-  color: #0d26388f;
+  color: var(--crm-ui-private-content-hex-0d26388f);
 }
 
 .emptyListState {
@@ -545,8 +545,8 @@
   margin-left: 10px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #3b83f60e;
-  border: 1px solid rgba(59, 131, 246, 0.134);
+  background: var(--crm-ui-private-surface-hex-3b83f60e);
+  border: 1px solid var(--crm-ui-private-border-rgb-59-131-246-0-134);
   font-size: 12px;
   line-height: 1;
   flex-shrink: 0;
@@ -565,7 +565,7 @@
 .favoriteStar {
   display: inline-block;
   margin-right: 6px;
-  color: #f59e0b;
+  color: var(--crm-ui-private-content-hex-f59e0b);
   font-size: 14px;
   vertical-align: middle;
 }
@@ -573,7 +573,7 @@
 .favoriteStarInline {
   display: inline-block;
   margin-right: 6px;
-  color: #f59e0b;
+  color: var(--crm-ui-private-content-hex-f59e0b);
   font-size: 12px;
   vertical-align: middle;
 }
@@ -642,8 +642,8 @@
 }
 
 .statusMiniDefault {
-  background: #eaf2ff;
-  color: #0085fa;
+  background: var(--crm-ui-private-surface-hex-eaf2ff);
+  color: var(--crm-ui-private-content-hex-0085fa);
 }
 
 .statusMiniBot {
@@ -657,9 +657,9 @@
 }
 
 .statusMiniAtendimento {
-  background: #eaf2ff;
-  color: #0085fa;
-  box-shadow: inset 0 0 0 1px #eaf2ff;
+  background: var(--crm-ui-private-surface-hex-eaf2ff);
+  color: var(--crm-ui-private-content-hex-0085fa);
+  box-shadow: inset 0 0 0 1px var(--crm-ui-private-shadow-hex-eaf2ff);
 }
 
 .statusMiniWaiting {
@@ -803,7 +803,7 @@
 }
 
 .noteShortcutButton:hover {
-  background: #f1f2f3;
+  background: var(--crm-ui-private-surface-hex-f1f2f3);
 }
 
 .chatHeaderActions {
@@ -842,7 +842,7 @@
 }
 
 .moreButton:hover {
-  background: #e2f5e8;
+  background: var(--crm-ui-private-surface-hex-e2f5e8);
 }
 
 .headerDropdownMenu {
@@ -853,7 +853,7 @@
   background: var(--crm-surface);
   border: 1px solid var(--crm-border);
   border-radius: 16px;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 12px 32px var(--crm-ui-private-shadow-rgb-15-23-42-0-14);
   padding: 8px;
   z-index: 50;
   display: flex;
@@ -879,7 +879,7 @@
 }
 
 .AtivarBot {
-  color: #0b8a4a;
+  color: var(--crm-ui-private-content-hex-0b8a4a);
 }
 
 .AtivarBot:hover {
@@ -1143,7 +1143,7 @@
   color: var(--crm-text-muted);
   font-size: 12px;
   font-weight: 700;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 1px var(--crm-ui-private-shadow-rgb-0-0-0-0-06);
 }
 
 .systemMessageRow {
@@ -1153,7 +1153,7 @@
 
 .systemMessageBadge {
   max-width: 80%;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-82);
   color: var(--crm-text-muted);
   border-radius: 10px;
   padding: 8px 12px;
@@ -1177,7 +1177,7 @@
   max-width: min(72%, 720px);
   padding: 8px 10px 6px;
   border-radius: 10px;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 1px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
 }
 
 .messageBubbleIncoming {
@@ -1272,7 +1272,7 @@
 }
 
 .messageFavoriteButtonActive {
-  color: #f59e0b;
+  color: var(--crm-ui-private-content-hex-f59e0b);
   opacity: 1;
 }
 
@@ -2319,8 +2319,8 @@
 }
 
 .noteDeleteConfirmButton:hover {
-  background: #ffe6e9;
-  color: #e7001b;
+  background: var(--crm-ui-private-surface-hex-ffe6e9);
+  color: var(--crm-ui-private-content-hex-e7001b);
 }
 
 .favoriteMessageCard {
@@ -2332,7 +2332,7 @@
 }
 
 .favoriteMessageCard:hover {
-  background:  #eef6f1;
+  background:  var(--crm-ui-private-surface-hex-eef6f1);
 }
 
 .favoriteMessageHeader {
@@ -2368,8 +2368,8 @@
 
 .messageHighlight .messageBubble {
   box-shadow:
-    0 0 20px 2px #fff70093,
-    0 0 18px #f59e0b47;
+    0 0 20px 2px var(--crm-ui-private-shadow-hex-fff70093),
+    0 0 18px var(--crm-ui-private-shadow-hex-f59e0b47);
 }
 
 @keyframes messageHighlightPulse {
@@ -2495,7 +2495,7 @@
 
 .whatsContactNameEditButton:hover {
   opacity: 1;
-  background: #eef6f1;
+  background: var(--crm-ui-private-surface-hex-eef6f1);
   color: var(--crm-text-strong);
 }
 
@@ -2523,7 +2523,7 @@
 
 .whatsContactNameInput:focus {
   border-color: var(--crm-border-strong);
-  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
+  box-shadow: 0 0 0 3px var(--crm-ui-private-shadow-rgb-148-163-184-0-12);
 }
 
 .whatsContactNameEditActions {
@@ -2568,7 +2568,7 @@
 }
 
 .whatsContactActionButton:hover {
-  background: #eef6f1;
+  background: var(--crm-ui-private-surface-hex-eef6f1);
 }
 
 .whatsContactSection {
@@ -2723,7 +2723,7 @@
 .listaMainButton:hover {
   background: var(--crm-surface-soft);
   border-color: var(--crm-border);
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 6px 20px var(--crm-ui-private-shadow-rgb-15-23-42-0-05);
 }
 
 .listaMainLeft {
@@ -2791,7 +2791,7 @@
   background: var(--crm-surface);
   border-radius: 18px;
   padding: 16px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 8px 24px var(--crm-ui-private-shadow-rgb-15-23-42-0-05);
 }
 
 .listaInlinePanelDanger {
@@ -2799,7 +2799,7 @@
   background: var(--crm-danger-bg);
   border-radius: 18px;
   padding: 16px;
-  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.06);
+  box-shadow: 0 8px 24px var(--crm-ui-private-shadow-rgb-220-38-38-0-06);
 }
 
 .listaInlineActions {
@@ -2860,9 +2860,9 @@
   gap: 10px;
   padding: 10px 12px;
   border-radius: 18px;
-  background: linear-gradient(135deg, #bfecfadc, #46616e4f);
+  background: linear-gradient(135deg, var(--crm-ui-private-surface-hex-bfecfadc), var(--crm-ui-private-surface-hex-46616e4f));
   border: 1px solid var(--crm-border-soft);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 4px 14px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
 }
 
 .audioPlayerOutgoing {
@@ -2876,7 +2876,7 @@
   border-radius: 18px;
   background: var(--crm-success-bg-strong);
   border: 1px solid var(--crm-success-border);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 4px 14px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
 }
 
 .audioPlayerTopRow {
@@ -2957,13 +2957,13 @@
   justify-content: center;
   background: var(--crm-surface);
   color: var(--crm-text-strong);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 6px 18px var(--crm-ui-private-shadow-rgb-15-23-42-0-12);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .audioPlayButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-16);
 }
 
 .audioWave {
@@ -2992,7 +2992,7 @@
 }
 
 .audioWaveBarActiveIncoming {
-  background: #002e6e;
+  background: var(--crm-ui-private-surface-hex-002e6e);
 }
 
 .audioWaveBarInactiveIncoming {
@@ -3075,7 +3075,7 @@
 }
 
 .audioTranscriptionBoxOutgoing {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-18);
 }
 
 .audioTranscriptionToggle {
@@ -3219,7 +3219,7 @@
   background: var(--crm-surface);
   border-radius: 20px;
   border: 1px solid var(--crm-border);
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 20px 60px var(--crm-ui-private-shadow-rgb-15-23-42-0-22);
 }
 
 .contactModalHeader {
@@ -3508,7 +3508,7 @@
   min-width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.08);
+  background: var(--crm-ui-private-surface-rgb-15-23-42-0-08);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3577,7 +3577,7 @@
   inset-inline: 0;
   bottom: 0;
   padding: 8px;
-  background: linear-gradient(to top, rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0));
+  background: linear-gradient(to top, var(--crm-ui-private-surface-rgb-15-23-42-0-82), var(--crm-ui-private-surface-rgb-15-23-42-0));
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -3592,7 +3592,7 @@
 
 .mediaThumbOverlayTime {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--crm-ui-private-content-rgb-255-255-255-0-9);
 }
 
 .mediaBrowserList {
@@ -3731,15 +3731,15 @@
 
 .expiringMediaNoticeBadge {
   max-width: min(100%, 620px);
-  background: rgba(229, 252, 136, 0.389);
-  color: rgba(27, 27, 27, 0.854);
+  background: var(--crm-ui-private-surface-rgb-229-252-136-0-389);
+  color: var(--crm-ui-private-content-rgb-27-27-27-0-854);
   border-radius: 10px;
   padding: 8px 12px;
   font-size: 12px;
   line-height: 1.45;
   text-align: center;
   backdrop-filter: blur(6px);
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 1px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
 }
 
 .rightPanelTitleWrap {
@@ -3761,7 +3761,7 @@
   height: 22px;
   border-radius: 999px;
   border: none;
-  background: #ffde59; 
+  background: var(--crm-ui-private-surface-hex-ffde59);
   color: var(--crm-text-strong);
   font-size: 12px;
   font-weight: 800;
@@ -3769,7 +3769,7 @@
   align-items: center;
   justify-content: center;
   cursor: help;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 2px 6px var(--crm-ui-private-shadow-rgb-15-23-42-0-12);
 }
 
 .mediaExpiryInfoTooltip {
@@ -3779,11 +3779,11 @@
   width: 290px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: #0d2638ed;
+  background: var(--crm-ui-private-surface-hex-0d2638ed);
   color: var(--crm-text-inverse);
   font-size: 12px;
   line-height: 1.5;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 12px 32px var(--crm-ui-private-shadow-rgb-15-23-42-0-22);
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px);
@@ -3817,11 +3817,11 @@
   bottom: calc(100% + 10px);
   left: 0;
   min-width: 190px;
-  background: #fffffff5;
-  border: 1px solid rgb(237, 237, 237);
+  background: var(--crm-ui-private-surface-hex-fffffff5);
+  border: 1px solid var(--crm-ui-private-border-rgb-237-237-237);
   border-radius: 14px;
   padding: 8px;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 10px 20px var(--crm-ui-private-shadow-rgb-15-23-42-0-16);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3831,7 +3831,7 @@
 .attachmentMenuItem {
   border: none;
   background: transparent;
-  color: #212121;
+  color: var(--crm-ui-private-content-hex-212121);
   border-radius: 10px;
   padding: 10px 12px;
   display: flex;
@@ -3844,7 +3844,7 @@
 }
 
 .attachmentMenuItem:hover {
-  background: rgba(78, 78, 78, 0.08);
+  background: var(--crm-ui-private-surface-rgb-78-78-78-0-08);
   transform: translateY(-1px);
 }
 
@@ -3858,7 +3858,7 @@
 
 .filePreviewCard {
   margin-bottom: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-22);
   border-radius: 16px;
   padding: 12px;
   background: var(--crm-surface);
@@ -3881,15 +3881,15 @@
   gap: 10px;
   padding: 12px;
   border-radius: 12px;
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--crm-ui-private-surface-rgb-148-163-184-0-08);
 }
 
 .toolButton {
   width: 40px;
   height: 40px;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-2);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-72);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3901,14 +3901,14 @@
 .toolButton:hover {
   transform: translateY(-1px);
   background: var(--crm-surface);
-  border-color: rgba(100, 116, 139, 0.28);
+  border-color: var(--crm-ui-private-border-rgb-100-116-139-0-28);
 }
 
 .toolButton:focus {
   background: linear-gradient(180deg, var(--crm-surface), var(--crm-primary-soft));
-  border-color: rgba(36, 218, 0, 0.34);
+  border-color: var(--crm-ui-private-border-rgb-36-218-0-0-34);
   color: var(--crm-primary-text);
-  box-shadow: 0 0 4 4px #e4f6f4;
+  box-shadow: 0 0 4 4px var(--crm-ui-private-shadow-hex-e4f6f4);
 }
 
 
@@ -3939,14 +3939,14 @@
 
 .filePreviewCard {
   margin-bottom: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-18);
   border-radius: 18px;
   padding: 12px;
   background: var(--crm-surface);
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 24px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
 }
 
 .filePreviewHeader {
@@ -3975,14 +3975,14 @@
 }
 
 .filePreviewRemoveButton:hover {
-  background: #ffe6e9;
-  color: #e7001b;
+  background: var(--crm-ui-private-surface-hex-ffe6e9);
+  color: var(--crm-ui-private-content-hex-e7001b);
 }
 
 .audioPreviewCard {
   border-radius: 16px;
   background: linear-gradient(180deg, var(--crm-surface-soft) 0%, var(--crm-surface-muted) 100%);
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-16);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -4004,7 +4004,7 @@
   height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  background: rgba(37, 99, 235, 0.12);
+  background: var(--crm-ui-private-surface-rgb-37-99-235-0-12);
   color: var(--crm-primary-text);
   font-size: 12px;
   font-weight: 700;
@@ -4023,7 +4023,7 @@
   border-radius: 14px;
   background: var(--crm-surface);
   padding: 8px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-14);
 }
 
 .audioPreviewPlayer {
@@ -4043,12 +4043,12 @@
   bottom: 95px;
   right: 16px;
   width: min(600px, calc(100vw - 48px));
-  background: #000;
+  background: var(--crm-ui-private-surface-hex-000000);
   border-radius: 18px;
   overflow: hidden;
   z-index: 80;
-  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 60px var(--crm-ui-private-shadow-rgb-2-6-23-0-42);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-08);
 }
 
 .cameraVideo {
@@ -4056,7 +4056,7 @@
   height: 600px;
   object-fit: cover;
   display: block;
-  background: #000;
+  background: var(--crm-ui-private-surface-hex-000000);
 }
 
 .cameraActions {
@@ -4065,7 +4065,7 @@
   align-items: center;
   gap: 10px;
   padding: 12px;
-  background: rgba(15, 23, 42, 0.96);
+  background: var(--crm-ui-private-surface-rgb-15-23-42-0-96);
 }
 
 .cameraActions button {
@@ -4082,7 +4082,7 @@
   bottom: 85px;
   left: 60px;
   z-index: 90;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 10px 20px var(--crm-ui-private-shadow-rgb-15-23-42-0-16);
   border-radius: 16px;
   overflow: hidden;
 }
@@ -4105,14 +4105,14 @@
   padding: 0;
   gap: 0;
   color: var(--crm-text-strong);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-78);
 }
 
 .macroButtonActive {
   background: linear-gradient(180deg, var(--crm-surface), var(--crm-primary-soft));
-  border-color: rgba(36, 218, 0, 0.34);
+  border-color: var(--crm-ui-private-border-rgb-36-218-0-0-34);
   color: var(--crm-primary-text);
-  box-shadow: 0 0 4 4px #e4f6f4;
+  box-shadow: 0 0 4 4px var(--crm-ui-private-shadow-hex-e4f6f4);
 }
 
 .macroPopover {
@@ -4123,10 +4123,10 @@
   width: min(410px, calc(100vw - 28px));
   max-height: min(430px, calc(100vh - 180px));
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-24);
   border-radius: 16px;
-  background: rgb(255, 255, 255);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.16);
+  background: var(--crm-ui-private-surface-rgb-255-255-255);
+  box-shadow: 0 10px 20px var(--crm-ui-private-shadow-rgb-15-23-42-0-16);
   backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
@@ -4138,8 +4138,8 @@
   justify-content: space-between;
   gap: 10px;
   padding: 8px 14px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.74));
+  border-bottom: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-18);
+  background: linear-gradient(180deg, var(--crm-ui-private-surface-rgb-255-255-255-0-94), var(--crm-ui-private-surface-rgb-248-250-252-0-74));
 }
 
 .macroPopoverHeader strong {
@@ -4168,7 +4168,7 @@
 
 .macroPopoverNewButton:hover {
   background: var(--crm-surface-soft);
-  border-color: rgba(100, 116, 139, 0.34);
+  border-color: var(--crm-ui-private-border-rgb-100-116-139-0-34);
 }
 
 .macroPopoverList {
@@ -4185,11 +4185,11 @@
   align-items: center;
   gap: 8px;
   padding: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-16);
   border-radius: 12px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.82));
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+    linear-gradient(180deg, var(--crm-ui-private-surface-rgb-255-255-255-0-96), var(--crm-ui-private-surface-rgb-248-250-252-0-82));
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-05);
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease,
@@ -4197,8 +4197,8 @@
 }
 
 .macroPopoverItem:hover {
-  border-color: rgba(37, 99, 235, 0.22);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.09);
+  border-color: var(--crm-ui-private-border-rgb-37-99-235-0-22);
+  box-shadow: 0 14px 30px var(--crm-ui-private-shadow-rgb-15-23-42-0-09);
   transform: translateY(-1px);
 }
 
@@ -4260,7 +4260,7 @@
   min-height: 44px;
   max-height: 180px;
   overflow-y: auto;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-18);
   border-radius: 18px;
   padding: 12px 16px;
   background: linear-gradient(180deg, var(--crm-surface) 0%, var(--crm-surface-soft) 100%);
@@ -4270,8 +4270,8 @@
   white-space: pre-wrap;
   word-break: break-word;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 4px 14px rgba(15, 23, 42, 0.04);
+    inset 0 1px 0 var(--crm-ui-private-shadow-rgb-255-255-255-0-9),
+    0 4px 14px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
@@ -4286,8 +4286,8 @@
 }
 
 .messageEditor:focus {
-  border-color: #008b6436;
-  box-shadow: 0 0 8 4px #e4f6f4;
+  border-color: var(--crm-ui-private-border-hex-008b6436);
+  box-shadow: 0 0 8 4px var(--crm-ui-private-shadow-hex-e4f6f4);
 
   background: var(--crm-surface);
 }
@@ -4413,9 +4413,9 @@
 
 
 .etiquetaTagPremium {
-  --tag-bg-1: rgba(59, 130, 246, 0.16);
-  --tag-bg-2: rgba(59, 130, 246, 0.28);
-  --tag-border: rgba(59, 130, 246, 0.34);
+  --tag-bg-1: var(--crm-ui-private-decoration-rgb-59-130-246-0-16);
+  --tag-bg-2: var(--crm-ui-private-decoration-rgb-59-130-246-0-28);
+  --tag-border: var(--crm-ui-private-border-rgb-59-130-246-0-34);
 
   position: relative;
   width: 36px;
@@ -4434,7 +4434,7 @@
     92% 90%,
     28% 90%
   );
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 3px 8px var(--crm-ui-private-shadow-rgb-15-23-42-0-05);
   transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
@@ -4445,7 +4445,7 @@
   width: 4px;
   height: 4px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-88);
   transform: translate(-50%, -50%);
 }
 
@@ -4458,15 +4458,15 @@
   border-radius: 999px;
   background: linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.26),
-    rgba(255, 255, 255, 0)
+    var(--crm-ui-private-surface-rgb-255-255-255-0-26),
+    var(--crm-ui-private-surface-rgb-255-255-255-0)
   );
   pointer-events: none;
 }
 
 .etiquetaTagPremium:hover {
   transform: rotate(-3deg) scale(1.04);
-  box-shadow: 0 5px 12px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 5px 12px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
 }
 
 .etiquetaCoresGrid {
@@ -4487,11 +4487,11 @@
 
 .etiquetaCorOpcao:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 10px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
 }
 
 .etiquetaCorOpcaoAtiva {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px var(--crm-ui-private-shadow-rgb-37-99-235-0-12);
 }
 
 .etiquetaAtualCard {
@@ -4563,7 +4563,7 @@
 .etiquetaCardAtiva {
   border-color: var(--crm-border-strong);
   background: var(--crm-surface-subtle);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 6px 18px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
 }
 
 .etiquetaContador {
@@ -4619,10 +4619,10 @@
   padding: 10px 12px;
   border-radius: 12px;
 
-  background: rgba(15, 23, 42, 0.96);
+  background: var(--crm-ui-private-surface-rgb-15-23-42-0-96);
   color: var(--crm-text-inverse);
 
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 14px 32px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
 
   opacity: 0;
   visibility: hidden;
@@ -4647,7 +4647,7 @@
   width: 10px;
   height: 10px;
 
-  background: rgba(15, 23, 42, 0.96);
+  background: var(--crm-ui-private-surface-rgb-15-23-42-0-96);
 
   transform: translateX(-50%) rotate(45deg);
 }
@@ -4661,7 +4661,7 @@
 .etiquetaTooltip small {
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--crm-ui-private-content-rgb-255-255-255-0-78);
 }
 
 .etiquetaTooltipWrap:hover .etiquetaTooltip {
@@ -4681,9 +4681,9 @@
   gap: 16px;
   padding: 16px 18px;
   border-radius: 16px;
-  border: 1px solid rgba(239, 68, 68, 0.18);
-  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.92));
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--crm-ui-private-border-rgb-239-68-68-0-18);
+  background: linear-gradient(180deg, var(--crm-ui-private-surface-rgb-255-255-255-0-96), var(--crm-ui-private-surface-rgb-248-250-252-0-92));
+  box-shadow: 0 10px 30px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
 }
 
 .botStopInfo {
@@ -4700,7 +4700,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(59, 130, 246, 0.10);
+  background: var(--crm-ui-private-surface-rgb-59-130-246-0-1);
   font-size: 22px;
   flex-shrink: 0;
 }
@@ -4729,7 +4729,7 @@
   border: 1px solid var(--disparoCardBorder);
   background: var(--disparoCardBG);
   box-shadow:
-    0 12px 30px rgba(15, 23, 42, 0.05),
+    0 12px 30px var(--crm-ui-private-shadow-rgb-15-23-42-0-05),
     inset 0 1px 0 var(--disparoCardBS);
 }
 
@@ -4778,7 +4778,7 @@
   justify-content: center;
   flex-shrink: 0;
   font-size: 18px;
-  background: rgba(255, 194, 194, 0.6);
+  background: var(--crm-ui-private-surface-rgb-255-194-194-0-6);
 }
 
 .disparoAlertCompactContent {
@@ -4791,14 +4791,14 @@
 .disparoAlertCompactTitle {
   font-size: 14px;
   line-height: 1.25;
-  color: #0b0b0b;
+  color: var(--crm-ui-private-content-hex-0b0b0b);
 }
 
 .disparoAlertCompactText {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #0b0b0b;
+  color: var(--crm-ui-private-content-hex-0b0b0b);
 }
 
 .disparoExpandButton {
@@ -4818,7 +4818,7 @@
 
 .disparoExpandButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.20);
+  box-shadow: 0 14px 28px var(--crm-ui-private-shadow-rgb-15-23-42-0-2);
 }
 
 .disparoCardExpandido {
@@ -4834,8 +4834,8 @@
   gap: 10px;
   padding: 14px;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(255,255,255,0.82);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-14);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-82);
 }
 
 .disparoFormHeader {
@@ -4871,7 +4871,7 @@
   height: 42px;
   padding: 0 14px;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-22);
   background: var(--crm-surface);
   color: var(--crm-text-strong);
   font-size: 15px;
@@ -4881,16 +4881,16 @@
 }
 
 .disparoQuickSelect:focus {
-  border-color: rgba(37, 99, 235, 0.42);
+  border-color: var(--crm-ui-private-border-rgb-37-99-235-0-42);
   box-shadow: var(--crm-focus-ring);
 }
 
 .disparoQuickNewButton {
   height: 42px;
   padding: 0 14px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-16);
   border-radius: 12px;
-  background: rgba(37, 99, 235, 0.06);
+  background: var(--crm-ui-private-surface-rgb-37-99-235-0-06);
   color: var(--crm-text-strong);
   font-size: 14px;
   font-weight: 700;
@@ -4899,8 +4899,8 @@
 }
 
 .disparoQuickNewButton:hover {
-  background: rgba(37, 99, 235, 0.10);
-  border-color: rgba(37, 99, 235, 0.22);
+  background: var(--crm-ui-private-surface-rgb-37-99-235-0-1);
+  border-color: var(--crm-ui-private-border-rgb-37-99-235-0-22);
   transform: translateY(-1px);
 }
 
@@ -4914,7 +4914,7 @@
   height: 38px;
   padding: 0 12px;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-18);
   background: var(--crm-surface);
   color: var(--crm-text-strong);
   font-size: 14px;
@@ -4922,7 +4922,7 @@
 }
 
 .disparoInput:focus {
-  border-color: rgba(37, 99, 235, 0.36);
+  border-color: var(--crm-ui-private-border-rgb-37-99-235-0-36);
   box-shadow: var(--crm-focus-ring);
 }
 
@@ -4970,18 +4970,18 @@
   padding: 0 18px;
   border: none;
   border-radius: 14px;
-  background: linear-gradient(180deg, #3b82f6, #2563eb);
+  background: linear-gradient(180deg, var(--crm-ui-private-surface-hex-3b82f6), var(--crm-ui-private-surface-hex-2563eb));
   color: var(--crm-text-inverse);
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 10px 20px var(--crm-ui-private-shadow-rgb-37-99-235-0-22);
   transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
 }
 
 .disparoQuickSendButton:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 14px 24px rgba(37, 99, 235, 0.26);
+  box-shadow: 0 14px 24px var(--crm-ui-private-shadow-rgb-37-99-235-0-26);
 }
 
 .disparoQuickSendButton:disabled {
@@ -4994,9 +4994,9 @@
   margin-top: 2px;
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(37, 99, 235, 0.18);
+  border: 1px solid var(--crm-ui-private-border-rgb-37-99-235-0-18);
   background:
-    linear-gradient(180deg, rgba(239, 246, 255, 0.94), rgba(255, 255, 255, 0.98));
+    linear-gradient(180deg, var(--crm-ui-private-surface-rgb-239-246-255-0-94), var(--crm-ui-private-surface-rgb-255-255-255-0-98));
   color: var(--crm-text);
   display: flex;
   align-items: center;
@@ -5020,9 +5020,9 @@
 }
 
 .disparoLimiteMetaAvisoBloqueado {
-  border-color: rgba(220, 38, 38, 0.28);
+  border-color: var(--crm-ui-private-border-rgb-220-38-38-0-28);
   background:
-    linear-gradient(180deg, rgba(254, 242, 242, 0.96), rgba(255, 255, 255, 0.98));
+    linear-gradient(180deg, var(--crm-ui-private-surface-rgb-254-242-242-0-96), var(--crm-ui-private-surface-rgb-255-255-255-0-98));
 }
 
 .disparoLimiteMetaNumeros {
@@ -5037,8 +5037,8 @@
   margin: 0;
   padding: 5px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-86);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-18);
   color: var(--crm-text-muted);
   font-size: 10px;
   font-weight: 700;
@@ -5057,8 +5057,8 @@
   gap: 10px;
   padding: 14px;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  background: linear-gradient(180deg, rgba(248,250,252,0.98), rgba(241,245,249,0.96));
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-14);
+  background: linear-gradient(180deg, var(--crm-ui-private-surface-rgb-248-250-252-0-98), var(--crm-ui-private-surface-rgb-241-245-249-0-96));
 }
 
 .disparoTemplatePreviewHeader {
@@ -5106,9 +5106,9 @@
   min-height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  background: rgba(34, 197, 94, 0.10);
+  background: var(--crm-ui-private-surface-rgb-34-197-94-0-1);
   color: var(--crm-success-text);
-  border: 1px solid rgba(34, 197, 94, 0.24);
+  border: 1px solid var(--crm-ui-private-border-rgb-34-197-94-0-24);
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
@@ -5118,8 +5118,8 @@
   min-height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-28);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-9);
   color: var(--crm-text-strong);
   font-size: 11px;
   font-weight: 800;
@@ -5129,8 +5129,8 @@
 }
 
 .disparoMiniToggleButton:hover {
-  background: rgba(239, 246, 255, 0.95);
-  border-color: rgba(37, 99, 235, 0.24);
+  background: var(--crm-ui-private-surface-rgb-239-246-255-0-95);
+  border-color: var(--crm-ui-private-border-rgb-37-99-235-0-24);
   transform: translateY(-1px);
 }
 
@@ -5150,8 +5150,8 @@
 .disparoTemplateSectionBox {
   padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(255,255,255,0.9);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-16);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-9);
   color: var(--crm-text-strong);
   font-size: 14px;
   line-height: 1.55;
@@ -5163,8 +5163,8 @@
   border-radius: 16px;
   padding: 12px;
   background:
-    radial-gradient(circle at 20% 20%, rgba(15, 23, 42, 0.04) 0 2px, transparent 2px),
-    #efe7dd;
+    radial-gradient(circle at 20% 20%, var(--crm-ui-private-surface-rgb-15-23-42-0-04) 0 2px, transparent 2px),
+    var(--crm-ui-private-surface-hex-efe7dd);
   background-size: 18px 18px;
 }
 
@@ -5173,7 +5173,7 @@
   background: var(--crm-surface);
   border-radius: 0 14px 14px 14px;
   padding: 11px 12px 8px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-12);
   position: relative;
 }
 
@@ -5253,8 +5253,8 @@
   min-height: 24px;
   padding: 0 9px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-86);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-18);
   color: var(--crm-text-muted);
   font-size: 11px;
   font-weight: 700;
@@ -5268,8 +5268,8 @@
 .disparoTemplateEmptyState {
   padding: 16px;
   border-radius: 14px;
-  border: 1px dashed rgba(148, 163, 184, 0.32);
-  background: rgba(255,255,255,0.75);
+  border: 1px dashed var(--crm-ui-private-border-rgb-148-163-184-0-32);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-75);
   color: var(--crm-text-muted);
   font-size: 13px;
   line-height: 1.45;
@@ -5278,8 +5278,8 @@
 .disparoTemplatePreviewCollapsed {
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px dashed rgba(148, 163, 184, 0.32);
-  background: rgba(255, 255, 255, 0.72);
+  border: 1px dashed var(--crm-ui-private-border-rgb-148-163-184-0-32);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-72);
   color: var(--crm-text-muted);
   font-size: 12px;
   line-height: 1.45;
@@ -5288,8 +5288,8 @@
 .disparoTemplateHintBox {
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px dashed rgba(148, 163, 184, 0.32);
-  background: rgba(255,255,255,0.75);
+  border: 1px dashed var(--crm-ui-private-border-rgb-148-163-184-0-32);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-75);
   color: var(--crm-text);
   font-size: 12px;
   line-height: 1.45;
@@ -5297,8 +5297,8 @@
 
 .disparoCustoCompacto {
   margin-top: 4px;
-  border: 1px solid #dbe7ff;
-  background: linear-gradient(180deg, #f8fbff 0%, #f1f7ff 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-dbe7ff);
+  background: linear-gradient(180deg, var(--crm-ui-private-surface-hex-f8fbff) 0%, var(--crm-ui-private-surface-hex-f1f7ff) 100%);
   border-radius: 14px;
   padding: 10px 12px;
   display: flex;
@@ -5345,8 +5345,8 @@
 
 .disparoCustoBox {
   margin-top: 8px;
-  border: 1px solid #dbe7ff;
-  background: linear-gradient(180deg, #f8fbff 0%, #f1f7ff 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-dbe7ff);
+  background: linear-gradient(180deg, var(--crm-ui-private-surface-hex-f8fbff) 0%, var(--crm-ui-private-surface-hex-f1f7ff) 100%);
   border-radius: 14px;
   padding: 12px;
   display: flex;
@@ -5376,7 +5376,7 @@
   min-height: 24px;
   padding: 0 9px;
   border-radius: 999px;
-  background: #e8f0ff;
+  background: var(--crm-ui-private-surface-hex-e8f0ff);
   color: var(--crm-primary-text);
   font-size: 10px;
   font-weight: 800;
@@ -5410,7 +5410,7 @@
   font-size: 11px;
   line-height: 1.4;
   color: var(--crm-text-muted);
-  border-top: 1px dashed #c7d2fe;
+  border-top: 1px dashed var(--crm-ui-private-border-hex-c7d2fe);
   padding-top: 8px;
 }
 
@@ -5439,14 +5439,14 @@
 
 .chatToastSuccess {
   color: var(--crm-success-text);
-  background: rgba(236, 253, 245, 0.94);
-  border: 1px solid rgba(52, 211, 153, 0.6);
+  background: var(--crm-ui-private-surface-rgb-236-253-245-0-94);
+  border: 1px solid var(--crm-ui-private-border-rgb-52-211-153-0-6);
 }
 
 .chatToastError {
   color: var(--crm-danger-text);
-  background: rgba(254, 242, 242, 0.96);
-  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: var(--crm-ui-private-surface-rgb-254-242-242-0-96);
+  border: 1px solid var(--crm-ui-private-border-rgb-248-113-113-0-55);
 }
 
 @keyframes chatToastIn {
@@ -5474,10 +5474,10 @@
   border: 1px solid var(--crm-border-soft);
   border-radius: 14px;
 
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-96);
   backdrop-filter: blur(8px);
 
-  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 -6px 18px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
 }
 
 
@@ -5559,7 +5559,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--crm-ui-private-surface-rgb-15-23-42-0-58);
   backdrop-filter: blur(3px);
   animation: novoProtocoloOverlayEntrada 0.18s ease;
 }
@@ -5567,12 +5567,12 @@
 .novoProtocoloModal {
   width: min(100%, 520px);
   overflow: hidden;
-  background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-ui-private-border-rgb-15-23-42-0-08);
   border-radius: 20px;
   box-shadow:
-    0 30px 80px rgba(15, 23, 42, 0.28),
-    0 8px 24px rgba(15, 23, 42, 0.12);
+    0 30px 80px var(--crm-ui-private-shadow-rgb-15-23-42-0-28),
+    0 8px 24px var(--crm-ui-private-shadow-rgb-15-23-42-0-12);
   animation: novoProtocoloModalEntrada 0.2s ease;
 }
 
@@ -5581,12 +5581,12 @@
   align-items: center;
   gap: 14px;
   padding: 22px 24px 18px;
-  border-bottom: 1px solid #e8edf3;
+  border-bottom: 1px solid var(--crm-ui-private-border-hex-e8edf3);
   background:
     linear-gradient(
       135deg,
-      rgba(16, 185, 129, 0.08),
-      rgba(255, 255, 255, 0.96) 52%
+      var(--crm-ui-private-surface-rgb-16-185-129-0-08),
+      var(--crm-ui-private-surface-rgb-255-255-255-0-96) 52%
     );
 }
 
@@ -5598,9 +5598,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 14px;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.22);
-  color: #047857;
+  background: var(--crm-ui-private-surface-rgb-16-185-129-0-12);
+  border: 1px solid var(--crm-ui-private-border-rgb-16-185-129-0-22);
+  color: var(--crm-ui-private-content-hex-047857);
   font-size: 24px;
   font-weight: 500;
   line-height: 1;
@@ -5620,12 +5620,12 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #059669;
+  color: var(--crm-ui-private-content-hex-059669);
 }
 
 .novoProtocoloModalTitle {
   margin: 0;
-  color: #0f172a;
+  color: var(--crm-ui-private-content-hex-0f172a);
   font-size: 22px;
   line-height: 1.3;
   font-weight: 750;
@@ -5641,7 +5641,7 @@
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
   font-size: 24px;
   line-height: 1;
   cursor: pointer;
@@ -5651,8 +5651,8 @@
 }
 
 .novoProtocoloModalClose:hover:not(:disabled) {
-  background: #eef2f7;
-  color: #0f172a;
+  background: var(--crm-ui-private-surface-hex-eef2f7);
+  color: var(--crm-ui-private-content-hex-0f172a);
 }
 
 .novoProtocoloModalClose:disabled {
@@ -5669,7 +5669,7 @@
 
 .novoProtocoloModalText {
   margin: 0;
-  color: #334155;
+  color: var(--crm-ui-private-content-hex-334155);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -5679,9 +5679,9 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px;
-  border: 1px solid rgba(14, 116, 144, 0.14);
+  border: 1px solid var(--crm-ui-private-border-rgb-14-116-144-0-14);
   border-radius: 14px;
-  background: rgba(236, 254, 255, 0.72);
+  background: var(--crm-ui-private-surface-rgb-236-254-255-0-72);
 }
 
 .novoProtocoloModalInfoIcon {
@@ -5693,8 +5693,8 @@
   justify-content: center;
   margin-top: 1px;
   border-radius: 999px;
-  background: #0e7490;
-  color: #ffffff;
+  background: var(--crm-ui-private-surface-hex-0e7490);
+  color: var(--crm-text-inverse);
   font-size: 13px;
   font-weight: 800;
 }
@@ -5702,14 +5702,14 @@
 .novoProtocoloModalInfo strong {
   display: block;
   margin-bottom: 4px;
-  color: #164e63;
+  color: var(--crm-ui-private-content-hex-164e63);
   font-size: 15px;
   line-height: 1.4;
 }
 
 .novoProtocoloModalInfo p {
   margin: 0;
-  color: #475569;
+  color: var(--crm-ui-private-content-hex-475569);
   font-size: 14px;
   line-height: 1.55;
 }
@@ -5719,9 +5719,9 @@
   align-items: center;
   gap: 12px;
   padding: 14px;
-  border: 1px solid #e5eaf0;
+  border: 1px solid var(--crm-ui-private-border-hex-e5eaf0);
   border-radius: 14px;
-  background: #f8fafc;
+  background: var(--crm-ui-private-surface-hex-f8fafc);
 }
 
 .novoProtocoloModalAvatar {
@@ -5732,8 +5732,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #0f2433;
-  color: #ffffff;
+  background: var(--crm-ui-private-surface-hex-0f2433);
+  color: var(--crm-text-inverse);
   font-size: 13px;
   font-weight: 800;
 }
@@ -5746,7 +5746,7 @@
 }
 
 .novoProtocoloModalContactInfo span {
-  color: #94a3b8;
+  color: var(--crm-ui-private-content-hex-94a3b8);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -5755,7 +5755,7 @@
 
 .novoProtocoloModalContactInfo strong {
   overflow: hidden;
-  color: #0f172a;
+  color: var(--crm-ui-private-content-hex-0f172a);
   font-size: 14px;
   font-weight: 750;
   text-overflow: ellipsis;
@@ -5763,7 +5763,7 @@
 }
 
 .novoProtocoloModalContactInfo small {
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
   font-size: 12px;
 }
 
@@ -5773,8 +5773,8 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 24px 22px;
-  border-top: 1px solid #e8edf3;
-  background: #fbfcfd;
+  border-top: 1px solid var(--crm-ui-private-border-hex-e8edf3);
+  background: var(--crm-ui-private-surface-hex-fbfcfd);
 }
 
 .novoProtocoloModalCancel,
@@ -5793,14 +5793,14 @@
 }
 
 .novoProtocoloModalCancel {
-  border: 1px solid #d7dee7;
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid var(--crm-ui-private-border-hex-d7dee7);
+  background: var(--crm-surface);
+  color: var(--crm-ui-private-content-hex-334155);
 }
 
 .novoProtocoloModalCancel:hover:not(:disabled) {
-  border-color: #b8c3d0;
-  background: #f8fafc;
+  border-color: var(--crm-ui-private-border-hex-b8c3d0);
+  background: var(--crm-ui-private-surface-hex-f8fafc);
 }
 
 .novoProtocoloModalConfirm {
@@ -5808,16 +5808,16 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1px solid #06273c;
-  background: #06273c;
+  border: 1px solid var(--crm-ui-private-border-hex-06273c);
+  background: var(--crm-ui-private-surface-hex-06273c);
   color: var(--crm-text-inverse);
-  box-shadow: 0 8px 20px #06273c47;
+  box-shadow: 0 8px 20px var(--crm-ui-private-shadow-hex-06273c47);
 }
 
 .novoProtocoloModalConfirm:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: #06273c;
-  background: #062e48;
+  border-color: var(--crm-ui-private-border-hex-06273c);
+  background: var(--crm-ui-private-surface-hex-062e48);
   color: var(--crm-text-inverse);
 }
 
@@ -5837,8 +5837,8 @@
 .novoProtocoloModalSpinner {
   width: 15px;
   height: 15px;
-  border: 2px solid rgba(255, 255, 255, 0.42);
-  border-top-color: #ffffff;
+  border: 2px solid var(--crm-ui-private-border-rgb-255-255-255-0-42);
+  border-top-color: var(--crm-ui-private-border-hex-ffffff);
   border-radius: 50%;
   animation: novoProtocoloSpinner 0.7s linear infinite;
 }
@@ -5971,8 +5971,8 @@
   border: none;
   border-radius: 999px;
 
-  background: #06273c90;
-  color: #ffffff;
+  background: var(--crm-ui-private-surface-hex-06273c90);
+  color: var(--crm-text-inverse);
 
   font-size: 24px;
   font-weight: 800;
@@ -5991,7 +5991,7 @@
 
 .scrollToBottomButton:hover {
   transform: translateX(-50%) translateY(-2px);
-  background: #06273ca4;
+  background: var(--crm-ui-private-surface-hex-06273ca4);
 }
 
 @media (max-height: 820px), (max-width: 1200px) {
@@ -6041,7 +6041,7 @@
   }
 
   .disparoCardExpandido::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.42);
+    background: var(--crm-ui-private-surface-rgb-148-163-184-0-42);
     border-radius: 999px;
   }
 
@@ -6051,7 +6051,7 @@
     z-index: 3;
     padding-top: 8px;
     background:
-      linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,0.96) 30%, rgba(255,255,255,0.98));
+      linear-gradient(180deg, var(--crm-ui-private-surface-rgb-255-255-255-0), var(--crm-ui-private-surface-rgb-255-255-255-0-96) 30%, var(--crm-ui-private-surface-rgb-255-255-255-0-98));
   }
 
   .disparoTemplatePreviewCard {
@@ -6242,7 +6242,7 @@
   font-size: 11px;
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  border: 1px solid var(--crm-ui-private-border-rgb-148-163-184-0-4);
   background: transparent;
   cursor: pointer;
   color: var(--crm-text-muted);
@@ -6268,9 +6268,9 @@
   max-width: 100%;
   padding: 7px 10px;
   border-radius: 10px;
-  border: 1px solid #16379136;
-  background: rgba(253, 253, 250, 0.92);
-  color: #163791d9;
+  border: 1px solid var(--crm-ui-private-border-hex-16379136);
+  background: var(--crm-ui-private-surface-rgb-253-253-250-0-92);
+  color: var(--crm-ui-private-content-hex-163791d9);
   font-size: 13px;
   line-height: 1.35;
   font-weight: 700;
@@ -6351,7 +6351,7 @@ a.buttonMessageOption:hover {
 }
 
 .messageVideoFailed {
-  border: 2px solid rgba(239, 68, 68, 0.75);
+  border: 2px solid var(--crm-ui-private-border-rgb-239-68-68-0-75);
   opacity: 0.78;
 }
 
@@ -6359,8 +6359,8 @@ a.buttonMessageOption:hover {
   margin-top: 8px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.28);
-  background: rgba(254, 242, 242, 0.96);
+  border: 1px solid var(--crm-ui-private-border-rgb-239-68-68-0-28);
+  background: var(--crm-ui-private-surface-rgb-254-242-242-0-96);
   color: var(--crm-danger-text);
   font-size: 12px;
   line-height: 1.45;
@@ -6662,7 +6662,7 @@ a.buttonMessageOption:hover {
     overflow: hidden;
     box-sizing: border-box;
 
-    box-shadow: -8px 0 28px rgba(15, 23, 42, 0.16);
+    box-shadow: -8px 0 28px var(--crm-ui-private-shadow-rgb-15-23-42-0-16);
   }
 
   /* Cabeçalho não pode encolher */
@@ -7635,5 +7635,4 @@ a.buttonMessageOption:hover {
   }
 
 }
-
 

@@ -3,9 +3,9 @@
   min-height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at 12% 10%, rgba(16, 185, 129, 0.18), transparent 30%),
-    radial-gradient(circle at 88% 86%, rgba(15, 118, 110, 0.14), transparent 28%),
-    linear-gradient(135deg, #040b10 0%, #07151a 48%, #08131f 100%);
+    radial-gradient(circle at 12% 10%, var(--crm-ui-public-surface-rgb-16-185-129-0-18), transparent 30%),
+    radial-gradient(circle at 88% 86%, var(--crm-ui-public-surface-rgb-15-118-110-0-14), transparent 28%),
+    linear-gradient(135deg, var(--crm-ui-public-surface-hex-040b10) 0%, var(--crm-ui-public-surface-hex-07151a) 48%, var(--crm-ui-public-surface-hex-08131f) 100%);
   padding: 24px 20px 28px;
 }
 
@@ -16,7 +16,7 @@
   width: 320px;
   height: 320px;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.2);
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-2);
   filter: blur(80px);
   pointer-events: none;
 }
@@ -28,7 +28,7 @@
   width: 320px;
   height: 320px;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.14);
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-14);
   filter: blur(80px);
   pointer-events: none;
 }
@@ -54,7 +54,7 @@
   width: fit-content;
   margin: 0 auto 12px;
   gap: 8px;
-  color: #ffffff;
+  color: var(--crm-ui-public-content-hex-ffffff);
   font-size: 15px;
   letter-spacing: 0.02em;
   text-decoration: none;
@@ -68,7 +68,7 @@
   width: 48px;
   height: 47px;
   object-fit: contain;
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 8px 16px var(--crm-ui-public-shadow-rgb-0-0-0-0-3));
 }
 
 .kicker {
@@ -77,9 +77,9 @@
   justify-content: center;
   padding: 8px 14px;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.09);
-  border: 1px solid rgba(52, 211, 153, 0.2);
-  color: #a7f3d0;
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-09);
+  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-2);
+  color: var(--crm-ui-public-content-hex-a7f3d0);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -92,14 +92,14 @@
   line-height: 1.08;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: #ffffff;
+  color: var(--crm-ui-public-content-hex-ffffff);
 }
 
 .subtitle {
   margin-top: 14px;
   font-size: 17px;
   line-height: 1.7;
-  color: #cbd5e1;
+  color: var(--crm-ui-public-content-hex-cbd5e1);
 }
 
 .cards {
@@ -116,32 +116,32 @@
   min-height: 100%;
   padding: 22px;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(255,255,255,0.45);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+  background: var(--crm-ui-public-surface-rgb-255-255-255-0-94);
+  border: 1px solid var(--crm-ui-public-border-rgb-255-255-255-0-45);
+  box-shadow: 0 18px 44px var(--crm-ui-public-shadow-rgb-0-0-0-0-22);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   overflow: hidden;
 }
 
 .cardAtivo {
-  border: 1px solid rgba(16, 185, 129, 0.34);
+  border: 1px solid var(--crm-ui-public-border-rgb-16-185-129-0-34);
   box-shadow:
-    0 18px 44px rgba(0, 0, 0, 0.22),
-    0 0 0 1px rgba(16, 185, 129, 0.12);
+    0 18px 44px var(--crm-ui-public-shadow-rgb-0-0-0-0-22),
+    0 0 0 1px var(--crm-ui-public-shadow-rgb-16-185-129-0-12);
 }
 
 .cardCotacao {
-  border: 1px solid rgba(16, 185, 129, 0.32);
+  border: 1px solid var(--crm-ui-public-border-rgb-16-185-129-0-32);
   box-shadow:
-    0 18px 44px rgba(0, 0, 0, 0.22),
-    0 0 0 1px rgba(16, 185, 129, 0.14);
+    0 18px 44px var(--crm-ui-public-shadow-rgb-0-0-0-0-22),
+    0 0 0 1px var(--crm-ui-public-shadow-rgb-16-185-129-0-14);
 }
 
 .cardEmBreve {
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
+  background: var(--crm-ui-public-surface-rgb-255-255-255-0-18);
+  border: 1px solid var(--crm-ui-public-border-rgb-255-255-255-0-12);
+  box-shadow: 0 18px 44px var(--crm-ui-public-shadow-rgb-0-0-0-0-18);
   backdrop-filter: blur(26px) saturate(0.55);
   -webkit-backdrop-filter: blur(26px) saturate(0.55);
 }
@@ -151,7 +151,7 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.28) 100%);
+    linear-gradient(180deg, var(--crm-ui-public-surface-rgb-255-255-255-0-18) 0%, var(--crm-ui-public-surface-rgb-255-255-255-0-28) 100%);
   z-index: 2;
   pointer-events: none;
 }
@@ -161,7 +161,7 @@
   position: absolute;
   inset: 0;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.26);
+  background: var(--crm-ui-public-surface-rgb-255-255-255-0-26);
   backdrop-filter: blur(22px) saturate(0.45);
   -webkit-backdrop-filter: blur(22px) saturate(0.45);
   z-index: 3;
@@ -176,14 +176,14 @@
   width: 150px;
   text-align: center;
   padding: 8px 0;
-  background: linear-gradient(135deg, rgba(250, 204, 21, 0.95), rgba(249, 115, 22, 0.92));
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--crm-ui-public-surface-rgb-250-204-21-0-95), var(--crm-ui-public-surface-rgb-249-115-22-0-92));
+  color: var(--crm-ui-public-content-hex-ffffff);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   transform: rotate(45deg);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 10px 24px var(--crm-ui-public-shadow-rgb-0-0-0-0-22);
 }
 
 .cardTop,
@@ -210,9 +210,9 @@
   padding: 7px 11px;
   font-size: 12px;
   font-weight: 700;
-  color: #475569;
-  background: #00ffc31e;
-  border: 1px solid #00ffc374;
+  color: var(--crm-ui-public-content-hex-475569);
+  background: var(--crm-ui-public-surface-hex-00ffc31e);
+  border: 1px solid var(--crm-ui-public-border-hex-00ffc374);
 }
 
 .miniBadgeEmBreve {
@@ -222,9 +222,9 @@
   padding: 7px 11px;
   font-size: 12px;
   font-weight: 700;
-  color: #475569;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid #e2e8f0;
+  color: var(--crm-ui-public-content-hex-475569);
+  background: var(--crm-ui-public-surface-rgb-255-255-255-0-18);
+  border: 1px solid var(--crm-ui-public-border-hex-e2e8f0);
 }
 
 .miniBadgeCotacao {
@@ -234,9 +234,9 @@
   padding: 7px 11px;
   font-size: 12px;
   font-weight: 700;
-  color: #065f46;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  color: var(--crm-ui-public-content-hex-065f46);
+  background: var(--crm-ui-public-surface-hex-ecfdf5);
+  border: 1px solid var(--crm-ui-public-border-hex-a7f3d0);
 }
 
 .cardTitle {
@@ -246,27 +246,27 @@
   line-height: 1.1;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
 }
 
 .cardDescription {
   font-size: 15px;
   line-height: 1.5;
-  color: #64748b;
+  color: var(--crm-ui-public-content-hex-64748b);
 }
 
 .priceBox {
   margin-top: 0px;
   padding: 16px;
   border-radius: 18px;
-  background: rgba(248, 250, 252, 0.92);
-  border: 1px solid #e2e8f0;
+  background: var(--crm-ui-public-surface-rgb-248-250-252-0-92);
+  border: 1px solid var(--crm-ui-public-border-hex-e2e8f0);
 }
 
 .oldPrice {
   width: fit-content;
   margin-bottom: 4px;
-  color: #94a3b8;
+  color: var(--crm-ui-public-content-hex-94a3b8);
   font-size: 15px;
   font-weight: 700;
   text-decoration: line-through;
@@ -277,14 +277,14 @@
   font-size: 30px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #047857;
+  color: var(--crm-ui-public-content-hex-047857);
 }
 
 .priceNote {
   margin-top: 8px;
   font-size: 13px;
   line-height: 1.6;
-  color: #64748b;
+  color: var(--crm-ui-public-content-hex-64748b);
 }
 
 .featureList {
@@ -303,7 +303,7 @@
   align-items: flex-start;
   font-size: 14px;
   line-height: 1.6;
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
 }
 
 .featureIcon {
@@ -314,9 +314,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(16, 185, 129, 0.14);
-  border: 1px solid rgba(16, 185, 129, 0.24);
-  color: #059669;
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-14);
+  border: 1px solid var(--crm-ui-public-border-rgb-16-185-129-0-24);
+  color: var(--crm-ui-public-content-hex-059669);
   font-size: 12px;
   font-weight: 900;
   margin-top: 1px;
@@ -343,32 +343,32 @@
 }
 
 .primaryButton {
-  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--crm-ui-public-surface-hex-065f46) 0%, var(--crm-ui-public-surface-hex-059669) 100%);
+  color: var(--crm-ui-public-content-hex-ffffff);
   cursor: pointer;
-  box-shadow: 0 14px 30px rgba(5, 150, 105, 0.24);
+  box-shadow: 0 14px 30px var(--crm-ui-public-shadow-rgb-5-150-105-0-24);
 }
 
 .primaryButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 34px rgba(5, 150, 105, 0.3);
+  box-shadow: 0 18px 34px var(--crm-ui-public-shadow-rgb-5-150-105-0-3);
 }
 
 .quoteButton {
-  background: linear-gradient(135deg, #047857 0%, #0f766e 100%);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--crm-ui-public-surface-hex-047857) 0%, var(--crm-ui-public-surface-hex-0f766e) 100%);
+  color: var(--crm-ui-public-content-hex-ffffff);
   cursor: pointer;
-  box-shadow: 0 14px 30px rgba(15, 118, 110, 0.22);
+  box-shadow: 0 14px 30px var(--crm-ui-public-shadow-rgb-15-118-110-0-22);
 }
 
 .quoteButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 34px rgba(15, 118, 110, 0.28);
+  box-shadow: 0 18px 34px var(--crm-ui-public-shadow-rgb-15-118-110-0-28);
 }
 
 .disabledButton {
-  background: #e2e8f0;
-  color: #64748b;
+  background: var(--crm-ui-public-surface-hex-e2e8f0);
+  color: var(--crm-ui-public-content-hex-64748b);
   cursor: not-allowed;
 }
 
@@ -378,7 +378,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: #047857;
+  color: var(--crm-ui-public-content-hex-047857);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -398,9 +398,9 @@
 
 .secondaryButton {
   max-width: 180px;
-  background: rgba(255,255,255,0.96);
-  color: #0f172a;
-  border: 1px solid #cbd5e1;
+  background: var(--crm-ui-public-surface-rgb-255-255-255-0-96);
+  color: var(--crm-ui-public-content-hex-0f172a);
+  border: 1px solid var(--crm-ui-public-border-hex-cbd5e1);
   cursor: pointer;
 }
 
@@ -412,15 +412,15 @@
   margin: 0;
   padding: 18px 20px;
   border-radius: 20px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: #cbd5e1;
+  background: var(--crm-ui-public-surface-rgb-255-255-255-0-08);
+  border: 1px solid var(--crm-ui-public-border-rgb-255-255-255-0-12);
+  color: var(--crm-ui-public-content-hex-cbd5e1);
   font-size: 14px;
   line-height: 1.7;
 }
 
 .footerText strong {
-  color: #ffffff;
+  color: var(--crm-ui-public-content-hex-ffffff);
 }
 
 

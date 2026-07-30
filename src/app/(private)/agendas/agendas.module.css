@@ -144,9 +144,9 @@
 }
 
 .agendaItemActive {
-  border: 1px solid  #b0e5d1;
-  background: linear-gradient(135deg, #ffffff 10%, #dcfff7 100%);
-  box-shadow: 0 5px 10px rgba(4, 226, 170, 0.12);
+  border: 1px solid  var(--crm-ui-private-border-hex-b0e5d1);
+  background: linear-gradient(135deg, var(--crm-surface) 10%, var(--crm-ui-private-surface-hex-dcfff7) 100%);
+  box-shadow: 0 5px 10px var(--crm-ui-private-shadow-rgb-4-226-170-0-12);
 }
 
 .agendaItemTop {
@@ -555,12 +555,12 @@
 .calendarDaySelected {
   border-color: var(--crm-primary);
   background: var(--crm-primary-soft);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 12px 24px var(--crm-ui-private-shadow-rgb-15-23-42-0-12);
 }
 
 .calendarDayToday {
-  border-color: #22c55e;
-  background: #f4fff8;
+  border-color: var(--crm-ui-private-border-hex-22c55e);
+  background: var(--crm-ui-private-surface-hex-f4fff8);
 }
 
 .dayNumber {

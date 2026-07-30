@@ -48,14 +48,14 @@ const CSS = `
 .captureInfoPanelV3Enabled { position: relative !important; }
 .captureInfoV3Row,
 .captureInfoV3Item {
-  border: 1px solid var(--crm-border-soft, #e7edf3);
+  border: 1px solid var(--crm-border-soft, var(--crm-ui-private-border-hex-e7edf3));
   border-radius: 16px;
-  background: var(--crm-surface, #fff);
+  background: var(--crm-surface, var(--crm-surface));
   padding: 14px;
 }
 .captureInfoV3Label {
   display: block;
-  color: var(--crm-text-soft, #7b8798);
+  color: var(--crm-text-soft, var(--crm-ui-private-content-hex-7b8798));
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .05em;
@@ -64,7 +64,7 @@ const CSS = `
 .captureInfoV3Value {
   display: block;
   margin-top: 6px;
-  color: var(--crm-text-strong, #172033);
+  color: var(--crm-text-strong, var(--crm-ui-private-content-hex-172033));
   font-size: 15px;
   font-weight: 700;
   line-height: 1.5;
@@ -72,24 +72,24 @@ const CSS = `
 }
 .captureInfoV3More {
   width: 100%;
-  border: 1px solid var(--crm-border, #d8e0eb);
+  border: 1px solid var(--crm-border, var(--crm-ui-private-border-hex-d8e0eb));
   border-radius: 12px;
-  background: var(--crm-surface-soft, #f7f9fb);
-  color: var(--crm-primary, #08785a);
+  background: var(--crm-surface-soft, var(--crm-ui-private-surface-hex-f7f9fb));
+  color: var(--crm-primary, var(--crm-ui-private-content-hex-08785a));
   padding: 11px 14px;
   font: inherit;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
 }
-.captureInfoV3More:hover { background: var(--crm-surface-muted, #eef2f6); }
+.captureInfoV3More:hover { background: var(--crm-surface-muted, var(--crm-ui-private-surface-hex-eef2f6)); }
 .captureInfoV3Overlay {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--crm-surface, #fff);
-  color: var(--crm-text-strong, #172033);
+  background: var(--crm-surface, var(--crm-surface));
+  color: var(--crm-text-strong, var(--crm-ui-private-content-hex-172033));
   pointer-events: auto;
 }
 .captureInfoV3Header {
@@ -98,14 +98,14 @@ const CSS = `
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--crm-border-soft, #e7edf3);
+  border-bottom: 1px solid var(--crm-border-soft, var(--crm-ui-private-border-hex-e7edf3));
 }
 .captureInfoV3Back,
 .captureInfoV3Refresh {
-  border: 1px solid var(--crm-border, #d8e0eb);
+  border: 1px solid var(--crm-border, var(--crm-ui-private-border-hex-d8e0eb));
   border-radius: 10px;
-  background: var(--crm-surface, #fff);
-  color: var(--crm-text-strong, #172033);
+  background: var(--crm-surface, var(--crm-surface));
+  color: var(--crm-text-strong, var(--crm-ui-private-content-hex-172033));
   padding: 8px 10px;
   font: inherit;
   font-size: 13px;
@@ -134,15 +134,15 @@ const CSS = `
 .captureInfoV3Meta {
   display: block;
   margin-top: 8px;
-  color: var(--crm-text-muted, #718096);
+  color: var(--crm-text-muted, var(--crm-ui-private-content-hex-718096));
   font-size: 11px;
   line-height: 1.4;
 }
 .captureInfoV3Empty {
-  border: 1px dashed var(--crm-border, #d8e0eb);
+  border: 1px dashed var(--crm-border, var(--crm-ui-private-border-hex-d8e0eb));
   border-radius: 14px;
   padding: 18px;
-  color: var(--crm-text-muted, #718096);
+  color: var(--crm-text-muted, var(--crm-ui-private-content-hex-718096));
   font-size: 13px;
   text-align: center;
 }

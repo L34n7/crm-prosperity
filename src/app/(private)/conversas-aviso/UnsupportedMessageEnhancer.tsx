@@ -119,15 +119,15 @@ export default function UnsupportedMessageEnhancer() {
         margin-left: 0 !important;
         margin-right: auto !important;
         padding: 14px 16px 10px !important;
-        border: 1px solid rgba(217, 153, 20, 0.42) !important;
+        border: 1px solid var(--crm-ui-private-border-rgb-217-153-20-0-42) !important;
         border-radius: 16px !important;
         background: linear-gradient(
           135deg,
-          rgba(255, 250, 230, 0.98),
-          rgba(255, 246, 207, 0.94)
+          var(--crm-ui-private-surface-rgb-255-250-230-0-98),
+          var(--crm-ui-private-surface-rgb-255-246-207-0-94)
         ) !important;
-        color: #25313b !important;
-        box-shadow: 0 8px 24px rgba(120, 83, 7, 0.1) !important;
+        color: var(--crm-ui-private-content-hex-25313b) !important;
+        box-shadow: 0 8px 24px var(--crm-ui-private-shadow-rgb-120-83-7-0-1) !important;
       }
 
       [class*="timelineArea"] .unsupportedMessageContentRow,
@@ -148,9 +148,9 @@ export default function UnsupportedMessageEnhancer() {
         flex: 0 0 38px;
         width: 38px;
         height: 38px;
-        border: 1px solid rgba(217, 153, 20, 0.28);
+        border: 1px solid var(--crm-ui-private-border-rgb-217-153-20-0-28);
         border-radius: 12px;
-        background: rgba(255, 255, 255, 0.72);
+        background: var(--crm-ui-private-surface-rgb-255-255-255-0-72);
         font-size: 20px;
         line-height: 1;
       }
@@ -163,7 +163,7 @@ export default function UnsupportedMessageEnhancer() {
       [class*="timelineArea"] .unsupportedMessageCardTitle {
         display: block;
         margin: 1px 0 4px;
-        color: #29323a;
+        color: var(--crm-ui-private-content-hex-29323a);
         font-size: 14px;
         font-weight: 750;
         line-height: 1.3;
@@ -171,7 +171,7 @@ export default function UnsupportedMessageEnhancer() {
 
       [class*="timelineArea"] .unsupportedMessageCardDescription {
         margin: 0;
-        color: #5f6871;
+        color: var(--crm-ui-private-content-hex-5f6871);
         font-size: 13px;
         line-height: 1.45;
       }
@@ -181,10 +181,10 @@ export default function UnsupportedMessageEnhancer() {
         align-items: center;
         margin-top: 8px;
         padding: 3px 8px;
-        border: 1px solid rgba(180, 126, 13, 0.24);
+        border: 1px solid var(--crm-ui-private-border-rgb-180-126-13-0-24);
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.58);
-        color: #8a6519;
+        background: var(--crm-ui-private-surface-rgb-255-255-255-0-58);
+        color: var(--crm-ui-private-content-hex-8a6519);
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.02em;
@@ -195,7 +195,7 @@ export default function UnsupportedMessageEnhancer() {
         .unsupportedMessageBubble
         [class*="messageMetaBottom"] {
         margin-top: 8px !important;
-        color: #8b826e !important;
+        color: var(--crm-ui-private-content-hex-8b826e) !important;
         font-size: 11px !important;
       }
 

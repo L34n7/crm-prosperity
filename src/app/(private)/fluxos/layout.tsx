@@ -117,8 +117,8 @@ const ESTILOS_BOTOES_PREVIA = `
     padding: 0 10px 10px !important;
     border: 0 !important;
     border-radius: 0 0 12px 12px !important;
-    background: #ffffff !important;
-    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08) !important;
+    background: var(--crm-surface) !important;
+    box-shadow: 0 2px 4px var(--crm-ui-private-shadow-rgb-15-23-42-0-08) !important;
   }
 
   [class*="whatsappFlowBubbleRow"]:has([class*="whatsappFlowButtons"])
@@ -139,7 +139,7 @@ const ESTILOS_BOTOES_PREVIA = `
     width: 100% !important;
     max-width: none !important;
     border-radius: 0 12px 0 0 !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 1px 2px var(--crm-ui-private-shadow-rgb-15-23-42-0-08) !important;
   }
 `;
 

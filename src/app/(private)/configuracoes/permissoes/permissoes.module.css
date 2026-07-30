@@ -237,7 +237,7 @@
   border-radius: 999px;
   background: var(--crm-surface);
   transition: transform 0.2s ease;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 4px 12px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
 }
 
 .switchInput:checked + .switchSlider {
@@ -399,7 +399,7 @@
   overflow: hidden;
   border-radius: 24px;
   background: var(--crm-surface);
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 28px 80px var(--crm-ui-private-shadow-rgb-15-23-42-0-28);
 }
 
 .modalHeader,

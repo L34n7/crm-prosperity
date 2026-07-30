@@ -91,7 +91,7 @@
   border: 1px solid var(--crm-border-strong);
   border-radius: 12px;
   background: var(--crm-surface);
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 14px 36px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
 }
 
 .option {

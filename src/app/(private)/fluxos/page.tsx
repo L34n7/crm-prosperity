@@ -3851,14 +3851,14 @@ function FluxosPageContent() {
         : labelConexao,
 
       labelStyle: {
-        fill: "#0f172a",
+        fill: "var(--crm-ui-private-content-hex-0f172a)",
         fontSize: 10,
         fontWeight: 700,
         transform: `translateY(${offsetY}px)`,
       },
 
       labelBgStyle: {
-        fill: "#ffffff",
+        fill: "var(--crm-text-inverse)",
         fillOpacity: 0.92,
         transform: `translateY(${offsetY}px)`,
       },
@@ -3869,7 +3869,7 @@ function FluxosPageContent() {
       labelBgBorderRadius: 6,
       labelShowBg: true,
       style: {
-        stroke: "#cbd5e1",
+        stroke: "var(--crm-ui-private-content-hex-cbd5e1)",
         strokeWidth: 2,
         strokeDasharray: "6 6",
       },
@@ -4005,14 +4005,14 @@ function FluxosPageContent() {
         labelShowBg: true,
 
         labelStyle: {
-          fill: "#0f172a",
+          fill: "var(--crm-ui-private-content-hex-0f172a)",
           fontSize: 10,
           fontWeight: 700,
           transform: `translateY(${offsetY}px)`,
         },
 
         labelBgStyle: {
-          fill: "#ffffff",
+          fill: "var(--crm-text-inverse)",
           fillOpacity: 0.92,
           transform: `translateY(${offsetY}px)`,
         },
@@ -4021,7 +4021,7 @@ function FluxosPageContent() {
         labelBgBorderRadius: 6,
 
         style: {
-          stroke: "#cbd5e1",
+          stroke: "var(--crm-ui-private-content-hex-cbd5e1)",
           strokeWidth: 2,
           strokeDasharray: "6 6"
         },
@@ -4435,7 +4435,7 @@ function abrirFluxo(fluxo: Fluxo) {
         label: "",
 
         style: {
-          stroke: "#cbd5e1",
+          stroke: "var(--crm-ui-private-content-hex-cbd5e1)",
           strokeWidth: 2,
           strokeDasharray: "6 6",
         },
@@ -4519,7 +4519,7 @@ function offsetLabelConexao(edgeId: string) {
           selected: false,
           style: {
             ...(edge.style || {}),
-            stroke: "#cbd5e1",
+            stroke: "var(--crm-ui-private-content-hex-cbd5e1)",
             strokeWidth: 2,
             strokeDasharray: "6 6",
           },
@@ -7307,7 +7307,7 @@ function fecharPainelEdicao() {
       selected: false,
       style: {
         ...(edge.style || {}),
-        stroke: "#cbd5e1",
+        stroke: "var(--crm-ui-private-content-hex-cbd5e1)",
         strokeWidth: 2,
         strokeDasharray: "6 6",
       },
@@ -8360,7 +8360,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       selected: item.id === edge.id,
                       style: {
                         ...(item.style || {}),
-                        stroke: item.id === edge.id ? "#0098bab6" : "#cbd5e1",
+                        stroke:
+                          item.id === edge.id
+                            ? "var(--crm-ui-private-border-hex-0098bab6)"
+                            : "var(--crm-ui-private-border-hex-cbd5e1)",
                         strokeWidth: item.id === edge.id ? 3 : 2,
                         strokeDasharray: "6 6",
                       },

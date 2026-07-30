@@ -9,7 +9,7 @@ export default function ProcessandoPagamentoPage() {
     <main
       style={{
         minHeight: "100vh",
-        background: "#f8fafc",
+        background: "var(--crm-ui-public-decoration-hex-f8fafc)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -20,11 +20,11 @@ export default function ProcessandoPagamentoPage() {
         style={{
           width: "100%",
           maxWidth: "620px",
-          background: "#ffffff",
+          background: "var(--crm-ui-public-decoration-hex-ffffff)",
           borderRadius: "24px",
           padding: "32px",
-          boxShadow: "0 20px 60px rgba(15, 23, 42, 0.08)",
-          border: "1px solid #e2e8f0",
+          boxShadow: "0 20px 60px var(--crm-ui-public-decoration-rgb-15-23-42-0-08)",
+          border: "1px solid var(--crm-ui-public-decoration-hex-e2e8f0)",
           textAlign: "center",
         }}
       >
@@ -35,7 +35,7 @@ export default function ProcessandoPagamentoPage() {
             fontWeight: 800,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            color: "#64748b",
+            color: "var(--crm-ui-public-decoration-hex-64748b)",
           }}
         >
           Pagamento em processamento
@@ -47,7 +47,7 @@ export default function ProcessandoPagamentoPage() {
             fontSize: "32px",
             lineHeight: 1.1,
             fontWeight: 800,
-            color: "#0f172a",
+            color: "var(--crm-ui-public-decoration-hex-0f172a)",
           }}
         >
           Estamos confirmando seu pagamento
@@ -58,7 +58,7 @@ export default function ProcessandoPagamentoPage() {
             margin: "16px 0 0",
             fontSize: "16px",
             lineHeight: 1.7,
-            color: "#475569",
+            color: "var(--crm-ui-public-decoration-hex-475569)",
           }}
         >
           Assim que a Átomo Pay confirmar o pagamento, sua conta será criada
@@ -70,9 +70,9 @@ export default function ProcessandoPagamentoPage() {
             marginTop: "24px",
             padding: "18px",
             borderRadius: "18px",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            color: "#334155",
+            background: "var(--crm-ui-public-decoration-hex-f8fafc)",
+            border: "1px solid var(--crm-ui-public-decoration-hex-e2e8f0)",
+            color: "var(--crm-ui-public-decoration-hex-334155)",
             fontSize: "14px",
             lineHeight: 1.7,
           }}
@@ -95,8 +95,8 @@ export default function ProcessandoPagamentoPage() {
               minHeight: "52px",
               border: "none",
               borderRadius: "16px",
-              background: "#0f172a",
-              color: "#ffffff",
+              background: "var(--crm-ui-public-decoration-hex-0f172a)",
+              color: "var(--crm-ui-public-decoration-hex-ffffff)",
               fontSize: "15px",
               fontWeight: 800,
               cursor: "pointer",
@@ -110,9 +110,9 @@ export default function ProcessandoPagamentoPage() {
             style={{
               minHeight: "48px",
               borderRadius: "16px",
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              color: "#0f172a",
+              border: "1px solid var(--crm-ui-public-decoration-hex-cbd5e1)",
+              background: "var(--crm-ui-public-decoration-hex-ffffff)",
+              color: "var(--crm-ui-public-decoration-hex-0f172a)",
               fontSize: "14px",
               fontWeight: 700,
               cursor: "pointer",

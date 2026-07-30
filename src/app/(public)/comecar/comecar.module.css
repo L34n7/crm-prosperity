@@ -3,9 +3,9 @@
   min-height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at 12% 14%, rgba(25, 210, 137, 0.08), transparent 30%),
-    radial-gradient(circle at 88% 82%, rgba(15, 118, 110, 0.14), transparent 28%),
-    linear-gradient(135deg, #040b10 0%, #07151a 48%, #08131f 100%);
+    radial-gradient(circle at 12% 14%, var(--crm-ui-public-surface-rgb-25-210-137-0-08), transparent 30%),
+    radial-gradient(circle at 88% 82%, var(--crm-ui-public-surface-rgb-15-118-110-0-14), transparent 28%),
+    linear-gradient(135deg, var(--crm-ui-public-surface-hex-040b10) 0%, var(--crm-ui-public-surface-hex-07151a) 48%, var(--crm-ui-public-surface-hex-08131f) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -19,7 +19,7 @@
   width: 320px;
   height: 320px;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.2);
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-2);
   filter: blur(80px);
   pointer-events: none;
 }
@@ -31,7 +31,7 @@
   width: 320px;
   height: 320px;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.14);
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-14);
   filter: blur(80px);
   pointer-events: none;
 }
@@ -53,12 +53,12 @@
   padding: 28px 36px;
   border-radius: 28px;
   background:
-    radial-gradient(circle at 4% 2%, rgba(16, 185, 129, 0.018), transparent 34%),
-    linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.025) 100%);
-  border: 1px solid rgba(52, 211, 153, 0.18);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+    radial-gradient(circle at 4% 2%, var(--crm-ui-public-surface-rgb-16-185-129-0-018), transparent 34%),
+    linear-gradient(160deg, var(--crm-ui-public-surface-rgb-255-255-255-0-07) 0%, var(--crm-ui-public-surface-rgb-255-255-255-0-025) 100%);
+  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-18);
+  box-shadow: 0 24px 60px var(--crm-ui-public-shadow-rgb-0-0-0-0-28);
   backdrop-filter: blur(10px);
-  color: #ffffff;
+  color: var(--crm-ui-public-content-hex-ffffff);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -71,11 +71,11 @@
   bottom: -120px;
   width: 260px;
   height: 260px;
-  border: 1px solid rgba(52, 211, 153, 0.12);
+  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-12);
   border-radius: 50%;
   box-shadow:
-    0 0 0 38px rgba(52, 211, 153, 0.025),
-    0 0 0 78px rgba(52, 211, 153, 0.018);
+    0 0 0 38px var(--crm-ui-public-shadow-rgb-52-211-153-0-025),
+    0 0 0 78px var(--crm-ui-public-shadow-rgb-52-211-153-0-018);
   pointer-events: none;
 }
 
@@ -86,7 +86,7 @@
   align-items: center;
   width: fit-content;
   gap: 12px;
-  color: #ffffff;
+  color: var(--crm-ui-public-content-hex-ffffff);
   text-decoration: none;
 }
 
@@ -94,7 +94,7 @@
   width: 170px;
   height: 170px;
   object-fit: contain;
-  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 12px 24px var(--crm-ui-public-shadow-rgb-0-0-0-0-3));
 }
 
 .brandName {
@@ -107,7 +107,7 @@
 }
 
 .brandName strong {
-  color: #ffffff;
+  color: var(--crm-ui-public-content-hex-ffffff);
   font-size: 50px;
   margin-top: 5px;
   letter-spacing: 0.01em;
@@ -116,7 +116,7 @@
 
 .brandName span {
   margin-top: 5px;
-  color: #c8a96b;
+  color: var(--crm-ui-public-content-hex-c8a96b);
   font-size: 22px;
   font-weight: 800;
 }
@@ -128,9 +128,9 @@
   margin-top: 8px;
   padding: 7px 13px;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.09);
-  border: 1px solid rgba(52, 211, 153, 0.18);
-  color: #a7f3d0;
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-09);
+  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-18);
+  color: var(--crm-ui-public-content-hex-a7f3d0);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -142,8 +142,8 @@
   height: 7px;
   margin-right: 8px;
   border-radius: 50%;
-  background: #34d399;
-  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.1);
+  background: var(--crm-ui-public-surface-hex-34d399);
+  box-shadow: 0 0 0 4px var(--crm-ui-public-shadow-rgb-52-211-153-0-1);
 }
 
 .heroTitle {
@@ -163,7 +163,7 @@
   margin-top: 11px;
   font-size: 17px;
   line-height: 1.7;
-  color: #cbd5e1;
+  color: var(--crm-ui-public-content-hex-cbd5e1);
   max-width: 560px;
 }
 
@@ -180,7 +180,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #e2e8f0;
+  color: var(--crm-ui-public-content-hex-e2e8f0);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -193,9 +193,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(16, 185, 129, 0.16);
-  border: 1px solid rgba(16, 185, 129, 0.32);
-  color: #86efac;
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-16);
+  border: 1px solid var(--crm-ui-public-border-rgb-16-185-129-0-32);
+  color: var(--crm-ui-public-content-hex-86efac);
   font-size: 13px;
   font-weight: 800;
 }
@@ -208,25 +208,25 @@
   gap: 3px;
   margin-top: 18px;
   padding: 11px 14px;
-  border-left: 2px solid #34d399;
+  border-left: 2px solid var(--crm-ui-public-border-hex-34d399);
   border-radius: 0 12px 12px 0;
-  background: rgba(16, 185, 129, 0.07);
-  color: #94a3b8;
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-07);
+  color: var(--crm-ui-public-content-hex-94a3b8);
   font-size: 13px;
   line-height: 1.45;
 }
 
 .heroFooter strong {
-  color: #d1fae5;
+  color: var(--crm-ui-public-content-hex-d1fae5);
   font-size: 14px;
 }
 
 .card {
   padding: 24px 28px;
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(52, 211, 153, 0.18);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+  background: var(--crm-ui-public-surface-rgb-255-255-255-0-96);
+  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-18);
+  box-shadow: 0 24px 60px var(--crm-ui-public-shadow-rgb-0-0-0-0-22);
   backdrop-filter: blur(14px);
   display: flex;
   flex-direction: column;
@@ -241,7 +241,7 @@
   font-size: 30px;
   line-height: 1.1;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
   letter-spacing: -0.02em;
 }
 
@@ -249,7 +249,7 @@
   margin-top: 6px;
   font-size: 15px;
   line-height: 1.45;
-  color: #64748b;
+  color: var(--crm-ui-public-content-hex-64748b);
 }
 
 .form {
@@ -267,17 +267,17 @@
 .label {
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
 }
 
 .input {
   height: 48px;
   padding: 0 16px;
   border-radius: 14px;
-  border: 1px solid #dbe2ea;
-  background: #ffffff;
+  border: 1px solid var(--crm-ui-public-border-hex-dbe2ea);
+  background: var(--crm-ui-public-surface-hex-ffffff);
   font-size: 15px;
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
   outline: none;
   transition:
     border-color 0.2s ease,
@@ -286,12 +286,12 @@
 }
 
 .input::placeholder {
-  color: #94a3b8;
+  color: var(--crm-ui-public-content-hex-94a3b8);
 }
 
 .input:focus {
-  border-color: #059669;
-  box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.11);
+  border-color: var(--crm-ui-public-border-hex-059669);
+  box-shadow: 0 0 0 4px var(--crm-ui-public-shadow-rgb-5-150-105-0-11);
 }
 
 .consentBox {
@@ -301,15 +301,15 @@
   align-items: flex-start;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid #dbe2ea;
-  background: #f8fafc;
-  color: #475569;
+  border: 1px solid var(--crm-ui-public-border-hex-dbe2ea);
+  background: var(--crm-ui-public-surface-hex-f8fafc);
+  color: var(--crm-ui-public-content-hex-475569);
   font-size: 13px;
   line-height: 1.45;
 }
 
 .consentBox a {
-  color: #047857;
+  color: var(--crm-ui-public-content-hex-047857);
   font-weight: 700;
   text-decoration: none;
 }
@@ -322,7 +322,7 @@
   width: 18px;
   height: 18px;
   margin: 2px 0 0;
-  accent-color: #059669;
+  accent-color: var(--crm-ui-public-content-hex-059669);
   cursor: pointer;
 }
 
@@ -331,8 +331,8 @@
   height: 50px;
   border-radius: 14px;
   border: none;
-  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--crm-ui-public-surface-hex-065f46) 0%, var(--crm-ui-public-surface-hex-059669) 100%);
+  color: var(--crm-ui-public-content-hex-ffffff);
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.01em;
@@ -341,12 +341,12 @@
     transform 0.2s ease,
     box-shadow 0.2s ease,
     opacity 0.2s ease;
-  box-shadow: 0 14px 30px rgba(5, 150, 105, 0.26);
+  box-shadow: 0 14px 30px var(--crm-ui-public-shadow-rgb-5-150-105-0-26);
 }
 
 .button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 18px 34px rgba(5, 150, 105, 0.32);
+  box-shadow: 0 18px 34px var(--crm-ui-public-shadow-rgb-5-150-105-0-32);
 }
 
 .button:disabled {
@@ -357,9 +357,9 @@
 .error {
   padding: 12px 14px;
   border-radius: 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
+  background: var(--crm-ui-public-surface-hex-fef2f2);
+  border: 1px solid var(--crm-ui-public-border-hex-fecaca);
+  color: var(--crm-ui-public-content-hex-b91c1c);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -369,21 +369,21 @@
   text-align: center;
   font-size: 13px;
   line-height: 1.45;
-  color: #64748b;
+  color: var(--crm-ui-public-content-hex-64748b);
 }
 
 .errorBox {
   margin-top: 12px;
   padding: 14px;
   border-radius: 14px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--crm-ui-public-surface-hex-fef2f2);
+  border: 1px solid var(--crm-ui-public-border-hex-fecaca);
 }
 
 .errorText {
   margin: 0;
   font-size: 14px;
-  color: #b91c1c;
+  color: var(--crm-ui-public-content-hex-b91c1c);
   line-height: 1.5;
 }
 
@@ -398,8 +398,8 @@
   height: 40px;
   border-radius: 10px;
   border: none;
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--crm-ui-public-surface-hex-0f172a);
+  color: var(--crm-ui-public-content-hex-ffffff);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -409,9 +409,9 @@
   flex: 1;
   height: 40px;
   border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--crm-ui-public-border-hex-cbd5e1);
+  background: var(--crm-ui-public-surface-hex-ffffff);
+  color: var(--crm-ui-public-content-hex-0f172a);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -425,7 +425,7 @@
   }
 
   .brandName strong {
-    color: #ffffff;
+    color: var(--crm-ui-public-content-hex-ffffff);
     font-size: 44px;
     margin-top: 5px;
     letter-spacing: 0.01em;
@@ -434,7 +434,7 @@
 
   .brandName span {
     margin-top: 5px;
-    color: #c8a96b;
+    color: var(--crm-ui-public-content-hex-c8a96b);
     font-size: 20px;
     font-weight: 800;
   }

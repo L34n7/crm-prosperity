@@ -4,9 +4,9 @@
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(circle at top left, #2564eb3f, transparent 34%),
-    radial-gradient(circle at bottom right, #2564eb3f, transparent 32%),
-    #f8fafc;
+    radial-gradient(circle at top left, var(--crm-ui-public-surface-hex-2564eb3f), transparent 34%),
+    radial-gradient(circle at bottom right, var(--crm-ui-public-surface-hex-2564eb3f), transparent 32%),
+    var(--crm-ui-public-surface-hex-f8fafc);
   padding: 24px;
 }
 /*
@@ -16,18 +16,18 @@
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.25), transparent 40%),
-    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.2), transparent 35%),
-    linear-gradient(135deg, #0f172a 0%, #111827 45%, #1e293b 100%);
+    radial-gradient(circle at top left, var(--crm-ui-public-surface-rgb-37-99-235-0-25), transparent 40%),
+    radial-gradient(circle at bottom right, var(--crm-ui-public-surface-rgb-14-165-233-0-2), transparent 35%),
+    linear-gradient(135deg, var(--crm-ui-public-surface-hex-0f172a) 0%, var(--crm-ui-public-surface-hex-111827) 45%, var(--crm-ui-public-surface-hex-1e293b) 100%);
 }
 */
 .card {
   width: 100%;
   max-width: 500px;
-  background: #ffffff;
+  background: var(--crm-ui-public-surface-hex-ffffff);
   border-radius: 28px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.1);
+  border: 1px solid var(--crm-ui-public-border-hex-e2e8f0);
+  box-shadow: 0 24px 70px var(--crm-ui-public-shadow-rgb-15-23-42-0-1);
   padding: 34px;
 }
 
@@ -39,8 +39,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--crm-ui-public-surface-hex-eff6ff);
+  color: var(--crm-ui-public-content-hex-2563eb);
 }
 
 .header {
@@ -52,13 +52,13 @@
   margin: 0;
   font-size: 30px;
   font-weight: 850;
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
   letter-spacing: -0.04em;
 }
 
 .header p {
   margin: 10px 0 0;
-  color: #475569;
+  color: var(--crm-ui-public-content-hex-475569);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -66,7 +66,7 @@
 .header strong {
   display: block;
   margin-top: 10px;
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
   font-size: 14px;
 }
 
@@ -80,7 +80,7 @@
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 750;
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
 }
 
 .passwordWrapper {
@@ -93,10 +93,10 @@
   width: 100%;
   height: 50px;
   border-radius: 15px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--crm-ui-public-border-hex-cbd5e1);
   padding: 0 48px 0 14px;
   font-size: 15px;
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
   outline: none;
   box-sizing: border-box;
   transition:
@@ -105,8 +105,8 @@
 }
 
 .passwordWrapper input:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  border-color: var(--crm-ui-public-border-hex-2563eb);
+  box-shadow: 0 0 0 4px var(--crm-ui-public-shadow-rgb-37-99-235-0-12);
 }
 
 .eyeButton {
@@ -116,7 +116,7 @@
   height: 28px;
   border: 0;
   background: transparent;
-  color: #64748b;
+  color: var(--crm-ui-public-content-hex-64748b);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -125,7 +125,7 @@
 }
 
 .eyeButton:hover {
-  color: #0f172a;
+  color: var(--crm-ui-public-content-hex-0f172a);
 }
 
 .strengthArea {
@@ -138,7 +138,7 @@
   align-items: center;
   margin-bottom: 8px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--crm-ui-public-content-hex-64748b);
 }
 
 .strengthHeader strong {
@@ -151,7 +151,7 @@
   width: 100%;
   height: 9px;
   border-radius: 999px;
-  background: #e2e8f0;
+  background: var(--crm-ui-public-surface-hex-e2e8f0);
   overflow: hidden;
 }
 
@@ -162,27 +162,27 @@
 }
 
 .fraca {
-  color: #dc2626;
+  color: var(--crm-ui-public-content-hex-dc2626);
 }
 
 .media {
-  color: #d97706;
+  color: var(--crm-ui-public-content-hex-d97706);
 }
 
 .forte {
-  color: #16a34a;
+  color: var(--crm-ui-public-content-hex-16a34a);
 }
 
 .strengthFill.fraca {
-  background: #dc2626;
+  background: var(--crm-ui-public-surface-hex-dc2626);
 }
 
 .strengthFill.media {
-  background: #d97706;
+  background: var(--crm-ui-public-surface-hex-d97706);
 }
 
 .strengthFill.forte {
-  background: #16a34a;
+  background: var(--crm-ui-public-surface-hex-16a34a);
 }
 
 .regras {
@@ -203,16 +203,16 @@
 }
 
 .regraValida {
-  color: #16a34a;
+  color: var(--crm-ui-public-content-hex-16a34a);
 }
 
 .regraInvalida {
-  color: #94a3b8;
+  color: var(--crm-ui-public-content-hex-94a3b8);
 }
 
 .passwordMismatch {
   margin: 8px 0 0;
-  color: #dc2626;
+  color: var(--crm-ui-public-content-hex-dc2626);
   font-size: 13px;
 }
 
@@ -226,27 +226,27 @@
 }
 
 .infoBox {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--crm-ui-public-surface-hex-eff6ff);
+  color: var(--crm-ui-public-content-hex-1d4ed8);
   text-align: center;
 }
 
 .errorBox {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--crm-ui-public-surface-hex-fef2f2);
+  color: var(--crm-ui-public-content-hex-b91c1c);
 }
 
 .successBox {
-  background: #f0fdf4;
-  color: #166534;
+  background: var(--crm-ui-public-surface-hex-f0fdf4);
+  color: var(--crm-ui-public-content-hex-166534);
 }
 
 .submitButton {
   height: 52px;
   border: none;
   border-radius: 15px;
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--crm-ui-public-surface-hex-0f172a);
+  color: var(--crm-ui-public-content-hex-ffffff);
   font-size: 15px;
   font-weight: 850;
   cursor: pointer;
@@ -258,7 +258,7 @@
 
 .submitButton:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: #020617;
+  background: var(--crm-ui-public-surface-hex-020617);
 }
 
 .submitButton:disabled {

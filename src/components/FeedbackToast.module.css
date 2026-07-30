@@ -24,14 +24,14 @@
 
 .toastSuccess {
   color: var(--crm-success-text);
-  background: rgba(236, 253, 245, 0.94);
-  border: 1px solid rgba(52, 211, 153, 0.6);
+  background: var(--crm-ui-private-surface-rgb-236-253-245-0-94);
+  border: 1px solid var(--crm-ui-private-border-rgb-52-211-153-0-6);
 }
 
 .toastError {
   color: var(--crm-danger-text);
-  background: rgba(254, 242, 242, 0.96);
-  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: var(--crm-ui-private-surface-rgb-254-242-242-0-96);
+  border: 1px solid var(--crm-ui-private-border-rgb-248-113-113-0-55);
 }
 
 @keyframes toastIn {

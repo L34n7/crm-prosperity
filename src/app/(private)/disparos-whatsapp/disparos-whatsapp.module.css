@@ -360,15 +360,15 @@
 }
 
 .summaryCard:hover {
-  border-color:  #cee4de;
-  background: #efffff13;
+  border-color:  var(--crm-ui-private-border-hex-cee4de);
+  background: var(--crm-ui-private-surface-hex-efffff13);
   transform: translateY(-1px);
 }
 
 .summaryCardActive {
-  border-color:  #d6e3ea;
-  background: #ffffff;
-  box-shadow: 0 0 10 3px rgba(15, 42, 39, 0.05);
+  border-color:  var(--crm-ui-private-border-hex-d6e3ea);
+  background: var(--crm-surface);
+  box-shadow: 0 0 10 3px var(--crm-ui-private-shadow-rgb-15-42-39-0-05);
 }
 
 .summaryLabel {
@@ -497,9 +497,9 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid #efb4b4;
-  background: #fff7f7;
-  color: #a52a2a;
+  border: 1px solid var(--crm-ui-private-border-hex-efb4b4);
+  background: var(--crm-ui-private-surface-hex-fff7f7);
+  color: var(--crm-ui-private-content-hex-a52a2a);
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
@@ -515,9 +515,9 @@
 
 .massProgressCancelButton:hover:not(:disabled),
 .cancelCampaignConfirmButton:hover:not(:disabled) {
-  border-color: #dc6f6f;
-  background: #ffeaea;
-  color: #861d1d;
+  border-color: var(--crm-ui-private-border-hex-dc6f6f);
+  background: var(--crm-ui-private-surface-hex-ffeaea);
+  color: var(--crm-ui-private-content-hex-861d1d);
 }
 
 .massProgressCancelButton:disabled,
@@ -641,12 +641,12 @@
 
 .primaryButton {
   border: none;
-  background: #06273c;
+  background: var(--crm-ui-private-surface-hex-06273c);
   color: var(--crm-text-inverse);
 }
 
 .primaryButton:hover {
-  background: #07314b;
+  background: var(--crm-ui-private-surface-hex-07314b);
   transform: translateY(-1px);
 }
 
@@ -657,14 +657,14 @@
 }
 
 .ButtonAdd {
-  border: 1px solid #c0f3ff;
-  background: #f3fdff;
+  border: 1px solid var(--crm-ui-private-border-hex-c0f3ff);
+  background: var(--crm-ui-private-surface-hex-f3fdff);
   color: var(--crm-text-strong);
 }
 
 .ButtonAdd:hover  {
-  border: 1px solid #a1eeff;
-  background: #e0faff;
+  border: 1px solid var(--crm-ui-private-border-hex-a1eeff);
+  background: var(--crm-ui-private-surface-hex-e0faff);
   color: var(--crm-text-strong);
 }
 
@@ -675,12 +675,12 @@
 
 .removeButton {
   border: none;
-  background: #b91c1c;
+  background: var(--crm-ui-private-surface-hex-b91c1c);
   color: var(--crm-text-inverse);
 }
 
 .removeButton:hover {
-  background: #991b1b;
+  background: var(--crm-ui-private-surface-hex-991b1b);
 }
 
 .primaryButton:disabled,
@@ -741,14 +741,14 @@
 }
 
 .resultProcessing {
-  border-color: rgba(234, 179, 8, 0.35);
-  background: rgba(234, 179, 8, 0.06);
+  border-color: var(--crm-ui-private-border-rgb-234-179-8-0-35);
+  background: var(--crm-ui-private-surface-rgb-234-179-8-0-06);
 }
 
 .resultProcessing .resultStatus {
   color: var(--crm-warning-text);
-  background: rgba(234, 179, 8, 0.12);
-  border-color: rgba(234, 179, 8, 0.28);
+  background: var(--crm-ui-private-surface-rgb-234-179-8-0-12);
+  border-color: var(--crm-ui-private-border-rgb-234-179-8-0-28);
 }
 
 .resultTop {
@@ -764,14 +764,14 @@
   font-weight: 700;
   border-radius: 999px;
   padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-7);
   white-space: nowrap;
 }
 
 .massCancelledStatus {
   border: 1px solid var(--crm-danger-border);
   color: var(--crm-danger-text);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-72);
   text-align: right;
   white-space: normal;
 }
@@ -788,7 +788,7 @@
   padding: 10px;
   border-radius: 12px;
   border: 1px solid var(--crm-danger-border);
-  background: rgba(255, 255, 255, 0.64);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-64);
 }
 
 .massCancelledMetric strong {
@@ -999,19 +999,19 @@
 }
 
 .TextButtonAdd {
-  color: #044654;
+  color: var(--crm-ui-private-content-hex-044654);
 }
 
 .TextButtonAdd:hover:not(:disabled) {
-  color: #00abd1;
+  color: var(--crm-ui-private-content-hex-00abd1);
 }
 
 .TextButtonRemover {
-  color: #6c3c3c;
+  color: var(--crm-ui-private-content-hex-6c3c3c);
 }
 
 .TextButtonRemover:hover:not(:disabled) {
-  color: #bd5656;
+  color: var(--crm-ui-private-content-hex-bd5656);
 }
 
 .TextButtonAdd:disabled,
@@ -1054,8 +1054,8 @@
 }
 
 .contactCardSelected {
-  background: #ecfffa;
-  border: 1px solid #8edac6;
+  background: var(--crm-ui-private-surface-hex-ecfffa);
+  border: 1px solid var(--crm-ui-private-border-hex-8edac6);
 }
 
 .contactMain {
@@ -1092,7 +1092,7 @@
   min-height: 24px;
   padding: 0 8px;
   border-radius: 999px;
-  background: #f1f1f1;
+  background: var(--crm-ui-private-surface-hex-f1f1f1);
   border: none;
   color: var(--crm-text);
   font-size: 11px;
@@ -1118,9 +1118,9 @@
   min-height: 24px;
   padding: 0 9px;
   border-radius: 999px;
-  background: #fff4e5;
-  border: 1px solid #ffd39b;
-  color: #9a4b00;
+  background: var(--crm-ui-private-surface-hex-fff4e5);
+  border: 1px solid var(--crm-ui-private-border-hex-ffd39b);
+  color: var(--crm-ui-private-content-hex-9a4b00);
   font-size: 11px;
   font-weight: 800;
   cursor: help;
@@ -1213,9 +1213,9 @@
   padding: 0 9px;
   margin-left: 10px;
   border-radius: 999px;
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
-  color: #3730a3;
+  background: var(--crm-ui-private-surface-hex-eef2ff);
+  border: 1px solid var(--crm-ui-private-border-hex-c7d2fe);
+  color: var(--crm-ui-private-content-hex-3730a3);
   font-size: 11px;
   font-weight: 800;
   line-height: 1.2;
@@ -1230,7 +1230,7 @@
 }
 
 .massHistoryBadgeMore {
-  background: #f8fafc;
+  background: var(--crm-ui-private-surface-hex-f8fafc);
   border-color: var(--crm-border);
   color: var(--crm-text);
 }
@@ -1345,7 +1345,7 @@
   gap: 12px;
   border: 1px solid var(--crm-border);
   border-radius: 16px;
-  background: linear-gradient(80deg, #fefdff 0%, var(--crm-surface) 100%);
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-fefdff) 0%, var(--crm-surface) 100%);
   padding: 12px;
 }
 
@@ -1419,16 +1419,16 @@
   align-items: center;
   gap: 16px;
 
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 8px 20px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
 }
 
 .metaHealthCard {
   position: relative;
   overflow: hidden;
-  border: 1px solid #12a5843d;
+  border: 1px solid var(--crm-ui-private-border-hex-12a5843d);
   border-radius: 22px;
   background:
-    linear-gradient(135deg, rgba(18, 165, 132, 0.10), transparent 38%),
+    linear-gradient(135deg, var(--crm-ui-private-surface-rgb-18-165-132-0-1), transparent 38%),
     linear-gradient(180deg, var(--crm-surface) 0%, var(--crm-surface-soft) 100%);
   padding: 18px;
   display: grid;
@@ -1452,14 +1452,14 @@
 .metaHealthWarning {
   border-color: var(--crm-warning-border);
   background:
-    linear-gradient(135deg, rgba(200, 121, 19, 0.12), transparent 38%),
+    linear-gradient(135deg, var(--crm-ui-private-surface-rgb-200-121-19-0-12), transparent 38%),
     linear-gradient(180deg, var(--crm-warning-bg) 0%, var(--crm-surface) 100%);
 }
 
 .metaHealthDanger {
   border-color: var(--crm-danger-border);
   background:
-    linear-gradient(135deg, rgba(215, 53, 72, 0.12), transparent 38%),
+    linear-gradient(135deg, var(--crm-ui-private-surface-rgb-215-53-72-0-12), transparent 38%),
     linear-gradient(180deg, var(--crm-danger-bg) 0%, var(--crm-surface) 100%);
 }
 
@@ -1502,9 +1502,9 @@
 
 .metaHealthHeaderActions > strong {
   min-width: 118px;
-  border: 1px solid rgba(18, 165, 132, 0.25);
+  border: 1px solid var(--crm-ui-private-border-rgb-18-165-132-0-25);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-72);
   padding: 8px 12px;
   color: var(--crm-primary-text);
   font-size: 13px;
@@ -1518,8 +1518,8 @@
   justify-content: center;
   padding: 8px 14px;
   border-radius: 14px;
-  border: 1px solid #d5ffeb;
-  background: linear-gradient(80deg, #f4fff8 0%, #c8ffdd 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-d5ffeb);
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-f4fff8) 0%, var(--crm-ui-private-surface-hex-c8ffdd) 100%);
   color: var(--crm-text-strong);
   font-size: 13px;
   font-weight: 700;
@@ -1528,16 +1528,16 @@
 }
 
 .metaCapacityButton:hover {
-  background: linear-gradient(80deg, #c8ffe3 0%, #c8ffdb 100%);
-  border: 1px solid #d8f5ff;
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-c8ffe3) 0%, var(--crm-ui-private-surface-hex-c8ffdb) 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-d8f5ff);
   transform: translateY(-1px);
 }
 
 .metaHealthUsageBadge {
   min-width: 118px;
-  border: 1px solid rgba(18, 165, 132, 0.25);
+  border: 1px solid var(--crm-ui-private-border-rgb-18-165-132-0-25);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-72);
   padding: 8px 12px;
   color: var(--crm-primary-text);
   font-size: 13px;
@@ -1560,9 +1560,9 @@
 }
 
 .metaHealthGrid div {
-  border: 1px solid rgba(18, 65, 78, 0.10);
+  border: 1px solid var(--crm-ui-private-border-rgb-18-65-78-0-1);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-76);
   padding: 13px;
   display: grid;
   gap: 4px;
@@ -1578,14 +1578,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  border-top: 1px solid rgba(18, 65, 78, 0.10);
+  border-top: 1px solid var(--crm-ui-private-border-rgb-18-65-78-0-1);
   padding-top: 12px;
 }
 
 .metaHealthMeta span {
-  border: 1px solid rgba(18, 65, 78, 0.10);
+  border: 1px solid var(--crm-ui-private-border-rgb-18-65-78-0-1);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.68);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-68);
   padding: 7px 10px;
   color: var(--crm-text);
   font-size: 12px;
@@ -1607,7 +1607,7 @@
 
 .messageCollapseCard {
   border: 1px solid var(--crm-border);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-72);
   border-radius: 16px;
   padding: 12px 14px;
   margin-top: 10px;
@@ -2049,8 +2049,8 @@
   border-radius: 20px;
   padding: 16px 16px 16px;
   background:
-    radial-gradient(circle at 20% 20%, rgba(15, 23, 42, 0.04) 0 2px, transparent 2px),
-    #efe7dd;
+    radial-gradient(circle at 20% 20%, var(--crm-ui-private-surface-rgb-15-23-42-0-04) 0 2px, transparent 2px),
+    var(--crm-ui-private-surface-hex-efe7dd);
   background-size: 18px 18px;
 }
 
@@ -2059,7 +2059,7 @@
   background: var(--crm-surface);
   border-radius: 0 14px 14px 14px;
   padding: 12px 12px 8px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-12);
   position: relative;
 }
 
@@ -2222,8 +2222,8 @@
 }
 
 .scheduleToggleCardActive {
-  border-color: #8edac6;
-  background: #f1fffb;
+  border-color: var(--crm-ui-private-border-hex-8edac6);
+  background: var(--crm-ui-private-surface-hex-f1fffb);
 }
 
 .scheduleToggleRow {
@@ -2267,13 +2267,13 @@
   height: 16px;
   border-radius: 50%;
   background: var(--crm-surface);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.24);
+  box-shadow: 0 1px 4px var(--crm-ui-private-shadow-rgb-15-23-42-0-24);
   transition: transform 0.2s ease;
 }
 
 .scheduleToggleInput:checked + .scheduleToggleControl {
-  background: #00a884;
-  border-color: #008f70;
+  background: var(--crm-ui-private-surface-hex-00a884);
+  border-color: var(--crm-ui-private-border-hex-008f70);
 }
 
 .scheduleToggleInput:checked + .scheduleToggleControl::after {
@@ -2281,7 +2281,7 @@
 }
 
 .scheduleToggleInput:focus-visible + .scheduleToggleControl {
-  outline: 3px solid rgba(0, 168, 132, 0.2);
+  outline: 3px solid var(--crm-ui-private-border-rgb-0-168-132-0-2);
   outline-offset: 2px;
 }
 
@@ -2291,7 +2291,7 @@
   gap: 12px;
   margin-top: 14px;
   padding-top: 14px;
-  border-top: 1px solid #cceee5;
+  border-top: 1px solid var(--crm-ui-private-border-hex-cceee5);
 }
 
 .templateVariablesGrid {
@@ -2390,7 +2390,7 @@
   border: 1px solid var(--crm-border-strong);
   border-radius: 12px;
   background: var(--crm-surface);
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 14px 36px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
 }
 
 .variableComboboxOption {
@@ -2504,9 +2504,9 @@
   min-height: 26px;
   padding: 5px 9px;
   border-radius: 999px;
-  background: #95fff6;
-  border: 1px dashed #009a80;
-  color: #00826c;
+  background: var(--crm-ui-private-surface-hex-95fff6);
+  border: 1px dashed var(--crm-ui-private-border-hex-009a80);
+  color: var(--crm-ui-private-content-hex-00826c);
   font-size: 11px;
   font-weight: 900;
 }
@@ -2517,7 +2517,7 @@
   background: var(--crm-surface);
   border-radius: 0 14px 14px 14px;
   padding: 14px 14px 8px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-12);
   position: relative;
 }
 
@@ -2575,7 +2575,7 @@
   margin-top: 8px;
   padding: 9px 10px;
   border-top: 1px solid var(--crm-border);
-  color: #00c89d;
+  color: var(--crm-ui-private-content-hex-00c89d);
   font-size: 13px;
   font-weight: 700;
   text-align: center;
@@ -2609,8 +2609,8 @@
   justify-content: center;
   padding: 8px 14px;
   border-radius: 14px;
-  border: 1px solid #d5ffeb;
-  background: linear-gradient(80deg, #f4fff8 0%, #c8ffdd 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-d5ffeb);
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-f4fff8) 0%, var(--crm-ui-private-surface-hex-c8ffdd) 100%);
   color: var(--crm-text-strong);
   font-size: 13px;
   font-weight: 700;
@@ -2619,8 +2619,8 @@
 }
 
 .metaPaymentButton:hover {
-  background: linear-gradient(80deg, #c8ffe3 0%, #c8ffdb 100%);
-  border: 1px solid #d8f5ff;
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-c8ffe3) 0%, var(--crm-ui-private-surface-hex-c8ffdb) 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-d8f5ff);
   transform: translateY(-1px);
 }
 
@@ -2634,8 +2634,8 @@
 
 .templateHintRow .templateHint {
   flex: 1;
-  border: 1px solid rgba(59, 130, 246, 0.18);
-  background: #94f6f020;
+  border: 1px solid var(--crm-ui-private-border-rgb-59-130-246-0-18);
+  background: var(--crm-ui-private-surface-hex-94f6f020);
 }
 
 .variablesButton {

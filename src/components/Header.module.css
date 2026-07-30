@@ -87,7 +87,7 @@
 
 .tokensLabel {
   font-weight: 800;
-  color: #0195c2;
+  color: var(--crm-ui-private-content-hex-0195c2);
 }
 
 .tokensBadge strong {
@@ -1125,7 +1125,7 @@
   height: 32px;
   border: none;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-12);
   color: var(--crm-text-inverse);
   font-size: 15px;
   font-weight: 900;
@@ -1133,21 +1133,21 @@
 }
 
 .tokenAlertClose:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-2);
 }
 
 .tokenAlertHero {
   padding: 26px 28px 24px;
   background:
-    linear-gradient(135deg, rgba(7, 17, 31, 0.98) 0%, rgba(11, 21, 38, 0.98) 45%, rgba(15, 23, 42, 0.98) 100%);
+    linear-gradient(135deg, var(--crm-ui-private-surface-rgb-7-17-31-0-98) 0%, var(--crm-ui-private-surface-rgb-11-21-38-0-98) 45%, var(--crm-ui-private-surface-rgb-15-23-42-0-98) 100%);
 }
 
 .tokenAlertCardWarning .tokenAlertHero {
-  background: linear-gradient(135deg, #78350f 0%, #b45309 100%);
+  background: linear-gradient(135deg, var(--crm-ui-private-surface-hex-78350f) 0%, var(--crm-ui-private-surface-hex-b45309) 100%);
 }
 
 .tokenAlertCardDanger .tokenAlertHero {
-  background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%);
+  background: linear-gradient(135deg, var(--crm-ui-private-surface-hex-7f1d1d) 0%, var(--crm-ui-private-surface-hex-dc2626) 100%);
 }
 
 .tokenAlertEyebrow {
@@ -1155,8 +1155,8 @@
   margin: 0 0 12px;
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-08);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-14);
   color: var(--crm-on-strong-muted);
   font-size: 12px;
   font-weight: 900;
@@ -1257,7 +1257,7 @@
 
 .tokenAlertPrimary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 14px rgba(16, 68, 84, 0.261);
+  box-shadow: 0 18px 14px var(--crm-ui-private-shadow-rgb-16-68-84-0-261);
 }
 
 .tokenAlertSecondary {
@@ -1417,11 +1417,11 @@
   }
 
   .mobileBackButton:hover {
-    background: rgba(15, 23, 42, 0.06);
+    background: var(--crm-ui-private-surface-rgb-15-23-42-0-06);
   }
 
   .mobileBackButton:active {
-    background: rgba(15, 23, 42, 0.12);
+    background: var(--crm-ui-private-surface-rgb-15-23-42-0-12);
     transform: scale(0.96);
   }
 
@@ -1539,7 +1539,7 @@
     align-items: center;
     justify-content: center;
 
-    color: #ffffff;
+    color: var(--crm-text-inverse);
     font-size: 10px;
     font-weight: 900;
     line-height: 1;
@@ -1550,12 +1550,12 @@
 
   .mobileTokensNotificationWarning {
     background: var(--crm-warning-strong);
-    box-shadow: 0 3px 8px rgba(245, 158, 11, 0.38);
+    box-shadow: 0 3px 8px var(--crm-ui-private-shadow-rgb-245-158-11-0-38);
   }
 
   .mobileTokensNotificationDanger {
     background: var(--crm-danger-strong);
-    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
+    box-shadow: 0 3px 8px var(--crm-ui-private-shadow-rgb-239-68-68-0-4);
   }
 
 }

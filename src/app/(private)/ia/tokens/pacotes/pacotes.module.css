@@ -15,8 +15,8 @@
   gap: 24px;
   align-items: stretch;
   background:
-    linear-gradient(135deg, rgba(7, 17, 31, 0.98) 0%, rgba(11, 21, 38, 0.98) 46%, rgba(15, 23, 42, 0.98) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+    linear-gradient(135deg, var(--crm-ui-private-surface-rgb-7-17-31-0-98) 0%, var(--crm-ui-private-surface-rgb-11-21-38-0-98) 46%, var(--crm-ui-private-surface-rgb-15-23-42-0-98) 100%);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-12);
   box-shadow: var(--crm-shadow-md);
 }
 
@@ -25,8 +25,8 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(59, 130, 246, 0.22), transparent 42%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.12), transparent 55%);
+    linear-gradient(90deg, var(--crm-ui-private-surface-rgb-59-130-246-0-22), transparent 42%),
+    linear-gradient(180deg, var(--crm-ui-private-surface-rgb-16-185-129-0-12), transparent 55%);
   pointer-events: none;
 }
 
@@ -50,8 +50,8 @@
 .heroKicker {
   margin: 0 0 14px;
   padding: 8px 13px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-08);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-14);
   color: var(--crm-on-strong-muted);
 }
 
@@ -76,7 +76,7 @@
   border-radius: 20px;
   padding: 18px;
   background: var(--crm-surface);
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-45);
   display: grid;
   align-content: center;
   gap: 9px;
@@ -124,7 +124,7 @@
 }
 
 .packageCardFeatured {
-  border-color: rgba(37, 99, 235, 0.32);
+  border-color: var(--crm-ui-private-border-rgb-37-99-235-0-32);
   box-shadow:
     var(--crm-shadow-md),
     0 0 0 1px var(--crm-primary-border);
@@ -138,14 +138,14 @@
   width: 158px;
   text-align: center;
   padding: 8px 0;
-  background: linear-gradient(135deg, rgba(250, 204, 21, 0.98), rgba(249, 115, 22, 0.94));
+  background: linear-gradient(135deg, var(--crm-ui-private-surface-rgb-250-204-21-0-98), var(--crm-ui-private-surface-rgb-249-115-22-0-94));
   color: var(--crm-text-inverse);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   transform: rotate(45deg);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 10px 24px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
 }
 
 .badgeRow {
@@ -206,7 +206,7 @@
 }
 
 .priceRow span {
-  background: linear-gradient(90deg, #106c32, #17c12b);
+  background: linear-gradient(90deg, var(--crm-ui-private-surface-hex-106c32), var(--crm-ui-private-surface-hex-17c12b));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-size: 36px;
@@ -254,8 +254,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(16, 185, 129, 0.14);
-  border: 1px solid rgba(16, 185, 129, 0.24);
+  background: var(--crm-ui-private-surface-rgb-16-185-129-0-14);
+  border: 1px solid var(--crm-ui-private-border-rgb-16-185-129-0-24);
   color: var(--crm-success-text);
   font-size: 12px;
   font-weight: 900;
@@ -296,18 +296,18 @@
 
 .primaryButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 14px rgba(19, 147, 102, 0.3);
+  box-shadow: 0 14px 14px var(--crm-ui-private-shadow-rgb-19-147-102-0-3);
 }
 
 .secondaryButton {
   background: linear-gradient(135deg, var(--crm-success-strong) 0%, var(--crm-accent) 100%);
   color: var(--crm-text-inverse);
-  box-shadow: 0 14px 30px rgba(15, 118, 110, 0.22);
+  box-shadow: 0 14px 30px var(--crm-ui-private-shadow-rgb-15-118-110-0-22);
 }
 
 .secondaryButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 34px rgba(15, 118, 110, 0.28);
+  box-shadow: 0 18px 34px var(--crm-ui-private-shadow-rgb-15-118-110-0-28);
 }
 
 @media (max-width: 1080px) {

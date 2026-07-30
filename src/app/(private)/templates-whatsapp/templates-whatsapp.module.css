@@ -21,7 +21,7 @@
   background: var(--crm-surface);
   border: 1px solid var(--crm-border);
   border-radius: 28px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -70,8 +70,8 @@
   justify-content: center;
   padding: 8px 14px;
   border-radius: 14px;
-  border: 1px solid #d5ffeb;
-  background: linear-gradient(80deg, #f4fff8 0%, #c8ffdd 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-d5ffeb);
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-f4fff8) 0%, var(--crm-ui-private-surface-hex-c8ffdd) 100%);
   color: var(--crm-text-strong);
   font-size: 13px;
   font-weight: 700;
@@ -80,8 +80,8 @@
 }
 
 .metaPaymentButton:hover {
-  background: linear-gradient(80deg, #c8ffe3 0%, #c8ffdb 100%);
-  border: 1px solid #d8f5ff;
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-c8ffe3) 0%, var(--crm-ui-private-surface-hex-c8ffdb) 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-d8f5ff);
   transform: translateY(-1px);
 }
 
@@ -200,8 +200,8 @@
 }
 
 .whatsappPreviewCard {
-  border: 1px solid #dbe3f0;
-  background: #ffffff;
+  border: 1px solid var(--crm-ui-private-border-hex-dbe3f0);
+  background: var(--crm-surface);
   border-radius: 18px;
   padding: 14px;
   display: flex;
@@ -215,14 +215,14 @@
   align-items: center;
   justify-content: space-between;
   font-size: 15px;
-  color: #0f172a;
+  color: var(--crm-ui-private-content-hex-0f172a);
 }
 
 .whatsappPreviewArea {
   border-radius: 0px;
   padding: 18px;
-  background-color: #efe7dc;
-  background-image: radial-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px);
+  background-color: var(--crm-ui-private-surface-hex-efe7dc);
+  background-image: radial-gradient(var(--crm-ui-private-surface-rgb-15-23-42-0-08) 1px, transparent 1px);
   background-size: 18px 18px;
 }
 
@@ -230,10 +230,10 @@
   width: 100%;
   max-width: 330px;
   margin: 0 auto;
-  background: #ffffff;
+  background: var(--crm-surface);
   border-radius: 0 14px 14px 14px;
   padding: 14px 14px 8px;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 18px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
 }
 
 .whatsappPreviewTitle {
@@ -241,14 +241,14 @@
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 800;
-  color: #111827;
+  color: var(--crm-ui-private-content-hex-111827);
 }
 
 .whatsappPreviewText {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #1f2937;
+  color: var(--crm-ui-private-content-hex-1f2937);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -260,27 +260,27 @@
   gap: 8px;
   margin-top: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--crm-ui-private-border-hex-e5e7eb);
 }
 
 .whatsappPreviewFooter {
   font-size: 11px;
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
   min-width: 0;
   word-break: break-word;
 }
 
 .whatsappPreviewTime {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--crm-ui-private-content-hex-94a3b8);
   white-space: nowrap;
 }
 
 .whatsappPreviewButton {
   padding: 10px 6px;
   text-align: center;
-  border-bottom: 1px solid #e5e7eb;
-  color: #0284c7;
+  border-bottom: 1px solid var(--crm-ui-private-border-hex-e5e7eb);
+  color: var(--crm-ui-private-content-hex-0284c7);
   font-size: 13px;
   font-weight: 700;
 }
@@ -370,15 +370,15 @@
 }
 
 .summaryCard:hover {
-  border-color:  #bbe4da;
-  background: #efffff13;
+  border-color:  var(--crm-ui-private-border-hex-bbe4da);
+  background: var(--crm-ui-private-surface-hex-efffff13);
   transform: translateY(-1px);
 }
 
 .summaryCardActive {
-  border-color:  #d6e3ea;
-  background: #ffffff;
-  box-shadow: 0 0 10 3px rgba(15, 42, 39, 0.05);
+  border-color:  var(--crm-ui-private-border-hex-d6e3ea);
+  background: var(--crm-surface);
+  box-shadow: 0 0 10 3px var(--crm-ui-private-shadow-rgb-15-42-39-0-05);
 }
 
 .summaryLabel {
@@ -538,14 +538,14 @@
 
 .compactBlock {
   border: 1px solid var(--crm-border);
-  background: #fbfeff;
+  background: var(--crm-ui-private-surface-hex-fbfeff);
   border-radius: 14px;
   padding: 10px 12px;
 }
 
 .compactMiniBlock {
   border: 1px solid var(--crm-border);
-  background: #fbfeff;
+  background: var(--crm-ui-private-surface-hex-fbfeff);
   border-radius: 14px;
   padding: 10px 12px;
   min-width: 0;
@@ -666,7 +666,7 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 8px 20px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
 }
 
 .submitInfo {

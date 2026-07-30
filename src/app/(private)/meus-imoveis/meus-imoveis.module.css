@@ -117,13 +117,13 @@
   border: 1px solid transparent;
   background: var(--crm-primary-strong);
   color: var(--crm-text-inverse);
-  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.15);
+  box-shadow: 0 6px 16px var(--crm-ui-private-shadow-rgb-15-118-110-0-15);
 }
 
 .primaryButton:hover,
 .searchButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 9px 20px rgba(15, 118, 110, 0.22);
+  box-shadow: 0 9px 20px var(--crm-ui-private-shadow-rgb-15-118-110-0-22);
   filter: brightness(1.05);
 }
 

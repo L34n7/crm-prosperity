@@ -11,8 +11,8 @@
 .panel,
 .tablePanel {
   min-width: 0;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-ui-private-border-hex-e2e8f0);
   border-radius: 18px;
 }
 
@@ -31,17 +31,17 @@
 .filterPanel h2,
 .panelHeader h2 {
   margin: 4px 0 0;
-  color: #0f172a;
+  color: var(--crm-ui-private-content-hex-0f172a);
   font-size: 1.08rem;
 }
 
 .filterPanel p {
   margin: 6px 0 0;
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--crm-ui-private-content-hex-2563eb);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -59,7 +59,7 @@
   display: grid;
   min-width: 0;
   gap: 6px;
-  color: #475569;
+  color: var(--crm-ui-private-content-hex-475569);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -73,8 +73,8 @@
   width: 100%;
   min-width: 0;
   padding: 9px 11px;
-  background: #fff;
-  border: 1px solid #cbd5e1;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-ui-private-border-hex-cbd5e1);
   border-radius: 10px;
 }
 
@@ -84,7 +84,7 @@
   width: 100%;
   min-width: 0;
   padding: 0;
-  color: #0f172a;
+  color: var(--crm-ui-private-content-hex-0f172a);
   background: transparent;
   border: 0;
   outline: none;
@@ -94,9 +94,9 @@
 .filters button {
   min-height: 39px;
   padding: 0 15px;
-  color: #fff;
+  color: var(--crm-text-inverse);
   font-weight: 700;
-  background: #2563eb;
+  background: var(--crm-ui-private-surface-hex-2563eb);
   border: 0;
   border-radius: 10px;
   cursor: pointer;
@@ -115,19 +115,19 @@
   min-width: 0;
   gap: 7px;
   padding: 17px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-ui-private-border-hex-e2e8f0);
   border-radius: 16px;
   overflow: hidden;
 }
 
 .kpis svg {
-  color: #2563eb;
+  color: var(--crm-ui-private-content-hex-2563eb);
 }
 
 .kpis span {
   min-width: 0;
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
   font-size: 0.8rem;
   font-weight: 700;
   overflow-wrap: anywhere;
@@ -135,7 +135,7 @@
 
 .kpis strong {
   min-width: 0;
-  color: #0f172a;
+  color: var(--crm-ui-private-content-hex-0f172a);
   font-size: clamp(1.25rem, 2.4vw, 1.55rem);
   line-height: 1.15;
   overflow-wrap: anywhere;
@@ -146,7 +146,7 @@
 .tableWrapper td small {
   display: block;
   min-width: 0;
-  color: #94a3b8;
+  color: var(--crm-ui-private-content-hex-94a3b8);
   font-size: 0.76rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
@@ -190,7 +190,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 13px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--crm-ui-private-border-hex-f1f5f9);
 }
 
 .planRow > div {
@@ -203,7 +203,7 @@
 
 .planRow strong {
   min-width: 0;
-  color: #0f172a;
+  color: var(--crm-ui-private-content-hex-0f172a);
   overflow-wrap: anywhere;
 }
 
@@ -218,24 +218,24 @@
   min-width: 0;
   gap: 5px;
   padding: 13px;
-  background: #f8fafc;
+  background: var(--crm-ui-private-surface-hex-f8fafc);
   border-radius: 12px;
 }
 
 .comparison span {
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
   font-size: 0.75rem;
 }
 
 .comparison strong {
-  color: #0f172a;
+  color: var(--crm-ui-private-content-hex-0f172a);
   font-size: 1.25rem;
 }
 
 .note,
 .empty {
   margin: 16px 0 0;
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
   font-size: 0.84rem;
   line-height: 1.55;
 }
@@ -247,10 +247,10 @@
   width: fit-content;
   max-width: 100%;
   padding: 5px 9px;
-  color: #1d4ed8;
+  color: var(--crm-ui-private-content-hex-1d4ed8);
   font-size: 0.75rem;
   font-weight: 800;
-  background: #eff6ff;
+  background: var(--crm-ui-private-surface-hex-eff6ff);
   border-radius: 999px;
 }
 
@@ -269,22 +269,22 @@
 .tableWrapper th,
 .tableWrapper td {
   padding: 12px 10px;
-  color: #334155;
+  color: var(--crm-ui-private-content-hex-334155);
   font-size: 0.82rem;
   text-align: left;
   white-space: nowrap;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--crm-ui-private-border-hex-f1f5f9);
 }
 
 .tableWrapper th {
-  color: #64748b;
+  color: var(--crm-ui-private-content-hex-64748b);
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .tableWrapper td strong {
-  color: #0f172a;
+  color: var(--crm-ui-private-content-hex-0f172a);
 }
 
 @media (max-width: 1050px) {
@@ -408,8 +408,8 @@
   .panel,
   .tablePanel,
   .kpis article {
-    background: #0f172a;
-    border-color: #1e293b;
+    background: var(--crm-ui-private-surface-hex-0f172a);
+    border-color: var(--crm-ui-private-border-hex-1e293b);
   }
 
   .filterPanel h2,
@@ -420,26 +420,26 @@
   .tableWrapper td strong,
   .filters input,
   .filters select {
-    color: #f8fafc;
+    color: var(--crm-ui-private-content-hex-f8fafc);
   }
 
   .filters label span {
-    background: #111827;
-    border-color: #334155;
+    background: var(--crm-ui-private-surface-hex-111827);
+    border-color: var(--crm-ui-private-border-hex-334155);
   }
 
   .filters select option {
-    color: #f8fafc;
-    background: #111827;
+    color: var(--crm-ui-private-content-hex-f8fafc);
+    background: var(--crm-ui-private-surface-hex-111827);
   }
 
   .planRow,
   .tableWrapper th,
   .tableWrapper td {
-    border-color: #1e293b;
+    border-color: var(--crm-ui-private-border-hex-1e293b);
   }
 
   .comparison div {
-    background: #111827;
+    background: var(--crm-ui-private-surface-hex-111827);
   }
 }

@@ -290,7 +290,7 @@
   border: 1px solid var(--crm-primary-border);
   border-radius: 16px;
   background: var(--crm-primary-soft);
-  box-shadow: 0 8px 22px rgba(15, 118, 110, 0.08);
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-118-110-0-08);
 }
 
 .integrationNameHighlight .input {
@@ -550,21 +550,21 @@
 }
 
 .qualityHigh {
-  color: #047857 !important;
-  background: #dcfce7;
-  border: 1px solid #86efac;
+  color: var(--crm-ui-private-content-hex-047857) !important;
+  background: var(--crm-ui-private-surface-hex-dcfce7);
+  border: 1px solid var(--crm-ui-private-border-hex-86efac);
 }
 
 .qualityMedium {
-  color: #92400e !important;
-  background: #fef3c7;
-  border: 1px solid #facc15;
+  color: var(--crm-ui-private-content-hex-92400e) !important;
+  background: var(--crm-warning-bg-strong);
+  border: 1px solid var(--crm-ui-private-border-hex-facc15);
 }
 
 .qualityLow {
-  color: #b91c1c !important;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
+  color: var(--crm-ui-private-content-hex-b91c1c) !important;
+  background: var(--crm-ui-private-surface-hex-fee2e2);
+  border: 1px solid var(--crm-ui-private-border-hex-fecaca);
 }
 
 .qualityNeutral {
@@ -627,7 +627,7 @@
 }
 
 .saveButton:hover {
-  background: #000000;
+  background: var(--crm-ui-private-surface-hex-000000);
   transform: translateY(-1px);
 }
 
@@ -644,8 +644,8 @@
   justify-content: center;
   padding: 12px 18px;
   border-radius: 14px;
-  border: 1px solid #d5ffeb;
-  background: linear-gradient(80deg, #f4fff8 0%, #c8ffdd 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-d5ffeb);
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-f4fff8) 0%, var(--crm-ui-private-surface-hex-c8ffdd) 100%);
   color: var(--crm-text-strong);
   font-size: 14px;
   font-weight: 700;
@@ -654,8 +654,8 @@
 }
 
 .metaButton:hover {
-  background: linear-gradient(80deg, #c8ffe3 0%, #c8ffdb 100%);
-  border: 1px solid #d8f5ff;
+  background: linear-gradient(80deg, var(--crm-ui-private-surface-hex-c8ffe3) 0%, var(--crm-ui-private-surface-hex-c8ffdb) 100%);
+  border: 1px solid var(--crm-ui-private-border-hex-d8f5ff);
   transform: translateY(-1px);
 }
 
@@ -725,7 +725,7 @@
   overflow: hidden;
   background: var(--crm-surface-muted);
   border: 4px solid var(--crm-surface);
-  box-shadow: 0 0 0 1px #cbd5e1;
+  box-shadow: 0 0 0 1px var(--crm-ui-private-shadow-hex-cbd5e1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -858,7 +858,7 @@
   overflow: hidden;
   background: var(--crm-surface-muted);
   border: 4px solid var(--crm-surface);
-  box-shadow: 0 0 0 1px #cbd5e1;
+  box-shadow: 0 0 0 1px var(--crm-ui-private-shadow-hex-cbd5e1);
     cursor: grab;
     user-select: none;
     touch-action: none;
@@ -892,7 +892,7 @@
 }
 
 .primaryButton:hover {
-  background: #000000;
+  background: var(--crm-ui-private-surface-hex-000000);
 }
 
 .upgradeModal {
@@ -906,7 +906,7 @@
   border: 1px solid var(--crm-primary-border);
   border-radius: 18px;
   background:
-    radial-gradient(circle at 8% 15%, rgba(20, 184, 166, 0.18), transparent 34%),
+    radial-gradient(circle at 8% 15%, var(--crm-ui-private-surface-rgb-20-184-166-0-18), transparent 34%),
     var(--crm-primary-soft);
   display: grid;
   grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1.3fr);
@@ -1023,7 +1023,7 @@
 .upgradeCta {
   min-height: 44px;
   padding-inline: 20px;
-  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.22);
+  box-shadow: 0 10px 24px var(--crm-ui-private-shadow-rgb-15-118-110-0-22);
 }
 
 .primaryButton {
@@ -1072,7 +1072,7 @@
 }
 
 .primaryButton:hover {
-  background: #000000;
+  background: var(--crm-ui-private-surface-hex-000000);
 }
 
 .secondaryButton:disabled,
@@ -1484,11 +1484,11 @@
 
 .loadingCardFull {
   width: min(520px, 100%);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--crm-ui-private-border-rgb-15-23-42-0-08);
   background: var(--crm-surface);
   border-radius: 24px;
   padding: 34px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 24px 70px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1500,8 +1500,8 @@
   width: 46px;
   height: 46px;
   border-radius: 999px;
-  border: 4px solid rgba(22, 163, 74, 0.18);
-  border-top-color: #16a34a;
+  border: 4px solid var(--crm-ui-private-border-rgb-22-163-74-0-18);
+  border-top-color: var(--crm-ui-private-border-hex-16a34a);
   animation: whatsappPerfilSpin 0.8s linear infinite;
 }
 
@@ -1527,10 +1527,10 @@
 .modalErrorAlert {
   margin-top: 12px;
   padding: 12px 14px;
-  border: 1px solid #fecaca;
+  border: 1px solid var(--crm-ui-private-border-hex-fecaca);
   border-radius: 14px;
-  background: #fff1f2;
-  color: #991b1b;
+  background: var(--crm-ui-private-surface-hex-fff1f2);
+  color: var(--crm-ui-private-content-hex-991b1b);
   font-size: 13px;
   line-height: 1.5;
   font-weight: 600;
@@ -1539,10 +1539,10 @@
 .modalSuccessAlert {
   margin-top: 12px;
   padding: 12px 14px;
-  border: 1px solid #bbf7d0;
+  border: 1px solid var(--crm-ui-private-border-hex-bbf7d0);
   border-radius: 14px;
-  background: #f0fdf4;
-  color: #166534;
+  background: var(--crm-ui-private-surface-hex-f0fdf4);
+  color: var(--crm-ui-private-content-hex-166534);
   font-size: 13px;
   line-height: 1.5;
   font-weight: 600;

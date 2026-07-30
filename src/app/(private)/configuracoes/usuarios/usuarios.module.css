@@ -304,7 +304,7 @@
 
 .userCard:hover {
   border-color: var(--crm-border-strong);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 10px 28px var(--crm-ui-private-shadow-rgb-15-23-42-0-05);
 }
 
 .userSummary {
@@ -489,7 +489,7 @@
   border: 1px solid var(--crm-primary-border);
   background: var(--crm-surface);
   padding: 28px;
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 28px 80px var(--crm-ui-private-shadow-rgb-15-23-42-0-28);
 }
 
 .userModal {
@@ -501,7 +501,7 @@
   border: 1px solid var(--crm-border);
   background: var(--crm-surface);
   padding: 28px;
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 28px 80px var(--crm-ui-private-shadow-rgb-15-23-42-0-28);
 }
 
 .deleteModal {
@@ -511,7 +511,7 @@
   border: 1px solid var(--crm-danger-border);
   background: var(--crm-surface);
   padding: 28px;
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 28px 80px var(--crm-ui-private-shadow-rgb-15-23-42-0-28);
 }
 
 .deleteWarningBox {

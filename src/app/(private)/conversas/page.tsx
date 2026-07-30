@@ -1754,7 +1754,7 @@ function CampoContatoEditavel({
                 style={{
                   marginRight: "auto",
                   color: "var(--crm-danger-strong)",
-                  borderColor: "rgba(220, 38, 38, 0.3)",
+                  borderColor: "var(--crm-ui-private-border-rgb-220-38-38-0-3)",
                 }}
                 onClick={onExcluir}
               >
@@ -2488,7 +2488,7 @@ function ConversasPageContent() {
         alignItems: "center",
         justifyContent: "center",
         padding: "20px",
-        background: "rgba(15, 23, 42, 0.58)",
+        background: "var(--crm-ui-private-decoration-rgb-15-23-42-0-58)",
         backdropFilter: "blur(3px)",
       });
 
@@ -2499,11 +2499,11 @@ function ConversasPageContent() {
       Object.assign(modal.style, {
         width: "min(430px, calc(100vw - 32px))",
         overflow: "hidden",
-        border: "1px solid var(--crm-border, #d8e1e7)",
+        border: "1px solid var(--crm-border, var(--crm-ui-private-decoration-hex-d8e1e7))",
         borderRadius: "22px",
-        background: "var(--crm-surface, #ffffff)",
-        color: "var(--crm-text-strong, #0f2635)",
-        boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)",
+        background: "var(--crm-surface, var(--crm-ui-private-decoration-hex-ffffff))",
+        color: "var(--crm-text-strong, var(--crm-ui-private-decoration-hex-0f2635))",
+        boxShadow: "0 24px 70px var(--crm-ui-private-decoration-rgb-15-23-42-0-28)",
         transform: "translateY(0)",
       });
 
@@ -2524,8 +2524,8 @@ function ConversasPageContent() {
         alignItems: "center",
         justifyContent: "center",
         borderRadius: "14px",
-        background: "rgba(220, 38, 38, 0.1)",
-        color: "var(--crm-danger-strong, #b91c1c)",
+        background: "var(--crm-ui-private-decoration-rgb-220-38-38-0-1)",
+        color: "var(--crm-danger-strong, var(--crm-ui-private-decoration-hex-b91c1c))",
         fontSize: "22px",
         fontWeight: "900",
       });
@@ -2550,7 +2550,7 @@ function ConversasPageContent() {
       descricao.textContent = `O campo “${nomeCampo}” será removido permanentemente do contato.`;
       Object.assign(descricao.style, {
         margin: "8px 0 0",
-        color: "var(--crm-text-muted, #607785)",
+        color: "var(--crm-text-muted, var(--crm-ui-private-decoration-hex-607785))",
         fontSize: "14px",
         lineHeight: "1.5",
       });
@@ -2559,7 +2559,7 @@ function ConversasPageContent() {
       aviso.textContent = "Esta ação não poderá ser desfeita.";
       Object.assign(aviso.style, {
         margin: "8px 0 0",
-        color: "var(--crm-danger-strong, #b91c1c)",
+        color: "var(--crm-danger-strong, var(--crm-ui-private-decoration-hex-b91c1c))",
         fontSize: "13px",
         fontWeight: "700",
       });
@@ -2573,8 +2573,8 @@ function ConversasPageContent() {
         justifyContent: "flex-end",
         gap: "10px",
         padding: "16px 22px 20px",
-        borderTop: "1px solid var(--crm-border-soft, #e8eef2)",
-        background: "var(--crm-surface-subtle, #f8fafb)",
+        borderTop: "1px solid var(--crm-border-soft, var(--crm-ui-private-decoration-hex-e8eef2))",
+        background: "var(--crm-surface-subtle, var(--crm-ui-private-decoration-hex-f8fafb))",
       });
 
       const cancelar = document.createElement("button");
@@ -2583,10 +2583,10 @@ function ConversasPageContent() {
       Object.assign(cancelar.style, {
         minHeight: "40px",
         padding: "9px 15px",
-        border: "1px solid var(--crm-border, #d8e1e7)",
+        border: "1px solid var(--crm-border, var(--crm-ui-private-decoration-hex-d8e1e7))",
         borderRadius: "12px",
-        background: "var(--crm-surface, #ffffff)",
-        color: "var(--crm-text-strong, #0f2635)",
+        background: "var(--crm-surface, var(--crm-ui-private-decoration-hex-ffffff))",
+        color: "var(--crm-text-strong, var(--crm-ui-private-decoration-hex-0f2635))",
         font: "inherit",
         fontSize: "13px",
         fontWeight: "800",
@@ -2599,15 +2599,15 @@ function ConversasPageContent() {
       Object.assign(confirmar.style, {
         minHeight: "40px",
         padding: "9px 16px",
-        border: "1px solid #b91c1c",
+        border: "1px solid var(--crm-ui-private-decoration-hex-b91c1c)",
         borderRadius: "12px",
-        background: "#b91c1c",
-        color: "#ffffff",
+        background: "var(--crm-ui-private-decoration-hex-b91c1c)",
+        color: "var(--crm-text-inverse)",
         font: "inherit",
         fontSize: "13px",
         fontWeight: "800",
         cursor: "pointer",
-        boxShadow: "0 6px 16px rgba(185, 28, 28, 0.2)",
+        boxShadow: "0 6px 16px var(--crm-ui-private-decoration-rgb-185-28-28-0-2)",
       });
 
       let finalizado = false;
@@ -9580,10 +9580,10 @@ const templateFooterTexto = useMemo(() => {
                               className={styles.filePreviewCard}
                               style={{
                                 marginBottom: 10,
-                                border: "1px solid rgba(148, 163, 184, 0.22)",
+                                border: "1px solid var(--crm-ui-private-decoration-rgb-148-163-184-0-22)",
                                 borderRadius: 14,
                                 padding: 12,
-                                background: "rgba(255,255,255,0.72)",
+                                background: "var(--crm-ui-private-decoration-rgb-255-255-255-0-72)",
                                 display: "flex",
                                 flexDirection: "column",
                                 gap: 10,
@@ -9658,7 +9658,7 @@ const templateFooterTexto = useMemo(() => {
                               <div
                                 style={{
                                   fontSize: 13,
-                                  color: "#64748b",
+                                  color: "var(--crm-ui-private-content-hex-64748b)",
                                   wordBreak: "break-word",
                                 }}
                               >
@@ -12997,7 +12997,7 @@ const templateFooterTexto = useMemo(() => {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.82)",
+            background: "var(--crm-ui-private-decoration-rgb-0-0-0-0-82)",
             zIndex: 9999,
             display: "flex",
             flexDirection: "column",
@@ -13022,7 +13022,7 @@ const templateFooterTexto = useMemo(() => {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                color: "#fff",
+                color: "var(--crm-text-inverse)",
               }}
             >
               <strong>{imagemModalTitulo || "Imagem"}</strong>
@@ -13069,7 +13069,7 @@ const templateFooterTexto = useMemo(() => {
             <div
               style={{
                 overflow: "auto",
-                background: "rgba(255,255,255,0.04)",
+                background: "var(--crm-ui-private-decoration-rgb-255-255-255-0-04)",
                 borderRadius: 16,
                 padding: 12,
                 display: "flex",
@@ -13104,7 +13104,7 @@ const templateFooterTexto = useMemo(() => {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.82)",
+            background: "var(--crm-ui-private-decoration-rgb-0-0-0-0-82)",
             zIndex: 9999,
             display: "flex",
             alignItems: "center",
@@ -13118,7 +13118,7 @@ const templateFooterTexto = useMemo(() => {
               width: "100%",
               maxWidth: 1100,
               height: "88vh",
-              background: "#fff",
+              background: "var(--crm-ui-private-decoration-hex-ffffff)",
               borderRadius: 16,
               overflow: "hidden",
               display: "flex",
@@ -13128,7 +13128,7 @@ const templateFooterTexto = useMemo(() => {
             <div
               style={{
                 padding: "12px 16px",
-                borderBottom: "1px solid #e5e7eb",
+                borderBottom: "1px solid var(--crm-ui-private-decoration-hex-e5e7eb)",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
