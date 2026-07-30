@@ -84,22 +84,44 @@ export function escopoOptOutBloqueiaCategoria(
   return Boolean(categoriaNormalizada && escopo === categoriaNormalizada);
 }
 
+export function textoPossuiInstrucaoOptOut(valor: unknown) {
+  const textoNormalizado = normalizarTextoComandoWhatsapp(valor);
+  if (!textoNormalizado) return false;
+
+  const textosConhecidos = [
+    ...Object.values(WHATSAPP_OPT_OUT_FOOTERS),
+    WHATSAPP_OPT_OUT_FOOTER_LEGADO,
+  ].map(normalizarTextoComandoWhatsapp);
+
+  if (textosConhecidos.includes(textoNormalizado)) {
+    return true;
+  }
+
+  return /\bresponda\s+(sair|stop)\b/.test(textoNormalizado);
+}
+
 export function templatePossuiInstrucaoOptOut(
   payload: TemplatePayloadLike,
   categoria: unknown
 ) {
-  const footerEsperado = obterFooterOptOut(categoria);
-  if (!footerEsperado) return false;
-
   const footer = (payload?.components || []).find(
     (component) => String(component.type || "").toUpperCase() === "FOOTER"
   );
   const footerNormalizado = normalizarTextoComandoWhatsapp(footer?.text);
+  if (!footerNormalizado) return false;
+
+  const footerEsperado = obterFooterOptOut(categoria);
+  const footersAceitos = [
+    footerEsperado,
+    ...Object.values(WHATSAPP_OPT_OUT_FOOTERS),
+    WHATSAPP_OPT_OUT_FOOTER_LEGADO,
+  ]
+    .filter((item): item is string => Boolean(item))
+    .map(normalizarTextoComandoWhatsapp);
 
   return (
-    footerNormalizado === normalizarTextoComandoWhatsapp(footerEsperado) ||
-    footerNormalizado ===
-      normalizarTextoComandoWhatsapp(WHATSAPP_OPT_OUT_FOOTER_LEGADO)
+    footersAceitos.includes(footerNormalizado) ||
+    textoPossuiInstrucaoOptOut(footer?.text)
   );
 }
 
