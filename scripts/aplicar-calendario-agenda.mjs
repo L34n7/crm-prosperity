@@ -11,6 +11,14 @@ function write(relativePath, content) {
   fs.writeFileSync(path.join(root, relativePath), content, "utf8");
 }
 
+function replaceRequired(content, current, replacement, description) {
+  if (content.includes(replacement)) return content;
+  if (!content.includes(current)) {
+    throw new Error(`Não foi possível aplicar: ${description}.`);
+  }
+  return content.replace(current, replacement);
+}
+
 function patchRuntimeStatus() {
   const relativePath = "src/app/(private)/agendas/AgendaAutomationRuntimeStatus.tsx";
   let content = read(relativePath);
@@ -171,6 +179,45 @@ function patchTemplatePreview() {
   console.log("Prévia da automação alinhada ao designer da tela de disparos.");
 }
 
+function patchCalendarEnhancers() {
+  const automationPath =
+    "src/app/(private)/agendas/AgendaAutomationEnhancer.tsx";
+  let automation = read(automationPath);
+  automation = replaceRequired(
+    automation,
+    'const isEdit = normalizedTitle.includes("configurar agenda");\n      const isNew = normalizedTitle.includes("nova agenda");',
+    'const isEdit =\n        normalizedTitle.includes("configurar agenda") ||\n        normalizedTitle.includes("configurar calendario");\n      const isNew =\n        normalizedTitle.includes("nova agenda") ||\n        normalizedTitle.includes("novo calendario");',
+    "reconhecimento do modal de automação do calendário"
+  );
+  write(automationPath, automation);
+
+  const googlePath =
+    "src/app/(private)/agendas/AgendaGoogleAgendaBindingFix.tsx";
+  let google = read(googlePath);
+  google = replaceRequired(
+    google,
+    '      const modal = shell.querySelector<HTMLElement>(".a2 .modalbg .modal");\n      if (!modal || !text(modal.querySelector(".dhead h2")).includes("Configurar agenda")) return;',
+    '      const modal = shell.querySelector<HTMLElement>(".a2 .modalbg .modal");\n      if (!modal) return;\n      const modalTitle = normalize(text(modal.querySelector(".dhead h2")));\n      if (\n        !modalTitle.includes("configurar agenda") &&\n        !modalTitle.includes("configurar calendario")\n      ) return;',
+    "reconhecimento do modal de vínculo com o Google Calendar"
+  );
+  write(googlePath, google);
+
+  const legacyPath =
+    "src/app/(private)/agendas/AgendaEnhancerLegacy.tsx";
+  let legacy = read(legacyPath);
+  legacy = replaceRequired(
+    legacy,
+    '      const newCalendar = buttons.find(\n        (button) => normalized(text(button)) === "nova agenda"\n      );',
+    '      const newCalendar = buttons.find((button) => {\n        const label = normalized(text(button));\n        return label === "nova agenda" || label === "novo calendario";\n      });',
+    "posicionamento do botão Novo calendário"
+  );
+  write(legacyPath, legacy);
+
+  console.log(
+    "Enhancers ajustados para reconhecer agenda e calendário sem depender da ordem de renderização."
+  );
+}
+
 function replaceDatabaseTableReferences(directory) {
   let changedFiles = 0;
   const extensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
@@ -200,4 +247,5 @@ function replaceDatabaseTableReferences(directory) {
 
 patchRuntimeStatus();
 patchTemplatePreview();
+patchCalendarEnhancers();
 replaceDatabaseTableReferences("src");
