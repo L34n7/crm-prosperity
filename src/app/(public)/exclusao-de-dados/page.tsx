@@ -5,6 +5,15 @@ export default function ExclusaoDeDados() {
 
       <p><strong>Ultima atualizacao:</strong> 31/07/2026</p>
 
+      <h2>Identificacao do responsavel</h2>
+      <p>
+        Este canal e mantido pelo CRM Prosperity, marca comercial utilizada por
+        <strong> 66.440.969 LEANDRO ISIDORIO NUNES</strong>, empresario individual
+        enquadrado como Microempreendedor Individual (MEI), inscrito no CNPJ sob o
+        nº <strong>66.440.969/0001-91</strong>, com endereco comercial na Avenida
+        Pedro Diniz, nº 617 C, Loja C, Bairro Amazonas, Betim/MG, CEP 32685-018.
+      </p>
+
       <p>
         Titulares de dados, clientes e usuarios podem solicitar informacoes,
         correcao ou exclusao de dados pessoais tratados pelo CRM Prosperity,
@@ -21,7 +30,8 @@ export default function ExclusaoDeDados() {
       <p>
         Pedidos relacionados a cadastro, contratacao, faturamento, seguranca,
         suporte ou relacionamento direto com o CRM Prosperity serao analisados
-        pelo proprio CRM Prosperity como controlador.
+        pelo empresario individual identificado acima, sob a marca CRM Prosperity,
+        como controlador.
       </p>
 
       <h2>2. Como solicitar</h2>
@@ -68,7 +78,7 @@ export default function ExclusaoDeDados() {
       <p>
         Copias residuais podem permanecer temporariamente em backups protegidos
         ate sua substituicao pelo ciclo tecnico normal, sem uso para finalidades
-        incompatíveis. Logs e evidencias necessarios ao cumprimento legal ou a
+        incompativeis. Logs e evidencias necessarios ao cumprimento legal ou a
         defesa de direitos podem ser preservados.
       </p>
 

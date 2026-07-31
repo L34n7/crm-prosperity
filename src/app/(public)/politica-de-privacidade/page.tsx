@@ -5,6 +5,21 @@ export default function PoliticaPrivacidade() {
 
       <p><strong>Ultima atualizacao:</strong> 31/07/2026</p>
 
+      <h2>Identificacao do agente de tratamento</h2>
+      <p>
+        Para os tratamentos em que atua como controlador, o CRM Prosperity e a
+        marca comercial utilizada por <strong>66.440.969 LEANDRO ISIDORIO NUNES</strong>,
+        empresario individual enquadrado como Microempreendedor Individual (MEI),
+        inscrito no CNPJ sob o nº <strong>66.440.969/0001-91</strong>, com endereco
+        comercial na Avenida Pedro Diniz, nº 617 C, Loja C, Bairro Amazonas,
+        Betim/MG, CEP 32685-018.
+      </p>
+      <p>
+        O canal para solicitacoes de privacidade e protecao de dados e
+        <strong> crmprosperity@gmail.com</strong>, sem prejuizo dos demais canais
+        oficiais disponibilizados na Plataforma.
+      </p>
+
       <p>
         Esta Politica explica como o CRM Prosperity trata dados pessoais no
         contexto da plataforma, do site, do suporte, das contratacoes e das
@@ -29,10 +44,10 @@ export default function PoliticaPrivacidade() {
         dados conforme instrucoes do Cliente e para prestar o servico.
       </p>
       <p>
-        O CRM Prosperity atua como controlador dos dados necessarios a cadastro,
-        contratacao, faturamento, seguranca, suporte, prevencao a fraudes,
-        comunicacoes institucionais e defesa de direitos relacionados a sua
-        propria operacao.
+        O empresario individual identificado acima, sob a marca CRM Prosperity,
+        atua como controlador dos dados necessarios a cadastro, contratacao,
+        faturamento, seguranca, suporte, prevencao a fraudes, comunicacoes
+        institucionais e defesa de direitos relacionados a sua propria operacao.
       </p>
 
       <h2>3. Dados que podem ser tratados</h2>
@@ -283,11 +298,11 @@ export default function PoliticaPrivacidade() {
 
       <h2>26. Contato de privacidade</h2>
       <p>
-        Solicitacoes relacionadas a privacidade e LGPD podem ser encaminhadas
-        pelos canais oficiais de suporte do CRM Prosperity ou pela pagina publica
-        de exclusao de dados. Ate a designacao e divulgacao de canal especifico
-        do encarregado, esses canais serao utilizados para recepcao e tratamento
-        das solicitacoes.
+        Solicitacoes relacionadas a privacidade e LGPD podem ser encaminhadas para
+        <strong> crmprosperity@gmail.com</strong>, pelos canais oficiais de suporte
+        do CRM Prosperity ou pela pagina publica de exclusao de dados. Ate a
+        designacao e divulgacao de canal especifico do encarregado, esses canais
+        serao utilizados para recepcao e tratamento das solicitacoes.
       </p>
     </main>
   );
