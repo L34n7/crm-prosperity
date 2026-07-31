@@ -10,8 +10,12 @@ export default function ExclusaoDeDados() {
         Este canal e mantido pelo CRM Prosperity, marca comercial utilizada por
         <strong> 66.440.969 LEANDRO ISIDORIO NUNES</strong>, empresario individual
         enquadrado como Microempreendedor Individual (MEI), inscrito no CNPJ sob o
-        nº <strong>66.440.969/0001-91</strong>, com endereco comercial na Avenida
-        Pedro Diniz, nº 617 C, Loja C, Bairro Amazonas, Betim/MG, CEP 32685-018.
+        nº <strong>66.440.969/0001-91</strong>, com operacao e atendimento realizados
+        de forma remota.
+      </p>
+      <p>
+        O endereco cadastral permanece mantido nos registros publicos competentes
+        e nao constitui local de atendimento presencial ao publico.
       </p>
 
       <p>
