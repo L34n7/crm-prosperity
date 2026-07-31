@@ -32,6 +32,12 @@ const VARIABLE_BADGE_LABELS = new Set([
   "SISTEMA",
 ]);
 
+const VARIABLES_MODAL_SECTION_TITLES = new Set([
+  "NOVA VARIAVEL PERSONALIZADA",
+  "VARIAVEIS CADASTRADAS",
+  "VARIAVEIS FIXAS DO SISTEMA",
+]);
+
 const CSS = `
 .agendaAutomationSection.isRuntimeActive{border-color:color-mix(in srgb,var(--crm-success-border) 78%,var(--crm-border));padding:19px}
 .agendaAutomationSection.isRuntimeActive:before{background:linear-gradient(90deg,var(--crm-success-strong),color-mix(in srgb,var(--crm-primary-strong) 65%,var(--crm-success-strong)))}
@@ -77,12 +83,33 @@ const CSS = `
 .agendaVariableDropdownPortal .agendaVariableDropdownName{font-size:14.5px!important;line-height:1.4!important;font-weight:900!important;color:var(--crm-text-strong)!important}
 .agendaVariableDropdownPortal .agendaVariableDropdownDescription{font-size:12.5px!important;line-height:1.48!important;font-weight:600!important;color:var(--crm-text-muted)!important}
 .agendaVariableDropdownPortal .agendaVariableDropdownBadge{font-size:10.5px!important;line-height:1.2!important;font-weight:850!important;padding:4px 7px!important;min-height:20px!important}
+.agendaVariablesCreateModal{font-size:13.5px!important;line-height:1.5!important}
+.agendaVariablesCreateModal .dhead{padding:20px 22px 17px!important;gap:14px!important}
+.agendaVariablesCreateModal .body{padding:20px 22px 24px!important}
+.agendaVariablesCreateModal .agendaVariablesCreateModalTitle,.agendaVariablesCreateModal .dhead h1,.agendaVariablesCreateModal .dhead h2{font-size:22px!important;line-height:1.25!important;font-weight:900!important;color:var(--crm-text-strong)!important}
+.agendaVariablesCreateModal .agendaVariablesCreateModalSubtitle,.agendaVariablesCreateModal .dhead p{font-size:13.5px!important;line-height:1.55!important;color:var(--crm-text-muted)!important;margin-top:5px!important}
+.agendaVariablesCreateModal .section{padding:18px!important;margin-bottom:15px!important;border-radius:14px!important}
+.agendaVariablesCreateModal .agendaVariablesCreateModalSectionTitle,.agendaVariablesCreateModal .section h3{font-size:15.5px!important;line-height:1.4!important;font-weight:900!important;margin-bottom:13px!important;color:var(--crm-text-strong)!important}
+.agendaVariablesCreateModal .form{gap:13px!important}
+.agendaVariablesCreateModal .field{gap:7px!important}
+.agendaVariablesCreateModal .field label,.agendaVariablesCreateModal label{font-size:13px!important;line-height:1.4!important;font-weight:850!important;color:var(--crm-text-strong)!important}
+.agendaVariablesCreateModal input,.agendaVariablesCreateModal select,.agendaVariablesCreateModal textarea{font-size:14px!important;line-height:1.45!important;border-radius:10px!important;padding:10px 12px!important}
+.agendaVariablesCreateModal input,.agendaVariablesCreateModal select{height:44px!important}
+.agendaVariablesCreateModal textarea{min-height:86px!important;resize:vertical!important}
+.agendaVariablesCreateModal input::placeholder,.agendaVariablesCreateModal textarea::placeholder{font-size:13.5px!important;color:var(--crm-text-muted)!important}
+.agendaVariablesCreateModal .btn,.agendaVariablesCreateModal button{min-height:40px!important;padding:0 14px!important;font-size:13px!important;line-height:1.3!important;font-weight:850!important;border-radius:10px!important}
+.agendaVariablesCreateModal .item{padding:13px!important;margin-top:10px!important;border-radius:12px!important}
+.agendaVariablesCreateModal .agendaVariablesCreateModalVariableName{font-size:14.5px!important;line-height:1.4!important;font-weight:900!important;color:var(--crm-text-strong)!important}
+.agendaVariablesCreateModal .agendaVariablesCreateModalDetail,.agendaVariablesCreateModal small,.agendaVariablesCreateModal p{font-size:12.75px!important;line-height:1.55!important}
+.agendaVariablesCreateModal .agendaVariablesCreateModalHint{font-size:13px!important;line-height:1.55!important;padding:11px 13px!important}
+.agendaVariablesCreateModal .agendaVariablesCreateModalCard{padding:13px 14px!important;min-height:62px!important;border-radius:12px!important}
+.agendaVariablesCreateModal .foot{padding:15px 22px!important}
 .agendaTemplateHelpTitle{display:inline-flex!important;align-items:center;gap:7px;position:relative;overflow:visible}
 .agendaTemplateHelp{position:relative;display:inline-flex;align-items:center;justify-content:center}
 .agendaTemplateHelpButton{width:19px;height:19px;padding:0;border:1px solid var(--crm-primary-border);border-radius:999px;background:var(--crm-primary-soft);color:var(--crm-primary-text);font-family:inherit;font-size:11.5px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help}
 .agendaTemplateHelpBubble{position:absolute;z-index:40;top:calc(100% + 8px);right:-8px;width:320px;max-width:min(320px,78vw);padding:12px 13px;border:1px solid var(--crm-border-strong);border-radius:11px;background:var(--crm-text-strong);color:var(--crm-text-inverse);box-shadow:0 14px 34px color-mix(in srgb,var(--crm-text-strong) 26%,transparent);font-size:12.5px!important;font-weight:650!important;line-height:1.6!important;text-align:left;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-4px);transition:.16s ease}
 .agendaTemplateHelp:hover .agendaTemplateHelpBubble,.agendaTemplateHelp:focus-within .agendaTemplateHelpBubble{opacity:1;visibility:visible;transform:translateY(0)}
-@media(max-width:760px){.agendaAutomationSection.isRuntimeActive{padding:15px}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle h3{font-size:18px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle p{font-size:13.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCard{padding:15px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCardHead strong{font-size:15.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationField input,.agendaAutomationSection.isRuntimeActive .agendaAutomationField select{font-size:13.5px!important}.agendaTemplateMappingPanel{padding:14px!important}.agendaTemplatePreviewArea{padding:14px!important}.agendaTemplatePreviewBubble pre{font-size:13px!important}.agendaTemplateCrmSourceField>span{font-size:13.5px!important}.agendaVariableDropdownPortal .agendaVariableDropdownName{font-size:14px!important}.agendaVariableDropdownPortal .agendaVariableDropdownDescription{font-size:12px!important}}
+@media(max-width:760px){.agendaAutomationSection.isRuntimeActive{padding:15px}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle h3{font-size:18px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle p{font-size:13.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCard{padding:15px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCardHead strong{font-size:15.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationField input,.agendaAutomationSection.isRuntimeActive .agendaAutomationField select{font-size:13.5px!important}.agendaTemplateMappingPanel{padding:14px!important}.agendaTemplatePreviewArea{padding:14px!important}.agendaTemplatePreviewBubble pre{font-size:13px!important}.agendaTemplateCrmSourceField>span{font-size:13.5px!important}.agendaVariableDropdownPortal .agendaVariableDropdownName{font-size:14px!important}.agendaVariableDropdownPortal .agendaVariableDropdownDescription{font-size:12px!important}.agendaVariablesCreateModal .dhead{padding:17px 17px 14px!important}.agendaVariablesCreateModal .body{padding:16px 17px 20px!important}.agendaVariablesCreateModal .agendaVariablesCreateModalTitle,.agendaVariablesCreateModal .dhead h1,.agendaVariablesCreateModal .dhead h2{font-size:20px!important}.agendaVariablesCreateModal .section{padding:15px!important}.agendaVariablesCreateModal .form{grid-template-columns:1fr!important}.agendaVariablesCreateModal input,.agendaVariablesCreateModal select,.agendaVariablesCreateModal textarea{font-size:13.5px!important}}
 `;
 
 function normalizedText(value: string) {
@@ -199,6 +226,80 @@ function applyVariableDropdownTypography(root: ParentNode) {
   }
 }
 
+function findVariablesModal(title: HTMLElement) {
+  let current: HTMLElement | null = title;
+  let candidate: HTMLElement | null = null;
+  for (let level = 0; current && level < 10; level += 1) {
+    const content = normalizedText(current.textContent || "");
+    if (
+      content.includes("NOVA VARIAVEL PERSONALIZADA") &&
+      content.includes("VARIAVEIS CADASTRADAS")
+    ) {
+      candidate = current;
+      if (
+        current.matches('[role="dialog"],.modal') ||
+        current.parentElement?.classList.contains("modalbg")
+      ) {
+        return current;
+      }
+    }
+    current = current.parentElement;
+  }
+  return candidate;
+}
+
+function applyVariablesModalTypography(root: ParentNode) {
+  const titles: HTMLElement[] = [];
+  if (root instanceof HTMLElement && normalizedText(root.textContent || "") === "CRIAR VARIAVEIS") {
+    titles.push(root);
+  }
+  root.querySelectorAll?.<HTMLElement>("h1,h2,h3,strong").forEach((element) => {
+    if (normalizedText(element.textContent || "") === "CRIAR VARIAVEIS") titles.push(element);
+  });
+
+  for (const title of titles) {
+    const modal = findVariablesModal(title);
+    if (!modal) continue;
+    modal.classList.add("agendaVariablesCreateModal");
+    title.classList.add("agendaVariablesCreateModalTitle");
+
+    modal.querySelectorAll<HTMLElement>("*").forEach((element) => {
+      if (element.children.length > 0) return;
+      const text = element.textContent?.trim() || "";
+      if (!text) return;
+      const normalized = normalizedText(text);
+
+      if (VARIABLES_MODAL_SECTION_TITLES.has(normalized)) {
+        element.classList.add("agendaVariablesCreateModalSectionTitle");
+        return;
+      }
+      if (normalized.startsWith("CADASTRE VALORES GLOBAIS")) {
+        element.classList.add("agendaVariablesCreateModalSubtitle");
+        return;
+      }
+      if (/^\{\{[^{}]+\}\}$/.test(text)) {
+        element.classList.add("agendaVariablesCreateModalVariableName");
+        const card = element.closest<HTMLElement>(".item,li,article");
+        card?.classList.add("agendaVariablesCreateModalCard");
+        return;
+      }
+      if (normalized.startsWith("A VARIAVEL SERA USADA ASSIM")) {
+        element.classList.add("agendaVariablesCreateModalHint");
+        return;
+      }
+      if (
+        normalized.startsWith("VALOR ATUAL") ||
+        normalized.startsWith("NOME SALVO") ||
+        normalized.startsWith("NUMERO OU TELEFONE") ||
+        normalized.startsWith("EMAIL SALVO") ||
+        text.length >= 18
+      ) {
+        element.classList.add("agendaVariablesCreateModalDetail");
+      }
+    });
+  }
+}
+
 function applyRuntimeStatus(section: HTMLElement) {
   section.classList.add("isRuntimeActive");
   applyTemplateHelp(section);
@@ -227,6 +328,7 @@ function applyFromAddedNode(node: Node) {
   if (node.matches(".agendaAutomationSection")) applyRuntimeStatus(node);
   node.querySelectorAll<HTMLElement>(".agendaAutomationSection").forEach(applyRuntimeStatus);
   applyVariableDropdownTypography(node);
+  applyVariablesModalTypography(node);
 }
 
 export default function AgendaAutomationRuntimeStatus() {
@@ -241,6 +343,7 @@ export default function AgendaAutomationRuntimeStatus() {
     if (style.textContent !== CSS) style.textContent = CSS;
     document.querySelectorAll<HTMLElement>(".agendaAutomationSection").forEach(applyRuntimeStatus);
     applyVariableDropdownTypography(document);
+    applyVariablesModalTypography(document);
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) mutation.addedNodes.forEach(applyFromAddedNode);
     });
