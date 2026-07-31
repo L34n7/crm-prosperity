@@ -5,6 +5,7 @@ import { notifyResponsible, sendEmail, startPostFlow } from "./automation-runtim
 import { cancelJob, completeJob, failJob, loadContext } from "./automation-runtime-context";
 import { sendWhatsApp } from "./automation-runtime-whatsapp";
 import { AgendaAutomationError, asObject, isApplicable, type Job } from "./automation-runtime-types";
+import { processAgendaResponseFlows } from "./agenda-response-runtime";
 
 const supabase = getSupabaseAdmin();
 
@@ -101,5 +102,6 @@ export async function processAgendaAutomations(limit = 50) {
     }
   }
 
-  return summary;
+  const respostas = await processAgendaResponseFlows(Math.min(50, safeLimit));
+  return { ...summary, respostas };
 }

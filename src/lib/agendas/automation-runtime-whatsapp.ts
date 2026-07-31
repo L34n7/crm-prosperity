@@ -28,6 +28,7 @@ async function logWhatsApp(
     messageId?: string | null;
     raw?: unknown;
     variables?: string[];
+    variablesSnapshot?: Record<string, string>;
   }
 ) {
   await supabase.from("whatsapp_disparos_logs").insert({
@@ -55,6 +56,8 @@ async function logWhatsApp(
       agenda_id: context.agenda.id,
       tipo: context.job.tipo,
       canal: context.job.canal,
+      template_categoria: context.template?.categoria || null,
+      variaveis_enviadas: values.variablesSnapshot || {},
     },
   });
 }
@@ -62,7 +65,8 @@ async function logWhatsApp(
 async function recordOutboundMessage(
   context: Context,
   messageId: string | null,
-  raw: unknown
+  raw: unknown,
+  variablesSnapshot: Record<string, string>
 ) {
   if (!context.conversation?.id) return;
   if (
@@ -92,6 +96,8 @@ async function recordOutboundMessage(
       agenda_tipo: context.job.tipo,
       template_id: context.template?.id || null,
       template_nome: context.template?.nome || null,
+      template_categoria: context.template?.categoria || null,
+      variaveis_enviadas: variablesSnapshot,
       meta_response: raw,
     },
   });
@@ -118,7 +124,7 @@ export async function sendWhatsApp(context: Context) {
   }
   if (!context.template) {
     throw new AgendaAutomationError(
-      "O template Utility selecionado não está aprovado ou não foi encontrado.",
+      "O template selecionado não está aprovado ou não foi encontrado.",
       { permanent: true }
     );
   }
@@ -131,9 +137,18 @@ export async function sendWhatsApp(context: Context) {
       { permanent: true }
     );
   }
-  if (normalize(context.template.categoria) !== "utility") {
+
+  const category = normalize(context.template.categoria);
+  if (!["utility", "marketing"].includes(category)) {
     throw new AgendaAutomationError(
-      "Somente templates Utility podem ser usados nas automações da agenda.",
+      "Somente templates aprovados como Utility ou Marketing podem ser usados nas automações da agenda.",
+      { permanent: true }
+    );
+  }
+  const config = context.rule?.configuracao_json || {};
+  if (category === "marketing" && config.marketing_aceito !== true) {
+    throw new AgendaAutomationError(
+      "O template foi classificado pela Meta como Marketing e precisa de aceite explícito na configuração da agenda.",
       { permanent: true }
     );
   }
@@ -150,11 +165,11 @@ export async function sendWhatsApp(context: Context) {
     await telefoneEstaSuprimido({
       empresaId: context.job.empresa_id,
       telefone: phone,
-      categoria: "utility",
+      categoria: category,
     })
   ) {
     throw new AgendaAutomationError(
-      "Envio cancelado porque o contato solicitou opt-out de mensagens Utility.",
+      `Envio cancelado porque o contato solicitou opt-out de mensagens ${category}.`,
       { cancel: true }
     );
   }
@@ -167,14 +182,21 @@ export async function sendWhatsApp(context: Context) {
     );
   }
 
-  const parameters = templateParameters(context);
+  let resolved;
+  try {
+    resolved = templateParameters(context);
+  } catch (error) {
+    throw new AgendaAutomationError(
+      error instanceof Error ? error.message : "O mapeamento das variáveis do template está incompleto.",
+      { permanent: true }
+    );
+  }
+  const buttons = quickReplyButtons(context);
   const sameIntegration =
     context.conversation?.integracao_whatsapp_id === context.integration.id;
   const window =
     sameIntegration && context.conversation?.id
-      ? await canSendFreeformWhatsAppMessage({
-          conversaId: context.conversation.id,
-        })
+      ? await canSendFreeformWhatsAppMessage({ conversaId: context.conversation.id })
       : null;
 
   let reservationIds: string[] = [];
@@ -190,6 +212,8 @@ export async function sendWhatsApp(context: Context) {
         agenda_automacao_execucao_id: context.job.id,
         agenda_agendamento_id: context.appointment.id,
         agenda_tipo: context.job.tipo,
+        template_categoria: category,
+        variaveis_enviadas: resolved.snapshot,
       },
     });
     if (!reservation.ok) {
@@ -204,8 +228,8 @@ export async function sendWhatsApp(context: Context) {
     to: phone,
     templateName: context.template.nome,
     languageCode: context.template.idioma || "pt_BR",
-    bodyParameters: parameters,
-    quickReplyButtons: quickReplyButtons(context),
+    bodyParameters: resolved.values,
+    quickReplyButtons: buttons,
   });
 
   if (!result.ok) {
@@ -227,7 +251,8 @@ export async function sendWhatsApp(context: Context) {
       error: result.error,
       statusHttp: result.status,
       raw: result.raw,
-      variables: parameters,
+      variables: resolved.values,
+      variablesSnapshot: resolved.snapshot,
     }).catch(() => undefined);
     throw new AgendaAutomationError(
       result.error || "Falha ao enviar o template pelo WhatsApp.",
@@ -243,6 +268,9 @@ export async function sendWhatsApp(context: Context) {
         meta_response: result.raw,
         template_id: context.template.id,
         template_nome: context.template.nome,
+        template_categoria: category,
+        variaveis_enviadas: resolved.snapshot,
+        botoes_mapeados: buttons,
       },
       updated_at: new Date().toISOString(),
     })
@@ -257,7 +285,11 @@ export async function sendWhatsApp(context: Context) {
       messageId: result.messageId,
       contatoId: context.contact?.id || context.appointment.contato_id || null,
       conversaId: context.conversation?.id || null,
-      metadataJson: { agenda_automacao_execucao_id: context.job.id },
+      metadataJson: {
+        agenda_automacao_execucao_id: context.job.id,
+        template_categoria: category,
+        variaveis_enviadas: resolved.snapshot,
+      },
     });
   }
 
@@ -268,7 +300,7 @@ export async function sendWhatsApp(context: Context) {
     integracaoWhatsappId: context.integration.id,
     conversaId: context.conversation?.id || null,
     templateId: context.template.id,
-    templateCategoria: "utility",
+    templateCategoria: category,
     optOutHabilitado: context.template.opt_out_habilitado === true,
     mensagemExternaId: result.messageId,
     origem: "agenda_automacao",
@@ -276,19 +308,23 @@ export async function sendWhatsApp(context: Context) {
     console.warn("[AGENDA_AUTOMACOES] Falha ao registrar contexto de opt-out:", error)
   );
 
-  await recordOutboundMessage(context, result.messageId, result.raw);
+  await recordOutboundMessage(context, result.messageId, result.raw, resolved.snapshot);
   await logWhatsApp(context, {
     status: "processando",
     statusHttp: result.status,
     messageId: result.messageId,
     raw: result.raw,
-    variables: parameters,
+    variables: resolved.values,
+    variablesSnapshot: resolved.snapshot,
   });
 
   return {
     messageId: result.messageId,
     templateId: context.template.id,
     templateName: context.template.nome,
+    templateCategory: category,
+    variables: resolved.snapshot,
+    buttons,
     metaResponse: result.raw,
   };
 }

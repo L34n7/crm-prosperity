@@ -3,6 +3,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  ALLOWED_TEMPLATE_FORMATS,
+  ALLOWED_TEMPLATE_SOURCES,
+  asRecord,
+  extractTemplateQuickReplyButtons,
+  extractTemplateVariablePositions,
+  normalizeButtonMappings,
+  normalizeText,
+  normalizeVariableMappings,
+} from "@/lib/agendas/template-mapping";
 
 const TYPES = new Set([
   "confirmacao",
@@ -40,38 +50,6 @@ function uuidOrNull(value: unknown) {
     : null;
 }
 
-function normalize(value: unknown) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function templateButtons(payload: unknown) {
-  const components = Array.isArray((payload as any)?.components)
-    ? (payload as any).components
-    : [];
-  const component = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BUTTONS"
-  );
-  return Array.isArray(component?.buttons)
-    ? component.buttons
-        .filter(
-          (item: any) => String(item?.type || "").toUpperCase() === "QUICK_REPLY"
-        )
-        .map((item: any) => normalize(item?.text))
-        .filter(Boolean)
-    : [];
-}
-
-function confirmationTemplateCompatible(payload: unknown) {
-  const buttons = templateButtons(payload);
-  return ["confirm", "cancel", "reagend"].every((action) =>
-    buttons.some((button: string) => button.includes(action))
-  );
-}
-
 async function agendaContext(id: string) {
   const result = await getUsuarioContexto();
   if (!result.ok) return result;
@@ -100,6 +78,53 @@ async function agendaContext(id: string) {
     companyId: result.usuario.empresa_id,
     supabase,
   };
+}
+
+function validateVariableMapping(payload: unknown, configuration: Record<string, unknown>) {
+  const expected = extractTemplateVariablePositions(payload);
+  const mappings = normalizeVariableMappings(configuration.template_variaveis);
+  const received = mappings.map((item) => item.posicao).sort((a, b) => a - b);
+  if (expected.join(",") !== received.join(",")) {
+    return `Mapeie todas as variáveis do template: ${expected
+      .map((item) => `{{${item}}}`)
+      .join(", ") || "nenhuma"}.`;
+  }
+  for (const mapping of mappings) {
+    if (!ALLOWED_TEMPLATE_SOURCES.has(mapping.fonte as never)) {
+      return `A fonte de {{${mapping.posicao}}} é inválida.`;
+    }
+    if (!ALLOWED_TEMPLATE_FORMATS.has(mapping.formato as never)) {
+      return `O formato de {{${mapping.posicao}}} é inválido.`;
+    }
+    if (mapping.fonte === "texto_fixo" && !String(mapping.valor_fixo || "").trim()) {
+      return `Informe o texto fixo de {{${mapping.posicao}}}.`;
+    }
+  }
+  return "";
+}
+
+function validateButtonMapping(payload: unknown, configuration: Record<string, unknown>) {
+  const buttons = extractTemplateQuickReplyButtons(payload);
+  const mappings = normalizeButtonMappings(configuration.template_botoes);
+  const available = new Set(buttons.map((item) => item.indice));
+  for (const mapping of mappings) {
+    if (!available.has(mapping.indice)) {
+      return `O mapeamento do botão ${mapping.indice + 1} não corresponde ao template atual.`;
+    }
+  }
+  const actions = new Set(
+    mappings.filter((item) => item.acao !== "ignorar").map((item) => item.acao)
+  );
+  for (const action of ["confirmar", "cancelar", "reagendar"] as const) {
+    if (!actions.has(action)) {
+      return `Associe um botão do template à ação “${action}”.`;
+    }
+    const mapping = mappings.find((item) => item.acao === action);
+    if (!mapping?.fluxo_id) {
+      return `Selecione o fluxo que será iniciado ao ${action}.`;
+    }
+  }
+  return "";
 }
 
 export async function GET(
@@ -177,32 +202,24 @@ export async function PUT(
       if (!TYPES.has(type) || !CHANNELS.has(channel)) {
         throw new Error(`Regra ${index + 1} possui tipo ou canal inválido.`);
       }
-
-      const configuration =
-        item?.configuracao_json &&
-        typeof item.configuracao_json === "object" &&
-        !Array.isArray(item.configuracao_json)
-          ? item.configuracao_json
-          : {};
-
+      const configuration = asRecord(item?.configuracao_json);
       return {
         tipo: type,
         canal: channel,
         ativo: item?.ativo === true,
-        antecedencia_minutos: boundedInteger(
-          item?.antecedencia_minutos,
-          0,
-          525600
-        ),
-        momento_referencia:
-          type === "pos_atendimento" ? "apos_fim" : "antes_inicio",
+        antecedencia_minutos: boundedInteger(item?.antecedencia_minutos, 0, 525600),
+        momento_referencia: type === "pos_atendimento" ? "apos_fim" : "antes_inicio",
         ordem: boundedInteger(item?.ordem, 0, 50),
         integracao_whatsapp_id: uuidOrNull(item?.integracao_whatsapp_id),
         whatsapp_template_id: uuidOrNull(item?.whatsapp_template_id),
         fluxo_id: uuidOrNull(item?.fluxo_id),
         configuracao_json: {
           ...configuration,
-          etapa: 3,
+          template_variaveis: normalizeVariableMappings(configuration.template_variaveis),
+          template_botoes: normalizeButtonMappings(configuration.template_botoes).map(
+            (mapping) => ({ ...mapping, fluxo_id: uuidOrNull(mapping.fluxo_id) })
+          ),
+          etapa: 4,
           execucao_habilitada: true,
         },
       };
@@ -210,16 +227,14 @@ export async function PUT(
 
     for (const [index, rule] of rules.entries()) {
       if (!rule.ativo) continue;
-      if (rule.canal === "whatsapp") {
-        if (!rule.integracao_whatsapp_id || !rule.whatsapp_template_id) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: `Regra ${index + 1}: selecione a integração e o template Utility.`,
-            },
-            { status: 400 }
-          );
-        }
+      if (rule.canal === "whatsapp" && (!rule.integracao_whatsapp_id || !rule.whatsapp_template_id)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Regra ${index + 1}: selecione a integração e o template aprovado.`,
+          },
+          { status: 400 }
+        );
       }
       if (rule.canal === "fluxo" && !rule.fluxo_id) {
         return NextResponse.json(
@@ -233,34 +248,29 @@ export async function PUT(
     }
 
     const integrationIds = Array.from(
-      new Set(
-        rules
-          .map((item) => item.integracao_whatsapp_id)
-          .filter((item): item is string => Boolean(item))
-      )
+      new Set(rules.map((item) => item.integracao_whatsapp_id).filter(Boolean) as string[])
     );
     const templateIds = Array.from(
-      new Set(
-        rules
-          .map((item) => item.whatsapp_template_id)
-          .filter((item): item is string => Boolean(item))
-      )
+      new Set(rules.map((item) => item.whatsapp_template_id).filter(Boolean) as string[])
+    );
+    const mappedFlowIds = rules.flatMap((rule) =>
+      normalizeButtonMappings(asRecord(rule.configuracao_json).template_botoes)
+        .map((item) => uuidOrNull(item.fluxo_id))
+        .filter(Boolean) as string[]
     );
     const flowIds = Array.from(
-      new Set(
-        rules
-          .map((item) => item.fluxo_id)
-          .filter((item): item is string => Boolean(item))
-      )
+      new Set([
+        ...(rules.map((item) => item.fluxo_id).filter(Boolean) as string[]),
+        ...mappedFlowIds,
+      ])
     );
 
     const [integrations, templates, flows] = await Promise.all([
       integrationIds.length
         ? context.supabase
             .from("integracoes_whatsapp")
-            .select("id")
+            .select("id, status, coex_status")
             .eq("empresa_id", context.companyId)
-            .eq("status", "ativa")
             .in("id", integrationIds)
         : Promise.resolve({ data: [], error: null }),
       templateIds.length
@@ -268,16 +278,14 @@ export async function PUT(
             .from("whatsapp_templates")
             .select("id, integracao_whatsapp_id, categoria, status, payload")
             .eq("empresa_id", context.companyId)
-            .ilike("categoria", "utility")
-            .ilike("status", "approved")
+            .in("status", ["approved", "APPROVED", "aprovado"])
             .in("id", templateIds)
         : Promise.resolve({ data: [], error: null }),
       flowIds.length
         ? context.supabase
             .from("automacao_fluxos")
-            .select("id")
+            .select("id, status")
             .eq("empresa_id", context.companyId)
-            .eq("status", "ativo")
             .in("id", flowIds)
         : Promise.resolve({ data: [], error: null }),
     ]);
@@ -285,7 +293,12 @@ export async function PUT(
     if (integrations.error || templates.error || flows.error) {
       throw new Error("Não foi possível validar as opções selecionadas.");
     }
-    if ((integrations.data || []).length !== integrationIds.length) {
+    const activeIntegrationIds = new Set(
+      (integrations.data || [])
+        .filter((item: any) => item.status === "ativa" || item.coex_status === "ativo")
+        .map((item: any) => String(item.id))
+    );
+    if (integrationIds.some((item) => !activeIntegrationIds.has(item))) {
       return NextResponse.json(
         { ok: false, error: "Uma integração selecionada não está ativa." },
         { status: 400 }
@@ -293,16 +306,18 @@ export async function PUT(
     }
     if ((templates.data || []).length !== templateIds.length) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Um template selecionado não é Utility aprovado ou não pertence à empresa.",
-        },
+        { ok: false, error: "Um template selecionado não está aprovado ou não pertence à empresa." },
         { status: 400 }
       );
     }
-    if ((flows.data || []).length !== flowIds.length) {
+    const activeFlowIds = new Set(
+      (flows.data || [])
+        .filter((item: any) => item.status === "ativo")
+        .map((item: any) => String(item.id))
+    );
+    if (flowIds.some((item) => !activeFlowIds.has(item))) {
       return NextResponse.json(
-        { ok: false, error: "Um fluxo selecionado não está ativo." },
+        { ok: false, error: "Todos os fluxos selecionados precisam estar ativos." },
         { status: 400 }
       );
     }
@@ -311,35 +326,44 @@ export async function PUT(
       (templates.data || []).map((item: any) => [String(item.id), item])
     );
     for (const rule of rules) {
-      if (!rule.whatsapp_template_id) continue;
+      if (!rule.whatsapp_template_id || rule.canal !== "whatsapp") continue;
       const template = templatesById.get(rule.whatsapp_template_id);
       if (
         rule.integracao_whatsapp_id &&
-        String(template?.integracao_whatsapp_id || "") !==
-          rule.integracao_whatsapp_id
+        String(template?.integracao_whatsapp_id || "") !== rule.integracao_whatsapp_id
       ) {
         return NextResponse.json(
-          {
-            ok: false,
-            error: "O template selecionado não pertence à integração escolhida.",
-          },
+          { ok: false, error: "O template selecionado não pertence à integração escolhida." },
           { status: 400 }
         );
       }
-      if (
-        rule.ativo &&
-        rule.tipo === "confirmacao" &&
-        rule.canal === "whatsapp" &&
-        !confirmationTemplateCompatible(template?.payload)
-      ) {
+      const category = normalizeText(template?.categoria);
+      if (!["utility", "marketing"].includes(category)) {
+        return NextResponse.json(
+          { ok: false, error: "O template precisa estar aprovado como Utility ou Marketing." },
+          { status: 400 }
+        );
+      }
+      if (!rule.ativo) continue;
+      if (category === "marketing" && rule.configuracao_json.marketing_aceito !== true) {
         return NextResponse.json(
           {
             ok: false,
             error:
-              "O template de confirmação precisa ter botões rápidos para Confirmar, Cancelar e Reagendar.",
+              "Confirme que o template foi classificado pela Meta como Marketing e seguirá as regras e cobranças dessa categoria.",
           },
           { status: 400 }
         );
+      }
+      const variableError = validateVariableMapping(template?.payload, rule.configuracao_json);
+      if (variableError) {
+        return NextResponse.json({ ok: false, error: variableError }, { status: 400 });
+      }
+      if (rule.tipo === "confirmacao") {
+        const buttonError = validateButtonMapping(template?.payload, rule.configuracao_json);
+        if (buttonError) {
+          return NextResponse.json({ ok: false, error: buttonError }, { status: 400 });
+        }
       }
     }
 
@@ -360,7 +384,7 @@ export async function PUT(
       regras: data || [],
       execucao_automatica_ativa: true,
       mensagem:
-        "Configurações salvas e automações replanejadas. As regras ativas serão executadas automaticamente.",
+        "Configurações salvas, mapeamentos validados e automações replanejadas.",
     });
   } catch (error) {
     return NextResponse.json(

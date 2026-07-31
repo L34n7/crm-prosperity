@@ -3,24 +3,12 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-
-function templateButtons(payload: unknown) {
-  const components = Array.isArray((payload as any)?.components)
-    ? (payload as any).components
-    : [];
-  const component = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BUTTONS"
-  );
-
-  return Array.isArray(component?.buttons)
-    ? component.buttons
-        .filter(
-          (item: any) => String(item?.type || "").toUpperCase() === "QUICK_REPLY"
-        )
-        .map((item: any) => String(item?.text || "").trim())
-        .filter(Boolean)
-    : [];
-}
+import {
+  extractTemplateBody,
+  extractTemplateQuickReplyButtons,
+  extractTemplateVariablePositions,
+  normalizeText,
+} from "@/lib/agendas/template-mapping";
 
 function integrationLabel(integration: any) {
   const name = String(integration?.nome_conexao || "WhatsApp").trim();
@@ -66,14 +54,13 @@ export async function GET() {
           "id, nome, idioma, categoria, status, integracao_whatsapp_id, payload"
         )
         .eq("empresa_id", companyId)
-        .ilike("status", "approved")
-        .ilike("categoria", "utility")
+        .in("status", ["approved", "APPROVED", "aprovado"])
         .order("nome", { ascending: true }),
       supabase
         .from("automacao_fluxos")
         .select("id, nome, status")
         .eq("empresa_id", companyId)
-        .eq("status", "ativo")
+        .neq("status", "arquivado")
         .order("nome", { ascending: true }),
     ]);
 
@@ -99,18 +86,30 @@ export async function GET() {
         modo_integracao: integration.modo_integracao,
       }));
 
+    const templates = (templatesResult.data || [])
+      .filter((template: any) =>
+        ["utility", "marketing"].includes(normalizeText(template.categoria))
+      )
+      .map((template: any) => {
+        const quickReplies = extractTemplateQuickReplyButtons(template.payload);
+        return {
+          id: template.id,
+          nome: template.nome,
+          idioma: template.idioma,
+          categoria: String(template.categoria || "").toUpperCase(),
+          status: template.status,
+          integracao_whatsapp_id: template.integracao_whatsapp_id,
+          corpo: extractTemplateBody(template.payload),
+          variaveis: extractTemplateVariablePositions(template.payload),
+          botoes: quickReplies.map((item) => item.texto),
+          botoes_detalhados: quickReplies,
+        };
+      });
+
     return NextResponse.json({
       ok: true,
       integracoes: integrations,
-      templates: (templatesResult.data || []).map((template: any) => ({
-        id: template.id,
-        nome: template.nome,
-        idioma: template.idioma,
-        categoria: template.categoria,
-        status: template.status,
-        integracao_whatsapp_id: template.integracao_whatsapp_id,
-        botoes: templateButtons(template.payload),
-      })),
+      templates,
       fluxos: flowsResult.data || [],
       execucao_automatica_ativa: true,
       total_integracoes: integrations.length,

@@ -1,5 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import {
+  asRecord,
+  mappedQuickReplyButtons,
+  resolveTemplateParameters,
+} from "./template-mapping";
+
 export type Job = {
   id: string;
   empresa_id: string;
@@ -43,9 +49,7 @@ export class AgendaAutomationError extends Error {
 }
 
 export function asObject(value: unknown): Record<string, any> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, any>)
-    : {};
+  return asRecord(value);
 }
 
 export function digits(value: unknown) {
@@ -127,56 +131,25 @@ export function humanText(context: Context) {
   return `Fluxo de pós-atendimento de “${appointmentTitle(context)}” para ${contactName(context)}.`;
 }
 
-export function templateVariableCount(payload: unknown) {
-  const components = Array.isArray(asObject(payload).components)
-    ? (asObject(payload).components as Array<Record<string, any>>)
-    : [];
-  const body = components.find(
-    (component) => String(component.type || "").toUpperCase() === "BODY"
-  );
-  const matches = String(body?.text || "").match(/\{\{\s*\d+\s*\}\}/g) || [];
-  return new Set(matches.map((value) => value.replace(/\D/g, ""))).size;
-}
-
 export function templateParameters(context: Context) {
-  const count = templateVariableCount(context.template?.payload);
-  const values = [
-    contactName(context),
-    appointmentTitle(context),
-    dateLabel(context.appointment.inicio_at, context.agenda.timezone),
-    timeLabel(context.appointment.inicio_at, context.agenda.timezone),
-    String(context.appointment.local || "Não informado"),
-    String(context.responsible?.nome || "Equipe de atendimento"),
-  ];
-  return Array.from({ length: count }, (_, index) => values[index] || "-");
+  return resolveTemplateParameters({
+    payload: context.template?.payload,
+    configuracao: context.rule?.configuracao_json,
+    context: {
+      appointment: context.appointment,
+      agenda: context.agenda,
+      contact: context.contact,
+      responsible: context.responsible,
+    },
+  });
 }
 
 export function quickReplyButtons(context: Context) {
   if (context.job.tipo !== "confirmacao") return [];
-  const components = Array.isArray(asObject(context.template?.payload).components)
-    ? (asObject(context.template?.payload).components as Array<Record<string, any>>)
-    : [];
-  const buttonsComponent = components.find(
-    (component) => String(component.type || "").toUpperCase() === "BUTTONS"
-  );
-  const buttons = Array.isArray(buttonsComponent?.buttons)
-    ? (buttonsComponent?.buttons as Array<Record<string, any>>)
-    : [];
-
-  return buttons.flatMap((button, index) => {
-    if (String(button?.type || "").toUpperCase() !== "QUICK_REPLY") return [];
-    const label = normalize(button?.text);
-    const appointmentId = context.appointment.id;
-    if (label.includes("confirm")) {
-      return [{ index, payload: `agenda_confirmar:${appointmentId}` }];
-    }
-    if (label.includes("cancel")) {
-      return [{ index, payload: `agenda_cancelar:${appointmentId}` }];
-    }
-    if (label.includes("reagend") || label.includes("remarc")) {
-      return [{ index, payload: `agenda_reagendar:${appointmentId}` }];
-    }
-    return [];
+  return mappedQuickReplyButtons({
+    payload: context.template?.payload,
+    configuracao: context.rule?.configuracao_json,
+    appointmentId: context.appointment.id,
   });
 }
 
@@ -206,7 +179,7 @@ export function isApplicable(context: Context) {
   if (["lembrete", "aviso_responsavel"].includes(context.job.tipo)) {
     return (
       ["agendado", "confirmado"].includes(status) &&
-      confirmation !== "reagendamento_solicitado" &&
+      !["reagendamento_solicitado", "cancelamento_solicitado"].includes(confirmation) &&
       start > now
     );
   }

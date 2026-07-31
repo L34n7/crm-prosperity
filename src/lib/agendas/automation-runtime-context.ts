@@ -93,11 +93,11 @@ export async function loadContext(job: Job): Promise<Context | null> {
       ? supabase
           .from("integracoes_whatsapp")
           .select(
-            "id, empresa_id, nome_conexao, phone_number_id, status, provider, config_json, token_ref, meta_messaging_limit, meta_messaging_limit_tier, meta_account_mode, quality_rating"
+            "id, empresa_id, nome_conexao, phone_number_id, status, coex_status, provider, config_json, token_ref, meta_messaging_limit, meta_messaging_limit_tier, meta_account_mode, quality_rating"
           )
           .eq("empresa_id", job.empresa_id)
           .eq("id", rule.integracao_whatsapp_id)
-          .eq("status", "ativa")
+          .or("status.eq.ativa,coex_status.eq.ativo")
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     rule.whatsapp_template_id
