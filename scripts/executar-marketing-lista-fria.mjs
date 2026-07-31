@@ -120,19 +120,19 @@ if (
                         ? "Disparo de marketing bloqueado"
                         : listaFriaSemOptOut
                         ? "Template sem opt-out"
-                        : \`${totalContatosListaFria} contato(s) de lista fria selecionado(s)\`}
+                        : \`\${totalContatosListaFria} contato(s) de lista fria selecionado(s)\`}
                     </strong>`,
     `                    <strong>
                       {listaFriaSemOptOut
                         ? "Template sem opt-out"
-                        : \`${totalContatosListaFria} contato(s) de lista fria selecionado(s)\`}
+                        : \`\${totalContatosListaFria} contato(s) de lista fria selecionado(s)\`}
                     </strong>`,
     "título do aviso de lista fria"
   );
 
   replacePageOnce(
     `                      {marketingComListaFria
-                        ? \`A Meta exige opt-in para mensagens de marketing. Remova os ${totalContatosListaFria} contato(s) de lista fria ou selecione somente contatos com opt-in para liberar o envio.\`
+                        ? \`A Meta exige opt-in para mensagens de marketing. Remova os \${totalContatosListaFria} contato(s) de lista fria ou selecione somente contatos com opt-in para liberar o envio.\`
                         : listaFriaSemOptOut
                         ? "Recrie este template utility com o rodapé obrigatório para responder SAIR antes de utilizá-lo com lista fria."
                         : "Templates utility podem ser enviados, mas exigirão uma confirmação de responsabilidade depois da confirmação dos valores."}`,
