@@ -25,7 +25,7 @@ const CSS = `
 .agendaAutomationSection.isRuntimeActive .agendaAutomationField>span{font-size:12.5px!important;line-height:1.45!important}
 .agendaAutomationSection.isRuntimeActive .agendaAutomationField input,.agendaAutomationSection.isRuntimeActive .agendaAutomationField select{height:44px!important;font-size:14px!important;padding:0 13px!important}
 .agendaAutomationSection.isRuntimeActive .agendaAutomationCheck{font-size:13px!important;gap:8px!important}
-.agendaAutomationSection.isRuntimeActive .agendaAutomationChannels{margin-bottom:13px!important;row-gap:10px!important}
+.agendaAutomationSection.isRuntimeActive .agendaAutomationChannels{margin-top:11px!important;margin-bottom:13px!important;row-gap:10px!important}
 .agendaAutomationSection.isRuntimeActive .agendaAutomationWhatsApp{margin-top:4px!important;row-gap:11px!important}
 .agendaAutomationSection.isRuntimeActive .agendaAutomationCompatibility{font-size:13.5px!important;line-height:1.65!important;min-height:28px!important;margin-top:4px!important}
 .agendaAutomationSection.isRuntimeActive .agendaAutomationError{font-size:13.5px!important;line-height:1.6!important}
@@ -38,6 +38,12 @@ const CSS = `
 .agendaTemplateVariableRow,.agendaTemplateButtonRow{gap:10px!important}
 .agendaTemplateToken{height:43px!important;font-size:12.5px!important}
 .agendaTemplateMappingPanel label{gap:6px!important}.agendaTemplateMappingPanel label>span,.agendaTemplateButtonRow>div>span{font-size:12px!important;line-height:1.4!important;margin-bottom:6px!important}
+.agendaTemplateCrmSourceField>span{font-size:14px!important;line-height:1.45!important;font-weight:900!important;color:var(--crm-text-strong)!important}
+.agendaTemplateCrmSourceField select[data-map="source"]{height:50px!important;font-size:14.5px!important;font-weight:750!important}
+.agendaTemplateCrmSourceField [role="combobox"],.agendaTemplateCrmSourceField button[aria-haspopup="listbox"]{width:100%!important;min-height:56px!important;height:auto!important;padding:8px 12px!important;text-align:left!important}
+.agendaTemplateCrmSourceField [role="combobox"] strong,.agendaTemplateCrmSourceField [role="combobox"] b,.agendaTemplateCrmSourceField button[aria-haspopup="listbox"] strong,.agendaTemplateCrmSourceField button[aria-haspopup="listbox"] b{font-size:14.5px!important;line-height:1.35!important;font-weight:850!important}
+.agendaTemplateCrmSourceField [role="combobox"] small,.agendaTemplateCrmSourceField [role="combobox"] p,.agendaTemplateCrmSourceField button[aria-haspopup="listbox"] small,.agendaTemplateCrmSourceField button[aria-haspopup="listbox"] p{font-size:12.5px!important;line-height:1.45!important;margin-top:3px!important}
+.agendaTemplateCrmSourceField [role="combobox"] span,.agendaTemplateCrmSourceField button[aria-haspopup="listbox"] span{line-height:1.4!important}
 .agendaTemplateMappingPanel select,.agendaTemplateMappingPanel input[type="text"]{height:43px!important;padding:0 11px!important;font-size:13.5px!important}
 .agendaTemplateButtonText{height:43px!important;padding:0 11px!important;font-size:13px!important}
 .agendaTemplateMarketingAck{padding:12px 13px!important;gap:11px!important;font-size:12.5px!important;line-height:1.65!important}
@@ -50,7 +56,7 @@ const CSS = `
 .agendaTemplateHelpButton{width:19px;height:19px;padding:0;border:1px solid var(--crm-primary-border);border-radius:999px;background:var(--crm-primary-soft);color:var(--crm-primary-text);font-family:inherit;font-size:11.5px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help}
 .agendaTemplateHelpBubble{position:absolute;z-index:40;top:calc(100% + 8px);right:-8px;width:320px;max-width:min(320px,78vw);padding:12px 13px;border:1px solid var(--crm-border-strong);border-radius:11px;background:var(--crm-text-strong);color:var(--crm-text-inverse);box-shadow:0 14px 34px color-mix(in srgb,var(--crm-text-strong) 26%,transparent);font-size:12.5px!important;font-weight:650!important;line-height:1.6!important;text-align:left;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-4px);transition:.16s ease}
 .agendaTemplateHelp:hover .agendaTemplateHelpBubble,.agendaTemplateHelp:focus-within .agendaTemplateHelpBubble{opacity:1;visibility:visible;transform:translateY(0)}
-@media(max-width:760px){.agendaAutomationSection.isRuntimeActive{padding:15px}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle h3{font-size:18px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle p{font-size:13.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCard{padding:15px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCardHead strong{font-size:15.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationField input,.agendaAutomationSection.isRuntimeActive .agendaAutomationField select{font-size:13.5px!important}.agendaTemplateMappingPanel{padding:14px!important}.agendaTemplatePreviewArea{padding:14px!important}.agendaTemplatePreviewBubble pre{font-size:13px!important}}
+@media(max-width:760px){.agendaAutomationSection.isRuntimeActive{padding:15px}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle h3{font-size:18px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle p{font-size:13.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCard{padding:15px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCardHead strong{font-size:15.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationField input,.agendaAutomationSection.isRuntimeActive .agendaAutomationField select{font-size:13.5px!important}.agendaTemplateMappingPanel{padding:14px!important}.agendaTemplatePreviewArea{padding:14px!important}.agendaTemplatePreviewBubble pre{font-size:13px!important}.agendaTemplateCrmSourceField>span{font-size:13.5px!important}.agendaTemplateCrmSourceField [role="combobox"],.agendaTemplateCrmSourceField button[aria-haspopup="listbox"]{min-height:54px!important}}
 `;
 
 function applyTemplateHelp(section: HTMLElement) {
@@ -80,9 +86,21 @@ function applyTemplateHelp(section: HTMLElement) {
     });
 }
 
+function applyCrmSourceTypography(section: HTMLElement) {
+  section
+    .querySelectorAll<HTMLElement>(".agendaTemplateVariableRow label")
+    .forEach((label) => {
+      const title = label.querySelector<HTMLElement>(":scope > span");
+      if (title?.textContent?.trim() === "Informação do CRM") {
+        label.classList.add("agendaTemplateCrmSourceField");
+      }
+    });
+}
+
 function applyRuntimeStatus(section: HTMLElement) {
   section.classList.add("isRuntimeActive");
   applyTemplateHelp(section);
+  applyCrmSourceTypography(section);
   const badge = section.querySelector<HTMLElement>(".agendaAutomationStage");
   if (badge && badge.textContent !== "Automação ativa") badge.textContent = "Automação ativa";
   const notice = section.querySelector<HTMLElement>(".agendaAutomationNotice");
@@ -102,6 +120,8 @@ function applyRuntimeStatus(section: HTMLElement) {
 
 function applyFromAddedNode(node: Node) {
   if (!(node instanceof HTMLElement)) return;
+  const ownerSection = node.closest<HTMLElement>(".agendaAutomationSection");
+  if (ownerSection) applyRuntimeStatus(ownerSection);
   if (node.matches(".agendaAutomationSection")) applyRuntimeStatus(node);
   node.querySelectorAll<HTMLElement>(".agendaAutomationSection").forEach(applyRuntimeStatus);
 }
