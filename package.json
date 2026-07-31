@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/aplicar-campos-captura-conversas.mjs && node scripts/aplicar-exclusao-campos-captura-conversas.mjs && node scripts/aplicar-importacao-sem-cabecalho.mjs && node scripts/aplicar-modal-cancelamento-agendamento.mjs && node scripts/executar-marketing-lista-fria.mjs",
+    "predev": "node scripts/aplicar-campos-captura-conversas.mjs && node scripts/aplicar-exclusao-campos-captura-conversas.mjs && node scripts/aplicar-importacao-sem-cabecalho.mjs && node scripts/aplicar-modal-cancelamento-agendamento.mjs && node scripts/executar-marketing-lista-fria.mjs && node scripts/aplicar-variaveis-agenda.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/aplicar-campos-captura-conversas.mjs && node scripts/aplicar-exclusao-campos-captura-conversas.mjs && node scripts/aplicar-importacao-sem-cabecalho.mjs && node scripts/aplicar-modal-cancelamento-agendamento.mjs && node scripts/executar-marketing-lista-fria.mjs",
+    "prebuild": "node scripts/aplicar-campos-captura-conversas.mjs && node scripts/aplicar-exclusao-campos-captura-conversas.mjs && node scripts/aplicar-importacao-sem-cabecalho.mjs && node scripts/aplicar-modal-cancelamento-agendamento.mjs && node scripts/executar-marketing-lista-fria.mjs && node scripts/aplicar-variaveis-agenda.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
