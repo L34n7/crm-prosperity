@@ -5,6 +5,16 @@ export default function TermosDeServico() {
 
       <p><strong>Ultima atualizacao:</strong> 31/07/2026</p>
 
+      <h2>Identificacao do fornecedor</h2>
+      <p>
+        O CRM Prosperity e a marca comercial utilizada pela plataforma operada por
+        <strong> 66.440.969 LEANDRO ISIDORIO NUNES</strong>, empresario individual
+        enquadrado como Microempreendedor Individual (MEI), inscrito no CNPJ sob o
+        nº <strong>66.440.969/0001-91</strong>, com endereco comercial na Avenida
+        Pedro Diniz, nº 617 C, Loja C, Bairro Amazonas, Betim/MG, CEP 32685-018,
+        doravante denominado <strong>CRM Prosperity</strong>.
+      </p>
+
       <p>
         Estes Termos de Uso e Contrato de Licenca SaaS regulam o acesso e o uso
         do CRM Prosperity. Ao criar uma conta, contratar um plano, aceitar uma
@@ -452,24 +462,25 @@ export default function TermosDeServico() {
 
       <h2>36. Legislacao e foro</h2>
       <p>
-        Estes Termos sao regidos pela legislacao brasileira. Fica eleito o foro do
-        domicilio do CRM Prosperity, salvo competencia obrigatoria diversa,
-        inclusive direitos de consumidores quando aplicaveis.
+        Estes Termos sao regidos pela legislacao brasileira. Fica eleito o foro da
+        Comarca de Betim, Estado de Minas Gerais, salvo competencia obrigatoria
+        diversa, inclusive o foro do domicilio do consumidor quando aplicavel.
       </p>
 
       <h2>37. Disposicoes gerais</h2>
       <p>
         A nulidade de uma clausula nao prejudicara as demais. A tolerancia nao
         constitui renuncia. O Cliente nao podera ceder a contratacao sem anuencia,
-        enquanto o CRM Prosperity podera realizar reorganizacoes societarias,
-        cessao empresarial ou substituicao operacional, preservados os direitos do
-        Cliente.
+        enquanto o CRM Prosperity podera realizar reorganizacoes empresariais,
+        transformacao, sucessao, cessao ou substituicao operacional, preservados
+        os direitos do Cliente.
       </p>
 
       <h2>38. Contato</h2>
       <p>
-        Duvidas contratuais, de suporte ou privacidade podem ser encaminhadas aos
-        canais oficiais disponibilizados na Plataforma e no site do CRM Prosperity.
+        Duvidas contratuais, de suporte ou privacidade podem ser encaminhadas para
+        <strong> crmprosperity@gmail.com</strong> ou pelos canais oficiais
+        disponibilizados na Plataforma e no site do CRM Prosperity.
       </p>
 
       <p>
