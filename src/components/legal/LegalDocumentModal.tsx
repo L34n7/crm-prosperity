@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import styles from "./LegalDocumentModal.module.css";
 
-export type DocumentoLegalId = "termos" | "privacidade";
+export type DocumentoLegalId = "termos" | "privacidade" | "exclusao";
 
 type LegalDocumentModalProps = {
   documento: DocumentoLegalId | null;
@@ -26,6 +26,12 @@ const DOCUMENTOS: Record<
     titulo: "Política de Privacidade",
     href: "/politica-de-privacidade",
     descricao: "Como o CRM Prosperity trata dados pessoais e protege a privacidade.",
+  },
+  exclusao: {
+    titulo: "Exclusão de Dados",
+    href: "/exclusao-de-dados",
+    descricao:
+      "Canal e procedimentos para solicitações de acesso, correção ou exclusão de dados pessoais.",
   },
 };
 
