@@ -100,17 +100,16 @@ export default function FooterSocialLinks() {
         rel="noopener noreferrer"
         className={styles.socialLink}
         aria-label="Acessar o Instagram do CRM Prosperity"
+        title="Instagram do CRM Prosperity"
       >
-        <span className={styles.iconWrap} aria-hidden="true">
-          <Image
-            src="/icons/insta.png"
-            alt=""
-            width={24}
-            height={24}
-            className={styles.icon}
-          />
-        </span>
-        <span>@crmprosperity</span>
+        <Image
+          src="/icons/insta.png"
+          alt=""
+          width={36}
+          height={36}
+          className={styles.icon}
+          aria-hidden="true"
+        />
       </a>
 
       <a
@@ -119,17 +118,16 @@ export default function FooterSocialLinks() {
         rel="noopener noreferrer"
         className={styles.socialLink}
         aria-label="Acessar o canal do CRM Prosperity no YouTube"
+        title="YouTube do CRM Prosperity"
       >
-        <span className={styles.iconWrap} aria-hidden="true">
-          <Image
-            src="/icons/youtube.png"
-            alt=""
-            width={24}
-            height={24}
-            className={styles.icon}
-          />
-        </span>
-        <span>CRM Prosperity</span>
+        <Image
+          src="/icons/youtube.png"
+          alt=""
+          width={36}
+          height={36}
+          className={styles.icon}
+          aria-hidden="true"
+        />
       </a>
     </nav>,
     mountNode
