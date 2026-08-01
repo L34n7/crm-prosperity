@@ -91,10 +91,97 @@ if (!content.includes(markerTransferenciaFilaGeral)) {
   alterado = true;
 }
 
+const markerFiltroFluxosSistema = "CRM_SYSTEM_FLOW_FILTER_ORDER_V1";
+
+if (!content.includes(markerFiltroFluxosSistema)) {
+  const filtroTipoAtual = `  const [filtroStatusFluxo, setFiltroStatusFluxo] = useState<
+    "todos" | "rascunho" | "ativo" | "pausado" | "arquivado"
+  >("todos");`;
+  const filtroTipoNovo = `  const [filtroStatusFluxo, setFiltroStatusFluxo] = useState<
+    | "todos"
+    | "sistema"
+    | "rascunho"
+    | "ativo"
+    | "pausado"
+    | "arquivado"
+  >("todos");`;
+
+  if (!content.includes(filtroTipoAtual)) {
+    throw new Error("Não foi possível localizar o tipo do filtro de fluxos.");
+  }
+  content = content.replace(filtroTipoAtual, filtroTipoNovo);
+
+  const filtroEventoAtual = `                    | "todos"
+                    | "rascunho"
+                    | "ativo"
+                    | "pausado"
+                    | "arquivado"`;
+  const filtroEventoNovo = `                    | "todos"
+                    | "sistema"
+                    | "rascunho"
+                    | "ativo"
+                    | "pausado"
+                    | "arquivado"`;
+
+  if (!content.includes(filtroEventoAtual)) {
+    throw new Error("Não foi possível localizar o evento do filtro de fluxos.");
+  }
+  content = content.replace(filtroEventoAtual, filtroEventoNovo);
+
+  const filtroOpcaoAtual = `              <option value="todos">Todos</option>
+              <option value="ativo">Ativos</option>`;
+  const filtroOpcaoNovo = `              <option value="todos">Todos</option>
+              <option value="sistema">Fluxos do sistema</option>
+              <option value="ativo">Ativos</option>`;
+
+  if (!content.includes(filtroOpcaoAtual)) {
+    throw new Error("Não foi possível localizar as opções do filtro de fluxos.");
+  }
+  content = content.replace(filtroOpcaoAtual, filtroOpcaoNovo);
+
+  const filtroListaAtual = `              .filter((f) =>
+                filtroStatusFluxo === "todos" ? true : f.status === filtroStatusFluxo
+              )`;
+  const filtroListaNovo = `              .filter((f) => {
+                // CRM_SYSTEM_FLOW_FILTER_ORDER_V1
+                if (filtroStatusFluxo === "todos") return true;
+                if (filtroStatusFluxo === "sistema") {
+                  return fluxoEhSistemaCalendario(f);
+                }
+                return f.status === filtroStatusFluxo;
+              })`;
+
+  if (!content.includes(filtroListaAtual)) {
+    throw new Error("Não foi possível localizar a filtragem da lista de fluxos.");
+  }
+  content = content.replace(filtroListaAtual, filtroListaNovo);
+
+  const ordenacaoAtual = `                if (statusDiff !== 0) return statusDiff;
+
+                // 🔥 Ordenação por data (mais recente primeiro)`;
+  const ordenacaoNova = `                if (statusDiff !== 0) return statusDiff;
+
+                if (a.status === "ativo" && b.status === "ativo") {
+                  const sistemaDiff =
+                    Number(fluxoEhSistemaCalendario(a)) -
+                    Number(fluxoEhSistemaCalendario(b));
+
+                  if (sistemaDiff !== 0) return sistemaDiff;
+                }
+
+                // 🔥 Ordenação por data (mais recente primeiro)`;
+
+  if (!content.includes(ordenacaoAtual)) {
+    throw new Error("Não foi possível localizar a ordenação da lista de fluxos.");
+  }
+  content = content.replace(ordenacaoAtual, ordenacaoNova);
+  alterado = true;
+}
+
 if (alterado) {
   fs.writeFileSync(absolutePath, content, "utf8");
 }
 
 console.log(
-  "Validações de ativação ajustadas para calendário automático e filas gerais."
+  "Validações, filtro e ordenação dos fluxos do sistema ajustados."
 );
