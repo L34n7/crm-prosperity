@@ -182,6 +182,61 @@ if (alterado) {
   fs.writeFileSync(absolutePath, content, "utf8");
 }
 
+const gatilhosRelativePath =
+  "src/app/api/automacoes/[id]/gatilhos/route.ts";
+const gatilhosAbsolutePath = path.join(root, gatilhosRelativePath);
+let gatilhosContent = fs.readFileSync(gatilhosAbsolutePath, "utf8");
+let gatilhosAlterado = false;
+const markerGatilhoOpcionalSistema = "CRM_SYSTEM_FLOW_OPTIONAL_TRIGGER_V1";
+
+if (!gatilhosContent.includes(markerGatilhoOpcionalSistema)) {
+  const selectAtual = `.select("id, status, fluxo_padrao")`;
+  const selectNovo = `.select("id, status, fluxo_padrao, configuracao_json")`;
+
+  if (!gatilhosContent.includes(selectAtual)) {
+    throw new Error(
+      "Não foi possível localizar a consulta de validação dos gatilhos."
+    );
+  }
+
+  gatilhosContent = gatilhosContent.replace(selectAtual, selectNovo);
+
+  const validacaoAtual = `  if (
+    !fluxo ||
+    String(fluxo.status || "") !== "ativo" ||
+    fluxo.fluxo_padrao === true
+  ) {
+    return false;
+  }`;
+
+  const validacaoNova = `  const fluxoSistemaCalendario =
+    fluxo?.configuracao_json?.fluxo_sistema_calendario === true &&
+    fluxo?.configuracao_json?.protegido_sistema === true;
+
+  // CRM_SYSTEM_FLOW_OPTIONAL_TRIGGER_V1
+  if (
+    !fluxo ||
+    String(fluxo.status || "") !== "ativo" ||
+    fluxo.fluxo_padrao === true ||
+    fluxoSistemaCalendario
+  ) {
+    return false;
+  }`;
+
+  if (!gatilhosContent.includes(validacaoAtual)) {
+    throw new Error(
+      "Não foi possível localizar a validação do último gatilho ativo."
+    );
+  }
+
+  gatilhosContent = gatilhosContent.replace(validacaoAtual, validacaoNova);
+  gatilhosAlterado = true;
+}
+
+if (gatilhosAlterado) {
+  fs.writeFileSync(gatilhosAbsolutePath, gatilhosContent, "utf8");
+}
+
 console.log(
-  "Validações, filtro e ordenação dos fluxos do sistema ajustados."
+  "Validações, filtro, ordenação e gatilhos opcionais dos fluxos do sistema ajustados."
 );
