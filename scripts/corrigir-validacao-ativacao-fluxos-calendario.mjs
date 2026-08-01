@@ -61,10 +61,40 @@ if (!content.includes(markerFilaGeral)) {
   alterado = true;
 }
 
+const markerTransferenciaFilaGeral =
+  "CRM_GENERAL_QUEUE_TRANSFER_NODE_ACTIVATION_VALIDATION_V1";
+
+if (!content.includes(markerTransferenciaFilaGeral)) {
+  const current = `    if (
+        tipoNo === "transferir_setor" &&
+        !String(config.setor_id || "").trim()
+      ) {
+        return \`O bloco "\${node.data?.titulo}" precisa ter um setor destino.\`;
+      }`;
+
+  const replacement = `    if (
+        tipoNo === "transferir_setor" &&
+        // CRM_GENERAL_QUEUE_TRANSFER_NODE_ACTIVATION_VALIDATION_V1
+        String(config.escopo_fila || "setor").trim() !== "geral" &&
+        !String(config.setor_id || "").trim()
+      ) {
+        return \`O bloco "\${node.data?.titulo}" precisa ter um setor destino.\`;
+      }`;
+
+  if (!content.includes(current)) {
+    throw new Error(
+      "Não foi possível localizar a validação do bloco Transferir setor."
+    );
+  }
+
+  content = content.replace(current, replacement);
+  alterado = true;
+}
+
 if (alterado) {
   fs.writeFileSync(absolutePath, content, "utf8");
 }
 
 console.log(
-  "Validações de ativação ajustadas para calendário automático e fila geral."
+  "Validações de ativação ajustadas para calendário automático e filas gerais."
 );
