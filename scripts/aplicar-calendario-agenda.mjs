@@ -245,7 +245,432 @@ function replaceDatabaseTableReferences(directory) {
   console.log(`Referências da tabela atualizadas em ${changedFiles} arquivo(s).`);
 }
 
+function patchSystemCalendarFlows() {
+  const enginePath = "src/lib/automacoes/process-automation-engine.ts";
+  let engine = read(enginePath);
+
+  if (!engine.includes("CRM_SYSTEM_CALENDAR_FLOW_CONTEXT_V1")) {
+    engine = replaceRequired(
+      engine,
+      `function valoresAgendamentoAgenda(agendamento: any, agenda: any | null) {
+  const labels = formatarSlotAgenda(`,
+      `function valoresAgendamentoAgenda(agendamento: any, agenda: any | null) {
+  // CRM_SYSTEM_CALENDAR_FLOW_CONTEXT_V1
+  const labels = formatarSlotAgenda(`,
+      "marcador do contexto automático dos fluxos de calendário"
+    );
+
+    engine = replaceRequired(
+      engine,
+      `  return {
+    agenda_agendamento_id: String(agendamento.id || ""),
+    agenda_nome: String(agenda?.nome || agendamento.titulo || ""),`,
+      `  return {
+    agenda_agendamento_id: String(agendamento.id || ""),
+    agenda_id: String(agendamento.agenda_id || ""),
+    agenda_nome: String(agenda?.nome || agendamento.titulo || ""),`,
+      "variável agenda_id do agendamento resolvido"
+    );
+
+    engine = replaceRequired(
+      engine,
+      `        agenda_agendamentos_opcoes: proximasOpcoes,
+        agenda_agendamento_id: opcaoEscolhida.id,
+        agenda_status: opcaoEscolhida.status || "",`,
+      `        agenda_agendamentos_opcoes: proximasOpcoes,
+        agenda_agendamento_id: opcaoEscolhida.id,
+        agenda_id: opcaoEscolhida.agenda_id || null,
+        agenda_status: opcaoEscolhida.status || "",`,
+      "persistência do calendário após a escolha do agendamento"
+    );
+
+    engine = replaceRequired(
+      engine,
+      `  const { data: execucao } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("*")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  let query = supabaseAdmin
+    .from("agenda_agendamentos")`,
+      `  const { data: execucao } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("*")
+    .eq("id", execucaoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  const metadataContexto = execucao?.metadata_json || {};
+  const agendamentoContextoId = String(
+    metadataContexto.agenda_agendamento_id ||
+      metadataContexto.variaveis?.agenda_agendamento_id ||
+      ""
+  ).trim();
+
+  if (config.usar_agendamento_contexto === true && agendamentoContextoId) {
+    let queryContexto = supabaseAdmin
+      .from("agenda_agendamentos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("id", agendamentoContextoId)
+      .in("status", statusBusca)
+      .gte("inicio_at", new Date().toISOString());
+
+    if (execucao?.contato_id) {
+      queryContexto = queryContexto.eq("contato_id", execucao.contato_id);
+    } else {
+      queryContexto = queryContexto.eq("telefone_cliente", numeroDestino);
+    }
+
+    const { data: agendamentoContexto, error: erroContexto } =
+      await queryContexto.maybeSingle();
+
+    if (erroContexto) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agenda_contexto_erro",
+        descricao: "Erro ao validar o agendamento recebido pela automação.",
+        entrada: {
+          agendamento_id: agendamentoContextoId,
+        },
+        saida: {
+          erro: erroContexto.message,
+        },
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        mensagemTexto: "erro",
+        numeroDestino,
+        runtimeCache,
+      });
+
+      return;
+    }
+
+    const agendaContexto = agendamentoContexto
+      ? await obterAgendaAutomacao(
+          empresaId,
+          String(agendamentoContexto.agenda_id || "")
+        )
+      : null;
+    const valoresContexto = agendamentoContexto
+      ? valoresAgendamentoAgenda(agendamentoContexto, agendaContexto)
+      : { agenda_encontrado: "false" };
+
+    await salvarVariaveisAutomacao({
+      empresaId,
+      execucao: {
+        id: execucaoId,
+        contato_id: execucao?.contato_id || null,
+      },
+      valores: {
+        ...valoresContexto,
+        agenda_encontrado: agendamentoContexto ? "true" : "false",
+      },
+      origem: "agenda_buscar_agendamento_contexto",
+      metadata: {
+        agendamento_id: agendamentoContexto?.id || agendamentoContextoId,
+      },
+    });
+
+    await salvarEstadoExecucaoAgenda({
+      empresaId,
+      execucaoId,
+      metadataAtual: metadataContexto,
+      patch: {
+        agenda_agendamento_id:
+          agendamentoContexto?.id || agendamentoContextoId,
+        agenda_id: agendamentoContexto?.agenda_id || null,
+        agenda_status: agendamentoContexto?.status || "nao_encontrado",
+        variaveis: {
+          ...(metadataContexto.variaveis || {}),
+          ...valoresContexto,
+          agenda_encontrado: agendamentoContexto ? "true" : "false",
+        },
+      },
+    });
+
+    const mensagemContexto = agendamentoContexto
+      ? String(config.mensagem_encontrado || "").trim()
+      : String(config.mensagem_nao_encontrado || "").trim();
+
+    if (mensagemContexto) {
+      await enviarMensagemAutomacao({
+        empresaId,
+        conversaId,
+        numeroDestino,
+        conteudo: substituirVariaveisAgenda(mensagemContexto, {
+          ...valoresContexto,
+          agenda_encontrado: agendamentoContexto ? "true" : "false",
+        }),
+        execucaoId,
+        noId: no.id,
+      });
+    }
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: agendamentoContexto
+        ? "agenda_contexto_utilizado"
+        : "agenda_contexto_nao_encontrado",
+      descricao: agendamentoContexto
+        ? "Agendamento recebido pelo botão utilizado sem listar outros compromissos."
+        : "O agendamento recebido pelo botão não está mais disponível.",
+      entrada: {
+        agendamento_id: agendamentoContextoId,
+      },
+      saida: {
+        agendamento_id: agendamentoContexto?.id || null,
+        agenda_id: agendamentoContexto?.agenda_id || null,
+      },
+    });
+
+    await seguirParaProximoNo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noAtualId: no.id,
+      mensagemTexto: agendamentoContexto ? "encontrado" : "nao_encontrado",
+      numeroDestino,
+      runtimeCache,
+    });
+
+    return;
+  }
+
+  let query = supabaseAdmin
+    .from("agenda_agendamentos")`,
+      "prioridade do agendamento recebido pelo botão"
+    );
+
+    engine = replaceRequired(
+      engine,
+      `      agenda_agendamento_id: agendamento?.id || null,
+      agenda_status: agendamento?.status || "nao_encontrado",`,
+      `      agenda_agendamento_id: agendamento?.id || null,
+      agenda_id: agendamento?.agenda_id || null,
+      agenda_status: agendamento?.status || "nao_encontrado",`,
+      "persistência do calendário após busca de agendamento"
+    );
+
+    engine = replaceRequired(
+      engine,
+      `  const config = no.configuracao_json || {};
+  const agendaId = String(config.agenda_id || "").trim();
+  const metadataAtual = execucao.metadata_json || {};
+  const agendaEstado = metadataAtual.agenda_estado || {};`,
+      `  const config = no.configuracao_json || {};
+  const metadataAtual = execucao.metadata_json || {};
+  const agendaIdContexto = String(
+    metadataAtual.agenda_id ||
+      metadataAtual.variaveis?.agenda_id ||
+      ""
+  ).trim();
+  const agendaId = String(
+    config.usar_agenda_contexto === true
+      ? agendaIdContexto || config.agenda_id || ""
+      : config.agenda_id || ""
+  ).trim();
+  const agendaEstado = metadataAtual.agenda_estado || {};`,
+      "calendário dinâmico no bloco Escolher horário"
+    );
+
+    engine = engine.replace(
+      'descricao: "Bloco de escolha de horario sem agenda configurada.",',
+      'descricao: "Bloco de escolha de horario sem calendário configurado ou resolvido.",'
+    );
+    engine = engine.replace(
+      'return { ok: false, aguardando: false, error: "Bloco sem agenda configurada." };',
+      'return { ok: false, aguardando: false, error: "Bloco sem calendário configurado ou resolvido." };'
+    );
+  }
+
+  write(enginePath, engine);
+
+  const editorPath = "src/app/(private)/fluxos/page.tsx";
+  let editor = read(editorPath);
+
+  if (!editor.includes("CRM_SYSTEM_CALENDAR_FLOW_EDITOR_V1")) {
+    editor = replaceRequired(
+      editor,
+      `  const fluxo = fluxoSelecionado;
+  const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);`,
+      `  const fluxo = fluxoSelecionado;
+  // CRM_SYSTEM_CALENDAR_FLOW_EDITOR_V1
+  const fluxoSistemaCalendario = Boolean(
+    fluxoSelecionado?.configuracao_json?.fluxo_sistema_calendario === true &&
+      fluxoSelecionado?.configuracao_json?.protegido_sistema === true &&
+      [
+        "calendario_confirmacao",
+        "calendario_cancelamento",
+        "calendario_reagendamento",
+      ].includes(
+        String(
+          fluxoSelecionado?.configuracao_json?.finalidade_sistema || ""
+        ).trim()
+      )
+  );
+  const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);`,
+      "identificação dos fluxos protegidos do calendário"
+    );
+
+    editor = replaceRequired(
+      editor,
+      `      if (tipoFinal === "agenda_buscar_agendamento") {
+        configuracao_json.agenda_id = agendaIdNode;
+        configuracao_json.status_busca = ["agendado", "confirmado"];`,
+      `      if (tipoFinal === "agenda_buscar_agendamento") {
+        configuracao_json.agenda_id = fluxoSistemaCalendario ? "" : agendaIdNode;
+        configuracao_json.usar_agendamento_contexto = fluxoSistemaCalendario;
+        configuracao_json.status_busca = ["agendado", "confirmado"];`,
+      "salvamento automático do bloco Buscar agendamento"
+    );
+
+    editor = replaceRequired(
+      editor,
+      `      if (tipoFinal === "agenda_escolher_horario") {
+        configuracao_json.agenda_id = agendaIdNode;
+        configuracao_json.mensagem =`,
+      `      if (tipoFinal === "agenda_escolher_horario") {
+        configuracao_json.agenda_id = fluxoSistemaCalendario ? "" : agendaIdNode;
+        configuracao_json.usar_agenda_contexto = fluxoSistemaCalendario;
+        configuracao_json.mensagem =`,
+      "salvamento automático do bloco Escolher horário"
+    );
+
+    const selectorAntigo = `                      {[
+                        "agenda_buscar_agendamento",
+                        "agenda_escolher_horario",
+                        "agenda_criar_agendamento",
+                      ].includes(tipoNodeEdicao) && (
+                        <label className={styles.field}>
+                          <span className={styles.label}>
+                            {tipoNodeEdicao === "agenda_criar_agendamento"
+                              ? "Selecione a agenda"
+                              : "Agenda"}
+                          </span>
+
+                          <select
+                            className={styles.input}
+                            value={agendaIdNode}
+                            onChange={(e) => setAgendaIdNode(e.target.value)}
+                            disabled={carregandoAgendasOpcoes}
+                          >
+                            <option value="">
+                              {tipoNodeEdicao === "agenda_buscar_agendamento"
+                                ? "Qualquer agenda"
+                                : carregandoAgendasOpcoes
+                                ? "Carregando agendas..."
+                                : "Selecione uma agenda ativa"}
+                            </option>
+
+                            {agendasOpcoes.map((agenda) => (
+                              <option key={agenda.id} value={agenda.id}>
+                                {agenda.nome} - {agenda.duracao_minutos}min
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}`;
+
+    const selectorNovo = `                      {[
+                        "agenda_buscar_agendamento",
+                        "agenda_escolher_horario",
+                        "agenda_criar_agendamento",
+                      ].includes(tipoNodeEdicao) && (
+                        fluxoSistemaCalendario &&
+                        [
+                          "agenda_buscar_agendamento",
+                          "agenda_escolher_horario",
+                        ].includes(tipoNodeEdicao) ? (
+                          <div className={styles.field}>
+                            <span className={styles.label}>
+                              {tipoNodeEdicao === "agenda_buscar_agendamento"
+                                ? "Origem dos agendamentos"
+                                : "Calendário"}
+                            </span>
+
+                            <select
+                              className={styles.input}
+                              value="automatico_contexto"
+                              disabled
+                              aria-label="Configuração automática do calendário"
+                            >
+                              <option value="automatico_contexto">
+                                {tipoNodeEdicao === "agenda_buscar_agendamento"
+                                  ? "Automático — botão ou todos os calendários"
+                                  : "Automático — calendário do agendamento atual"}
+                              </option>
+                            </select>
+
+                            <span className={styles.help}>
+                              {tipoNodeEdicao === "agenda_buscar_agendamento"
+                                ? "Quando iniciado por um botão, utiliza somente o agendamento correspondente. Quando iniciado por mensagem, pesquisa os compromissos futuros do contato em todos os calendários."
+                                : "Os horários são consultados no mesmo calendário do agendamento recebido pelo botão ou selecionado durante o fluxo."}
+                            </span>
+                          </div>
+                        ) : (
+                          <label className={styles.field}>
+                            <span className={styles.label}>
+                              {tipoNodeEdicao === "agenda_criar_agendamento"
+                                ? "Selecione o calendário"
+                                : "Calendário"}
+                            </span>
+
+                            <select
+                              className={styles.input}
+                              value={agendaIdNode}
+                              onChange={(e) => setAgendaIdNode(e.target.value)}
+                              disabled={carregandoAgendasOpcoes}
+                            >
+                              <option value="">
+                                {tipoNodeEdicao === "agenda_buscar_agendamento"
+                                  ? "Qualquer calendário"
+                                  : carregandoAgendasOpcoes
+                                  ? "Carregando calendários..."
+                                  : "Selecione um calendário ativo"}
+                              </option>
+
+                              {agendasOpcoes.map((agenda) => (
+                                <option key={agenda.id} value={agenda.id}>
+                                  {agenda.nome} - {agenda.duracao_minutos}min
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )
+                      )}`;
+
+    editor = replaceRequired(
+      editor,
+      selectorAntigo,
+      selectorNovo,
+      "seletor exclusivo dos fluxos protegidos do calendário"
+    );
+  }
+
+  write(editorPath, editor);
+  console.log(
+    "Fluxos protegidos do calendário configurados com agendamento e calendário automáticos."
+  );
+}
+
 patchRuntimeStatus();
 patchTemplatePreview();
 patchCalendarEnhancers();
+patchSystemCalendarFlows();
 replaceDatabaseTableReferences("src");
