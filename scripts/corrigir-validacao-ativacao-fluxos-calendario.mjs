@@ -5,10 +5,11 @@ const root = process.cwd();
 const relativePath = "src/app/(private)/fluxos/page.tsx";
 const absolutePath = path.join(root, relativePath);
 let content = fs.readFileSync(absolutePath, "utf8");
+let alterado = false;
 
-const marker = "CRM_SYSTEM_CALENDAR_FLOW_ACTIVATION_VALIDATION_V1";
+const markerCalendario = "CRM_SYSTEM_CALENDAR_FLOW_ACTIVATION_VALIDATION_V1";
 
-if (!content.includes(marker)) {
+if (!content.includes(markerCalendario)) {
   const current = `    if (
       tipoNo === "agenda_escolher_horario" &&
       !String(config.agenda_id || "").trim()
@@ -33,9 +34,37 @@ if (!content.includes(marker)) {
   }
 
   content = content.replace(current, replacement);
+  alterado = true;
+}
+
+const markerFilaGeral = "CRM_GENERAL_QUEUE_ACTIVATION_VALIDATION_V1";
+
+if (!content.includes(markerFilaGeral)) {
+  const current = `        String(config.acao_excesso_tentativas || "transferir_atendimento") ===
+          "transferir_atendimento" &&
+        !String(config.setor_excesso_tentativas || "").trim()`;
+
+  const replacement = `        String(config.acao_excesso_tentativas || "transferir_atendimento") ===
+          "transferir_atendimento" &&
+        // CRM_GENERAL_QUEUE_ACTIVATION_VALIDATION_V1
+        String(config.escopo_fila_excesso_tentativas || "setor").trim() !==
+          "geral" &&
+        !String(config.setor_excesso_tentativas || "").trim()`;
+
+  if (!content.includes(current)) {
+    throw new Error(
+      "Não foi possível localizar a validação do setor por excesso de tentativas."
+    );
+  }
+
+  content = content.replace(current, replacement);
+  alterado = true;
+}
+
+if (alterado) {
   fs.writeFileSync(absolutePath, content, "utf8");
 }
 
 console.log(
-  "Validação de ativação ajustada para calendários resolvidos pelo contexto do agendamento."
+  "Validações de ativação ajustadas para calendário automático e fila geral."
 );
