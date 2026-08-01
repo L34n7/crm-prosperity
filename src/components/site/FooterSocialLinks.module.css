@@ -16,7 +16,7 @@
   border: 0;
   background: transparent;
   text-decoration: none;
-  filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 7px 12px var(--crm-ui-public-shadow-rgb-0-0-0-0-32));
   transition:
     transform 180ms ease,
     filter 180ms ease,
@@ -26,7 +26,7 @@
 .socialLink:hover,
 .socialLink:focus-visible {
   transform: translateY(-2px) scale(1.12);
-  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.48));
+  filter: drop-shadow(0 10px 18px var(--crm-ui-public-shadow-rgb-0-0-0-0-48));
 }
 
 .socialLink:focus-visible {
