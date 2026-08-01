@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import styles from "./FooterSocialLinks.module.css";
 
-const FOOTER_DESCRIPTION =
-  "Plataforma empresarial de atendimento, automação e gestão de relacionamento com clientes pelo WhatsApp.";
+const FOOTER_DESCRIPTION_START =
+  "Plataforma empresarial de atendimento, automação e gestão de relacionamento";
 
 function normalizarTexto(value: string | null | undefined) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -16,53 +16,81 @@ export default function FooterSocialLinks() {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    let observer: MutationObserver | null = null;
-    let createdMount: HTMLElement | null = null;
+    let disposed = false;
+    let frameId: number | null = null;
 
     function localizarRodape() {
-      const footer = document.querySelector("footer");
-      if (!footer) return false;
+      if (disposed) return;
 
-      const description = Array.from(footer.querySelectorAll("p")).find(
-        (paragraph) =>
-          normalizarTexto(paragraph.textContent) === FOOTER_DESCRIPTION
-      );
+      const footers = Array.from(document.querySelectorAll("footer"));
+      let mountEncontrado: HTMLElement | null = null;
 
-      if (!description) return false;
+      for (const footer of footers) {
+        const description = Array.from(footer.querySelectorAll("p")).find(
+          (paragraph) =>
+            normalizarTexto(paragraph.textContent).startsWith(
+              FOOTER_DESCRIPTION_START
+            )
+        );
 
-      let mount = footer.querySelector<HTMLElement>(
-        "[data-crm-footer-social-links]"
-      );
+        if (!description) continue;
 
-      if (!mount) {
-        mount = document.createElement("div");
-        mount.dataset.crmFooterSocialLinks = "true";
-        description.insertAdjacentElement("afterend", mount);
-        createdMount = mount;
+        let mount = footer.querySelector<HTMLElement>(
+          "[data-crm-footer-social-links]"
+        );
+
+        if (!mount) {
+          mount = document.createElement("div");
+          mount.dataset.crmFooterSocialLinks = "true";
+          description.insertAdjacentElement("afterend", mount);
+        }
+
+        mountEncontrado = mount;
+        break;
       }
 
-      setMountNode(mount);
-      return true;
+      setMountNode((current) =>
+        current === mountEncontrado ? current : mountEncontrado
+      );
     }
 
-    if (!localizarRodape()) {
-      observer = new MutationObserver(() => {
-        if (localizarRodape()) observer?.disconnect();
-      });
-
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
+    function agendarLocalizacao() {
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        frameId = null;
+        localizarRodape();
       });
     }
+
+    const observer = new MutationObserver(agendarLocalizacao);
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+
+    window.addEventListener("load", agendarLocalizacao);
+    agendarLocalizacao();
+
+    const reforcoInicial = window.setTimeout(agendarLocalizacao, 250);
+    const reforcoFinal = window.setTimeout(agendarLocalizacao, 1000);
 
     return () => {
-      observer?.disconnect();
-      createdMount?.remove();
+      disposed = true;
+      observer.disconnect();
+      window.removeEventListener("load", agendarLocalizacao);
+      window.clearTimeout(reforcoInicial);
+      window.clearTimeout(reforcoFinal);
+
+      if (frameId !== null) cancelAnimationFrame(frameId);
+
+      document
+        .querySelectorAll<HTMLElement>("[data-crm-footer-social-links]")
+        .forEach((element) => element.remove());
     };
   }, []);
 
-  if (!mountNode) return null;
+  if (!mountNode || !mountNode.isConnected) return null;
 
   return createPortal(
     <nav className={styles.socialLinks} aria-label="Redes sociais do CRM Prosperity">
