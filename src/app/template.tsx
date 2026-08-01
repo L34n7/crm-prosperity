@@ -1,3 +1,4 @@
+import FooterSocialLinks from "@/components/site/FooterSocialLinks";
 import LegalDocumentModalProvider from "@/components/legal/LegalDocumentModalProvider";
 
 export default function RootTemplate({
@@ -8,6 +9,7 @@ export default function RootTemplate({
   return (
     <>
       <LegalDocumentModalProvider />
+      <FooterSocialLinks />
       {children}
     </>
   );
