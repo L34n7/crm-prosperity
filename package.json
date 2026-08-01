@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/aplicar-campos-captura-conversas.mjs && node scripts/aplicar-exclusao-campos-captura-conversas.mjs && node scripts/aplicar-importacao-sem-cabecalho.mjs && node scripts/aplicar-modal-cancelamento-agendamento.mjs && node scripts/executar-marketing-lista-fria.mjs && node scripts/aplicar-variaveis-agenda.mjs && node scripts/aplicar-calendario-agenda.mjs && node scripts/aplicar-escopo-fila-runtime.mjs && node scripts/aplicar-escopo-fila-editor.mjs",
+    "predev": "node scripts/aplicar-campos-captura-conversas.mjs && node scripts/aplicar-exclusao-campos-captura-conversas.mjs && node scripts/aplicar-importacao-sem-cabecalho.mjs && node scripts/aplicar-modal-cancelamento-agendamento.mjs && node scripts/executar-marketing-lista-fria.mjs && node scripts/aplicar-variaveis-agenda.mjs && node scripts/aplicar-calendario-agenda.mjs && node scripts/aplicar-escopo-fila-runtime.mjs && node scripts/aplicar-escopo-fila-editor.mjs && node scripts/corrigir-validacao-ativacao-fluxos-calendario.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/aplicar-campos-captura-conversas.mjs && node scripts/aplicar-exclusao-campos-captura-conversas.mjs && node scripts/aplicar-importacao-sem-cabecalho.mjs && node scripts/aplicar-modal-cancelamento-agendamento.mjs && node scripts/executar-marketing-lista-fria.mjs && node scripts/aplicar-variaveis-agenda.mjs && node scripts/aplicar-calendario-agenda.mjs && node scripts/aplicar-escopo-fila-runtime.mjs && node scripts/aplicar-escopo-fila-editor.mjs",
+    "prebuild": "node scripts/aplicar-campos-captura-conversas.mjs && node scripts/aplicar-exclusao-campos-captura-conversas.mjs && node scripts/aplicar-importacao-sem-cabecalho.mjs && node scripts/aplicar-modal-cancelamento-agendamento.mjs && node scripts/executar-marketing-lista-fria.mjs && node scripts/aplicar-variaveis-agenda.mjs && node scripts/aplicar-calendario-agenda.mjs && node scripts/aplicar-escopo-fila-runtime.mjs && node scripts/aplicar-escopo-fila-editor.mjs && node scripts/corrigir-validacao-ativacao-fluxos-calendario.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
