@@ -8,6 +8,7 @@ import LegalDocumentModal, {
 const DOCUMENTO_POR_CAMINHO: Record<string, DocumentoLegalId> = {
   "/termos-de-servico": "termos",
   "/politica-de-privacidade": "privacidade",
+  "/exclusao-de-dados": "exclusao",
 };
 
 function normalizarCaminho(pathname: string) {
