@@ -9,6 +9,9 @@ import {
   SEGMENTOS_EMPRESA,
   type SegmentoCodigo,
 } from "@/lib/segmentos/catalogo";
+import LegalDocumentModal, {
+  type DocumentoLegalId,
+} from "@/components/legal/LegalDocumentModal";
 
 type TipoOferta = "normal" | "vip" | "jv" | "af" | "free";
 
@@ -21,6 +24,8 @@ export default function ComecarPage() {
   const [empresa, setEmpresa] = useState("");
   const [segmento, setSegmento] = useState<SegmentoCodigo | "">("");
   const [aceiteContrato, setAceiteContrato] = useState(false);
+  const [documentoLegal, setDocumentoLegal] =
+    useState<DocumentoLegalId | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -44,6 +49,23 @@ export default function ComecarPage() {
 
   function handleTelefoneChange(e: React.ChangeEvent<HTMLInputElement>) {
     setTelefone(formatarTelefone(e.target.value));
+  }
+
+  function abrirDocumentoLegal(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    documento: DocumentoLegalId
+  ) {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    setDocumentoLegal(documento);
   }
 
   function obterTipoOfertaDaUrl(): TipoOferta {
@@ -285,11 +307,17 @@ export default function ComecarPage() {
               />
               <span>
                 Declaro que li e aceito os{" "}
-                <Link href="/termos-de-servico" target="_blank">
+                <Link
+                  href="/termos-de-servico"
+                  onClick={(event) => abrirDocumentoLegal(event, "termos")}
+                >
                   Termos de Serviço
                 </Link>
                 , a{" "}
-                <Link href="/politica-de-privacidade" target="_blank">
+                <Link
+                  href="/politica-de-privacidade"
+                  onClick={(event) => abrirDocumentoLegal(event, "privacidade")}
+                >
                   Política de Privacidade
                 </Link>{" "}
                 e estou ciente de que sou responsável pelos dados, contatos,
@@ -310,6 +338,11 @@ export default function ComecarPage() {
           </form>
         </div>
       </section>
+
+      <LegalDocumentModal
+        documento={documentoLegal}
+        onClose={() => setDocumentoLegal(null)}
+      />
     </main>
   );
 }
