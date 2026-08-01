@@ -58,14 +58,36 @@
   object-fit: contain;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 768px) {
   .socialLinks {
+    width: 100%;
+    max-width: 320px;
+    display: flex;
     align-items: stretch;
     flex-direction: column;
-    width: min(280px, 100%);
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-top: 18px;
+    visibility: visible;
+    opacity: 1;
   }
 
   .socialLink {
     width: 100%;
+    min-height: 46px;
+    justify-content: flex-start;
+    padding: 8px 12px 8px 8px;
+    font-size: 13px;
+  }
+
+  .iconWrap {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+
+  .icon {
+    width: 22px;
+    height: 22px;
   }
 }
