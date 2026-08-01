@@ -55,6 +55,7 @@ export default function LegalDocumentModalProvider() {
       if (!documentoSelecionado) return;
 
       event.preventDefault();
+      event.stopPropagation();
       setDocumento(documentoSelecionado);
     }
 
