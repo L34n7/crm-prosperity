@@ -135,15 +135,10 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
   }
 
   if (!content.includes("CRM_PROTECTED_SYSTEM_FLOW_DELETE_V1")) {
-    content = transformSection(
+    content = replaceRequired(
       content,
-      "export async function DELETE(req: NextRequest)",
-      "async function desvincularAgendamentosDoFluxo",
-      (section) =>
-        replaceRequired(
-          section,
-          "    if (definitivo) {",
-          `    // CRM_PROTECTED_SYSTEM_FLOW_DELETE_V1
+      "    if (definitivo) {",
+      `    // CRM_PROTECTED_SYSTEM_FLOW_DELETE_V1
     const { data: fluxoProtegidoAcao, error: fluxoProtegidoAcaoError } =
       await supabaseAdmin
         .from("automacao_fluxos")
@@ -172,9 +167,7 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
     }
 
     if (definitivo) {`,
-          "bloqueio de arquivamento e exclusão dos fluxos fixos"
-        ),
-      "DELETE da API de fluxos"
+      "bloqueio de arquivamento e exclusão dos fluxos fixos"
     );
   }
 
@@ -335,38 +328,6 @@ function patchEditor() {
                   onClick={() => {
                     abrirModalArquivarFluxo(menuFluxo.fluxo!);`,
       "bloqueio visual do arquivamento no menu lateral"
-    );
-
-    content = replaceRequired(
-      content,
-      `className={styles.dangerButton}
-                    onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}`,
-      `className={styles.dangerButton}
-                    disabled={fluxoEhSistemaCalendario(fluxoSelecionado)}
-                    title={
-                      fluxoEhSistemaCalendario(fluxoSelecionado)
-                        ? "Fluxos fixos do sistema não podem ser excluídos."
-                        : undefined
-                    }
-                    onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}`,
-      "bloqueio visual da exclusão definitiva no cabeçalho"
-    );
-
-    content = replaceRequired(
-      content,
-      `className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
-                  onClick={() => {
-                    abrirModalApagarDefinitivo(menuFluxo.fluxo!);`,
-      `className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
-                  disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
-                  title={
-                    fluxoEhSistemaCalendario(menuFluxo.fluxo)
-                      ? "Fluxos fixos do sistema não podem ser excluídos."
-                      : undefined
-                  }
-                  onClick={() => {
-                    abrirModalApagarDefinitivo(menuFluxo.fluxo!);`,
-      "bloqueio visual da exclusão definitiva no menu lateral"
     );
   }
 
