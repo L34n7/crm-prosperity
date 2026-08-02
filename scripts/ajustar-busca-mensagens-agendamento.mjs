@@ -233,6 +233,62 @@ if (!editor.includes(markerEditor)) {
 fs.writeFileSync(enginePath, engine, "utf8");
 fs.writeFileSync(editorPath, editor, "utf8");
 
+const metaPath = path.join(root, "src/lib/whatsapp/meta.ts");
+const processWebhookPath = path.join(
+  root,
+  "src/lib/whatsapp/process-webhook.ts"
+);
+
+let meta = fs.readFileSync(metaPath, "utf8");
+let processWebhook = fs.readFileSync(processWebhookPath, "utf8");
+
+const markerPayloadBotaoAgenda = "CRM_AGENDA_TEMPLATE_BUTTON_PAYLOAD_V1";
+
+if (!meta.includes(markerPayloadBotaoAgenda)) {
+  meta = replaceVariants(
+    meta,
+    [
+      `  interactive?: WhatsAppInteractiveMessage | null;\n  context?: WhatsAppMessageContext | null;`,
+    ],
+    `  interactive?: WhatsAppInteractiveMessage | null;\n  button?: WhatsAppButtonMessage | null;\n  context?: WhatsAppMessageContext | null;`,
+    "tipo do payload de botão do WhatsApp"
+  );
+
+  meta = replaceVariants(
+    meta,
+    [
+      `        const metadataJson = buildMetadataJson(message);\n        metadataJson.context = message.context ?? null;`,
+    ],
+    `        const metadataJson = buildMetadataJson(message);\n        // ${markerPayloadBotaoAgenda}\n        metadataJson.button = message.button ?? null;\n        metadataJson.context = message.context ?? null;`,
+    "preservação do payload de botão do template"
+  );
+}
+
+const markerAcaoAgendaWebhook = "CRM_AGENDA_BUTTON_SKIP_COMMON_TRIGGER_V1";
+
+if (!processWebhook.includes(markerAcaoAgendaWebhook)) {
+  processWebhook = replaceVariants(
+    processWebhook,
+    [
+      `      const metadataJson = (message.metadataJson || {}) as any;\n\n      let textoAutomacao =`,
+    ],
+    `      const metadataJson = (message.metadataJson || {}) as any;\n\n      // ${markerAcaoAgendaWebhook}\n      const payloadAcaoAgenda = String(\n        message.rawMessage?.button?.payload ||\n          metadataJson?.button?.payload ||\n          metadataJson?.interactive?.button_reply?.id ||\n          metadataJson?.interactive?.list_reply?.id ||\n          ""\n      ).trim();\n      const ehAcaoAgendaCalendario =\n        /^agenda_(confirmar|cancelar|reagendar):[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(\n          payloadAcaoAgenda\n        );\n\n      let textoAutomacao =`,
+    "identificação das ações de calendário no webhook"
+  );
+
+  processWebhook = replaceVariants(
+    processWebhook,
+    [
+      `      const automacaoJaProcessada =\n        mensagemExistente?.metadata_json?.automacao_processada === true;`,
+    ],
+    `      const automacaoJaProcessada =\n        mensagemExistente?.metadata_json?.automacao_processada === true ||\n        ehAcaoAgendaCalendario;`,
+    "bloqueio do processamento duplicado pelo motor comum"
+  );
+}
+
+fs.writeFileSync(metaPath, meta, "utf8");
+fs.writeFileSync(processWebhookPath, processWebhook, "utf8");
+
 console.log(
-  "Busca de agendamento, títulos dos campos e mensagens padrão atualizados."
+  "Busca de agendamento, mensagens e ações dos botões do calendário atualizadas."
 );
