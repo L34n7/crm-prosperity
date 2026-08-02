@@ -13,11 +13,9 @@ function write(relativePath, content) {
 
 function replaceRequired(content, current, replacement, description) {
   if (content.includes(replacement)) return content;
-
   if (!content.includes(current)) {
     throw new Error(`Não foi possível aplicar: ${description}.`);
   }
-
   return content.replace(current, replacement);
 }
 
@@ -39,20 +37,17 @@ function transformSection(content, startMarker, endMarker, transform, descriptio
   return content.slice(0, start) + transformed + content.slice(end);
 }
 
-function patchAutomacoesApi() {
+function patchApi() {
   const relativePath = "src/app/api/automacoes/route.ts";
   let content = read(relativePath);
 
-  const helperMarker = "CRM_PROTECTED_SYSTEM_FLOW_ACTIONS_V1";
-
-  if (!content.includes(helperMarker)) {
+  if (!content.includes("CRM_PROTECTED_SYSTEM_FLOW_ACTIONS_V1")) {
     content = replaceRequired(
       content,
       "async function fluxoPossuiGatilhoAtivo(params: {",
-      `// ${helperMarker}
+      `// CRM_PROTECTED_SYSTEM_FLOW_ACTIONS_V1
 function fluxoEhSistemaProtegido(configuracao: unknown) {
   const config = configuracaoComoObjeto(configuracao);
-
   return (
     configuracaoMarcada(config.fluxo_sistema_calendario) &&
     configuracaoMarcada(config.protegido_sistema)
@@ -76,11 +71,10 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
     );
   }
 
-  const optionalTriggerMarker =
-    "CRM_SYSTEM_FLOW_OPTIONAL_TRIGGER_EDIT_VALIDATION_V1";
-
-  if (!content.includes(optionalTriggerMarker)) {
-    const current = `    if (statusFinal === "ativo" && !fluxoPadraoFinal) {
+  if (!content.includes("CRM_SYSTEM_FLOW_OPTIONAL_TRIGGER_EDIT_VALIDATION_V1")) {
+    content = replaceRequired(
+      content,
+      `    if (statusFinal === "ativo" && !fluxoPadraoFinal) {
       const possuiGatilhoAtivo = await fluxoPossuiGatilhoAtivo({
         empresaId: usuario.empresa_id,
         fluxoId: id,
@@ -89,13 +83,12 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
       if (!possuiGatilhoAtivo) {
         return respostaFluxoAtivoSemGatilho();
       }
-    }`;
-
-    const replacement = `    const fluxoSistemaCalendario = fluxoEhSistemaProtegido(
+    }`,
+      `    const fluxoSistemaCalendario = fluxoEhSistemaProtegido(
       fluxoAntes.configuracao_json
     );
 
-    // ${optionalTriggerMarker}
+    // CRM_SYSTEM_FLOW_OPTIONAL_TRIGGER_EDIT_VALIDATION_V1
     if (
       statusFinal === "ativo" &&
       !fluxoPadraoFinal &&
@@ -109,19 +102,12 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
       if (!possuiGatilhoAtivo) {
         return respostaFluxoAtivoSemGatilho();
       }
-    }`;
-
-    content = replaceRequired(
-      content,
-      current,
-      replacement,
-      "gatilhos opcionais na edição dos fluxos fixos"
+    }`,
+      "gatilhos opcionais dos fluxos fixos"
     );
   }
 
-  const statusProtectionMarker = "CRM_PROTECTED_SYSTEM_FLOW_STATUS_V1";
-
-  if (!content.includes(statusProtectionMarker)) {
+  if (!content.includes("CRM_PROTECTED_SYSTEM_FLOW_STATUS_V1")) {
     content = transformSection(
       content,
       "export async function PATCH(req: NextRequest)",
@@ -130,7 +116,7 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
         replaceRequired(
           section,
           "    const configuracaoFinal =",
-          `    // ${statusProtectionMarker}
+          `    // CRM_PROTECTED_SYSTEM_FLOW_STATUS_V1
     if (
       fluxoEhSistemaProtegido(fluxoAntes.configuracao_json) &&
       body?.status !== undefined &&
@@ -144,13 +130,11 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
     const configuracaoFinal =`,
           "bloqueio de pausa dos fluxos fixos"
         ),
-      "seção PATCH da API de fluxos"
+      "PATCH da API de fluxos"
     );
   }
 
-  const deleteProtectionMarker = "CRM_PROTECTED_SYSTEM_FLOW_DELETE_V1";
-
-  if (!content.includes(deleteProtectionMarker)) {
+  if (!content.includes("CRM_PROTECTED_SYSTEM_FLOW_DELETE_V1")) {
     content = transformSection(
       content,
       "export async function DELETE(req: NextRequest)",
@@ -159,7 +143,7 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
         replaceRequired(
           section,
           "    if (definitivo) {",
-          `    // ${deleteProtectionMarker}
+          `    // CRM_PROTECTED_SYSTEM_FLOW_DELETE_V1
     const { data: fluxoProtegidoAcao, error: fluxoProtegidoAcaoError } =
       await supabaseAdmin
         .from("automacao_fluxos")
@@ -172,7 +156,9 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
       return NextResponse.json(
         {
           ok: false,
-          error: `Erro ao validar a proteção do fluxo: ${fluxoProtegidoAcaoError.message}`,
+          error:
+            "Erro ao validar a proteção do fluxo: " +
+            fluxoProtegidoAcaoError.message,
         },
         { status: 500 }
       );
@@ -188,20 +174,18 @@ async function fluxoPossuiGatilhoAtivo(params: {`,
     if (definitivo) {`,
           "bloqueio de arquivamento e exclusão dos fluxos fixos"
         ),
-      "seção DELETE da API de fluxos"
+      "DELETE da API de fluxos"
     );
   }
 
   write(relativePath, content);
 }
 
-function patchFluxosEditor() {
+function patchEditor() {
   const relativePath = "src/app/(private)/fluxos/page.tsx";
   let content = read(relativePath);
 
-  const badgeMarker = "CRM_SYSTEM_FLOW_STRONG_BADGE_V1";
-
-  if (!content.includes(badgeMarker)) {
+  if (!content.includes("CRM_SYSTEM_FLOW_STRONG_BADGE_V1")) {
     content = replaceRequired(
       content,
       `<span className={\`\${styles.badge} \${styles.badgeBlue}\`}>
@@ -209,11 +193,11 @@ function patchFluxosEditor() {
                         </span>`,
       `<span
                           className={\`\${styles.badge} \${styles.systemFlowBadge}\`}
-                          data-system-flow-badge="${badgeMarker}"
+                          data-system-flow-badge="CRM_SYSTEM_FLOW_STRONG_BADGE_V1"
                         >
                           🔒 FLUXO DO SISTEMA
                         </span>`,
-      "badge do sistema na lista de fluxos"
+      "badge na lista de fluxos"
     );
 
     content = replaceRequired(
@@ -223,17 +207,15 @@ function patchFluxosEditor() {
               </span>`,
       `<span
                 className={\`\${styles.badge} \${styles.systemFlowBadge}\`}
-                data-system-flow-badge="${badgeMarker}"
+                data-system-flow-badge="CRM_SYSTEM_FLOW_STRONG_BADGE_V1"
               >
                 🔒 FLUXO DO SISTEMA
               </span>`,
-      "badge do sistema no cabeçalho"
+      "badge no cabeçalho do fluxo"
     );
   }
 
-  const clientProtectionMarker = "CRM_PROTECTED_SYSTEM_FLOW_EDITOR_V1";
-
-  if (!content.includes(clientProtectionMarker)) {
+  if (!content.includes("CRM_PROTECTED_SYSTEM_FLOW_EDITOR_V1")) {
     content = replaceRequired(
       content,
       `async function alterarStatusFluxo(
@@ -245,14 +227,14 @@ function patchFluxosEditor() {
   fluxo: Fluxo,
   novoStatus: "ativo" | "rascunho" | "pausado"
 ) {
-  // ${clientProtectionMarker}
+  // CRM_PROTECTED_SYSTEM_FLOW_EDITOR_V1
   if (fluxoEhSistemaCalendario(fluxo) && novoStatus !== "ativo") {
     setErro("Fluxos fixos do sistema não podem ser pausados.");
     return;
   }
 
   try {`,
-      "proteção da pausa no editor"
+      "bloqueio de pausa no editor"
     );
 
     content = replaceRequired(
@@ -266,7 +248,7 @@ function patchFluxosEditor() {
   }
 
   setFluxoParaArquivar(fluxo);`,
-      "proteção do arquivamento no editor"
+      "bloqueio de arquivamento no editor"
     );
 
     content = replaceRequired(
@@ -280,196 +262,115 @@ function patchFluxosEditor() {
   }
 
   if (apagandoFluxoDefinitivoRef.current) return;`,
-      "proteção da exclusão definitiva no editor"
+      "bloqueio de exclusão definitiva no editor"
     );
 
-    const headerActionsCurrent = `                      <button
-                        type="button"
-                        className={styles.headerDropdownItem}
+    content = replaceRequired(
+      content,
+      `className={styles.headerDropdownItem}
                         onClick={() => {
                           setMenuHeaderAberto(false);
-                          alterarStatusFluxo(
-                            fluxoSelecionado,
-                            fluxoSelecionado.status === "ativo" ? "pausado" : "ativo"
-                          );
-                        }}
-                      >
-                        {fluxoSelecionado.status === "ativo"
-                          ? "Pausar fluxo"
-                          : "Ativar fluxo"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className={\`\${styles.headerDropdownItem} \${styles.headerDropdownDanger}\`}
+                          alterarStatusFluxo(`,
+      `className={styles.headerDropdownItem}
+                        disabled={fluxoEhSistemaCalendario(fluxoSelecionado)}
+                        title={
+                          fluxoEhSistemaCalendario(fluxoSelecionado)
+                            ? "Fluxos fixos do sistema não podem ser pausados."
+                            : undefined
+                        }
                         onClick={() => {
                           setMenuHeaderAberto(false);
-                          abrirModalArquivarFluxo(fluxoSelecionado);
-                        }}
-                      >
-                        Apagar fluxo
-                      </button>`;
-
-    const headerActionsReplacement = `                      {!fluxoEhSistemaCalendario(fluxoSelecionado) && (
-                        <>
-                          <button
-                            type="button"
-                            className={styles.headerDropdownItem}
-                            onClick={() => {
-                              setMenuHeaderAberto(false);
-                              alterarStatusFluxo(
-                                fluxoSelecionado,
-                                fluxoSelecionado.status === "ativo" ? "pausado" : "ativo"
-                              );
-                            }}
-                          >
-                            {fluxoSelecionado.status === "ativo"
-                              ? "Pausar fluxo"
-                              : "Ativar fluxo"}
-                          </button>
-
-                          <button
-                            type="button"
-                            className={\`\${styles.headerDropdownItem} \${styles.headerDropdownDanger}\`}
-                            onClick={() => {
-                              setMenuHeaderAberto(false);
-                              abrirModalArquivarFluxo(fluxoSelecionado);
-                            }}
-                          >
-                            Apagar fluxo
-                          </button>
-                        </>
-                      )}`;
+                          alterarStatusFluxo(`,
+      "bloqueio visual da pausa no cabeçalho"
+    );
 
     content = replaceRequired(
       content,
-      headerActionsCurrent,
-      headerActionsReplacement,
-      "remoção das ações protegidas no menu do cabeçalho"
+      `className={\`\${styles.headerDropdownItem} \${styles.headerDropdownDanger}\`}
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          abrirModalArquivarFluxo(fluxoSelecionado);`,
+      `className={\`\${styles.headerDropdownItem} \${styles.headerDropdownDanger}\`}
+                        disabled={fluxoEhSistemaCalendario(fluxoSelecionado)}
+                        title={
+                          fluxoEhSistemaCalendario(fluxoSelecionado)
+                            ? "Fluxos fixos do sistema não podem ser arquivados."
+                            : undefined
+                        }
+                        onClick={() => {
+                          setMenuHeaderAberto(false);
+                          abrirModalArquivarFluxo(fluxoSelecionado);`,
+      "bloqueio visual do arquivamento no cabeçalho"
     );
 
-    const sidebarPauseCurrent = `                <button
-                  className={styles.flowDropdownItem}
+    content = replaceRequired(
+      content,
+      `className={styles.flowDropdownItem}
                   onClick={() => {
-                    alterarStatusFluxo(
-                      menuFluxo.fluxo!,
-                      menuFluxo.fluxo!.status === "ativo" ? "pausado" : "ativo"
-                    );
-                    setMenuFluxo(null);
-                  }}
-                >
-                  {menuFluxo.fluxo.status === "ativo" ? "Pausar" : "Ativar"}
-                </button>`;
-
-    const sidebarPauseReplacement = `                {!fluxoEhSistemaCalendario(menuFluxo.fluxo) && (
-                  <button
-                    className={styles.flowDropdownItem}
-                    onClick={() => {
-                      alterarStatusFluxo(
-                        menuFluxo.fluxo!,
-                        menuFluxo.fluxo!.status === "ativo" ? "pausado" : "ativo"
-                      );
-                      setMenuFluxo(null);
-                    }}
-                  >
-                    {menuFluxo.fluxo.status === "ativo" ? "Pausar" : "Ativar"}
-                  </button>
-                )}`;
-
-    content = replaceRequired(
-      content,
-      sidebarPauseCurrent,
-      sidebarPauseReplacement,
-      "remoção da pausa no menu lateral"
-    );
-
-    const sidebarArchiveCurrent = `                <button
-                  className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
+                    alterarStatusFluxo(`,
+      `className={styles.flowDropdownItem}
+                  disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
+                  title={
+                    fluxoEhSistemaCalendario(menuFluxo.fluxo)
+                      ? "Fluxos fixos do sistema não podem ser pausados."
+                      : undefined
+                  }
                   onClick={() => {
-                    abrirModalArquivarFluxo(menuFluxo.fluxo!);
-                    setMenuFluxo(null);
-                  }}
-                >
-                  Apagar
-                </button>`;
-
-    const sidebarArchiveReplacement = `                {!fluxoEhSistemaCalendario(menuFluxo.fluxo) && (
-                  <button
-                    className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
-                    onClick={() => {
-                      abrirModalArquivarFluxo(menuFluxo.fluxo!);
-                      setMenuFluxo(null);
-                    }}
-                  >
-                    Apagar
-                  </button>
-                )}`;
+                    alterarStatusFluxo(`,
+      "bloqueio visual da pausa no menu lateral"
+    );
 
     content = replaceRequired(
       content,
-      sidebarArchiveCurrent,
-      sidebarArchiveReplacement,
-      "remoção do arquivamento no menu lateral"
-    );
-
-    const archivedHeaderDeleteCurrent = `                  <button
-                    type="button"
-                    className={styles.dangerButton}
-                    onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}
-                  >
-                    Apagar definitivo
-                  </button>`;
-
-    const archivedHeaderDeleteReplacement = `                  {!fluxoEhSistemaCalendario(fluxoSelecionado) && (
-                    <button
-                      type="button"
-                      className={styles.dangerButton}
-                      onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}
-                    >
-                      Apagar definitivo
-                    </button>
-                  )}`;
-
-    content = replaceRequired(
-      content,
-      archivedHeaderDeleteCurrent,
-      archivedHeaderDeleteReplacement,
-      "proteção visual da exclusão definitiva no cabeçalho"
-    );
-
-    const archivedSidebarDeleteCurrent = `                <button
-                  className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
+      `className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
                   onClick={() => {
-                    abrirModalApagarDefinitivo(menuFluxo.fluxo!);
-                    setMenuFluxo(null);
-                  }}
-                >
-                  Apagar definitivo
-                </button>`;
-
-    const archivedSidebarDeleteReplacement = `                {!fluxoEhSistemaCalendario(menuFluxo.fluxo) && (
-                  <button
-                    className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
-                    onClick={() => {
-                      abrirModalApagarDefinitivo(menuFluxo.fluxo!);
-                      setMenuFluxo(null);
-                    }}
-                  >
-                    Apagar definitivo
-                  </button>
-                )}`;
+                    abrirModalArquivarFluxo(menuFluxo.fluxo!);`,
+      `className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
+                  disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
+                  title={
+                    fluxoEhSistemaCalendario(menuFluxo.fluxo)
+                      ? "Fluxos fixos do sistema não podem ser arquivados."
+                      : undefined
+                  }
+                  onClick={() => {
+                    abrirModalArquivarFluxo(menuFluxo.fluxo!);`,
+      "bloqueio visual do arquivamento no menu lateral"
+    );
 
     content = replaceRequired(
       content,
-      archivedSidebarDeleteCurrent,
-      archivedSidebarDeleteReplacement,
-      "proteção visual da exclusão definitiva no menu lateral"
+      `className={styles.dangerButton}
+                    onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}`,
+      `className={styles.dangerButton}
+                    disabled={fluxoEhSistemaCalendario(fluxoSelecionado)}
+                    title={
+                      fluxoEhSistemaCalendario(fluxoSelecionado)
+                        ? "Fluxos fixos do sistema não podem ser excluídos."
+                        : undefined
+                    }
+                    onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}`,
+      "bloqueio visual da exclusão definitiva no cabeçalho"
+    );
+
+    content = replaceRequired(
+      content,
+      `className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
+                  onClick={() => {
+                    abrirModalApagarDefinitivo(menuFluxo.fluxo!);`,
+      `className={\`\${styles.flowDropdownItem} \${styles.flowDropdownDanger}\`}
+                  disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
+                  title={
+                    fluxoEhSistemaCalendario(menuFluxo.fluxo)
+                      ? "Fluxos fixos do sistema não podem ser excluídos."
+                      : undefined
+                  }
+                  onClick={() => {
+                    abrirModalApagarDefinitivo(menuFluxo.fluxo!);`,
+      "bloqueio visual da exclusão definitiva no menu lateral"
     );
   }
 
-  const modalErrorsMarker = "CRM_MODAL_TRIGGER_ERRORS_V1";
-
-  if (!content.includes(modalErrorsMarker)) {
+  if (!content.includes("CRM_MODAL_TRIGGER_ERRORS_V1")) {
     content = transformSection(
       content,
       "async function removerGatilhoFluxo(gatilhoId: string)",
@@ -479,22 +380,20 @@ function patchFluxosEditor() {
           `  try {
     setErro("");
     setSucesso("");`,
-          `  // ${modalErrorsMarker}
+          `  // CRM_MODAL_TRIGGER_ERRORS_V1
   try {
     setErroEdicaoFluxo("");
     setSucesso("");`
         );
-
         next = next.replace(
           `    setErro(error?.message || "Erro ao remover gatilho.");`,
           `    setErroEdicaoFluxo(
       error?.message || "Erro ao remover gatilho."
     );`
         );
-
         return next;
       },
-      "tratamento de erro ao remover gatilho"
+      "erros ao remover gatilho"
     );
 
     content = transformSection(
@@ -510,33 +409,30 @@ function patchFluxosEditor() {
     setErroEdicaoFluxo("");
     setSucesso("");`
         );
-
         next = next.replace(
           `    setErro(error?.message || "Erro ao atualizar gatilho.");`,
           `    setErroEdicaoFluxo(
       error?.message || "Erro ao atualizar gatilho."
     );`
         );
-
         return next;
       },
-      "tratamento de erro ao atualizar gatilho"
+      "erros ao atualizar gatilho"
     );
   }
 
   write(relativePath, content);
 }
 
-function patchFluxosStyles() {
+function patchStyles() {
   const relativePath = "src/app/(private)/fluxos/fluxos.module.css";
   let content = read(relativePath);
-  const marker = "CRM_SYSTEM_FLOW_STRONG_BADGE_STYLE_V1";
 
-  if (!content.includes(marker)) {
+  if (!content.includes("CRM_SYSTEM_FLOW_STRONG_BADGE_STYLE_V1")) {
     content = replaceRequired(
       content,
       ".flowBadges {",
-      `/* ${marker} */
+      `/* CRM_SYSTEM_FLOW_STRONG_BADGE_STYLE_V1 */
 .systemFlowBadge {
   background: var(--crm-surface-soft);
   color: var(--crm-text-strong);
@@ -550,17 +446,23 @@ function patchFluxosStyles() {
   text-transform: uppercase;
 }
 
+.headerDropdownItem:disabled,
+.flowDropdownItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .flowBadges {`,
-      "estilo Strong do badge dos fluxos fixos"
+      "estilo do badge e ações bloqueadas"
     );
   }
 
   write(relativePath, content);
 }
 
-patchAutomacoesApi();
-patchFluxosEditor();
-patchFluxosStyles();
+patchApi();
+patchEditor();
+patchStyles();
 
 console.log(
   "Fluxos fixos protegidos, badge atualizado e erros de gatilho direcionados ao modal."
