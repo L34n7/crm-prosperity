@@ -596,7 +596,11 @@ export async function POST(req: NextRequest) {
           webhook_verificado,
           onboarding_etapa,
           onboarding_status,
-          setup_completed_at
+          setup_completed_at,
+          modo_integracao,
+          coex_status,
+          is_on_biz_app,
+          platform_type
         `
       )
       .eq("id", integracaoWhatsappId)
