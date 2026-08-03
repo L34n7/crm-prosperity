@@ -90,3 +90,4 @@ console.log(
 );
 
 await import("./aplicar-agrupamento-disparos-agendados.mjs");
+await import("./aplicar-estilo-disparos-chat.mjs");
