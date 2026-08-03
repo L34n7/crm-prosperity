@@ -4,6 +4,7 @@ import path from "node:path";
 const root = process.cwd();
 const variablesMarker = "CRM_AGENDA_RESPONSE_VARIABLES_PERSIST_V1";
 const chatMarker = "CRM_AGENDA_TEMPLATE_CHAT_MESSAGE_V1";
+const protocolMarker = "CRM_AGENDA_TEMPLATE_PROTOCOL_V1";
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
@@ -57,6 +58,28 @@ if (!whatsappRuntime.includes(chatMarker)) {
     `    remetente_tipo: "sistema",\n    remetente_id: null,\n    conteudo: humanText(context),\n    tipo_mensagem: "template",`,
     `    remetente_tipo: "bot",\n    remetente_id: null,\n    conteudo: renderTemplateMessage(context, variablesSnapshot),\n    tipo_mensagem: "template",`,
     "exibição do disparo como mensagem automática do bot"
+  );
+}
+
+if (!whatsappRuntime.includes(protocolMarker)) {
+  const recordFunction = `async function recordOutboundMessage(\n  context: Context,`;
+  const protocolResolver = `// ${protocolMarker}\nasync function resolveConversationProtocolId(context: Context) {\n  const appointmentProtocolId = String(\n    context.appointment.conversa_protocolo_id || ""\n  ).trim();\n\n  if (appointmentProtocolId) return appointmentProtocolId;\n  if (!context.conversation?.id) return null;\n\n  const baseQuery = () =>\n    supabase\n      .from("conversa_protocolos")\n      .select("id")\n      .eq("empresa_id", context.job.empresa_id)\n      .eq("conversa_id", context.conversation.id);\n\n  const { data: activeProtocol, error: activeProtocolError } = await baseQuery()\n    .eq("ativo", true)\n    .order("created_at", { ascending: false })\n    .limit(1)\n    .maybeSingle();\n\n  if (activeProtocolError) {\n    console.warn(\n      "[AGENDA_AUTOMACOES] Erro ao localizar protocolo ativo da conversa:",\n      activeProtocolError\n    );\n  }\n\n  if (activeProtocol?.id) return activeProtocol.id;\n\n  const { data: latestProtocol, error: latestProtocolError } = await baseQuery()\n    .order("created_at", { ascending: false })\n    .limit(1)\n    .maybeSingle();\n\n  if (latestProtocolError) {\n    console.warn(\n      "[AGENDA_AUTOMACOES] Erro ao localizar último protocolo da conversa:",\n      latestProtocolError\n    );\n  }\n\n  return latestProtocol?.id || null;\n}\n\n${recordFunction}`;
+
+  whatsappRuntime = replaceRequired(
+    whatsappRuntime,
+    recordFunction,
+    protocolResolver,
+    "resolução do protocolo do disparo do calendário"
+  );
+
+  const beforeMessageInsert = `  const { error } = await supabase.from("mensagens").insert({\n    empresa_id: context.job.empresa_id,\n    conversa_id: context.conversation.id,\n    conversa_protocolo_id: context.appointment.conversa_protocolo_id || null,`;
+  const messageInsertWithProtocol = `  const conversationProtocolId = await resolveConversationProtocolId(context);\n\n  const { error } = await supabase.from("mensagens").insert({\n    empresa_id: context.job.empresa_id,\n    conversa_id: context.conversation.id,\n    conversa_protocolo_id: conversationProtocolId,`;
+
+  whatsappRuntime = replaceRequired(
+    whatsappRuntime,
+    beforeMessageInsert,
+    messageInsertWithProtocol,
+    "vínculo da mensagem disparada ao protocolo da conversa"
   );
 }
 
