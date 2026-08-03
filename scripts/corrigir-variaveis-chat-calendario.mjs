@@ -4,3 +4,4 @@ await import("./ajustar-ordem-disparos-agendados.mjs");
 await import("./aplicar-pos-atendimento-disparo-agenda.mjs");
 await import("./corrigir-validacao-reagendamento-agenda.mjs");
 await import("./corrigir-cancelamento-google-agenda.mjs");
+await import("./aplicar-lembretes-individuais-pos-fluxo.mjs");
