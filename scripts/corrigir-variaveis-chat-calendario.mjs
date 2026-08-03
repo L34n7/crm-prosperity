@@ -88,3 +88,5 @@ write(whatsappRuntimePath, whatsappRuntime);
 console.log(
   "Variáveis dos fluxos e mensagens dos templates do calendário corrigidas."
 );
+
+await import("./aplicar-agrupamento-disparos-agendados.mjs");
