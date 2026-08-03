@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const marker = "CRM_DISPAROS_PROGRAMADOS_DESC_V1";
+const marker = "CRM_DISPAROS_PROGRAMADOS_DESC_V2";
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
@@ -98,14 +98,19 @@ if (!page.includes(marker)) {
     );
   }
 
-  const helper = `${anchor}\n\n// ${marker}\nfunction obterDataCampoRecenteDisparo(\n  valor: any,\n  campo: string,\n  profundidade = 0\n): number {\n  if (valor == null || profundidade > 6) return 0;\n\n  if (Array.isArray(valor)) {\n    return valor.reduce(\n      (maior, item) =>\n        Math.max(\n          maior,\n          obterDataCampoRecenteDisparo(item, campo, profundidade + 1)\n        ),\n      0\n    );\n  }\n\n  if (typeof valor !== \"object\") return 0;\n\n  let maior = 0;\n  for (const [chave, item] of Object.entries(valor)) {\n    if (chave === campo && typeof item === \"string\") {\n      const timestamp = new Date(item).getTime();\n      if (Number.isFinite(timestamp)) maior = Math.max(maior, timestamp);\n      continue;\n    }\n\n    if (item && typeof item === \"object\") {\n      maior = Math.max(\n        maior,\n        obterDataCampoRecenteDisparo(item, campo, profundidade + 1)\n      );\n    }\n  }\n\n  return maior;\n}\n\nfunction obterDataProgramadaDisparo(valor: any): number {\n  return (\n    obterDataCampoRecenteDisparo(valor, \"executar_em\") ||\n    obterDataCampoRecenteDisparo(valor, \"created_at\")\n  );\n}`;
+  const helper = `${anchor}\n\n// ${marker}\nfunction obterDataCampoRecenteDisparo(\n  valor: any,\n  campo: string,\n  profundidade = 0\n): number {\n  if (valor == null || profundidade > 6) return 0;\n\n  if (Array.isArray(valor)) {\n    return valor.reduce(\n      (maior, item) =>\n        Math.max(\n          maior,\n          obterDataCampoRecenteDisparo(item, campo, profundidade + 1)\n        ),\n      0\n    );\n  }\n\n  if (typeof valor !== \"object\") return 0;\n\n  let maior = 0;\n  for (const [chave, item] of Object.entries(valor)) {\n    if (chave === campo && typeof item === \"string\") {\n      const timestamp = new Date(item).getTime();\n      if (Number.isFinite(timestamp)) maior = Math.max(maior, timestamp);\n      continue;\n    }\n\n    if (item && typeof item === \"object\") {\n      maior = Math.max(\n        maior,\n        obterDataCampoRecenteDisparo(item, campo, profundidade + 1)\n      );\n    }\n  }\n\n  return maior;\n}\n\nfunction obterDataProgramadaDisparo(valor: any): number {\n  return (\n    obterDataCampoRecenteDisparo(valor, \"executar_em\") ||\n    obterDataCampoRecenteDisparo(valor, \"created_at\")\n  );\n}\n\nfunction compararDisparosAgendados(a: any, b: any): number {\n  const aCancelado = String(a?.status || \"\").toLowerCase() === \"cancelado\";\n  const bCancelado = String(b?.status || \"\").toLowerCase() === \"cancelado\";\n\n  if (aCancelado !== bCancelado) {\n    return aCancelado ? 1 : -1;\n  }\n\n  return obterDataProgramadaDisparo(b) - obterDataProgramadaDisparo(a);\n}`;
 
   page = page.replace(anchor, helper);
 }
 
 const calls = localizarChamadasSort(page);
 const candidates = calls.filter(({ snippet }) => {
-  if (snippet.includes("obterDataProgramadaDisparo")) return false;
+  if (
+    snippet.includes("obterDataProgramadaDisparo") ||
+    snippet.includes("compararDisparosAgendados")
+  ) {
+    return false;
+  }
   const normalized = snippet.toLowerCase();
   return [
     "executar_em",
@@ -122,12 +127,12 @@ const candidates = calls.filter(({ snippet }) => {
 for (const call of [...candidates].sort((a, b) => b.start - a.start)) {
   page =
     page.slice(0, call.start) +
-    ".sort((a, b) => obterDataProgramadaDisparo(b) - obterDataProgramadaDisparo(a))" +
+    ".sort(compararDisparosAgendados)" +
     page.slice(call.end);
 }
 
 write(pagePath, page);
 
 console.log(
-  `Disparos agendados ordenados pela data programada em ordem decrescente. Comparadores ajustados: ${candidates.length}.`
+  `Disparos agendados ordenados pela data programada, com cancelados no final dos grupos. Comparadores ajustados: ${candidates.length}.`
 );
