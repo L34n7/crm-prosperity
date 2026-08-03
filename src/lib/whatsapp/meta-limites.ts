@@ -4,12 +4,15 @@ export const WHATSAPP_META_LIMITE_PADRAO = 250;
 export const WHATSAPP_META_LIMITE_ALERTA_AMARELO = 0.8;
 export const WHATSAPP_META_LIMITE_ALERTA_VERMELHO = 0.9;
 
+const MARCADOR_ANTISPAM_131048 = "__META_ANTISPAM_131048__:";
+
 type ConfigJson = Record<string, any> | null | undefined;
 
 export type IntegracaoMetaLimite = {
   id: string;
   empresa_id?: string | null;
   phone_number_id?: string | null;
+  business_portfolio_id?: string | null;
   meta_messaging_limit?: number | null;
   meta_messaging_limit_tier?: string | null;
   meta_account_mode?: string | null;
@@ -48,12 +51,73 @@ type RpcReservaLimite = {
   reserva_ids: string[] | null;
 };
 
+type RpcResumoLimite = {
+  portfolio_id: string | null;
+  usados: number | null;
+  restantes: number | null;
+  antispam_bloqueado: boolean | null;
+  antispam_bloqueado_ate: string | null;
+};
+
 const supabaseAdmin = getSupabaseAdmin();
 
 function objetoConfig(configJson: ConfigJson) {
   return configJson && typeof configJson === "object" && !Array.isArray(configJson)
     ? configJson
     : {};
+}
+
+function rpcNaoDisponivel(error: { code?: string; message?: string } | null) {
+  const texto = String(error?.message || "").toLowerCase();
+
+  return (
+    error?.code === "PGRST202" ||
+    texto.includes("obter_resumo_whatsapp_meta_limite") &&
+      (texto.includes("schema cache") || texto.includes("could not find"))
+  );
+}
+
+function extrairBloqueioAntispam(telefonesBloqueados?: string[] | null) {
+  const marcador = (telefonesBloqueados || []).find((item) =>
+    String(item || "").startsWith(MARCADOR_ANTISPAM_131048)
+  );
+
+  if (!marcador) {
+    return {
+      bloqueado: false,
+      bloqueadoAte: null as string | null,
+      telefones: telefonesBloqueados || [],
+    };
+  }
+
+  const bloqueadoAte = marcador.slice(MARCADOR_ANTISPAM_131048.length).trim();
+
+  return {
+    bloqueado: true,
+    bloqueadoAte: bloqueadoAte || null,
+    telefones: (telefonesBloqueados || []).filter(
+      (item) => !String(item || "").startsWith(MARCADOR_ANTISPAM_131048)
+    ),
+  };
+}
+
+function formatarBloqueioAntispam(dataIso?: string | null) {
+  if (!dataIso) return null;
+
+  const data = new Date(dataIso);
+
+  if (Number.isNaN(data.getTime())) return null;
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+    .format(data)
+    .replace(",", "");
 }
 
 export function normalizarTelefoneMetaLimite(valor: string | null | undefined) {
@@ -144,6 +208,49 @@ export async function obterResumoLimiteMeta(params: {
   integracao: IntegracaoMetaLimite;
 }) {
   const limiteInfo = obterLimiteMetaIntegracao(params.integracao);
+  const { data: resumoData, error: resumoError } = await supabaseAdmin.rpc(
+    "obter_resumo_whatsapp_meta_limite",
+    {
+      p_empresa_id: params.empresaId,
+      p_integracao_whatsapp_id: params.integracao.id,
+      p_limite: limiteInfo.limite,
+    }
+  );
+
+  if (!resumoError) {
+    const resumo = (Array.isArray(resumoData)
+      ? resumoData[0] || null
+      : resumoData || null) as RpcResumoLimite | null;
+
+    if (resumo) {
+      const usados = Math.max(0, Number(resumo.usados || 0));
+      const restantes = Math.max(
+        0,
+        Number.isFinite(Number(resumo.restantes))
+          ? Number(resumo.restantes)
+          : limiteInfo.limite - usados
+      );
+      const percentual = limiteInfo.limite > 0 ? usados / limiteInfo.limite : 0;
+
+      return {
+        ...limiteInfo,
+        usados,
+        restantes,
+        percentual,
+        portfolioId: resumo.portfolio_id || null,
+        antispamBloqueado: resumo.antispam_bloqueado === true,
+        antispamBloqueadoAte: resumo.antispam_bloqueado_ate || null,
+        alerta:
+          percentual >= WHATSAPP_META_LIMITE_ALERTA_VERMELHO
+            ? "vermelho"
+            : percentual >= WHATSAPP_META_LIMITE_ALERTA_AMARELO
+            ? "amarelo"
+            : "normal",
+      };
+    }
+  } else if (!rpcNaoDisponivel(resumoError)) {
+    throw new Error(`Erro ao consultar limite Meta: ${resumoError.message}`);
+  }
 
   const { data, error } = await supabaseAdmin
     .from("whatsapp_meta_conversas_iniciadas")
@@ -170,6 +277,9 @@ export async function obterResumoLimiteMeta(params: {
     usados,
     restantes,
     percentual,
+    portfolioId: params.integracao.business_portfolio_id || null,
+    antispamBloqueado: false,
+    antispamBloqueadoAte: null,
     alerta:
       percentual >= WHATSAPP_META_LIMITE_ALERTA_VERMELHO
         ? "vermelho"
@@ -182,20 +292,6 @@ export async function obterResumoLimiteMeta(params: {
 export async function reservarLimiteMeta(params: ReservaLimiteParams) {
   const telefones = normalizarTelefonesMetaLimite(params.telefones);
   const limiteInfo = obterLimiteMetaIntegracao(params.integracao);
-
-  if (telefones.length === 0) {
-    return {
-      ok: true as const,
-      limite: limiteInfo.limite,
-      usados: 0,
-      reservados: 0,
-      restantes: limiteInfo.limite,
-      reservaIds: [] as string[],
-      telefonesBloqueados: [] as string[],
-      telefones,
-      limiteInfo,
-    };
-  }
 
   const { data, error } = await supabaseAdmin.rpc(
     "reservar_whatsapp_meta_limite",
@@ -229,6 +325,10 @@ export async function reservarLimiteMeta(params: ReservaLimiteParams) {
     throw new Error("A reserva de limite Meta nao retornou resultado.");
   }
 
+  const bloqueioAntispam = extrairBloqueioAntispam(
+    resultado.telefones_bloqueados
+  );
+
   if (!resultado.ok) {
     return {
       ok: false as const,
@@ -240,8 +340,13 @@ export async function reservarLimiteMeta(params: ReservaLimiteParams) {
       telefonesBloqueados: resultado.telefones_bloqueados || [],
       telefones,
       limiteInfo,
-      error:
-        "Este envio ultrapassaria o limite de conversas iniciadas pela empresa em 24 horas definido pela Meta.",
+      motivoBloqueio: bloqueioAntispam.bloqueado
+        ? "antispam_131048"
+        : "limite_24h",
+      bloqueadoAte: bloqueioAntispam.bloqueadoAte,
+      error: bloqueioAntispam.bloqueado
+        ? "A Meta aplicou uma restricao temporaria de envio por taxa de spam (erro 131048)."
+        : "Este envio ultrapassaria o limite de conversas iniciadas pela empresa em 24 horas definido pela Meta.",
     };
   }
 
@@ -255,6 +360,8 @@ export async function reservarLimiteMeta(params: ReservaLimiteParams) {
     telefonesBloqueados: [] as string[],
     telefones,
     limiteInfo,
+    motivoBloqueio: null,
+    bloqueadoAte: null,
   };
 }
 
@@ -300,7 +407,7 @@ export async function atualizarReservaLimiteMeta({
     .update(payload)
     .in("id", reservaIds)
     .eq("telefone_normalizado", telefoneNormalizado)
-    .eq("status", "reservado");
+    .in("status", ["reservado", "processando", "enviado"]);
 
   if (error) {
     console.warn("[WHATSAPP META LIMITE] Erro ao atualizar reserva:", error);
@@ -313,13 +420,39 @@ export function montarRespostaLimiteMetaExcedido(resultado: {
   restantes: number;
   telefonesBloqueados?: string[];
 }) {
+  const bloqueioAntispam = extrairBloqueioAntispam(
+    resultado.telefonesBloqueados
+  );
+
+  if (bloqueioAntispam.bloqueado) {
+    const bloqueadoAteFormatado = formatarBloqueioAntispam(
+      bloqueioAntispam.bloqueadoAte
+    );
+
+    return {
+      ok: false,
+      motivo: "whatsapp_meta_antispam_131048",
+      code: "WHATSAPP_META_ANTISPAM_131048",
+      error:
+        "A Meta aplicou uma restricao temporaria de envio por taxa de spam (erro 131048).",
+      detalhe: bloqueadoAteFormatado
+        ? `O CRM pausou novos disparos preventivamente ate ${bloqueadoAteFormatado}. O bloqueio antispam e separado do limite de contatos unicos em 24 horas.`
+        : "O CRM pausou novos disparos preventivamente. O bloqueio antispam e separado do limite de contatos unicos em 24 horas.",
+      limite: resultado.limite,
+      usados: resultado.usados,
+      restantes: resultado.restantes,
+      bloqueado_ate: bloqueioAntispam.bloqueadoAte,
+      telefones_bloqueados: bloqueioAntispam.telefones,
+    };
+  }
+
   return {
     ok: false,
     motivo: "whatsapp_meta_limite_excedido",
     code: "WHATSAPP_META_LIMITE_EXCEDIDO",
     error:
-      "Este envio ultrapassaria o limite de conversas iniciadas pela empresa em 24 horas definido pela Meta.",
-    detalhe: `Limite atual: ${resultado.limite}. Ja usados/reservados: ${resultado.usados}. Restantes agora: ${resultado.restantes}.`,
+      "Este envio ultrapassaria o limite de conversas iniciadas pela empresa em uma janela movel de 24 horas definida pela Meta.",
+    detalhe: `Limite atual: ${resultado.limite}. Ja usados/reservados no portfolio empresarial: ${resultado.usados}. Restantes agora: ${resultado.restantes}.`,
     limite: resultado.limite,
     usados: resultado.usados,
     restantes: resultado.restantes,
