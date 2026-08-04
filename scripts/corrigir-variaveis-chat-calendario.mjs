@@ -17,3 +17,4 @@ await import("./corrigir-conflitos-disparo-anterior-contador.mjs");
 await import("./aplicar-ajuste-final-lembretes-intervalos.mjs");
 await import("./corrigir-detector-intervalos-premium.mjs");
 await import("./aplicar-lembretes-agendamento-premium-v3.mjs");
+await import("./corrigir-select-canal-atual-lembrete-whatsapp.mjs");
