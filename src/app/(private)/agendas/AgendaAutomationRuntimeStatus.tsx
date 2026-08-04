@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import AgendaTemplateMappingEnhancer from "./AgendaTemplateMappingEnhancer";
 
 const STYLE_ID = "agenda-automation-stage13-runtime";
 const NOTICE_TEXT =
@@ -354,5 +353,5 @@ export default function AgendaAutomationRuntimeStatus() {
     };
   }, []);
 
-  return <AgendaTemplateMappingEnhancer />;
+  return null;
 }
