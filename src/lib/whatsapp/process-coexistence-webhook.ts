@@ -21,6 +21,7 @@ import {
   finishCoexistenceIntegrationIfReady,
   refreshCoexistenceHistoryStats,
 } from "@/lib/whatsapp/coexistence-history-queue";
+import { assumirAtendimentoPeloWhatsappBusinessApp } from "@/lib/automacoes/assumir-atendimento-business-app";
 
 const supabase = getSupabaseAdmin();
 
@@ -59,6 +60,18 @@ function normalizeCoexistenceMessageType(value?: string | null) {
   return allowedTypes.has(normalized) ? normalized : "texto";
 }
 
+function mensagemEhMaisRecenteQueConversa(
+  conversation: { last_message_at?: string | null },
+  messageAt: string
+) {
+  const current = conversation.last_message_at
+    ? new Date(conversation.last_message_at).getTime()
+    : 0;
+  const incoming = new Date(messageAt).getTime();
+
+  return !Number.isNaN(incoming) && incoming >= current;
+}
+
 async function findActiveProtocolId(conversationId: string) {
   const { data, error } = await supabase
     .from("conversa_protocolos")
@@ -87,7 +100,7 @@ async function updateConversationLastMessage(
     : 0;
   const incoming = new Date(messageAt).getTime();
 
-  if (Number.isNaN(incoming) || incoming <= current) return;
+  if (Number.isNaN(incoming) || incoming <= current) return false;
 
   const { error } = await supabase
     .from("conversas")
@@ -104,6 +117,7 @@ async function updateConversationLastMessage(
   }
 
   conversation.last_message_at = messageAt;
+  return true;
 }
 
 async function saveCoexistenceMessage(params: {
@@ -113,6 +127,10 @@ async function saveCoexistenceMessage(params: {
   message: ExtractedCoexistenceEcho;
 }) {
   const messageAt = timestampToIso(params.message.timestamp);
+  const mensagemMaisRecente = mensagemEhMaisRecenteQueConversa(
+    params.conversation,
+    messageAt
+  );
   const { data: existing, error: existingError } = await supabase
     .from("mensagens")
     .select("id, metadata_json")
@@ -130,6 +148,7 @@ async function saveCoexistenceMessage(params: {
       id: existing.id,
       duplicated: true,
       messageAt,
+      mensagemMaisRecente,
     };
   }
 
@@ -179,6 +198,7 @@ async function saveCoexistenceMessage(params: {
         id: null,
         duplicated: true,
         messageAt,
+        mensagemMaisRecente,
       };
     }
 
@@ -193,7 +213,40 @@ async function saveCoexistenceMessage(params: {
     id: inserted.id,
     duplicated: false,
     messageAt,
+    mensagemMaisRecente,
   };
+}
+
+async function registrarResultadoAssuncaoNaMensagem(params: {
+  mensagemId?: string | null;
+  resultado: Awaited<
+    ReturnType<typeof assumirAtendimentoPeloWhatsappBusinessApp>
+  >;
+}) {
+  if (!params.mensagemId) return;
+
+  const { data: mensagemAtual } = await supabase
+    .from("mensagens")
+    .select("metadata_json")
+    .eq("id", params.mensagemId)
+    .maybeSingle();
+
+  await supabase
+    .from("mensagens")
+    .update({
+      metadata_json: {
+        ...(mensagemAtual?.metadata_json || {}),
+        atendimento_assumido_business_app: true,
+        atendimento_assumido_business_app_em: new Date().toISOString(),
+        automacoes_canceladas: params.resultado.execucoesCanceladas,
+        agendamentos_cancelados: params.resultado.agendamentosCancelados,
+        estado_conversa_atualizado:
+          params.resultado.estadoConversaAtualizado,
+        execucoes_novas_preservadas:
+          params.resultado.execucoesNovasPreservadas,
+      },
+    })
+    .eq("id", params.mensagemId);
 }
 
 async function processMessageEchoes(body: WhatsAppWebhookBody) {
@@ -222,22 +275,34 @@ async function processMessageEchoes(body: WhatsAppWebhookBody) {
     });
     const protocolId = await findActiveProtocolId(conversation.id);
 
-    await saveCoexistenceMessage({
+    const savedMessage = await saveCoexistenceMessage({
       integration,
       conversation,
       protocolId,
       message: echo,
     });
 
-    await supabase
-      .from("conversas")
-      .update({
-        bot_ativo: false,
-        origem_atendimento: "whatsapp_business_app",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", conversation.id)
-      .eq("empresa_id", integration.empresa_id);
+    const resultadoAssuncao =
+      await assumirAtendimentoPeloWhatsappBusinessApp({
+        empresaId: integration.empresa_id,
+        conversaId: conversation.id,
+        mensagemExternaId: echo.messageId,
+        mensagemEnviadaEm: savedMessage.messageAt,
+        atualizarEstadoConversa: savedMessage.mensagemMaisRecente,
+      });
+
+    await registrarResultadoAssuncaoNaMensagem({
+      mensagemId: savedMessage.id,
+      resultado: resultadoAssuncao,
+    });
+
+    console.log("[COEX BUSINESS APP] Atendimento assumido", {
+      empresaId: integration.empresa_id,
+      integracaoId: integration.id,
+      conversaId: conversation.id,
+      mensagemExternaId: echo.messageId,
+      ...resultadoAssuncao,
+    });
   }
 
   return echoes.length;
