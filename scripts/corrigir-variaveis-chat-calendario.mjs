@@ -8,3 +8,5 @@ await import("./aplicar-lembretes-individuais-pos-fluxo.mjs");
 await import("./aplicar-intervalos-agenda-reabrir-protocolo.mjs");
 await import("./aplicar-revisao-telefone-disparos.mjs");
 await import("./corrigir-duplicidade-revisao-telefone.mjs");
+await import("./corrigir-aplicador-mapeamento-template-lembrete.mjs");
+await import("./aplicar-mapeamento-template-lembrete-individual.mjs");
