@@ -30,6 +30,43 @@ if (!pagina.includes("CRM_AVAILABLE_COUNTER_SELECTED_V5")) {
   );
 }
 
+if (!pagina.includes("CRM_HISTORICO_ORDEM_DECRESCENTE_V2")) {
+  pagina = substituirRegexObrigatorio(
+    pagina,
+    /function nomeCampanhaHistorico\(/,
+    `// CRM_HISTORICO_ORDEM_DECRESCENTE_V2\nfunction timestampHistoricoDisparo(item: ResultadoDisparo) {\n  const timestamp = Date.parse(String(item.created_at || ""));\n  return Number.isFinite(timestamp) ? timestamp : 0;\n}\n\nfunction ordenarHistoricoPorDataHoraDecrescente(\n  itens: ResultadoDisparo[]\n) {\n  return [...itens].sort((a, b) => {\n    const diferencaData =\n      timestampHistoricoDisparo(b) - timestampHistoricoDisparo(a);\n\n    if (diferencaData !== 0) return diferencaData;\n\n    return String(b.id || "").localeCompare(\n      String(a.id || ""),\n      "pt-BR"\n    );\n  });\n}\n\nfunction nomeCampanhaHistorico(`,
+    "ordenacao decrescente do historico"
+  );
+
+  const chaveCacheAnterior =
+    'const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v1";';
+  const chaveCacheNova =
+    'const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v2";';
+
+  if (!pagina.includes(chaveCacheNova)) {
+    if (!pagina.includes(chaveCacheAnterior)) {
+      throw new Error(
+        "[DISPAROS CONTATOS] Trecho nao encontrado: invalidacao do cache antigo do historico"
+      );
+    }
+    pagina = pagina.replace(chaveCacheAnterior, chaveCacheNova);
+  }
+
+  pagina = substituirRegexObrigatorio(
+    pagina,
+    /setResultado\(paginaCache\.resultados\);/,
+    `setResultado(\n          ordenarHistoricoPorDataHoraDecrescente(paginaCache.resultados)\n        );`,
+    "ordenacao do historico restaurado do cache"
+  );
+
+  pagina = substituirRegexObrigatorio(
+    pagina,
+    /setResultado\(resultadosPagina\);/,
+    `setResultado(\n          ordenarHistoricoPorDataHoraDecrescente(resultadosPagina)\n        );`,
+    "ordenacao do historico retornado pela API"
+  );
+}
+
 if (pagina !== paginaOriginal) {
   fs.writeFileSync(paginaPath, pagina, "utf8");
 }
@@ -51,5 +88,5 @@ if (conflitos !== conflitosOriginal) {
 }
 
 console.log(
-  "Contador de disponiveis, conflitos em massa e disparo anterior ajustados."
+  "Contador, conflitos, disparo anterior e ordem do historico ajustados."
 );
