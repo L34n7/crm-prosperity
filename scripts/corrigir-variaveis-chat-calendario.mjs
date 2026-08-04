@@ -85,7 +85,42 @@ if (chatPage.includes(renderAnterior)) {
   );
 }
 
+const tituloAnterior = `  const titulo = primeiroBlocoPareceTitulo
+    ? primeiroBloco
+    : formatarNomeTemplateDisparo(metadata.template_nome);`;
+const tituloSemPrefixoHeader = `  const titulo = primeiroBlocoPareceTitulo
+    ? primeiroBloco.replace(/^Header:\\s*/i, "").trim()
+    : formatarNomeTemplateDisparo(metadata.template_nome);`;
+
+if (chatPage.includes(tituloAnterior)) {
+  chatPage = chatPage.replace(tituloAnterior, tituloSemPrefixoHeader);
+} else if (!chatPage.includes(tituloSemPrefixoHeader)) {
+  throw new Error(
+    "Não foi possível remover o prefixo Header do título do disparo."
+  );
+}
+
+const urlRenderAnterior = `    const url = montarUrlMidiaMensagem(msg);`;
+const urlRenderSemPrefixoHeader = `    if (mensagemEhDisparo(msg) && mensagemDisparoTemBotoes(msg)) {
+      msg = {
+        ...msg,
+        conteudo: String(msg.conteudo || "")
+          .replace(/^Header:\\s*/i, "")
+          .trimStart(),
+      };
+    }
+
+    const url = montarUrlMidiaMensagem(msg);`;
+
+if (chatPage.includes(urlRenderAnterior)) {
+  chatPage = chatPage.replace(urlRenderAnterior, urlRenderSemPrefixoHeader);
+} else if (!chatPage.includes(urlRenderSemPrefixoHeader)) {
+  throw new Error(
+    "Não foi possível remover o prefixo Header dos templates com botões."
+  );
+}
+
 writeFileSync(chatPagePath, chatPage, "utf8");
 console.log(
-  "Templates com botões identificados como disparo sem remover as ações interativas."
+  "Templates identificados como disparo, com botões preservados e sem o prefixo Header."
 );
