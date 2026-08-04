@@ -13,3 +13,4 @@ await import("./aplicar-mapeamento-template-lembrete-individual.mjs");
 await import("./ajustar-selecao-massa-disparos-v3.mjs");
 await import("./aplicar-pausa-rate-limit-12h-ui.mjs");
 await import("./corrigir-conflitos-disparo-anterior-contador.mjs");
+await import("./aplicar-ajuste-final-lembretes-intervalos.mjs");
