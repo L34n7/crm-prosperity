@@ -372,7 +372,7 @@ async function reativarConversaParaDisparo(params: {
   const { error } = await supabaseAdmin
     .from("conversas")
     .update({
-      status: "fila",
+      status: "aberta",
       origem_atendimento: "reativacao",
       bot_ativo: false,
       aguardando_atendente: false,
