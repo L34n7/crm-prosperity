@@ -72,8 +72,7 @@ mapping = mapping
   .replaceAll(
     "body .a2 .repeat.rem",
     "body .a2 .repeat.agendaIndividualTemplateBound"
-  )
-  .replaceAll("(loaded as any).variables", "loaded.variables");
+  );
 fs.writeFileSync(mappingPath, mapping, "utf8");
 
 let premium = fs.readFileSync(premiumPath, "utf8");
