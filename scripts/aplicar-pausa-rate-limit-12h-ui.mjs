@@ -174,9 +174,9 @@ if (!page.includes("CRM_RATE_LIMIT_CONTACT_12H_V1")) {
       "                            );",
     ].join("\n")
   );
-  page = page.replace(
-    "                                  cooldownMarketingAtivo",
-    "                                  cooldownDisparoAtivo"
+  page = page.replaceAll(
+    "cooldownMarketingAtivo",
+    "cooldownDisparoAtivo"
   );
 
   page = page.replaceAll(
