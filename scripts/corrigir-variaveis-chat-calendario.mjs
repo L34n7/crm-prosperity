@@ -11,3 +11,4 @@ await import("./corrigir-duplicidade-revisao-telefone.mjs");
 await import("./corrigir-aplicador-mapeamento-template-lembrete.mjs");
 await import("./aplicar-mapeamento-template-lembrete-individual.mjs");
 await import("./ajustar-selecao-massa-disparos-v3.mjs");
+await import("./aplicar-pausa-rate-limit-12h-ui.mjs");
