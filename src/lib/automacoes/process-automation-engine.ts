@@ -383,6 +383,49 @@ async function carregarVariaveisGlobaisEmpresa(params: {
   return mapa;
 }
 
+const VARIAVEIS_FIXAS_EMPRESA = new Set([
+  "nome_empresa",
+  "empresa_nome",
+]);
+
+// CRM_SYSTEM_CANONICAL_VARIABLES_RUNTIME_V1
+async function carregarVariaveisFixasEmpresa(params: {
+  empresaId: string;
+  chaves: string[];
+}) {
+  const { empresaId, chaves } = params;
+
+  if (
+    !chaves.some((chave) =>
+      VARIAVEIS_FIXAS_EMPRESA.has(String(chave || "").trim().toLowerCase())
+    )
+  ) {
+    return new Map<string, string>();
+  }
+
+  const { data: empresa, error } = await supabaseAdmin
+    .from("empresas")
+    .select("nome_fantasia")
+    .eq("id", empresaId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao buscar variáveis fixas da empresa:",
+      error
+    );
+
+    return new Map<string, string>();
+  }
+
+  const nomeEmpresa = String(empresa?.nome_fantasia || "").trim();
+
+  return new Map<string, string>([
+    ["nome_empresa", nomeEmpresa],
+    ["empresa_nome", nomeEmpresa],
+  ]);
+}
+
 async function resolverValorConversaoEncerramento(params: {
   empresaId: string;
   execucaoId: string;
@@ -4524,11 +4567,19 @@ export async function executarNo(params: {
   const mensagem =
     configTransferencia.mensagem ||
     "Vou te encaminhar para um atendente.";
+  // CRM_QUEUE_SCOPE_ENGINE_V1
+  const escopoFilaTransferencia =
+    String(configTransferencia.escopo_fila || "").trim() === "geral"
+      ? "geral"
+      : "setor";
   const setorDestino =
-    String(configTransferencia.setor_id || "").trim() || null;
+    escopoFilaTransferencia === "geral"
+      ? null
+      : String(configTransferencia.setor_id || "").trim() || null;
   const atribuicao = await resolverAtribuicaoTransferencia({
     empresaId,
     setorId: setorDestino,
+    escopoFila: escopoFilaTransferencia,
     estrategia: configTransferencia.estrategia_transferencia,
     atendenteId: configTransferencia.atendente_id,
   });
@@ -4577,7 +4628,8 @@ export async function executarNo(params: {
   await supabaseAdmin
     .from("conversas")
     .update({
-      setor_id: setorDestino,
+      setor_id: atribuicao.setorId,
+      escopo_fila: atribuicao.escopoFila,
       status: atribuicao.responsavelId ? "em_atendimento" : "fila",
       responsavel_id: atribuicao.responsavelId,
       bot_ativo: false,
@@ -4780,8 +4832,12 @@ async function substituirVariaveisMensagem(params: {
     )
   );
 
-  const [variaveisExecucaoResult, variaveisFixasContato, variaveisGlobais] =
-    await Promise.all([
+  const [
+    variaveisExecucaoResult,
+    variaveisFixasContato,
+    variaveisGlobais,
+    variaveisFixasEmpresa,
+  ] = await Promise.all([
       supabaseAdmin
         .from("automacao_variaveis")
         .select("chave, valor")
@@ -4796,6 +4852,11 @@ async function substituirVariaveisMensagem(params: {
       }),
 
       carregarVariaveisGlobaisEmpresa({
+        empresaId,
+        chaves,
+      }),
+
+      carregarVariaveisFixasEmpresa({
         empresaId,
         chaves,
       }),
@@ -4824,6 +4885,10 @@ async function substituirVariaveisMensagem(params: {
   }
 
   for (const [chave, valor] of variaveisFixasContato) {
+    mapaVariaveis.set(chave, valor);
+  }
+
+  for (const [chave, valor] of variaveisFixasEmpresa) {
     mapaVariaveis.set(chave, valor);
   }
 
@@ -5316,7 +5381,7 @@ async function obterAgendaAutomacao(empresaId: string, agendaId: string) {
   if (!agendaId) return null;
 
   const { data } = await supabaseAdmin
-    .from("agenda_calendarios")
+    .from("calendarios")
     .select("id, nome, timezone")
     .eq("id", agendaId)
     .eq("empresa_id", empresaId)
@@ -5737,17 +5802,23 @@ async function salvarVariaveisAutomacao(params: {
 }
 
 function valoresSlotAgenda(slot: any, agenda: any | null, sufixo = "_nova") {
+  const sufixoCalendario = sufixo === "_nova" ? "_novo" : sufixo;
+
   return {
     [`agenda_data${sufixo}`]: String(slot.data_label || ""),
     [`agenda_hora${sufixo}`]: String(slot.hora_label || ""),
     [`agenda_inicio_at${sufixo}`]: String(slot.inicio_at || ""),
     [`agenda_fim_at${sufixo}`]: String(slot.fim_at || ""),
     [`agenda_label${sufixo}`]: String(slot.label || ""),
-    [`agenda_nome${sufixo}`]: String(agenda?.nome || ""),
+    [`calendario_id${sufixoCalendario}`]: String(
+      slot.agenda_id || agenda?.id || ""
+    ),
+    [`calendario_nome${sufixoCalendario}`]: String(agenda?.nome || ""),
   };
 }
 
 function valoresAgendamentoAgenda(agendamento: any, agenda: any | null) {
+  // CRM_SYSTEM_CALENDAR_FLOW_CONTEXT_V1
   const labels = formatarSlotAgenda(
     String(agendamento.inicio_at || ""),
     String(agendamento.fim_at || ""),
@@ -5756,7 +5827,10 @@ function valoresAgendamentoAgenda(agendamento: any, agenda: any | null) {
 
   return {
     agenda_agendamento_id: String(agendamento.id || ""),
-    agenda_nome: String(agenda?.nome || agendamento.titulo || ""),
+    agenda_id: String(agendamento.agenda_id || ""),
+    calendario_id: String(agendamento.agenda_id || agenda?.id || ""),
+    calendario_nome: String(agenda?.nome || ""),
+    agendamento_titulo: String(agendamento.titulo || ""),
     agenda_data: labels.data_label,
     agenda_hora: labels.hora_label,
     agenda_inicio_at: String(agendamento.inicio_at || ""),
@@ -5791,11 +5865,11 @@ async function montarOpcoesAgendamentosAgenda(
       status: agendamento.status,
       inicio_at: agendamento.inicio_at,
       fim_at: agendamento.fim_at,
-      agenda_nome: valores.agenda_nome,
+      calendario_nome: valores.calendario_nome,
       data_label: valores.agenda_data,
       hora_label: valores.agenda_hora,
       label: `${valores.agenda_data} as ${valores.agenda_hora}${
-        valores.agenda_nome ? ` - ${valores.agenda_nome}` : ""
+        valores.calendario_nome ? ` - ${valores.calendario_nome}` : ""
       }`,
     });
   }
@@ -5851,8 +5925,17 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
   } = params;
 
   const config = no.configuracao_json || {};
-  const agendaId = String(config.agenda_id || "").trim();
   const metadataAtual = execucao.metadata_json || {};
+  const agendaIdContexto = String(
+    metadataAtual.agenda_id ||
+      metadataAtual.variaveis?.agenda_id ||
+      ""
+  ).trim();
+  const agendaId = String(
+    config.usar_agenda_contexto === true
+      ? agendaIdContexto || config.agenda_id || ""
+      : config.agenda_id || ""
+  ).trim();
   const agendaEstado = metadataAtual.agenda_estado || {};
 
   if (!agendaId) {
@@ -5862,12 +5945,12 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
       fluxoId: execucao.fluxo_id,
       noId: no.id,
       tipoEvento: "agenda_erro_configuracao",
-      descricao: "Bloco de escolha de horario sem agenda configurada.",
+      descricao: "Bloco de escolha de horario sem calendário configurado ou resolvido.",
       entrada: config,
       saida: {},
     });
 
-    return { ok: false, aguardando: false, error: "Bloco sem agenda configurada." };
+    return { ok: false, aguardando: false, error: "Bloco sem calendário configurado ou resolvido." };
   }
 
   const agenda = await obterAgendaAutomacao(empresaId, agendaId);
@@ -5880,11 +5963,11 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
   if (!dataForcada && interpretacao.data_invalida_motivo) {
     const mensagemDataInvalida = substituirVariaveisAgenda(
       String(config.mensagem_data_invalida || "").trim() ||
-        "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.",
+        "Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano.",
       {
         agenda_data_informada: interpretacao.data_informada || "",
         agenda_data_sugestao_ano: interpretacao.data_sugestao_ano || "",
-        agenda_nome_nova: agenda?.nome || "",
+        calendario_nome_novo: agenda?.nome || "",
       }
     );
 
@@ -6034,10 +6117,10 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
       resultadoSlots.dias_sem_disponibilidade?.includes(dataEscolhida);
     const mensagemPadrao =
       semExpedienteNoDia
-        ? "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis."
+        ? "Não há atendimento disponível em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos."
         : interpretacao.preferencia?.hora_minutos != null
         ? "O horario das {{agenda_hora_solicitada}} nao esta livre em {{agenda_data_nova}} e nao encontrei outros horarios nesse dia. Me diga outro dia ou horario."
-        : "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.";
+        : "Não encontrei horários disponíveis em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos.";
     const mensagemBaseSemHorarios =
       semExpedienteNoDia
         ? String(config.mensagem_sem_expediente || "").trim() || mensagemPadrao
@@ -6048,7 +6131,7 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
       mensagemBaseSemHorarios,
       {
         agenda_data_nova: dataLabel,
-        agenda_nome_nova: agenda?.nome || "",
+        calendario_nome_novo: agenda?.nome || "",
         agenda_hora_solicitada: horaSolicitada,
         agenda_preferencia_solicitada: preferenciaSolicitada,
       }
@@ -6107,10 +6190,10 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
     preferenciaNaoAtendida
       ? substituirVariaveisAgenda(
           String(config.mensagem_preferencia_indisponivel || "").trim() ||
-            "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:",
+            "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\n\nEstas são as opções mais próximas:",
           {
             agenda_data_nova: dataLabel,
-            agenda_nome_nova: agenda?.nome || "",
+            calendario_nome_novo: agenda?.nome || "",
             agenda_hora_solicitada: horaSolicitada,
             agenda_preferencia_solicitada: preferenciaSolicitada,
           }
@@ -6119,10 +6202,10 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
   const mensagemListar = substituirVariaveisAgenda(
     mensagemPreferenciaIndisponivel ||
       String(mensagemInicial || config.mensagem_listar_horarios || "").trim() ||
-      "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:",
+      "Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:",
     {
       agenda_data_nova: dataLabel,
-      agenda_nome_nova: agenda?.nome || "",
+      calendario_nome_novo: agenda?.nome || "",
       agenda_hora_solicitada: horaSolicitada,
       agenda_preferencia_solicitada: preferenciaSolicitada,
     }
@@ -6347,11 +6430,11 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
     const agendaEstado = metadataAtual.agenda_estado || {};
     const mensagemDataInvalida = substituirVariaveisAgenda(
       String(config.mensagem_data_invalida || "").trim() ||
-        "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.",
+        "Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano.",
       {
         agenda_data_informada: interpretacao.data_informada || "",
         agenda_data_sugestao_ano: interpretacao.data_sugestao_ano || "",
-        agenda_nome_nova: agendaConfigurada?.nome || "",
+        calendario_nome_novo: agendaConfigurada?.nome || "",
       }
     );
 
@@ -6551,6 +6634,7 @@ async function registrarEscolhaAgendamentoAgendaAutomacao(params: {
       patch: {
         agenda_agendamentos_opcoes: proximasOpcoes,
         agenda_agendamento_id: opcaoEscolhida.id,
+        agenda_id: opcaoEscolhida.agenda_id || null,
         agenda_status: opcaoEscolhida.status || "",
         variaveis: {
           ...(metadataAtual.variaveis || {}),
@@ -6670,6 +6754,156 @@ async function buscarAgendamentoAutomacao(params: {
     .eq("empresa_id", empresaId)
     .maybeSingle();
 
+  const metadataContexto = execucao?.metadata_json || {};
+  const agendamentoContextoId = String(
+    metadataContexto.agenda_agendamento_id ||
+      metadataContexto.variaveis?.agenda_agendamento_id ||
+      ""
+  ).trim();
+
+  if (config.usar_agendamento_contexto === true && agendamentoContextoId) {
+    let queryContexto = supabaseAdmin
+      .from("agenda_agendamentos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .eq("id", agendamentoContextoId)
+      .in("status", statusBusca)
+      .gte("inicio_at", new Date().toISOString());
+
+    if (execucao?.contato_id) {
+      queryContexto = queryContexto.eq("contato_id", execucao.contato_id);
+    } else {
+      queryContexto = queryContexto.eq("telefone_cliente", numeroDestino);
+    }
+
+    const { data: agendamentoContexto, error: erroContexto } =
+      await queryContexto.maybeSingle();
+
+    if (erroContexto) {
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "agenda_contexto_erro",
+        descricao: "Erro ao validar o agendamento recebido pela automação.",
+        entrada: {
+          agendamento_id: agendamentoContextoId,
+        },
+        saida: {
+          erro: erroContexto.message,
+        },
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noAtualId: no.id,
+        mensagemTexto: "erro",
+        numeroDestino,
+        runtimeCache,
+      });
+
+      return;
+    }
+
+    const agendaContexto = agendamentoContexto
+      ? await obterAgendaAutomacao(
+          empresaId,
+          String(agendamentoContexto.agenda_id || "")
+        )
+      : null;
+    const valoresContexto = agendamentoContexto
+      ? valoresAgendamentoAgenda(agendamentoContexto, agendaContexto)
+      : { agenda_encontrado: "false" };
+
+    await salvarVariaveisAutomacao({
+      empresaId,
+      execucao: {
+        id: execucaoId,
+        contato_id: execucao?.contato_id || null,
+      },
+      valores: {
+        ...valoresContexto,
+        agenda_encontrado: agendamentoContexto ? "true" : "false",
+      },
+      origem: "agenda_buscar_agendamento_contexto",
+      metadata: {
+        agendamento_id: agendamentoContexto?.id || agendamentoContextoId,
+      },
+    });
+
+    await salvarEstadoExecucaoAgenda({
+      empresaId,
+      execucaoId,
+      metadataAtual: metadataContexto,
+      patch: {
+        agenda_agendamento_id:
+          agendamentoContexto?.id || agendamentoContextoId,
+        agenda_id: agendamentoContexto?.agenda_id || null,
+        agenda_status: agendamentoContexto?.status || "nao_encontrado",
+        variaveis: {
+          ...(metadataContexto.variaveis || {}),
+          ...valoresContexto,
+          agenda_encontrado: agendamentoContexto ? "true" : "false",
+        },
+      },
+    });
+
+    const mensagemContexto = agendamentoContexto
+      ? String(config.mensagem_encontrado || "").trim()
+      : String(config.mensagem_nao_encontrado || "").trim();
+
+    if (mensagemContexto) {
+      await enviarMensagemAutomacao({
+        empresaId,
+        conversaId,
+        numeroDestino,
+        conteudo: substituirVariaveisAgenda(mensagemContexto, {
+          ...valoresContexto,
+          agenda_encontrado: agendamentoContexto ? "true" : "false",
+        }),
+        execucaoId,
+        noId: no.id,
+      });
+    }
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: agendamentoContexto
+        ? "agenda_contexto_utilizado"
+        : "agenda_contexto_nao_encontrado",
+      descricao: agendamentoContexto
+        ? "Agendamento recebido pelo botão utilizado sem listar outros compromissos."
+        : "O agendamento recebido pelo botão não está mais disponível.",
+      entrada: {
+        agendamento_id: agendamentoContextoId,
+      },
+      saida: {
+        agendamento_id: agendamentoContexto?.id || null,
+        agenda_id: agendamentoContexto?.agenda_id || null,
+      },
+    });
+
+    await seguirParaProximoNo({
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      noAtualId: no.id,
+      mensagemTexto: agendamentoContexto ? "encontrado" : "nao_encontrado",
+      numeroDestino,
+      runtimeCache,
+    });
+
+    return;
+  }
+
   let query = supabaseAdmin
     .from("agenda_agendamentos")
     .select("*")
@@ -6729,7 +6963,8 @@ async function buscarAgendamentoAutomacao(params: {
     .maybeSingle();
   const metadataAtual = execucaoAtual?.metadata_json || {};
 
-  if (listarParaEscolha && agendamentos.length > 0) {
+  // CRM_SINGLE_APPOINTMENT_AUTO_SELECTION_V1
+  if (listarParaEscolha && agendamentos.length > 1) {
     const opcoes = await montarOpcoesAgendamentosAgenda(empresaId, agendamentos);
     const mensagemBase =
       String(config.mensagem_listar_agendamentos || "").trim() ||
@@ -6848,6 +7083,7 @@ async function buscarAgendamentoAutomacao(params: {
     metadataAtual,
     patch: {
       agenda_agendamento_id: agendamento?.id || null,
+      agenda_id: agendamento?.agenda_id || null,
       agenda_status: agendamento?.status || "nao_encontrado",
       variaveis: {
         ...(metadataAtual.variaveis || {}),
@@ -7199,7 +7435,7 @@ async function remarcarAgendamentoAutomacao(params: {
       numeroDestino,
       conteudo:
         String(config.mensagem_conflito || "").trim() ||
-        "Esse novo horario acabou de ficar indisponivel. Vamos escolher outro horario.",
+        "Esse horário acabou de ficar indisponível.\n\nEscolha outra opção para continuarmos.",
       execucaoId,
       noId: no.id,
     });
@@ -7875,6 +8111,7 @@ async function transferirArquivoIaSemConexaoErro(params: {
     .update({
       status: "fila",
       setor_id: null,
+      escopo_fila: "geral",
       responsavel_id: null,
       bot_ativo: false,
       aguardando_atendente: true,
@@ -7931,8 +8168,14 @@ export async function executarAcaoExcessoTentativas(params: {
   const mensagem =
     String(config.mensagem_excesso_tentativas || "").trim() ||
     "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.";
+  const escopoFilaExcessoTentativas =
+    String(config.escopo_fila_excesso_tentativas || "").trim() === "geral"
+      ? "geral"
+      : "setor";
   const setorExcessoTentativas =
-    String(config.setor_excesso_tentativas || "").trim() || null;
+    escopoFilaExcessoTentativas === "geral"
+      ? null
+      : String(config.setor_excesso_tentativas || "").trim() || null;
   const acao = String(
     config.acao_excesso_tentativas || "transferir_atendimento"
   );
@@ -8103,6 +8346,7 @@ export async function executarAcaoExcessoTentativas(params: {
   const atribuicao = await resolverAtribuicaoTransferencia({
     empresaId,
     setorId: setorExcessoTentativas,
+    escopoFila: escopoFilaExcessoTentativas,
     estrategia: config.estrategia_excesso_tentativas,
     atendenteId: config.atendente_excesso_tentativas,
   });
@@ -8122,7 +8366,8 @@ export async function executarAcaoExcessoTentativas(params: {
     .from("conversas")
     .update({
       status: atribuicao.responsavelId ? "em_atendimento" : "fila",
-      setor_id: setorExcessoTentativas,
+      setor_id: atribuicao.setorId,
+      escopo_fila: atribuicao.escopoFila,
       responsavel_id: atribuicao.responsavelId,
       bot_ativo: false,
       aguardando_atendente: !atribuicao.responsavelId,

@@ -20,6 +20,12 @@ function integrationLabel(integration: any) {
   return [name, number, mode].filter(Boolean).join(" · ");
 }
 
+function variableMetadata(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 export async function GET() {
   try {
     const result = await getUsuarioContexto();
@@ -39,7 +45,12 @@ export async function GET() {
     }
 
     const supabase = getSupabaseAdmin();
-    const [integrationsResult, templatesResult, flowsResult] = await Promise.all([
+    const [
+      integrationsResult,
+      templatesResult,
+      flowsResult,
+      variablesResult,
+    ] = await Promise.all([
       supabase
         .from("integracoes_whatsapp")
         .select(
@@ -60,8 +71,17 @@ export async function GET() {
         .from("automacao_fluxos")
         .select("id, nome, status")
         .eq("empresa_id", companyId)
-        .neq("status", "arquivado")
+        .eq("status", "ativo")
         .order("nome", { ascending: true }),
+      supabase
+        .from("automacao_variaveis")
+        .select("id, chave, valor, metadata_json, created_at, updated_at")
+        .eq("empresa_id", companyId)
+        .is("execucao_id", null)
+        .is("contato_id", null)
+        .eq("metadata_json->>tipo", "global_empresa")
+        .eq("metadata_json->>ativo", "true")
+        .order("created_at", { ascending: false }),
     ]);
 
     if (integrationsResult.error) {
@@ -74,6 +94,9 @@ export async function GET() {
     }
     if (flowsResult.error) {
       throw new Error(`Erro ao buscar fluxos: ${flowsResult.error.message}`);
+    }
+    if (variablesResult.error) {
+      throw new Error(`Erro ao buscar variáveis: ${variablesResult.error.message}`);
     }
 
     const integrations = (integrationsResult.data || [])
@@ -106,11 +129,26 @@ export async function GET() {
         };
       });
 
+    const variables = (variablesResult.data || []).map((item: any) => {
+      const metadata = variableMetadata(item.metadata_json);
+      return {
+        id: item.id,
+        chave: String(item.chave || ""),
+        valor: String(item.valor || ""),
+        descricao: String(metadata.descricao || ""),
+        escopo: String(metadata.escopo || "global"),
+        ativo: metadata.ativo !== false,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+      };
+    });
+
     return NextResponse.json({
       ok: true,
       integracoes: integrations,
       templates,
       fluxos: flowsResult.data || [],
+      variaveis: variables,
       execucao_automatica_ativa: true,
       total_integracoes: integrations.length,
     });

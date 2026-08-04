@@ -7636,3 +7636,67 @@ a.buttonMessageOption:hover {
 
 }
 
+
+
+/* CRM_DISPARO_CHAT_PRESENTATION_V1 */
+.messageBubbleDisparo {
+  background: color-mix(
+    in srgb,
+    var(--crm-primary-soft) 82%,
+    var(--crm-surface)
+  );
+  color: var(--crm-text-strong);
+  border: 1px solid color-mix(
+    in srgb,
+    var(--crm-primary-strong) 28%,
+    var(--crm-border)
+  );
+  border-top-left-radius: 4px;
+  box-shadow:
+    inset 3px 0 0 var(--crm-primary-strong),
+    0 1px 1px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
+}
+
+.disparoSenderLabel {
+  color: var(--crm-primary-strong);
+  font-weight: 800;
+}
+
+.disparoModeBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--crm-primary-strong) 14%,
+    var(--crm-surface)
+  );
+  color: var(--crm-primary-strong);
+  border: 1px solid color-mix(
+    in srgb,
+    var(--crm-primary-strong) 24%,
+    transparent
+  );
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: lowercase;
+}
+
+.disparoMessageContent {
+  display: grid;
+  gap: 8px;
+}
+
+.disparoMessageTitle {
+  display: block;
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.disparoMessageContent .messageText {
+  margin: 0;
+}

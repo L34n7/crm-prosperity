@@ -95,20 +95,8 @@ export function validarPoliticaListaDisparo(params: {
     return { ok: true as const, categoria, totalContatosFrios };
   }
 
-  if (categoria === "marketing") {
-    return {
-      ok: false as const,
-      categoria,
-      totalContatosFrios,
-      status: 422,
-      code: CODIGO_MARKETING_LISTA_FRIA_BLOQUEADO,
-      error:
-        "Templates de marketing nao podem ser enviados para contatos de lista fria. Remova os contatos sem opt-in para continuar.",
-    };
-  }
-
   if (
-    categoria === "utility" &&
+    (categoria === "marketing" || categoria === "utility") &&
     !params.responsabilidadeListaFriaConfirmada
   ) {
     return {
@@ -118,7 +106,7 @@ export function validarPoliticaListaDisparo(params: {
       status: 428,
       code: CODIGO_CONFIRMACAO_LISTA_FRIA_OBRIGATORIA,
       error:
-        "Confirme a responsabilidade pelo envio de template utility para contatos de lista fria.",
+        `Confirme a responsabilidade pelo envio de template ${categoria} para contatos de lista fria.`,
     };
   }
 

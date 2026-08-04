@@ -436,6 +436,68 @@
   border-color: var(--crm-ui-private-border-hex-b1b8bf);
 }
 
+/* CRM_SYSTEM_FLOW_PREMIUM_BADGE_STYLE_V2 */
+.systemFlowBadge {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  gap: 8px;
+  min-height: 27px;
+  padding: 0 12px 0 10px;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      115deg,
+      transparent 0 34%,
+      color-mix(in srgb, var(--crm-text-inverse) 12%, transparent) 46%,
+      transparent 58%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--crm-primary-strong) 24%, transparent),
+      transparent 48%
+    ),
+    var(--crm-ui-private-surface-hex-000000);
+  color: var(--crm-text-inverse);
+  border-color: color-mix(
+    in srgb,
+    var(--crm-primary-strong) 58%,
+    var(--crm-border-strong)
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--crm-text-inverse) 18%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--crm-primary-strong) 22%, transparent),
+    0 6px 18px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  font-style: normal;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.systemFlowBadge::before {
+  content: '';
+  width: 10px;
+  height: 12px;
+  flex: 0 0 10px;
+  clip-path: polygon(50% 0, 92% 18%, 84% 70%, 50% 100%, 16% 70%, 8% 18%);
+  background: linear-gradient(
+    145deg,
+    var(--crm-warning-border),
+    var(--crm-primary-strong)
+  );
+  box-shadow: 0 0 12px
+    color-mix(in srgb, var(--crm-primary-strong) 48%, transparent);
+}
+
+.headerDropdownItem:disabled,
+.flowDropdownItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .flowBadges {
   display: flex;
   align-items: center;

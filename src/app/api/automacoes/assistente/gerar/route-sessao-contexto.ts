@@ -74,7 +74,7 @@ export async function carregarContextoAssistente(body: ObjetoJson) {
 
   const [{ data: agendas }, { data: midias }] = await Promise.all([
     supabaseAdmin
-      .from("agenda_calendarios")
+      .from("calendarios")
       .select(
         "id, nome, descricao, timezone, duracao_minutos, janela_dias, status"
       )

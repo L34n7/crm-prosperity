@@ -34,6 +34,11 @@ export type Context = {
   integration: any | null;
   template: any | null;
   flow: any | null;
+  variables: Record<string, string>;
+  protocols: {
+    protocolo_atual: string;
+    ultimo_protocolo: string;
+  };
 };
 
 export class AgendaAutomationError extends Error {
@@ -140,12 +145,14 @@ export function templateParameters(context: Context) {
       agenda: context.agenda,
       contact: context.contact,
       responsible: context.responsible,
+      variables: context.variables,
+      protocols: context.protocols,
     },
   });
 }
 
 export function quickReplyButtons(context: Context) {
-  if (context.job.tipo !== "confirmacao") return [];
+  if (!["confirmacao", "lembrete"].includes(context.job.tipo)) return []; // CRM_CALENDAR_EMAIL_REMINDER_BUTTONS_PRIORITY_V1
   return mappedQuickReplyButtons({
     payload: context.template?.payload,
     configuracao: context.rule?.configuracao_json,

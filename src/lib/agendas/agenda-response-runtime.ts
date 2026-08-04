@@ -97,7 +97,7 @@ async function processResponse(job: ResponseJob) {
         .eq("id", job.agendamento_id)
         .maybeSingle(),
       supabase
-        .from("agenda_calendarios")
+        .from("calendarios")
         .select("id, nome, timezone, status")
         .eq("empresa_id", job.empresa_id)
         .eq("id", job.agenda_id)
@@ -175,22 +175,65 @@ async function processResponse(job: ResponseJob) {
     conversation.bot_ativo !== true;
   if (humanService || conversation.aguardando_atendente === true) {
     throw new ResponseFlowError(
-      "A conversa está em atendimento humano; o fluxo será tentado novamente."
+      "A ação foi registrada, mas a conversa está em atendimento humano.",
+      { cancel: true }
     );
   }
 
-  const { data: activeExecution } = await supabase
+  // CRM_CALENDAR_EMAIL_REMINDER_BUTTONS_PRIORITY_V1
+  const { data: activeExecutions, error: activeExecutionsError } = await supabase
     .from("automacao_execucoes")
-    .select("id")
+    .select("id, fluxo_id, status, metadata_json")
     .eq("empresa_id", job.empresa_id)
     .eq("conversa_id", conversation.id)
-    .in("status", ["rodando", "aguardando"])
-    .limit(1)
-    .maybeSingle();
-  if (activeExecution?.id) {
-    throw new ResponseFlowError(
-      "A conversa já possui uma automação ativa; o fluxo será tentado novamente."
+    .in("status", ["rodando", "aguardando"]);
+  if (activeExecutionsError) {
+    throw new Error(
+      `Erro ao verificar automações ativas: ${activeExecutionsError.message}`
     );
+  }
+
+  const interruptedExecutionIds = (activeExecutions || []).map((item) => item.id);
+  if (interruptedExecutionIds.length > 0) {
+    const interruptedAt = new Date().toISOString();
+    for (const activeExecution of activeExecutions || []) {
+      const { error: interruptionError } = await supabase
+        .from("automacao_execucoes")
+        .update({
+          status: "cancelado",
+          metadata_json: {
+            ...(activeExecution.metadata_json || {}),
+            interrupcao_agenda: {
+              motivo: "interrompido_por_acao_calendario",
+              acao: job.acao,
+              agenda_agendamento_id: appointment.id,
+              agenda_automacao_resposta_id: job.id,
+              fluxo_substituto_id: flow.id,
+              interrompido_em: interruptedAt,
+            },
+          },
+        })
+        .eq("empresa_id", job.empresa_id)
+        .eq("id", activeExecution.id)
+        .in("status", ["rodando", "aguardando"]);
+      if (interruptionError) {
+        throw new Error(
+          `Erro ao interromper automação anterior: ${interruptionError.message}`
+        );
+      }
+    }
+
+    const { error: schedulesError } = await supabase
+      .from("automacao_agendamentos")
+      .update({ status: "cancelado" })
+      .eq("empresa_id", job.empresa_id)
+      .in("execucao_id", interruptedExecutionIds)
+      .eq("status", "pendente");
+    if (schedulesError) {
+      throw new Error(
+        `Erro ao cancelar tarefas da automação anterior: ${schedulesError.message}`
+      );
+    }
   }
 
   const { data: initialNode, error: nodeError } = await supabase
@@ -301,6 +344,32 @@ async function processResponse(job: ResponseJob) {
     }
     throw new Error(
       `Erro ao iniciar fluxo da resposta: ${executionError?.message || "sem retorno"}`
+    );
+  }
+
+  // CRM_AGENDA_RESPONSE_VARIABLES_PERSIST_V1
+  const variableRows = Object.entries(variables).map(([chave, valor]) => ({
+    empresa_id: job.empresa_id,
+    execucao_id: execution.id,
+    contato_id: appointment.contato_id,
+    chave,
+    valor: String(valor ?? ""),
+    metadata_json: {
+      origem: "agenda_resposta_whatsapp",
+      agenda_automacao_resposta_id: job.id,
+      agenda_agendamento_id: appointment.id,
+    },
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error: variablesError } = await supabase
+    .from("automacao_variaveis")
+    .upsert(variableRows, {
+      onConflict: "execucao_id,chave",
+    });
+  if (variablesError) {
+    throw new Error(
+      `Erro ao persistir variáveis do fluxo do calendário: ${variablesError.message}`
     );
   }
 

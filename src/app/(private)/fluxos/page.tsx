@@ -109,6 +109,27 @@ type EstrategiaTransferenciaNode =
   | "rodizio_aleatorio"
   | "menos_conversas";
 
+type EscopoFilaNode = "setor" | "geral";
+
+// CRM_QUEUE_SCOPE_EDITOR_V1
+function normalizarEscopoFilaNode(
+  valor: unknown,
+  setorId?: unknown,
+  usarGeralComoPadrao = false
+): EscopoFilaNode {
+  if (String(valor || "").trim() === "geral") return "geral";
+  if (String(valor || "").trim() === "setor") return "setor";
+  if (String(setorId || "").trim()) return "setor";
+  return usarGeralComoPadrao ? "geral" : "setor";
+}
+
+function fluxoEhSistemaCalendario(fluxo?: Fluxo | null) {
+  return Boolean(
+    fluxo?.configuracao_json?.fluxo_sistema_calendario === true &&
+      fluxo?.configuracao_json?.protegido_sistema === true
+  );
+}
+
 type AtendenteOpcao = {
   id: string;
   nome: string;
@@ -534,8 +555,29 @@ function mimeTypeParaUpload(arquivo: File) {
 }
 const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; 
 const VARIAVEIS_FIXAS_CONTATO_HELP =
-    "Variaveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+    "Variáveis do sistema: {{nome_empresa}}, {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{calendario_nome}}, {{agendamento_titulo}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
 const VARIAVEIS_FIXAS_SISTEMA = [
+  // CRM_SYSTEM_CANONICAL_VARIABLES_EDITOR_V1
+  {
+    chave: "nome_empresa",
+    exemplo: "{{nome_empresa}}",
+    descricao: "Nome da empresa salvo em Configurações Gerais.",
+  },
+  {
+    chave: "calendario_nome",
+    exemplo: "{{calendario_nome}}",
+    descricao: "Nome do calendário vinculado ao agendamento atual.",
+  },
+  {
+    chave: "calendario_nome_novo",
+    exemplo: "{{calendario_nome_novo}}",
+    descricao: "Nome do calendário usado no novo horário selecionado.",
+  },
+  {
+    chave: "agendamento_titulo",
+    exemplo: "{{agendamento_titulo}}",
+    descricao: "Título salvo no agendamento atual.",
+  },
   {
     chave: "nome_contato",
     exemplo: "{{nome_contato}}",
@@ -594,6 +636,11 @@ const VARIAVEIS_FIXAS_SISTEMA = [
   },
 ];
 const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
+  "nome_empresa",
+  "empresa_nome",
+  "calendario_nome",
+  "calendario_nome_novo",
+  "agendamento_titulo",
   "nome",
   "nome_contato",
   "contato_nome",
@@ -1881,7 +1928,7 @@ function mensagensDoNodePreviaWhatsapp(
         "bot",
         textoPreviaWhatsapp(
           configuracao.mensagem_encontrado || configuracao.mensagem,
-          "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}."
+          "Encontrei seu agendamento para {{agenda_data}} às {{agenda_hora}}."
         ),
         { delayLabel }
       ),
@@ -1903,7 +1950,7 @@ function mensagensDoNodePreviaWhatsapp(
         "bot",
         textoPreviaWhatsapp(
           configuracao.mensagem_listar_horarios,
-          "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
+          "Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:"
         ),
         {
           botoes: ["14:00", "14:30", "15:00"],
@@ -2388,10 +2435,26 @@ function FluxosPageContent() {
   }
 
   const [setorDestino, setSetorDestino] = useState("");
+  const [escopoFilaTransferenciaNode, setEscopoFilaTransferenciaNode] =
+    useState<EscopoFilaNode>("setor");
   const [estrategiaTransferenciaNode, setEstrategiaTransferenciaNode] =
     useState<EstrategiaTransferenciaNode>("fila_setor");
   const [atendenteDestinoNode, setAtendenteDestinoNode] = useState("");
   const fluxo = fluxoSelecionado;
+  // CRM_SYSTEM_CALENDAR_FLOW_EDITOR_V1
+  const fluxoSistemaCalendario = Boolean(
+    fluxoSelecionado?.configuracao_json?.fluxo_sistema_calendario === true &&
+      fluxoSelecionado?.configuracao_json?.protegido_sistema === true &&
+      [
+        "calendario_confirmacao",
+        "calendario_cancelamento",
+        "calendario_reagendamento",
+      ].includes(
+        String(
+          fluxoSelecionado?.configuracao_json?.finalidade_sistema || ""
+        ).trim()
+      )
+  );
   const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);
   const [confirmandoExclusaoConexao, setConfirmandoExclusaoConexao] =
     useState(false);
@@ -2420,7 +2483,12 @@ function FluxosPageContent() {
     useState<GatilhoFluxo["condicao"]>("contem");
   
   const [filtroStatusFluxo, setFiltroStatusFluxo] = useState<
-    "todos" | "rascunho" | "ativo" | "pausado" | "arquivado"
+    | "todos"
+    | "sistema"
+    | "rascunho"
+    | "ativo"
+    | "pausado"
+    | "arquivado"
   >("todos");
 
   const [modalArquivarAberto, setModalArquivarAberto] = useState(false);
@@ -2487,6 +2555,8 @@ function FluxosPageContent() {
     useState("transferir_atendimento");
   const [setorExcessoTentativasNode, setSetorExcessoTentativasNode] =
     useState("");
+  const [escopoFilaExcessoTentativasNode, setEscopoFilaExcessoTentativasNode] =
+    useState<EscopoFilaNode>("setor");
   const [estrategiaExcessoTentativasNode, setEstrategiaExcessoTentativasNode] =
     useState<EstrategiaTransferenciaNode>("fila_setor");
   const [atendenteExcessoTentativasNode, setAtendenteExcessoTentativasNode] =
@@ -2528,18 +2598,18 @@ function FluxosPageContent() {
   const [agendaMensagemSemHorariosNode, setAgendaMensagemSemHorariosNode] =
     useState("No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.");
   const [agendaMensagemSemExpedienteNode, setAgendaMensagemSemExpedienteNode] =
-    useState("Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis.");
+    useState("Não há atendimento disponível em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos.");
   const [agendaMensagemDataInvalidaNode, setAgendaMensagemDataInvalidaNode] =
-    useState("Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.");
+    useState("Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano.");
   const [agendaMensagemListarAgendamentosNode, setAgendaMensagemListarAgendamentosNode] =
     useState("Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:");
   const [agendaMensagemListarHorariosNode, setAgendaMensagemListarHorariosNode] =
-    useState("Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:");
+    useState("Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:");
   const [
     agendaMensagemPreferenciaIndisponivelNode,
     setAgendaMensagemPreferenciaIndisponivelNode,
   ] = useState(
-    "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
+    "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\n\nEstas são as opções mais próximas:"
   );
   const [agendaMensagemConflitoNode, setAgendaMensagemConflitoNode] =
     useState("Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.");
@@ -3059,7 +3129,7 @@ function FluxosPageContent() {
       },
       {
         key: "agenda_nome",
-        description: "Nome da agenda em que o horário foi reservado.",
+        description: "Nome do calendário em que o horário foi reservado.",
         category: "Agendamento",
       },
       {
@@ -4215,6 +4285,9 @@ function abrirFluxo(fluxo: Fluxo) {
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
+              escopo_fila_excesso_tentativas: fluxoSistemaCalendario
+                ? "geral"
+                : "setor",
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
@@ -4234,6 +4307,9 @@ function abrirFluxo(fluxo: Fluxo) {
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
+              escopo_fila_excesso_tentativas: fluxoSistemaCalendario
+                ? "geral"
+                : "setor",
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
@@ -4253,6 +4329,9 @@ function abrirFluxo(fluxo: Fluxo) {
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
+              escopo_fila_excesso_tentativas: fluxoSistemaCalendario
+                ? "geral"
+                : "setor",
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
@@ -4302,11 +4381,11 @@ function abrirFluxo(fluxo: Fluxo) {
               listar_para_escolha: true,
               quantidade_opcoes: 6,
               mensagem_encontrado:
-                "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.",
+                "Encontrei seu agendamento para {{agenda_data}} às {{agenda_hora}}.",
               mensagem_listar_agendamentos:
                 "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:",
               mensagem_nao_encontrado:
-                "Nao encontrei nenhum agendamento futuro no seu contato.",
+                "No momento não encontrei horários disponíveis. Vou te encaminhar para um atendente.",
             }
           : tipoNo === "agenda_escolher_horario"
           ? {
@@ -4314,20 +4393,23 @@ function abrirFluxo(fluxo: Fluxo) {
               mensagem:
                 "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.",
               mensagem_listar_horarios:
-                "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:",
+                "Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:",
               mensagem_preferencia_indisponivel:
-                "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:",
+                "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\n\nEstas são as opções mais próximas:",
               quantidade_opcoes: 6,
               janela_dias: 14,
               mensagem_data_invalida:
-                "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.",
+                "Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano.",
               mensagem_sem_horarios:
-                "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.",
+                "Não encontrei horários disponíveis em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos.",
               mensagem_sem_expediente:
-                "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis.",
+                "Não há atendimento disponível em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos.",
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
+              escopo_fila_excesso_tentativas: fluxoSistemaCalendario
+                ? "geral"
+                : "setor",
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
@@ -4361,7 +4443,7 @@ function abrirFluxo(fluxo: Fluxo) {
               mensagem:
                 "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}.",
               mensagem_conflito:
-                "Esse novo horario acabou de ficar indisponivel. Vamos escolher outro horario.",
+                "Esse horário acabou de ficar indisponível.\n\nEscolha outra opção para continuarmos.",
               enviar_email_agendamento: true,
               email_agendamento_origem: "contato",
               email_agendamento_variavel: "email",
@@ -4379,6 +4461,7 @@ function abrirFluxo(fluxo: Fluxo) {
           : tipoNo === "transferir_setor"
           ? {
               mensagem: "Vou te encaminhar para um atendente.",
+              escopo_fila: fluxoSistemaCalendario ? "geral" : "setor",
               setor_id: "",
               estrategia_transferencia: "fila_setor",
               atendente_id: null,
@@ -4575,6 +4658,13 @@ function offsetLabelConexao(edgeId: string) {
     );
     setRedirectUrlNode(String(configuracaoJson?.url || ""));
     setSetorDestino(configuracaoJson?.setor_id || "");
+    setEscopoFilaTransferenciaNode(
+      normalizarEscopoFilaNode(
+        configuracaoJson?.escopo_fila,
+        configuracaoJson?.setor_id,
+        fluxoSistemaCalendario
+      )
+    );
     setEstrategiaTransferenciaNode(
       normalizarEstrategiaTransferenciaNode(
         configuracaoJson?.estrategia_transferencia,
@@ -4606,6 +4696,13 @@ function offsetLabelConexao(edgeId: string) {
     );
     setSetorExcessoTentativasNode(
       String(configuracaoJson?.setor_excesso_tentativas || "")
+    );
+    setEscopoFilaExcessoTentativasNode(
+      normalizarEscopoFilaNode(
+        configuracaoJson?.escopo_fila_excesso_tentativas,
+        configuracaoJson?.setor_excesso_tentativas,
+        fluxoSistemaCalendario
+      )
     );
     setEstrategiaExcessoTentativasNode(
       normalizarEstrategiaTransferenciaNode(
@@ -4687,13 +4784,13 @@ function offsetLabelConexao(edgeId: string) {
     setAgendaMensagemSemExpedienteNode(
       String(
         configuracaoJson?.mensagem_sem_expediente ||
-          "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis."
+          "Não há atendimento disponível em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos."
       )
     );
     setAgendaMensagemDataInvalidaNode(
       String(
         configuracaoJson?.mensagem_data_invalida ||
-          "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}."
+          "Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano."
       )
     );
     setAgendaMensagemListarAgendamentosNode(
@@ -4705,13 +4802,13 @@ function offsetLabelConexao(edgeId: string) {
     setAgendaMensagemListarHorariosNode(
       String(
         configuracaoJson?.mensagem_listar_horarios ||
-          "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
+          "Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:"
       )
     );
     setAgendaMensagemPreferenciaIndisponivelNode(
       String(
         configuracaoJson?.mensagem_preferencia_indisponivel ||
-          "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
+          "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\n\nEstas são as opções mais próximas:"
       )
     );
     setAgendaMensagemConflitoNode(
@@ -4971,12 +5068,15 @@ async function aplicarEdicaoNoInterno() {
   }
 
   if (tipoNodeEdicao === "transferir_setor") {
-      if (!setorDestino) {
+      if (escopoFilaTransferenciaNode === "setor" && !setorDestino) {
         setErro("Selecione o setor destino da transferência.");
         return;
       }
 
-      if (estrategiaTransferenciaNode === "atendente_especifico") {
+      if (
+        escopoFilaTransferenciaNode === "setor" &&
+        estrategiaTransferenciaNode === "atendente_especifico"
+      ) {
         const atendenteValido = atendentes.some(
           (atendente) =>
             atendente.id === atendenteDestinoNode &&
@@ -5003,12 +5103,18 @@ async function aplicarEdicaoNoInterno() {
         "interpretar_arquivo_ia",
       ].includes(tipoNodeEdicao)
     ) {
-      if (!setorExcessoTentativasNode) {
+      if (
+        escopoFilaExcessoTentativasNode === "setor" &&
+        !setorExcessoTentativasNode
+      ) {
         setErro("Selecione o setor para a transferência por excesso de tentativas ou timeout.");
         return;
       }
 
-      if (estrategiaExcessoTentativasNode === "atendente_especifico") {
+      if (
+        escopoFilaExcessoTentativasNode === "setor" &&
+        estrategiaExcessoTentativasNode === "atendente_especifico"
+      ) {
         const atendenteValido = atendentes.some(
           (atendente) =>
             atendente.id === atendenteExcessoTentativasNode &&
@@ -5271,7 +5377,8 @@ async function aplicarEdicaoNoInterno() {
       }
 
       if (tipoFinal === "agenda_buscar_agendamento") {
-        configuracao_json.agenda_id = agendaIdNode;
+        configuracao_json.agenda_id = fluxoSistemaCalendario ? "" : agendaIdNode;
+        configuracao_json.usar_agendamento_contexto = fluxoSistemaCalendario;
         configuracao_json.status_busca = ["agendado", "confirmado"];
         configuracao_json.listar_para_escolha = agendaListarAgendamentosNode;
         configuracao_json.quantidade_opcoes = Math.max(
@@ -5280,29 +5387,30 @@ async function aplicarEdicaoNoInterno() {
         );
         configuracao_json.mensagem_encontrado =
           mensagemNode.trim() ||
-          "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.";
+          "Encontrei seu agendamento para {{agenda_data}} às {{agenda_hora}}.";
         configuracao_json.mensagem_listar_agendamentos =
           agendaMensagemListarAgendamentosNode.trim() ||
           "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:";
         configuracao_json.mensagem_nao_encontrado =
           agendaMensagemSemHorariosNode.trim() ||
-          "Nao encontrei nenhum agendamento futuro no seu contato.";
+          "No momento não encontrei horários disponíveis. Vou te encaminhar para um atendente.";
       }
 
       if (tipoFinal === "agenda_escolher_horario") {
-        configuracao_json.agenda_id = agendaIdNode;
+        configuracao_json.agenda_id = fluxoSistemaCalendario ? "" : agendaIdNode;
+        configuracao_json.usar_agenda_contexto = fluxoSistemaCalendario;
         configuracao_json.mensagem =
           mensagemNode.trim() ||
           "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.";
         configuracao_json.mensagem_listar_horarios =
           agendaMensagemListarHorariosNode.trim() ||
-          "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:";
+          "Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:";
         configuracao_json.mensagem_preferencia_indisponivel =
           agendaMensagemPreferenciaIndisponivelNode.trim() ||
-          "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:";
+          "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\n\nEstas são as opções mais próximas:";
         configuracao_json.mensagem_data_invalida =
           agendaMensagemDataInvalidaNode.trim() ||
-          "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}.";
+          "Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano.";
         configuracao_json.quantidade_opcoes = Math.max(
           1,
           Math.min(10, Number(agendaQuantidadeOpcoesNode || 6))
@@ -5313,10 +5421,10 @@ async function aplicarEdicaoNoInterno() {
         );
         configuracao_json.mensagem_sem_horarios =
           agendaMensagemSemHorariosNode.trim() ||
-          "Nao encontrei horarios livres para {{agenda_data_nova}}. Me diga outro dia ou horario.";
+          "Não encontrei horários disponíveis em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos.";
         configuracao_json.mensagem_sem_expediente =
           agendaMensagemSemExpedienteNode.trim() ||
-          "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis.";
+          "Não há atendimento disponível em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos.";
       }
 
       if (tipoFinal === "agenda_criar_agendamento") {
@@ -5363,7 +5471,7 @@ async function aplicarEdicaoNoInterno() {
           "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}.";
         configuracao_json.mensagem_conflito =
           agendaMensagemConflitoNode.trim() ||
-          "Esse novo horario acabou de ficar indisponivel. Vamos escolher outro horario.";
+          "Esse horário acabou de ficar indisponível.\n\nEscolha outra opção para continuarmos.";
         configuracao_json.enviar_email_agendamento = agendaEnviarEmailNode;
         configuracao_json.email_agendamento_origem =
           agendaEmailOrigemNode === "variavel" ? "variavel" : "contato";
@@ -5424,11 +5532,16 @@ async function aplicarEdicaoNoInterno() {
         configuracao_json.acao_excesso_tentativas =
           acaoExcessoTentativasNode || "transferir_atendimento";
 
+        configuracao_json.escopo_fila_excesso_tentativas =
+          escopoFilaExcessoTentativasNode;
         configuracao_json.setor_excesso_tentativas =
-          setorExcessoTentativasNode || null;
+          escopoFilaExcessoTentativasNode === "setor"
+            ? setorExcessoTentativasNode || null
+            : null;
         configuracao_json.estrategia_excesso_tentativas =
           estrategiaExcessoTentativasNode;
         configuracao_json.atendente_excesso_tentativas =
+          escopoFilaExcessoTentativasNode === "setor" &&
           estrategiaExcessoTentativasNode === "atendente_especifico"
             ? atendenteExcessoTentativasNode || null
             : null;
@@ -5444,10 +5557,13 @@ async function aplicarEdicaoNoInterno() {
       }
 
       if (tipoFinal === "transferir_setor") {
-        configuracao_json.setor_id = setorDestino;
+        configuracao_json.escopo_fila = escopoFilaTransferenciaNode;
+        configuracao_json.setor_id =
+          escopoFilaTransferenciaNode === "setor" ? setorDestino : null;
         configuracao_json.estrategia_transferencia =
           estrategiaTransferenciaNode;
         configuracao_json.atendente_id =
+          escopoFilaTransferenciaNode === "setor" &&
           estrategiaTransferenciaNode === "atendente_especifico"
             ? atendenteDestinoNode || null
             : null;
@@ -6320,6 +6436,11 @@ async function importarFluxoCompartilhado() {
   }
 
 function abrirModalArquivarFluxo(fluxo: Fluxo) {
+  if (fluxoEhSistemaCalendario(fluxo)) {
+    setErro("Fluxos fixos do sistema não podem ser arquivados.");
+    return;
+  }
+
   setFluxoParaArquivar(fluxo);
   setModalArquivarAberto(true);
 }
@@ -6437,8 +6558,9 @@ async function removerGatilhoFluxo(gatilhoId: string) {
 
   if (!fluxoParaEditar) return;
 
+  // CRM_MODAL_TRIGGER_ERRORS_V1
   try {
-    setErro("");
+    setErroEdicaoFluxo("");
     setSucesso("");
 
     const res = await fetch(
@@ -6463,7 +6585,9 @@ async function removerGatilhoFluxo(gatilhoId: string) {
     setSucesso("Gatilho removido com sucesso.");
     await carregarGatilhosFluxo(fluxoParaEditar.id);
   } catch (error: any) {
-    setErro(error?.message || "Erro ao remover gatilho.");
+    setErroEdicaoFluxo(
+      error?.message || "Erro ao remover gatilho."
+    );
   }
 }
 
@@ -6473,7 +6597,7 @@ async function alternarGatilhoFluxo(gatilho: GatilhoFluxo) {
   if (!fluxoParaEditar) return;
 
   try {
-    setErro("");
+    setErroEdicaoFluxo("");
     setSucesso("");
 
     const res = await fetch(
@@ -6498,7 +6622,9 @@ async function alternarGatilhoFluxo(gatilho: GatilhoFluxo) {
 
     await carregarGatilhosFluxo(fluxoParaEditar.id);
   } catch (error: any) {
-    setErro(error?.message || "Erro ao atualizar gatilho.");
+    setErroEdicaoFluxo(
+      error?.message || "Erro ao atualizar gatilho."
+    );
   }
 }
 
@@ -6568,6 +6694,11 @@ async function restaurarFluxo(fluxo: Fluxo) {
   
 
 function abrirModalApagarDefinitivo(fluxo: Fluxo) {
+  if (fluxoEhSistemaCalendario(fluxo)) {
+    setErro("Fluxos fixos do sistema não podem ser excluídos.");
+    return;
+  }
+
   if (apagandoFluxoDefinitivoRef.current) return;
 
   setFluxoParaApagarDefinitivo(fluxo);
@@ -6920,11 +7051,14 @@ function validarFluxoAntesDeAtivar(params?: {
       }
     }
 
+    // CRM_SYSTEM_CALENDAR_FLOW_ACTIVATION_VALIDATION_V1
     if (
       tipoNo === "agenda_escolher_horario" &&
-      !String(config.agenda_id || "").trim()
+      !String(config.agenda_id || "").trim() &&
+      config.usar_agenda_contexto !== true &&
+      config.usar_agenda_contexto !== "true"
     ) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma agenda.`;
+      return `O bloco "${node.data?.titulo}" precisa ter um calendário.`;
     }
 
     if (
@@ -7019,6 +7153,8 @@ function validarFluxoAntesDeAtivar(params?: {
 
     if (
         tipoNo === "transferir_setor" &&
+        // CRM_GENERAL_QUEUE_TRANSFER_NODE_ACTIVATION_VALIDATION_V1
+        String(config.escopo_fila || "setor").trim() !== "geral" &&
         !String(config.setor_id || "").trim()
       ) {
         return `O bloco "${node.data?.titulo}" precisa ter um setor destino.`;
@@ -7048,6 +7184,9 @@ function validarFluxoAntesDeAtivar(params?: {
         ].includes(tipoNo) &&
         String(config.acao_excesso_tentativas || "transferir_atendimento") ===
           "transferir_atendimento" &&
+        // CRM_GENERAL_QUEUE_ACTIVATION_VALIDATION_V1
+        String(config.escopo_fila_excesso_tentativas || "setor").trim() !==
+          "geral" &&
         !String(config.setor_excesso_tentativas || "").trim()
       ) {
         return `O bloco "${node.data?.titulo}" precisa ter um setor para transferência por excesso de tentativas ou timeout.`;
@@ -7096,6 +7235,12 @@ async function alterarStatusFluxo(
   fluxo: Fluxo,
   novoStatus: "ativo" | "rascunho" | "pausado"
 ) {
+  // CRM_PROTECTED_SYSTEM_FLOW_EDITOR_V1
+  if (fluxoEhSistemaCalendario(fluxo) && novoStatus !== "ativo") {
+    setErro("Fluxos fixos do sistema não podem ser pausados.");
+    return;
+  }
+
   try {
     setErro("");
     setSucesso("");
@@ -7466,7 +7611,7 @@ const nodesParaPreviaWhatsapp = useMemo(() => {
     if (tipoFinal === "agenda_buscar_agendamento") {
       configuracao.mensagem_encontrado =
         mensagemNode.trim() ||
-        "Encontrei seu agendamento para {{agenda_data}} as {{agenda_hora}}.";
+        "Encontrei seu agendamento para {{agenda_data}} às {{agenda_hora}}.";
       configuracao.mensagem_listar_agendamentos =
         agendaMensagemListarAgendamentosNode.trim();
       configuracao.mensagem_nao_encontrado =
@@ -7739,6 +7884,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 setFiltroStatusFluxo(
                   e.target.value as
                     | "todos"
+                    | "sistema"
                     | "rascunho"
                     | "ativo"
                     | "pausado"
@@ -7747,6 +7893,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               }
             >
               <option value="todos">Todos</option>
+              <option value="sistema">Fluxos do sistema</option>
               <option value="ativo">Ativos</option>
               <option value="rascunho">Rascunhos</option>
               <option value="pausado">Pausados</option>
@@ -7797,9 +7944,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               .filter((f) =>
                 f.nome.toLowerCase().includes(buscaFluxo.toLowerCase())
               )
-              .filter((f) =>
-                filtroStatusFluxo === "todos" ? true : f.status === filtroStatusFluxo
-              )
+              .filter((f) => {
+                // CRM_SYSTEM_FLOW_FILTER_ORDER_V1
+                if (filtroStatusFluxo === "todos") return true;
+                if (filtroStatusFluxo === "sistema") {
+                  return fluxoEhSistemaCalendario(f);
+                }
+                return f.status === filtroStatusFluxo;
+              })
               .sort((a, b) => {
                 const ordemStatus = {
                   rascunho: 1,
@@ -7812,6 +7964,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   ordemStatus[a.status] - ordemStatus[b.status];
 
                 if (statusDiff !== 0) return statusDiff;
+
+                if (a.status === "ativo" && b.status === "ativo") {
+                  const sistemaDiff =
+                    Number(fluxoEhSistemaCalendario(a)) -
+                    Number(fluxoEhSistemaCalendario(b));
+
+                  if (sistemaDiff !== 0) return sistemaDiff;
+                }
 
                 // 🔥 Ordenação por data (mais recente primeiro)
                 return (
@@ -7842,6 +8002,15 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     <span className={styles.flowItemTitle}>{fluxo.nome}</span>
 
                     <div className={styles.flowBadges}>
+                      {fluxoEhSistemaCalendario(fluxo) && (
+                        <span
+                          className={`${styles.badge} ${styles.systemFlowBadge}`}
+                          data-system-flow-badge="CRM_SYSTEM_FLOW_STRONG_BADGE_V1"
+                        >
+                          FLUXO DO SISTEMA
+                        </span>
+                      )}
+
                       {fluxo.fluxo_padrao && (
                         <span className={`${styles.badge} ${styles.badgeBlue}`}>
                           padrão
@@ -7918,6 +8087,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             <h2 className={styles.editorTitle}>
               {fluxoSelecionado?.nome || "Selecione um fluxo"}
             </h2>
+            {fluxoEhSistemaCalendario(fluxoSelecionado) && (
+              <span
+                className={`${styles.badge} ${styles.systemFlowBadge}`}
+                data-system-flow-badge="CRM_SYSTEM_FLOW_STRONG_BADGE_V1"
+              >
+                FLUXO DO SISTEMA
+              </span>
+            )}
             <p className={styles.editorSubtitle}>
               Adicione blocos, arraste no painel e conecte um bloco no outro.
             </p>
@@ -8265,6 +8442,12 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       <button
                         type="button"
                         className={styles.headerDropdownItem}
+                        disabled={fluxoEhSistemaCalendario(fluxoSelecionado)}
+                        title={
+                          fluxoEhSistemaCalendario(fluxoSelecionado)
+                            ? "Fluxos fixos do sistema não podem ser pausados."
+                            : undefined
+                        }
                         onClick={() => {
                           setMenuHeaderAberto(false);
                           alterarStatusFluxo(
@@ -8281,6 +8464,12 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       <button
                         type="button"
                         className={`${styles.headerDropdownItem} ${styles.headerDropdownDanger}`}
+                        disabled={fluxoEhSistemaCalendario(fluxoSelecionado)}
+                        title={
+                          fluxoEhSistemaCalendario(fluxoSelecionado)
+                            ? "Fluxos fixos do sistema não podem ser arquivados."
+                            : undefined
+                        }
                         onClick={() => {
                           setMenuHeaderAberto(false);
                           abrirModalArquivarFluxo(fluxoSelecionado);
@@ -8705,16 +8894,16 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                 "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira."
                               );
                               setAgendaMensagemListarHorariosNode(
-                                "Para {{agenda_data_nova}} tenho estes horarios. Responda com o numero do horario ou me diga outro dia:"
+                                "Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:"
                               );
                               setAgendaMensagemPreferenciaIndisponivelNode(
-                                "Nao tenho horario {{agenda_preferencia_solicitada}} livre em {{agenda_data_nova}}. Tenho estas alternativas:"
+                                "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\n\nEstas são as opções mais próximas:"
                               );
                               setAgendaMensagemDataInvalidaNode(
-                                "Essa data ja passou. Para evitar confusao, me envie uma data futura. Se quiser marcar para outro ano, informe o ano completo, por exemplo {{agenda_data_sugestao_ano}}."
+                                "Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano."
                               );
                               setAgendaMensagemSemExpedienteNode(
-                                "Nao temos atendimento em {{agenda_data_nova}}. Me diga outro dia para eu verificar os horarios disponiveis."
+                                "Não há atendimento disponível em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos."
                               );
                             }
 
@@ -8831,13 +9020,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           : tipoNodeEdicao === "avaliacao"
                           ? "Pergunta de avaliação"
                           : tipoNodeEdicao === "agenda_buscar_agendamento"
-                          ? "Mensagem quando encontrar"
+                          ? "Mensagem para 1 agendamento" // CRM_APPOINTMENT_MESSAGE_LABELS_V1
                           : tipoNodeEdicao === "agenda_escolher_horario"
                           ? "Mensagem para pedir o dia"
                           : tipoNodeEdicao === "agenda_criar_agendamento"
                           ? "Mensagem depois de criar"
                           : tipoNodeEdicao === "agenda_remarcar_agendamento"
-                          ? "Mensagem depois de remarcar"
+                          ? "Mensagem após remarcar com sucesso"
                           : tipoNodeEdicao === "agenda_cancelar_agendamento"
                           ? "Mensagem depois de cancelar"
                           : tipoNodeEdicao === "interpretar_arquivo_ia"
@@ -9812,40 +10001,73 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         "agenda_escolher_horario",
                         "agenda_criar_agendamento",
                       ].includes(tipoNodeEdicao) && (
-                        <label className={styles.field}>
-                          <span className={styles.label}>
-                            {tipoNodeEdicao === "agenda_criar_agendamento"
-                              ? "Selecione a agenda"
-                              : "Agenda"}
-                          </span>
-
-                          <select
-                            className={styles.input}
-                            value={agendaIdNode}
-                            onChange={(e) => setAgendaIdNode(e.target.value)}
-                            disabled={carregandoAgendasOpcoes}
-                          >
-                            <option value="">
+                        fluxoSistemaCalendario &&
+                        [
+                          "agenda_buscar_agendamento",
+                          "agenda_escolher_horario",
+                        ].includes(tipoNodeEdicao) ? (
+                          <div className={styles.field}>
+                            <span className={styles.label}>
                               {tipoNodeEdicao === "agenda_buscar_agendamento"
-                                ? "Qualquer agenda"
-                                : carregandoAgendasOpcoes
-                                ? "Carregando agendas..."
-                                : "Selecione uma agenda ativa"}
-                            </option>
+                                ? "Origem dos agendamentos"
+                                : "Calendário"}
+                            </span>
 
-                            {agendasOpcoes.map((agenda) => (
-                              <option key={agenda.id} value={agenda.id}>
-                                {agenda.nome} - {agenda.duracao_minutos}min
+                            <select
+                              className={styles.input}
+                              value="automatico_contexto"
+                              disabled
+                              aria-label="Configuração automática do calendário"
+                            >
+                              <option value="automatico_contexto">
+                                {tipoNodeEdicao === "agenda_buscar_agendamento"
+                                  ? "Automático — botão ou todos os calendários"
+                                  : "Automático — calendário do agendamento atual"}
                               </option>
-                            ))}
-                          </select>
-                        </label>
+                            </select>
+
+                            <span className={styles.help}>
+                              {tipoNodeEdicao === "agenda_buscar_agendamento"
+                                ? "Quando iniciado por um botão, utiliza somente o agendamento correspondente. Quando iniciado por mensagem, pesquisa os compromissos futuros do contato em todos os calendários."
+                                : "Os horários são consultados no mesmo calendário do agendamento recebido pelo botão ou selecionado durante o fluxo."}
+                            </span>
+                          </div>
+                        ) : (
+                          <label className={styles.field}>
+                            <span className={styles.label}>
+                              {tipoNodeEdicao === "agenda_criar_agendamento"
+                                ? "Selecione o calendário"
+                                : "Calendário"}
+                            </span>
+
+                            <select
+                              className={styles.input}
+                              value={agendaIdNode}
+                              onChange={(e) => setAgendaIdNode(e.target.value)}
+                              disabled={carregandoAgendasOpcoes}
+                            >
+                              <option value="">
+                                {tipoNodeEdicao === "agenda_buscar_agendamento"
+                                  ? "Qualquer calendário"
+                                  : carregandoAgendasOpcoes
+                                  ? "Carregando calendários..."
+                                  : "Selecione um calendário ativo"}
+                              </option>
+
+                              {agendasOpcoes.map((agenda) => (
+                                <option key={agenda.id} value={agenda.id}>
+                                  {agenda.nome} - {agenda.duracao_minutos}min
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )
                       )}
 
                       {tipoNodeEdicao === "agenda_escolher_horario" && (
                         <>
                           <label className={styles.field}>
-                            <span className={styles.label}>Mensagem ao listar horarios</span>
+                            <span className={styles.label}>Mensagem ao listar horários</span>
                             <textarea
                               className={styles.textarea}
                               value={agendaMensagemListarHorariosNode}
@@ -9854,7 +10076,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               }
                             />
                             <span className={styles.help}>
-                              Variaveis: {"{{agenda_data_nova}}"} e {"{{agenda_nome_nova}}"}.
+                              Variaveis: {"{{agenda_data_nova}}"} e {"{{calendario_nome_novo}}"}.
                             </span>
                           </label>
 
@@ -9887,7 +10109,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           </div>
 
                           <label className={styles.field}>
-                            <span className={styles.label}>Mensagem se horario pedido estiver ocupado</span>
+                            <span className={styles.label}>Mensagem se o horário pedido estiver ocupado</span>
                             <textarea
                               className={styles.textarea}
                               value={agendaMensagemPreferenciaIndisponivelNode}
@@ -9918,7 +10140,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           </label>
 
                           <label className={styles.field}>
-                            <span className={styles.label}>Mensagem sem horarios</span>
+                            <span className={styles.label}>Mensagem sem horários</span>
                             <textarea
                               className={styles.textarea}
                               value={agendaMensagemSemHorariosNode}
@@ -9957,9 +10179,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             />
 
                             <div>
-                              <strong>Listar agendamentos para escolha</strong>
+                              <strong>Listar quando houver vários agendamentos</strong>
                               <p>
-                                Envia os agendamentos futuros e aguarda o contato responder o numero.
+                                Quando houver mais de um agendamento futuro, envia as opções e aguarda o contato responder o número.
                               </p>
                             </div>
                           </label>
@@ -9967,7 +10189,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           {agendaListarAgendamentosNode && (
                             <>
                               <label className={styles.field}>
-                                <span className={styles.label}>Mensagem ao listar agendamentos</span>
+                                <span className={styles.label}>Mensagem para vários agendamentos</span>
                                 <textarea
                                   className={styles.textarea}
                                   value={agendaMensagemListarAgendamentosNode}
@@ -10032,7 +10254,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           </label>
 
                           <label className={styles.field}>
-                            <span className={styles.label}>Mensagem sem horário / indisponivel</span>
+                            <span className={styles.label}>Mensagem se o horário ficar indisponível</span>
                             <textarea
                               className={styles.textarea}
                               value={agendaMensagemConflitoNode}
@@ -10631,6 +10853,29 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         {tipoNodeEdicao === "transferir_setor" && (
                     <div className={styles.optionsBox}>
                       <label className={styles.field}>
+                        <span className={styles.label}>Escopo da fila</span>
+                        <select
+                          className={styles.input}
+                          value={escopoFilaTransferenciaNode}
+                          onChange={(e) => {
+                            const escopo = e.target.value === "geral" ? "geral" : "setor";
+                            setEscopoFilaTransferenciaNode(escopo);
+                            if (escopo === "geral") {
+                              setSetorDestino("");
+                              setAtendenteDestinoNode("");
+                              setEstrategiaTransferenciaNode("fila_setor");
+                            }
+                          }}
+                        >
+                          <option value="geral">Fila geral — todos os setores</option>
+                          <option value="setor">Fila de um setor específico</option>
+                        </select>
+                        <span className={styles.help}>
+                          Na fila geral, qualquer equipe com acesso aos atendimentos pode assumir a conversa.
+                        </span>
+                      </label>
+
+                      <label className={styles.field}>
                         <span className={styles.label}>Setor destino</span>
 
                         <select
@@ -10640,7 +10885,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             setSetorDestino(e.target.value);
                             setAtendenteDestinoNode("");
                           }}
-                          disabled={carregandoSetores}
+                          disabled={
+                            escopoFilaTransferenciaNode === "geral" ||
+                            carregandoSetores
+                          }
                         >
                           <option value="">
                             {carregandoSetores ? "Carregando setores..." : "Selecione um setor"}
@@ -10666,7 +10914,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               setAtendenteDestinoNode("");
                             }
                           }}
-                          disabled={!setorDestino}
+                          disabled={
+                            escopoFilaTransferenciaNode === "geral" ||
+                            !setorDestino
+                          }
                         >
                           <option value="fila_setor">Somente fila do setor</option>
                           <option value="atendente_especifico">Atendente específico</option>
@@ -10891,6 +11142,26 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       {acaoExcessoTentativasNode === "transferir_atendimento" && (
                         <>
                           <label className={styles.field}>
+                            <span className={styles.label}>Escopo da fila</span>
+                            <select
+                              className={styles.input}
+                              value={escopoFilaExcessoTentativasNode}
+                              onChange={(e) => {
+                                const escopo = e.target.value === "geral" ? "geral" : "setor";
+                                setEscopoFilaExcessoTentativasNode(escopo);
+                                if (escopo === "geral") {
+                                  setSetorExcessoTentativasNode("");
+                                  setAtendenteExcessoTentativasNode("");
+                                  setEstrategiaExcessoTentativasNode("fila_setor");
+                                }
+                              }}
+                            >
+                              <option value="geral">Fila geral — todos os setores</option>
+                              <option value="setor">Fila de um setor específico</option>
+                            </select>
+                          </label>
+
+                          <label className={styles.field}>
                             <span className={styles.label}>Setor do atendimento</span>
                             <select
                               className={styles.input}
@@ -10899,7 +11170,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                 setSetorExcessoTentativasNode(e.target.value);
                                 setAtendenteExcessoTentativasNode("");
                               }}
-                              disabled={carregandoSetores}
+                              disabled={
+                                escopoFilaExcessoTentativasNode === "geral" ||
+                                carregandoSetores
+                              }
                             >
                               <option value="">Selecione um setor</option>
                               {setores.map((setor) => (
@@ -10922,7 +11196,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                   setAtendenteExcessoTentativasNode("");
                                 }
                               }}
-                              disabled={!setorExcessoTentativasNode}
+                              disabled={
+                                escopoFilaExcessoTentativasNode === "geral" ||
+                                !setorExcessoTentativasNode
+                              }
                             >
                               <option value="fila_setor">Somente fila do setor</option>
                               <option value="atendente_especifico">Atendente específico</option>
@@ -12759,6 +13036,12 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               <>
                 <button
                   className={styles.flowDropdownItem}
+                  disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
+                  title={
+                    fluxoEhSistemaCalendario(menuFluxo.fluxo)
+                      ? "Fluxos fixos do sistema não podem ser pausados."
+                      : undefined
+                  }
                   onClick={() => {
                     alterarStatusFluxo(
                       menuFluxo.fluxo!,
@@ -12803,6 +13086,12 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                 <button
                   className={`${styles.flowDropdownItem} ${styles.flowDropdownDanger}`}
+                  disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
+                  title={
+                    fluxoEhSistemaCalendario(menuFluxo.fluxo)
+                      ? "Fluxos fixos do sistema não podem ser arquivados."
+                      : undefined
+                  }
                   onClick={() => {
                     abrirModalArquivarFluxo(menuFluxo.fluxo!);
                     setMenuFluxo(null);

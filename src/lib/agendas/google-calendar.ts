@@ -13,7 +13,7 @@ const GOOGLE_SCOPES = [
 ];
 const CANAL_TTL_SEGUNDOS = 604800;
 const RENOVAR_CANAL_ANTES_MS = 36 * 60 * 60 * 1000;
-const TOLERANCIA_CONFLITO_MS = 2000;
+const TOLERANCIA_CONFLITO_MS = 2000; // CRM_GOOGLE_CANCEL_DELETE_PRIORITY_V1
 const DESCRICAO_INICIO = "Descrição do compromisso:\n";
 const LINK_CRM_INICIO = "\n\nAbrir no CRM: ";
 
@@ -456,7 +456,7 @@ export async function concluirOAuthGoogleCalendar(params: {
   const perfil = perfilResponse.ok ? await perfilResponse.json() : {};
   const supabase = getSupabaseAdmin();
   const { data: agenda } = await supabase
-    .from("agenda_calendarios")
+    .from("calendarios")
     .select("id")
     .eq("id", params.agendaId)
     .eq("empresa_id", params.empresaId)
@@ -683,6 +683,35 @@ async function excluirEventoGoogle(
   }
 }
 
+async function marcarEventoGoogleComoExcluido(params: {
+  agendamento: Agendamento;
+  vinculo: GoogleVinculo;
+  origem: "crm" | "google";
+  googleUpdatedAt?: string | null;
+}) {
+  const agora = new Date().toISOString();
+  const { error } = await getSupabaseAdmin()
+    .from("agenda_google_eventos")
+    .update({
+      google_html_link: null,
+      google_etag: null,
+      google_updated_at: params.googleUpdatedAt || agora,
+      crm_updated_at_snapshot: params.agendamento.updated_at || agora,
+      google_updated_at_snapshot: params.googleUpdatedAt || agora,
+      ultima_origem: params.origem,
+      conflito_status: "sem_conflito",
+      conflito_detalhes: null,
+      last_synced_hash: hashAgendamento(params.agendamento),
+      sync_status: "excluido",
+      updated_at: agora,
+    })
+    .eq("id", params.vinculo.id);
+
+  if (error) {
+    throw new Error(`Erro ao registrar exclusão do evento Google: ${error.message}`);
+  }
+}
+
 async function criarEventoGoogle(
   integracao: GoogleIntegracao,
   agendamento: Agendamento
@@ -811,21 +840,6 @@ export async function sincronizarAgendamentoGoogleCalendar(params: {
     return;
   }
 
-  if (
-    agendamento &&
-    vinculo?.google_event_id &&
-    !params.forcar &&
-    vinculo.last_synced_hash === hashAgendamento(agendamento) &&
-    timestamp(vinculo.crm_updated_at_snapshot) + TOLERANCIA_CONFLITO_MS >=
-      timestamp(agendamento.updated_at)
-  ) {
-    await supabase
-      .from("agenda_google_sync_fila")
-      .delete()
-      .eq("agendamento_id", agendamento.id);
-    return;
-  }
-
   if (!agendamento) {
     if (vinculo?.google_event_id) {
       await excluirEventoGoogle(integracao, vinculo.google_event_id);
@@ -838,22 +852,31 @@ export async function sincronizarAgendamentoGoogleCalendar(params: {
     return;
   }
 
+  // Cancelamentos precisam ser processados antes da otimização por hash.
+  // Assim, um vínculo sincronizado nunca impede a exclusão do evento remoto.
   if (agendamento.status === "cancelado") {
     if (vinculo?.google_event_id) {
       await excluirEventoGoogle(integracao, vinculo.google_event_id);
-      await supabase
-        .from("agenda_google_eventos")
-        .update({
-          google_html_link: null,
-          google_etag: null,
-          google_updated_at: new Date().toISOString(),
-          crm_updated_at_snapshot: agendamento.updated_at,
-          ultima_origem: "crm",
-          last_synced_hash: hashAgendamento(agendamento),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", vinculo.id);
+      await marcarEventoGoogleComoExcluido({
+        agendamento,
+        vinculo,
+        origem: "crm",
+      });
     }
+    await supabase
+      .from("agenda_google_sync_fila")
+      .delete()
+      .eq("agendamento_id", agendamento.id);
+    return;
+  }
+
+  if (
+    vinculo?.google_event_id &&
+    !params.forcar &&
+    vinculo.last_synced_hash === hashAgendamento(agendamento) &&
+    timestamp(vinculo.crm_updated_at_snapshot) + TOLERANCIA_CONFLITO_MS >=
+      timestamp(agendamento.updated_at)
+  ) {
     await supabase
       .from("agenda_google_sync_fila")
       .delete()
@@ -1009,6 +1032,26 @@ async function processarEventoGoogle(
       .from("agenda_google_eventos")
       .delete()
       .eq("id", vinculo.id);
+    return { cancelado: null, conflito: null };
+  }
+
+  // Se o CRM já cancelou, o Google não pode restaurar ou manter o evento ativo.
+  // A exclusão é repetida de forma idempotente quando uma sincronização de entrada
+  // chega antes do processamento da fila de saída.
+  if (agendamento.status === "cancelado") {
+    if (evento.status !== "cancelled" && vinculo.google_event_id) {
+      await excluirEventoGoogle(integracao, vinculo.google_event_id);
+    }
+    await marcarEventoGoogleComoExcluido({
+      agendamento,
+      vinculo,
+      origem: "crm",
+      googleUpdatedAt: evento.updated || null,
+    });
+    await getSupabaseAdmin()
+      .from("agenda_google_sync_fila")
+      .delete()
+      .eq("agendamento_id", agendamento.id);
     return { cancelado: null, conflito: null };
   }
 
@@ -1454,6 +1497,7 @@ export async function processarFilaGoogleCalendar(limite = 30) {
         empresaId: item.empresa_id,
         agendaId: item.agenda_id,
         agendamentoId: item.agendamento_id,
+        forcar: item.operacao === "delete",
       });
       resultados.push({ id: item.id, ok: true });
     } catch (erro) {

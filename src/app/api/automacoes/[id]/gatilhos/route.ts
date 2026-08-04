@@ -129,7 +129,7 @@ async function removerGatilhoDeixariaFluxoAtivoSemGatilho(params: {
 }) {
   const { data: fluxo, error: fluxoError } = await supabaseAdmin
     .from("automacao_fluxos")
-    .select("id, status, fluxo_padrao")
+    .select("id, status, fluxo_padrao, configuracao_json")
     .eq("id", params.fluxoId)
     .eq("empresa_id", params.empresaId)
     .maybeSingle();
@@ -138,10 +138,16 @@ async function removerGatilhoDeixariaFluxoAtivoSemGatilho(params: {
     throw new Error(`Erro ao validar fluxo: ${fluxoError.message}`);
   }
 
+  const fluxoSistemaCalendario =
+    fluxo?.configuracao_json?.fluxo_sistema_calendario === true &&
+    fluxo?.configuracao_json?.protegido_sistema === true;
+
+  // CRM_SYSTEM_FLOW_OPTIONAL_TRIGGER_V1
   if (
     !fluxo ||
     String(fluxo.status || "") !== "ativo" ||
-    fluxo.fluxo_padrao === true
+    fluxo.fluxo_padrao === true ||
+    fluxoSistemaCalendario
   ) {
     return false;
   }

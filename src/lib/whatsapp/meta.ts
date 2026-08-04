@@ -308,6 +308,7 @@ export type NormalizedMessageMetadata = {
     address?: string | null;
   } | null;
   interactive?: WhatsAppInteractiveMessage | null;
+  button?: WhatsAppButtonMessage | null;
   context?: WhatsAppMessageContext | null;
   unsupported?: {
     type?: string | null;
@@ -640,6 +641,8 @@ export function extractIncomingMessages(
         const tipoMensagem = mapWhatsAppTypeToInternalType(type);
         const conteudo = buildConteudo(message, tipoMensagem);
         const metadataJson = buildMetadataJson(message);
+        // CRM_AGENDA_TEMPLATE_BUTTON_PAYLOAD_V1
+        metadataJson.button = message.button ?? null;
         metadataJson.context = message.context ?? null;
         const textoExtraido =
           message.text?.body ??
@@ -844,6 +847,8 @@ export function extractCoexistenceMessageEchoes(
         const type = message.type || "unknown";
         const tipoMensagem = mapWhatsAppTypeToInternalType(type);
         const metadataJson = buildMetadataJson(message);
+        // CRM_AGENDA_TEMPLATE_BUTTON_PAYLOAD_V1
+        metadataJson.button = message.button ?? null;
         metadataJson.context = message.context ?? null;
 
         results.push({

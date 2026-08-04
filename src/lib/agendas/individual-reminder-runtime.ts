@@ -90,7 +90,7 @@ async function buildContext(job: Job) {
       .eq("id", job.agendamento_id)
       .maybeSingle(),
     supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .select("id, empresa_id, nome, timezone, status, metadata_json")
       .eq("empresa_id", job.empresa_id)
       .eq("id", job.agenda_id)

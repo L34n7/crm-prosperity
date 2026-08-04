@@ -293,7 +293,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (
-      politicaLista.categoria === "utility" &&
+      ["utility", "marketing"].includes(politicaLista.categoria) &&
       classificacaoLista.totalFrios > 0 &&
       template.opt_out_habilitado !== true
     ) {
@@ -302,7 +302,7 @@ export async function POST(request: NextRequest) {
           ok: false,
           code: "TEMPLATE_SEM_OPT_OUT",
           error:
-            "Templates utility enviados para lista fria precisam conter o rodape de opt-out. Recrie o template com a instrucao para responder SAIR.",
+            "Templates enviados para lista fria precisam conter o rodape de opt-out. Recrie o template com a instrucao para responder SAIR.",
         },
         { status: 422 }
       );
@@ -450,7 +450,7 @@ export async function POST(request: NextRequest) {
         total_contatos_frios: classificacaoLista.totalFrios,
         total_contatos_opt_in: classificacaoLista.totalOptIn,
         responsabilidade_lista_fria_confirmada:
-          politicaLista.categoria === "utility" &&
+          ["utility", "marketing"].includes(politicaLista.categoria) &&
           classificacaoLista.totalFrios > 0 &&
           responsabilidadeListaFriaConfirmada,
         contato_nome: contato.nome,
@@ -494,7 +494,7 @@ export async function POST(request: NextRequest) {
         total_contatos_frios: classificacaoLista.totalFrios,
         total_contatos_opt_in: classificacaoLista.totalOptIn,
         responsabilidade_lista_fria_confirmada:
-          politicaLista.categoria === "utility" &&
+          ["utility", "marketing"].includes(politicaLista.categoria) &&
           classificacaoLista.totalFrios > 0 &&
           responsabilidadeListaFriaConfirmada,
       },

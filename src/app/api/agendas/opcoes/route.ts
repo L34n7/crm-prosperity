@@ -27,7 +27,7 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .select("id, nome, timezone, duracao_minutos, intervalo_minutos, janela_dias, status")
       .eq("empresa_id", usuario.empresa_id)
       .eq("status", "ativo")

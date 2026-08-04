@@ -36,6 +36,7 @@ function tipoLabel(tipo: string) {
   if (tipo === "lembrete") return "Lembrete do agendamento";
   if (tipo === "aviso_responsavel") return "Aviso ao responsável";
   if (tipo === "pos_atendimento") return "Pós-atendimento";
+  if (tipo === "lembrete_individual") return "Lembrete adicional do agendamento"; // CRM_AGENDA_INDIVIDUAL_REMINDER_POST_FLOW_V1
   return "Automação da agenda";
 }
 
@@ -71,6 +72,25 @@ function destinoAgenda(canal: string, agendamento: any, responsavel: any) {
   if (canal === "email") return agendamento?.email_cliente || responsavel?.email || "";
   if (canal === "sistema") return responsavel?.nome || "Responsável da agenda";
   return agendamento?.nome_cliente || "Contato do agendamento";
+}
+
+// CRM_DISPAROS_DESTINO_NORMALIZADO_V1
+function destinoDetalhadoAgenda(canal: string, agendamento: any, responsavel: any, fluxo: any) {
+  const valor = destinoAgenda(canal, agendamento, responsavel) || "-";
+  if (canal === "email") {
+    return { tipo: "email", rotulo: "E-mail", valor };
+  }
+  if (canal === "sistema") {
+    return { tipo: "responsavel", rotulo: "Responsável", valor };
+  }
+  if (canal === "fluxo") {
+    return {
+      tipo: "fluxo",
+      rotulo: fluxo?.nome ? "Fluxo de destino" : "Contato",
+      valor: fluxo?.nome || valor,
+    };
+  }
+  return { tipo: "whatsapp", rotulo: "WhatsApp", valor };
 }
 
 function conteudoAgenda(tipo: string, canal: string, agendamento: any, agenda: any) {
@@ -132,11 +152,11 @@ export async function GET(request: NextRequest) {
         `)
         .eq("empresa_id", usuario.empresa_id)
         .eq("tipo_agendamento", "disparo_template")
-        .order("created_at", { ascending: false }),
+        .order("executar_em", { ascending: false }),
       supabase
         .from("agenda_automacao_execucoes")
         .select(`
-          id, empresa_id, agenda_id, agendamento_id, regra_id, tipo, canal,
+          id, empresa_id, agenda_id, agendamento_id, agenda_lembrete_id, regra_id, tipo, canal,
           executar_em, status, payload_json, resultado_json, created_at,
           executado_em, mensagem_externa_id, erro, cancelado_manualmente,
           cancelado_em,
@@ -154,7 +174,7 @@ export async function GET(request: NextRequest) {
           )
         `)
         .eq("empresa_id", usuario.empresa_id)
-        .order("created_at", { ascending: false }),
+        .order("executar_em", { ascending: false }),
     ]);
 
     if (fluxosResult.error) {
@@ -174,7 +194,7 @@ export async function GET(request: NextRequest) {
           .filter(Boolean),
         ...execucoesAgenda
           .map((item: any) =>
-            String(one(item.agenda_automacao_regras)?.whatsapp_template_id || "").trim()
+            String((item.payload_json || {}).whatsapp_template_id || one(item.agenda_automacao_regras)?.whatsapp_template_id || "").trim()
           )
           .filter(Boolean),
       ])
@@ -287,6 +307,12 @@ export async function GET(request: NextRequest) {
           template_nome: payload.template_nome || template?.nome || null,
           template_idioma: payload.template_idioma || template?.idioma || null,
           template_payload: payload.template_payload || template?.payload || null,
+          destino_tipo: "whatsapp",
+          destino_rotulo: "WhatsApp",
+          destino_valor: payload.numero_destino || "-",
+          grupo_id: payload.agendamento_id
+            ? "agendamento:" + payload.agendamento_id
+            : "disparo:" + item.id,
         },
         envio_status: envioStatus,
         envio_label:
@@ -311,7 +337,8 @@ export async function GET(request: NextRequest) {
       const agenda = one(item.agenda_calendarios) || {};
       const agendamento = one(item.agenda_agendamentos) || {};
       const regra = one(item.agenda_automacao_regras) || {};
-      const template = templates.get(String(regra.whatsapp_template_id || ""));
+      const individualPayload = item.payload_json || {};
+      const template = templates.get(String(individualPayload.whatsapp_template_id || regra.whatsapp_template_id || ""));
       const responsavel = responsaveis.get(String(agendamento.responsavel_id || ""));
       const fluxo = flows.get(String(regra.fluxo_id || ""));
       const messageId = String(item.mensagem_externa_id || "").trim();
@@ -326,7 +353,14 @@ export async function GET(request: NextRequest) {
           ? "processando"
           : null;
       const title = template?.nome || `${tipoLabel(item.tipo)} · ${canalLabel(item.canal)}`;
-      const destination = destinoAgenda(item.canal, agendamento, responsavel);
+      const recipient = individualPayload.destinatario && typeof individualPayload.destinatario === "object" ? individualPayload.destinatario : null;
+      const destination = recipient ? (item.canal === "email" ? recipient.email : item.canal === "whatsapp" ? recipient.telefone : recipient.nome) : destinoAgenda(item.canal, agendamento, responsavel);
+      const destinationMeta = destinoDetalhadoAgenda(
+        item.canal,
+        agendamento,
+        responsavel,
+        fluxo
+      );
       const content = conteudoAgenda(item.tipo, item.canal, agendamento, agenda);
 
       return {
@@ -352,15 +386,28 @@ export async function GET(request: NextRequest) {
         },
         payload_json: {
           ...(item.payload_json || {}),
-          origem_disparo: "agenda",
+          origem_disparo: item.tipo === "lembrete_individual" ? "lembrete_individual" : "agenda",
           agenda_automacao_execucao_id: item.id,
+          agenda_lembrete_id: item.agenda_lembrete_id || individualPayload.agenda_lembrete_id || null,
           agenda_id: item.agenda_id,
           agenda_nome: agenda.nome || null,
+          calendario_nome: agenda.nome || null,
+          agenda_timezone: agenda.timezone || null,
           agendamento_id: item.agendamento_id,
+          grupo_id: "agendamento:" + item.agendamento_id,
           agendamento_titulo: agendamento.titulo || null,
+          agendamento_inicio_at: agendamento.inicio_at || null,
+          agendamento_fim_at: agendamento.fim_at || null,
+          agendamento_status: agendamento.status || null,
+          agendamento_local: agendamento.local || null,
           contato_nome: agendamento.nome_cliente || null,
+          responsavel_nome: responsavel?.nome || null,
           conversa_id: agendamento.conversa_id || null,
           numero_destino: destination || "-",
+          destino_tipo: destinationMeta.tipo,
+          destino_rotulo: destinationMeta.rotulo,
+          destino_valor: destinationMeta.valor,
+          tipo_label: tipoLabel(item.tipo),
           template_id: template?.id || null,
           template_nome: title,
           template_idioma: template?.idioma || null,
@@ -407,16 +454,42 @@ export async function GET(request: NextRequest) {
           payload.contato_nome,
           payload.agenda_nome,
           payload.agendamento_titulo,
+          payload.destino_valor,
+          payload.responsavel_nome,
+          payload.agendamento_local,
           item.automacao_fluxos?.nome,
           item.automacao_nos?.titulo,
         ].some((value) => String(value || "").toLowerCase().includes(busca));
       });
     }
 
-    disparos.sort(
-      (a: any, b: any) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    const prioridadeStatus = (item: any) => {
+      if (item.status === "erro") return 0;
+      if (item.status === "executando") return 1;
+      if (item.status === "pendente") return 2;
+      return 3;
+    };
+
+    disparos.sort((a: any, b: any) => {
+      const prioridadeA = prioridadeStatus(a);
+      const prioridadeB = prioridadeStatus(b);
+      if (prioridadeA !== prioridadeB) return prioridadeA - prioridadeB;
+
+      if (prioridadeA < 3) {
+        return new Date(a.executar_em).getTime() - new Date(b.executar_em).getTime();
+      }
+
+      const referenciaA = a.executed_at || a.executar_em || a.created_at;
+      const referenciaB = b.executed_at || b.executar_em || b.created_at;
+      return new Date(referenciaB).getTime() - new Date(referenciaA).getTime();
+    });
+
+    // CRM_DISPAROS_PROGRAMADOS_DESC_V2
+    disparos.sort((a: any, b: any) => {
+      const dataB = new Date(b.executar_em || b.created_at || 0).getTime();
+      const dataA = new Date(a.executar_em || a.created_at || 0).getTime();
+      return dataB - dataA;
+    });
 
     return NextResponse.json({ ok: true, disparos });
   } catch (error: any) {

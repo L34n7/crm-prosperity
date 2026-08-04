@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 
 const STYLE_ID = "agenda-automation-stage2";
-const PENDING_KEY = "crm:agenda:automacoes-pendentes";
+const PENDING_KEY = "crm:agenda:automacoes-pendentes"; // CRM_AGENDA_POST_ATTENDANCE_TEMPLATE_V1
+const CRM_AGENDA_VALIDATION_RESCHEDULE_V1 = true;
 
 type Integracao = { id: string; nome_conexao: string };
 type Template = {
@@ -32,6 +33,7 @@ const CSS = `
 .agendaAutomationSection:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,var(--crm-primary-strong),color-mix(in srgb,var(--crm-primary-strong) 35%,var(--crm-ui-private-surface-hex-21a179)))}
 .agendaAutomationHead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:13px}.agendaAutomationTitle{display:flex;align-items:center;gap:10px}.agendaAutomationIcon{width:38px;height:38px;border:1px solid var(--crm-primary-border);border-radius:12px;background:var(--crm-primary-soft);color:var(--crm-primary-text);display:grid;place-items:center;font-size:18px}.agendaAutomationTitle h3{margin:0!important;font-size:15px!important}.agendaAutomationTitle p{margin:3px 0 0;color:var(--crm-text-muted);font-size:10.5px;line-height:1.4}.agendaAutomationStage{padding:5px 9px;border:1px solid var(--crm-warning-border);border-radius:999px;background:var(--crm-warning-bg);color:var(--crm-warning-text);font-size:8.5px;font-weight:900;white-space:nowrap}
 .agendaAutomationNotice{margin-bottom:12px;padding:10px 11px;border:1px solid var(--crm-warning-border);border-radius:12px;background:var(--crm-warning-bg);color:var(--crm-warning-text);font-size:10px;line-height:1.45}
+.agendaAutomationFlowNotice{padding:10px 11px;border:1px solid var(--crm-warning-border);border-radius:11px;background:var(--crm-warning-bg);color:var(--crm-warning-text);font-size:9.5px;line-height:1.5}.agendaAutomationFlowNotice strong{display:block;margin-bottom:3px;color:var(--crm-warning-text)}
 .agendaAutomationGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.agendaAutomationCard{padding:12px;border:1px solid var(--crm-border);border-radius:15px;background:var(--crm-surface);display:grid;gap:10px}.agendaAutomationCard.isActive{border-color:var(--crm-primary-border);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--crm-primary-border) 35%,transparent)}.agendaAutomationCardHead{display:flex;align-items:center;justify-content:space-between;gap:10px}.agendaAutomationCardHead strong{font-size:12px;color:var(--crm-text-strong)}.agendaAutomationSwitch{display:flex;align-items:center;gap:7px;font-size:9px;font-weight:900;color:var(--crm-text-muted);cursor:pointer}.agendaAutomationSwitch input{width:17px;height:17px;accent-color:var(--crm-primary-strong)}
 .agendaAutomationWhen{display:grid;grid-template-columns:minmax(70px,.7fr) minmax(110px,1fr);gap:7px}.agendaAutomationField{display:grid;gap:5px}.agendaAutomationField>span{font-size:9px;font-weight:850;color:var(--crm-text-muted)}.agendaAutomationField input,.agendaAutomationField select{width:100%;height:35px;padding:0 9px;border:1px solid var(--crm-border-strong);border-radius:10px;background:var(--crm-surface);color:var(--crm-text-strong);font:inherit;font-size:10.5px;outline:none}.agendaAutomationField input:focus,.agendaAutomationField select:focus{border-color:var(--crm-primary-strong);box-shadow:var(--crm-focus-ring)}
 .agendaAutomationChannels{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.agendaAutomationCheck{display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:800;color:var(--crm-text);cursor:pointer}.agendaAutomationCheck input{width:15px;height:15px;accent-color:var(--crm-primary-strong)}.agendaAutomationWhatsApp{display:grid;grid-template-columns:1fr 1fr;gap:7px}.agendaAutomationCompatibility{grid-column:1/-1;min-height:18px;font-size:8.5px;color:var(--crm-text-muted)}.agendaAutomationCompatibility.ok{color:var(--crm-success-text)}.agendaAutomationCompatibility.warn{color:var(--crm-warning-text)}
@@ -86,7 +88,7 @@ function cardHtml(params: {
 function criarSecao() {
   const section = document.createElement("section");
   section.className = "agendaAutomationSection";
-  section.innerHTML = `<div class="agendaAutomationHead"><div class="agendaAutomationTitle"><span class="agendaAutomationIcon">⚡</span><div><h3>Automação da agenda</h3><p>Defina os padrões de confirmação, lembretes, avisos e pós-atendimento desta agenda.</p></div></div><span class="agendaAutomationStage">Configuração segura</span></div><div class="agendaAutomationNotice"><strong>Nenhum envio será realizado nesta etapa.</strong> As regras serão apenas salvas para uso nas próximas entregas. Disparos, e-mails, notificações e fluxos continuam desativados.</div><div class="agendaAutomationGrid">${cardHtml({ key: "confirmacao", title: "Confirmação do agendamento", timing: "Antes do início", channels: '<label class="agendaAutomationCheck"><input type="checkbox" data-channel="whatsapp" checked/>WhatsApp</label><label class="agendaAutomationCheck"><input type="checkbox" data-channel="email"/>E-mail</label>', extras: '<div class="agendaAutomationWhatsApp"><label class="agendaAutomationField"><span>Integração do WhatsApp</span><select data-role="integration"><option value="">Selecione</option></select></label><label class="agendaAutomationField"><span>Template Utility</span><select data-role="template"><option value="">Selecione</option></select></label><div class="agendaAutomationCompatibility" data-role="compatibility">Selecione um template com botões Confirmar, Cancelar e Reagendar.</div></div>' })}${cardHtml({ key: "lembrete", title: "Lembrete do agendamento", timing: "Antes do início", channels: '<label class="agendaAutomationCheck"><input type="checkbox" data-channel="whatsapp" checked/>WhatsApp</label><label class="agendaAutomationCheck"><input type="checkbox" data-channel="email"/>E-mail</label>', extras: '<div class="agendaAutomationWhatsApp"><label class="agendaAutomationField"><span>Integração do WhatsApp</span><select data-role="integration"><option value="">Selecione</option></select></label><label class="agendaAutomationField"><span>Template Utility</span><select data-role="template"><option value="">Selecione</option></select></label><div class="agendaAutomationCompatibility" data-role="compatibility">Selecione o template que será usado no lembrete.</div></div>' })}${cardHtml({ key: "aviso_responsavel", title: "Aviso ao responsável", timing: "Antes do início", channels: '<label class="agendaAutomationCheck"><input type="checkbox" data-channel="sistema" checked/>Notificação no sistema</label><label class="agendaAutomationCheck"><input type="checkbox" data-channel="email"/>E-mail</label>' })}${cardHtml({ key: "pos_atendimento", title: "Pós-atendimento", timing: "Depois do término", channels: '<label class="agendaAutomationCheck"><input type="checkbox" data-channel="fluxo" checked disabled/>Iniciar fluxo</label>', extras: '<label class="agendaAutomationField"><span>Fluxo que será iniciado</span><select data-role="flow"><option value="">Selecione um fluxo</option></select></label>' })}</div><div class="agendaAutomationError" data-role="error"></div><div class="agendaAutomationSaving" data-role="saving">Salvando configurações de automação…</div>`;
+  section.innerHTML = `<div class="agendaAutomationHead"><div class="agendaAutomationTitle"><span class="agendaAutomationIcon">⚡</span><div><h3>Automação da agenda</h3><p>Defina os padrões de confirmação, lembretes, avisos e pós-atendimento desta agenda.</p></div></div><span class="agendaAutomationStage">Configuração segura</span></div><div class="agendaAutomationNotice"><strong>Ao salvar uma alteração, os disparos pendentes anteriores serão cancelados.</strong> O sistema criará novos agendamentos com os horários atualizados. Execuções já concluídas permanecerão somente no histórico.</div><div class="agendaAutomationGrid">${cardHtml({ key: "confirmacao", title: "Confirmação do agendamento", timing: "Antes do início", channels: '<label class="agendaAutomationCheck"><input type="checkbox" data-channel="whatsapp" checked/>WhatsApp</label><label class="agendaAutomationCheck"><input type="checkbox" data-channel="email"/>E-mail</label>', extras: '<div class="agendaAutomationWhatsApp"><label class="agendaAutomationField"><span>Integração do WhatsApp</span><select data-role="integration"><option value="">Selecione</option></select></label><label class="agendaAutomationField"><span>Template Utility</span><select data-role="template"><option value="">Selecione</option></select></label><div class="agendaAutomationCompatibility" data-role="compatibility">Selecione um template com botões Confirmar, Cancelar e Reagendar.</div></div>' })}${cardHtml({ key: "lembrete", title: "Lembrete do agendamento", timing: "Antes do início", channels: '<label class="agendaAutomationCheck"><input type="checkbox" data-channel="whatsapp" checked/>WhatsApp</label><label class="agendaAutomationCheck"><input type="checkbox" data-channel="email"/>E-mail</label>', extras: '<div class="agendaAutomationWhatsApp"><label class="agendaAutomationField"><span>Integração do WhatsApp</span><select data-role="integration"><option value="">Selecione</option></select></label><label class="agendaAutomationField"><span>Template Utility</span><select data-role="template"><option value="">Selecione</option></select></label><div class="agendaAutomationCompatibility" data-role="compatibility">Selecione o template que será usado no lembrete.</div></div>' })}${cardHtml({ key: "aviso_responsavel", title: "Aviso ao responsável", timing: "Antes do início", channels: '<label class="agendaAutomationCheck"><input type="checkbox" data-channel="sistema" checked/>Notificação no sistema</label><label class="agendaAutomationCheck"><input type="checkbox" data-channel="email"/>E-mail</label>' })}${cardHtml({ key: "pos_atendimento", title: "Pós-atendimento", timing: "Depois do término", channels: '<label class="agendaAutomationCheck"><input type="radio" name="agenda-pos-atendimento-canal" data-channel="fluxo" checked/>Iniciar fluxo</label><label class="agendaAutomationCheck"><input type="radio" name="agenda-pos-atendimento-canal" data-channel="whatsapp"/>Disparo pelo WhatsApp</label>', extras: '<label class="agendaAutomationField"><span>Fluxo que será iniciado</span><select data-role="flow"><option value="">Selecione um fluxo</option></select></label><div class="agendaAutomationFlowNotice"><strong>Importante sobre o fluxo automático</strong>O fluxo só poderá iniciar se existir uma conversa ativa e a janela de atendimento de 24 horas da Meta ainda estiver aberta. Para executar o pós-atendimento horas ou dias depois, use o disparo por template do WhatsApp.</div><div class="agendaAutomationWhatsApp"><label class="agendaAutomationField"><span>Integração do WhatsApp</span><select data-role="integration"><option value="">Selecione</option></select></label><label class="agendaAutomationField"><span>Template do pós-atendimento</span><select data-role="template"><option value="">Selecione</option></select></label><div class="agendaAutomationCompatibility" data-role="compatibility">Selecione o template aprovado que será enviado após o atendimento.</div></div>' })}</div><div class="agendaAutomationError" data-role="error"></div><div class="agendaAutomationSaving" data-role="saving">Salvando configurações de automação…</div>`;
   return section;
 }
 
@@ -126,9 +128,13 @@ function atualizarCompatibilidade(card: HTMLElement, opcoes: Opcoes) {
   status.classList.remove("ok", "warn");
   const template = opcoes.templates.find((item) => item.id === templateId);
   if (!template) {
-    status.textContent = card.dataset.rule === "confirmacao"
-      ? "Selecione um template com botões Confirmar, Cancelar e Reagendar."
-      : "Selecione o template que será usado no lembrete.";
+    if (card.dataset.rule === "confirmacao") {
+      status.textContent = "Selecione um template com botões Confirmar, Cancelar e Reagendar.";
+    } else if (card.dataset.rule === "pos_atendimento") {
+      status.textContent = "Selecione o template aprovado que será enviado após o atendimento.";
+    } else {
+      status.textContent = "Selecione o template que será usado no lembrete.";
+    }
     return;
   }
   if (card.dataset.rule === "confirmacao") {
@@ -136,11 +142,35 @@ function atualizarCompatibilidade(card: HTMLElement, opcoes: Opcoes) {
     status.classList.add(compativel ? "ok" : "warn");
     status.textContent = compativel
       ? "Template compatível com os três caminhos planejados."
-      : `Botões encontrados: ${(template.botoes || []).join(", ") || "nenhum"}. A compatibilidade será validada antes da ativação.`;
+      : "Botões encontrados: " + ((template.botoes || []).join(", ") || "nenhum") + ". A compatibilidade será validada antes da ativação.";
   } else {
     status.classList.add("ok");
-    status.textContent = "Template Utility aprovado e disponível para esta integração.";
+    status.textContent = card.dataset.rule === "pos_atendimento"
+      ? "Template aprovado e disponível para o disparo de pós-atendimento, inclusive fora da janela de 24 horas."
+      : "Template Utility aprovado e disponível para esta integração.";
   }
+}
+
+function aplicarCanalPosAtendimento(section: HTMLElement) {
+  const card = section.querySelector<HTMLElement>('[data-rule="pos_atendimento"]');
+  if (!card) return;
+
+  const fluxo = card.querySelector<HTMLInputElement>('input[data-channel="fluxo"]');
+  const whatsapp = card.querySelector<HTMLInputElement>('input[data-channel="whatsapp"]');
+  if (fluxo && whatsapp && !fluxo.checked && !whatsapp.checked) {
+    fluxo.checked = true;
+  }
+
+  const usaFluxo = fluxo?.checked === true;
+  const usaWhatsapp = whatsapp?.checked === true;
+  const flowSelect = card.querySelector<HTMLSelectElement>('select[data-role="flow"]');
+  const flowField = flowSelect?.closest(".agendaAutomationField") as HTMLElement | null;
+  const flowNotice = card.querySelector<HTMLElement>(".agendaAutomationFlowNotice");
+  const whatsappFields = card.querySelector<HTMLElement>(".agendaAutomationWhatsApp");
+
+  if (flowField) flowField.style.display = usaFluxo ? "" : "none";
+  if (flowNotice) flowNotice.style.display = usaFluxo ? "" : "none";
+  if (whatsappFields) whatsappFields.style.display = usaWhatsapp ? "grid" : "none";
 }
 
 function aplicarEstadoVisual(section: HTMLElement) {
@@ -151,6 +181,7 @@ function aplicarEstadoVisual(section: HTMLElement) {
     const label = card.querySelector<HTMLElement>(".agendaAutomationSwitch span");
     if (label) label.textContent = active ? "Ativado" : "Desativado";
   });
+  aplicarCanalPosAtendimento(section);
 }
 
 function aplicarRegras(section: HTMLElement, regras: Regra[], opcoes: Opcoes) {
@@ -177,7 +208,7 @@ function aplicarRegras(section: HTMLElement, regras: Regra[], opcoes: Opcoes) {
     if (integration) integration.value = whatsapp?.integracao_whatsapp_id || "";
     atualizarTemplates(card, opcoes, whatsapp?.whatsapp_template_id || "");
     const flow = card.querySelector<HTMLSelectElement>('[data-role="flow"]');
-    if (flow) flow.value = principal.fluxo_id || "";
+    if (flow) flow.value = encontradas.find((item) => item.canal === "fluxo")?.fluxo_id || "";
   });
   aplicarEstadoVisual(section);
 }
@@ -203,7 +234,7 @@ function serializar(section: HTMLElement) {
         ordem,
         integracao_whatsapp_id: input.dataset.channel === "whatsapp" ? integration : null,
         whatsapp_template_id: input.dataset.channel === "whatsapp" ? template : null,
-        fluxo_id: tipo === "pos_atendimento" ? flow : null,
+        fluxo_id: input.dataset.channel === "fluxo" ? flow : null,
         configuracao_json: { etapa: 2, execucao_habilitada: false },
       });
     });
@@ -212,18 +243,43 @@ function serializar(section: HTMLElement) {
 }
 
 function validar(section: HTMLElement, regras: Regra[]) {
+  const nomes = {
+    confirmacao: "Confirmação do agendamento",
+    lembrete: "Lembrete do agendamento",
+    aviso_responsavel: "Aviso ao responsável",
+    pos_atendimento: "Pós-atendimento",
+  } as const;
+
   for (const tipo of ["confirmacao", "lembrete", "aviso_responsavel", "pos_atendimento"] as const) {
     const card = section.querySelector<HTMLElement>(`[data-rule="${tipo}"]`);
     const ativo = card?.querySelector<HTMLInputElement>('[data-role="enabled"]')?.checked === true;
     if (!ativo) continue;
+
     const relacionadas = regras.filter((item) => item.tipo === tipo);
-    if (!relacionadas.length) return `Selecione ao menos um canal para ${tipo.replace("_", " ")}.`;
+    if (!relacionadas.length) {
+      return nomes[tipo] + ": selecione um canal de execução.";
+    }
+
+    if (tipo === "pos_atendimento") {
+      if (relacionadas.length !== 1) {
+        return "Pós-atendimento: escolha somente uma opção — Iniciar fluxo ou Disparo pelo WhatsApp.";
+      }
+      const canal = relacionadas[0];
+      if (canal.canal === "fluxo" && !canal.fluxo_id) {
+        return "Pós-atendimento: selecione o fluxo que será iniciado.";
+      }
+      if (
+        canal.canal === "whatsapp" &&
+        (!canal.integracao_whatsapp_id || !canal.whatsapp_template_id)
+      ) {
+        return "Pós-atendimento: selecione a integração e o template do disparo pelo WhatsApp.";
+      }
+      continue;
+    }
+
     const whatsapp = relacionadas.find((item) => item.canal === "whatsapp");
     if (whatsapp && (!whatsapp.integracao_whatsapp_id || !whatsapp.whatsapp_template_id)) {
-      return `Selecione a integração e o template do WhatsApp para ${tipo}.`;
-    }
-    if (tipo === "pos_atendimento" && !relacionadas[0]?.fluxo_id) {
-      return "Selecione o fluxo de pós-atendimento.";
+      return nomes[tipo] + ": selecione a integração e o template do WhatsApp.";
     }
   }
   return "";
@@ -298,8 +354,12 @@ export default function AgendaAutomationEnhancer() {
     const bind = async (modal: HTMLElement) => {
       const title = texto(modal.querySelector(".dhead h2"));
       const normalizedTitle = normalizar(title);
-      const isEdit = normalizedTitle.includes("configurar agenda");
-      const isNew = normalizedTitle.includes("nova agenda");
+      const isEdit =
+        normalizedTitle.includes("configurar agenda") ||
+        normalizedTitle.includes("configurar calendario");
+      const isNew =
+        normalizedTitle.includes("nova agenda") ||
+        normalizedTitle.includes("novo calendario");
       if (!isEdit && !isNew) return;
       const body = modal.querySelector<HTMLElement>(".body");
       const form = modal.querySelector<HTMLElement>(".body > .form");
@@ -321,6 +381,9 @@ export default function AgendaAutomationEnhancer() {
         preencherOpcoes(section, loadedOptions);
         section.querySelectorAll<HTMLElement>(".agendaAutomationCard").forEach((card) => {
           card.querySelector<HTMLInputElement>('[data-role="enabled"]')?.addEventListener("change", () => aplicarEstadoVisual(section!));
+          card.querySelectorAll<HTMLInputElement>('[data-channel]').forEach((input) => {
+            input.addEventListener("change", () => aplicarEstadoVisual(section!));
+          });
           const integration = card.querySelector<HTMLSelectElement>('[data-role="integration"]');
           const template = card.querySelector<HTMLSelectElement>('[data-role="template"]');
           integration?.addEventListener("change", () => atualizarTemplates(card, loadedOptions));

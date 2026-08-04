@@ -177,10 +177,11 @@
 .searchFilters {
   display: grid;
   grid-template-columns:
-    minmax(220px, 1.35fr)
-    minmax(160px, 0.85fr)
+    minmax(210px, 1.25fr)
+    minmax(145px, 0.75fr)
+    minmax(155px, 0.8fr)
     minmax(170px, 0.9fr)
-    minmax(180px, 1fr);
+    minmax(140px, 0.7fr);
   gap: 12px;
   min-width: 0;
   align-items: end;
@@ -3286,4 +3287,46 @@
   .modalOverlay {
     padding: 12px;
   }
+}
+
+
+/* CRM_PHONE_REVIEW_DISPATCH_BADGE_V1 */
+.contactBadgeReview {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+
+/* CRM_BULK_CONTACT_SELECTION_INPUT_V4 */
+.bulkQuantityInput { width: 74px; min-width: 74px; height: 32px; border: 1px solid var(--crm-border-strong); border-radius: 9px; background: var(--crm-surface); color: var(--crm-text-strong); padding: 0 8px; font-size: 12px; font-weight: 700; text-align: center; outline: none; }
+.bulkQuantityInput:focus { border-color: var(--crm-primary-strong); box-shadow: var(--crm-focus-ring); }
+.bulkQuantityInput::-webkit-inner-spin-button, .bulkQuantityInput::-webkit-outer-spin-button { margin: 0; }
+@media (max-width: 640px) { .bulkQuantityInput { width: 66px; min-width: 66px; } }
+
+
+/* CRM_RATE_LIMIT_12H_BADGE */
+.contactBadgeRateLimit {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #0b2a4a;
+  border: 1px solid #164f82;
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: help;
+  white-space: nowrap;
 }

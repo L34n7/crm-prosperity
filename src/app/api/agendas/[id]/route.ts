@@ -42,7 +42,7 @@ export async function GET(
     const supabase = getSupabaseAdmin();
 
     const { data: agenda, error } = await supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .select("*")
       .eq("empresa_id", usuario.empresa_id)
       .eq("id", id)
@@ -165,7 +165,7 @@ export async function PATCH(
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .update(atualizacao)
       .eq("empresa_id", usuario.empresa_id)
       .eq("id", id)
@@ -218,7 +218,7 @@ export async function DELETE(
     const supabase = getSupabaseAdmin();
 
     const { data: agenda, error: agendaError } = await supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .select("id, status")
       .eq("empresa_id", usuario.empresa_id)
       .eq("id", id)
@@ -244,7 +244,7 @@ export async function DELETE(
     });
 
     const { error } = await supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .delete()
       .eq("empresa_id", usuario.empresa_id)
       .eq("id", id);

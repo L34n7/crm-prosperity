@@ -1,5 +1,9 @@
 import { Resend } from "resend";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import {
+  buildCalendarInvite,
+  calendarInviteContentType,
+} from "@/lib/email/calendar-invite"; // CRM_CALENDAR_EMAIL_REMINDER_BUTTONS_PRIORITY_V1
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -35,109 +39,6 @@ function textoCabecalhoSeguro(valor: string) {
     .replace(/[\r\n<>]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function dataIcsValida(valor: string | null | undefined) {
-  if (!valor) return null;
-
-  const data = new Date(valor);
-  return Number.isNaN(data.getTime()) ? null : data;
-}
-
-function formatarDataIcs(data: Date) {
-  return data.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-}
-
-function escaparIcsTexto(valor: string) {
-  return String(valor || "")
-    .replace(/\\/g, "\\\\")
-    .replace(/\r?\n/g, "\\n")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,");
-}
-
-function escaparIcsParametro(valor: string) {
-  return `"${String(valor || "")
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\r?\n/g, " ")}"`;
-}
-
-function dobrarLinhaIcs(linha: string) {
-  const limite = 73;
-  const partes = [];
-  let restante = linha;
-
-  while (restante.length > limite) {
-    partes.push(restante.slice(0, limite));
-    restante = restante.slice(limite);
-  }
-
-  partes.push(restante);
-  return partes.join("\r\n ");
-}
-
-function montarConviteCalendario(params: {
-  agendamentoId: string;
-  empresaNome: string;
-  destinatario: string;
-  contatoNome: string;
-  dataLabel: string;
-  horaLabel: string;
-  inicioAt?: string | null;
-  fimAt?: string | null;
-  sequencia?: number;
-  descricaoStatus?: string;
-  metodo?: "REQUEST" | "CANCEL";
-  statusEvento?: "CONFIRMED" | "CANCELLED";
-}) {
-  const inicio = dataIcsValida(params.inicioAt);
-  const fim = dataIcsValida(params.fimAt);
-
-  if (!inicio || !fim || fim <= inicio) return null;
-
-  const resumo = `Agendamento com ${params.empresaNome}`;
-  const metodo = params.metodo || "REQUEST";
-  const statusEvento = params.statusEvento || "CONFIRMED";
-  const partstat = statusEvento === "CANCELLED" ? "DECLINED" : "NEEDS-ACTION";
-  const rsvp = statusEvento === "CANCELLED" ? "FALSE" : "TRUE";
-  const descricao = [
-    `${params.descricaoStatus || "Agendamento confirmado"} com ${
-      params.empresaNome
-    }.`,
-    params.dataLabel ? `Data: ${params.dataLabel}.` : "",
-    params.horaLabel ? `Horario: ${params.horaLabel}.` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const linhas = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//CRM Prosperity//Agendamento//PT-BR",
-    "CALSCALE:GREGORIAN",
-    `METHOD:${metodo}`,
-    "BEGIN:VEVENT",
-    `UID:${escaparIcsTexto(params.agendamentoId)}@crmprosperity.com`,
-    `DTSTAMP:${formatarDataIcs(new Date())}`,
-    `DTSTART:${formatarDataIcs(inicio)}`,
-    `DTEND:${formatarDataIcs(fim)}`,
-    `SUMMARY:${escaparIcsTexto(resumo)}`,
-    `DESCRIPTION:${escaparIcsTexto(descricao)}`,
-    `ORGANIZER;CN=${escaparIcsParametro(
-      params.empresaNome
-    )}:mailto:no-reply@crmprosperity.com`,
-    `ATTENDEE;CN=${escaparIcsParametro(
-      params.contatoNome
-    )};ROLE=REQ-PARTICIPANT;PARTSTAT=${partstat};RSVP=${rsvp}:mailto:${params.destinatario}`,
-    `STATUS:${statusEvento}`,
-    "TRANSP:OPAQUE",
-    `SEQUENCE:${Math.max(0, Number(params.sequencia || 0))}`,
-    "END:VEVENT",
-    "END:VCALENDAR",
-  ];
-
-  return `${linhas.map(dobrarLinhaIcs).join("\r\n")}\r\n`;
 }
 
 async function buscarNomeEmpresa(empresaId: string) {
@@ -187,6 +88,12 @@ export async function sendAppointmentCreatedEmail({
   const empresaNome = await buscarNomeEmpresa(empresaId);
   const empresaSeguro = escaparHtml(empresaNome);
   const empresaCabecalho = textoCabecalhoSeguro(empresaNome || "CRM Prosperity");
+  const appUrl = (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://crmprosperity.com"
+  ).replace(/\/$/, "");
+  const logoUrl = `${appUrl}/logo.png`;
   const contatoSeguro = escaparHtml(contatoNome || "Cliente");
   const dataSeguro = escaparHtml(dataLabel || "");
   const horaSeguro = escaparHtml(horaLabel || "");
@@ -218,27 +125,28 @@ export async function sendAppointmentCreatedEmail({
   const textoAcao = ehCancelamento
     ? "Se precisar marcar novamente, responda pelo mesmo canal em que realizou o agendamento."
     : "Para remarcar ou cancelar, responda pelo mesmo canal em que realizou o agendamento.";
-  const conviteCalendario = montarConviteCalendario({
-    agendamentoId,
-    empresaNome,
-    destinatario,
-    contatoNome: contatoNome || "Cliente",
-    dataLabel: dataLabel || "",
-    horaLabel: horaLabel || "",
-    inicioAt,
-    fimAt,
-    sequencia: ehCancelamento ? 2 : ehRemarcacao ? 1 : 0,
-    descricaoStatus: ehCancelamento
-      ? "Agendamento cancelado"
-      : ehRemarcacao
-      ? "Agendamento remarcado"
-      : "Agendamento confirmado",
-    metodo: ehCancelamento ? "CANCEL" : "REQUEST",
-    statusEvento: ehCancelamento ? "CANCELLED" : "CONFIRMED",
+  const conviteCalendario = buildCalendarInvite({
+    appointmentId: agendamentoId,
+    companyName: empresaNome,
+    attendeeEmail: destinatario,
+    attendeeName: contatoNome || "Cliente",
+    title: `Agendamento com ${empresaNome}`,
+    description: [
+      `${textoConfirmacao} com ${empresaNome}.`,
+      dataLabel ? `Data: ${dataLabel}.` : "",
+      horaLabel ? `Horário: ${horaLabel}.` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+    startAt: inicioAt,
+    endAt: fimAt,
+    sequence: ehCancelamento ? 2 : ehRemarcacao ? 1 : 0,
+    method: ehCancelamento ? "CANCEL" : "REQUEST",
+    status: ehCancelamento ? "CANCELLED" : "CONFIRMED",
   });
-  const conviteContentType = `text/calendar; charset=UTF-8; method=${
+  const conviteContentType = calendarInviteContentType(
     ehCancelamento ? "CANCEL" : "REQUEST"
-  }`;
+  );
 
   try {
     await resend.emails.send({
@@ -271,16 +179,17 @@ export async function sendAppointmentCreatedEmail({
               <td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
                   <tr>
-                    <td style="background:#0f509a;padding:26px 30px;color:#ffffff;">
-                      <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">
-                        ${empresaSeguro}
-                      </div>
-                      <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">
-                        ${tituloEmail}
-                      </h1>
-                      <p style="margin:8px 0 0;font-size:18px;line-height:1.35;font-weight:700;opacity:0.95;">
-                        ${subtituloEmail}
-                      </p>
+                    <td style="background:linear-gradient(135deg,#0f509a,#0f172a);padding:28px 32px;color:#ffffff;">
+                      <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
+                        <td style="padding:0;vertical-align:middle;">
+                          <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">${empresaSeguro}</div>
+                          <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">${tituloEmail}</h1>
+                          <p style="margin:8px 0 0;font-size:15px;line-height:1.45;font-weight:700;opacity:0.95;">${subtituloEmail}</p>
+                        </td>
+                        <td width="86" align="right" style="width:86px;padding:0 0 0 18px;vertical-align:middle;">
+                          <img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none;" />
+                        </td>
+                      </tr></table>
                     </td>
                   </tr>
 

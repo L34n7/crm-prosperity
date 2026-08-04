@@ -189,6 +189,7 @@ type ContatoOpcao = {
   nome: string | null;
   whatsapp_profile_name?: string | null;
   telefone: string | null;
+  telefone_revisar?: boolean;
   email: string | null;
   origem: string | null;
   campanha: string | null;
@@ -225,6 +226,7 @@ type FiltrosConsultaContatos = {
   origem?: string;
   campanha?: string;
   disparoAnteriorId?: string;
+  telefoneRevisar?: string;
   mensagemDataInicio?: string;
   mensagemDataFim?: string;
   ultimoAtendenteId?: string;
@@ -294,6 +296,25 @@ function contatoTemCooldownMarketing(contato: ContatoOpcao) {
     String(contato.whatsapp_disparo_cooldown_categoria || "marketing")
       .trim()
       .toLowerCase() === "marketing"
+  );
+}
+
+// CRM_RATE_LIMIT_CONTACT_12H_V1
+function contatoTemCooldownRateLimit(contato: ContatoOpcao) {
+  return (
+    contato.whatsapp_disparo_cooldown_ativo === true &&
+    Number(contato.whatsapp_disparo_cooldown_horas || 0) === 12
+  );
+}
+
+function contatoEstaEmCooldownAplicavel(
+  contato: ContatoOpcao,
+  categoriaTemplate: string
+) {
+  if (contatoTemCooldownRateLimit(contato)) return true;
+  return (
+    categoriaTemplate !== "utility" &&
+    contatoTemCooldownMarketing(contato)
   );
 }
 
@@ -379,7 +400,7 @@ const STATUS_CAMPANHAS_ATIVAS = new Set(["pendente", "enviando"]);
 const TEMPO_CARD_CAMPANHA_TERMINAL_MS = 8000;
 const TESTE_CARD_PAGINA_DISPARO_KEY =
   "crm-whatsapp-disparo-page-card-test";
-const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v1";
+const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v2";
 const HISTORICO_CACHE_TTL_MS = 5 * 60 * 1000;
 const HISTORICO_CACHE_MAX_CONSULTAS = 20;
 
@@ -1351,6 +1372,8 @@ function formatarModoMeta(mode?: string | null) {
 }
 
 function contatoTemTelefoneValido(contato: ContatoOpcao) {
+  if (contato.telefone_revisar === true) return false;
+
   const telefone = limparNumero(contato.telefone);
   return telefone.length >= 10;
 }
@@ -1389,6 +1412,28 @@ function formatarDataHoraCurta(data?: string | null) {
   } catch {
     return "";
   }
+}
+
+// CRM_HISTORICO_ORDEM_DECRESCENTE_V2
+function timestampHistoricoDisparo(item: ResultadoDisparo) {
+  const timestamp = Date.parse(String(item.created_at || ""));
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function ordenarHistoricoPorDataHoraDecrescente(
+  itens: ResultadoDisparo[]
+) {
+  return [...itens].sort((a, b) => {
+    const diferencaData =
+      timestampHistoricoDisparo(b) - timestampHistoricoDisparo(a);
+
+    if (diferencaData !== 0) return diferencaData;
+
+    return String(b.id || "").localeCompare(
+      String(a.id || ""),
+      "pt-BR"
+    );
+  });
 }
 
 function nomeCampanhaHistorico(campanha?: CampanhaHistoricoFiltro | null) {
@@ -1759,6 +1804,10 @@ export default function DisparosWhatsAppPage() {
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [contatos, setContatos] = useState<ContatoOpcao[]>([]);
   const [contatosSelecionados, setContatosSelecionados] = useState<ContatoOpcao[]>([]);
+  // CRM_BULK_CONTACT_SELECTION_V4
+  const [quantidadeAdicionarContatos, setQuantidadeAdicionarContatos] = useState("");
+  const [quantidadeRemoverContatos, setQuantidadeRemoverContatos] = useState("");
+  const [adicionandoContatosEmMassa, setAdicionandoContatosEmMassa] = useState(false);
 
   const [loadingUsuario, setLoadingUsuario] = useState(true);
   const [loadingIntegracoes, setLoadingIntegracoes] = useState(true);
@@ -1798,6 +1847,7 @@ export default function DisparosWhatsAppPage() {
   const [campanhasDisponiveis, setCampanhasDisponiveis] = useState<string[]>([]);
   const [disparoAnteriorFiltroContatos, setDisparoAnteriorFiltroContatos] =
     useState("");
+  const [telefoneRevisarFiltro, setTelefoneRevisarFiltro] = useState("");
   const [atendentesDisponiveis, setAtendentesDisponiveis] = useState<
     AtendenteFiltro[]
   >([]);
@@ -2047,6 +2097,7 @@ export default function DisparosWhatsAppPage() {
         origem = "",
         campanha = "",
         disparoAnteriorId = "",
+        telefoneRevisar = "",
         mensagemDataInicio = "",
         mensagemDataFim = "",
         ultimoAtendenteId = "",
@@ -2075,6 +2126,10 @@ export default function DisparosWhatsAppPage() {
 
         if (disparoAnteriorId.trim()) {
           params.set("disparo_anterior_id", disparoAnteriorId.trim());
+        }
+
+        if (telefoneRevisar === "true" || telefoneRevisar === "false") {
+          params.set("telefone_revisar", telefoneRevisar);
         }
 
         if (integracaoId) {
@@ -2221,7 +2276,9 @@ export default function DisparosWhatsAppPage() {
           atualizadoEm: Date.now(),
         };
         salvarConsultaHistoricoCache(chaveConsulta, consultaCache);
-        setResultado(paginaCache.resultados);
+        setResultado(
+          ordenarHistoricoPorDataHoraDecrescente(paginaCache.resultados)
+        );
         setHistoricoTemMais(paginaCache.temMais);
         setTotaisHistorico(
           consultaCache.totais || {
@@ -2324,7 +2381,9 @@ export default function DisparosWhatsAppPage() {
           setCampanhasHistorico(campanhas);
         }
 
-        setResultado(resultadosPagina);
+        setResultado(
+          ordenarHistoricoPorDataHoraDecrescente(resultadosPagina)
+        );
         setHistoricoTemMais(json.tem_mais === true);
         setTotaisHistorico(
           totaisRecebidos || {
@@ -2576,6 +2635,7 @@ export default function DisparosWhatsAppPage() {
         origem: origemFiltro,
         campanha: campanhaFiltro,
         disparoAnteriorId: disparoAnteriorFiltroContatos,
+        telefoneRevisar: telefoneRevisarFiltro,
         mensagemDataInicio: mensagemDataInicioFiltro,
         mensagemDataFim: mensagemDataFimFiltro,
         ultimoAtendenteId: ultimoAtendenteFiltro,
@@ -2591,6 +2651,7 @@ export default function DisparosWhatsAppPage() {
     origemFiltro,
     campanhaFiltro,
     disparoAnteriorFiltroContatos,
+    telefoneRevisarFiltro,
     integracaoId,
     mensagemDataInicioFiltro,
     mensagemDataFimFiltro,
@@ -2830,9 +2891,12 @@ export default function DisparosWhatsAppPage() {
   );
   const contatosCooldownSelecionados = useMemo(
     () =>
-      categoriaTemplateSelecionado === "utility"
-        ? []
-        : contatosSelecionados.filter(contatoTemCooldownMarketing),
+      contatosSelecionados.filter((contato) =>
+        contatoEstaEmCooldownAplicavel(
+          contato,
+          categoriaTemplateSelecionado
+        )
+      ),
     [contatosSelecionados, categoriaTemplateSelecionado]
   );
   const totalContatosOptOut = contatosOptOutSelecionados.length;
@@ -2845,8 +2909,10 @@ export default function DisparosWhatsAppPage() {
     categoriaTemplateSelecionado === "marketing" && temContatosListaFria;
   const utilityComListaFria =
     categoriaTemplateSelecionado === "utility" && temContatosListaFria;
-  const utilityListaFriaSemOptOut =
-    utilityComListaFria &&
+  const templateComListaFria =
+    marketingComListaFria || utilityComListaFria;
+  const listaFriaSemOptOut =
+    templateComListaFria &&
     templateSelecionado?.opt_out_habilitado !== true;
 
   const totalVariaveis = useMemo(() => {
@@ -2908,6 +2974,7 @@ export default function DisparosWhatsAppPage() {
       origemFiltro ||
       campanhaFiltro ||
       disparoAnteriorFiltroContatos ||
+      telefoneRevisarFiltro ||
       quantidadeFiltrosAvancadosAtivos > 0
   );
 
@@ -2926,10 +2993,7 @@ export default function DisparosWhatsAppPage() {
     [contatos]
   );
 
-  const contatosDisponiveis = useMemo(() => {
-    const idsSelecionados = new Set(contatosSelecionados.map((item) => item.id));
-    return contatos.filter((item) => !idsSelecionados.has(item.id));
-  }, [contatos, contatosSelecionados]);
+  const contatosDisponiveis = useMemo(() => contatos, [contatos]);
 
   const obterHistoricoDisparosDoContato = useCallback(
     (contatoId: string) => {
@@ -2995,6 +3059,9 @@ export default function DisparosWhatsAppPage() {
         return false;
       }
 
+      if (telefoneRevisarFiltro === "true" && contato.telefone_revisar !== true) return false;
+      if (telefoneRevisarFiltro === "false" && contato.telefone_revisar === true) return false;
+
       return true;
     },
     [
@@ -3004,12 +3071,26 @@ export default function DisparosWhatsAppPage() {
       idsContatosConsulta,
       obterHistoricoDisparosDoContato,
       origemFiltro,
+      telefoneRevisarFiltro,
     ]
   );
 
+  const idsContatosSelecionadosParaDisparo = useMemo(
+    () => new Set(contatosSelecionados.map((contato) => contato.id)),
+    [contatosSelecionados]
+  );
+
   const contatosDisponiveisFiltrados = useMemo(() => {
-    return contatosDisponiveis.filter(contatoPassaFiltrosSelecionados);
-  }, [contatosDisponiveis, contatoPassaFiltrosSelecionados]);
+    return contatosDisponiveis.filter(
+      (contato) =>
+        contatoPassaFiltrosSelecionados(contato) &&
+        !idsContatosSelecionadosParaDisparo.has(contato.id)
+    );
+  }, [
+    contatosDisponiveis,
+    contatoPassaFiltrosSelecionados,
+    idsContatosSelecionadosParaDisparo,
+  ]);
 
   const contatosDisponiveisValidos = useMemo(() => {
     return contatosDisponiveisFiltrados.filter(
@@ -3019,16 +3100,28 @@ export default function DisparosWhatsAppPage() {
           contato,
           categoriaTemplateSelecionado
         ) &&
-        !(
-          contatoTemCooldownMarketing(contato) &&
-          categoriaTemplateSelecionado !== "utility"
-        )
+        !contatoEstaEmCooldownAplicavel(contato, categoriaTemplateSelecionado)
     );
   }, [contatosDisponiveisFiltrados, categoriaTemplateSelecionado]);
 
   const contatosSelecionadosFiltrados = useMemo(() => {
     return contatosSelecionados.filter(contatoPassaFiltrosSelecionados);
   }, [contatosSelecionados, contatoPassaFiltrosSelecionados]);
+
+  const idsContatosSelecionados = useMemo(
+    () => new Set(contatosSelecionados.map((contato) => contato.id)),
+    [contatosSelecionados]
+  );
+
+  // CRM_AVAILABLE_COUNTER_SELECTED_V5
+  const totalContatosDisponiveisRestantes = useMemo(
+    () =>
+      Math.max(
+        totalContatosDisponiveis - contatosSelecionadosFiltrados.length,
+        0
+      ),
+    [totalContatosDisponiveis, contatosSelecionadosFiltrados.length]
+  );
 
   const gruposConflitoAtivos = useMemo(() => {
     const idsSelecionados = new Set(contatosSelecionados.map((item) => item.id));
@@ -3147,20 +3240,28 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
-    if (
-      contatoTemCooldownMarketing(contato) &&
-      categoriaTemplateSelecionado !== "utility"
-    ) {
+    if (contatoEstaEmCooldownAplicavel(contato, categoriaTemplateSelecionado)) {
       setErro(
-        "Este contato esta em pausa temporaria para disparos de marketing porque a Meta recusou uma entrega recente."
+        contatoTemCooldownRateLimit(contato)
+          ? "Este contato esta em pausa de 12 horas apos um rate limit da Meta."
+          : "Este contato esta em pausa temporaria para disparos de marketing porque a Meta recusou uma entrega recente."
       );
       return;
     }
 
     const telefone = limparNumero(contato.telefone);
 
+    if (contato.telefone_revisar === true) {
+      setErro(
+        "Este número está marcado para revisão na página de Contatos e precisa ser corrigido antes do disparo. Confira o DDI (Brasil: 55), o DDD da região e a quantidade de dígitos."
+      );
+      return;
+    }
+
     if (!telefone || telefone.length < 10) {
-      setErro("Este contato não possui telefone válido para disparo.");
+      setErro(
+        "O telefone deste contato não possui formato válido para disparo. Acesse a página de Contatos e confira o DDI (Brasil: 55), o DDD da região e a quantidade de dígitos."
+      );
       return;
     }
 
@@ -3172,25 +3273,154 @@ export default function DisparosWhatsAppPage() {
     });
   }
 
-  function adicionarTodosDisponiveis() {
-    const mapaSelecionados = new Set(contatosSelecionados.map((item) => item.id));
+  function normalizarQuantidadeAcaoMassa(valor: string, maximo = 0) {
+    const numero = Number.parseInt(String(valor || "").replace(/\D/g, ""), 10);
+    if (!Number.isFinite(numero) || numero <= 0) return 0;
+    const inteiro = Math.floor(numero);
+    return maximo > 0 ? Math.min(inteiro, maximo) : inteiro;
+  }
 
-    const novos = contatosDisponiveisValidos.filter(
-      (item) => !mapaSelecionados.has(item.id)
+  function contatoElegivelParaAcaoMassa(contato: ContatoOpcao) {
+    return contatoTemTelefoneValido(contato) &&
+      !contatoTemOptOutParaCategoria(contato, categoriaTemplateSelecionado) &&
+      !contatoEstaEmCooldownAplicavel(contato, categoriaTemplateSelecionado);
+  }
+
+  function montarParametrosContatosAcaoMassa(paginaAtual: number, limite: number) {
+    const params = new URLSearchParams();
+    if (buscaContato.trim()) params.set("busca", buscaContato.trim());
+    if (origemFiltro.trim()) params.set("origem", origemFiltro.trim());
+    if (campanhaFiltro.trim()) params.set("campanha", campanhaFiltro.trim());
+    if (disparoAnteriorFiltroContatos.trim()) params.set("disparo_anterior_id", disparoAnteriorFiltroContatos.trim());
+    if (telefoneRevisarFiltro === "true" || telefoneRevisarFiltro === "false") params.set("telefone_revisar", telefoneRevisarFiltro);
+    if (integracaoId) params.set("integracao_whatsapp_id", integracaoId);
+    if (integracaoId && somenteIntegracaoFiltro) params.set("filtrar_por_integracao", "true");
+    if (mensagemDataInicioFiltro) params.set("mensagem_data_inicio", mensagemDataInicioFiltro);
+    if (mensagemDataFimFiltro) params.set("mensagem_data_fim", mensagemDataFimFiltro);
+    if (ultimoAtendenteFiltro) params.set("ultimo_atendente_id", ultimoAtendenteFiltro);
+    if (integracaoId && optInFiltro) params.set("opt_in", optInFiltro);
+    if (integracaoId && optOutFiltro) params.set("opt_out", optOutFiltro);
+    params.set("pagina", String(paginaAtual));
+    params.set("limite", String(limite));
+    return params;
+  }
+
+  async function buscarContatosParaAdicionarEmMassa(quantidade: number) {
+    const idsSelecionados = new Set(contatosSelecionados.map((contato) => contato.id));
+    const encontrados = new Map<string, ContatoOpcao>();
+    const adicionar = (contato: ContatoOpcao) => {
+      if (!idsSelecionados.has(contato.id) && contatoElegivelParaAcaoMassa(contato)) {
+        encontrados.set(contato.id, contato);
+      }
+    };
+
+    contatosDisponiveisValidos.forEach(adicionar);
+
+    const limitePagina = 500;
+    const totalPaginas = Math.max(1, Math.ceil(totalContatosDisponiveis / limitePagina));
+    let paginaAtual = 1;
+
+    while (encontrados.size < quantidade && paginaAtual <= totalPaginas) {
+      const params = montarParametrosContatosAcaoMassa(paginaAtual, limitePagina);
+      const resposta = await fetch("/api/contatos?" + params.toString(), { cache: "no-store" });
+      const json = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(json.error || "Erro ao carregar contatos para a seleção em massa.");
+      }
+
+      const lista = Array.isArray(json.contatos)
+        ? (json.contatos as ContatoOpcao[])
+        : [];
+      lista.forEach(adicionar);
+
+      if (lista.length < limitePagina) break;
+      paginaAtual += 1;
+    }
+
+    return Array.from(encontrados.values()).slice(0, quantidade);
+  }
+
+  async function adicionarTodosDisponiveis() {
+    const quantidadeInformada = normalizarQuantidadeAcaoMassa(
+      quantidadeAdicionarContatos,
+      totalContatosDisponiveis
     );
+    const quantidadeAlvo = quantidadeInformada > 0
+      ? quantidadeInformada
+      : Math.max(totalContatosDisponiveis, contatosDisponiveisValidos.length);
 
-    if (novos.length === 0) {
+    if (quantidadeAlvo <= 0 || totalContatosDisponiveisRestantes <= 0) {
       setErro("Nenhum contato válido disponível para adicionar.");
       return;
     }
 
-    setErro("");
-    invalidarDecisoesConflitoParaContatos(novos.map((item) => item.id));
-    setContatosSelecionados((prev) => [...prev, ...novos]);
+    try {
+      setAdicionandoContatosEmMassa(true);
+      setErro("");
+      setMensagem("");
+
+      const novos = await buscarContatosParaAdicionarEmMassa(quantidadeAlvo);
+
+      if (novos.length === 0) {
+        setErro("Nenhum contato válido disponível para adicionar com os filtros atuais.");
+        return;
+      }
+
+      invalidarDecisoesConflitoParaContatos(novos.map((contato) => contato.id));
+      setContatos((atuais) => {
+        const mapa = new Map(atuais.map((contato) => [contato.id, contato]));
+        novos.forEach((contato) => mapa.set(contato.id, contato));
+        return Array.from(mapa.values());
+      });
+      setContatosSelecionados((atuais) => {
+        const ids = new Set(atuais.map((contato) => contato.id));
+        return [...atuais, ...novos.filter((contato) => !ids.has(contato.id))];
+      });
+      setQuantidadeAdicionarContatos("");
+      setMensagem(
+        quantidadeInformada > 0
+          ? String(novos.length) + " contato(s) adicionado(s)."
+          : "Todos os " + String(novos.length) + " contato(s) disponíveis foram adicionados."
+      );
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao adicionar contatos em massa."
+      );
+    } finally {
+      setAdicionandoContatosEmMassa(false);
+    }
   }
 
   function removerContato(contatoId: string) {
     setContatosSelecionados((prev) => prev.filter((item) => item.id !== contatoId));
+  }
+
+  function removerSelecionadosFiltrados() {
+    const quantidadeInformada = normalizarQuantidadeAcaoMassa(
+      quantidadeRemoverContatos,
+      contatosSelecionadosFiltrados.length
+    );
+    const quantidade = quantidadeInformada > 0
+      ? quantidadeInformada
+      : contatosSelecionadosFiltrados.length;
+
+    if (quantidade <= 0) {
+      setErro("Nenhum contato selecionado para remover.");
+      return;
+    }
+
+    const removidos = contatosSelecionadosFiltrados.slice(0, quantidade);
+    const ids = new Set(removidos.map((contato) => contato.id));
+    setContatosSelecionados((atuais) =>
+      atuais.filter((contato) => !ids.has(contato.id))
+    );
+    invalidarDecisoesConflitoParaContatos(Array.from(ids));
+    setQuantidadeRemoverContatos("");
+    setErro("");
+    setMensagem(String(removidos.length) + " contato(s) removido(s).");
   }
 
   function limparSelecao() {
@@ -3622,21 +3852,14 @@ export default function DisparosWhatsAppPage() {
 
     if (temContatosCooldown) {
       setErro(
-        "A seleção possui contatos em pausa temporária para disparos de marketing. Remova-os para continuar."
+        "A seleção possui contatos em pausa temporária da Meta. Remova-os para continuar."
       );
       return;
     }
 
-    if (marketingComListaFria) {
+    if (listaFriaSemOptOut) {
       setErro(
-        "Templates de marketing não podem ser enviados para contatos de lista fria. Remova os contatos sem opt-in para continuar."
-      );
-      return;
-    }
-
-    if (utilityListaFriaSemOptOut) {
-      setErro(
-        "Este template utility não possui o rodapé de opt-out. Recrie o template com a instrução para responder SAIR."
+        "Este template não possui o rodapé de opt-out necessário para envio à lista fria. Recrie o template com a instrução para responder SAIR."
       );
       return;
     }
@@ -3697,7 +3920,7 @@ export default function DisparosWhatsAppPage() {
             executar_em: executarEm.toISOString(),
             variaveis: variaveisObrigatorias,
             confirmacao_responsabilidade_lista_fria:
-              utilityComListaFria &&
+              templateComListaFria &&
               confirmacaoResponsabilidadeListaFria,
             contatos: contatosSelecionados.map((contato) => ({
               id: contato.id,
@@ -3983,21 +4206,14 @@ export default function DisparosWhatsAppPage() {
 
     if (temContatosCooldown) {
       setErro(
-        "A seleção possui contatos em pausa temporária para disparos de marketing. Remova-os para continuar."
+        "A seleção possui contatos em pausa temporária da Meta. Remova-os para continuar."
       );
       return;
     }
 
-    if (marketingComListaFria) {
+    if (listaFriaSemOptOut) {
       setErro(
-        "Templates de marketing não podem ser enviados para contatos de lista fria. Remova os contatos sem opt-in para continuar."
-      );
-      return;
-    }
-
-    if (utilityListaFriaSemOptOut) {
-      setErro(
-        "Este template utility não possui o rodapé de opt-out. Recrie o template com a instrução para responder SAIR."
+        "Este template não possui o rodapé de opt-out necessário para envio à lista fria. Recrie o template com a instrução para responder SAIR."
       );
       return;
     }
@@ -4014,7 +4230,7 @@ export default function DisparosWhatsAppPage() {
     setModalConfirmacaoAberto(false);
     setConfirmacaoCobranca(false);
 
-    if (utilityComListaFria) {
+    if (templateComListaFria) {
       setConfirmacaoResponsabilidadeListaFria(false);
       setModalResponsabilidadeListaFriaAberto(true);
       return;
@@ -4028,7 +4244,7 @@ export default function DisparosWhatsAppPage() {
   }
 
   async function confirmarResponsabilidadeEDisparar() {
-    if (!confirmacaoResponsabilidadeListaFria || !utilityComListaFria) return;
+    if (!confirmacaoResponsabilidadeListaFria || !templateComListaFria) return;
 
     setModalResponsabilidadeListaFriaAberto(false);
 
@@ -4041,6 +4257,23 @@ export default function DisparosWhatsAppPage() {
   }
 
   function renderBadgeCooldownContato(contato: ContatoOpcao) {
+    if (contatoTemCooldownRateLimit(contato)) {
+      const expiraEm = contato.whatsapp_disparo_cooldown_expira_em;
+      const tooltip = [
+        "A Meta aplicou rate limit para este contato.",
+        "Novos disparos ficam bloqueados por 12 horas para evitar a repeticao do erro.",
+        expiraEm ? `Expira em ${formatarDataHora(expiraEm)}.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      return (
+        <span className={styles.contactBadgeRateLimit} title={tooltip}>
+          Pausa 12hr
+        </span>
+      );
+    }
+
     if (!contatoTemCooldownMarketing(contato)) return null;
     if (categoriaTemplateSelecionado === "utility") return null;
 
@@ -4428,6 +4661,7 @@ export default function DisparosWhatsAppPage() {
                           setOrigemFiltro("");
                           setCampanhaFiltro("");
                           setDisparoAnteriorFiltroContatos("");
+                          setTelefoneRevisarFiltro("");
                           setMensagemDataInicioFiltro("");
                           setMensagemDataFimFiltro("");
                           setUltimoAtendenteFiltro("");
@@ -4522,6 +4756,19 @@ export default function DisparosWhatsAppPage() {
                             {truncarNomeBadge(campanha.nome, 50)} ({campanha.total})
                           </option>
                         ))}
+                      </select>
+                    </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label}>Revisão do número</label>
+                      <select
+                        value={telefoneRevisarFiltro}
+                        onChange={(e) => setTelefoneRevisarFiltro(e.target.value)}
+                        className={styles.input}
+                      >
+                        <option value="">Todos</option>
+                        <option value="false">Sem revisão</option>
+                        <option value="true">⚠ revisão</option>
                       </select>
                     </div>
                   </div>
@@ -4624,24 +4871,36 @@ export default function DisparosWhatsAppPage() {
                       <h3 className={styles.contactsTitle}>Disponíveis</h3>
 
                       <div className={styles.contactsHeaderActions}>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          inputMode="numeric"
+                          value={quantidadeAdicionarContatos}
+                          onChange={(event) =>
+                            setQuantidadeAdicionarContatos(
+                              event.target.value.replace(/\D/g, "")
+                            )
+                          }
+                          className={styles.bulkQuantityInput}
+                          placeholder="Qtd."
+                          title="Informe a quantidade. Com 0 ou vazio, adiciona todos os contatos disponíveis."
+                          aria-label="Quantidade de contatos para adicionar; zero ou vazio adiciona todos"
+                        />
                         <button
                           type="button"
                           className={styles.TextButtonAdd}
                           onClick={adicionarTodosDisponiveis}
                           disabled={
                             loadingContatos ||
-                            contatosDisponiveisValidos.length === 0
+                            adicionandoContatosEmMassa ||
+                            totalContatosDisponiveisRestantes === 0
                           }
                         >
-                          Add todos
+                          {adicionandoContatosEmMassa ? "Adicionando..." : "Add todos"}
                         </button>
-
                         <span className={styles.contactsCount}>
-                          {loadingContatos
-                            ? "..."
-                            : temFiltrosContatosAtivos
-                            ? `${contatosDisponiveisFiltrados.length}/${totalContatosDisponiveis}`
-                            : totalContatosDisponiveis}
+                          {loadingContatos ? "..." : totalContatosDisponiveisRestantes}
                         </span>
                       </div>
                     </div>
@@ -4656,9 +4915,11 @@ export default function DisparosWhatsAppPage() {
                       ) : (
                         contatosDisponiveisFiltrados.map((contato) => {
                           const telefoneValido = contatoTemTelefoneValido(contato);
-                          const cooldownMarketingAtivo =
-                            contatoTemCooldownMarketing(contato) &&
-                            categoriaTemplateSelecionado !== "utility";
+                          const cooldownDisparoAtivo =
+                            contatoEstaEmCooldownAplicavel(
+                              contato,
+                              categoriaTemplateSelecionado
+                            );
 
                           return (
                             <div key={contato.id} className={styles.contactCard}>
@@ -4710,11 +4971,12 @@ export default function DisparosWhatsAppPage() {
                                       : "Lista fria"}
                                   </span>
 
-                                  {!telefoneValido ? (
-                                    <span className={styles.contactBadgeWarning}>
-                                      Sem telefone válido
-                                    </span>
+                                  {contato.telefone_revisar ? (
+
+                                    <span className={styles.contactBadgeReview}>⚠ revisão</span>
+
                                   ) : null}
+
 
                                   {renderBadgeCooldownContato(contato)}
                                 </div>
@@ -4725,13 +4987,27 @@ export default function DisparosWhatsAppPage() {
                                 type="button"
                                 className={styles.ButtonAdd}
                                 onClick={() => adicionarContato(contato)}
-                                disabled={
+                                aria-disabled={
                                   !telefoneValido ||
                                   contatoTemOptOutParaCategoria(
                                     contato,
                                     categoriaTemplateSelecionado
                                   ) ||
-                                  cooldownMarketingAtivo
+                                  cooldownDisparoAtivo
+                                }
+                                title={
+                                  !telefoneValido
+                                    ? contato.telefone_revisar === true
+                                      ? "Telefone marcado para revisão. Corrija-o na página de Contatos antes do disparo."
+                                      : "Este contato não possui telefone válido."
+                                    : contatoTemOptOutParaCategoria(
+                                        contato,
+                                        categoriaTemplateSelecionado
+                                      )
+                                    ? "Este contato solicitou opt-out para esta categoria."
+                                    : cooldownDisparoAtivo
+                                    ? "Este contato está em pausa temporária para marketing."
+                                    : "Adicionar contato ao disparo"
                                 }
                               >
                                 Adicionar
@@ -4748,11 +5024,27 @@ export default function DisparosWhatsAppPage() {
                       <h3 className={styles.contactsTitle}>Selecionados</h3>
 
                       <div className={styles.contactsHeaderActions}>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          inputMode="numeric"
+                          value={quantidadeRemoverContatos}
+                          onChange={(event) =>
+                            setQuantidadeRemoverContatos(
+                              event.target.value.replace(/\D/g, "")
+                            )
+                          }
+                          className={styles.bulkQuantityInput}
+                          placeholder="Qtd."
+                          title="Informe a quantidade. Com 0 ou vazio, remove todos os contatos selecionados exibidos."
+                          aria-label="Quantidade de contatos para remover; zero ou vazio remove todos"
+                        />
                         <button
                           type="button"
                           className={styles.TextButtonRemover}
-                          onClick={limparSelecao}
-                          disabled={contatosSelecionados.length === 0}
+                          onClick={removerSelecionadosFiltrados}
+                          disabled={contatosSelecionadosFiltrados.length === 0}
                         >
                           Remover todos
                         </button>
@@ -4827,6 +5119,13 @@ export default function DisparosWhatsAppPage() {
                                     : "Lista fria"}
                                 </span>
 
+                                {contato.telefone_revisar ? (
+
+                                  <span className={styles.contactBadgeReview}>⚠ revisão</span>
+
+                                ) : null}
+
+
                                 {renderBadgeCooldownContato(contato)}
                               </div>
                               {renderBadgesDisparoAntigo(contato)}
@@ -4868,8 +5167,8 @@ export default function DisparosWhatsAppPage() {
                     <strong>Disparo bloqueado por pausa da Meta</strong>
                     <p>
                       {totalContatosCooldown} contato(s) selecionado(s) estão
-                      em pausa temporária para marketing porque a Meta recusou
-                      uma entrega recente por limite de qualidade ou frequência.
+                      em pausa temporária porque a Meta recusou uma entrega
+                      recente por rate limit, qualidade ou frequência.
                       Remova-os da seleção para continuar.
                     </p>
                   </div>
@@ -4878,33 +5177,31 @@ export default function DisparosWhatsAppPage() {
                 {temContatosListaFria ? (
                   <div
                     className={`${styles.coldListNotice} ${
-                      marketingComListaFria || utilityListaFriaSemOptOut
+                      listaFriaSemOptOut
                         ? styles.coldListNoticeBlocked
                         : styles.coldListNoticeWarning
                     }`}
                     role={
-                      marketingComListaFria || utilityListaFriaSemOptOut
+                      listaFriaSemOptOut
                         ? "alert"
                         : "status"
                     }
                   >
                     <strong>
-                      {marketingComListaFria
-                        ? "Disparo de marketing bloqueado"
-                        : utilityListaFriaSemOptOut
+                      {listaFriaSemOptOut
                         ? "Template sem opt-out"
                         : `${totalContatosListaFria} contato(s) de lista fria selecionado(s)`}
                     </strong>
                     <p>
-                      {marketingComListaFria
-                        ? `A Meta exige opt-in para mensagens de marketing. Remova os ${totalContatosListaFria} contato(s) de lista fria ou selecione somente contatos com opt-in para liberar o envio.`
-                        : utilityListaFriaSemOptOut
-                        ? "Recrie este template utility com o rodapé obrigatório para responder SAIR antes de utilizá-lo com lista fria."
-                        : "Templates utility podem ser enviados, mas exigirão uma confirmação de responsabilidade depois da confirmação dos valores."}
+                      {listaFriaSemOptOut
+                        ? "Este template não possui o rodapé de opt-out necessário para envio à lista fria. Recrie-o com a instrução para responder SAIR."
+                        : marketingComListaFria
+                        ? "O disparo de marketing para lista fria será liberado após a confirmação dos valores e do termo de responsabilidade."
+                        : "O disparo utility para lista fria exigirá confirmação de responsabilidade após a confirmação dos valores."}
                     </p>
                     <span>
-                      Nesta tela, o contato possui opt-in quando já existe uma
-                      mensagem recebida dele no WhatsApp da empresa.
+                      Contatos sem opt-in permanecem identificados como lista
+                      fria e exigem confirmação de responsabilidade antes do envio.
                     </span>
                   </div>
                 ) : null}
@@ -5195,20 +5492,17 @@ export default function DisparosWhatsAppPage() {
                         (!agendarDisparo && selecaoExcedeLimite) ||
                         loadingConflitos ||
                         temConflitosPendentes ||
-                        marketingComListaFria ||
                         temContatosOptOut ||
                         temContatosCooldown ||
-                        utilityListaFriaSemOptOut
+                        listaFriaSemOptOut
                       }
                     >
                       {temContatosOptOut
                         ? "Opt-out bloqueado"
                         : temContatosCooldown
                         ? "Pausa Meta"
-                        : utilityListaFriaSemOptOut
+                        : listaFriaSemOptOut
                         ? "Template sem opt-out"
-                        : marketingComListaFria
-                        ? "Marketing bloqueado"
                         : temConflitosPendentes
                         ? "Resolver repetidos"
                         : !agendarDisparo && disparoBloqueado
@@ -6126,7 +6420,7 @@ export default function DisparosWhatsAppPage() {
 
       {modalResponsabilidadeListaFriaAberto &&
         podeDisparar &&
-        utilityComListaFria && (
+        templateComListaFria && (
           <div
             className={styles.modalOverlay}
             onClick={() => {
@@ -6151,9 +6445,10 @@ export default function DisparosWhatsAppPage() {
                     Confirmar responsabilidade pelo envio
                   </h3>
                   <p className={styles.modalSubtitle}>
-                    O template utility será enviado para{" "}
-                    {totalContatosListaFria} contato(s) sem histórico de
-                    mensagem recebida.
+                    O template{" "}
+                    {marketingComListaFria ? "marketing" : "utility"} será
+                    enviado para {totalContatosListaFria} contato(s) sem
+                    opt-in registrado.
                   </p>
                 </div>
 
@@ -6172,14 +6467,26 @@ export default function DisparosWhatsAppPage() {
 
               <div className={styles.modalBody}>
                 <div className={styles.modalRiskAlert}>
-                  <strong>Este envio possui risco para a conta WhatsApp.</strong>
-                  <p>
-                    Templates utility devem conter somente informações
-                    transacionais ou de serviço solicitadas pelo contato. Usar
-                    esse tipo de template para promoção, prospecção ou conteúdo
-                    de marketing pode causar denúncias, redução da qualidade,
-                    limitação ou banimento pela Meta.
-                  </p>
+                  <strong>
+                    Este envio possui risco para a conta WhatsApp.
+                  </strong>
+                  {marketingComListaFria ? (
+                    <p>
+                      Mensagens de marketing para contatos sem opt-in podem
+                      gerar bloqueios, denúncias, redução da qualidade do
+                      número, limitação de envios ou banimento pela Meta.
+                      Utilize somente uma base obtida legalmente e mantenha uma
+                      instrução clara de opt-out.
+                    </p>
+                  ) : (
+                    <p>
+                      Templates utility devem conter somente informações
+                      transacionais ou de serviço solicitadas pelo contato.
+                      Usar esse tipo de template para promoção, prospecção ou
+                      conteúdo de marketing pode causar denúncias, redução da
+                      qualidade, limitação ou banimento pela Meta.
+                    </p>
+                  )}
                 </div>
 
                 <div className={styles.modalSection}>
@@ -6188,12 +6495,17 @@ export default function DisparosWhatsAppPage() {
                   </h4>
                   <ul className={styles.modalList}>
                     <li>
-                      revisou o conteúdo e confirma que ele é realmente
-                      utility, sem oferta ou promoção;
+                      {marketingComListaFria
+                        ? "revisou o conteúdo, a origem da lista e a finalidade comercial deste envio;"
+                        : "revisou o conteúdo e confirma que ele é realmente utility, sem oferta ou promoção;"}
                     </li>
                     <li>
                       possui base legal e autorização adequadas para contatar
                       os destinatários;
+                    </li>
+                    <li>
+                      disponibiliza opt-out e respeitará imediatamente os
+                      pedidos para não receber novas mensagens;
                     </li>
                     <li>
                       assume a responsabilidade por bloqueios, denúncias,
@@ -6211,9 +6523,11 @@ export default function DisparosWhatsAppPage() {
                     }
                   />
                   <span>
-                    Li e compreendi os riscos. Confirmo que o conteúdo é
-                    utility e assumo integralmente a responsabilidade por este
-                    envio à lista fria.
+                    Li e compreendi os riscos. Confirmo que possuo base legal
+                    para este contato e assumo integralmente a responsabilidade
+                    pelo envio do template{" "}
+                    {marketingComListaFria ? "marketing" : "utility"} à lista
+                    fria.
                   </span>
                 </label>
               </div>

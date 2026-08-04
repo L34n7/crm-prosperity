@@ -126,7 +126,7 @@ export async function POST(
     const supabase = getSupabaseAdmin();
 
     const { data: agenda, error: agendaError } = await supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .select("id, nome, duracao_minutos")
       .eq("empresa_id", usuario.empresa_id)
       .eq("id", id)

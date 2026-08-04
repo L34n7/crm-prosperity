@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { asObject, type Context, type Job } from "./automation-runtime-types";
 
 const supabase = getSupabaseAdmin();
-const APPROVED = ["approved", "APPROVED", "aprovado"];
+const APPROVED = ["approved", "APPROVED", "aprovado"]; // CRM_AGENDA_POST_ATTENDANCE_TEMPLATE_V1
 
 async function findConversation(appointment: any, companyId: string) {
   const appointmentConversationId = String(appointment.conversa_id || "").trim();
@@ -12,7 +12,7 @@ async function findConversation(appointment: any, companyId: string) {
     const { data } = await supabase
       .from("conversas")
       .select(
-        "id, empresa_id, contato_id, responsavel_id, integracao_whatsapp_id, status, bot_ativo, aguardando_atendente, last_message_at"
+        "id, empresa_id, contato_id, responsavel_id, integracao_whatsapp_id, status, bot_ativo, aguardando_atendente, last_message_at, last_inbound_message_at, window_expires_at, closed_at"
       )
       .eq("empresa_id", companyId)
       .eq("id", appointmentConversationId)
@@ -24,7 +24,7 @@ async function findConversation(appointment: any, companyId: string) {
   const { data } = await supabase
     .from("conversas")
     .select(
-      "id, empresa_id, contato_id, responsavel_id, integracao_whatsapp_id, status, bot_ativo, aguardando_atendente, last_message_at"
+      "id, empresa_id, contato_id, responsavel_id, integracao_whatsapp_id, status, bot_ativo, aguardando_atendente, last_message_at, last_inbound_message_at, window_expires_at, closed_at"
     )
     .eq("empresa_id", companyId)
     .eq("contato_id", appointment.contato_id)
@@ -43,7 +43,7 @@ export async function loadContext(job: Job): Promise<Context | null> {
       .eq("id", job.agendamento_id)
       .maybeSingle(),
     supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .select("id, empresa_id, nome, timezone, status, metadata_json")
       .eq("empresa_id", job.empresa_id)
       .eq("id", job.agenda_id)
@@ -69,7 +69,9 @@ export async function loadContext(job: Job): Promise<Context | null> {
     appointment.contato_id
       ? supabase
           .from("contatos")
-          .select("id, nome, telefone, email, status_lead, classificacao")
+          .select(
+            "id, nome, whatsapp_profile_name, telefone, email, origem, campanha, status_lead, classificacao"
+          )
           .eq("empresa_id", job.empresa_id)
           .eq("id", appointment.contato_id)
           .maybeSingle()
@@ -88,7 +90,14 @@ export async function loadContext(job: Job): Promise<Context | null> {
   if (contactResult.error) throw new Error(contactResult.error.message);
   if (responsibleResult.error) throw new Error(responsibleResult.error.message);
 
-  const [integrationResult, templateResult, flowResult] = await Promise.all([
+  const [
+    integrationResult,
+    templateResult,
+    flowResult,
+    variablesResult,
+    currentProtocolResult,
+    lastProtocolResult,
+  ] = await Promise.all([
     rule.integracao_whatsapp_id
       ? supabase
           .from("integracoes_whatsapp")
@@ -119,11 +128,51 @@ export async function loadContext(job: Job): Promise<Context | null> {
           .eq("id", rule.fluxo_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    supabase
+      .from("automacao_variaveis")
+      .select("chave, valor")
+      .eq("empresa_id", job.empresa_id)
+      .is("execucao_id", null)
+      .is("contato_id", null)
+      .eq("metadata_json->>tipo", "global_empresa")
+      .eq("metadata_json->>ativo", "true"),
+    conversation?.id
+      ? supabase
+          .from("conversa_protocolos")
+          .select("protocolo")
+          .eq("empresa_id", job.empresa_id)
+          .eq("conversa_id", conversation.id)
+          .eq("ativo", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    appointment.contato_id
+      ? supabase
+          .from("conversa_protocolos")
+          .select("protocolo")
+          .eq("empresa_id", job.empresa_id)
+          .eq("contato_id", appointment.contato_id)
+          .eq("ativo", false)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   if (integrationResult.error) throw new Error(integrationResult.error.message);
   if (templateResult.error) throw new Error(templateResult.error.message);
   if (flowResult.error) throw new Error(flowResult.error.message);
+  if (variablesResult.error) throw new Error(variablesResult.error.message);
+  if (currentProtocolResult.error) throw new Error(currentProtocolResult.error.message);
+  if (lastProtocolResult.error) throw new Error(lastProtocolResult.error.message);
+
+  const variables = Object.fromEntries(
+    (variablesResult.data || []).map((item: any) => [
+      String(item.chave || "").trim(),
+      String(item.valor || ""),
+    ])
+  );
 
   return {
     job,
@@ -136,6 +185,11 @@ export async function loadContext(job: Job): Promise<Context | null> {
     integration: integrationResult.data || null,
     template: templateResult.data || null,
     flow: flowResult.data || null,
+    variables,
+    protocols: {
+      protocolo_atual: String(currentProtocolResult.data?.protocolo || ""),
+      ultimo_protocolo: String(lastProtocolResult.data?.protocolo || ""),
+    },
   };
 }
 
@@ -148,7 +202,8 @@ async function patchJob(job: Job, values: Record<string, unknown>) {
       updated_at: new Date().toISOString(),
     })
     .eq("empresa_id", job.empresa_id)
-    .eq("id", job.id);
+    .eq("id", job.id)
+    .eq("status", "processando");
   if (error) throw new Error(`Erro ao atualizar execução da agenda: ${error.message}`);
 }
 

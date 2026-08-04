@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin();
 
     let query = supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .select(
         "id, empresa_id, nome, descricao, timezone, duracao_minutos, intervalo_minutos, antecedencia_minutos, janela_dias, status, metadata_json, created_at, updated_at"
       )
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { data: agenda, error } = await supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .insert({
         empresa_id: usuario.empresa_id,
         nome,

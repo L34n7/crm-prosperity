@@ -5,13 +5,14 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   ALLOWED_TEMPLATE_FORMATS,
-  ALLOWED_TEMPLATE_SOURCES,
   asRecord,
   extractTemplateQuickReplyButtons,
   extractTemplateVariablePositions,
+  isAllowedTemplateSource,
   normalizeButtonMappings,
   normalizeText,
   normalizeVariableMappings,
+  templateCustomVariableKey,
 } from "@/lib/agendas/template-mapping";
 
 const TYPES = new Set([
@@ -63,7 +64,7 @@ async function agendaContext(id: string) {
 
   const supabase = getSupabaseAdmin();
   const { data: agenda, error } = await supabase
-    .from("agenda_calendarios")
+    .from("calendarios")
     .select("id")
     .eq("empresa_id", result.usuario.empresa_id)
     .eq("id", id)
@@ -90,7 +91,7 @@ function validateVariableMapping(payload: unknown, configuration: Record<string,
       .join(", ") || "nenhuma"}.`;
   }
   for (const mapping of mappings) {
-    if (!ALLOWED_TEMPLATE_SOURCES.has(mapping.fonte as never)) {
+    if (!isAllowedTemplateSource(mapping.fonte)) {
       return `A fonte de {{${mapping.posicao}}} é inválida.`;
     }
     if (!ALLOWED_TEMPLATE_FORMATS.has(mapping.formato as never)) {
@@ -103,29 +104,53 @@ function validateVariableMapping(payload: unknown, configuration: Record<string,
   return "";
 }
 
-function validateButtonMapping(payload: unknown, configuration: Record<string, unknown>) {
+function validateButtonMapping(
+  payload: unknown,
+  configuration: Record<string, unknown>,
+  requireAllActions: boolean
+) {
   const buttons = extractTemplateQuickReplyButtons(payload);
   const mappings = normalizeButtonMappings(configuration.template_botoes);
   const available = new Set(buttons.map((item) => item.indice));
+  const contextLabel = requireAllActions
+    ? "Confirmação do agendamento"
+    : "Lembrete do agendamento";
+  const actionLabels: Record<string, string> = {
+    confirmar: "Confirmar agendamento",
+    cancelar: "Iniciar cancelamento",
+    reagendar: "Iniciar reagendamento",
+  };
+
   for (const mapping of mappings) {
+    const button = buttons.find((item) => item.indice === mapping.indice);
+    const buttonLabel = String(
+      button?.texto || mapping.texto_snapshot || `Botão ${mapping.indice + 1}`
+    ).trim();
+
     if (!available.has(mapping.indice)) {
-      return `O mapeamento do botão ${mapping.indice + 1} não corresponde ao template atual.`;
+      return `${contextLabel}: o mapeamento do botão “${buttonLabel}” não corresponde ao template atual.`;
+    }
+    if (mapping.acao !== "ignorar" && !mapping.fluxo_id) {
+      return `${contextLabel} — botão “${buttonLabel}”: a ação “${
+        actionLabels[mapping.acao] || mapping.acao
+      }” exige a seleção de um fluxo. Se não deseja mapear esse botão, escolha “Sem ação” no campo Ação no CRM.`;
     }
   }
+
+  if (!requireAllActions) return "";
+
   const actions = new Set(
     mappings.filter((item) => item.acao !== "ignorar").map((item) => item.acao)
   );
   for (const action of ["confirmar", "cancelar", "reagendar"] as const) {
     if (!actions.has(action)) {
-      return `Associe um botão do template à ação “${action}”.`;
-    }
-    const mapping = mappings.find((item) => item.acao === action);
-    if (!mapping?.fluxo_id) {
-      return `Selecione o fluxo que será iniciado ao ${action}.`;
+      return `${contextLabel}: associe um botão do template à ação “${
+        actionLabels[action]
+      }”.`;
     }
   }
   return "";
-}
+} // CRM_AGENDA_VALIDATION_RESCHEDULE_V1
 
 export async function GET(
   _request: NextRequest,
@@ -247,6 +272,25 @@ export async function PUT(
       }
     }
 
+    const activePostAttendanceRules = rules.filter(
+      (item) => item.tipo === "pos_atendimento" && item.ativo
+    );
+    if (
+      activePostAttendanceRules.length > 1 ||
+      activePostAttendanceRules.some(
+        (item) => !["fluxo", "whatsapp"].includes(item.canal)
+      )
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Pós-atendimento: escolha somente uma opção — Iniciar fluxo ou Disparo pelo WhatsApp.",
+        },
+        { status: 400 }
+      );
+    }
+
     const integrationIds = Array.from(
       new Set(rules.map((item) => item.integracao_whatsapp_id).filter(Boolean) as string[])
     );
@@ -264,8 +308,17 @@ export async function PUT(
         ...mappedFlowIds,
       ])
     );
+    const customVariableKeys = Array.from(
+      new Set(
+        rules.flatMap((rule) =>
+          normalizeVariableMappings(asRecord(rule.configuracao_json).template_variaveis)
+            .map((mapping) => templateCustomVariableKey(mapping.fonte))
+            .filter(Boolean)
+        )
+      )
+    );
 
-    const [integrations, templates, flows] = await Promise.all([
+    const [integrations, templates, flows, variables] = await Promise.all([
       integrationIds.length
         ? context.supabase
             .from("integracoes_whatsapp")
@@ -286,11 +339,23 @@ export async function PUT(
             .from("automacao_fluxos")
             .select("id, status")
             .eq("empresa_id", context.companyId)
+            .eq("status", "ativo")
             .in("id", flowIds)
+        : Promise.resolve({ data: [], error: null }),
+      customVariableKeys.length
+        ? context.supabase
+            .from("automacao_variaveis")
+            .select("chave")
+            .eq("empresa_id", context.companyId)
+            .is("execucao_id", null)
+            .is("contato_id", null)
+            .eq("metadata_json->>tipo", "global_empresa")
+            .eq("metadata_json->>ativo", "true")
+            .in("chave", customVariableKeys)
         : Promise.resolve({ data: [], error: null }),
     ]);
 
-    if (integrations.error || templates.error || flows.error) {
+    if (integrations.error || templates.error || flows.error || variables.error) {
       throw new Error("Não foi possível validar as opções selecionadas.");
     }
     const activeIntegrationIds = new Set(
@@ -310,14 +375,24 @@ export async function PUT(
         { status: 400 }
       );
     }
-    const activeFlowIds = new Set(
-      (flows.data || [])
-        .filter((item: any) => item.status === "ativo")
-        .map((item: any) => String(item.id))
-    );
-    if (flowIds.some((item) => !activeFlowIds.has(item))) {
+    if ((flows.data || []).length !== flowIds.length) {
       return NextResponse.json(
         { ok: false, error: "Todos os fluxos selecionados precisam estar ativos." },
+        { status: 400 }
+      );
+    }
+    const availableVariableKeys = new Set(
+      (variables.data || []).map((item: any) => String(item.chave || ""))
+    );
+    const missingVariable = customVariableKeys.find(
+      (key) => !availableVariableKeys.has(key)
+    );
+    if (missingVariable) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `A variável personalizada {{${missingVariable}}} não existe mais ou está inativa.`,
+        },
         { status: 400 }
       );
     }
@@ -359,8 +434,12 @@ export async function PUT(
       if (variableError) {
         return NextResponse.json({ ok: false, error: variableError }, { status: 400 });
       }
-      if (rule.tipo === "confirmacao") {
-        const buttonError = validateButtonMapping(template?.payload, rule.configuracao_json);
+      if (["confirmacao", "lembrete"].includes(rule.tipo)) {
+        const buttonError = validateButtonMapping(
+          template?.payload,
+          rule.configuracao_json,
+          rule.tipo === "confirmacao"
+        );
         if (buttonError) {
           return NextResponse.json({ ok: false, error: buttonError }, { status: 400 });
         }
@@ -384,7 +463,7 @@ export async function PUT(
       regras: data || [],
       execucao_automatica_ativa: true,
       mensagem:
-        "Configurações salvas, mapeamentos validados e automações replanejadas.",
+        "Configurações salvas. Disparos pendentes anteriores foram cancelados e os novos horários foram replanejados.",
     });
   } catch (error) {
     return NextResponse.json(

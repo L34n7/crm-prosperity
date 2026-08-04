@@ -104,6 +104,7 @@ type ConversaAtual = {
   empresa_id: string;
   contato_id: string;
   setor_id: string | null;
+  escopo_fila?: "setor" | "geral" | null;
   responsavel_id: string | null;
   integracao_whatsapp_id: string | null;
   status: string;
@@ -357,6 +358,15 @@ async function usuarioPodeEditarConversa(
 
   const podeTransferir = await podeTransferirConversas(usuario);
 
+  // CRM_QUEUE_SCOPE_ROUTE_V1
+  if (
+    conversa.escopo_fila === "geral" &&
+    conversa.status === "fila" &&
+    !conversa.responsavel_id
+  ) {
+    return podeTransferir || (await podeAtribuirConversas(usuario));
+  }
+
   if (podeTransferir) {
     return await usuarioPertenceAoSetor(usuario.id, conversa.setor_id);
   }
@@ -391,6 +401,14 @@ async function usuarioPodeTransferir(
   const podeAtribuir = await podeAtribuirConversas(usuario);
 
   if (podeAtribuir) {
+    if (
+      conversa.escopo_fila === "geral" &&
+      conversa.status === "fila" &&
+      !conversa.responsavel_id
+    ) {
+      return true;
+    }
+
     return await usuarioPertenceAoSetor(usuario.id, conversa.setor_id);
   }
 
@@ -420,6 +438,14 @@ async function usuarioPodeAtribuir(
   }
 
   if (isAdministrador(usuario)) return true;
+
+  if (
+    conversa.escopo_fila === "geral" &&
+    conversa.status === "fila" &&
+    !conversa.responsavel_id
+  ) {
+    return true;
+  }
 
   return await usuarioPertenceAoSetor(usuario.id, conversa.setor_id);
 }
@@ -451,6 +477,14 @@ async function usuarioPodeEncerrar(
   const podeAtribuir = await podeAtribuirConversas(usuario);
 
   if (podeAtribuir) {
+    if (
+      conversa.escopo_fila === "geral" &&
+      conversa.status === "fila" &&
+      !conversa.responsavel_id
+    ) {
+      return true;
+    }
+
     return await usuarioPertenceAoSetor(usuario.id, conversa.setor_id);
   }
 
@@ -526,6 +560,14 @@ export async function PUT(
   const empresa_id = conversaAtual.empresa_id;
   const contato_id = body?.contato_id ?? conversaAtual.contato_id;
   const setor_id = "setor_id" in body ? body.setor_id : conversaAtual.setor_id;
+  const escopo_fila =
+    String(
+      "escopo_fila" in body
+        ? body.escopo_fila
+        : conversaAtual.escopo_fila || "setor"
+    ).trim() === "geral"
+      ? "geral"
+      : "setor";
   const responsavelIdEntrada =
     "responsavel_id" in body
       ? body.responsavel_id
@@ -870,6 +912,7 @@ export async function PUT(
   const updateData: Record<string, unknown> = {
     contato_id,
     setor_id,
+    escopo_fila,
     responsavel_id,
     integracao_whatsapp_id,
     status,
@@ -883,6 +926,7 @@ export async function PUT(
 
   if (mudouSetor) {
     updateData.setor_id = setor_id;
+    updateData.escopo_fila = setor_id ? "setor" : escopo_fila;
 
     const limparResponsavel = true;
 

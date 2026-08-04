@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
+// CRM_AGENDA_FEEDBACK_DETAILS_V1
 const RESULTADOS_VALIDOS = ["realizado", "faltou", "cancelado"] as const;
 
 type ResultadoFeedback = (typeof RESULTADOS_VALIDOS)[number];
@@ -40,8 +41,17 @@ export async function GET() {
         agenda_id,
         contato_id,
         conversa_id,
+        titulo,
+        tipo_id,
+        responsavel_id,
+        prioridade,
+        origem,
+        local,
+        link_reuniao,
+        observacoes,
         nome_cliente,
         telefone_cliente,
+        email_cliente,
         inicio_at,
         fim_at,
         status,
@@ -53,7 +63,8 @@ export async function GET() {
         contatos (
           id,
           nome,
-          telefone
+          telefone,
+          email
         )
       `
     )

@@ -697,6 +697,19 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
       const metadataJson = (message.metadataJson || {}) as any;
 
+      // CRM_AGENDA_BUTTON_SKIP_COMMON_TRIGGER_V1
+      const payloadAcaoAgenda = String(
+        message.rawMessage?.button?.payload ||
+          metadataJson?.button?.payload ||
+          metadataJson?.interactive?.button_reply?.id ||
+          metadataJson?.interactive?.list_reply?.id ||
+          ""
+      ).trim();
+      const ehAcaoAgendaCalendario =
+        /^agenda_(confirmar|cancelar|reagendar):[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+          payloadAcaoAgenda
+        );
+
       let textoAutomacao =
         message.text?.trim() ||
         metadataJson?.interactive?.button_reply?.id ||
@@ -820,7 +833,8 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         mensagemExistente?.conversa_id || conversation.id;
 
       const automacaoJaProcessada =
-        mensagemExistente?.metadata_json?.automacao_processada === true;
+        mensagemExistente?.metadata_json?.automacao_processada === true ||
+        ehAcaoAgendaCalendario;
 
       let resultadoOptOut: Awaited<
         ReturnType<typeof processarMensagemRecebidaParaOptOut>

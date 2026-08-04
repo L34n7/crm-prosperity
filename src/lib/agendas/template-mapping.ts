@@ -1,6 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export type AgendaTemplateAction = "confirmar" | "cancelar" | "reagendar" | "ignorar";
+export type AgendaTemplateSourceKind = "text" | "datetime" | "fixed";
+export type AgendaTemplateSourceCategory =
+  | "Nome e número"
+  | "Agenda"
+  | "Fixa";
+
+export type AgendaTemplateSourceOption = {
+  value: string;
+  variable: string;
+  label: string;
+  description: string;
+  kind: AgendaTemplateSourceKind;
+  category: AgendaTemplateSourceCategory;
+};
 
 export type AgendaTemplateVariableMapping = {
   posicao: number;
@@ -22,25 +36,207 @@ export type AgendaTemplateContext = {
   agenda: Record<string, any>;
   contact?: Record<string, any> | null;
   responsible?: Record<string, any> | null;
+  variables?: Record<string, string>;
+  protocols?: {
+    protocolo_atual?: string;
+    ultimo_protocolo?: string;
+  } | null;
 };
 
-export const TEMPLATE_SOURCE_OPTIONS = [
-  { value: "contato.nome", label: "Nome completo do contato", kind: "text" },
-  { value: "contato.primeiro_nome", label: "Primeiro nome do contato", kind: "text" },
-  { value: "contato.telefone", label: "Telefone do contato", kind: "text" },
-  { value: "contato.email", label: "E-mail do contato", kind: "text" },
-  { value: "agendamento.titulo", label: "Título do agendamento", kind: "text" },
-  { value: "agendamento.inicio_at", label: "Data/hora de início", kind: "datetime" },
-  { value: "agendamento.fim_at", label: "Data/hora de término", kind: "datetime" },
-  { value: "agendamento.local", label: "Local do agendamento", kind: "text" },
-  { value: "agendamento.link_reuniao", label: "Link da reunião", kind: "text" },
-  { value: "agendamento.observacoes", label: "Observações do agendamento", kind: "text" },
-  { value: "agenda.nome", label: "Nome da agenda", kind: "text" },
-  { value: "responsavel.nome", label: "Nome do responsável", kind: "text" },
-  { value: "responsavel.email", label: "E-mail do responsável", kind: "text" },
-  { value: "responsavel.telefone", label: "Telefone do responsável", kind: "text" },
-  { value: "texto_fixo", label: "Texto fixo", kind: "fixed" },
+const CUSTOM_VARIABLE_PREFIX = "variavel.";
+
+export const TEMPLATE_SOURCE_OPTIONS: readonly AgendaTemplateSourceOption[] = [
+  {
+    value: "nome_contato",
+    variable: "{{nome_contato}}",
+    label: "Nome salvo no contato",
+    description: "Nome salvo no cadastro do contato.",
+    kind: "text",
+    category: "Nome e número",
+  },
+  {
+    value: "nome",
+    variable: "{{nome}}",
+    label: "Nome do contato",
+    description: "Nome do contato usado no padrão geral do sistema.",
+    kind: "text",
+    category: "Nome e número",
+  },
+  {
+    value: "nome_whatsapp",
+    variable: "{{nome_whatsapp}}",
+    label: "Nome do WhatsApp",
+    description:
+      "Nome do perfil do WhatsApp; quando não existir, usa o nome salvo no contato.",
+    kind: "text",
+    category: "Nome e número",
+  },
+  {
+    value: "numero_contato",
+    variable: "{{numero_contato}}",
+    label: "Número do contato",
+    description: "Número ou telefone salvo no cadastro do contato.",
+    kind: "text",
+    category: "Nome e número",
+  },
+  {
+    value: "agendamento.titulo",
+    variable: "{{agendamento.titulo}}",
+    label: "Título do agendamento",
+    description: "Título do compromisso; usa o nome da agenda quando estiver vazio.",
+    kind: "text",
+    category: "Agenda",
+  },
+  {
+    value: "agendamento.inicio_at",
+    variable: "{{agendamento.inicio_at}}",
+    label: "Data e hora de início",
+    description: "Início do agendamento, formatado conforme a opção escolhida.",
+    kind: "datetime",
+    category: "Agenda",
+  },
+  {
+    value: "agendamento.fim_at",
+    variable: "{{agendamento.fim_at}}",
+    label: "Data e hora de término",
+    description: "Término do agendamento, formatado conforme a opção escolhida.",
+    kind: "datetime",
+    category: "Agenda",
+  },
+  {
+    value: "agendamento.local",
+    variable: "{{agendamento.local}}",
+    label: "Local do agendamento",
+    description: "Local informado no compromisso.",
+    kind: "text",
+    category: "Agenda",
+  },
+  {
+    value: "agendamento.link_reuniao",
+    variable: "{{agendamento.link_reuniao}}",
+    label: "Link da reunião",
+    description: "Link de reunião associado ao compromisso.",
+    kind: "text",
+    category: "Agenda",
+  },
+  {
+    value: "agendamento.observacoes",
+    variable: "{{agendamento.observacoes}}",
+    label: "Observações do agendamento",
+    description: "Observações públicas registradas no compromisso.",
+    kind: "text",
+    category: "Agenda",
+  },
+  {
+    value: "agenda.nome",
+    variable: "{{agenda.nome}}",
+    label: "Nome da agenda",
+    description: "Nome da agenda à qual o compromisso pertence.",
+    kind: "text",
+    category: "Agenda",
+  },
+  {
+    value: "responsavel.nome",
+    variable: "{{responsavel.nome}}",
+    label: "Nome do responsável",
+    description: "Nome do usuário responsável pelo compromisso.",
+    kind: "text",
+    category: "Agenda",
+  },
+  {
+    value: "responsavel.email",
+    variable: "{{responsavel.email}}",
+    label: "E-mail do responsável",
+    description: "E-mail do usuário responsável pelo compromisso.",
+    kind: "text",
+    category: "Agenda",
+  },
+  {
+    value: "responsavel.telefone",
+    variable: "{{responsavel.telefone}}",
+    label: "Telefone do responsável",
+    description: "Telefone do usuário responsável pelo compromisso.",
+    kind: "text",
+    category: "Agenda",
+  },
+  {
+    value: "email_contato",
+    variable: "{{email_contato}}",
+    label: "E-mail do contato",
+    description: "E-mail salvo no cadastro do contato.",
+    kind: "text",
+    category: "Fixa",
+  },
+  {
+    value: "campanha",
+    variable: "{{campanha}}",
+    label: "Campanha do contato",
+    description: "Campanha vinculada ao contato.",
+    kind: "text",
+    category: "Fixa",
+  },
+  {
+    value: "origem",
+    variable: "{{origem}}",
+    label: "Origem do contato",
+    description: "Origem cadastrada para o contato.",
+    kind: "text",
+    category: "Fixa",
+  },
+  {
+    value: "status_lead",
+    variable: "{{status_lead}}",
+    label: "Status do lead",
+    description: "Status atual do lead no CRM.",
+    kind: "text",
+    category: "Fixa",
+  },
+  {
+    value: "classificacao_lead",
+    variable: "{{classificacao_lead}}",
+    label: "Classificação do lead",
+    description: "Classificação global atual do lead.",
+    kind: "text",
+    category: "Fixa",
+  },
+  {
+    value: "protocolo_atual",
+    variable: "{{protocolo_atual}}",
+    label: "Protocolo atual",
+    description: "Protocolo ativo da conversa mais recente do contato.",
+    kind: "text",
+    category: "Fixa",
+  },
+  {
+    value: "ultimo_protocolo",
+    variable: "{{ultimo_protocolo}}",
+    label: "Último protocolo",
+    description: "Último protocolo encerrado do contato.",
+    kind: "text",
+    category: "Fixa",
+  },
+  {
+    value: "texto_fixo",
+    variable: "Texto fixo",
+    label: "Texto fixo",
+    description: "Valor digitado manualmente e repetido em todos os envios.",
+    kind: "fixed",
+    category: "Fixa",
+  },
 ] as const;
+
+const LEGACY_TEMPLATE_SOURCES = new Set([
+  "contato.nome",
+  "contato.primeiro_nome",
+  "contato.telefone",
+  "contato.email",
+]);
+
+const TEMPLATE_SOURCE_ALIASES = new Map<string, string>([
+  ["contato.nome", "nome_contato"],
+  ["contato.telefone", "numero_contato"],
+  ["contato.email", "email_contato"],
+]);
 
 export const TEMPLATE_FORMAT_OPTIONS = [
   { value: "texto", label: "Texto padrão", kinds: ["text", "fixed"] },
@@ -55,7 +251,10 @@ export const TEMPLATE_FORMAT_OPTIONS = [
   { value: "data_hora_extenso", label: "domingo, 2 de agosto, às 14h30", kinds: ["datetime"] },
 ] as const;
 
-export const ALLOWED_TEMPLATE_SOURCES = new Set(TEMPLATE_SOURCE_OPTIONS.map((item) => item.value));
+export const ALLOWED_TEMPLATE_SOURCES = new Set([
+  ...TEMPLATE_SOURCE_OPTIONS.map((item) => item.value),
+  ...LEGACY_TEMPLATE_SOURCES,
+]);
 export const ALLOWED_TEMPLATE_FORMATS = new Set(TEMPLATE_FORMAT_OPTIONS.map((item) => item.value));
 export const ALLOWED_TEMPLATE_ACTIONS = new Set<AgendaTemplateAction>([
   "confirmar",
@@ -76,6 +275,46 @@ export function normalizeText(value: unknown) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+export function normalizeTemplateVariableKey(value: unknown) {
+  return String(value || "")
+    .replace(/[{}]/g, "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+export function customTemplateSource(key: unknown) {
+  const normalized = normalizeTemplateVariableKey(key);
+  return normalized ? `${CUSTOM_VARIABLE_PREFIX}${normalized}` : "";
+}
+
+export function templateCustomVariableKey(source: unknown) {
+  const text = String(source || "").trim();
+  if (!text.startsWith(CUSTOM_VARIABLE_PREFIX)) return "";
+  return normalizeTemplateVariableKey(text.slice(CUSTOM_VARIABLE_PREFIX.length));
+}
+
+export function canonicalTemplateSource(source: unknown) {
+  const text = String(source || "").trim();
+  return TEMPLATE_SOURCE_ALIASES.get(text) || text;
+}
+
+export function isAllowedTemplateSource(source: unknown) {
+  const text = canonicalTemplateSource(source);
+  return ALLOWED_TEMPLATE_SOURCES.has(text) || Boolean(templateCustomVariableKey(text));
+}
+
+export function templateSourceKind(source: unknown): AgendaTemplateSourceKind {
+  const text = canonicalTemplateSource(source);
+  if (templateCustomVariableKey(text)) return "text";
+  if (text === "contato.primeiro_nome") return "text";
+  return TEMPLATE_SOURCE_OPTIONS.find((item) => item.value === text)?.kind || "text";
 }
 
 export function templateComponents(payload: unknown) {
@@ -116,7 +355,7 @@ export function extractTemplateQuickReplyButtons(payload: unknown) {
 
 export function suggestVariableMapping(posicao: number): AgendaTemplateVariableMapping {
   if (posicao === 1) {
-    return { posicao, fonte: "contato.nome", formato: "texto", valor_padrao: "Cliente" };
+    return { posicao, fonte: "nome_contato", formato: "texto", valor_padrao: "Cliente" };
   }
   if (posicao === 2) {
     return {
@@ -161,10 +400,10 @@ export function normalizeVariableMappings(value: unknown) {
   return value.flatMap((item) => {
     const record = asRecord(item);
     const posicao = Number(record.posicao);
-    const fonte = String(record.fonte || "").trim();
+    const fonte = canonicalTemplateSource(record.fonte);
     const formato = String(record.formato || "texto").trim();
     if (!Number.isInteger(posicao) || posicao < 1 || posicao > 100) return [];
-    if (!ALLOWED_TEMPLATE_SOURCES.has(fonte as any)) return [];
+    if (!isAllowedTemplateSource(fonte)) return [];
     if (!ALLOWED_TEMPLATE_FORMATS.has(formato as any)) return [];
     return [
       {
@@ -284,15 +523,21 @@ function sourceValue(context: AgendaTemplateContext, source: string) {
   const appointment = context.appointment || {};
   const contact = context.contact || {};
   const responsible = context.responsible || {};
-  switch (source) {
-    case "contato.nome":
+  const customKey = templateCustomVariableKey(source);
+  if (customKey) return context.variables?.[customKey] || "";
+
+  switch (canonicalTemplateSource(source)) {
+    case "nome_contato":
+    case "nome":
       return appointment.nome_cliente || contact.nome || "";
+    case "nome_whatsapp":
+      return contact.whatsapp_profile_name || appointment.nome_cliente || contact.nome || "";
+    case "numero_contato":
+      return appointment.telefone_cliente || contact.telefone || "";
+    case "email_contato":
+      return appointment.email_cliente || contact.email || "";
     case "contato.primeiro_nome":
       return String(appointment.nome_cliente || contact.nome || "").trim().split(/\s+/)[0] || "";
-    case "contato.telefone":
-      return appointment.telefone_cliente || contact.telefone || "";
-    case "contato.email":
-      return appointment.email_cliente || contact.email || "";
     case "agendamento.titulo":
       return appointment.titulo || context.agenda?.nome || "";
     case "agendamento.inicio_at":
@@ -313,6 +558,18 @@ function sourceValue(context: AgendaTemplateContext, source: string) {
       return responsible.email || "";
     case "responsavel.telefone":
       return responsible.telefone || "";
+    case "campanha":
+      return contact.campanha || "";
+    case "origem":
+      return contact.origem || "";
+    case "status_lead":
+      return contact.status_lead || "";
+    case "classificacao_lead":
+      return contact.classificacao || "";
+    case "protocolo_atual":
+      return context.protocols?.protocolo_atual || "";
+    case "ultimo_protocolo":
+      return context.protocols?.ultimo_protocolo || "";
     default:
       return "";
   }
@@ -322,12 +579,13 @@ export function resolveMappedValue(
   context: AgendaTemplateContext,
   mapping: AgendaTemplateVariableMapping
 ) {
-  if (mapping.fonte === "texto_fixo") {
+  const source = canonicalTemplateSource(mapping.fonte);
+  if (source === "texto_fixo") {
     return String(mapping.valor_fixo || mapping.valor_padrao || "-").slice(0, 1024);
   }
-  const raw = sourceValue(context, mapping.fonte);
+  const raw = sourceValue(context, source);
   let value = "";
-  if (mapping.fonte.endsWith("_at")) {
+  if (templateSourceKind(source) === "datetime") {
     value = formatAgendaDateTime(
       String(raw || ""),
       String(context.agenda?.timezone || "America/Sao_Paulo"),

@@ -113,8 +113,7 @@ async function ajustarPaginaDisparos() {
               confirmacaoResponsabilidadeListaFria`,
     `              templateComListaFria &&
               confirmacaoResponsabilidadeListaFria`,
-    "envio da confirmação ao backend",
-    2
+    "envio da confirmação ao backend"
   );
 
   source = replaceAllRequired(

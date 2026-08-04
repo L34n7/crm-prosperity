@@ -260,6 +260,27 @@ function respostaFluxoAtivoSemGatilho() {
   );
 }
 
+// CRM_PROTECTED_SYSTEM_FLOW_ACTIONS_V1
+function fluxoEhSistemaProtegido(configuracao: unknown) {
+  const config = configuracaoComoObjeto(configuracao);
+  return (
+    configuracaoMarcada(config.fluxo_sistema_calendario) &&
+    configuracaoMarcada(config.protegido_sistema)
+  );
+}
+
+function respostaAcaoFluxoSistemaProtegido() {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "FLUXO_SISTEMA_PROTEGIDO",
+      error:
+        "Fluxos fixos do sistema não podem ser pausados, arquivados ou excluídos.",
+    },
+    { status: 403 }
+  );
+}
+
 async function fluxoPossuiGatilhoAtivo(params: {
   empresaId: string;
   fluxoId: string;
@@ -1183,6 +1204,17 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    // CRM_PROTECTED_SYSTEM_FLOW_STATUS_V1
+    if (
+      fluxoEhSistemaProtegido(fluxoAntes.configuracao_json) &&
+      body?.status !== undefined &&
+      ["pausado", "rascunho", "arquivado"].includes(
+        String(body.status || "").trim()
+      )
+    ) {
+      return respostaAcaoFluxoSistemaProtegido();
+    }
+
     const configuracaoFinal =
       atualizacao.configuracao_json !== undefined
         ? atualizacao.configuracao_json
@@ -1225,7 +1257,16 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    if (statusFinal === "ativo" && !fluxoPadraoFinal) {
+    const fluxoSistemaCalendario = fluxoEhSistemaProtegido(
+      fluxoAntes.configuracao_json
+    );
+
+    // CRM_SYSTEM_FLOW_OPTIONAL_TRIGGER_EDIT_VALIDATION_V1
+    if (
+      statusFinal === "ativo" &&
+      !fluxoPadraoFinal &&
+      !fluxoSistemaCalendario
+    ) {
       const possuiGatilhoAtivo = await fluxoPossuiGatilhoAtivo({
         empresaId: usuario.empresa_id,
         fluxoId: id,
@@ -1372,6 +1413,34 @@ export async function DELETE(req: NextRequest) {
         { ok: false, error: "ID do fluxo é obrigatório." },
         { status: 400 }
       );
+    }
+
+    // CRM_PROTECTED_SYSTEM_FLOW_DELETE_V1
+    const { data: fluxoProtegidoAcao, error: fluxoProtegidoAcaoError } =
+      await supabaseAdmin
+        .from("automacao_fluxos")
+        .select("id, configuracao_json")
+        .eq("id", id)
+        .eq("empresa_id", usuario.empresa_id)
+        .maybeSingle();
+
+    if (fluxoProtegidoAcaoError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Erro ao validar a proteção do fluxo: " +
+            fluxoProtegidoAcaoError.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    if (
+      fluxoProtegidoAcao &&
+      fluxoEhSistemaProtegido(fluxoProtegidoAcao.configuracao_json)
+    ) {
+      return respostaAcaoFluxoSistemaProtegido();
     }
 
     if (definitivo) {

@@ -898,6 +898,7 @@ export async function POST(request: Request) {
       mensagem_externa_id: mensagemExternaId,
       metadata_json: {
         tipo: "disparo_template_individual",
+        disparo_tipo: "manual",
         template_id: template.id,
         template_nome: template.nome,
         template_idioma: template.idioma,

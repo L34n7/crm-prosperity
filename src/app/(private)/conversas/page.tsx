@@ -1077,6 +1077,102 @@ function getRemetenteLabel(remetente: Mensagem["remetente_tipo"]) {
   }
 }
 
+// CRM_DISPARO_CHAT_PRESENTATION_V1
+function getMensagemMetadataDisparo(msg: Mensagem) {
+  return (msg.metadata_json || {}) as Record<string, unknown>;
+}
+
+function mensagemEhDisparo(msg: Mensagem) {
+  const metadata = getMensagemMetadataDisparo(msg);
+  const tipoOriginalMeta = String(
+    (msg as Mensagem & { tipo_original_meta?: string | null })
+      .tipo_original_meta || ""
+  )
+    .trim()
+    .toLowerCase();
+  const tipoOriginalWhatsapp = String(
+    metadata.tipo_original_whatsapp || ""
+  )
+    .trim()
+    .toLowerCase();
+  const tipoMetadata = String(metadata.tipo || "")
+    .trim()
+    .toLowerCase();
+  const possuiIdentificacaoTemplate = Boolean(
+    metadata.template_id || metadata.template_nome
+  );
+
+  return (
+    msg.tipo_mensagem === "template" ||
+    tipoOriginalMeta === "template" ||
+    tipoOriginalWhatsapp === "template" ||
+    tipoMetadata.includes("disparo_template") ||
+    (possuiIdentificacaoTemplate &&
+      (msg.origem === "automatica" || msg.origem === "enviada"))
+  );
+}
+
+function mensagemDisparoTemBotoes(msg: Mensagem) {
+  const metadata = getMensagemMetadataDisparo(msg);
+  return Array.isArray(metadata.botoes) && metadata.botoes.length > 0;
+}
+
+function getModoDisparo(msg: Mensagem) {
+  const metadata = getMensagemMetadataDisparo(msg);
+  const tipo = String(metadata.tipo || "").trim().toLowerCase();
+  const origem = String(metadata.origem || "").trim().toLowerCase();
+  const disparoTipo = String(metadata.disparo_tipo || "")
+    .trim()
+    .toLowerCase();
+
+  const manual =
+    disparoTipo === "manual" ||
+    tipo.includes("individual") ||
+    origem.includes("individual") ||
+    (msg.remetente_tipo === "usuario" && msg.origem === "enviada");
+
+  return manual ? "manual" : "agendado";
+}
+
+function formatarNomeTemplateDisparo(valor: unknown) {
+  const texto = String(valor || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!texto) return "Disparo";
+
+  return texto
+    .split(" ")
+    .map((parte) =>
+      parte ? parte.charAt(0).toUpperCase() + parte.slice(1).toLowerCase() : parte
+    )
+    .join(" ");
+}
+
+function obterApresentacaoDisparo(msg: Mensagem) {
+  const metadata = getMensagemMetadataDisparo(msg);
+  const texto = String(msg.conteudo || "").trim();
+  const blocos = texto
+    .split(/\n\s*\n/)
+    .map((bloco) => bloco.trim())
+    .filter(Boolean);
+  const primeiroBloco = blocos[0] || "";
+  const primeiroBlocoPareceTitulo =
+    blocos.length > 1 &&
+    primeiroBloco.length <= 90 &&
+    !/[.!?]$/.test(primeiroBloco);
+
+  const titulo = primeiroBlocoPareceTitulo
+    ? primeiroBloco.replace(/^Header:\s*/i, "").trim()
+    : formatarNomeTemplateDisparo(metadata.template_nome);
+  const conteudo = primeiroBlocoPareceTitulo
+    ? blocos.slice(1).join("\n\n")
+    : texto;
+
+  return { titulo, conteudo };
+}
+
 function getStatusEnvioLabel(status: Mensagem["status_envio"]) {
   switch (status) {
     case "pendente":
@@ -3357,6 +3453,35 @@ function ConversasPageContent() {
 }
 
   function renderizarConteudoMensagem(msg: Mensagem) {
+    if (
+      mensagemEhDisparo(msg) && !mensagemDisparoTemBotoes(msg)
+    ) {
+      const disparo = obterApresentacaoDisparo(msg);
+
+      return (
+        <div className={styles.disparoMessageContent}>
+          <strong className={styles.disparoMessageTitle}>
+            <TextoComEmoji texto={disparo.titulo} />
+          </strong>
+
+          {disparo.conteudo ? (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={disparo.conteudo} />
+            </p>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (mensagemEhDisparo(msg) && mensagemDisparoTemBotoes(msg)) {
+      msg = {
+        ...msg,
+        conteudo: String(msg.conteudo || "")
+          .replace(/^Header:\s*/i, "")
+          .trimStart(),
+      };
+    }
+
     const url = montarUrlMidiaMensagem(msg);
 
     const caption =
@@ -9414,9 +9539,14 @@ const templateFooterTexto = useMemo(() => {
 
                                 const msg = item.valor;
                                 const isConteudoIndisponivel = msg.tipo_mensagem === "unsupported";
+                                const isDisparo = mensagemEhDisparo(msg);
+                                const disparoModo = getModoDisparo(msg);
                                 const isOutgoing =
-                                  msg.origem === "enviada" && !isConteudoIndisponivel;
-                                const isAutomatic = msg.origem === "automatica";
+                                  !isDisparo &&
+                                  msg.origem === "enviada" &&
+                                  !isConteudoIndisponivel;
+                                const isAutomatic =
+                                  !isDisparo && msg.origem === "automatica";
                                 const isSystem = msg.remetente_tipo === "sistema";
                                 const isMensagemDoSistema = mensagemFoiEnviadaPeloSistema(msg);
                                 const mensagemErroEnvio = getMensagemErroEnvio(msg);
@@ -9441,23 +9571,40 @@ const templateFooterTexto = useMemo(() => {
                                       >
                                       <div
                                         className={`${styles.messageBubble} ${
-                                          isOutgoing
+                                          isDisparo
+                                            ? styles.messageBubbleDisparo
+                                            : isOutgoing
                                             ? styles.messageBubbleOutgoing
                                             : isAutomatic
                                             ? styles.messageBubbleAutomatic
                                             : styles.messageBubbleIncoming
                                         }`}
                                       >
-                                        {!isOutgoing &&
-                                          (msg.remetente_tipo === "bot" || msg.remetente_tipo === "ia") && (
+                                        {(isDisparo ||
+                                          (!isOutgoing &&
+                                            (msg.remetente_tipo === "bot" ||
+                                              msg.remetente_tipo === "ia"))) && (
                                             <div className={styles.messageMetaTop}>
-                                              <span className={styles.senderLabel}>
-                                                {getRemetenteLabel(msg.remetente_tipo)}
+                                              <span
+                                                className={[
+                                                  styles.senderLabel,
+                                                  isDisparo ? styles.disparoSenderLabel : "",
+                                                ]
+                                                  .filter(Boolean)
+                                                  .join(" ")}
+                                              >
+                                                {isDisparo
+                                                  ? "Disparo"
+                                                  : getRemetenteLabel(msg.remetente_tipo)}
                                               </span>
 
-                                              {isAutomatic && (
+                                              {isDisparo ? (
+                                                <span className={styles.disparoModeBadge}>
+                                                  {disparoModo}
+                                                </span>
+                                              ) : isAutomatic ? (
                                                 <span className={styles.automaticBadge}>automática</span>
-                                              )}
+                                              ) : null}
                                             </div>
                                           )}
 

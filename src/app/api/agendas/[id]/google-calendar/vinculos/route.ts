@@ -29,7 +29,7 @@ export async function GET(
 
     const supabase = getSupabaseAdmin();
     const { data: agenda } = await supabase
-      .from("agenda_calendarios")
+      .from("calendarios")
       .select("id")
       .eq("id", id)
       .eq("empresa_id", empresaId)

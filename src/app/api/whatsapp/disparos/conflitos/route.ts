@@ -135,31 +135,16 @@ export async function POST(req: NextRequest) {
       Date.now() - janelaDias * 24 * 60 * 60 * 1000
     ).toISOString();
 
-    const { data, error } = await supabaseAdmin
-      .from("whatsapp_disparo_itens")
-      .select(
-        `
-          id,
-          contato_id,
-          telefone_normalizado,
-          campanha_id,
-          created_at,
-          processed_at,
-          campanha:campanha_id (
-            id,
-            nome,
-            template_nome,
-            total_itens,
-            created_at
-          )
-        `
-      )
-      .eq("empresa_id", usuario.empresa_id)
-      .eq("status", "enviado")
-      .gte("created_at", desde)
-      .in("telefone_normalizado", telefonesSelecionados)
-      .order("created_at", { ascending: false })
-      .limit(5000);
+    // CRM_DISPARO_CONFLITOS_RPC_V1
+    const { data: dadosConflitos, error } = await supabaseAdmin.rpc(
+      "listar_conflitos_disparos_contatos",
+      {
+        p_empresa_id: usuario.empresa_id,
+        p_telefones: telefonesSelecionados,
+        p_desde: desde,
+        p_limite: 5000,
+      }
+    );
 
     if (error) {
       return NextResponse.json(
@@ -170,6 +155,30 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    const data: ItemDisparoRecente[] = (
+      Array.isArray(dadosConflitos) ? dadosConflitos : []
+    ).map((item: any) => ({
+      id: String(item.id || ""),
+      contato_id: item.contato_id ? String(item.contato_id) : null,
+      telefone_normalizado: item.telefone_normalizado
+        ? String(item.telefone_normalizado)
+        : null,
+      campanha_id: item.campanha_id ? String(item.campanha_id) : null,
+      created_at: item.created_at ? String(item.created_at) : null,
+      processed_at: item.processed_at ? String(item.processed_at) : null,
+      campanha: {
+        id: item.campanha_id ? String(item.campanha_id) : null,
+        nome: item.campanha_nome ? String(item.campanha_nome) : null,
+        template_nome: item.campanha_template_nome
+          ? String(item.campanha_template_nome)
+          : null,
+        total_itens: Number(item.campanha_total_itens || 0),
+        created_at: item.campanha_created_at
+          ? String(item.campanha_created_at)
+          : null,
+      },
+    }));
 
     const campanhasMap = new Map<
       string,

@@ -19,8 +19,12 @@ const STATUS_CONVERSAS_EM_CARGA = [
   "aguardando_cliente",
 ];
 
+export type EscopoFila = "setor" | "geral";
+
+// CRM_QUEUE_SCOPE_V1
 export type ResultadoAtribuicaoTransferencia = {
   setorId: string | null;
+  escopoFila: EscopoFila;
   responsavelId: string | null;
   atendenteNome: string | null;
   estrategiaSolicitada: EstrategiaTransferenciaAtendente;
@@ -31,10 +35,13 @@ export type ResultadoAtribuicaoTransferencia = {
 function resultadoFila(params: {
   setorId: string | null;
   estrategia: EstrategiaTransferenciaAtendente;
+  escopoFila?: EscopoFila;
   motivo?: string | null;
 }): ResultadoAtribuicaoTransferencia {
   return {
     setorId: params.setorId,
+    escopoFila:
+      params.escopoFila || (params.setorId ? "setor" : "geral"),
     responsavelId: null,
     atendenteNome: null,
     estrategiaSolicitada: params.estrategia,
@@ -46,21 +53,38 @@ function resultadoFila(params: {
 export async function resolverAtribuicaoTransferencia(params: {
   empresaId: string;
   setorId?: string | null;
+  escopoFila?: unknown;
   estrategia?: unknown;
   atendenteId?: unknown;
 }): Promise<ResultadoAtribuicaoTransferencia> {
-  const setorId = String(params.setorId || "").trim() || null;
+  const escopoFila: EscopoFila =
+    String(params.escopoFila || "").trim() === "geral"
+      ? "geral"
+      : "setor";
+  const setorId =
+    escopoFila === "geral"
+      ? null
+      : String(params.setorId || "").trim() || null;
   const atendenteId = String(params.atendenteId || "").trim() || null;
   const estrategia = normalizarEstrategiaTransferenciaAtendente(
     params.estrategia,
     atendenteId
   );
 
+  if (escopoFila === "geral") {
+    return resultadoFila({
+      setorId: null,
+      escopoFila: "geral",
+      estrategia,
+    });
+  }
+
   if (!setorId) {
     return resultadoFila({
       setorId: null,
+      escopoFila: "geral",
       estrategia,
-      motivo: "setor_nao_informado",
+      motivo: "setor_nao_informado_fallback_fila_geral",
     });
   }
 
@@ -125,6 +149,7 @@ export async function resolverAtribuicaoTransferencia(params: {
 
       return {
         setorId,
+        escopoFila: "setor",
         responsavelId: atendente.id,
         atendenteNome: atendente.nome || null,
         estrategiaSolicitada: estrategia,
@@ -229,6 +254,7 @@ export async function resolverAtribuicaoTransferencia(params: {
 
     return {
       setorId,
+      escopoFila: "setor",
       responsavelId: selecionado.id,
       atendenteNome: selecionado.nome || null,
       estrategiaSolicitada: estrategia,

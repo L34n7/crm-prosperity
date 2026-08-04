@@ -20,7 +20,7 @@ async function contextoAgenda(id: string) {
 
   const supabase = getSupabaseAdmin();
   const { data: agenda } = await supabase
-    .from("agenda_calendarios")
+    .from("calendarios")
     .select("id")
     .eq("empresa_id", resultado.usuario.empresa_id)
     .eq("id", id)

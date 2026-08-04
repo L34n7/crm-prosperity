@@ -1855,3 +1855,451 @@
     flex: 1;
   }
 }
+
+
+/* CRM_DISPAROS_AGRUPADOS_STYLES_V1 */
+.searchBar {
+  grid-template-columns: minmax(0, 1fr) 190px auto;
+}
+
+.groupsSummary {
+  margin: 14px 18px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.groupCard {
+  border: 1px solid var(--crm-border);
+  border-radius: 20px;
+  background: var(--crm-surface);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.groupCard:hover,
+.groupCardSelected {
+  border-color: var(--crm-primary-border);
+  box-shadow: 0 12px 28px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
+}
+
+.groupHeader {
+  padding: 16px;
+  display: grid;
+  gap: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.groupHeader:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--crm-primary-strong);
+}
+
+.groupIdentity,
+.groupTitleRow,
+.groupFooterActions,
+.groupChannels,
+.groupStats {
+  display: flex;
+  align-items: center;
+}
+
+.groupIdentity {
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.groupTitleRow {
+  min-width: 0;
+  gap: 12px;
+}
+
+.groupIcon {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: var(--crm-primary-soft);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-size: 21px;
+}
+
+.groupTitle {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.groupMeta,
+.panelSubtitle {
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.groupStats {
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.groupStats span {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--crm-surface-soft);
+  border: 1px solid var(--crm-border-soft);
+}
+
+.groupStats strong {
+  color: var(--crm-text-strong);
+}
+
+.groupScheduleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.groupSchedule {
+  padding: 10px 12px;
+  border: 1px solid var(--crm-border-soft);
+  background: var(--crm-surface-soft);
+  border-radius: 14px;
+  display: grid;
+  gap: 3px;
+}
+
+.groupSchedule span {
+  color: var(--crm-text-soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.groupSchedule strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.groupChannels {
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.channelChip {
+  padding: 6px 9px;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 10px;
+  background: var(--crm-surface-subtle);
+  color: var(--crm-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.groupFooterActions {
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.expandButton {
+  border: 0;
+  background: transparent;
+  color: var(--crm-primary-text);
+  padding: 9px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.groupItems {
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.groupItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 14px;
+  background: var(--crm-surface);
+  padding: 6px;
+}
+
+.groupItemMainButton {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 7px 8px;
+  display: grid;
+  grid-template-columns: 58px 120px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.groupItemMainButton:hover {
+  background: var(--crm-surface-subtle);
+  border-radius: 10px;
+}
+
+.groupItemTime {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.groupItemChannel {
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.groupItemInfo {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.groupItemInfo strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupItemInfo small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupItemCancel {
+  border: 0;
+  border-radius: 10px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.groupTimeline {
+  display: grid;
+  gap: 7px;
+}
+
+.timelineItem {
+  width: 100%;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+  color: inherit;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 48px 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.timelineItem:hover {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-surface-subtle);
+}
+
+.timelineTime {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.timelineIcon {
+  font-size: 16px;
+}
+
+.timelineContent {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.timelineContent strong {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.timelineContent small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panelActions {
+  display: grid;
+  gap: 9px;
+}
+
+.channelPreviewCard {
+  margin: 0 10px 10px;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+  display: grid;
+  gap: 13px;
+}
+
+.channelPreviewHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.channelPreviewHeader div {
+  display: grid;
+  gap: 2px;
+}
+
+.channelPreviewHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.channelPreviewHeader small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.channelPreviewIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--crm-primary-soft);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.channelPreviewDestination {
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
+  padding: 10px 12px;
+  display: grid;
+  gap: 3px;
+}
+
+.channelPreviewDestination span,
+.groupCancelSummary span {
+  color: var(--crm-text-soft);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.channelPreviewDestination strong,
+.groupCancelSummary strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.channelPreviewText {
+  margin: 0;
+  color: var(--crm-text);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.groupCancelSummary {
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.groupCancelSummary small {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .searchBar {
+    grid-template-columns: 1fr;
+  }
+
+  .groupsSummary,
+  .groupIdentity,
+  .groupFooterActions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .groupScheduleGrid,
+  .detailsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .groupFooterActions,
+  .groupFooterActions > *,
+  .panelActions > * {
+    width: 100%;
+  }
+
+  .groupItemMainButton {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+  }
+
+  .groupItemChannel {
+    display: none;
+  }
+
+  .groupItem {
+    grid-template-columns: 1fr;
+  }
+
+  .groupItemCancel {
+    width: 100%;
+  }
+
+  .timelineItem {
+    grid-template-columns: 44px 24px minmax(0, 1fr);
+  }
+
+  .timelineItem > [class*="badge"] {
+    grid-column: 3;
+  }
+}

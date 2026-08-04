@@ -377,9 +377,10 @@ export default function AgendaEnhancer() {
       const refresh = buttons.find(
         (button) => !text(button) && Boolean(button.querySelector("svg.lucide-refresh-cw"))
       );
-      const newCalendar = buttons.find(
-        (button) => normalized(text(button)) === "nova agenda"
-      );
+      const newCalendar = buttons.find((button) => {
+        const label = normalized(text(button));
+        return label === "nova agenda" || label === "novo calendario";
+      });
       const newAppointment = buttons.find((button) =>
         normalized(text(button)).includes("novo agendamento")
       );

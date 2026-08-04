@@ -17,7 +17,7 @@ import {
   type Context,
 } from "./automation-runtime-types";
 
-const supabase = getSupabaseAdmin();
+const supabase = getSupabaseAdmin(); // CRM_AGENDA_POST_ATTENDANCE_TEMPLATE_V1 CRM_AGENDA_INDIVIDUAL_REMINDER_POST_FLOW_V1
 
 export async function sendEmail(context: Context) {
   const isResponsible = context.job.tipo === "aviso_responsavel";
@@ -44,7 +44,9 @@ export async function sendEmail(context: Context) {
     dateLabel: dateLabel(context.appointment.inicio_at, context.agenda.timezone),
     timeLabel: timeLabel(context.appointment.inicio_at, context.agenda.timezone),
     location: context.appointment.local,
-    agendaId: context.agenda.id,
+    startAt: context.appointment.inicio_at,
+    endAt: context.appointment.fim_at,
+    agendaId: context.agenda.id, // CRM_CALENDAR_EMAIL_REMINDER_BUTTONS_PRIORITY_V1
     appointmentId: context.appointment.id,
   });
 
@@ -108,39 +110,101 @@ export async function notifyResponsible(context: Context) {
   return { notificationId: data.id, reused: false };
 }
 
-async function getOrCreateProtocol(context: Context) {
+async function reabrirUltimoProtocolo(context: Context) { // CRM_AGENDA_DAY_BREAKS_REOPEN_LAST_PROTOCOL_V1
   if (!context.conversation?.id) return null;
-  const { data: current } = await supabase
-    .from("conversa_protocolos")
-    .select("id")
-    .eq("empresa_id", context.job.empresa_id)
-    .eq("conversa_id", context.conversation.id)
+
+  const baseQuery = () =>
+    supabase
+      .from("conversa_protocolos")
+      .select("id, ativo")
+      .eq("empresa_id", context.job.empresa_id)
+      .eq("conversa_id", context.conversation.id);
+
+  const { data: ativoAtual, error: ativoError } = await baseQuery()
     .eq("ativo", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (current?.id) return current.id;
 
-  const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
-  const day = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  const { data, error } = await supabase
+  if (ativoError) {
+    throw new Error(`Erro ao consultar protocolo ativo: ${ativoError.message}`);
+  }
+  if (ativoAtual?.id) return ativoAtual.id;
+
+  const { data: ultimo, error: ultimoError } = await baseQuery()
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (ultimoError) {
+    throw new Error(`Erro ao consultar o último protocolo: ${ultimoError.message}`);
+  }
+
+  const agora = new Date().toISOString();
+  if (ultimo?.id) {
+    const { data: reaberto, error: reabrirError } = await supabase
+      .from("conversa_protocolos")
+      .update({
+        ativo: true,
+        started_at: agora,
+        closed_at: null,
+        iniciado_com_bot: true,
+        finalizado_com_bot: false,
+        finalizado_por_tipo: null,
+        finalizado_por_usuario_id: null,
+        motivo_encerramento: null,
+        resultado: "em_andamento",
+        resultado_em: null,
+        resultado_evento_id: null,
+        updated_at: agora,
+      })
+      .eq("empresa_id", context.job.empresa_id)
+      .eq("conversa_id", context.conversation.id)
+      .eq("id", ultimo.id)
+      .eq("ativo", false)
+      .select("id")
+      .maybeSingle();
+
+    if (reaberto?.id) return reaberto.id;
+
+    if (reabrirError?.code === "23505" || !reaberto) {
+      const { data: concorrente } = await baseQuery()
+        .eq("ativo", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (concorrente?.id) return concorrente.id;
+    }
+
+    if (reabrirError) {
+      throw new Error(`Erro ao reabrir o último protocolo: ${reabrirError.message}`);
+    }
+  }
+
+  const sufixo = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const dia = agora.slice(0, 10).replaceAll("-", "");
+  const { data: criado, error: criarError } = await supabase
     .from("conversa_protocolos")
     .insert({
       empresa_id: context.job.empresa_id,
       conversa_id: context.conversation.id,
       contato_id: context.appointment.contato_id || context.contact?.id || null,
-      protocolo: `AG-${day}-${suffix}`,
+      protocolo: `AG-${dia}-${sufixo}`,
       tipo: "reabertura",
       ativo: true,
+      started_at: agora,
       iniciado_com_bot: true,
       resultado: "em_andamento",
     })
     .select("id")
     .single();
-  if (error || !data) {
-    throw new Error(`Erro ao criar protocolo para o fluxo: ${error?.message || "sem retorno"}`);
+
+  if (criarError || !criado) {
+    throw new Error(
+      `Erro ao criar o primeiro protocolo da conversa: ${criarError?.message || "sem retorno"}`
+    );
   }
-  return data.id;
+  return criado.id;
 }
 
 export async function startPostFlow(context: Context) {
@@ -154,6 +218,22 @@ export async function startPostFlow(context: Context) {
     throw new AgendaAutomationError(
       "O pós-atendimento exige um contato e uma conversa vinculados ao agendamento.",
       { permanent: true }
+    );
+  }
+
+  const nowMs = Date.now();
+  const windowExpiresAt = Date.parse(String(context.conversation.window_expires_at || ""));
+  const lastInboundAt = Date.parse(String(context.conversation.last_inbound_message_at || ""));
+  const windowOpen =
+    (Number.isFinite(windowExpiresAt) && windowExpiresAt > nowMs) ||
+    (Number.isFinite(lastInboundAt) && lastInboundAt + 24 * 60 * 60 * 1000 > nowMs);
+
+  // O protocolo do CRM pode estar encerrado. Se a janela da Meta estiver aberta,
+  // getOrCreateProtocol e a atualização da conversa reabrem o atendimento para o bot.
+  if (!windowOpen) {
+    throw new AgendaAutomationError(
+      "O fluxo de pós-atendimento não pôde iniciar porque a janela de 24 horas da Meta está fechada. Use um disparo por template do WhatsApp para retomar o contato.",
+      { cancel: true }
     );
   }
   const phone = customerPhone(context);
@@ -223,7 +303,7 @@ export async function startPostFlow(context: Context) {
     );
   }
 
-  const protocolId = await getOrCreateProtocol(context);
+  const protocolId = await reabrirUltimoProtocolo(context);
   const now = new Date().toISOString();
   const { error: conversationError } = await supabase
     .from("conversas")

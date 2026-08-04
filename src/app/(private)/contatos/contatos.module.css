@@ -456,6 +456,60 @@
   word-break: break-word;
 }
 
+.phoneReviewAlert {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 15px 17px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 17px;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--crm-warning-text) 8%, transparent);
+}
+
+.phoneReviewAlertIcon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--crm-warning-text);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.phoneReviewAlertContent {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.phoneReviewAlertLabel {
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.phoneReviewAlertContent strong {
+  color: var(--crm-warning-text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.phoneReviewAlertContent p {
+  margin: 0;
+  color: var(--crm-warning-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .statusBadge {
   display: inline-flex;
   align-items: center;
@@ -1409,13 +1463,26 @@
   white-space: nowrap;
 }
 
+/* CRM_CONTACT_REVIEW_BADGE_V1 */
 .reviewDot {
-  width: 7px;
-  height: 7px;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 8px;
   border-radius: 999px;
-  background: var(--crm-warning-strong);
-  box-shadow: 0 0 0 3px var(--crm-warning-bg);
+  border: 1px solid var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.reviewDot::after {
+  content: "⚠ revisão";
 }
 
 .sheetCell {

@@ -65,6 +65,13 @@ type AgendaDisponibilidade = {
   ativo: boolean;
 };
 
+type AgendaIntervaloDia = {
+  dia_semana: number;
+  hora_inicio: string;
+  hora_fim: string;
+  ativo: boolean;
+}; // CRM_AGENDA_DAY_BREAKS_REOPEN_LAST_PROTOCOL_V1
+
 function clamp(numero: number, minimo: number, maximo: number) {
   if (!Number.isFinite(numero)) return minimo;
   return Math.max(minimo, Math.min(maximo, numero));
@@ -597,6 +604,82 @@ export function filtrarSlotsPorPreferencia(
   return filtrados;
 }
 
+async function horarioForaDaDisponibilidadeAgenda(params: {
+  supabase: any;
+  empresaId: string;
+  agendaId: string;
+  inicioAt: string;
+  fimAt: string;
+}) {
+  const [agendaResult, disponibilidadeResult, intervalosResult] = await Promise.all([
+    params.supabase
+      .from("agenda_calendarios")
+      .select("timezone")
+      .eq("empresa_id", params.empresaId)
+      .eq("id", params.agendaId)
+      .maybeSingle(),
+    params.supabase
+      .from("agenda_disponibilidades")
+      .select("dia_semana, hora_inicio, hora_fim, ativo")
+      .eq("empresa_id", params.empresaId)
+      .eq("agenda_id", params.agendaId)
+      .eq("ativo", true),
+    params.supabase
+      .from("agenda_disponibilidade_intervalos")
+      .select("dia_semana, hora_inicio, hora_fim, ativo")
+      .eq("empresa_id", params.empresaId)
+      .eq("agenda_id", params.agendaId)
+      .eq("ativo", true),
+  ]);
+
+  if (agendaResult.error) {
+    throw new Error(`Erro ao buscar agenda: ${agendaResult.error.message}`);
+  }
+  if (disponibilidadeResult.error) {
+    throw new Error(
+      `Erro ao buscar disponibilidade: ${disponibilidadeResult.error.message}`
+    );
+  }
+  if (intervalosResult.error) {
+    throw new Error(`Erro ao buscar intervalos: ${intervalosResult.error.message}`);
+  }
+
+  const timezone = agendaResult.data?.timezone || "America/Sao_Paulo";
+  const inicio = localParts(new Date(params.inicioAt), timezone);
+  const fim = localParts(new Date(params.fimAt), timezone);
+  if (
+    inicio.year !== fim.year ||
+    inicio.month !== fim.month ||
+    inicio.day !== fim.day
+  ) {
+    return true;
+  }
+
+  const diaSemana = diaSemanaLocal(inicio);
+  const janela = (disponibilidadeResult.data || []).find(
+    (item: AgendaDisponibilidade) => Number(item.dia_semana) === diaSemana
+  );
+  if (!janela) return true;
+
+  const inicioMinutos = inicio.hour * 60 + inicio.minute;
+  const fimMinutos = fim.hour * 60 + fim.minute;
+  if (
+    inicioMinutos < parseHora(janela.hora_inicio) ||
+    fimMinutos > parseHora(janela.hora_fim) ||
+    fimMinutos <= inicioMinutos
+  ) {
+    return true;
+  }
+
+  return (intervalosResult.data || []).some((intervalo: AgendaIntervaloDia) => {
+    if (Number(intervalo.dia_semana) !== diaSemana) return false;
+    return (
+      inicioMinutos < parseHora(intervalo.hora_fim) &&
+      fimMinutos > parseHora(intervalo.hora_inicio)
+    );
+  });
+}
+
 export async function existeConflitoAgenda(params: {
   supabase: any;
   empresaId: string;
@@ -605,6 +688,10 @@ export async function existeConflitoAgenda(params: {
   fimAt: string;
   ignorarAgendamentoId?: string | null;
 }) {
+  if (await horarioForaDaDisponibilidadeAgenda(params)) {
+    return true;
+  }
+
   await reconciliarExclusoesGoogleCalendar({
     empresaId: params.empresaId,
     agendaId: params.agendaId,
@@ -644,7 +731,7 @@ export async function listarSlotsDisponiveis(params: {
   limite?: number | null;
 }): Promise<AgendaSlotsDisponiveisResultado> {
   const { data: agendaRaw, error: agendaError } = await params.supabase
-    .from("agenda_calendarios")
+    .from("calendarios")
     .select(
       "id, empresa_id, nome, timezone, duracao_minutos, intervalo_minutos, antecedencia_minutos, janela_dias, status"
     )
@@ -678,13 +765,23 @@ export async function listarSlotsDisponiveis(params: {
   );
   const limite = clamp(Number(params.limite || 12), 1, 50);
 
-  const { data: disponibilidadesRaw, error: disponibilidadesError } =
-    await params.supabase
+  const [disponibilidadesResult, intervalosResult] = await Promise.all([
+    params.supabase
       .from("agenda_disponibilidades")
       .select("dia_semana, hora_inicio, hora_fim, ativo")
       .eq("empresa_id", params.empresaId)
       .eq("agenda_id", params.agendaId)
-      .eq("ativo", true);
+      .eq("ativo", true),
+    params.supabase
+      .from("agenda_disponibilidade_intervalos")
+      .select("dia_semana, hora_inicio, hora_fim, ativo")
+      .eq("empresa_id", params.empresaId)
+      .eq("agenda_id", params.agendaId)
+      .eq("ativo", true),
+  ]);
+  const { data: disponibilidadesRaw, error: disponibilidadesError } =
+    disponibilidadesResult;
+  const { data: intervalosRaw, error: intervalosError } = intervalosResult;
 
   if (disponibilidadesError) {
     throw new Error(
@@ -692,7 +789,12 @@ export async function listarSlotsDisponiveis(params: {
     );
   }
 
+  if (intervalosError) {
+    throw new Error(`Erro ao buscar intervalos: ${intervalosError.message}`);
+  }
+
   const disponibilidades = (disponibilidadesRaw || []) as AgendaDisponibilidade[];
+  const intervalos = (intervalosRaw || []) as AgendaIntervaloDia[];
 
   if (!disponibilidades.length) {
     return {
@@ -778,6 +880,9 @@ export async function listarSlotsDisponiveis(params: {
     const janelas = disponibilidades.filter(
       (item: AgendaDisponibilidade) => Number(item.dia_semana) === diaSemana
     );
+    const intervalosDia = intervalos.filter(
+      (item: AgendaIntervaloDia) => Number(item.dia_semana) === diaSemana
+    );
 
     if (janelas.length > 0) {
       temDisponibilidadeNoPeriodo = true;
@@ -800,6 +905,16 @@ export async function listarSlotsDisponiveis(params: {
           timezone,
         });
         const fim = new Date(inicio.getTime() + duracaoMinutos * 60_000);
+        const fimMinuto = minuto + duracaoMinutos;
+        const interceptaIntervalo = intervalosDia.some(
+          (intervalo: AgendaIntervaloDia) =>
+            minuto < parseHora(intervalo.hora_fim) &&
+            fimMinuto > parseHora(intervalo.hora_inicio)
+        );
+
+        if (interceptaIntervalo) {
+          continue;
+        }
 
         if (inicio.getTime() <= limiteMinimo.getTime()) {
           continue;

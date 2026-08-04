@@ -2020,6 +2020,34 @@ export default function ContatosPage() {
                           </div>
                         ) : (
                           <div className={styles.detailsGrid}>
+                            {contato.telefone_revisar && (
+                              <div
+                                className={styles.phoneReviewAlert}
+                                role="alert"
+                              >
+                                <span
+                                  className={styles.phoneReviewAlertIcon}
+                                  aria-hidden="true"
+                                >
+                                  !
+                                </span>
+                                <div className={styles.phoneReviewAlertContent}>
+                                  <span className={styles.phoneReviewAlertLabel}>
+                                    Telefone precisa de revisão
+                                  </span>
+                                  <strong>
+                                    Corrija o número antes de utilizar este contato em disparos.
+                                  </strong>
+                                  <p>
+                                    Verifique se o DDI está correto — para números do Brasil,
+                                    use 55. Confira também o DDD da região, a quantidade de
+                                    dígitos e se há zeros ou caracteres indevidos. Clique em
+                                    Editar para ajustar o telefone.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>Classificação</span>
                               <span className={styles.infoValue}>
@@ -2292,14 +2320,6 @@ export default function ContatosPage() {
                               )}
                             </section>
 
-                            {contato.telefone_revisar && (
-                              <div className={styles.infoBlockFull}>
-                                <span className={styles.infoLabel}>Alerta</span>
-                                <span className={styles.infoValue}>
-                                  Este contato foi marcado para revisão de telefone.
-                                </span>
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>

@@ -326,7 +326,12 @@ export default function AgendaGoogleAgendaBindingFix() {
 
     const renderModal = () => {
       const modal = shell.querySelector<HTMLElement>(".a2 .modalbg .modal");
-      if (!modal || !text(modal.querySelector(".dhead h2")).includes("Configurar agenda")) return;
+      if (!modal) return;
+      const modalTitle = normalize(text(modal.querySelector(".dhead h2")));
+      if (
+        !modalTitle.includes("configurar agenda") &&
+        !modalTitle.includes("configurar calendario")
+      ) return;
 
       hideLegacyGoogleCards(modal);
       const card = ensureBindingCard(modal);

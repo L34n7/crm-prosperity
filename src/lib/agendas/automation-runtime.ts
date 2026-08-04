@@ -6,10 +6,35 @@ import { cancelJob, completeJob, failJob, loadContext } from "./automation-runti
 import { sendWhatsApp } from "./automation-runtime-whatsapp";
 import { AgendaAutomationError, asObject, isApplicable, type Job } from "./automation-runtime-types";
 import { processAgendaResponseFlows } from "./agenda-response-runtime";
+import { isIndividualReminder, processIndividualReminder, refreshIndividualReminderStatus } from "./individual-reminder-runtime"; // CRM_AGENDA_INDIVIDUAL_REMINDER_POST_FLOW_V1
 
 const supabase = getSupabaseAdmin();
 
+// CRM_AGENDA_POST_ATTENDANCE_TEMPLATE_V1
+async function executionStillCurrent(job: Job) {
+  const { data, error } = await supabase
+    .from("agenda_automacao_execucoes")
+    .select("status, regra_id")
+    .eq("empresa_id", job.empresa_id)
+    .eq("id", job.id)
+    .maybeSingle();
+  if (error) {
+    throw new Error("Erro ao validar a execução atual da agenda: " + error.message);
+  }
+  return (
+    data?.status === "processando" &&
+    String(data?.regra_id || "") === String(job.regra_id || "")
+  );
+}
+
 async function processJob(job: Job) {
+  if (isIndividualReminder(job)) {
+    const execution = await processIndividualReminder(job);
+    await completeJob(job, execution.result, execution.externalId || null);
+    await refreshIndividualReminderStatus(job);
+    return "concluido" as const;
+  }
+
   if (job.mensagem_externa_id) {
     await completeJob(job, {
       ...asObject(job.resultado_json),
@@ -25,6 +50,9 @@ async function processJob(job: Job) {
   }
   if (!isApplicable(context)) {
     await cancelJob(job, "A regra não se aplica mais ao estado atual do agendamento.");
+    return "cancelado" as const;
+  }
+  if (!(await executionStillCurrent(job))) {
     return "cancelado" as const;
   }
 
@@ -96,6 +124,11 @@ export async function processAgendaAutomations(limit = 50) {
         error,
       });
       const status = await failJob(job, error);
+      if (isIndividualReminder(job)) {
+        await refreshIndividualReminderStatus(job).catch((refreshError) =>
+          console.warn("[AGENDA_LEMBRETES] Falha ao atualizar status consolidado:", refreshError)
+        );
+      }
       if (status === "cancelado") summary.cancelados += 1;
       else if (status === "reagendado") summary.reagendados += 1;
       else summary.erros += 1;

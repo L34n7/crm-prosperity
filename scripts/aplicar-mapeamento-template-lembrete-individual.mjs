@@ -12,12 +12,13 @@ function substituirObrigatorio(busca, substituicao, descricao) {
 }
 
 if (!codigo.includes(marcador)) {
-  const ancoraCss = "@media(max-width:760px){.agendaTemplateVariableRow,.agendaTemplateButtonRow{grid-template-columns:1fr}";
-  substituirObrigatorio(
-    ancoraCss,
-    `/* ${marcador} */\n.agendaIndividualTemplateBound{min-width:0!important;max-width:100%;overflow:hidden}.agendaIndividualTemplateBound>*{min-width:0;max-width:100%}.agendaIndividualTemplateBound div,.agendaIndividualTemplateBound label,.agendaIndividualTemplateBound .field{min-width:0;max-width:100%}.agendaIndividualTemplateBound select,.agendaIndividualTemplateBound input[type=\"text\"]{width:100%!important;min-width:0!important;max-width:100%!important}.agendaIndividualTemplateBound .agendaTemplateMappingPanel{grid-column:1/-1;width:100%;min-width:0;max-width:100%;overflow:hidden}.agendaIndividualTemplateBound .agendaTemplateVariableRow{grid-template-columns:58px minmax(0,1.2fr) minmax(0,1fr)}.agendaIndividualTemplateBound .agendaTemplatePreview{min-width:0}.agendaIndividualTemplateBound .agendaTemplatePreview pre{max-width:100%;overflow-wrap:anywhere}.agendaIndividualLegacyMarketingAck,.agendaIndividualLegacyHelper{display:none!important}\nbody .a2 .repeat.rem{min-width:0;max-width:100%;overflow:hidden;grid-template-columns:minmax(0,1fr) minmax(0,.72fr) minmax(0,1fr) 30px}body .a2 .repeat.rem>*{min-width:0;max-width:100%}body .a2 .repeat.rem .field,body .a2 .repeat.rem label,body .a2 .repeat.rem div{min-width:0;max-width:100%}body .a2 .repeat.rem select{width:100%!important;min-width:0!important;max-width:100%!important}\n${ancoraCss}`,
-    "estilos do mapeamento individual"
-  );
+  const fimCss = "\n`;\n\nfunction normalize";
+  const indiceFimCss = codigo.indexOf(fimCss);
+  if (indiceFimCss < 0) {
+    throw new Error("Não foi possível localizar o final dos estilos do mapeamento de templates.");
+  }
+  const estilosIndividuais = `\n/* ${marcador} */\n.agendaIndividualTemplateBound{min-width:0!important;max-width:100%;overflow:hidden}.agendaIndividualTemplateBound>*{min-width:0;max-width:100%}.agendaIndividualTemplateBound div,.agendaIndividualTemplateBound label,.agendaIndividualTemplateBound .field{min-width:0;max-width:100%}.agendaIndividualTemplateBound select,.agendaIndividualTemplateBound input[type="text"]{width:100%!important;min-width:0!important;max-width:100%!important}.agendaIndividualTemplateBound .agendaTemplateMappingPanel{grid-column:1/-1;width:100%;min-width:0;max-width:100%;overflow:hidden}.agendaIndividualTemplateBound .agendaTemplateVariableRow{grid-template-columns:58px minmax(0,1.2fr) minmax(0,1fr)}.agendaIndividualTemplateBound .agendaTemplatePreview{min-width:0}.agendaIndividualTemplateBound .agendaTemplatePreview pre{max-width:100%;overflow-wrap:anywhere}.agendaIndividualLegacyMarketingAck,.agendaIndividualLegacyHelper{display:none!important}\nbody .a2 .repeat.rem{min-width:0;max-width:100%;overflow:hidden;grid-template-columns:minmax(0,1fr) minmax(0,.72fr) minmax(0,1fr) 30px}body .a2 .repeat.rem>*{min-width:0;max-width:100%}body .a2 .repeat.rem .field,body .a2 .repeat.rem label,body .a2 .repeat.rem div{min-width:0;max-width:100%}body .a2 .repeat.rem select{width:100%!important;min-width:0!important;max-width:100%!important}\n`;
+  codigo = codigo.slice(0, indiceFimCss) + estilosIndividuais + codigo.slice(indiceFimCss);
 
   const ancoraMapas = "    const saved = new Map<string, Record<string, unknown>>();";
   substituirObrigatorio(
@@ -118,7 +119,11 @@ if (!codigo.includes(marcador)) {
             card: row,
             template,
             flows: loaded.fluxos,
+            variables: Array.isArray((loaded as any).variables)
+              ? (loaded as any).variables
+              : [],
             saved: salvo,
+            onOpenVariables: () => {},
             onChange: (config) => {
               if (config) {
                 individualConfigs.set(row, config);
@@ -228,14 +233,13 @@ ${ancoraRetornoFetch}`;
     "salvamento do mapeamento individual"
   );
 
-  const ancoraAplicacao = `      shell.querySelectorAll<HTMLElement>(".agendaAutomationSection").forEach((section) => {
-        void bindSection(section);
-      });`;
-  substituirObrigatorio(
-    ancoraAplicacao,
-    `${ancoraAplicacao}\n      shell.querySelectorAll<HTMLElement>(".a2 .drawer .repeat.rem").forEach((row) => {\n        void bindIndividualReminder(row);\n      });`,
-    "observação dos lembretes individuais"
-  );
+  const inicioApply = codigo.indexOf("    const apply = () => {");
+  const fimApply = codigo.indexOf("\n    };\n    const schedule = () => {", inicioApply);
+  if (inicioApply < 0 || fimApply < 0) {
+    throw new Error("Não foi possível localizar a rotina de aplicação do enhancer.");
+  }
+  const observacaoIndividual = `\n      shell.querySelectorAll<HTMLElement>(".a2 .drawer .repeat.rem").forEach((row) => {\n        void bindIndividualReminder(row);\n      });`;
+  codigo = codigo.slice(0, fimApply) + observacaoIndividual + codigo.slice(fimApply);
 
   fs.writeFileSync(arquivo, codigo, "utf8");
   console.log("Mapeamento completo, prévia e consentimento de Marketing aplicados aos lembretes individuais.");

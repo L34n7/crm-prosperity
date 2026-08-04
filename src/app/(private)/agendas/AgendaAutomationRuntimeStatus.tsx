@@ -108,6 +108,7 @@ const CSS = `
 .agendaTemplateHelpButton{width:19px;height:19px;padding:0;border:1px solid var(--crm-primary-border);border-radius:999px;background:var(--crm-primary-soft);color:var(--crm-primary-text);font-family:inherit;font-size:11.5px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:help}
 .agendaTemplateHelpBubble{position:absolute;z-index:40;top:calc(100% + 8px);right:-8px;width:320px;max-width:min(320px,78vw);padding:12px 13px;border:1px solid var(--crm-border-strong);border-radius:11px;background:var(--crm-text-strong);color:var(--crm-text-inverse);box-shadow:0 14px 34px color-mix(in srgb,var(--crm-text-strong) 26%,transparent);font-size:12.5px!important;font-weight:650!important;line-height:1.6!important;text-align:left;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-4px);transition:.16s ease}
 .agendaTemplateHelp:hover .agendaTemplateHelpBubble,.agendaTemplateHelp:focus-within .agendaTemplateHelpBubble{opacity:1;visibility:visible;transform:translateY(0)}
+.agendaAutomationGrid{grid-template-columns:minmax(0,1fr)!important}.agendaAutomationCard{min-width:0!important}
 @media(max-width:760px){.agendaAutomationSection.isRuntimeActive{padding:15px}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle h3{font-size:18px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationTitle p{font-size:13.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCard{padding:15px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationCardHead strong{font-size:15.5px!important}.agendaAutomationSection.isRuntimeActive .agendaAutomationField input,.agendaAutomationSection.isRuntimeActive .agendaAutomationField select{font-size:13.5px!important}.agendaTemplateMappingPanel{padding:14px!important}.agendaTemplatePreviewArea{padding:14px!important}.agendaTemplatePreviewBubble pre{font-size:13px!important}.agendaTemplateCrmSourceField>span{font-size:13.5px!important}.agendaVariableDropdownPortal .agendaVariableDropdownName{font-size:14px!important}.agendaVariableDropdownPortal .agendaVariableDropdownDescription{font-size:12px!important}.agendaVariablesCreateModal .dhead{padding:17px 17px 14px!important}.agendaVariablesCreateModal .body{padding:16px 17px 20px!important}.agendaVariablesCreateModal .agendaVariablesCreateModalTitle,.agendaVariablesCreateModal .dhead h1,.agendaVariablesCreateModal .dhead h2{font-size:20px!important}.agendaVariablesCreateModal .section{padding:15px!important}.agendaVariablesCreateModal .form{grid-template-columns:1fr!important}.agendaVariablesCreateModal input,.agendaVariablesCreateModal select,.agendaVariablesCreateModal textarea{font-size:13.5px!important}}
 `;
 
@@ -330,6 +331,90 @@ function applyFromAddedNode(node: Node) {
   applyVariablesModalTypography(node);
 }
 
+
+const CRM_CALENDAR_TERMINOLOGY_V1 = true;
+const CALENDAR_TEXT_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bNova agenda\b/g, "Novo calendário"],
+  [/\bnova agenda\b/g, "novo calendário"],
+  [/\bConfigurar agenda\b/g, "Configurar calendário"],
+  [/\bconfigurar agenda\b/g, "configurar calendário"],
+  [/\bCriar agenda\b/g, "Criar calendário"],
+  [/\bcriar agenda\b/g, "criar calendário"],
+  [/\bEditar agenda\b/g, "Editar calendário"],
+  [/\beditar agenda\b/g, "editar calendário"],
+  [/\bAgenda arquivada\b/g, "Calendário arquivado"],
+  [/\bagenda arquivada\b/g, "calendário arquivado"],
+  [/\bAgenda selecionada\b/g, "Calendário selecionado"],
+  [/\bagenda selecionada\b/g, "calendário selecionado"],
+  [/\bAgenda ativa\b/g, "Calendário ativo"],
+  [/\bagenda ativa\b/g, "calendário ativo"],
+  [/\bAgenda fixa\b/g, "Calendário fixo"],
+  [/\bagenda fixa\b/g, "calendário fixo"],
+  [/\bAgenda vinculada\b/g, "Calendário vinculado"],
+  [/\bagenda vinculada\b/g, "calendário vinculado"],
+  [/\bEsta agenda\b/g, "Este calendário"],
+  [/\besta agenda\b/g, "este calendário"],
+  [/\bUma agenda\b/g, "Um calendário"],
+  [/\buma agenda\b/g, "um calendário"],
+  [/\bDa agenda\b/g, "Do calendário"],
+  [/\bda agenda\b/g, "do calendário"],
+  [/\bNa agenda\b/g, "No calendário"],
+  [/\bna agenda\b/g, "no calendário"],
+  [/\bÀ agenda\b/g, "Ao calendário"],
+  [/\bà agenda\b/g, "ao calendário"],
+  [/\bPela agenda\b/g, "Pelo calendário"],
+  [/\bpela agenda\b/g, "pelo calendário"],
+  [/\bA agenda\b/g, "O calendário"],
+  [/\ba agenda\b/g, "o calendário"],
+  [/\bAgendas\b/g, "Calendários"],
+  [/\bagendas\b/g, "calendários"],
+  [/\bAgenda\b/g, "Calendário"],
+  [/\bagenda\b/g, "calendário"],
+];
+
+function replaceAgendaWithCalendar(value: string) {
+  return CALENDAR_TEXT_REPLACEMENTS.reduce(
+    (current, [pattern, replacement]) => current.replace(pattern, replacement),
+    value
+  );
+}
+
+function updateCalendarAttributes(element: HTMLElement) {
+  for (const attribute of ["aria-label", "title", "placeholder"]) {
+    const current = element.getAttribute(attribute);
+    if (!current) continue;
+    const next = replaceAgendaWithCalendar(current);
+    if (next !== current) element.setAttribute(attribute, next);
+  }
+}
+
+function applyCalendarTerminology(root: Node) {
+  if (root.nodeType === Node.TEXT_NODE) {
+    const textNode = root as Text;
+    const current = textNode.nodeValue || "";
+    const next = replaceAgendaWithCalendar(current);
+    if (next !== current) textNode.nodeValue = next;
+    return;
+  }
+
+  if (!(root instanceof HTMLElement)) return;
+  updateCalendarAttributes(root);
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const textNode = node as Text;
+    const current = textNode.nodeValue || "";
+    const next = replaceAgendaWithCalendar(current);
+    if (next !== current) textNode.nodeValue = next;
+    node = walker.nextNode();
+  }
+
+  root
+    .querySelectorAll<HTMLElement>("[aria-label],[title],[placeholder]")
+    .forEach(updateCalendarAttributes);
+}
+
 export default function AgendaAutomationRuntimeStatus() {
   useEffect(() => {
     let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
@@ -341,10 +426,16 @@ export default function AgendaAutomationRuntimeStatus() {
     }
     if (style.textContent !== CSS) style.textContent = CSS;
     document.querySelectorAll<HTMLElement>(".agendaAutomationSection").forEach(applyRuntimeStatus);
+    applyCalendarTerminology(document.body);
     applyVariableDropdownTypography(document);
     applyVariablesModalTypography(document);
     const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) mutation.addedNodes.forEach(applyFromAddedNode);
+      for (const mutation of mutations) {
+        mutation.addedNodes.forEach((node) => {
+          applyFromAddedNode(node);
+          applyCalendarTerminology(node);
+        });
+      }
     });
     observer.observe(document.body, { childList: true, subtree: true });
     return () => {

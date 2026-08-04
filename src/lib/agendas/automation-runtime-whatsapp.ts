@@ -19,6 +19,32 @@ import {
 
 const supabase = getSupabaseAdmin();
 
+// CRM_AGENDA_TEMPLATE_CHAT_MESSAGE_V1
+function renderTemplateMessage(
+  context: Context,
+  variablesSnapshot: Record<string, string>
+) {
+  const components = Array.isArray(context.template?.payload?.components)
+    ? context.template.payload.components
+    : [];
+
+  const replaceVariables = (value: unknown) =>
+    String(value || "").replace(/{{\s*(\d+)\s*}}/g, (_, position) =>
+      Object.prototype.hasOwnProperty.call(variablesSnapshot, String(position))
+        ? variablesSnapshot[String(position)]
+        : `{{${position}}}`
+    );
+
+  const parts = components.flatMap((component: Record<string, any>) => {
+    const type = String(component?.type || "").toUpperCase();
+    if (!["HEADER", "BODY", "FOOTER"].includes(type)) return [];
+    const text = replaceVariables(component?.text).trim();
+    return text ? [text] : [];
+  });
+
+  return parts.join("\n\n") || humanText(context);
+}
+
 async function logWhatsApp(
   context: Context,
   values: {
@@ -62,6 +88,54 @@ async function logWhatsApp(
   });
 }
 
+// CRM_AGENDA_TEMPLATE_PROTOCOL_V1
+async function resolveConversationProtocolId(context: Context) {
+  const appointmentProtocolId = String(
+    context.appointment.conversa_protocolo_id || ""
+  ).trim();
+
+  if (appointmentProtocolId) return appointmentProtocolId;
+
+  const conversationId = context.conversation?.id || null;
+  if (!conversationId) return null;
+
+  const baseQuery = () =>
+    supabase
+      .from("conversa_protocolos")
+      .select("id")
+      .eq("empresa_id", context.job.empresa_id)
+      .eq("conversa_id", conversationId);
+
+  const { data: activeProtocol, error: activeProtocolError } = await baseQuery()
+    .eq("ativo", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (activeProtocolError) {
+    console.warn(
+      "[AGENDA_AUTOMACOES] Erro ao localizar protocolo ativo da conversa:",
+      activeProtocolError
+    );
+  }
+
+  if (activeProtocol?.id) return activeProtocol.id;
+
+  const { data: latestProtocol, error: latestProtocolError } = await baseQuery()
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestProtocolError) {
+    console.warn(
+      "[AGENDA_AUTOMACOES] Erro ao localizar último protocolo da conversa:",
+      latestProtocolError
+    );
+  }
+
+  return latestProtocol?.id || null;
+}
+
 async function recordOutboundMessage(
   context: Context,
   messageId: string | null,
@@ -77,19 +151,23 @@ async function recordOutboundMessage(
     return;
   }
 
+  const conversationProtocolId = await resolveConversationProtocolId(context);
+
   const { error } = await supabase.from("mensagens").insert({
     empresa_id: context.job.empresa_id,
     conversa_id: context.conversation.id,
-    conversa_protocolo_id: context.appointment.conversa_protocolo_id || null,
-    remetente_tipo: "sistema",
+    conversa_protocolo_id: conversationProtocolId,
+    remetente_tipo: "bot",
     remetente_id: null,
-    conteudo: humanText(context),
+    conteudo: renderTemplateMessage(context, variablesSnapshot),
     tipo_mensagem: "template",
     origem: "automatica",
     status_envio: "enviada",
     mensagem_externa_id: messageId,
     tipo_original_meta: "template",
     metadata_json: {
+      tipo: "disparo_template_agendado",
+      disparo_tipo: "agendado",
       agenda_automacao: true,
       agenda_automacao_execucao_id: context.job.id,
       agenda_agendamento_id: context.appointment.id,
