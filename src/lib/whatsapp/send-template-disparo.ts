@@ -349,30 +349,41 @@ async function buscarOuCriarProtocoloAtivoDaConversa(params: {
 }
 
 async function reativarConversaParaDisparo(params: {
-  conversaId: string;
-  usuarioId: string | null;
+  conversa: Awaited<ReturnType<typeof findOrCreateWhatsAppConversation>>;
 }) {
-  const now = new Date().toISOString();
-  const payload: Record<string, unknown> = {
-    status: "aberta",
-    origem_atendimento: "manual",
-    bot_ativo: false,
-    aguardando_atendente: Boolean(params.usuarioId),
-    closed_at: null,
-    updated_at: now,
-  };
+  const { conversa } = params;
+  const conversaEmAtendimentoHumano =
+    conversa.status === "em_atendimento" ||
+    conversa.status === "aguardando_cliente";
+  const conversaNaFilaHumana =
+    conversa.status === "fila" && conversa.aguardando_atendente === true;
+  const conversaComAutomacaoAtiva =
+    conversa.status === "bot" && conversa.bot_ativo === true;
 
-  if (params.usuarioId) {
-    payload.responsavel_id = params.usuarioId;
+  if (
+    conversaEmAtendimentoHumano ||
+    conversaNaFilaHumana ||
+    conversaComAutomacaoAtiva
+  ) {
+    return;
   }
 
+  const now = new Date().toISOString();
   const { error } = await supabaseAdmin
     .from("conversas")
-    .update(payload)
-    .eq("id", params.conversaId);
+    .update({
+      status: "fila",
+      origem_atendimento: "reativacao",
+      bot_ativo: false,
+      aguardando_atendente: false,
+      responsavel_id: null,
+      closed_at: null,
+      updated_at: now,
+    })
+    .eq("id", conversa.id);
 
   if (error) {
-    throw new Error(`Erro ao reativar conversa: ${error.message}`);
+    throw new Error(`Erro ao preparar conversa para disparo: ${error.message}`);
   }
 }
 
@@ -396,10 +407,7 @@ async function garantirContatoConversaEProtocolo(params: {
     integracaoWhatsappId: params.integracaoWhatsappId,
   });
 
-  await reativarConversaParaDisparo({
-    conversaId: conversa.id,
-    usuarioId: params.usuarioId,
-  });
+  await reativarConversaParaDisparo({ conversa });
 
   const protocoloAtivo = await buscarOuCriarProtocoloAtivoDaConversa({
     empresaId: params.empresaId,
