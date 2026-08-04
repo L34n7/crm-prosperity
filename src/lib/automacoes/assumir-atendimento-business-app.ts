@@ -11,11 +11,73 @@ function timestampEmMilissegundos(valor?: string | null) {
   return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
 }
 
+async function buscarAdministradorPrincipalEmpresa(empresaId: string) {
+  const { data: perfilAdministrador, error: perfilError } = await supabase
+    .from("perfis_empresa")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .eq("ativo", true)
+    .ilike("nome", "Administrador")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (perfilError) {
+    throw new Error(
+      `Erro ao buscar perfil Administrador da empresa: ${perfilError.message}`
+    );
+  }
+
+  if (!perfilAdministrador?.id) {
+    return null;
+  }
+
+  const { data: vinculos, error: vinculosError } = await supabase
+    .from("usuarios_perfis")
+    .select("usuario_id")
+    .eq("perfil_empresa_id", perfilAdministrador.id)
+    .order("created_at", { ascending: true });
+
+  if (vinculosError) {
+    throw new Error(
+      `Erro ao buscar usuários administradores da empresa: ${vinculosError.message}`
+    );
+  }
+
+  const usuarioIds = (vinculos || [])
+    .map((vinculo) => vinculo.usuario_id)
+    .filter(Boolean);
+
+  if (usuarioIds.length === 0) {
+    return null;
+  }
+
+  const { data: administrador, error: administradorError } = await supabase
+    .from("usuarios")
+    .select("id, nome, email, created_at")
+    .eq("empresa_id", empresaId)
+    .eq("status", "ativo")
+    .in("id", usuarioIds)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (administradorError) {
+    throw new Error(
+      `Erro ao selecionar administrador responsável: ${administradorError.message}`
+    );
+  }
+
+  return administrador || null;
+}
+
 export type ResultadoAssuncaoBusinessApp = {
   estadoConversaAtualizado: boolean;
   execucoesCanceladas: number;
   agendamentosCancelados: number;
   execucoesNovasPreservadas: number;
+  administradorId: string | null;
+  administradorNome: string | null;
 };
 
 export async function assumirAtendimentoPeloWhatsappBusinessApp(params: {
@@ -35,12 +97,18 @@ export async function assumirAtendimentoPeloWhatsappBusinessApp(params: {
   const agora = new Date().toISOString();
   const momentoAssuncao = timestampEmMilissegundos(mensagemEnviadaEm);
 
-  const { data: execucoesAtivas, error: execucoesError } = await supabase
-    .from("automacao_execucoes")
-    .select("id, status, started_at, metadata_json")
-    .eq("empresa_id", empresaId)
-    .eq("conversa_id", conversaId)
-    .in("status", STATUS_EXECUCAO_ATIVA);
+  const [administradorResult, execucoesResult] = await Promise.all([
+    buscarAdministradorPrincipalEmpresa(empresaId),
+    supabase
+      .from("automacao_execucoes")
+      .select("id, status, started_at, metadata_json")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .in("status", STATUS_EXECUCAO_ATIVA),
+  ]);
+
+  const administrador = administradorResult;
+  const { data: execucoesAtivas, error: execucoesError } = execucoesResult;
 
   if (execucoesError) {
     throw new Error(
@@ -60,18 +128,22 @@ export async function assumirAtendimentoPeloWhatsappBusinessApp(params: {
   let estadoConversaAtualizado = false;
 
   if (atualizarEstadoConversa && execucoesMaisNovas.length === 0) {
+    const atualizacaoConversa: Record<string, unknown> = {
+      status: "em_atendimento",
+      origem_atendimento: "whatsapp_business_app",
+      bot_ativo: false,
+      aguardando_atendente: false,
+      closed_at: null,
+      updated_at: agora,
+    };
+
+    if (administrador?.id) {
+      atualizacaoConversa.responsavel_id = administrador.id;
+    }
+
     const { data: conversaAtualizada, error: conversaError } = await supabase
       .from("conversas")
-      .update({
-        status: "em_atendimento",
-        origem_atendimento: "whatsapp_business_app",
-        bot_ativo: false,
-        // Esta flag funciona como trava operacional das automações enquanto
-        // o atendimento humano estiver sendo conduzido pelo aplicativo.
-        aguardando_atendente: true,
-        closed_at: null,
-        updated_at: agora,
-      })
+      .update(atualizacaoConversa)
       .eq("empresa_id", empresaId)
       .eq("id", conversaId)
       .select("id")
@@ -102,6 +174,8 @@ export async function assumirAtendimentoPeloWhatsappBusinessApp(params: {
           origem_cancelamento: "smb_message_echoes",
           mensagem_echo_id: mensagemExternaId,
           atendimento_assumido_em: mensagemEnviadaEm,
+          atendimento_assumido_por_usuario_id: administrador?.id || null,
+          atendimento_assumido_por_usuario_nome: administrador?.nome || null,
           cancelado_em: agora,
         },
       })
@@ -149,5 +223,7 @@ export async function assumirAtendimentoPeloWhatsappBusinessApp(params: {
     execucoesCanceladas: execucoesCanceladasIds.length,
     agendamentosCancelados,
     execucoesNovasPreservadas: execucoesMaisNovas.length,
+    administradorId: administrador?.id || null,
+    administradorNome: administrador?.nome || null,
   };
 }
