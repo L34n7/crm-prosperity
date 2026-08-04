@@ -143,7 +143,6 @@ function createOverview(source: HTMLElement, requestReopen: (target: ReopenTarge
   const clientName = fieldValue(client, "Nome") || text(client?.querySelector(".contact b"));
   const clientPhone = fieldValue(client, "Telefone");
   const clientEmail = fieldValue(client, "E-mail");
-  const confirmation = fieldValue(reminders, "Status da confirmação");
   const finalStatus = fieldValue(result, "Status final");
   const resultSummary = fieldValue(result, "Resumo do resultado");
   const internalNotes = fieldValue(result, "Observações internas");
@@ -176,7 +175,7 @@ function createOverview(source: HTMLElement, requestReopen: (target: ReopenTarge
         </div>
       </section>
       <div class="agendaOverviewGrid">
-        <section class="agendaOverviewSection"><h4>Informações principais</h4><div class="agendaOverviewRows">${row("Término", dateTime(end))}${row("Prioridade", priority)}${row("Confirmação", confirmation || "Não informada")}${row("Local", location || "Não informado")}${meeting ? row("Reunião", `<a class="agendaOverviewLink" href="${escapeHtml(meeting)}" target="_blank" rel="noopener noreferrer">Abrir link da reunião</a>`, true) : row("Reunião", "Não informada")}</div></section>
+        <section class="agendaOverviewSection"><h4>Informações principais</h4><div class="agendaOverviewRows">${row("Término", dateTime(end))}${row("Prioridade", priority)}${row("Local", location || "Não informado")}${meeting ? row("Reunião", `<a class="agendaOverviewLink" href="${escapeHtml(meeting)}" target="_blank" rel="noopener noreferrer">Abrir link da reunião</a>`, true) : row("Reunião", "Não informada")}</div></section>
         <section class="agendaOverviewSection"><h4>Cliente</h4><div class="agendaOverviewRows">${row("Nome", clientName || "Não informado")}${row("Telefone", clientPhone || "Não informado")}${row("E-mail", clientEmail || "Não informado")}</div></section>
         <section class="agendaOverviewSection full"><h4>Descrição</h4><p class="agendaOverviewText">${escapeHtml(description || "Nenhuma descrição foi adicionada.")}</p></section>
         <section class="agendaOverviewSection"><h4>Participantes</h4>${repeatedItems(participants, "Nenhum participante adicional.")}</section>

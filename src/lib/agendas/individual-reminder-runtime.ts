@@ -7,7 +7,6 @@ import { sendWhatsApp } from "./automation-runtime-whatsapp";
 import {
   AgendaAutomationError,
   appointmentTitle,
-  contactName,
   dateLabel,
   timeLabel,
   type Job,
@@ -364,6 +363,21 @@ async function sendIndividualEmail(built: Awaited<ReturnType<typeof buildContext
 
 export async function processIndividualReminder(job: Job) {
   const built = await buildContext(job);
+  if (job.canal === "whatsapp" && built.recipientType === "responsavel") {
+    throw new AgendaAutomationError(
+      "O canal WhatsApp não é permitido para o responsável do agendamento.",
+      { permanent: true }
+    );
+  }
+  if (
+    job.canal === "sistema" &&
+    ["cliente", "participantes"].includes(built.recipientType)
+  ) {
+    throw new AgendaAutomationError(
+      "O canal Sistema é exclusivo para o responsável do agendamento.",
+      { permanent: true }
+    );
+  }
   if (job.canal === "sistema") {
     const result = await createSystemNotification(built);
     return {
