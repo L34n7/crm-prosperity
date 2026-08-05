@@ -67,6 +67,28 @@ if (!pagina.includes("CRM_HISTORICO_ORDEM_DECRESCENTE_V2")) {
   );
 }
 
+if (!pagina.includes("CRM_LISTA_FRIA_CONFIRMACAO_DIRETA_V1")) {
+  const confirmacaoDiretaIncorreta = `          confirmacao_responsabilidade_lista_fria:\n            utilityComListaFria &&\n            confirmacaoResponsabilidadeListaFria,\n          destinatarios,`;
+  const confirmacaoDiretaCorreta = `          confirmacao_responsabilidade_lista_fria:\n            templateComListaFria &&\n            confirmacaoResponsabilidadeListaFria,\n          destinatarios,`;
+  const confirmacaoDiretaComMarcador = `          // CRM_LISTA_FRIA_CONFIRMACAO_DIRETA_V1\n          confirmacao_responsabilidade_lista_fria:\n            templateComListaFria &&\n            confirmacaoResponsabilidadeListaFria,\n          destinatarios,`;
+
+  if (pagina.includes(confirmacaoDiretaIncorreta)) {
+    pagina = pagina.replace(
+      confirmacaoDiretaIncorreta,
+      confirmacaoDiretaComMarcador
+    );
+  } else if (pagina.includes(confirmacaoDiretaCorreta)) {
+    pagina = pagina.replace(
+      confirmacaoDiretaCorreta,
+      confirmacaoDiretaComMarcador
+    );
+  } else {
+    throw new Error(
+      "[DISPAROS CONTATOS] Trecho nao encontrado: confirmacao direta de responsabilidade da lista fria"
+    );
+  }
+}
+
 if (pagina !== paginaOriginal) {
   fs.writeFileSync(paginaPath, pagina, "utf8");
 }
@@ -88,5 +110,5 @@ if (conflitos !== conflitosOriginal) {
 }
 
 console.log(
-  "Contador, conflitos, disparo anterior e ordem do historico ajustados."
+  "Contador, conflitos, disparo anterior, ordem do historico e confirmacao de lista fria ajustados."
 );
