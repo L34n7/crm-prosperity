@@ -5,7 +5,6 @@ await import("./aplicar-pos-atendimento-disparo-agenda.mjs");
 await import("./corrigir-validacao-reagendamento-agenda.mjs");
 await import("./corrigir-cancelamento-google-agenda.mjs");
 await import("./aplicar-lembretes-individuais-pos-fluxo.mjs");
-await import("./aplicar-intervalos-agenda-reabrir-protocolo.mjs");
 await import("./aplicar-revisao-telefone-disparos.mjs");
 await import("./corrigir-duplicidade-revisao-telefone.mjs");
 await import("./corrigir-aplicador-mapeamento-template-lembrete.mjs");
@@ -14,8 +13,6 @@ await import("./corrigir-runtime-mapeamento-lembrete-whatsapp.mjs");
 await import("./ajustar-selecao-massa-disparos-v3.mjs");
 await import("./aplicar-pausa-rate-limit-12h-ui.mjs");
 await import("./corrigir-conflitos-disparo-anterior-contador.mjs");
-await import("./aplicar-ajuste-final-lembretes-intervalos.mjs");
-await import("./aplicar-lembretes-agendamento-premium-v3.mjs");
 await import("./corrigir-select-canal-atual-lembrete-whatsapp.mjs");
 await import("./aplicar-estilo-disparos-chat.mjs");
 
