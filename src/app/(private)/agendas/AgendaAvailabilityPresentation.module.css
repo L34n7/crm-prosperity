@@ -73,7 +73,7 @@
   border-radius: 10px !important;
   background: var(--crm-surface) !important;
   color: var(--crm-text-strong) !important;
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-variant-numeric: tabular-nums !important;
   text-align: center !important;
 }
@@ -139,7 +139,7 @@
 .summaryText strong {
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -148,7 +148,7 @@
 .summaryText span,
 .intervalCount {
   color: var(--crm-text-muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -161,7 +161,7 @@
   padding: 0 9px;
   border: 1px solid var(--crm-border);
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -198,7 +198,7 @@
 
 .timelineHeader strong {
   color: var(--crm-text-strong);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -213,7 +213,7 @@
   align-items: center;
   gap: 5px;
   color: var(--crm-text-muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -279,7 +279,7 @@
   max-width: 100%;
   padding: 0 5px;
   overflow: hidden;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -289,7 +289,7 @@
   display: flex;
   justify-content: space-between;
   color: var(--crm-text-muted);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -331,7 +331,7 @@
   align-items: center !important;
   gap: 9px !important;
   color: var(--crm-text-strong) !important;
-  font-size: 12px !important;
+  font-size: 14px !important;
   font-weight: 900 !important;
 }
 
@@ -400,7 +400,7 @@
   border-radius: 11px !important;
   background: var(--crm-surface) !important;
   color: var(--crm-text-strong) !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
   font-weight: 750 !important;
   outline: none !important;
 }

@@ -1,114 +1,2971 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import {Suspense,useCallback,useEffect,useMemo,useState} from "react";
-import {useSearchParams} from "next/navigation";
-import {Archive,ArchiveRestore,Bell,CalendarDays,CalendarPlus,Check,ChevronLeft,ChevronRight,Clock3,ExternalLink,History,Link2,MessageCircle,Plus,RefreshCw,Search,Settings2,Trash2,Unlink,UserRound,UsersRound,X} from "lucide-react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  Archive,
+  ArchiveRestore,
+  Bell,
+  CalendarDays,
+  CalendarPlus,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  ExternalLink,
+  History,
+  Link2,
+  MessageCircle,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings2,
+  Trash2,
+  Unlink,
+  UserRound,
+  UsersRound,
+  X,
+} from "lucide-react";
 import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
-import {createClient} from "@/lib/supabase/client";
-import {solicitarAtualizacaoFeedbackAgendasHeader} from "@/lib/header-summary/events";
+import { createClient } from "@/lib/supabase/client";
+import { solicitarAtualizacaoFeedbackAgendasHeader } from "@/lib/header-summary/events";
 
 import AgendaPremiumRuntimeEnhancer from "./AgendaPremiumRuntimeEnhancer";
 
 // CRM_AGENDA_PREMIUM_REMINDER_INTERVALS_V2
-const css=`
-.a2{min-height:100vh;background:var(--crm-ui-private-surface-hex-f4f7fb);color:var(--crm-ui-private-content-hex-172033)}.a2 *{box-sizing:border-box}.a2 button,.a2 input,.a2 select,.a2 textarea{font:inherit}.wrap{max-width:1650px;margin:auto;padding:20px}.head,.actions,.toolbar,.nav,.row,.foot,.mini{display:flex;align-items:center;gap:8px}.head{justify-content:space-between;margin-bottom:15px}.head h1{margin:0;font-size:26px}.head p{margin:4px 0 0;color:var(--crm-ui-private-content-hex-718096);font-size:13px}.actions{flex-wrap:wrap}.btn{height:38px;border:1px solid var(--crm-ui-private-border-hex-d8e0eb);background:var(--crm-surface);border-radius:9px;padding:0 12px;color:var(--crm-ui-private-content-hex-2e3b50);font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}.btn:hover{border-color:var(--crm-ui-private-border-hex-aebaca)}.primary{background:var(--crm-ui-private-surface-hex-109b75);border-color:var(--crm-ui-private-border-hex-109b75);color:var(--crm-text-inverse)}.danger{color:var(--crm-ui-private-content-hex-c32640);border-color:var(--crm-ui-private-border-hex-ffc6cf)}.select{height:38px;border:1px solid var(--crm-ui-private-border-hex-d8e0eb);border-radius:9px;background:var(--crm-surface);padding:0 10px;min-width:220px}.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}.stat,.card{background:var(--crm-surface);border:1px solid var(--crm-ui-private-border-hex-e2e8f0);border-radius:13px;box-shadow:0 2px 9px var(--crm-ui-private-shadow-hex-14213d0a)}.stat{padding:12px}.stat small{color:var(--crm-ui-private-content-hex-768399)}.stat b{display:block;font-size:22px;margin-top:5px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:12px}.toolbar{justify-content:space-between;padding:12px;border-bottom:1px solid var(--crm-ui-private-border-hex-e6ebf2);flex-wrap:wrap}.month{min-width:155px;text-align:center;font-weight:800;text-transform:capitalize}.filters{display:flex;gap:7px;flex-wrap:wrap}.filters input,.filters select{height:34px;border:1px solid var(--crm-ui-private-border-hex-dbe2ec);border-radius:8px;padding:0 9px;background:var(--crm-surface);font-size:12px}.search{position:relative}.search svg{position:absolute;left:8px;top:9px;color:var(--crm-ui-private-content-hex-8793a5)}.search input{padding-left:28px;width:180px}.grid{display:grid;grid-template-columns:repeat(7,1fr)}.wd{text-align:center;padding:9px 3px;background:var(--crm-ui-private-surface-hex-f8fafc);border-bottom:1px solid var(--crm-ui-private-border-hex-e8edf3);color:var(--crm-ui-private-content-hex-718096);font-size:10px;font-weight:800}.day{min-height:125px;border-right:1px solid var(--crm-ui-private-border-hex-edf1f5);border-bottom:1px solid var(--crm-ui-private-border-hex-edf1f5);padding:6px;overflow:hidden}.day:nth-child(7n){border-right:0}.muted{background:var(--crm-ui-private-surface-hex-fafbfd);color:var(--crm-ui-private-content-hex-aab4c2)}.today .num{background:var(--crm-ui-private-surface-hex-109b75);color:var(--crm-text-inverse)}.selected{box-shadow:inset 0 0 0 2px var(--crm-ui-private-shadow-hex-4bc3a3)}.dh{display:flex;justify-content:space-between}.num{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800}.add{border:0;background:transparent;color:var(--crm-ui-private-content-hex-7d899c);cursor:pointer}.event{width:100%;border:0;border-left:4px solid var(--c,var(--crm-ui-private-border-hex-109b75));border-radius:6px;background:var(--crm-ui-private-surface-hex-eef9f6);padding:4px 5px;margin-top:4px;text-align:left;cursor:pointer}.event.g{border-left-color:var(--crm-ui-private-border-hex-f59e0b);background:var(--crm-ui-private-surface-hex-fff7e5)}.event.cancel{opacity:.5;text-decoration:line-through}.event b,.event span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.event b{font-size:10px}.event span{font-size:9px;color:var(--crm-ui-private-content-hex-637086)}.aside{display:grid;gap:12px;align-content:start}.side{padding:12px}.side h3{margin:0 0 10px;font-size:13px}.item{border:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-radius:9px;padding:8px;margin-top:7px;cursor:pointer;background:var(--crm-surface)}.item b{font-size:11px}.item div{font-size:10px;color:var(--crm-ui-private-content-hex-6e7b8e);margin-top:3px}.empty{text-align:center;color:var(--crm-ui-private-content-hex-8a96a8);font-size:11px;padding:18px}.pill{font-size:9px;border-radius:99px;background:var(--crm-ui-private-surface-hex-edf2f7);padding:3px 7px}.on{color:var(--crm-ui-private-content-hex-08785a);background:var(--crm-ui-private-surface-hex-e8f8f3)}.banner{background:var(--crm-ui-private-surface-hex-fff7e4);border:1px solid var(--crm-ui-private-border-hex-f3d990);border-radius:10px;padding:9px 11px;margin-bottom:12px;font-size:12px;display:flex;align-items:center;gap:8px}.banner strong{margin-right:auto}.overlay{position:fixed;inset:0;background:var(--crm-ui-private-surface-hex-0f172a66);z-index:1000;display:flex;justify-content:flex-end}.drawer{height:100%;width:min(720px,97vw);background:var(--crm-surface);display:flex;flex-direction:column;box-shadow:-12px 0 35px var(--crm-ui-private-shadow-hex-0f172a33)}.dhead,.foot{padding:13px 16px;border-bottom:1px solid var(--crm-ui-private-border-hex-e5eaf1)}.dhead{display:flex;align-items:center;gap:10px}.dhead div{flex:1}.dhead h2{margin:0;font-size:18px}.dhead p{margin:3px 0 0;color:var(--crm-ui-private-content-hex-7a8799);font-size:11px}.body{padding:15px 16px;overflow:auto;flex:1}.foot{border-top:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-bottom:0;justify-content:space-between}.section{border:1px solid var(--crm-ui-private-border-hex-e4e9f0);border-radius:11px;padding:12px;margin-bottom:11px}.section h3{font-size:13px;margin:0 0 10px;display:flex;align-items:center;gap:6px}.form{display:grid;grid-template-columns:1fr 1fr;gap:9px}.field{display:grid;gap:4px}.field.full{grid-column:1/-1}.field label{font-size:10px;color:var(--crm-ui-private-content-hex-657287);font-weight:800}.field input,.field select,.field textarea{border:1px solid var(--crm-ui-private-border-hex-d8e0ea);border-radius:8px;padding:8px;color:var(--crm-ui-private-content-hex-263348);background:var(--crm-surface)}.field input,.field select{height:38px}.field textarea{min-height:70px;resize:vertical}.contact{border:1px solid var(--crm-ui-private-border-hex-d1ebe4);background:var(--crm-ui-private-surface-hex-f4fbf9);border-radius:9px;padding:8px;display:flex;gap:8px;align-items:center}.contact div{flex:1}.results{border:1px solid var(--crm-ui-private-border-hex-e0e6ee);border-radius:9px;max-height:180px;overflow:auto;margin-top:6px}.result{width:100%;border:0;border-bottom:1px solid var(--crm-ui-private-border-hex-edf1f5);background:var(--crm-surface);text-align:left;padding:8px;cursor:pointer}.result:last-child{border:0}.repeat{border:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-radius:9px;padding:9px;margin-top:8px;background:var(--crm-ui-private-surface-hex-fbfcfe)}.repeat .row{justify-content:space-between;margin-bottom:7px}.remove{border:0;background:transparent;color:var(--crm-ui-private-content-hex-cf2c44);cursor:pointer}.rem{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px}.remWhatsapp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--crm-ui-private-border-hex-d8e0ea)}.remWhatsappNote{grid-column:1/-1;color:var(--crm-ui-private-content-hex-718096);font-size:10px;line-height:1.45}.remMarketing{grid-column:1/-1;display:flex;align-items:flex-start;gap:7px;font-size:10px;color:var(--crm-ui-private-content-hex-657287)}.history{border-left:1px solid var(--crm-ui-private-border-hex-d8e1eb);margin-left:5px;padding-left:14px}.hist{margin-bottom:12px;position:relative}.hist:before{content:"";position:absolute;left:-19px;top:3px;width:8px;height:8px;border-radius:50%;background:var(--crm-ui-private-surface-hex-18ad82)}.hist b{font-size:11px}.hist p{font-size:10px;color:var(--crm-ui-private-content-hex-6f7c8e);margin:2px 0}.modalbg{position:fixed;inset:0;background:var(--crm-ui-private-surface-hex-0f172a66);z-index:1100;display:grid;place-items:center;padding:15px}.modal{width:min(650px,96vw);max-height:92vh;overflow:auto;background:var(--crm-surface);border-radius:13px}.modal .dhead,.modal .body,.modal .foot{padding:13px 15px}.agendaSideBadge{border:1px solid transparent;font-weight:850;line-height:1.15}.agendaSideBadge-agendado{background:var(--crm-success-bg)!important;border-color:var(--crm-success-border)!important;color:var(--crm-success-text)!important}.agendaSideBadge-cancelado{background:var(--crm-danger-bg)!important;border-color:var(--crm-danger-border)!important;color:var(--crm-danger-text)!important}.agendaSideBadge-google{background:var(--crm-warning-bg)!important;border-color:var(--crm-warning-border)!important;color:var(--crm-warning-text)!important}.cancelConfirmBg{z-index:1300;backdrop-filter:blur(3px)}.confirmModal{width:min(440px,94vw);background:var(--crm-surface);border:1px solid var(--crm-ui-private-border-hex-e2e8f0);border-radius:16px;box-shadow:0 24px 70px var(--crm-ui-private-shadow-hex-0f172a40);overflow:hidden}.confirmBody{padding:22px 22px 18px}.confirmIcon{width:46px;height:46px;border-radius:14px;background:var(--crm-ui-private-surface-hex-fff1f2);color:var(--crm-ui-private-content-hex-c32640);display:grid;place-items:center;margin-bottom:14px}.confirmBody h2{margin:0;font-size:20px;color:var(--crm-ui-private-content-hex-172033)}.confirmBody p{margin:8px 0 0;color:var(--crm-ui-private-content-hex-667085);font-size:13px;line-height:1.55}.confirmSummary{display:flex;align-items:center;gap:10px;margin-top:16px;padding:12px;border:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-radius:11px;background:var(--crm-ui-private-surface-hex-f8fafc);color:var(--crm-ui-private-content-hex-405066)}.confirmSummary div{display:grid;gap:2px}.confirmSummary b{font-size:12px}.confirmSummary span{font-size:11px;color:var(--crm-ui-private-content-hex-748095)}.confirmActions{display:flex;justify-content:flex-end;gap:10px;padding:14px 18px;background:var(--crm-ui-private-surface-hex-f8fafc);border-top:1px solid var(--crm-ui-private-border-hex-e5eaf1)}.confirmDanger{background:var(--crm-surface)!important;border-color:var(--crm-ui-private-border-hex-f2a8b3)!important;color:var(--crm-ui-private-content-hex-b4233b)!important}.confirmDanger:hover:not(:disabled){background:var(--crm-ui-private-surface-hex-c32640)!important;border-color:var(--crm-ui-private-border-hex-c32640)!important;color:var(--crm-text-inverse)!important;box-shadow:0 7px 18px var(--crm-ui-private-shadow-hex-c3264030)}.typeModalBg{z-index:1450;backdrop-filter:blur(4px)}.typeModal{width:min(480px,94vw);overflow:hidden;border:1px solid var(--crm-border-strong);border-radius:18px;background:var(--crm-surface);box-shadow:0 28px 80px var(--crm-ui-private-shadow-hex-0f172a40)}.typeModal .dhead{padding:16px 18px;background:linear-gradient(135deg,var(--crm-primary-soft),var(--crm-surface));border-bottom:1px solid var(--crm-border)}.typeModalIcon{width:40px;height:40px;flex:0 0 40px;border:1px solid var(--crm-primary-border);border-radius:12px;background:var(--crm-surface);color:var(--crm-primary-text);display:grid;place-items:center}.typeModal .dhead h2{font-size:18px}.typeModal .dhead p{font-size:11px;line-height:1.4}.typeModal .body{padding:18px;display:grid;gap:15px}.typeModalIntro{margin:0;color:var(--crm-text-muted);font-size:11px;line-height:1.55}.typeModalForm{display:grid;gap:13px}.typeModalForm .field{gap:6px}.typeModalForm .field label{font-size:11px}.typeModalForm .field input{width:100%;height:42px;border:1px solid var(--crm-border-strong);border-radius:11px;padding:0 11px;background:var(--crm-surface);color:var(--crm-text-strong);outline:none}.typeModalForm .field input:focus{border-color:var(--crm-primary-strong);box-shadow:var(--crm-focus-ring)}.typeColorControl{display:grid;grid-template-columns:54px minmax(0,1fr);gap:9px}.typeColorControl input[type="color"]{padding:4px;cursor:pointer}.typePreview{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--crm-border);border-radius:12px;background:var(--crm-surface-soft)}.typePreviewMark{width:14px;height:14px;flex:0 0 14px;border-radius:5px;box-shadow:0 0 0 4px var(--crm-primary-soft)}.typePreview strong{display:block;font-size:11px;color:var(--crm-text-strong)}.typePreview small{display:block;margin-top:2px;color:var(--crm-text-muted);font-size:9.5px}.typeModalError{padding:9px 10px;border:1px solid var(--crm-danger-border);border-radius:10px;background:var(--crm-danger-bg);color:var(--crm-danger-text);font-size:10px;line-height:1.45}.typeModal .foot{padding:13px 18px;justify-content:flex-end;background:var(--crm-surface-soft)}.agendaTimeUnitControl{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:7px;align-items:center}.agendaTimeUnitControl input,.agendaTimeUnitControl select{width:100%!important}.agendaTimeUnitControl select{height:38px;border:1px solid var(--crm-ui-private-border-hex-d8e0ea);border-radius:8px;padding:0 8px;background:var(--crm-surface);color:var(--crm-ui-private-content-hex-263348);font-weight:700}.agendaTemplateShell .a2 .drawer .foot>div:first-child{display:flex!important;align-items:center!important;gap:10px!important;flex-wrap:nowrap!important}.eventFooterAction{width:160px!important;min-width:160px!important;flex:0 0 160px!important;justify-content:center!important;white-space:nowrap!important}.agendaTemplateShell .a2 .drawer .agendaGoogleDrawerTools{display:inline-flex!important;align-items:center!important;gap:0!important;flex-wrap:nowrap!important;margin:0!important}.agendaTemplateShell .a2 .drawer .agendaGoogleEventOpen{width:160px!important;min-width:160px!important;flex:0 0 160px!important;justify-content:center!important;white-space:nowrap!important}@media(max-width:760px){.agendaTimeUnitControl{grid-template-columns:minmax(0,1fr) 98px}.agendaTemplateShell .a2 .drawer .foot>div:first-child{width:100%;gap:8px!important}.eventFooterAction,.agendaTemplateShell .a2 .drawer .agendaGoogleEventOpen{width:auto!important;min-width:0!important;flex:1 1 0!important}}.availability{display:grid;gap:8px}.availabilityHint{margin:4px 0 10px;color:var(--crm-text-muted);font-size:10px;line-height:1.45}.avDay{padding:9px;border:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-radius:10px;background:var(--crm-ui-private-surface-hex-fbfcfe)}.av{display:grid;grid-template-columns:95px 1fr 1fr 38px;gap:6px;align-items:center}.av input{height:34px;border:1px solid var(--crm-ui-private-border-hex-d8e0ea);border-radius:7px}.avBreaks{display:grid;gap:6px;margin:8px 0 0 101px;padding-top:8px;border-top:1px dashed var(--crm-ui-private-border-hex-d8e0ea)}.avBreakHead{display:flex;align-items:center;justify-content:space-between;gap:8px}.avBreakHead span{font-size:9px;font-weight:850;color:var(--crm-text-muted)}.avBreak{display:grid;grid-template-columns:minmax(110px,1fr) 100px 100px 30px;gap:6px;align-items:center}.avBreak input{height:32px;min-width:0;border:1px solid var(--crm-ui-private-border-hex-d8e0ea);border-radius:7px;padding:0 7px;background:var(--crm-surface);color:var(--crm-text-strong);font-size:10px}.avBreakEmpty{font-size:9px;color:var(--crm-text-muted)}.avAddBreak{height:28px!important;padding:0 9px!important;font-size:9px!important}.toggle{height:22px;border:0;border-radius:99px;background:var(--crm-ui-private-surface-hex-cbd5e1)}/* CRM_AGENDA_DAY_BREAKS_REOPEN_LAST_PROTOCOL_V1 */.toggle.y{background:var(--crm-ui-private-surface-hex-14a47c)}.spin{animation:sp .8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+const css = `
+.a2{min-height:100vh;background:var(--crm-ui-private-surface-hex-f4f7fb);color:var(--crm-ui-private-content-hex-172033)}.a2 *{box-sizing:border-box}.a2 button,.a2 input,.a2 select,.a2 textarea{font:inherit}.wrap{max-width:1650px;margin:auto;padding:20px}.head,.actions,.toolbar,.nav,.row,.foot,.mini{display:flex;align-items:center;gap:8px}.head{justify-content:space-between;margin-bottom:15px}.head h1{margin:0;font-size:26px}.head p{margin:4px 0 0;color:var(--crm-ui-private-content-hex-718096);font-size:13px}.actions{flex-wrap:wrap}.btn{height:38px;border:1px solid var(--crm-ui-private-border-hex-d8e0eb);background:var(--crm-surface);border-radius:9px;padding:0 12px;color:var(--crm-ui-private-content-hex-2e3b50);font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}.btn:hover{border-color:var(--crm-ui-private-border-hex-aebaca)}.primary{background:var(--crm-ui-private-surface-hex-109b75);border-color:var(--crm-ui-private-border-hex-109b75);color:var(--crm-text-inverse)}.danger{color:var(--crm-ui-private-content-hex-c32640);border-color:var(--crm-ui-private-border-hex-ffc6cf)}.select{height:38px;border:1px solid var(--crm-ui-private-border-hex-d8e0eb);border-radius:9px;background:var(--crm-surface);padding:0 10px;min-width:220px}.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}.stat,.card{background:var(--crm-surface);border:1px solid var(--crm-ui-private-border-hex-e2e8f0);border-radius:13px;box-shadow:0 2px 9px var(--crm-ui-private-shadow-hex-14213d0a)}.stat{padding:12px}.stat small{color:var(--crm-ui-private-content-hex-768399)}.stat b{display:block;font-size:22px;margin-top:5px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:12px}.toolbar{justify-content:space-between;padding:12px;border-bottom:1px solid var(--crm-ui-private-border-hex-e6ebf2);flex-wrap:wrap}.month{min-width:155px;text-align:center;font-weight:800;text-transform:capitalize}.filters{display:flex;gap:7px;flex-wrap:wrap}.filters input,.filters select{height:34px;border:1px solid var(--crm-ui-private-border-hex-dbe2ec);border-radius:8px;padding:0 9px;background:var(--crm-surface);font-size:12px}.search{position:relative}.search svg{position:absolute;left:8px;top:9px;color:var(--crm-ui-private-content-hex-8793a5)}.search input{padding-left:28px;width:180px}.grid{display:grid;grid-template-columns:repeat(7,1fr)}.wd{text-align:center;padding:9px 3px;background:var(--crm-ui-private-surface-hex-f8fafc);border-bottom:1px solid var(--crm-ui-private-border-hex-e8edf3);color:var(--crm-ui-private-content-hex-718096);font-size:10px;font-weight:800}.day{min-height:125px;border-right:1px solid var(--crm-ui-private-border-hex-edf1f5);border-bottom:1px solid var(--crm-ui-private-border-hex-edf1f5);padding:6px;overflow:hidden}.day:nth-child(7n){border-right:0}.muted{background:var(--crm-ui-private-surface-hex-fafbfd);color:var(--crm-ui-private-content-hex-aab4c2)}.today .num{background:var(--crm-ui-private-surface-hex-109b75);color:var(--crm-text-inverse)}.selected{box-shadow:inset 0 0 0 2px var(--crm-ui-private-shadow-hex-4bc3a3)}.dh{display:flex;justify-content:space-between}.num{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800}.add{border:0;background:transparent;color:var(--crm-ui-private-content-hex-7d899c);cursor:pointer}.event{width:100%;border:0;border-left:4px solid var(--c,var(--crm-ui-private-border-hex-109b75));border-radius:6px;background:var(--crm-ui-private-surface-hex-eef9f6);padding:4px 5px;margin-top:4px;text-align:left;cursor:pointer}.event.g{border-left-color:var(--crm-ui-private-border-hex-f59e0b);background:var(--crm-ui-private-surface-hex-fff7e5)}.event.cancel{opacity:.5;text-decoration:line-through}.event b,.event span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.event b{font-size:10px}.event span{font-size:9px;color:var(--crm-ui-private-content-hex-637086)}.aside{display:grid;gap:12px;align-content:start}.side{padding:12px}.side h3{margin:0 0 10px;font-size:13px}.item{border:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-radius:9px;padding:8px;margin-top:7px;cursor:pointer;background:var(--crm-surface)}.item b{font-size:11px}.item div{font-size:10px;color:var(--crm-ui-private-content-hex-6e7b8e);margin-top:3px}.empty{text-align:center;color:var(--crm-ui-private-content-hex-8a96a8);font-size:11px;padding:18px}.pill{font-size:9px;border-radius:99px;background:var(--crm-ui-private-surface-hex-edf2f7);padding:3px 7px}.on{color:var(--crm-ui-private-content-hex-08785a);background:var(--crm-ui-private-surface-hex-e8f8f3)}.banner{background:var(--crm-ui-private-surface-hex-fff7e4);border:1px solid var(--crm-ui-private-border-hex-f3d990);border-radius:10px;padding:9px 11px;margin-bottom:12px;font-size:12px;display:flex;align-items:center;gap:8px}.banner strong{margin-right:auto}.overlay{position:fixed;inset:0;background:var(--crm-ui-private-surface-hex-0f172a66);z-index:1000;display:flex;justify-content:flex-end}.drawer{height:100%;width:min(720px,97vw);background:var(--crm-surface);display:flex;flex-direction:column;box-shadow:-12px 0 35px var(--crm-ui-private-shadow-hex-0f172a33)}.dhead,.foot{padding:13px 16px;border-bottom:1px solid var(--crm-ui-private-border-hex-e5eaf1)}.dhead{display:flex;align-items:center;gap:10px}.dhead div{flex:1}.dhead h2{margin:0;font-size:18px}.dhead p{margin:3px 0 0;color:var(--crm-ui-private-content-hex-7a8799);font-size:11px}.body{padding:15px 16px;overflow:auto;flex:1}.foot{border-top:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-bottom:0;justify-content:space-between}.section{border:1px solid var(--crm-ui-private-border-hex-e4e9f0);border-radius:11px;padding:12px;margin-bottom:11px}.section h3{font-size:13px;margin:0 0 10px;display:flex;align-items:center;gap:6px}.form{display:grid;grid-template-columns:1fr 1fr;gap:9px}.field{display:grid;gap:4px}.field.full{grid-column:1/-1}.field label{font-size:10px;color:var(--crm-ui-private-content-hex-657287);font-weight:800}.field input,.field select,.field textarea{border:1px solid var(--crm-ui-private-border-hex-d8e0ea);border-radius:8px;padding:8px;color:var(--crm-ui-private-content-hex-263348);background:var(--crm-surface)}.field input,.field select{height:38px}.field textarea{min-height:70px;resize:vertical}.contact{border:1px solid var(--crm-ui-private-border-hex-d1ebe4);background:var(--crm-ui-private-surface-hex-f4fbf9);border-radius:9px;padding:8px;display:flex;gap:8px;align-items:center}.contact div{flex:1}.results{border:1px solid var(--crm-ui-private-border-hex-e0e6ee);border-radius:9px;max-height:180px;overflow:auto;margin-top:6px}.result{width:100%;border:0;border-bottom:1px solid var(--crm-ui-private-border-hex-edf1f5);background:var(--crm-surface);text-align:left;padding:8px;cursor:pointer}.result:last-child{border:0}.repeat{border:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-radius:9px;padding:9px;margin-top:8px;background:var(--crm-ui-private-surface-hex-fbfcfe)}.repeat .row{justify-content:space-between;margin-bottom:7px}.remove{border:0;background:transparent;color:var(--crm-ui-private-content-hex-cf2c44);cursor:pointer}.rem{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px}.remWhatsapp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--crm-ui-private-border-hex-d8e0ea)}.remWhatsappNote{grid-column:1/-1;color:var(--crm-ui-private-content-hex-718096);font-size:10px;line-height:1.45}.remMarketing{grid-column:1/-1;display:flex;align-items:flex-start;gap:7px;font-size:10px;color:var(--crm-ui-private-content-hex-657287)}.history{border-left:1px solid var(--crm-ui-private-border-hex-d8e1eb);margin-left:5px;padding-left:14px}.hist{margin-bottom:12px;position:relative}.hist:before{content:"";position:absolute;left:-19px;top:3px;width:8px;height:8px;border-radius:50%;background:var(--crm-ui-private-surface-hex-18ad82)}.hist b{font-size:11px}.hist p{font-size:10px;color:var(--crm-ui-private-content-hex-6f7c8e);margin:2px 0}.modalbg{position:fixed;inset:0;background:var(--crm-ui-private-surface-hex-0f172a66);z-index:1100;display:grid;place-items:center;padding:15px}.modal{width:min(650px,96vw);max-height:92vh;overflow:auto;background:var(--crm-surface);border-radius:13px}.modal .dhead,.modal .body,.modal .foot{padding:13px 15px}.agendaSideBadge{border:1px solid transparent;font-weight:850;line-height:1.15}.agendaSideBadge-agendado{background:var(--crm-success-bg)!important;border-color:var(--crm-success-border)!important;color:var(--crm-success-text)!important}.agendaSideBadge-cancelado{background:var(--crm-danger-bg)!important;border-color:var(--crm-danger-border)!important;color:var(--crm-danger-text)!important}.agendaSideBadge-google{background:var(--crm-warning-bg)!important;border-color:var(--crm-warning-border)!important;color:var(--crm-warning-text)!important}.cancelConfirmBg{z-index:1300;backdrop-filter:blur(3px)}.confirmModal{width:min(440px,94vw);background:var(--crm-surface);border:1px solid var(--crm-ui-private-border-hex-e2e8f0);border-radius:16px;box-shadow:0 24px 70px var(--crm-ui-private-shadow-hex-0f172a40);overflow:hidden}.confirmBody{padding:22px 22px 18px}.confirmIcon{width:46px;height:46px;border-radius:14px;background:var(--crm-ui-private-surface-hex-fff1f2);color:var(--crm-ui-private-content-hex-c32640);display:grid;place-items:center;margin-bottom:14px}.confirmBody h2{margin:0;font-size:20px;color:var(--crm-ui-private-content-hex-172033)}.confirmBody p{margin:8px 0 0;color:var(--crm-ui-private-content-hex-667085);font-size:13px;line-height:1.55}.confirmSummary{display:flex;align-items:center;gap:10px;margin-top:16px;padding:12px;border:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-radius:11px;background:var(--crm-ui-private-surface-hex-f8fafc);color:var(--crm-ui-private-content-hex-405066)}.confirmSummary div{display:grid;gap:2px}.confirmSummary b{font-size:12px}.confirmSummary span{font-size:11px;color:var(--crm-ui-private-content-hex-748095)}.confirmActions{display:flex;justify-content:flex-end;gap:10px;padding:14px 18px;background:var(--crm-ui-private-surface-hex-f8fafc);border-top:1px solid var(--crm-ui-private-border-hex-e5eaf1)}.confirmDanger{background:var(--crm-surface)!important;border-color:var(--crm-ui-private-border-hex-f2a8b3)!important;color:var(--crm-ui-private-content-hex-b4233b)!important}.confirmDanger:hover:not(:disabled){background:var(--crm-ui-private-surface-hex-c32640)!important;border-color:var(--crm-ui-private-border-hex-c32640)!important;color:var(--crm-text-inverse)!important;box-shadow:0 7px 18px var(--crm-ui-private-shadow-hex-c3264030)}.typeModalBg{z-index:1450;backdrop-filter:blur(4px)}.typeModal{width:min(480px,94vw);overflow:hidden;border:1px solid var(--crm-border-strong);border-radius:18px;background:var(--crm-surface);box-shadow:0 28px 80px var(--crm-ui-private-shadow-hex-0f172a40)}.typeModal .dhead{padding:16px 18px;background:linear-gradient(135deg,var(--crm-primary-soft),var(--crm-surface));border-bottom:1px solid var(--crm-border)}.typeModalIcon{width:40px;height:40px;flex:0 0 40px;border:1px solid var(--crm-primary-border);border-radius:12px;background:var(--crm-surface);color:var(--crm-primary-text);display:grid;place-items:center}.typeModal .dhead h2{font-size:18px}.typeModal .dhead p{font-size:11px;line-height:1.4}.typeModal .body{padding:18px;display:grid;gap:15px}.typeModalIntro{margin:0;color:var(--crm-text-muted);font-size:11px;line-height:1.55}.typeModalForm{display:grid;gap:13px}.typeModalForm .field{gap:6px}.typeModalForm .field label{font-size:11px}.typeModalForm .field input{width:100%;height:42px;border:1px solid var(--crm-border-strong);border-radius:11px;padding:0 11px;background:var(--crm-surface);color:var(--crm-text-strong);outline:none}.typeModalForm .field input:focus{border-color:var(--crm-primary-strong);box-shadow:var(--crm-focus-ring)}.typeColorControl{display:grid;grid-template-columns:54px minmax(0,1fr);gap:9px}.typeColorControl input[type="color"]{padding:4px;cursor:pointer}.typePreview{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--crm-border);border-radius:12px;background:var(--crm-surface-soft)}.typePreviewMark{width:14px;height:14px;flex:0 0 14px;border-radius:5px;box-shadow:0 0 0 4px var(--crm-primary-soft)}.typePreview strong{display:block;font-size:11px;color:var(--crm-text-strong)}.typePreview small{display:block;margin-top:2px;color:var(--crm-text-muted);font-size:9.5px}.typeModalError{padding:9px 10px;border:1px solid var(--crm-danger-border);border-radius:10px;background:var(--crm-danger-bg);color:var(--crm-danger-text);font-size:10px;line-height:1.45}.typeModal .foot{padding:13px 18px;justify-content:flex-end;background:var(--crm-surface-soft)}.agendaTimeUnitControl{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:7px;align-items:center}.agendaTimeUnitControl input,.agendaTimeUnitControl select{width:100%!important}.agendaTimeUnitControl select{height:38px;border:1px solid var(--crm-ui-private-border-hex-d8e0ea);border-radius:8px;padding:0 8px;background:var(--crm-surface);color:var(--crm-ui-private-content-hex-263348);font-weight:700}.agendaTemplateShell .a2 .drawer .foot>div:first-child{display:flex!important;align-items:center!important;gap:10px!important;flex-wrap:nowrap!important}.eventFooterAction{width:160px!important;min-width:160px!important;flex:0 0 160px!important;justify-content:center!important;white-space:nowrap!important}.agendaTemplateShell .a2 .drawer .agendaGoogleDrawerTools{display:inline-flex!important;align-items:center!important;gap:0!important;flex-wrap:nowrap!important;margin:0!important}.agendaTemplateShell .a2 .drawer .agendaGoogleEventOpen{width:160px!important;min-width:160px!important;flex:0 0 160px!important;justify-content:center!important;white-space:nowrap!important}@media(max-width:760px){.agendaTimeUnitControl{grid-template-columns:minmax(0,1fr) 98px}.agendaTemplateShell .a2 .drawer .foot>div:first-child{width:100%;gap:8px!important}.eventFooterAction,.agendaTemplateShell .a2 .drawer .agendaGoogleEventOpen{width:auto!important;min-width:0!important;flex:1 1 0!important}}.availability{display:grid;gap:8px}.availabilityHint{margin:4px 0 10px;color:var(--crm-text-muted);font-size:10px;line-height:1.45}.avDay{padding:9px;border:1px solid var(--crm-ui-private-border-hex-e5eaf1);border-radius:10px;background:var(--crm-ui-private-surface-hex-fbfcfe)}.av{display:grid;grid-template-columns:95px 1fr 1fr 38px;gap:6px;align-items:center}.av input{height:34px;border:1px solid var(--crm-ui-private-border-hex-d8e0ea);border-radius:7px}.avBreaks{display:grid;gap:6px;margin:8px 0 0 101px;padding-top:8px;border-top:1px dashed var(--crm-ui-private-border-hex-d8e0ea)}.avBreakHead{display:flex;align-items:center;justify-content:space-between;gap:8px}.avBreakHead span{font-size:9px;font-weight:850;color:var(--crm-text-muted)}.avBreak{display:grid;grid-template-columns:minmax(110px,1fr) 100px 100px 30px;gap:6px;align-items:center}.avBreak input{height:32px;min-width:0;border:1px solid var(--crm-ui-private-border-hex-d8e0ea);border-radius:7px;padding:0 7px;background:var(--crm-surface);color:var(--crm-text-strong);font-size:10px}.avBreakEmpty{font-size:9px;color:var(--crm-text-muted)}.avAddBreak{height:28px!important;padding:0 9px!important;font-size:12px!important}.toggle{height:22px;border:0;border-radius:99px;background:var(--crm-ui-private-surface-hex-cbd5e1)}/* CRM_AGENDA_DAY_BREAKS_REOPEN_LAST_PROTOCOL_V1 */.toggle.y{background:var(--crm-ui-private-surface-hex-14a47c)}.spin{animation:sp .8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
 .feedbackCard{background:var(--crm-ui-private-surface-hex-fff7e4);border:1px solid var(--crm-ui-private-border-hex-f3d990);border-radius:14px;padding:13px 14px;margin-bottom:12px;display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:13px;box-shadow:0 3px 12px var(--crm-ui-private-shadow-hex-14213d0a)}.feedbackIcon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--crm-surface);color:var(--crm-ui-private-content-hex-9a6700);border:1px solid var(--crm-ui-private-border-hex-f3d990)}.feedbackMain{min-width:0;display:grid;gap:5px}.feedbackHead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.feedbackHeadLabel{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--crm-ui-private-content-hex-9a6700)}.feedbackCounter{font-size:9px;font-weight:800;border-radius:99px;padding:3px 7px;background:var(--crm-surface);border:1px solid var(--crm-ui-private-border-hex-f3d990);color:var(--crm-ui-private-content-hex-6e5a18)}.feedbackTitle{display:block;font-size:15px;line-height:1.25;color:var(--crm-ui-private-content-hex-172033);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.feedbackClient{display:flex;align-items:center;gap:5px;min-width:0;font-size:11px;color:var(--crm-ui-private-content-hex-405066)}.feedbackClient b,.feedbackClient span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.feedbackMeta{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-top:2px}.feedbackMetaItem{display:inline-flex;align-items:center;gap:5px;min-width:0;font-size:10px;color:var(--crm-ui-private-content-hex-667085)}.feedbackMetaItem svg{flex:0 0 auto}.feedbackMetaItem strong{color:var(--crm-ui-private-content-hex-405066)}.feedbackActions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;max-width:360px}.feedbackActions .btn{height:32px;font-size:11px;white-space:nowrap}.feedbackOpen{background:var(--crm-surface)}.feedbackSuccess{background:var(--crm-surface);border-color:var(--crm-ui-private-border-hex-b7e4d6);color:var(--crm-ui-private-content-hex-08785a)}.feedbackMissed{background:var(--crm-surface);border-color:var(--crm-ui-private-border-hex-ffc6cf);color:var(--crm-ui-private-content-hex-c32640)}@media(max-width:980px){.feedbackCard{grid-template-columns:38px minmax(0,1fr)}.feedbackIcon{width:38px;height:38px}.feedbackActions{grid-column:1/-1;max-width:none;justify-content:flex-end;border-top:1px solid var(--crm-ui-private-border-hex-f3d990);padding-top:10px}}@media(max-width:620px){.feedbackCard{grid-template-columns:1fr;padding:12px}.feedbackIcon{display:none}.feedbackTitle{white-space:normal}.feedbackActions{justify-content:stretch}.feedbackActions .btn{flex:1}.feedbackOpen{flex-basis:100%!important}}
 @media(max-width:1100px){.layout{grid-template-columns:1fr}.aside{grid-template-columns:1fr 1fr}.stats{grid-template-columns:repeat(3,1fr)}}@media(max-width:760px){.remWhatsapp{grid-template-columns:1fr}.remWhatsappNote,.remMarketing{grid-column:auto}.wrap{padding:12px 8px}.head{display:block}.actions{margin-top:10px}.select{width:100%}.stats{grid-template-columns:1fr 1fr}.card:first-child{overflow:auto}.grid{min-width:740px}.toolbar{align-items:flex-start}.filters,.filters>*{width:100%}.search input,.filters select{width:100%}.aside{grid-template-columns:1fr}.form{grid-template-columns:1fr}.field.full{grid-column:auto}.rem{grid-template-columns:1fr 1fr}.foot{align-items:stretch;flex-direction:column}.foot .mini{width:100%}.foot .mini .btn{flex:1}}
 `;
 
-type Agenda={id:string;nome:string;descricao:string|null;duracao_minutos:number;intervalo_minutos:number;antecedencia_minutos:number;janela_dias:number;status:"ativo"|"inativo"|"arquivado"};
-type Tipo={id:string;nome:string;cor:string};type Resp={id:string;nome:string;email:string|null};
-type Contato={id:string;nome:string|null;telefone:string|null;email:string|null;empresa?:string|null};
-type Vinculo={entidade_tipo:string;entidade_id:string;papel:string;titulo:string;subtitulo:string;imagem_url:string;principal:boolean;dados_json:Record<string,string>};
-type Participante={nome:string;email:string;telefone:string;papel:string;tipo:string;status:string};
-type Lembrete={id?:string;canal:string;antecedencia_minutos:number;destinatario_tipo:string;ativo:boolean;status?:string;agendado_para?:string;erro?:string|null;metadata_json?:{integracao_whatsapp_id?:string|null;whatsapp_template_id?:string|null;marketing_aceito?:boolean;template_variaveis?:unknown[]}};
-type ReminderOptions={integracoes:{id:string;nome_conexao:string}[];templates:{id:string;nome:string;idioma:string;categoria:string;integracao_whatsapp_id:string;variaveis?:number[]}[]}; // CRM_AGENDA_INDIVIDUAL_REMINDER_POST_FLOW_V1
-type Hist={id:string;acao:string;descricao?:string;usuario_nome?:string;created_at:string};
-type Ag={id:string;agenda_id:string;contato_id:string|null;titulo:string;nome_cliente:string|null;telefone_cliente:string|null;email_cliente:string|null;inicio_at:string;fim_at:string;status:string;origem:string;observacoes:string|null;tipo_id:string|null;responsavel_id:string|null;local:string|null;link_reuniao:string|null;prioridade:string;confirmacao_status:string;resultado:string|null;observacoes_internas:string|null;contato:Contato|null;responsavel:Resp|null;tipo:Tipo|null;vinculos:Vinculo[];participantes:Participante[];lembretes:Lembrete[];historico:Hist[]};
-type GEvent={id:string;titulo:string;inicio_at:string;fim_at:string;dia_inteiro:boolean};
-type Form={id:string|null;titulo:string;tipo_id:string;status:string;inicio_at:string;fim_at:string;responsavel_id:string;prioridade:string;local:string;link_reuniao:string;observacoes:string;contato_id:string;nome_cliente:string;telefone_cliente:string;email_cliente:string;participantes:Participante[];vinculos:Vinculo[];lembretes:Lembrete[];confirmacao_status:string;resultado:string;observacoes_internas:string};
-type IntervaloDia={id?:string;nome:string;hora_inicio:string;hora_fim:string;ativo:boolean};
-type Disp={dia_semana:number;hora_inicio:string;hora_fim:string;ativo:boolean;intervalos:IntervaloDia[]};
-const dias=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"],diasFull=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"],labels:Record<string,string>={agendado:"Agendado",confirmado:"Confirmado",cancelado:"Cancelado",realizado:"Realizado",faltou:"Não compareceu"};
-const p=(n:number)=>String(n).padStart(2,"0"),key=(d:Date)=>`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`,local=(s:string)=>{const d=new Date(s);return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`},iso=(s:string)=>new Date(s).toISOString(),time=(s:string)=>new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date(s)),dt=(s?:string)=>s?new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(s)):"-";
+type Agenda = {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  duracao_minutos: number;
+  intervalo_minutos: number;
+  antecedencia_minutos: number;
+  janela_dias: number;
+  status: "ativo" | "inativo" | "arquivado";
+};
+type Tipo = { id: string; nome: string; cor: string };
+type Resp = { id: string; nome: string; email: string | null };
+type Contato = {
+  id: string;
+  nome: string | null;
+  telefone: string | null;
+  email: string | null;
+  empresa?: string | null;
+};
+type Vinculo = {
+  entidade_tipo: string;
+  entidade_id: string;
+  papel: string;
+  titulo: string;
+  subtitulo: string;
+  imagem_url: string;
+  principal: boolean;
+  dados_json: Record<string, string>;
+};
+type Participante = {
+  nome: string;
+  email: string;
+  telefone: string;
+  papel: string;
+  tipo: string;
+  status: string;
+};
+type Lembrete = {
+  id?: string;
+  canal: string;
+  antecedencia_minutos: number;
+  destinatario_tipo: string;
+  ativo: boolean;
+  status?: string;
+  agendado_para?: string;
+  erro?: string | null;
+  metadata_json?: {
+    integracao_whatsapp_id?: string | null;
+    whatsapp_template_id?: string | null;
+    marketing_aceito?: boolean;
+    template_variaveis?: unknown[];
+  };
+};
+type ReminderOptions = {
+  integracoes: { id: string; nome_conexao: string }[];
+  templates: {
+    id: string;
+    nome: string;
+    idioma: string;
+    categoria: string;
+    integracao_whatsapp_id: string;
+    variaveis?: number[];
+  }[];
+}; // CRM_AGENDA_INDIVIDUAL_REMINDER_POST_FLOW_V1
+type Hist = {
+  id: string;
+  acao: string;
+  descricao?: string;
+  usuario_nome?: string;
+  created_at: string;
+};
+type Ag = {
+  id: string;
+  agenda_id: string;
+  contato_id: string | null;
+  titulo: string;
+  nome_cliente: string | null;
+  telefone_cliente: string | null;
+  email_cliente: string | null;
+  inicio_at: string;
+  fim_at: string;
+  status: string;
+  origem: string;
+  observacoes: string | null;
+  tipo_id: string | null;
+  responsavel_id: string | null;
+  local: string | null;
+  link_reuniao: string | null;
+  prioridade: string;
+  confirmacao_status: string;
+  resultado: string | null;
+  observacoes_internas: string | null;
+  contato: Contato | null;
+  responsavel: Resp | null;
+  tipo: Tipo | null;
+  vinculos: Vinculo[];
+  participantes: Participante[];
+  lembretes: Lembrete[];
+  historico: Hist[];
+};
+type GEvent = {
+  id: string;
+  titulo: string;
+  inicio_at: string;
+  fim_at: string;
+  dia_inteiro: boolean;
+};
+type Form = {
+  id: string | null;
+  titulo: string;
+  tipo_id: string;
+  status: string;
+  inicio_at: string;
+  fim_at: string;
+  responsavel_id: string;
+  prioridade: string;
+  local: string;
+  link_reuniao: string;
+  observacoes: string;
+  contato_id: string;
+  nome_cliente: string;
+  telefone_cliente: string;
+  email_cliente: string;
+  participantes: Participante[];
+  vinculos: Vinculo[];
+  lembretes: Lembrete[];
+  confirmacao_status: string;
+  resultado: string;
+  observacoes_internas: string;
+};
+type IntervaloDia = {
+  id?: string;
+  nome: string;
+  hora_inicio: string;
+  hora_fim: string;
+  ativo: boolean;
+};
+type Disp = {
+  dia_semana: number;
+  hora_inicio: string;
+  hora_fim: string;
+  ativo: boolean;
+  intervalos: IntervaloDia[];
+};
+const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
+  diasFull = [
+    "Domingo",
+    "Segunda",
+    "Terça",
+    "Quarta",
+    "Quinta",
+    "Sexta",
+    "Sábado",
+  ],
+  labels: Record<string, string> = {
+    agendado: "Agendado",
+    confirmado: "Confirmado",
+    cancelado: "Cancelado",
+    realizado: "Realizado",
+    faltou: "Não compareceu",
+  };
+const p = (n: number) => String(n).padStart(2, "0"),
+  key = (d: Date) =>
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+  local = (s: string) => {
+    const d = new Date(s);
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  },
+  iso = (s: string) => new Date(s).toISOString(),
+  time = (s: string) =>
+    new Intl.DateTimeFormat("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(s)),
+  dt = (s?: string) =>
+    s
+      ? new Intl.DateTimeFormat("pt-BR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        }).format(new Date(s))
+      : "-";
 // CRM_AGENDA_FEEDBACK_DETAILS_V1
-const relationOne=(value:any)=>Array.isArray(value)?value[0]||null:value||null;
-const feedbackOriginLabel=(value?:string|null)=>{const origem=String(value||"").toLowerCase();if(origem==="automacao")return"Automação";if(origem==="api")return"API";if(origem==="google")return"Google";return"Manual"};
-const range=(m:Date)=>({start:new Date(m.getFullYear(),m.getMonth(),1).toISOString(),end:new Date(m.getFullYear(),m.getMonth()+1,1).toISOString()});
-const cal=(m:Date)=>{const f=new Date(m.getFullYear(),m.getMonth(),1),s=new Date(m.getFullYear(),m.getMonth(),1-f.getDay());return Array.from({length:42},(_,i)=>{const d=new Date(s);d.setDate(s.getDate()+i);return{d,k:key(d),ok:d.getMonth()===m.getMonth()}})};
+const relationOne = (value: any) =>
+  Array.isArray(value) ? value[0] || null : value || null;
+const feedbackOriginLabel = (value?: string | null) => {
+  const origem = String(value || "").toLowerCase();
+  if (origem === "automacao") return "Automação";
+  if (origem === "api") return "API";
+  if (origem === "google") return "Google";
+  return "Manual";
+};
+const range = (m: Date) => ({
+  start: new Date(m.getFullYear(), m.getMonth(), 1).toISOString(),
+  end: new Date(m.getFullYear(), m.getMonth() + 1, 1).toISOString(),
+});
+const cal = (m: Date) => {
+  const f = new Date(m.getFullYear(), m.getMonth(), 1),
+    s = new Date(m.getFullYear(), m.getMonth(), 1 - f.getDay());
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(s);
+    d.setDate(s.getDate() + i);
+    return { d, k: key(d), ok: d.getMonth() === m.getMonth() };
+  });
+};
 // CRM_AGENDA_REMINDERS_PREMIUM_RULES_V3
-const blank=(day:string,dur=60,user=""):Form=>{const i=`${day}T09:00`,d=new Date(i);d.setMinutes(d.getMinutes()+dur);return{id:null,titulo:"Agendamento",tipo_id:"",status:"agendado",inicio_at:i,fim_at:local(d.toISOString()),responsavel_id:user,prioridade:"normal",local:"",link_reuniao:"",observacoes:"",contato_id:"",nome_cliente:"",telefone_cliente:"",email_cliente:"",participantes:[],vinculos:[],lembretes:[],confirmacao_status:"pendente",resultado:"",observacoes_internas:""}};
-const toForm=(a:Ag):Form=>({id:a.id,titulo:a.titulo,tipo_id:a.tipo_id||"",status:a.status,inicio_at:local(a.inicio_at),fim_at:local(a.fim_at),responsavel_id:a.responsavel_id||"",prioridade:a.prioridade||"normal",local:a.local||"",link_reuniao:a.link_reuniao||"",observacoes:a.observacoes||"",contato_id:a.contato_id||"",nome_cliente:a.nome_cliente||a.contato?.nome||"",telefone_cliente:a.telefone_cliente||a.contato?.telefone||"",email_cliente:a.email_cliente||a.contato?.email||"",participantes:a.participantes||[],vinculos:a.vinculos||[],lembretes:(a.lembretes||[]).filter(x=>x.status!=="enviado"),confirmacao_status:a.confirmacao_status||"pendente",resultado:a.resultado||"",observacoes_internas:a.observacoes_internas||""});
+const blank = (day: string, dur = 60, user = ""): Form => {
+  const i = `${day}T09:00`,
+    d = new Date(i);
+  d.setMinutes(d.getMinutes() + dur);
+  return {
+    id: null,
+    titulo: "Agendamento",
+    tipo_id: "",
+    status: "agendado",
+    inicio_at: i,
+    fim_at: local(d.toISOString()),
+    responsavel_id: user,
+    prioridade: "normal",
+    local: "",
+    link_reuniao: "",
+    observacoes: "",
+    contato_id: "",
+    nome_cliente: "",
+    telefone_cliente: "",
+    email_cliente: "",
+    participantes: [],
+    vinculos: [],
+    lembretes: [],
+    confirmacao_status: "pendente",
+    resultado: "",
+    observacoes_internas: "",
+  };
+};
+const toForm = (a: Ag): Form => ({
+  id: a.id,
+  titulo: a.titulo,
+  tipo_id: a.tipo_id || "",
+  status: a.status,
+  inicio_at: local(a.inicio_at),
+  fim_at: local(a.fim_at),
+  responsavel_id: a.responsavel_id || "",
+  prioridade: a.prioridade || "normal",
+  local: a.local || "",
+  link_reuniao: a.link_reuniao || "",
+  observacoes: a.observacoes || "",
+  contato_id: a.contato_id || "",
+  nome_cliente: a.nome_cliente || a.contato?.nome || "",
+  telefone_cliente: a.telefone_cliente || a.contato?.telefone || "",
+  email_cliente: a.email_cliente || a.contato?.email || "",
+  participantes: a.participantes || [],
+  vinculos: a.vinculos || [],
+  lembretes: (a.lembretes || []).filter((x) => x.status !== "enviado"),
+  confirmacao_status: a.confirmacao_status || "pendente",
+  resultado: a.resultado || "",
+  observacoes_internas: a.observacoes_internas || "",
+});
 
-function Page(){
- const [reminderOptions,setReminderOptions]=useState<ReminderOptions>({integracoes:[],templates:[]});
- useEffect(()=>{let active=true;fetch("/api/agendas/automacoes/opcoes",{cache:"no-store"}).then(r=>r.json()).then(j=>{if(active&&j?.ok)setReminderOptions({integracoes:j.integracoes||[],templates:j.templates||[]})}).catch(()=>undefined);return()=>{active=false}},[]);
- const sp=useSearchParams(),sb=useMemo(()=>createClient(),[]);
- const [agendas,setAgendas]=useState<Agenda[]>([]),[agendaId,setAgendaId]=useState(""),[ags,setAgs]=useState<Ag[]>([]),[tipos,setTipos]=useState<Tipo[]>([]),[resps,setResps]=useState<Resp[]>([]),[userId,setUserId]=useState("");
- const [google,setGoogle]=useState<{conectado:boolean;email?:string;ultima_sincronizacao_em?:string}>({conectado:false}),[gevents,setGevents]=useState<GEvent[]>([]),[feedbacks,setFeedbacks]=useState<any[]>([]);
- const [month,setMonth]=useState(new Date()),[day,setDay]=useState(key(new Date())),[load,setLoad]=useState(true),[busy,setBusy]=useState(false),[err,setErr]=useState(""),[ok,setOk]=useState("");
- const [filter,setFilter]=useState({q:"",status:"todos",tipo:"todos",resp:"todos",origem:"todos"}),[open,setOpen]=useState(false),[form,setForm]=useState<Form>(()=>blank(key(new Date()))),[contact,setContact]=useState<Contato|null>(null),[cq,setCq]=useState(""),[contacts,setContacts]=useState<Contato[]>([]);
- const [cancelConfirm,setCancelConfirm]=useState(false);
- const [typeModal,setTypeModal]=useState(false),[typeDraft,setTypeDraft]=useState({nome:"",cor:"#22c55e"}),[typeBusy,setTypeBusy]=useState(false),[typeError,setTypeError]=useState("");
- const [config,setConfig]=useState(false),[configNew,setConfigNew]=useState(false),[af,setAf]=useState({nome:"",descricao:"",duracao_minutos:"60",intervalo_minutos:"30",antecedencia_minutos:"120",janela_dias:"14",status:"ativo"}),[disp,setDisp]=useState<Disp[]>(dias.map((_,i)=>({dia_semana:i,hora_inicio:"09:00",hora_fim:"18:00",ativo:i>0&&i<6,intervalos:[]})));
- const [unidadeDuracaoAgenda,setUnidadeDuracaoAgenda]=useState<"minutos"|"horas">("minutos"),[unidadeIntervaloAgenda,setUnidadeIntervaloAgenda]=useState<"minutos"|"horas">("minutos"),[unidadeAntecedenciaAgenda,setUnidadeAntecedenciaAgenda]=useState<"minutos"|"horas">("minutos");
- const agenda=agendas.find(a=>a.id===agendaId),days=useMemo(()=>cal(month),[month]);
- const visible=useMemo(()=>ags.filter(a=>{if(filter.status!=="todos"&&a.status!==filter.status)return false;if(filter.tipo!=="todos"&&a.tipo_id!==filter.tipo)return false;if(filter.resp!=="todos"&&a.responsavel_id!==filter.resp)return false;if(filter.origem==="google")return false;if(filter.origem!=="todos"&&a.origem!==filter.origem)return false;const q=filter.q.toLowerCase().trim();return!q||[a.titulo,a.nome_cliente,a.telefone_cliente,a.local,a.responsavel?.nome,a.tipo?.nome].filter(Boolean).join(" ").toLowerCase().includes(q)}),[ags,filter]);
- const byDay=useMemo(()=>{const m=new Map<string,Ag[]>();visible.forEach(a=>m.set(key(new Date(a.inicio_at)),[...(m.get(key(new Date(a.inicio_at)))||[]),a]));return m},[visible]);
- const gby=useMemo(()=>{const m=new Map<string,GEvent[]>();gevents.forEach(a=>m.set(a.dia_inteiro?a.inicio_at.slice(0,10):key(new Date(a.inicio_at)),[...(m.get(a.dia_inteiro?a.inicio_at.slice(0,10):key(new Date(a.inicio_at)))||[]),a]));return m},[gevents]);
- const stats=useMemo(()=>({ativos:ags.filter(a=>["agendado","confirmado"].includes(a.status)).length,conf:ags.filter(a=>a.status==="confirmado").length,done:ags.filter(a=>a.status==="realizado").length,miss:ags.filter(a=>a.status==="faltou").length,pend:ags.filter(a=>a.confirmacao_status==="pendente"&&["agendado","confirmado"].includes(a.status)).length}),[ags]);
+function Page() {
+  const [reminderOptions, setReminderOptions] = useState<ReminderOptions>({
+    integracoes: [],
+    templates: [],
+  });
+  useEffect(() => {
+    let active = true;
+    fetch("/api/agendas/automacoes/opcoes", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (active && j?.ok)
+          setReminderOptions({
+            integracoes: j.integracoes || [],
+            templates: j.templates || [],
+          });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  const sp = useSearchParams(),
+    sb = useMemo(() => createClient(), []);
+  const [agendas, setAgendas] = useState<Agenda[]>([]),
+    [agendaId, setAgendaId] = useState(""),
+    [ags, setAgs] = useState<Ag[]>([]),
+    [tipos, setTipos] = useState<Tipo[]>([]),
+    [resps, setResps] = useState<Resp[]>([]),
+    [userId, setUserId] = useState("");
+  const [google, setGoogle] = useState<{
+      conectado: boolean;
+      email?: string;
+      ultima_sincronizacao_em?: string;
+    }>({ conectado: false }),
+    [gevents, setGevents] = useState<GEvent[]>([]),
+    [feedbacks, setFeedbacks] = useState<any[]>([]);
+  const [month, setMonth] = useState(new Date()),
+    [day, setDay] = useState(key(new Date())),
+    [load, setLoad] = useState(true),
+    [busy, setBusy] = useState(false),
+    [err, setErr] = useState(""),
+    [ok, setOk] = useState("");
+  const [filter, setFilter] = useState({
+      q: "",
+      status: "todos",
+      tipo: "todos",
+      resp: "todos",
+      origem: "todos",
+    }),
+    [open, setOpen] = useState(false),
+    [form, setForm] = useState<Form>(() => blank(key(new Date()))),
+    [contact, setContact] = useState<Contato | null>(null),
+    [cq, setCq] = useState(""),
+    [contacts, setContacts] = useState<Contato[]>([]);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [typeModal, setTypeModal] = useState(false),
+    [typeDraft, setTypeDraft] = useState({ nome: "", cor: "#22c55e" }),
+    [typeBusy, setTypeBusy] = useState(false),
+    [typeError, setTypeError] = useState("");
+  const [config, setConfig] = useState(false),
+    [configNew, setConfigNew] = useState(false),
+    [af, setAf] = useState({
+      nome: "",
+      descricao: "",
+      duracao_minutos: "60",
+      intervalo_minutos: "30",
+      antecedencia_minutos: "120",
+      janela_dias: "14",
+      status: "ativo",
+    }),
+    [disp, setDisp] = useState<Disp[]>(
+      dias.map((_, i) => ({
+        dia_semana: i,
+        hora_inicio: "09:00",
+        hora_fim: "18:00",
+        ativo: i > 0 && i < 6,
+        intervalos: [],
+      })),
+    );
+  const [unidadeDuracaoAgenda, setUnidadeDuracaoAgenda] = useState<
+      "minutos" | "horas"
+    >("minutos"),
+    [unidadeIntervaloAgenda, setUnidadeIntervaloAgenda] = useState<
+      "minutos" | "horas"
+    >("minutos"),
+    [unidadeAntecedenciaAgenda, setUnidadeAntecedenciaAgenda] = useState<
+      "minutos" | "horas"
+    >("minutos");
+  const agenda = agendas.find((a) => a.id === agendaId),
+    days = useMemo(() => cal(month), [month]);
+  const visible = useMemo(
+    () =>
+      ags.filter((a) => {
+        if (filter.status !== "todos" && a.status !== filter.status)
+          return false;
+        if (filter.tipo !== "todos" && a.tipo_id !== filter.tipo) return false;
+        if (filter.resp !== "todos" && a.responsavel_id !== filter.resp)
+          return false;
+        if (filter.origem === "google") return false;
+        if (filter.origem !== "todos" && a.origem !== filter.origem)
+          return false;
+        const q = filter.q.toLowerCase().trim();
+        return (
+          !q ||
+          [
+            a.titulo,
+            a.nome_cliente,
+            a.telefone_cliente,
+            a.local,
+            a.responsavel?.nome,
+            a.tipo?.nome,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(q)
+        );
+      }),
+    [ags, filter],
+  );
+  const byDay = useMemo(() => {
+    const m = new Map<string, Ag[]>();
+    visible.forEach((a) =>
+      m.set(key(new Date(a.inicio_at)), [
+        ...(m.get(key(new Date(a.inicio_at))) || []),
+        a,
+      ]),
+    );
+    return m;
+  }, [visible]);
+  const gby = useMemo(() => {
+    const m = new Map<string, GEvent[]>();
+    gevents.forEach((a) =>
+      m.set(
+        a.dia_inteiro ? a.inicio_at.slice(0, 10) : key(new Date(a.inicio_at)),
+        [
+          ...(m.get(
+            a.dia_inteiro
+              ? a.inicio_at.slice(0, 10)
+              : key(new Date(a.inicio_at)),
+          ) || []),
+          a,
+        ],
+      ),
+    );
+    return m;
+  }, [gevents]);
+  const stats = useMemo(
+    () => ({
+      ativos: ags.filter((a) => ["agendado", "confirmado"].includes(a.status))
+        .length,
+      conf: ags.filter((a) => a.status === "confirmado").length,
+      done: ags.filter((a) => a.status === "realizado").length,
+      miss: ags.filter((a) => a.status === "faltou").length,
+      pend: ags.filter(
+        (a) =>
+          a.confirmacao_status === "pendente" &&
+          ["agendado", "confirmado"].includes(a.status),
+      ).length,
+    }),
+    [ags],
+  );
 
- const loadAgendas=useCallback(async(prefer?:string)=>{const r=await fetch("/api/agendas?status=todos",{cache:"no-store"}),j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||"Erro ao carregar agendas.");setAgendas(j.agendas||[]);setAgendaId(v=>{const x=prefer||v||sp.get("agenda")||"";return j.agendas.some((a:Agenda)=>a.id===x)?x:(j.agendas.find((a:Agenda)=>a.status==="ativo")?.id||j.agendas[0]?.id||"")})},[sp]);
- const loadGoogle=useCallback(async(id:string)=>{try{const r=await fetch(`/api/agendas/${id}/google-calendar`,{cache:"no-store"}),j=await r.json();setGoogle(r.ok&&j.ok?j.integracao:{conectado:false});const rg=range(month),q=new URLSearchParams({inicio_at:rg.start,fim_at:rg.end}),er=await fetch(`/api/agendas/${id}/google-calendar/ocupacoes?${q}`,{cache:"no-store"}),ej=await er.json();setGevents(er.ok&&ej.ok?ej.eventos||[]:[])}catch{setGevents([])}},[month]);
- const loadData=useCallback(async(id:string)=>{const rg=range(month),{data,error}=await sb.rpc("agenda_etapa1_listar",{p_agenda_id:id,p_inicio:rg.start,p_fim:rg.end});if(error)throw Error(error.message);setAgs(data?.agendamentos||[]);setTipos(data?.tipos||[]);setResps(data?.responsaveis||[]);setUserId(data?.usuario_atual_id||"");await loadGoogle(id)},[loadGoogle,month,sb]);
- const loadFeedback=useCallback(async()=>{try{const r=await fetch("/api/agendas/feedback",{cache:"no-store"}),j=await r.json();if(r.ok&&j.ok)setFeedbacks(j.pendencias||[])}catch{/* feedback não bloqueia a agenda */}},[]);
- useEffect(()=>{Promise.all([loadAgendas(),loadFeedback()]).catch(e=>setErr(e.message)).finally(()=>setLoad(false))},[loadAgendas,loadFeedback]);
- useEffect(()=>{if(!agendaId)return;setLoad(true);loadData(agendaId).catch(e=>setErr(e.message)).finally(()=>setLoad(false));const q=new URLSearchParams(location.search);q.set("agenda",agendaId);history.replaceState({},"",`${location.pathname}?${q}`)},[agendaId,loadData]);
- useEffect(()=>{if(!open||cq.trim().length<2){setContacts([]);return}const t=setTimeout(async()=>{const{data,error}=await sb.rpc("agenda_etapa1_buscar_contatos",{p_busca:cq,p_limite:20});if(error)setErr(error.message);else setContacts(data||[])},300);return()=>clearTimeout(t)},[cq,open,sb]);
- useEffect(()=>{const s=sp.get("google_calendar");if(s)setOk(s.startsWith("conectado")?"Google Calendar conectado.":"")},[sp]);
+  const loadAgendas = useCallback(
+    async (prefer?: string) => {
+      const r = await fetch("/api/agendas?status=todos", { cache: "no-store" }),
+        j = await r.json();
+      if (!r.ok || !j.ok) throw Error(j.error || "Erro ao carregar agendas.");
+      setAgendas(j.agendas || []);
+      setAgendaId((v) => {
+        const x = prefer || v || sp.get("agenda") || "";
+        return j.agendas.some((a: Agenda) => a.id === x)
+          ? x
+          : j.agendas.find((a: Agenda) => a.status === "ativo")?.id ||
+              j.agendas[0]?.id ||
+              "";
+      });
+    },
+    [sp],
+  );
+  const loadGoogle = useCallback(
+    async (id: string) => {
+      try {
+        const r = await fetch(`/api/agendas/${id}/google-calendar`, {
+            cache: "no-store",
+          }),
+          j = await r.json();
+        setGoogle(r.ok && j.ok ? j.integracao : { conectado: false });
+        const rg = range(month),
+          q = new URLSearchParams({ inicio_at: rg.start, fim_at: rg.end }),
+          er = await fetch(
+            `/api/agendas/${id}/google-calendar/ocupacoes?${q}`,
+            { cache: "no-store" },
+          ),
+          ej = await er.json();
+        setGevents(er.ok && ej.ok ? ej.eventos || [] : []);
+      } catch {
+        setGevents([]);
+      }
+    },
+    [month],
+  );
+  const loadData = useCallback(
+    async (id: string) => {
+      const rg = range(month),
+        { data, error } = await sb.rpc("agenda_etapa1_listar", {
+          p_agenda_id: id,
+          p_inicio: rg.start,
+          p_fim: rg.end,
+        });
+      if (error) throw Error(error.message);
+      setAgs(data?.agendamentos || []);
+      setTipos(data?.tipos || []);
+      setResps(data?.responsaveis || []);
+      setUserId(data?.usuario_atual_id || "");
+      await loadGoogle(id);
+    },
+    [loadGoogle, month, sb],
+  );
+  const loadFeedback = useCallback(async () => {
+    try {
+      const r = await fetch("/api/agendas/feedback", { cache: "no-store" }),
+        j = await r.json();
+      if (r.ok && j.ok) setFeedbacks(j.pendencias || []);
+    } catch {
+      /* feedback não bloqueia a agenda */
+    }
+  }, []);
+  useEffect(() => {
+    Promise.all([loadAgendas(), loadFeedback()])
+      .catch((e) => setErr(e.message))
+      .finally(() => setLoad(false));
+  }, [loadAgendas, loadFeedback]);
+  useEffect(() => {
+    if (!agendaId) return;
+    setLoad(true);
+    loadData(agendaId)
+      .catch((e) => setErr(e.message))
+      .finally(() => setLoad(false));
+    const q = new URLSearchParams(location.search);
+    q.set("agenda", agendaId);
+    history.replaceState({}, "", `${location.pathname}?${q}`);
+  }, [agendaId, loadData]);
+  useEffect(() => {
+    if (!open || cq.trim().length < 2) {
+      setContacts([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      const { data, error } = await sb.rpc("agenda_etapa1_buscar_contatos", {
+        p_busca: cq,
+        p_limite: 20,
+      });
+      if (error) setErr(error.message);
+      else setContacts(data || []);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [cq, open, sb]);
+  useEffect(() => {
+    const s = sp.get("google_calendar");
+    if (s) setOk(s.startsWith("conectado") ? "Google Calendar conectado." : "");
+  }, [sp]);
 
- const ajustarInicioComDuracaoAgenda=(inicioAt:string)=>{setForm(atual=>{const duracaoMinutos=Math.max(1,Number(agenda?.duracao_minutos||60));const inicio=new Date(inicioAt);if(Number.isNaN(inicio.getTime()))return{...atual,inicio_at:inicioAt};const fim=new Date(inicio.getTime()+duracaoMinutos*60*1000);return{...atual,inicio_at:inicioAt,fim_at:local(fim.toISOString())}})};
- const valorTempoAgenda=(valorMinutos:string,unidade:"minutos"|"horas")=>{if(valorMinutos==="")return"";const minutos=Number(valorMinutos);if(!Number.isFinite(minutos))return valorMinutos;if(unidade==="minutos")return String(minutos);const horas=minutos/60;return String(Number(horas.toFixed(2)))};
- const atualizarTempoAgenda=(campo:"duracao_minutos"|"intervalo_minutos"|"antecedencia_minutos",valor:string,unidade:"minutos"|"horas")=>{setAf(atual=>({...atual,[campo]:valor===""?"":String(Math.max(0,Number(valor)||0)*(unidade==="horas"?60:1))}))};
- const refresh=async()=>{if(!agendaId)return;try{setBusy(true);await Promise.all([loadData(agendaId),loadFeedback()]);setOk("Agenda atualizada.")}catch(e:any){setErr(e.message)}finally{setBusy(false)}};
- const newAg=(d=day)=>{if(!agenda)return;setForm(blank(d,agenda.duracao_minutos,userId));setContact(null);setOpen(true)};
- const edit=(a:Ag)=>{setForm(toForm(a));setContact(a.contato);setOpen(true)};
- const choose=(c:Contato)=>{setContact(c);setForm(f=>({...f,contato_id:c.id,nome_cliente:c.nome||"",telefone_cliente:c.telefone||"",email_cliente:c.email||""}));setCq("");setContacts([])};
- const addPart=()=>setForm(f=>({...f,participantes:[...f.participantes,{nome:"",email:"",telefone:"",papel:"",tipo:"convidado",status:"pendente"}]}));
- const addLink=()=>setForm(f=>({...f,vinculos:[...f.vinculos,{entidade_tipo:"outro",entidade_id:"",papel:"",titulo:"",subtitulo:"",imagem_url:"",principal:f.vinculos.length===0,dados_json:{}}]}));
- const addRem=()=>setForm(f=>({...f,lembretes:[...f.lembretes,{canal:"sistema",antecedencia_minutos:60,destinatario_tipo:"responsavel",ativo:true,metadata_json:{}}]}));
- const customType=()=>{setTypeDraft({nome:"",cor:"#22c55e"});setTypeError("");setTypeModal(true)};
- const saveCustomType=async()=>{const nome=typeDraft.nome.trim();const cor=/^#[0-9a-fA-F]{6}$/.test(typeDraft.cor)?typeDraft.cor:"#22c55e";if(!nome){setTypeError("Informe o nome do novo tipo de agendamento.");return}try{setTypeBusy(true);setTypeError("");const{data,error}=await sb.rpc("agenda_etapa1_salvar_tipo",{p_tipo_id:null,p_nome:nome,p_cor:cor,p_icone:"calendar"});if(error)throw Error(error.message);setTipos(x=>[...x.filter(t=>t.id!==data.id),data]);setForm(f=>({...f,tipo_id:data.id}));setTypeModal(false);setOk("Tipo criado.")}catch(e:any){setTypeError(e.message||"Não foi possível criar o tipo de agendamento.")}finally{setTypeBusy(false)}};
- const save=async(status?:string)=>{if(!agendaId)return;try{setBusy(true);setErr("");for(const reminder of form.lembretes.filter(item=>item.ativo&&item.canal==="whatsapp")){if(!reminder.metadata_json?.integracao_whatsapp_id||!reminder.metadata_json?.whatsapp_template_id)throw Error("Lembrete adicional pelo WhatsApp: selecione a integração e o template aprovado.");const selectedTemplate=reminderOptions.templates.find(item=>item.id===reminder.metadata_json?.whatsapp_template_id);if(selectedTemplate?.categoria?.toUpperCase()==="MARKETING"&&reminder.metadata_json?.marketing_aceito!==true)throw Error("Lembrete adicional pelo WhatsApp: confirme o uso do template de Marketing antes de salvar.")}const payload={...form,status:status||form.status,inicio_at:iso(form.inicio_at),fim_at:iso(form.fim_at),participantes:form.participantes.filter(p=>p.nome.trim()),vinculos:form.vinculos.filter(v=>v.titulo.trim()),lembretes:form.lembretes.filter(r=>r.ativo),metadata_json:{agenda_enriquecida:true}};const{error}=await sb.rpc("agenda_etapa1_salvar_agendamento",{p_agenda_id:agendaId,p_agendamento_id:form.id,p_payload:payload});if(error)throw Error(error.message);if(google.conectado)await fetch(`/api/agendas/${agendaId}/google-calendar`,{method:"POST"}).catch(()=>undefined);setOpen(false);await loadData(agendaId);setOk(status==="cancelado"?"Agendamento cancelado.":form.id?"Agendamento atualizado.":"Agendamento criado.");solicitarAtualizacaoFeedbackAgendasHeader()}catch(e:any){setErr(e.message)}finally{setBusy(false)}};
- const answer=async(id:string,resposta:string)=>{try{const r=await fetch("/api/agendas/feedback",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({agendamento_id:id,resposta})}),j=await r.json();if(!r.ok||!j.ok)throw Error(j.error);await Promise.all([loadFeedback(),agendaId?loadData(agendaId):Promise.resolve()]);setOk(j.message)}catch(e:any){setErr(e.message)}};
- const googleAction=async(action:"sync"|"disconnect")=>{if(!agendaId)return;if(action==="disconnect"&&!confirm("Desvincular o Google Calendar?"))return;try{setBusy(true);const r=await fetch(`/api/agendas/${agendaId}/google-calendar`,{method:action==="sync"?"POST":"DELETE"}),j=await r.json();if(!r.ok||!j.ok)throw Error(j.error);await loadGoogle(agendaId);setOk(action==="sync"?"Google sincronizado.":"Google desvinculado.")}catch(e:any){setErr(e.message)}finally{setBusy(false)}};
- const openConfig=async(isNew:boolean)=>{setConfigNew(isNew);setUnidadeDuracaoAgenda("minutos");setUnidadeIntervaloAgenda("minutos");setUnidadeAntecedenciaAgenda("minutos");if(isNew){setAf({nome:"",descricao:"",duracao_minutos:"60",intervalo_minutos:"30",antecedencia_minutos:"120",janela_dias:"14",status:"ativo"});setDisp(dias.map((_,i)=>({dia_semana:i,hora_inicio:"09:00",hora_fim:"18:00",ativo:i>0&&i<6,intervalos:[]})))}else if(agenda){setAf({nome:agenda.nome,descricao:agenda.descricao||"",duracao_minutos:String(agenda.duracao_minutos),intervalo_minutos:String(agenda.intervalo_minutos),antecedencia_minutos:String(agenda.antecedencia_minutos),janela_dias:String(agenda.janela_dias),status:agenda.status});const r=await fetch(`/api/agendas/${agenda.id}/disponibilidades`,{cache:"no-store"}),j=await r.json();if(j.ok&&j.disponibilidades?.length){const m=new Map<number,Disp>(j.disponibilidades.map((x:Disp)=>[x.dia_semana,{...x,intervalos:Array.isArray(x.intervalos)?x.intervalos:[]} ]));setDisp(dias.map((_,i)=>m.get(i)||{dia_semana:i,hora_inicio:"09:00",hora_fim:"18:00",ativo:false,intervalos:[]}))}}setConfig(true)};
- const saveConfig=async()=>{try{setBusy(true);let id=agendaId;const payload={...af,duracao_minutos:Number(af.duracao_minutos),intervalo_minutos:Number(af.intervalo_minutos),antecedencia_minutos:Number(af.antecedencia_minutos),janela_dias:Number(af.janela_dias)};const r=await fetch(configNew?"/api/agendas":`/api/agendas/${id}`,{method:configNew?"POST":"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),j=await r.json();if(!r.ok||!j.ok)throw Error(j.error);if(configNew)id=j.agenda.id;const ar=await fetch(`/api/agendas/${id}/disponibilidades`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({disponibilidades:disp})}),aj=await ar.json();if(!ar.ok||!aj.ok)throw Error(aj.error);setConfig(false);await loadAgendas(id);setAgendaId(id);setOk(configNew?"Agenda criada.":"Agenda atualizada.")}catch(e:any){setErr(e.message)}finally{setBusy(false)}};
- const archive=async()=>{if(!agenda)return;const status=agenda.status==="arquivado"?"ativo":"arquivado";if(status==="arquivado"&&!confirm("Arquivar esta agenda?"))return;try{setBusy(true);const r=await fetch(`/api/agendas/${agenda.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})}),j=await r.json();if(!r.ok||!j.ok)throw Error(j.error);setConfig(false);await loadAgendas(agenda.id);setOk(status==="arquivado"?"Agenda arquivada.":"Agenda reativada.")}catch(e:any){setErr(e.message)}finally{setBusy(false)}};
- const delAgenda=async()=>{if(!agenda||!confirm("Excluir esta agenda permanentemente?"))return;try{setBusy(true);const r=await fetch(`/api/agendas/${agenda.id}`,{method:"DELETE"}),j=await r.json();if(!r.ok||!j.ok)throw Error(j.error);setConfig(false);setAgendaId("");await loadAgendas();setOk("Agenda excluída.")}catch(e:any){setErr(e.message)}finally{setBusy(false)}};
- if(load&&agendas.length===0)return <div className="a2"><style>{css}</style><Header/><div className="empty"><RefreshCw className="spin"/> Carregando...</div></div>;
- return <div className="a2"><style>{css}</style><Header/><FeedbackToast success={ok} error={err} onSuccessDismiss={()=>setOk("")} onErrorDismiss={()=>setErr("")}/><main className="wrap">
-  <div className="head"><div><h1>Agendamentos</h1><p>Clientes, responsáveis, registros do nicho, lembretes, resultados e histórico em um só lugar.</p></div><div className="actions"><select className="select" value={agendaId} onChange={e=>setAgendaId(e.target.value)}>{agendas.length===0&&<option value="">Nenhuma agenda</option>}{agendas.map(a=><option key={a.id} value={a.id}>{a.nome}{a.status==="arquivado"?" (arquivada)":""}</option>)}</select><button className="btn" onClick={refresh} disabled={!agendaId||busy}><RefreshCw size={15} className={busy?"spin":""}/></button><button className="btn" onClick={()=>openConfig(false)} disabled={!agenda}><Settings2 size={15}/>Configurar</button><button className="btn" onClick={()=>openConfig(true)}><Plus size={15}/>Nova agenda</button><button className="btn primary" onClick={()=>newAg()} disabled={!agenda||agenda.status==="arquivado"}><CalendarPlus size={16}/>Novo agendamento</button></div></div>
-  {feedbacks.length>0&&(()=>{const feedback=feedbacks[0],contato=relationOne(feedback.contatos),calendario=relationOne(feedback.agenda_calendarios),nomeCliente=feedback.nome_cliente||contato?.nome||"Cliente não informado",telefone=feedback.telefone_cliente||contato?.telefone||"";const abrirDetalhes=()=>{const agendamento=ags.find(a=>a.id===feedback.id);if(agendamento){edit(agendamento);return}const data=new Date(feedback.inicio_at);if(feedback.agenda_id&&feedback.agenda_id!==agendaId)setAgendaId(feedback.agenda_id);setMonth(new Date(data.getFullYear(),data.getMonth(),1));setDay(key(data))};return <section className="feedbackCard"><div className="feedbackIcon"><Clock3 size={19}/></div><div className="feedbackMain"><div className="feedbackHead"><span className="feedbackHeadLabel">Confirme o resultado do agendamento</span><span className="feedbackCounter">{feedbacks.length} pendente{feedbacks.length>1?"s":""}</span></div><strong className="feedbackTitle">{feedback.titulo||"Agendamento"}</strong><div className="feedbackClient"><UserRound size={13}/><b>{nomeCliente}</b>{telefone&&<span>· {telefone}</span>}</div><div className="feedbackMeta"><span className="feedbackMetaItem"><CalendarDays size={13}/><strong>{dt(feedback.inicio_at)}</strong>{feedback.fim_at&&<span>até {time(feedback.fim_at)}</span>}</span><span className="feedbackMetaItem"><CalendarDays size={13}/><span>Calendário: <strong>{calendario?.nome||"Não informado"}</strong></span></span><span className="feedbackMetaItem"><span>Status: <strong>{labels[feedback.status]||feedback.status||"Agendado"}</strong></span></span><span className="feedbackMetaItem"><span>Origem: <strong>{feedbackOriginLabel(feedback.origem)}</strong></span></span>{feedback.local&&<span className="feedbackMetaItem"><span>Local: <strong>{feedback.local}</strong></span></span>}</div></div><div className="feedbackActions"><button className="btn feedbackOpen" onClick={abrirDetalhes}><ExternalLink size={13}/>Detalhes</button><button className="btn feedbackSuccess" onClick={()=>answer(feedback.id,"realizado")}><Check size={13}/>Realizado</button><button className="btn feedbackMissed" onClick={()=>answer(feedback.id,"faltou")}><X size={13}/>Não compareceu</button></div></section>})()}
-  <div className="stats"><div className="stat"><small>Ativos no mês</small><b>{stats.ativos}</b></div><div className="stat"><small>Confirmados</small><b>{stats.conf}</b></div><div className="stat"><small>Realizados</small><b>{stats.done}</b></div><div className="stat"><small>Não compareceram</small><b>{stats.miss}</b></div><div className="stat"><small>Confirmações pendentes</small><b>{stats.pend}</b></div></div>
-  <div className="layout"><section className="card"><div className="toolbar"><div className="nav"><button className="btn" onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()-1,1))}><ChevronLeft size={15}/></button><button className="btn" onClick={()=>{setMonth(new Date());setDay(key(new Date()))}}>Hoje</button><span className="month">{new Intl.DateTimeFormat("pt-BR",{month:"long",year:"numeric"}).format(month)}</span><button className="btn" onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()+1,1))}><ChevronRight size={15}/></button></div><div className="filters"><div className="search"><Search size={14}/><input placeholder="Buscar cliente, local..." value={filter.q} onChange={e=>setFilter({...filter,q:e.target.value})}/></div><select value={filter.tipo} onChange={e=>setFilter({...filter,tipo:e.target.value})}><option value="todos">Todos os tipos</option>{tipos.map(t=><option key={t.id} value={t.id}>{t.nome}</option>)}</select><select value={filter.resp} onChange={e=>setFilter({...filter,resp:e.target.value})}><option value="todos">Todos os responsáveis</option>{resps.map(r=><option key={r.id} value={r.id}>{r.nome}</option>)}</select><select value={filter.status} onChange={e=>setFilter({...filter,status:e.target.value})}><option value="todos">Todos os status</option>{Object.entries(labels).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><select value={filter.origem} onChange={e=>setFilter({...filter,origem:e.target.value})}><option value="todos">Todas as origens</option><option value="manual">Manual</option><option value="automacao">Automação</option><option value="api">API</option><option value="google">Google</option></select></div></div>
-   <div className="grid">{dias.map(x=><div className="wd" key={x}>{x}</div>)}{days.map(x=>{const aa=byDay.get(x.k)||[],gg=filter.origem==="todos"||filter.origem==="google"?(gby.get(x.k)||[]):[],items=[...aa,...gg].slice(0,3);return <div key={x.k} className={`day ${!x.ok?"muted":""} ${x.k===day?"selected":""} ${x.k===key(new Date())?"today":""}`} onClick={()=>setDay(x.k)}><div className="dh"><span className="num">{x.d.getDate()}</span><button className="add" onClick={e=>{e.stopPropagation();newAg(x.k)}}><Plus size={13}/></button></div>{items.map(it=>"dia_inteiro" in it?<div className="event g" key={`g${it.id}`}><b>{it.dia_inteiro?"Dia inteiro":time(it.inicio_at)}</b><span>{it.titulo} · Google</span></div>:<button className={`event ${it.status==="cancelado"?"cancel":""}`} style={{"--c":it.tipo?.cor||"#109b75"} as React.CSSProperties} key={it.id} onClick={e=>{e.stopPropagation();edit(it)}}><b>{time(it.inicio_at)} · {it.titulo}</b><span>{it.nome_cliente||it.contato?.nome||it.responsavel?.nome||labels[it.status]}</span></button>)}{aa.length+gg.length>3&&<span className="pill">+{aa.length+gg.length-3} eventos</span>}</div>})}</div>
-  </section><aside className="aside"><div className="card side"><h3>{new Intl.DateTimeFormat("pt-BR",{weekday:"long",day:"2-digit",month:"long"}).format(new Date(`${day}T12:00`))}</h3>{(byDay.get(day)||[]).map(a=><div className="item" key={a.id} onClick={()=>edit(a)}><span className={`pill agendaSideBadge agendaSideBadge-${a.status} ${["confirmado","realizado"].includes(a.status)?"on":""}`}>{labels[a.status]}</span><b> {time(a.inicio_at)} · {a.titulo}</b><div>{a.nome_cliente||a.contato?.nome||"Cliente não informado"}{a.responsavel?.nome?` · ${a.responsavel.nome}`:""}</div></div>)}{(gby.get(day)||[]).map(g=><div className="item" key={g.id}><span className="pill agendaSideBadge agendaSideBadge-google">Google</span><b> {g.titulo}</b><div>{g.dia_inteiro?"Dia inteiro":`${time(g.inicio_at)} – ${time(g.fim_at)}`}</div></div>)}{!(byDay.get(day)||[]).length&&!(gby.get(day)||[]).length&&<div className="empty"><CalendarDays/><br/>Nenhum evento.</div>}</div>
-   <div className="card side"><h3>Google Calendar</h3><div className="mini"><span className={`pill ${google.conectado?"on":""}`}>{google.conectado?"Conectado":"Desconectado"}</span><span style={{fontSize:10,color:"var(--crm-ui-private-content-hex-718096)"}}>{google.email}</span></div><div className="mini" style={{marginTop:9}}>{google.conectado?<><button className="btn" style={{height:31}} onClick={()=>googleAction("sync")}><RefreshCw size={13}/>Sincronizar</button><button className="btn" style={{height:31}} onClick={()=>googleAction("disconnect")}><Unlink size={13}/></button></>:<button className="btn" style={{height:31}} onClick={()=>location.href=`/api/agendas/${agendaId}/google-calendar?acao=conectar`} disabled={!agendaId}><Link2 size={13}/>Conectar</button>}</div></div></aside></div>
- </main>
- {open&&<div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&!busy&&setOpen(false)}><aside className="drawer"><div className="dhead"><CalendarDays size={20}/><div><h2>{form.id?form.titulo:"Novo agendamento"}</h2><p>{form.id?`${dt(iso(form.inicio_at))} · ${labels[form.status]}`:"Cadastre todas as informações do compromisso."}</p></div><button className="btn" onClick={()=>setOpen(false)}><X size={16}/></button></div><div className="body">
-  <section className="section"><h3><CalendarDays size={15}/>Informações principais</h3><div className="form"><div className="field full"><label>Título*</label><input value={form.titulo} onChange={e=>setForm({...form,titulo:e.target.value})}/></div><div className="field"><label>Tipo</label><div className="row"><select style={{flex:1}} value={form.tipo_id} onChange={e=>setForm({...form,tipo_id:e.target.value})}><option value="">Sem tipo</option>{tipos.map(t=><option key={t.id} value={t.id}>{t.nome}</option>)}</select><button className="btn" onClick={customType}><Plus size={14}/></button></div></div><div className="field"><label>Status</label><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>{Object.entries(labels).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div><div className="field"><label>Início*</label><input type="datetime-local" value={form.inicio_at} onChange={e=>ajustarInicioComDuracaoAgenda(e.target.value)}/></div><div className="field"><label>Fim*</label><input type="datetime-local" value={form.fim_at} onChange={e=>setForm({...form,fim_at:e.target.value})}/></div><div className="field"><label>Responsável</label><select value={form.responsavel_id} onChange={e=>setForm({...form,responsavel_id:e.target.value})}><option value="">Sem responsável</option>{resps.map(r=><option key={r.id} value={r.id}>{r.nome}</option>)}</select></div><div className="field"><label>Prioridade</label><select value={form.prioridade} onChange={e=>setForm({...form,prioridade:e.target.value})}><option value="baixa">Baixa</option><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option></select></div><div className="field full"><label>Local / endereço</label><input value={form.local} onChange={e=>setForm({...form,local:e.target.value})} placeholder="Endereço, sala ou unidade"/></div><div className="field full"><label>Link da reunião</label><input value={form.link_reuniao} onChange={e=>setForm({...form,link_reuniao:e.target.value})}/></div><div className="field full"><label>Descrição</label><textarea value={form.observacoes} onChange={e=>setForm({...form,observacoes:e.target.value})}/></div></div></section>
-  <section className="section"><h3><UserRound size={15}/>Cliente</h3>{contact?<div className="contact"><UserRound size={18}/><div><b>{contact.nome||"Contato sem nome"}</b><small>{contact.telefone}{contact.email?` · ${contact.email}`:""}</small></div><button className="btn" style={{height:30}} onClick={()=>{setContact(null);setForm({...form,contato_id:"",nome_cliente:"",telefone_cliente:"",email_cliente:""})}}>Trocar</button></div>:<><div className="search"><Search size={14}/><input style={{width:"100%"}} placeholder="Buscar contato" value={cq} onChange={e=>setCq(e.target.value)}/></div>{contacts.length>0&&<div className="results">{contacts.map(c=><button className="result" key={c.id} onClick={()=>choose(c)}><b>{c.nome||"Sem nome"}</b><div>{c.telefone}{c.email?` · ${c.email}`:""}{c.empresa?` · ${c.empresa}`:""}</div></button>)}</div>}</>}<div className="form" style={{marginTop:9}}><div className="field"><label>Nome*</label><input value={form.nome_cliente} onChange={e=>setForm({...form,nome_cliente:e.target.value})}/></div><div className="field"><label>Telefone</label><input value={form.telefone_cliente} onChange={e=>setForm({...form,telefone_cliente:e.target.value})}/></div><div className="field full"><label>E-mail</label><input value={form.email_cliente} onChange={e=>setForm({...form,email_cliente:e.target.value})}/></div></div><div className="mini" style={{marginTop:8}}>{form.telefone_cliente&&<a className="btn" style={{height:30}} target="_blank" rel="noreferrer" href={`https://wa.me/55${form.telefone_cliente.replace(/\D/g,"")}`}><MessageCircle size={13}/>WhatsApp</a>}{form.contato_id&&<a className="btn" style={{height:30}} href={`/contatos?contato=${form.contato_id}`}><ExternalLink size={13}/>Abrir contato</a>}</div></section>
-  <section className="section"><div className="row" style={{justifyContent:"space-between"}}><h3><UsersRound size={15}/>Participantes</h3><button className="btn" style={{height:30}} onClick={addPart}><Plus size={13}/>Adicionar</button></div>{form.participantes.map((p,i)=><div className="repeat" key={i}><div className="row"><b>Participante {i+1}</b><button className="remove" onClick={()=>setForm({...form,participantes:form.participantes.filter((_,x)=>x!==i)})}><X size={14}/></button></div><div className="form"><div className="field"><label>Nome*</label><input value={p.nome} onChange={e=>setForm({...form,participantes:form.participantes.map((x,n)=>n===i?{...x,nome:e.target.value}:x)})}/></div><div className="field"><label>Papel</label><input value={p.papel} onChange={e=>setForm({...form,participantes:form.participantes.map((x,n)=>n===i?{...x,papel:e.target.value}:x)})}/></div><div className="field"><label>E-mail</label><input value={p.email} onChange={e=>setForm({...form,participantes:form.participantes.map((x,n)=>n===i?{...x,email:e.target.value}:x)})}/></div><div className="field"><label>Telefone</label><input value={p.telefone} onChange={e=>setForm({...form,participantes:form.participantes.map((x,n)=>n===i?{...x,telefone:e.target.value}:x)})}/></div></div></div>)}{form.participantes.length===0&&<div className="empty">Nenhum participante adicional.</div>}</section>
-  <section className="section"><div className="row" style={{justifyContent:"space-between"}}><h3><Link2 size={15}/>Registros relacionados</h3><button className="btn" style={{height:30}} onClick={addLink}><Plus size={13}/>Adicionar</button></div><small>Imóvel, veículo, procedimento, oportunidade, ordem de serviço ou qualquer outro registro do nicho.</small>{form.vinculos.map((v,i)=><div className="repeat" key={i}><div className="row"><b>Registro {i+1}</b><button className="remove" onClick={()=>setForm({...form,vinculos:form.vinculos.filter((_,x)=>x!==i)})}><X size={14}/></button></div><div className="form"><div className="field"><label>Tipo</label><select value={v.entidade_tipo} onChange={e=>setForm({...form,vinculos:form.vinculos.map((x,n)=>n===i?{...x,entidade_tipo:e.target.value}:x)})}><option value="imovel">Imóvel</option><option value="veiculo">Veículo</option><option value="procedimento">Procedimento</option><option value="oportunidade">Oportunidade</option><option value="ordem_servico">Ordem de serviço</option><option value="processo">Processo</option><option value="outro">Outro</option></select></div><div className="field"><label>Código / ID</label><input value={v.entidade_id} onChange={e=>setForm({...form,vinculos:form.vinculos.map((x,n)=>n===i?{...x,entidade_id:e.target.value}:x)})}/></div><div className="field full"><label>Título*</label><input value={v.titulo} onChange={e=>setForm({...form,vinculos:form.vinculos.map((x,n)=>n===i?{...x,titulo:e.target.value}:x)})}/></div><div className="field"><label>Papel</label><input value={v.papel} onChange={e=>setForm({...form,vinculos:form.vinculos.map((x,n)=>n===i?{...x,papel:e.target.value}:x)})}/></div><div className="field"><label>Resumo</label><input value={v.subtitulo} onChange={e=>setForm({...form,vinculos:form.vinculos.map((x,n)=>n===i?{...x,subtitulo:e.target.value}:x)})}/></div><div className="field full"><label>URL da imagem</label><input value={v.imagem_url} onChange={e=>setForm({...form,vinculos:form.vinculos.map((x,n)=>n===i?{...x,imagem_url:e.target.value}:x)})}/></div><div className="field"><label>Campo adicional</label><input value={Object.keys(v.dados_json)[0]||""} onChange={e=>{const val=Object.values(v.dados_json)[0]||"";setForm({...form,vinculos:form.vinculos.map((x,n)=>n===i?{...x,dados_json:e.target.value?{[e.target.value]:val}:{}}:x)})}}/></div><div className="field"><label>Valor</label><input value={Object.values(v.dados_json)[0]||""} onChange={e=>{const k=Object.keys(v.dados_json)[0]||"Informação";setForm({...form,vinculos:form.vinculos.map((x,n)=>n===i?{...x,dados_json:e.target.value?{[k]:e.target.value}:{}}:x)})}}/></div></div></div>)}{form.vinculos.length===0&&<div className="empty">Nenhum registro relacionado.</div>}</section>
-  <section className="section"><div className="row" style={{justifyContent:"space-between"}}><h3><Bell size={15}/>Lembretes e confirmação</h3><button className="btn" style={{height:30}} onClick={addRem}><Plus size={13}/>Lembrete</button></div><small>Crie avisos extras somente para este compromisso. Eles serão processados e exibidos junto das automações em Disparos agendados.</small>{form.lembretes.length===0&&<div className="empty">Nenhum lembrete adicional. Clique em Lembrete para configurar um envio.</div>}{form.lembretes.map((r,i)=>{const reminderMetadata=r.metadata_json||{};const selectedTemplate=reminderOptions.templates.find(item=>item.id===reminderMetadata.whatsapp_template_id);const compatibleTemplates=reminderOptions.templates.filter(item=>!reminderMetadata.integracao_whatsapp_id||item.integracao_whatsapp_id===reminderMetadata.integracao_whatsapp_id);return <div className="repeat" key={r.id||i}><div className="rem"><div className="field"><label>Canal</label><select value={r.canal} onChange={e=>{const canal=e.target.value;setForm({...form,lembretes:form.lembretes.map((x,n)=>n===i?{...x,canal,metadata_json:canal==="whatsapp"?(x.metadata_json||{}):x.metadata_json}:x)})}}>{r.destinatario_tipo==="responsavel"?<><option value="sistema">Sistema</option><option value="email">E-mail</option></>:<><option value="email">E-mail</option><option value="whatsapp">WhatsApp</option></>}</select></div><div className="field"><label>Antecedência</label><select value={r.antecedencia_minutos} onChange={e=>setForm({...form,lembretes:form.lembretes.map((x,n)=>n===i?{...x,antecedencia_minutos:Number(e.target.value)}:x)})}><option value={15}>15 min</option><option value={30}>30 min</option><option value={60}>1 hora</option><option value={120}>2 horas</option><option value={1440}>1 dia</option><option value={2880}>2 dias</option></select></div><div className="field"><label>Destinatário</label><select value={r.destinatario_tipo} onChange={e=>{const destinatario_tipo=e.target.value;setForm({...form,lembretes:form.lembretes.map((x,n)=>{if(n!==i)return x;const canal=destinatario_tipo==="responsavel"?(x.canal==="whatsapp"?"sistema":x.canal):(x.canal==="sistema"?"email":x.canal);return{...x,destinatario_tipo,canal,metadata_json:canal==="whatsapp"?(x.metadata_json||{}):x.metadata_json}})})}}><option value="responsavel">Responsável</option><option value="cliente">Cliente</option><option value="participantes">Participantes</option></select></div><button className="remove" onClick={()=>setForm({...form,lembretes:form.lembretes.filter((_,x)=>x!==i)})}><X size={14}/></button></div>{r.canal==="whatsapp"&&<div className="remWhatsapp"><div className="field"><label>Integração do WhatsApp</label><select value={reminderMetadata.integracao_whatsapp_id||""} onChange={e=>setForm({...form,lembretes:form.lembretes.map((x,n)=>n===i?{...x,metadata_json:{...(x.metadata_json||{}),integracao_whatsapp_id:e.target.value||null,whatsapp_template_id:null,marketing_aceito:false}}:x)})}><option value="">Selecione</option>{reminderOptions.integracoes.map(item=><option key={item.id} value={item.id}>{item.nome_conexao}</option>)}</select></div><div className="field"><label>Template aprovado</label><select value={reminderMetadata.whatsapp_template_id||""} onChange={e=>setForm({...form,lembretes:form.lembretes.map((x,n)=>n===i?{...x,metadata_json:{...(x.metadata_json||{}),whatsapp_template_id:e.target.value||null,marketing_aceito:false}}:x)})}><option value="">Selecione</option>{compatibleTemplates.map(item=><option key={item.id} value={item.id}>{item.nome} · {item.idioma} · {item.categoria}</option>)}</select></div>{selectedTemplate?.categoria?.toUpperCase()==="MARKETING"&&<label className="remMarketing"><input type="checkbox" checked={reminderMetadata.marketing_aceito===true} onChange={e=>setForm({...form,lembretes:form.lembretes.map((x,n)=>n===i?{...x,metadata_json:{...(x.metadata_json||{}),marketing_aceito:e.target.checked}}:x)})}/><span>Confirmo o uso deste template classificado como Marketing e os riscos aplicáveis às diretrizes da Meta.</span></label>}<div className="remWhatsappNote">As variáveis mais comuns do template serão preenchidas automaticamente com nome, data, horário, título, calendário e local do compromisso.</div></div>}{r.erro&&<small style={{display:"block",marginTop:7,color:"var(--crm-ui-private-content-hex-c32640)"}}>{r.erro}</small>}</div>})}</section>
-  <section className="section"><h3><Check size={15}/>Resultado e informações internas</h3><div className="form"><div className="field"><label>Status final</label><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>{Object.entries(labels).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div><div className="field"><label>Resumo do resultado</label><input value={form.resultado} onChange={e=>setForm({...form,resultado:e.target.value})} placeholder="Ex.: proposta enviada"/></div><div className="field full"><label>Observações internas</label><textarea value={form.observacoes_internas} onChange={e=>setForm({...form,observacoes_internas:e.target.value})}/></div></div></section>
-  {form.id&&<section className="section"><h3><History size={15}/>Histórico</h3><div className="history">{(ags.find(a=>a.id===form.id)?.historico||[]).map(h=><div className="hist" key={h.id}><b>{h.acao.replaceAll("_"," ")}</b><p>{h.descricao||"Alteração registrada."}</p><small>{h.usuario_nome||"Sistema"} · {dt(h.created_at)}</small></div>)}{!(ags.find(a=>a.id===form.id)?.historico||[]).length&&<div className="empty">Sem alterações registradas.</div>}</div></section>}
- </div><div className="foot"><div>{form.id&&form.status!=="cancelado"&&<button className="btn danger eventFooterAction" onClick={()=>setCancelConfirm(true)}><X size={15}/>Cancelar evento</button>}</div><div className="mini"><button className="btn" onClick={()=>setOpen(false)}>Fechar</button><button className="btn primary" onClick={()=>save()} disabled={busy}>{busy?<RefreshCw className="spin" size={15}/>:<Check size={15}/>}Salvar</button></div></div></aside></div>}
- {cancelConfirm&&<div className="modalbg cancelConfirmBg" onMouseDown={e=>e.target===e.currentTarget&&!busy&&setCancelConfirm(false)}><div className="confirmModal" role="dialog" aria-modal="true" aria-labelledby="cancel-event-title"><div className="confirmBody"><div className="confirmIcon"><X size={22}/></div><h2 id="cancel-event-title">Cancelar evento?</h2><p>O agendamento <strong>{form.titulo||"selecionado"}</strong> será marcado como cancelado. Esta ação ficará registrada no histórico.</p><div className="confirmSummary"><CalendarDays size={18}/><div><b>{dt(iso(form.inicio_at))}</b><span>{form.nome_cliente||contact?.nome||"Cliente não informado"}</span></div></div></div><div className="confirmActions"><button className="btn" onClick={()=>setCancelConfirm(false)} disabled={busy}>Voltar</button><button className="btn confirmDanger" onClick={()=>{setCancelConfirm(false);void save("cancelado")}} disabled={busy}>{busy?<RefreshCw className="spin" size={15}/>:<X size={15}/>}Cancelar evento</button></div></div></div>}
- {typeModal&&<div className="modalbg typeModalBg" onMouseDown={e=>e.target===e.currentTarget&&!typeBusy&&setTypeModal(false)}><div className="typeModal" role="dialog" aria-modal="true" aria-labelledby="type-modal-title"><div className="dhead"><div className="typeModalIcon"><CalendarPlus size={19}/></div><div><h2 id="type-modal-title">Novo tipo de agendamento</h2><p>Crie uma categoria para organizar e identificar os compromissos.</p></div><button type="button" className="btn" onClick={()=>setTypeModal(false)} disabled={typeBusy} aria-label="Fechar"><X size={15}/></button></div><div className="body"><p className="typeModalIntro">Defina um nome claro e uma cor para destacar este tipo no calendário.</p><div className="typeModalForm"><div className="field"><label>Nome do tipo*</label><input autoFocus maxLength={80} value={typeDraft.nome} onChange={e=>setTypeDraft({...typeDraft,nome:e.target.value})} onKeyDown={e=>{if(e.key==="Enter")void saveCustomType()}} placeholder="Ex.: Visita ao imóvel"/></div><div className="field"><label>Cor de identificação</label><div className="typeColorControl"><input type="color" value={/^#[0-9a-fA-F]{6}$/.test(typeDraft.cor)?typeDraft.cor:"#22c55e"} onChange={e=>setTypeDraft({...typeDraft,cor:e.target.value})} aria-label="Selecionar cor"/><input value={typeDraft.cor} onChange={e=>setTypeDraft({...typeDraft,cor:e.target.value})} maxLength={7} placeholder="#22c55e"/></div></div></div><div className="typePreview"><span className="typePreviewMark" style={{backgroundColor:/^#[0-9a-fA-F]{6}$/.test(typeDraft.cor)?typeDraft.cor:"#22c55e"}}/><div><strong>{typeDraft.nome.trim()||"Novo tipo"}</strong><small>Prévia da identificação no calendário.</small></div></div>{typeError&&<div className="typeModalError">{typeError}</div>}</div><div className="foot"><button type="button" className="btn" onClick={()=>setTypeModal(false)} disabled={typeBusy}>Cancelar</button><button type="button" className="btn primary" onClick={()=>void saveCustomType()} disabled={typeBusy}>{typeBusy?<RefreshCw className="spin" size={15}/>:<Check size={15}/>}Criar tipo</button></div></div></div>}
- {config&&<div className="modalbg"><div className="modal"><div className="dhead"><Settings2 size={18}/><div><h2>{configNew?"Nova agenda":"Configurar agenda"}</h2><p>Defina regras e disponibilidade semanal.</p></div><button className="btn" onClick={()=>setConfig(false)}><X size={15}/></button></div><div className="body"><div className="form"><div className="field full"><label>Nome*</label><input value={af.nome} onChange={e=>setAf({...af,nome:e.target.value})}/></div><div className="field full"><label>Descrição</label><textarea value={af.descricao} onChange={e=>setAf({...af,descricao:e.target.value})}/></div><div className="field"><label>Duração padrão</label><div className="agendaTimeUnitControl"><input type="number" min={unidadeDuracaoAgenda==="horas"?"0.25":"1"} step={unidadeDuracaoAgenda==="horas"?"0.25":"1"} value={valorTempoAgenda(af.duracao_minutos,unidadeDuracaoAgenda)} onChange={e=>atualizarTempoAgenda("duracao_minutos",e.target.value,unidadeDuracaoAgenda)}/><select value={unidadeDuracaoAgenda} onChange={e=>setUnidadeDuracaoAgenda(e.target.value as "minutos"|"horas")} aria-label="Unidade da duração padrão"><option value="minutos">minutos</option><option value="horas">horas</option></select></div></div><div className="field"><label>Espaço entre horários</label><div className="agendaTimeUnitControl"><input type="number" min="0" step={unidadeIntervaloAgenda==="horas"?"0.25":"1"} value={valorTempoAgenda(af.intervalo_minutos,unidadeIntervaloAgenda)} onChange={e=>atualizarTempoAgenda("intervalo_minutos",e.target.value,unidadeIntervaloAgenda)}/><select value={unidadeIntervaloAgenda} onChange={e=>setUnidadeIntervaloAgenda(e.target.value as "minutos"|"horas")} aria-label="Unidade do intervalo"><option value="minutos">minutos</option><option value="horas">horas</option></select></div></div><div className="field"><label>Antecedência mínima</label><div className="agendaTimeUnitControl"><input type="number" min="0" step={unidadeAntecedenciaAgenda==="horas"?"0.25":"1"} value={valorTempoAgenda(af.antecedencia_minutos,unidadeAntecedenciaAgenda)} onChange={e=>atualizarTempoAgenda("antecedencia_minutos",e.target.value,unidadeAntecedenciaAgenda)}/><select value={unidadeAntecedenciaAgenda} onChange={e=>setUnidadeAntecedenciaAgenda(e.target.value as "minutos"|"horas")} aria-label="Unidade da antecedência mínima"><option value="minutos">minutos</option><option value="horas">horas</option></select></div></div><div className="field"><label>Janela em dias</label><input type="number" value={af.janela_dias} onChange={e=>setAf({...af,janela_dias:e.target.value})}/></div></div><h3 style={{fontSize:13,marginTop:16}}>Disponibilidade semanal</h3><p className="availabilityHint">Defina o início e o fim de cada dia e adicione até 5 intervalos que não poderão receber agendamentos, como almoço, café ou compromissos internos.</p><div className="availability">{disp.map((d,i)=><div className="avDay" key={d.dia_semana}><div className="av"><b style={{fontSize:10}}>{diasFull[d.dia_semana]}</b><input type="time" value={d.hora_inicio.slice(0,5)} disabled={!d.ativo} onChange={e=>setDisp(x=>x.map((v,n)=>n===i?{...v,hora_inicio:e.target.value}:v))}/><input type="time" value={d.hora_fim.slice(0,5)} disabled={!d.ativo} onChange={e=>setDisp(x=>x.map((v,n)=>n===i?{...v,hora_fim:e.target.value}:v))}/><button type="button" className={`toggle ${d.ativo?"y":""}`} aria-label={d.ativo?"Desativar dia":"Ativar dia"} onClick={()=>setDisp(x=>x.map((v,n)=>n===i?{...v,ativo:!v.ativo}:v))}/></div>{d.ativo&&<div className="avBreaks"><div className="avBreakHead"><span>Intervalos do dia · {d.intervalos.length}/5</span><button type="button" className="btn avAddBreak" disabled={d.intervalos.length>=5} onClick={()=>setDisp(x=>x.map((v,n)=>n===i?{...v,intervalos:[...v.intervalos,{nome:`Intervalo ${v.intervalos.length+1}`,hora_inicio:"12:00",hora_fim:"13:00",ativo:true}]}:v))}><Plus size={12}/>Adicionar intervalo</button></div>{d.intervalos.map((intervalo,k)=><div className="avBreak" key={intervalo.id||k}><input value={intervalo.nome} placeholder="Ex.: Almoço" maxLength={80} onChange={e=>setDisp(x=>x.map((v,n)=>n===i?{...v,intervalos:v.intervalos.map((item,pos)=>pos===k?{...item,nome:e.target.value}:item)}:v))}/><input type="time" value={intervalo.hora_inicio.slice(0,5)} aria-label="Início do intervalo" onChange={e=>setDisp(x=>x.map((v,n)=>n===i?{...v,intervalos:v.intervalos.map((item,pos)=>pos===k?{...item,hora_inicio:e.target.value}:item)}:v))}/><input type="time" value={intervalo.hora_fim.slice(0,5)} aria-label="Fim do intervalo" onChange={e=>setDisp(x=>x.map((v,n)=>n===i?{...v,intervalos:v.intervalos.map((item,pos)=>pos===k?{...item,hora_fim:e.target.value}:item)}:v))}/><button type="button" className="remove" aria-label="Remover intervalo" onClick={()=>setDisp(x=>x.map((v,n)=>n===i?{...v,intervalos:v.intervalos.filter((_,pos)=>pos!==k)}:v))}><X size={14}/></button></div>)}{d.intervalos.length===0&&<div className="avBreakEmpty">Nenhum intervalo configurado para este dia.</div>}</div>}</div>)}</div></div><div className="foot"><div className="mini">{!configNew&&<button className="btn" onClick={archive}>{agenda?.status==="arquivado"?<ArchiveRestore size={14}/>:<Archive size={14}/>} {agenda?.status==="arquivado"?"Reativar":"Arquivar"}</button>}{!configNew&&agenda?.status==="arquivado"&&<button className="btn danger" onClick={delAgenda}><Trash2 size={14}/>Excluir</button>}</div><div className="mini"><button className="btn" onClick={()=>setConfig(false)}>Cancelar</button><button className="btn primary" onClick={saveConfig} disabled={busy}><Check size={14}/>Salvar</button></div></div></div></div>}
- </div>
+  const ajustarInicioComDuracaoAgenda = (inicioAt: string) => {
+    setForm((atual) => {
+      const duracaoMinutos = Math.max(1, Number(agenda?.duracao_minutos || 60));
+      const inicio = new Date(inicioAt);
+      if (Number.isNaN(inicio.getTime()))
+        return { ...atual, inicio_at: inicioAt };
+      const fim = new Date(inicio.getTime() + duracaoMinutos * 60 * 1000);
+      return {
+        ...atual,
+        inicio_at: inicioAt,
+        fim_at: local(fim.toISOString()),
+      };
+    });
+  };
+  const valorTempoAgenda = (
+    valorMinutos: string,
+    unidade: "minutos" | "horas",
+  ) => {
+    if (valorMinutos === "") return "";
+    const minutos = Number(valorMinutos);
+    if (!Number.isFinite(minutos)) return valorMinutos;
+    if (unidade === "minutos") return String(minutos);
+    const horas = minutos / 60;
+    return String(Number(horas.toFixed(2)));
+  };
+  const atualizarTempoAgenda = (
+    campo: "duracao_minutos" | "intervalo_minutos" | "antecedencia_minutos",
+    valor: string,
+    unidade: "minutos" | "horas",
+  ) => {
+    setAf((atual) => ({
+      ...atual,
+      [campo]:
+        valor === ""
+          ? ""
+          : String(
+              Math.max(0, Number(valor) || 0) * (unidade === "horas" ? 60 : 1),
+            ),
+    }));
+  };
+  const refresh = async () => {
+    if (!agendaId) return;
+    try {
+      setBusy(true);
+      await Promise.all([loadData(agendaId), loadFeedback()]);
+      setOk("Agenda atualizada.");
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const newAg = (d = day) => {
+    if (!agenda) return;
+    setForm(blank(d, agenda.duracao_minutos, userId));
+    setContact(null);
+    setOpen(true);
+  };
+  const edit = (a: Ag) => {
+    setForm(toForm(a));
+    setContact(a.contato);
+    setOpen(true);
+  };
+  const choose = (c: Contato) => {
+    setContact(c);
+    setForm((f) => ({
+      ...f,
+      contato_id: c.id,
+      nome_cliente: c.nome || "",
+      telefone_cliente: c.telefone || "",
+      email_cliente: c.email || "",
+    }));
+    setCq("");
+    setContacts([]);
+  };
+  const addPart = () =>
+    setForm((f) => ({
+      ...f,
+      participantes: [
+        ...f.participantes,
+        {
+          nome: "",
+          email: "",
+          telefone: "",
+          papel: "",
+          tipo: "convidado",
+          status: "pendente",
+        },
+      ],
+    }));
+  const addLink = () =>
+    setForm((f) => ({
+      ...f,
+      vinculos: [
+        ...f.vinculos,
+        {
+          entidade_tipo: "outro",
+          entidade_id: "",
+          papel: "",
+          titulo: "",
+          subtitulo: "",
+          imagem_url: "",
+          principal: f.vinculos.length === 0,
+          dados_json: {},
+        },
+      ],
+    }));
+  const addRem = () =>
+    setForm((f) => ({
+      ...f,
+      lembretes: [
+        ...f.lembretes,
+        {
+          canal: "sistema",
+          antecedencia_minutos: 60,
+          destinatario_tipo: "responsavel",
+          ativo: true,
+          metadata_json: {},
+        },
+      ],
+    }));
+  const customType = () => {
+    setTypeDraft({ nome: "", cor: "#22c55e" });
+    setTypeError("");
+    setTypeModal(true);
+  };
+  const saveCustomType = async () => {
+    const nome = typeDraft.nome.trim();
+    const cor = /^#[0-9a-fA-F]{6}$/.test(typeDraft.cor)
+      ? typeDraft.cor
+      : "#22c55e";
+    if (!nome) {
+      setTypeError("Informe o nome do novo tipo de agendamento.");
+      return;
+    }
+    try {
+      setTypeBusy(true);
+      setTypeError("");
+      const { data, error } = await sb.rpc("agenda_etapa1_salvar_tipo", {
+        p_tipo_id: null,
+        p_nome: nome,
+        p_cor: cor,
+        p_icone: "calendar",
+      });
+      if (error) throw Error(error.message);
+      setTipos((x) => [...x.filter((t) => t.id !== data.id), data]);
+      setForm((f) => ({ ...f, tipo_id: data.id }));
+      setTypeModal(false);
+      setOk("Tipo criado.");
+    } catch (e: any) {
+      setTypeError(
+        e.message || "Não foi possível criar o tipo de agendamento.",
+      );
+    } finally {
+      setTypeBusy(false);
+    }
+  };
+  const save = async (status?: string) => {
+    if (!agendaId) return;
+    try {
+      setBusy(true);
+      setErr("");
+      for (const reminder of form.lembretes.filter(
+        (item) => item.ativo && item.canal === "whatsapp",
+      )) {
+        if (
+          !reminder.metadata_json?.integracao_whatsapp_id ||
+          !reminder.metadata_json?.whatsapp_template_id
+        )
+          throw Error(
+            "Lembrete adicional pelo WhatsApp: selecione a integração e o template aprovado.",
+          );
+        const selectedTemplate = reminderOptions.templates.find(
+          (item) => item.id === reminder.metadata_json?.whatsapp_template_id,
+        );
+        if (
+          selectedTemplate?.categoria?.toUpperCase() === "MARKETING" &&
+          reminder.metadata_json?.marketing_aceito !== true
+        )
+          throw Error(
+            "Lembrete adicional pelo WhatsApp: confirme o uso do template de Marketing antes de salvar.",
+          );
+      }
+      const payload = {
+        ...form,
+        status: status || form.status,
+        inicio_at: iso(form.inicio_at),
+        fim_at: iso(form.fim_at),
+        participantes: form.participantes.filter((p) => p.nome.trim()),
+        vinculos: form.vinculos.filter((v) => v.titulo.trim()),
+        lembretes: form.lembretes.filter((r) => r.ativo),
+        metadata_json: { agenda_enriquecida: true },
+      };
+      const { error } = await sb.rpc("agenda_etapa1_salvar_agendamento", {
+        p_agenda_id: agendaId,
+        p_agendamento_id: form.id,
+        p_payload: payload,
+      });
+      if (error) throw Error(error.message);
+      if (google.conectado)
+        await fetch(`/api/agendas/${agendaId}/google-calendar`, {
+          method: "POST",
+        }).catch(() => undefined);
+      setOpen(false);
+      await loadData(agendaId);
+      setOk(
+        status === "cancelado"
+          ? "Agendamento cancelado."
+          : form.id
+            ? "Agendamento atualizado."
+            : "Agendamento criado.",
+      );
+      solicitarAtualizacaoFeedbackAgendasHeader();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const answer = async (id: string, resposta: string) => {
+    try {
+      const r = await fetch("/api/agendas/feedback", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agendamento_id: id, resposta }),
+        }),
+        j = await r.json();
+      if (!r.ok || !j.ok) throw Error(j.error);
+      await Promise.all([
+        loadFeedback(),
+        agendaId ? loadData(agendaId) : Promise.resolve(),
+      ]);
+      setOk(j.message);
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  };
+  const googleAction = async (action: "sync" | "disconnect") => {
+    if (!agendaId) return;
+    if (action === "disconnect" && !confirm("Desvincular o Google Calendar?"))
+      return;
+    try {
+      setBusy(true);
+      const r = await fetch(`/api/agendas/${agendaId}/google-calendar`, {
+          method: action === "sync" ? "POST" : "DELETE",
+        }),
+        j = await r.json();
+      if (!r.ok || !j.ok) throw Error(j.error);
+      await loadGoogle(agendaId);
+      setOk(
+        action === "sync" ? "Google sincronizado." : "Google desvinculado.",
+      );
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const openConfig = async (isNew: boolean) => {
+    setConfigNew(isNew);
+    setUnidadeDuracaoAgenda("minutos");
+    setUnidadeIntervaloAgenda("minutos");
+    setUnidadeAntecedenciaAgenda("minutos");
+    if (isNew) {
+      setAf({
+        nome: "",
+        descricao: "",
+        duracao_minutos: "60",
+        intervalo_minutos: "30",
+        antecedencia_minutos: "120",
+        janela_dias: "14",
+        status: "ativo",
+      });
+      setDisp(
+        dias.map((_, i) => ({
+          dia_semana: i,
+          hora_inicio: "09:00",
+          hora_fim: "18:00",
+          ativo: i > 0 && i < 6,
+          intervalos: [],
+        })),
+      );
+    } else if (agenda) {
+      setAf({
+        nome: agenda.nome,
+        descricao: agenda.descricao || "",
+        duracao_minutos: String(agenda.duracao_minutos),
+        intervalo_minutos: String(agenda.intervalo_minutos),
+        antecedencia_minutos: String(agenda.antecedencia_minutos),
+        janela_dias: String(agenda.janela_dias),
+        status: agenda.status,
+      });
+      const r = await fetch(`/api/agendas/${agenda.id}/disponibilidades`, {
+          cache: "no-store",
+        }),
+        j = await r.json();
+      if (j.ok && j.disponibilidades?.length) {
+        const m = new Map<number, Disp>(
+          j.disponibilidades.map((x: Disp) => [
+            x.dia_semana,
+            {
+              ...x,
+              intervalos: Array.isArray(x.intervalos) ? x.intervalos : [],
+            },
+          ]),
+        );
+        setDisp(
+          dias.map(
+            (_, i) =>
+              m.get(i) || {
+                dia_semana: i,
+                hora_inicio: "09:00",
+                hora_fim: "18:00",
+                ativo: false,
+                intervalos: [],
+              },
+          ),
+        );
+      }
+    }
+    setConfig(true);
+  };
+  const saveConfig = async () => {
+    try {
+      setBusy(true);
+      let id = agendaId;
+      const payload = {
+        ...af,
+        duracao_minutos: Number(af.duracao_minutos),
+        intervalo_minutos: Number(af.intervalo_minutos),
+        antecedencia_minutos: Number(af.antecedencia_minutos),
+        janela_dias: Number(af.janela_dias),
+      };
+      const r = await fetch(configNew ? "/api/agendas" : `/api/agendas/${id}`, {
+          method: configNew ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+        j = await r.json();
+      if (!r.ok || !j.ok) throw Error(j.error);
+      if (configNew) id = j.agenda.id;
+      const ar = await fetch(`/api/agendas/${id}/disponibilidades`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ disponibilidades: disp }),
+        }),
+        aj = await ar.json();
+      if (!ar.ok || !aj.ok) throw Error(aj.error);
+      setConfig(false);
+      await loadAgendas(id);
+      setAgendaId(id);
+      setOk(configNew ? "Agenda criada." : "Agenda atualizada.");
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const archive = async () => {
+    if (!agenda) return;
+    const status = agenda.status === "arquivado" ? "ativo" : "arquivado";
+    if (status === "arquivado" && !confirm("Arquivar esta agenda?")) return;
+    try {
+      setBusy(true);
+      const r = await fetch(`/api/agendas/${agenda.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        }),
+        j = await r.json();
+      if (!r.ok || !j.ok) throw Error(j.error);
+      setConfig(false);
+      await loadAgendas(agenda.id);
+      setOk(status === "arquivado" ? "Agenda arquivada." : "Agenda reativada.");
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const delAgenda = async () => {
+    if (!agenda || !confirm("Excluir esta agenda permanentemente?")) return;
+    try {
+      setBusy(true);
+      const r = await fetch(`/api/agendas/${agenda.id}`, { method: "DELETE" }),
+        j = await r.json();
+      if (!r.ok || !j.ok) throw Error(j.error);
+      setConfig(false);
+      setAgendaId("");
+      await loadAgendas();
+      setOk("Agenda excluída.");
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (load && agendas.length === 0)
+    return (
+      <div className="a2">
+        <style>{css}</style>
+        <Header />
+        <div className="empty">
+          <RefreshCw className="spin" /> Carregando...
+        </div>
+      </div>
+    );
+  return (
+    <div className="a2">
+      <style>{css}</style>
+      <Header />
+      <FeedbackToast
+        success={ok}
+        error={err}
+        onSuccessDismiss={() => setOk("")}
+        onErrorDismiss={() => setErr("")}
+      />
+      <main className="wrap">
+        <div className="head">
+          <div>
+            <h1>Agendamentos</h1>
+            <p>
+              Clientes, responsáveis, registros do nicho, lembretes, resultados
+              e histórico em um só lugar.
+            </p>
+          </div>
+          <div className="actions">
+            <select
+              className="select"
+              value={agendaId}
+              onChange={(e) => setAgendaId(e.target.value)}
+            >
+              {agendas.length === 0 && <option value="">Nenhuma agenda</option>}
+              {agendas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nome}
+                  {a.status === "arquivado" ? " (arquivada)" : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              className="btn"
+              onClick={refresh}
+              disabled={!agendaId || busy}
+            >
+              <RefreshCw size={15} className={busy ? "spin" : ""} />
+            </button>
+            <button
+              className="btn"
+              onClick={() => openConfig(false)}
+              disabled={!agenda}
+            >
+              <Settings2 size={15} />
+              Configurar
+            </button>
+            <button className="btn" onClick={() => openConfig(true)}>
+              <Plus size={15} />
+              Nova agenda
+            </button>
+            <button
+              className="btn primary"
+              onClick={() => newAg()}
+              disabled={!agenda || agenda.status === "arquivado"}
+            >
+              <CalendarPlus size={16} />
+              Novo agendamento
+            </button>
+          </div>
+        </div>
+        {feedbacks.length > 0 &&
+          (() => {
+            const feedback = feedbacks[0],
+              contato = relationOne(feedback.contatos),
+              calendario = relationOne(feedback.agenda_calendarios),
+              nomeCliente =
+                feedback.nome_cliente ||
+                contato?.nome ||
+                "Cliente não informado",
+              telefone = feedback.telefone_cliente || contato?.telefone || "";
+            const abrirDetalhes = () => {
+              const agendamento = ags.find((a) => a.id === feedback.id);
+              if (agendamento) {
+                edit(agendamento);
+                return;
+              }
+              const data = new Date(feedback.inicio_at);
+              if (feedback.agenda_id && feedback.agenda_id !== agendaId)
+                setAgendaId(feedback.agenda_id);
+              setMonth(new Date(data.getFullYear(), data.getMonth(), 1));
+              setDay(key(data));
+            };
+            return (
+              <section className="feedbackCard">
+                <div className="feedbackIcon">
+                  <Clock3 size={19} />
+                </div>
+                <div className="feedbackMain">
+                  <div className="feedbackHead">
+                    <span className="feedbackHeadLabel">
+                      Confirme o resultado do agendamento
+                    </span>
+                    <span className="feedbackCounter">
+                      {feedbacks.length} pendente
+                      {feedbacks.length > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <strong className="feedbackTitle">
+                    {feedback.titulo || "Agendamento"}
+                  </strong>
+                  <div className="feedbackClient">
+                    <UserRound size={13} />
+                    <b>{nomeCliente}</b>
+                    {telefone && <span>· {telefone}</span>}
+                  </div>
+                  <div className="feedbackMeta">
+                    <span className="feedbackMetaItem">
+                      <CalendarDays size={13} />
+                      <strong>{dt(feedback.inicio_at)}</strong>
+                      {feedback.fim_at && (
+                        <span>até {time(feedback.fim_at)}</span>
+                      )}
+                    </span>
+                    <span className="feedbackMetaItem">
+                      <CalendarDays size={13} />
+                      <span>
+                        Calendário:{" "}
+                        <strong>{calendario?.nome || "Não informado"}</strong>
+                      </span>
+                    </span>
+                    <span className="feedbackMetaItem">
+                      <span>
+                        Status:{" "}
+                        <strong>
+                          {labels[feedback.status] ||
+                            feedback.status ||
+                            "Agendado"}
+                        </strong>
+                      </span>
+                    </span>
+                    <span className="feedbackMetaItem">
+                      <span>
+                        Origem:{" "}
+                        <strong>{feedbackOriginLabel(feedback.origem)}</strong>
+                      </span>
+                    </span>
+                    {feedback.local && (
+                      <span className="feedbackMetaItem">
+                        <span>
+                          Local: <strong>{feedback.local}</strong>
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="feedbackActions">
+                  <button className="btn feedbackOpen" onClick={abrirDetalhes}>
+                    <ExternalLink size={13} />
+                    Detalhes
+                  </button>
+                  <button
+                    className="btn feedbackSuccess"
+                    onClick={() => answer(feedback.id, "realizado")}
+                  >
+                    <Check size={13} />
+                    Realizado
+                  </button>
+                  <button
+                    className="btn feedbackMissed"
+                    onClick={() => answer(feedback.id, "faltou")}
+                  >
+                    <X size={13} />
+                    Não compareceu
+                  </button>
+                </div>
+              </section>
+            );
+          })()}
+        <div className="stats">
+          <div className="stat">
+            <small>Ativos no mês</small>
+            <b>{stats.ativos}</b>
+          </div>
+          <div className="stat">
+            <small>Confirmados</small>
+            <b>{stats.conf}</b>
+          </div>
+          <div className="stat">
+            <small>Realizados</small>
+            <b>{stats.done}</b>
+          </div>
+          <div className="stat">
+            <small>Não compareceram</small>
+            <b>{stats.miss}</b>
+          </div>
+          <div className="stat">
+            <small>Confirmações pendentes</small>
+            <b>{stats.pend}</b>
+          </div>
+        </div>
+        <div className="layout">
+          <section className="card">
+            <div className="toolbar">
+              <div className="nav">
+                <button
+                  className="btn"
+                  onClick={() =>
+                    setMonth(
+                      new Date(month.getFullYear(), month.getMonth() - 1, 1),
+                    )
+                  }
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setMonth(new Date());
+                    setDay(key(new Date()));
+                  }}
+                >
+                  Hoje
+                </button>
+                <span className="month">
+                  {new Intl.DateTimeFormat("pt-BR", {
+                    month: "long",
+                    year: "numeric",
+                  }).format(month)}
+                </span>
+                <button
+                  className="btn"
+                  onClick={() =>
+                    setMonth(
+                      new Date(month.getFullYear(), month.getMonth() + 1, 1),
+                    )
+                  }
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+              <div className="filters">
+                <div className="search">
+                  <Search size={14} />
+                  <input
+                    placeholder="Buscar cliente, local..."
+                    value={filter.q}
+                    onChange={(e) =>
+                      setFilter({ ...filter, q: e.target.value })
+                    }
+                  />
+                </div>
+                <select
+                  value={filter.tipo}
+                  onChange={(e) =>
+                    setFilter({ ...filter, tipo: e.target.value })
+                  }
+                >
+                  <option value="todos">Todos os tipos</option>
+                  {tipos.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nome}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filter.resp}
+                  onChange={(e) =>
+                    setFilter({ ...filter, resp: e.target.value })
+                  }
+                >
+                  <option value="todos">Todos os responsáveis</option>
+                  {resps.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nome}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filter.status}
+                  onChange={(e) =>
+                    setFilter({ ...filter, status: e.target.value })
+                  }
+                >
+                  <option value="todos">Todos os status</option>
+                  {Object.entries(labels).map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filter.origem}
+                  onChange={(e) =>
+                    setFilter({ ...filter, origem: e.target.value })
+                  }
+                >
+                  <option value="todos">Todas as origens</option>
+                  <option value="manual">Manual</option>
+                  <option value="automacao">Automação</option>
+                  <option value="api">API</option>
+                  <option value="google">Google</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid">
+              {dias.map((x) => (
+                <div className="wd" key={x}>
+                  {x}
+                </div>
+              ))}
+              {days.map((x) => {
+                const aa = byDay.get(x.k) || [],
+                  gg =
+                    filter.origem === "todos" || filter.origem === "google"
+                      ? gby.get(x.k) || []
+                      : [],
+                  items = [...aa, ...gg].slice(0, 3);
+                return (
+                  <div
+                    key={x.k}
+                    className={`day ${!x.ok ? "muted" : ""} ${x.k === day ? "selected" : ""} ${x.k === key(new Date()) ? "today" : ""}`}
+                    onClick={() => setDay(x.k)}
+                  >
+                    <div className="dh">
+                      <span className="num">{x.d.getDate()}</span>
+                      <button
+                        className="add"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          newAg(x.k);
+                        }}
+                      >
+                        <Plus size={13} />
+                      </button>
+                    </div>
+                    {items.map((it) =>
+                      "dia_inteiro" in it ? (
+                        <div className="event g" key={`g${it.id}`}>
+                          <b>
+                            {it.dia_inteiro
+                              ? "Dia inteiro"
+                              : time(it.inicio_at)}
+                          </b>
+                          <span>{it.titulo} · Google</span>
+                        </div>
+                      ) : (
+                        <button
+                          className={`event ${it.status === "cancelado" ? "cancel" : ""}`}
+                          style={
+                            {
+                              "--c": it.tipo?.cor || "#109b75",
+                            } as React.CSSProperties
+                          }
+                          key={it.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            edit(it);
+                          }}
+                        >
+                          <b>
+                            {time(it.inicio_at)} · {it.titulo}
+                          </b>
+                          <span>
+                            {it.nome_cliente ||
+                              it.contato?.nome ||
+                              it.responsavel?.nome ||
+                              labels[it.status]}
+                          </span>
+                        </button>
+                      ),
+                    )}
+                    {aa.length + gg.length > 3 && (
+                      <span className="pill">
+                        +{aa.length + gg.length - 3} eventos
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+          <aside className="aside">
+            <div className="card side">
+              <h3>
+                {new Intl.DateTimeFormat("pt-BR", {
+                  weekday: "long",
+                  day: "2-digit",
+                  month: "long",
+                }).format(new Date(`${day}T12:00`))}
+              </h3>
+              {(byDay.get(day) || []).map((a) => (
+                <div className="item" key={a.id} onClick={() => edit(a)}>
+                  <span
+                    className={`pill agendaSideBadge agendaSideBadge-${a.status} ${["confirmado", "realizado"].includes(a.status) ? "on" : ""}`}
+                  >
+                    {labels[a.status]}
+                  </span>
+                  <b>
+                    {" "}
+                    {time(a.inicio_at)} · {a.titulo}
+                  </b>
+                  <div>
+                    {a.nome_cliente ||
+                      a.contato?.nome ||
+                      "Cliente não informado"}
+                    {a.responsavel?.nome ? ` · ${a.responsavel.nome}` : ""}
+                  </div>
+                </div>
+              ))}
+              {(gby.get(day) || []).map((g) => (
+                <div className="item" key={g.id}>
+                  <span className="pill agendaSideBadge agendaSideBadge-google">
+                    Google
+                  </span>
+                  <b> {g.titulo}</b>
+                  <div>
+                    {g.dia_inteiro
+                      ? "Dia inteiro"
+                      : `${time(g.inicio_at)} – ${time(g.fim_at)}`}
+                  </div>
+                </div>
+              ))}
+              {!(byDay.get(day) || []).length &&
+                !(gby.get(day) || []).length && (
+                  <div className="empty">
+                    <CalendarDays />
+                    <br />
+                    Nenhum evento.
+                  </div>
+                )}
+            </div>
+            <div className="card side">
+              <h3>Google Calendar</h3>
+              <div className="mini">
+                <span className={`pill ${google.conectado ? "on" : ""}`}>
+                  {google.conectado ? "Conectado" : "Desconectado"}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: "var(--crm-ui-private-content-hex-718096)",
+                  }}
+                >
+                  {google.email}
+                </span>
+              </div>
+              <div className="mini" style={{ marginTop: 9 }}>
+                {google.conectado ? (
+                  <>
+                    <button
+                      className="btn"
+                      style={{ height: 31 }}
+                      onClick={() => googleAction("sync")}
+                    >
+                      <RefreshCw size={13} />
+                      Sincronizar
+                    </button>
+                    <button
+                      className="btn"
+                      style={{ height: 31 }}
+                      onClick={() => googleAction("disconnect")}
+                    >
+                      <Unlink size={13} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="btn"
+                    style={{ height: 31 }}
+                    onClick={() =>
+                      (location.href = `/api/agendas/${agendaId}/google-calendar?acao=conectar`)
+                    }
+                    disabled={!agendaId}
+                  >
+                    <Link2 size={13} />
+                    Conectar
+                  </button>
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </main>
+      {open && (
+        <div
+          className="overlay"
+          onMouseDown={(e) =>
+            e.target === e.currentTarget && !busy && setOpen(false)
+          }
+        >
+          <aside className="drawer">
+            <div className="dhead">
+              <CalendarDays size={20} />
+              <div>
+                <h2>{form.id ? form.titulo : "Novo agendamento"}</h2>
+                <p>
+                  {form.id
+                    ? `${dt(iso(form.inicio_at))} · ${labels[form.status]}`
+                    : "Cadastre todas as informações do compromisso."}
+                </p>
+              </div>
+              <button className="btn" onClick={() => setOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="body">
+              <section className="section">
+                <h3>
+                  <CalendarDays size={15} />
+                  Informações principais
+                </h3>
+                <div className="form">
+                  <div className="field full">
+                    <label>Título*</label>
+                    <input
+                      value={form.titulo}
+                      onChange={(e) =>
+                        setForm({ ...form, titulo: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Tipo</label>
+                    <div className="row">
+                      <select
+                        style={{ flex: 1 }}
+                        value={form.tipo_id}
+                        onChange={(e) =>
+                          setForm({ ...form, tipo_id: e.target.value })
+                        }
+                      >
+                        <option value="">Sem tipo</option>
+                        {tipos.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.nome}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="btn" onClick={customType}>
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label>Status</label>
+                    <select
+                      value={form.status}
+                      onChange={(e) =>
+                        setForm({ ...form, status: e.target.value })
+                      }
+                    >
+                      {Object.entries(labels).map(([v, l]) => (
+                        <option key={v} value={v}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Início*</label>
+                    <input
+                      type="datetime-local"
+                      value={form.inicio_at}
+                      onChange={(e) =>
+                        ajustarInicioComDuracaoAgenda(e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Fim*</label>
+                    <input
+                      type="datetime-local"
+                      value={form.fim_at}
+                      onChange={(e) =>
+                        setForm({ ...form, fim_at: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Responsável</label>
+                    <select
+                      value={form.responsavel_id}
+                      onChange={(e) =>
+                        setForm({ ...form, responsavel_id: e.target.value })
+                      }
+                    >
+                      <option value="">Sem responsável</option>
+                      {resps.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Prioridade</label>
+                    <select
+                      value={form.prioridade}
+                      onChange={(e) =>
+                        setForm({ ...form, prioridade: e.target.value })
+                      }
+                    >
+                      <option value="baixa">Baixa</option>
+                      <option value="normal">Normal</option>
+                      <option value="alta">Alta</option>
+                      <option value="urgente">Urgente</option>
+                    </select>
+                  </div>
+                  <div className="field full">
+                    <label>Local / endereço</label>
+                    <input
+                      value={form.local}
+                      onChange={(e) =>
+                        setForm({ ...form, local: e.target.value })
+                      }
+                      placeholder="Endereço, sala ou unidade"
+                    />
+                  </div>
+                  <div className="field full">
+                    <label>Link da reunião</label>
+                    <input
+                      value={form.link_reuniao}
+                      onChange={(e) =>
+                        setForm({ ...form, link_reuniao: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="field full">
+                    <label>Descrição</label>
+                    <textarea
+                      value={form.observacoes}
+                      onChange={(e) =>
+                        setForm({ ...form, observacoes: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              </section>
+              <section className="section">
+                <h3>
+                  <UserRound size={15} />
+                  Cliente
+                </h3>
+                {contact ? (
+                  <div className="contact">
+                    <UserRound size={18} />
+                    <div>
+                      <b>{contact.nome || "Contato sem nome"}</b>
+                      <small>
+                        {contact.telefone}
+                        {contact.email ? ` · ${contact.email}` : ""}
+                      </small>
+                    </div>
+                    <button
+                      className="btn"
+                      style={{ height: 30 }}
+                      onClick={() => {
+                        setContact(null);
+                        setForm({
+                          ...form,
+                          contato_id: "",
+                          nome_cliente: "",
+                          telefone_cliente: "",
+                          email_cliente: "",
+                        });
+                      }}
+                    >
+                      Trocar
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="search">
+                      <Search size={14} />
+                      <input
+                        style={{ width: "100%" }}
+                        placeholder="Buscar contato"
+                        value={cq}
+                        onChange={(e) => setCq(e.target.value)}
+                      />
+                    </div>
+                    {contacts.length > 0 && (
+                      <div className="results">
+                        {contacts.map((c) => (
+                          <button
+                            className="result"
+                            key={c.id}
+                            onClick={() => choose(c)}
+                          >
+                            <b>{c.nome || "Sem nome"}</b>
+                            <div>
+                              {c.telefone}
+                              {c.email ? ` · ${c.email}` : ""}
+                              {c.empresa ? ` · ${c.empresa}` : ""}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="form" style={{ marginTop: 9 }}>
+                  <div className="field">
+                    <label>Nome*</label>
+                    <input
+                      value={form.nome_cliente}
+                      onChange={(e) =>
+                        setForm({ ...form, nome_cliente: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Telefone</label>
+                    <input
+                      value={form.telefone_cliente}
+                      onChange={(e) =>
+                        setForm({ ...form, telefone_cliente: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="field full">
+                    <label>E-mail</label>
+                    <input
+                      value={form.email_cliente}
+                      onChange={(e) =>
+                        setForm({ ...form, email_cliente: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="mini" style={{ marginTop: 8 }}>
+                  {form.telefone_cliente && (
+                    <a
+                      className="btn"
+                      style={{ height: 30 }}
+                      target="_blank"
+                      rel="noreferrer"
+                      href={`https://wa.me/55${form.telefone_cliente.replace(/\D/g, "")}`}
+                    >
+                      <MessageCircle size={13} />
+                      WhatsApp
+                    </a>
+                  )}
+                  {form.contato_id && (
+                    <a
+                      className="btn"
+                      style={{ height: 30 }}
+                      href={`/contatos?contato=${form.contato_id}`}
+                    >
+                      <ExternalLink size={13} />
+                      Abrir contato
+                    </a>
+                  )}
+                </div>
+              </section>
+              <section className="section">
+                <div
+                  className="row"
+                  style={{ justifyContent: "space-between" }}
+                >
+                  <h3>
+                    <UsersRound size={15} />
+                    Participantes
+                  </h3>
+                  <button
+                    className="btn"
+                    style={{ height: 30 }}
+                    onClick={addPart}
+                  >
+                    <Plus size={13} />
+                    Adicionar
+                  </button>
+                </div>
+                {form.participantes.map((p, i) => (
+                  <div className="repeat" key={i}>
+                    <div className="row">
+                      <b>Participante {i + 1}</b>
+                      <button
+                        className="remove"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            participantes: form.participantes.filter(
+                              (_, x) => x !== i,
+                            ),
+                          })
+                        }
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="form">
+                      <div className="field">
+                        <label>Nome*</label>
+                        <input
+                          value={p.nome}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              participantes: form.participantes.map((x, n) =>
+                                n === i ? { ...x, nome: e.target.value } : x,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Papel</label>
+                        <input
+                          value={p.papel}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              participantes: form.participantes.map((x, n) =>
+                                n === i ? { ...x, papel: e.target.value } : x,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="field">
+                        <label>E-mail</label>
+                        <input
+                          value={p.email}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              participantes: form.participantes.map((x, n) =>
+                                n === i ? { ...x, email: e.target.value } : x,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Telefone</label>
+                        <input
+                          value={p.telefone}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              participantes: form.participantes.map((x, n) =>
+                                n === i
+                                  ? { ...x, telefone: e.target.value }
+                                  : x,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {form.participantes.length === 0 && (
+                  <div className="empty">Nenhum participante adicional.</div>
+                )}
+              </section>
+              <section className="section">
+                <div
+                  className="row"
+                  style={{ justifyContent: "space-between" }}
+                >
+                  <h3>
+                    <Link2 size={15} />
+                    Registros relacionados
+                  </h3>
+                  <button
+                    className="btn"
+                    style={{ height: 30 }}
+                    onClick={addLink}
+                  >
+                    <Plus size={13} />
+                    Adicionar
+                  </button>
+                </div>
+                <small>
+                  Imóvel, veículo, procedimento, oportunidade, ordem de serviço
+                  ou qualquer outro registro do nicho.
+                </small>
+                {form.vinculos.map((v, i) => (
+                  <div className="repeat" key={i}>
+                    <div className="row">
+                      <b>Registro {i + 1}</b>
+                      <button
+                        className="remove"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            vinculos: form.vinculos.filter((_, x) => x !== i),
+                          })
+                        }
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="form">
+                      <div className="field">
+                        <label>Tipo</label>
+                        <select
+                          value={v.entidade_tipo}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              vinculos: form.vinculos.map((x, n) =>
+                                n === i
+                                  ? { ...x, entidade_tipo: e.target.value }
+                                  : x,
+                              ),
+                            })
+                          }
+                        >
+                          <option value="imovel">Imóvel</option>
+                          <option value="veiculo">Veículo</option>
+                          <option value="procedimento">Procedimento</option>
+                          <option value="oportunidade">Oportunidade</option>
+                          <option value="ordem_servico">
+                            Ordem de serviço
+                          </option>
+                          <option value="processo">Processo</option>
+                          <option value="outro">Outro</option>
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label>Código / ID</label>
+                        <input
+                          value={v.entidade_id}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              vinculos: form.vinculos.map((x, n) =>
+                                n === i
+                                  ? { ...x, entidade_id: e.target.value }
+                                  : x,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="field full">
+                        <label>Título*</label>
+                        <input
+                          value={v.titulo}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              vinculos: form.vinculos.map((x, n) =>
+                                n === i ? { ...x, titulo: e.target.value } : x,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Papel</label>
+                        <input
+                          value={v.papel}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              vinculos: form.vinculos.map((x, n) =>
+                                n === i ? { ...x, papel: e.target.value } : x,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Resumo</label>
+                        <input
+                          value={v.subtitulo}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              vinculos: form.vinculos.map((x, n) =>
+                                n === i
+                                  ? { ...x, subtitulo: e.target.value }
+                                  : x,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="field full">
+                        <label>URL da imagem</label>
+                        <input
+                          value={v.imagem_url}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              vinculos: form.vinculos.map((x, n) =>
+                                n === i
+                                  ? { ...x, imagem_url: e.target.value }
+                                  : x,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Campo adicional</label>
+                        <input
+                          value={Object.keys(v.dados_json)[0] || ""}
+                          onChange={(e) => {
+                            const val = Object.values(v.dados_json)[0] || "";
+                            setForm({
+                              ...form,
+                              vinculos: form.vinculos.map((x, n) =>
+                                n === i
+                                  ? {
+                                      ...x,
+                                      dados_json: e.target.value
+                                        ? { [e.target.value]: val }
+                                        : {},
+                                    }
+                                  : x,
+                              ),
+                            });
+                          }}
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Valor</label>
+                        <input
+                          value={Object.values(v.dados_json)[0] || ""}
+                          onChange={(e) => {
+                            const k =
+                              Object.keys(v.dados_json)[0] || "Informação";
+                            setForm({
+                              ...form,
+                              vinculos: form.vinculos.map((x, n) =>
+                                n === i
+                                  ? {
+                                      ...x,
+                                      dados_json: e.target.value
+                                        ? { [k]: e.target.value }
+                                        : {},
+                                    }
+                                  : x,
+                              ),
+                            });
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {form.vinculos.length === 0 && (
+                  <div className="empty">Nenhum registro relacionado.</div>
+                )}
+              </section>
+              <section className="section">
+                <div
+                  className="row"
+                  style={{ justifyContent: "space-between" }}
+                >
+                  <h3>
+                    <Bell size={15} />
+                    Lembretes e confirmação
+                  </h3>
+                  <button
+                    className="btn"
+                    style={{ height: 30 }}
+                    onClick={addRem}
+                  >
+                    <Plus size={13} />
+                    Lembrete
+                  </button>
+                </div>
+                <small>
+                  Crie avisos extras somente para este compromisso. Eles serão
+                  processados e exibidos junto das automações em Disparos
+                  agendados.
+                </small>
+                {form.lembretes.length === 0 && (
+                  <div className="empty">
+                    Nenhum lembrete adicional. Clique em Lembrete para
+                    configurar um envio.
+                  </div>
+                )}
+                {form.lembretes.map((r, i) => {
+                  const reminderMetadata = r.metadata_json || {};
+                  const selectedTemplate = reminderOptions.templates.find(
+                    (item) => item.id === reminderMetadata.whatsapp_template_id,
+                  );
+                  const compatibleTemplates = reminderOptions.templates.filter(
+                    (item) =>
+                      !reminderMetadata.integracao_whatsapp_id ||
+                      item.integracao_whatsapp_id ===
+                        reminderMetadata.integracao_whatsapp_id,
+                  );
+                  return (
+                    <div className="repeat" key={r.id || i}>
+                      <div className="rem">
+                        <div className="field">
+                          <label>Canal</label>
+                          <select
+                            value={r.canal}
+                            onChange={(e) => {
+                              const canal = e.target.value;
+                              setForm({
+                                ...form,
+                                lembretes: form.lembretes.map((x, n) =>
+                                  n === i
+                                    ? {
+                                        ...x,
+                                        canal,
+                                        metadata_json:
+                                          canal === "whatsapp"
+                                            ? x.metadata_json || {}
+                                            : x.metadata_json,
+                                      }
+                                    : x,
+                                ),
+                              });
+                            }}
+                          >
+                            {r.destinatario_tipo === "responsavel" ? (
+                              <>
+                                <option value="sistema">Sistema</option>
+                                <option value="email">E-mail</option>
+                              </>
+                            ) : (
+                              <>
+                                <option value="email">E-mail</option>
+                                <option value="whatsapp">WhatsApp</option>
+                              </>
+                            )}
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label>Antecedência</label>
+                          <select
+                            value={r.antecedencia_minutos}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                lembretes: form.lembretes.map((x, n) =>
+                                  n === i
+                                    ? {
+                                        ...x,
+                                        antecedencia_minutos: Number(
+                                          e.target.value,
+                                        ),
+                                      }
+                                    : x,
+                                ),
+                              })
+                            }
+                          >
+                            <option value={15}>15 min</option>
+                            <option value={30}>30 min</option>
+                            <option value={60}>1 hora</option>
+                            <option value={120}>2 horas</option>
+                            <option value={1440}>1 dia</option>
+                            <option value={2880}>2 dias</option>
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label>Destinatário</label>
+                          <select
+                            value={r.destinatario_tipo}
+                            onChange={(e) => {
+                              const destinatario_tipo = e.target.value;
+                              setForm({
+                                ...form,
+                                lembretes: form.lembretes.map((x, n) => {
+                                  if (n !== i) return x;
+                                  const canal =
+                                    destinatario_tipo === "responsavel"
+                                      ? x.canal === "whatsapp"
+                                        ? "sistema"
+                                        : x.canal
+                                      : x.canal === "sistema"
+                                        ? "email"
+                                        : x.canal;
+                                  return {
+                                    ...x,
+                                    destinatario_tipo,
+                                    canal,
+                                    metadata_json:
+                                      canal === "whatsapp"
+                                        ? x.metadata_json || {}
+                                        : x.metadata_json,
+                                  };
+                                }),
+                              });
+                            }}
+                          >
+                            <option value="responsavel">Responsável</option>
+                            <option value="cliente">Cliente</option>
+                            <option value="participantes">Participantes</option>
+                          </select>
+                        </div>
+                        <button
+                          className="remove"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              lembretes: form.lembretes.filter(
+                                (_, x) => x !== i,
+                              ),
+                            })
+                          }
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      {r.canal === "whatsapp" && (
+                        <div className="remWhatsapp">
+                          <div className="field">
+                            <label>Integração do WhatsApp</label>
+                            <select
+                              value={
+                                reminderMetadata.integracao_whatsapp_id || ""
+                              }
+                              onChange={(e) =>
+                                setForm({
+                                  ...form,
+                                  lembretes: form.lembretes.map((x, n) =>
+                                    n === i
+                                      ? {
+                                          ...x,
+                                          metadata_json: {
+                                            ...(x.metadata_json || {}),
+                                            integracao_whatsapp_id:
+                                              e.target.value || null,
+                                            whatsapp_template_id: null,
+                                            marketing_aceito: false,
+                                          },
+                                        }
+                                      : x,
+                                  ),
+                                })
+                              }
+                            >
+                              <option value="">Selecione</option>
+                              {reminderOptions.integracoes.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.nome_conexao}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="field">
+                            <label>Template aprovado</label>
+                            <select
+                              value={
+                                reminderMetadata.whatsapp_template_id || ""
+                              }
+                              onChange={(e) =>
+                                setForm({
+                                  ...form,
+                                  lembretes: form.lembretes.map((x, n) =>
+                                    n === i
+                                      ? {
+                                          ...x,
+                                          metadata_json: {
+                                            ...(x.metadata_json || {}),
+                                            whatsapp_template_id:
+                                              e.target.value || null,
+                                            marketing_aceito: false,
+                                          },
+                                        }
+                                      : x,
+                                  ),
+                                })
+                              }
+                            >
+                              <option value="">Selecione</option>
+                              {compatibleTemplates.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.nome} · {item.idioma} · {item.categoria}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {selectedTemplate?.categoria?.toUpperCase() ===
+                            "MARKETING" && (
+                            <label className="remMarketing">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  reminderMetadata.marketing_aceito === true
+                                }
+                                onChange={(e) =>
+                                  setForm({
+                                    ...form,
+                                    lembretes: form.lembretes.map((x, n) =>
+                                      n === i
+                                        ? {
+                                            ...x,
+                                            metadata_json: {
+                                              ...(x.metadata_json || {}),
+                                              marketing_aceito:
+                                                e.target.checked,
+                                            },
+                                          }
+                                        : x,
+                                    ),
+                                  })
+                                }
+                              />
+                              <span>
+                                Confirmo o uso deste template classificado como
+                                Marketing e os riscos aplicáveis às diretrizes
+                                da Meta.
+                              </span>
+                            </label>
+                          )}
+                          <div className="remWhatsappNote">
+                            As variáveis mais comuns do template serão
+                            preenchidas automaticamente com nome, data, horário,
+                            título, calendário e local do compromisso.
+                          </div>
+                        </div>
+                      )}
+                      {r.erro && (
+                        <small
+                          style={{
+                            display: "block",
+                            marginTop: 7,
+                            color: "var(--crm-ui-private-content-hex-c32640)",
+                          }}
+                        >
+                          {r.erro}
+                        </small>
+                      )}
+                    </div>
+                  );
+                })}
+              </section>
+              <section className="section">
+                <h3>
+                  <Check size={15} />
+                  Resultado e informações internas
+                </h3>
+                <div className="form">
+                  <div className="field">
+                    <label>Status final</label>
+                    <select
+                      value={form.status}
+                      onChange={(e) =>
+                        setForm({ ...form, status: e.target.value })
+                      }
+                    >
+                      {Object.entries(labels).map(([v, l]) => (
+                        <option key={v} value={v}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Resumo do resultado</label>
+                    <input
+                      value={form.resultado}
+                      onChange={(e) =>
+                        setForm({ ...form, resultado: e.target.value })
+                      }
+                      placeholder="Ex.: proposta enviada"
+                    />
+                  </div>
+                  <div className="field full">
+                    <label>Observações internas</label>
+                    <textarea
+                      value={form.observacoes_internas}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          observacoes_internas: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </section>
+              {form.id && (
+                <section className="section">
+                  <h3>
+                    <History size={15} />
+                    Histórico
+                  </h3>
+                  <div className="history">
+                    {(ags.find((a) => a.id === form.id)?.historico || []).map(
+                      (h) => (
+                        <div className="hist" key={h.id}>
+                          <b>{h.acao.replaceAll("_", " ")}</b>
+                          <p>{h.descricao || "Alteração registrada."}</p>
+                          <small>
+                            {h.usuario_nome || "Sistema"} · {dt(h.created_at)}
+                          </small>
+                        </div>
+                      ),
+                    )}
+                    {!(ags.find((a) => a.id === form.id)?.historico || [])
+                      .length && (
+                      <div className="empty">Sem alterações registradas.</div>
+                    )}
+                  </div>
+                </section>
+              )}
+            </div>
+            <div className="foot">
+              <div>
+                {form.id && form.status !== "cancelado" && (
+                  <button
+                    className="btn danger eventFooterAction"
+                    onClick={() => setCancelConfirm(true)}
+                  >
+                    <X size={15} />
+                    Cancelar evento
+                  </button>
+                )}
+              </div>
+              <div className="mini">
+                <button className="btn" onClick={() => setOpen(false)}>
+                  Fechar
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={() => save()}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <RefreshCw className="spin" size={15} />
+                  ) : (
+                    <Check size={15} />
+                  )}
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+      {cancelConfirm && (
+        <div
+          className="modalbg cancelConfirmBg"
+          onMouseDown={(e) =>
+            e.target === e.currentTarget && !busy && setCancelConfirm(false)
+          }
+        >
+          <div
+            className="confirmModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-event-title"
+          >
+            <div className="confirmBody">
+              <div className="confirmIcon">
+                <X size={22} />
+              </div>
+              <h2 id="cancel-event-title">Cancelar evento?</h2>
+              <p>
+                O agendamento <strong>{form.titulo || "selecionado"}</strong>{" "}
+                será marcado como cancelado. Esta ação ficará registrada no
+                histórico.
+              </p>
+              <div className="confirmSummary">
+                <CalendarDays size={18} />
+                <div>
+                  <b>{dt(iso(form.inicio_at))}</b>
+                  <span>
+                    {form.nome_cliente ||
+                      contact?.nome ||
+                      "Cliente não informado"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="confirmActions">
+              <button
+                className="btn"
+                onClick={() => setCancelConfirm(false)}
+                disabled={busy}
+              >
+                Voltar
+              </button>
+              <button
+                className="btn confirmDanger"
+                onClick={() => {
+                  setCancelConfirm(false);
+                  void save("cancelado");
+                }}
+                disabled={busy}
+              >
+                {busy ? (
+                  <RefreshCw className="spin" size={15} />
+                ) : (
+                  <X size={15} />
+                )}
+                Cancelar evento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {typeModal && (
+        <div
+          className="modalbg typeModalBg"
+          onMouseDown={(e) =>
+            e.target === e.currentTarget && !typeBusy && setTypeModal(false)
+          }
+        >
+          <div
+            className="typeModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="type-modal-title"
+          >
+            <div className="dhead">
+              <div className="typeModalIcon">
+                <CalendarPlus size={19} />
+              </div>
+              <div>
+                <h2 id="type-modal-title">Novo tipo de agendamento</h2>
+                <p>
+                  Crie uma categoria para organizar e identificar os
+                  compromissos.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setTypeModal(false)}
+                disabled={typeBusy}
+                aria-label="Fechar"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className="body">
+              <p className="typeModalIntro">
+                Defina um nome claro e uma cor para destacar este tipo no
+                calendário.
+              </p>
+              <div className="typeModalForm">
+                <div className="field">
+                  <label>Nome do tipo*</label>
+                  <input
+                    autoFocus
+                    maxLength={80}
+                    value={typeDraft.nome}
+                    onChange={(e) =>
+                      setTypeDraft({ ...typeDraft, nome: e.target.value })
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void saveCustomType();
+                    }}
+                    placeholder="Ex.: Visita ao imóvel"
+                  />
+                </div>
+                <div className="field">
+                  <label>Cor de identificação</label>
+                  <div className="typeColorControl">
+                    <input
+                      type="color"
+                      value={
+                        /^#[0-9a-fA-F]{6}$/.test(typeDraft.cor)
+                          ? typeDraft.cor
+                          : "#22c55e"
+                      }
+                      onChange={(e) =>
+                        setTypeDraft({ ...typeDraft, cor: e.target.value })
+                      }
+                      aria-label="Selecionar cor"
+                    />
+                    <input
+                      value={typeDraft.cor}
+                      onChange={(e) =>
+                        setTypeDraft({ ...typeDraft, cor: e.target.value })
+                      }
+                      maxLength={7}
+                      placeholder="#22c55e"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="typePreview">
+                <span
+                  className="typePreviewMark"
+                  style={{
+                    backgroundColor: /^#[0-9a-fA-F]{6}$/.test(typeDraft.cor)
+                      ? typeDraft.cor
+                      : "#22c55e",
+                  }}
+                />
+                <div>
+                  <strong>{typeDraft.nome.trim() || "Novo tipo"}</strong>
+                  <small>Prévia da identificação no calendário.</small>
+                </div>
+              </div>
+              {typeError && <div className="typeModalError">{typeError}</div>}
+            </div>
+            <div className="foot">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setTypeModal(false)}
+                disabled={typeBusy}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => void saveCustomType()}
+                disabled={typeBusy}
+              >
+                {typeBusy ? (
+                  <RefreshCw className="spin" size={15} />
+                ) : (
+                  <Check size={15} />
+                )}
+                Criar tipo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {config && (
+        <div className="modalbg">
+          <div className="modal">
+            <div className="dhead">
+              <Settings2 size={18} />
+              <div>
+                <h2>{configNew ? "Nova agenda" : "Configurar agenda"}</h2>
+                <p>Defina regras e disponibilidade semanal.</p>
+              </div>
+              <button className="btn" onClick={() => setConfig(false)}>
+                <X size={15} />
+              </button>
+            </div>
+            <div className="body">
+              <div className="form">
+                <div className="field full">
+                  <label>Nome*</label>
+                  <input
+                    value={af.nome}
+                    onChange={(e) => setAf({ ...af, nome: e.target.value })}
+                  />
+                </div>
+                <div className="field full">
+                  <label>Descrição</label>
+                  <textarea
+                    value={af.descricao}
+                    onChange={(e) =>
+                      setAf({ ...af, descricao: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label>Duração padrão</label>
+                  <div className="agendaTimeUnitControl">
+                    <input
+                      type="number"
+                      min={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
+                      step={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
+                      value={valorTempoAgenda(
+                        af.duracao_minutos,
+                        unidadeDuracaoAgenda,
+                      )}
+                      onChange={(e) =>
+                        atualizarTempoAgenda(
+                          "duracao_minutos",
+                          e.target.value,
+                          unidadeDuracaoAgenda,
+                        )
+                      }
+                    />
+                    <select
+                      value={unidadeDuracaoAgenda}
+                      onChange={(e) =>
+                        setUnidadeDuracaoAgenda(
+                          e.target.value as "minutos" | "horas",
+                        )
+                      }
+                      aria-label="Unidade da duração padrão"
+                    >
+                      <option value="minutos">minutos</option>
+                      <option value="horas">horas</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Espaço entre horários</label>
+                  <div className="agendaTimeUnitControl">
+                    <input
+                      type="number"
+                      min="0"
+                      step={unidadeIntervaloAgenda === "horas" ? "0.25" : "1"}
+                      value={valorTempoAgenda(
+                        af.intervalo_minutos,
+                        unidadeIntervaloAgenda,
+                      )}
+                      onChange={(e) =>
+                        atualizarTempoAgenda(
+                          "intervalo_minutos",
+                          e.target.value,
+                          unidadeIntervaloAgenda,
+                        )
+                      }
+                    />
+                    <select
+                      value={unidadeIntervaloAgenda}
+                      onChange={(e) =>
+                        setUnidadeIntervaloAgenda(
+                          e.target.value as "minutos" | "horas",
+                        )
+                      }
+                      aria-label="Unidade do intervalo"
+                    >
+                      <option value="minutos">minutos</option>
+                      <option value="horas">horas</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Antecedência mínima</label>
+                  <div className="agendaTimeUnitControl">
+                    <input
+                      type="number"
+                      min="0"
+                      step={
+                        unidadeAntecedenciaAgenda === "horas" ? "0.25" : "1"
+                      }
+                      value={valorTempoAgenda(
+                        af.antecedencia_minutos,
+                        unidadeAntecedenciaAgenda,
+                      )}
+                      onChange={(e) =>
+                        atualizarTempoAgenda(
+                          "antecedencia_minutos",
+                          e.target.value,
+                          unidadeAntecedenciaAgenda,
+                        )
+                      }
+                    />
+                    <select
+                      value={unidadeAntecedenciaAgenda}
+                      onChange={(e) =>
+                        setUnidadeAntecedenciaAgenda(
+                          e.target.value as "minutos" | "horas",
+                        )
+                      }
+                      aria-label="Unidade da antecedência mínima"
+                    >
+                      <option value="minutos">minutos</option>
+                      <option value="horas">horas</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Janela em dias</label>
+                  <input
+                    type="number"
+                    value={af.janela_dias}
+                    onChange={(e) =>
+                      setAf({ ...af, janela_dias: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <h3 style={{ fontSize: 13, marginTop: 16 }}>
+                Disponibilidade semanal
+              </h3>
+              <p className="availabilityHint">
+                Defina o início e o fim de cada dia e adicione até 5 intervalos
+                que não poderão receber agendamentos, como almoço, café ou
+                compromissos internos.
+              </p>
+              <div className="availability">
+                {disp.map((d, i) => (
+                  <div className="avDay" key={d.dia_semana}>
+                    <div className="av">
+                      <b style={{ fontSize: 10 }}>{diasFull[d.dia_semana]}</b>
+                      <input
+                        type="time"
+                        value={d.hora_inicio.slice(0, 5)}
+                        disabled={!d.ativo}
+                        onChange={(e) =>
+                          setDisp((x) =>
+                            x.map((v, n) =>
+                              n === i
+                                ? { ...v, hora_inicio: e.target.value }
+                                : v,
+                            ),
+                          )
+                        }
+                      />
+                      <input
+                        type="time"
+                        value={d.hora_fim.slice(0, 5)}
+                        disabled={!d.ativo}
+                        onChange={(e) =>
+                          setDisp((x) =>
+                            x.map((v, n) =>
+                              n === i ? { ...v, hora_fim: e.target.value } : v,
+                            ),
+                          )
+                        }
+                      />
+                      <button
+                        type="button"
+                        className={`toggle ${d.ativo ? "y" : ""}`}
+                        aria-label={d.ativo ? "Desativar dia" : "Ativar dia"}
+                        onClick={() =>
+                          setDisp((x) =>
+                            x.map((v, n) =>
+                              n === i ? { ...v, ativo: !v.ativo } : v,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                    {d.ativo && (
+                      <div className="avBreaks">
+                        <div className="avBreakHead">
+                          <span>
+                            Intervalos do dia · {d.intervalos.length}/5
+                          </span>
+                          <button
+                            type="button"
+                            className="btn avAddBreak"
+                            disabled={d.intervalos.length >= 5}
+                            onClick={() =>
+                              setDisp((x) =>
+                                x.map((v, n) =>
+                                  n === i
+                                    ? {
+                                        ...v,
+                                        intervalos: [
+                                          ...v.intervalos,
+                                          {
+                                            nome: `Intervalo ${v.intervalos.length + 1}`,
+                                            hora_inicio: "12:00",
+                                            hora_fim: "13:00",
+                                            ativo: true,
+                                          },
+                                        ],
+                                      }
+                                    : v,
+                                ),
+                              )
+                            }
+                          >
+                            <Plus size={16} />
+                            Adicionar intervalo
+                          </button>
+                        </div>
+                        {d.intervalos.map((intervalo, k) => (
+                          <div className="avBreak" key={intervalo.id || k}>
+                            <input
+                              value={intervalo.nome}
+                              placeholder="Ex.: Almoço"
+                              maxLength={80}
+                              onChange={(e) =>
+                                setDisp((x) =>
+                                  x.map((v, n) =>
+                                    n === i
+                                      ? {
+                                          ...v,
+                                          intervalos: v.intervalos.map(
+                                            (item, pos) =>
+                                              pos === k
+                                                ? {
+                                                    ...item,
+                                                    nome: e.target.value,
+                                                  }
+                                                : item,
+                                          ),
+                                        }
+                                      : v,
+                                  ),
+                                )
+                              }
+                            />
+                            <input
+                              type="time"
+                              value={intervalo.hora_inicio.slice(0, 5)}
+                              aria-label="Início do intervalo"
+                              onChange={(e) =>
+                                setDisp((x) =>
+                                  x.map((v, n) =>
+                                    n === i
+                                      ? {
+                                          ...v,
+                                          intervalos: v.intervalos.map(
+                                            (item, pos) =>
+                                              pos === k
+                                                ? {
+                                                    ...item,
+                                                    hora_inicio: e.target.value,
+                                                  }
+                                                : item,
+                                          ),
+                                        }
+                                      : v,
+                                  ),
+                                )
+                              }
+                            />
+                            <input
+                              type="time"
+                              value={intervalo.hora_fim.slice(0, 5)}
+                              aria-label="Fim do intervalo"
+                              onChange={(e) =>
+                                setDisp((x) =>
+                                  x.map((v, n) =>
+                                    n === i
+                                      ? {
+                                          ...v,
+                                          intervalos: v.intervalos.map(
+                                            (item, pos) =>
+                                              pos === k
+                                                ? {
+                                                    ...item,
+                                                    hora_fim: e.target.value,
+                                                  }
+                                                : item,
+                                          ),
+                                        }
+                                      : v,
+                                  ),
+                                )
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="remove"
+                              aria-label="Remover intervalo"
+                              onClick={() =>
+                                setDisp((x) =>
+                                  x.map((v, n) =>
+                                    n === i
+                                      ? {
+                                          ...v,
+                                          intervalos: v.intervalos.filter(
+                                            (_, pos) => pos !== k,
+                                          ),
+                                        }
+                                      : v,
+                                  ),
+                                )
+                              }
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                        {d.intervalos.length === 0 && (
+                          <div className="avBreakEmpty">
+                            Nenhum intervalo configurado para este dia.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="foot">
+              <div className="mini">
+                {!configNew && (
+                  <button className="btn" onClick={archive}>
+                    {agenda?.status === "arquivado" ? (
+                      <ArchiveRestore size={14} />
+                    ) : (
+                      <Archive size={14} />
+                    )}{" "}
+                    {agenda?.status === "arquivado" ? "Reativar" : "Arquivar"}
+                  </button>
+                )}
+                {!configNew && agenda?.status === "arquivado" && (
+                  <button className="btn danger" onClick={delAgenda}>
+                    <Trash2 size={14} />
+                    Excluir
+                  </button>
+                )}
+              </div>
+              <div className="mini">
+                <button className="btn" onClick={() => setConfig(false)}>
+                  Cancelar
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={saveConfig}
+                  disabled={busy}
+                >
+                  <Check size={14} />
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
-export default function AgendasPage(){return <div className="agendaTemplateShell"><Suspense fallback={<div>Carregando...</div>}><Page/></Suspense><AgendaPremiumRuntimeEnhancer/></div>}
+export default function AgendasPage() {
+  return (
+    <div className="agendaTemplateShell">
+      <Suspense fallback={<div>Carregando...</div>}>
+        <Page />
+      </Suspense>
+      <AgendaPremiumRuntimeEnhancer />
+    </div>
+  );
+}
