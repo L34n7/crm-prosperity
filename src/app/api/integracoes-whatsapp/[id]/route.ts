@@ -9,10 +9,94 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const MAX_TENTATIVAS_DESCONEXAO = 3;
+const ERROS_TRANSITORIOS_DESCONEXAO = new Set([
+  "55P03",
+  "57014",
+  "40001",
+  "40P01",
+]);
+
 type ConfirmacaoDesconexao = {
   confirmar_desconexao?: boolean;
   confirmar_desconexao_coex_no_app?: boolean;
 };
+
+type ErroBanco = {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+};
+
+function aguardar(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function erroTransitorioDesconexao(error: ErroBanco | null | undefined) {
+  return ERROS_TRANSITORIOS_DESCONEXAO.has(String(error?.code || ""));
+}
+
+async function executarDesconexaoComRetentativa(params: {
+  supabase: ReturnType<typeof getSupabaseAdmin>;
+  integracaoId: string;
+  empresaId: string;
+  usuarioId: string;
+}) {
+  let ultimoErro: ErroBanco | null = null;
+  let tentativasRealizadas = 0;
+
+  for (
+    let tentativa = 1;
+    tentativa <= MAX_TENTATIVAS_DESCONEXAO;
+    tentativa += 1
+  ) {
+    tentativasRealizadas = tentativa;
+
+    if (tentativa > 1) {
+      await aguardar(500 * tentativa);
+    }
+
+    const inicio = Date.now();
+    const { data, error } = await params.supabase.rpc(
+      "backup_e_excluir_integracao_whatsapp",
+      {
+        p_integracao_id: params.integracaoId,
+        p_empresa_id: params.empresaId,
+        p_usuario_id: params.usuarioId,
+      }
+    );
+
+    if (!error) {
+      return {
+        backupId: data,
+        error: null,
+        tentativas: tentativa,
+        duracaoMs: Date.now() - inicio,
+      };
+    }
+
+    ultimoErro = error;
+
+    if (!erroTransitorioDesconexao(error)) {
+      break;
+    }
+
+    console.warn("[WHATSAPP] Conflito transitório ao desconectar integração", {
+      integracaoId: params.integracaoId,
+      tentativa,
+      codigo: error.code,
+      duracaoMs: Date.now() - inicio,
+    });
+  }
+
+  return {
+    backupId: null,
+    error: ultimoErro,
+    tentativas: tentativasRealizadas,
+    duracaoMs: null,
+  };
+}
 
 export async function DELETE(
   request: Request,
@@ -46,7 +130,9 @@ export async function DELETE(
       );
     }
 
-    const body = (await request.json().catch(() => ({}))) as ConfirmacaoDesconexao;
+    const body = (await request
+      .json()
+      .catch(() => ({}))) as ConfirmacaoDesconexao;
 
     if (body.confirmar_desconexao !== true) {
       return NextResponse.json(
@@ -102,29 +188,38 @@ export async function DELETE(
       );
     }
 
-    const { data: backupId, error: exclusaoError } = await supabase.rpc(
-      "backup_e_excluir_integracao_whatsapp",
-      {
-        p_integracao_id: id,
-        p_empresa_id: usuario.empresa_id,
-        p_usuario_id: usuario.id,
-      }
-    );
+    const resultadoExclusao = await executarDesconexaoComRetentativa({
+      supabase,
+      integracaoId: id,
+      empresaId: usuario.empresa_id,
+      usuarioId: usuario.id,
+    });
 
-    if (exclusaoError) {
+    if (resultadoExclusao.error) {
+      const transitorio = erroTransitorioDesconexao(resultadoExclusao.error);
+
       console.error(
         "[WHATSAPP] Erro ao criar backup e excluir integração:",
-        exclusaoError
+        {
+          ...resultadoExclusao.error,
+          tentativas: resultadoExclusao.tentativas,
+          transitorio,
+        }
       );
+
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Não foi possível desconectar a integração. Nenhum dado foi excluído.",
+          error: transitorio
+            ? "A integração está sendo atualizada por outro processo. Aguarde alguns segundos e tente novamente."
+            : "Não foi possível desconectar a integração. Nenhum dado foi excluído.",
+          retryable: transitorio,
         },
-        { status: 500 }
+        { status: transitorio ? 409 : 500 }
       );
     }
+
+    const backupId = resultadoExclusao.backupId;
 
     const { count: totalIntegracoesRestantes, error: totalError } =
       await supabase
@@ -162,6 +257,8 @@ export async function DELETE(
       detalhes: {
         backup_id: backupId,
         destino: redirectTo,
+        tentativas: resultadoExclusao.tentativas,
+        duracao_ms: resultadoExclusao.duracaoMs,
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
