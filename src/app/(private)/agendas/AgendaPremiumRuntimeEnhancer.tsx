@@ -257,6 +257,14 @@ body .a2 .agendaPremiumDayCard:before{
   height:3px;
   border-radius:0 0 999px 999px;
   background:linear-gradient(90deg,var(--crm-primary-strong),var(--crm-success-strong));
+  opacity:0!important;
+  transform:scaleX(.78)!important;
+  transform-origin:center!important;
+  transition:opacity .18s ease,transform .18s ease!important;
+}
+body .a2 .agendaPremiumDayCard.agendaDayExpanded:before{
+  opacity:1!important;
+  transform:scaleX(1)!important;
 }
 body .a2 .agendaPremiumDayCard .av{padding-top:7px!important}
 body .a2 .repeat.agendaReminderCard{
@@ -284,6 +292,12 @@ body .a2 .repeat.agendaReminderCard{
 
 /* CRM_AGENDA_EXPANDABLE_DAY_TIMELINE_V7 */
 body .a2 .availability{gap:10px!important}
+body .a2 .availabilityHint{
+  margin:6px 0 13px!important;
+  color:var(--crm-text-muted)!important;
+  font-size:12px!important;
+  line-height:1.55!important;
+}
 body .a2 .availability>.avDay.agendaPremiumDayCard{
   display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:0!important;
   width:100%!important;min-width:0!important;padding:0!important;border-radius:15px!important;
@@ -295,7 +309,7 @@ body .a2 .availability>.avDay.agendaPremiumDayCard.agendaDayExpanded{
 }
 body .a2 .availability>.avDay.agendaPremiumDayCard>.av{
   display:grid!important;
-  grid-template-columns:32px minmax(100px,1fr) 62px 80px 12px 80px 78px 44px!important;
+  grid-template-columns:32px minmax(90px,1fr) 62px 104px 12px 104px 78px 44px!important;
   align-items:center!important;gap:7px!important;width:100%!important;min-width:0!important;
   padding:12px 13px!important;border-bottom:0!important;
 }
@@ -307,8 +321,9 @@ body .a2 .availability>.avDay.agendaPremiumDayCard>.av b{
   white-space:nowrap!important;font-size:12px!important;font-weight:900!important;
 }
 body .a2 .availability>.avDay.agendaPremiumDayCard>.av input{
-  width:100%!important;min-width:0!important;height:36px!important;padding:0 8px!important;
+  width:100%!important;min-width:0!important;height:38px!important;padding:0 4px!important;
   border-radius:10px!important;text-align:center!important;background:var(--crm-surface)!important;
+  font-size:12px!important;font-variant-numeric:tabular-nums!important;
 }
 body .a2 .agendaDayExpand{
   width:30px!important;min-width:30px!important;height:30px!important;padding:0!important;
@@ -370,6 +385,24 @@ body .a2 .agendaDayTimelineInvalid{padding:9px 10px!important;border:1px dashed 
 body .a2 .agendaPremiumIntervalHeader{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;width:100%!important;padding:2px 1px 4px!important}
 body .a2 .agendaPremiumIntervalRow{display:grid!important;grid-template-columns:minmax(130px,1fr) 100px 100px 40px!important;align-items:end!important;gap:9px!important;width:100%!important;min-width:0!important;margin:0!important}
 body .a2 .agendaPremiumIntervalEmpty{width:100%!important}
+
+body .a2 .drawer .agendaAppointmentSectionHeader{
+  align-items:flex-start!important;
+  gap:12px!important;
+  margin-bottom:8px!important;
+}
+body .a2 .drawer .agendaAppointmentSectionHeader h3{margin:4px 0 0!important}
+body .a2 .drawer .agendaAppointmentSectionHeader .btn{flex:0 0 auto!important}
+body .a2 .drawer .agendaAppointmentSectionDescription{
+  display:block!important;
+  margin:0 0 12px!important;
+  color:var(--crm-text-muted)!important;
+  font-size:11px!important;
+  line-height:1.5!important;
+}
+body .a2 .drawer .agendaParticipantsSection>.empty,
+body .a2 .drawer .agendaRemindersSection>.empty{margin-top:0!important}
+
 @media(max-width:720px){
   body .a2 .availability>.avDay.agendaPremiumDayCard>.av{grid-template-columns:32px minmax(0,1fr) 62px 42px!important}
   body .a2 .agendaDayExpand{grid-column:1!important;grid-row:1!important}
@@ -442,6 +475,40 @@ function decorateReminderCards(root: ParentNode) {
 
     const common = lowestCommonParent(integrationField, templateField, card);
     if (common && common !== card) common.classList.add("agendaReminderWhatsappGrid");
+  });
+}
+
+function decorateAppointmentSections(root: ParentNode) {
+  root.querySelectorAll<HTMLElement>(".drawer .section").forEach((section) => {
+    const heading = section.querySelector<HTMLElement>("h3");
+    if (!heading) return;
+
+    const title = normalize(heading.textContent);
+    const header = heading.closest<HTMLElement>(".row");
+
+    if (title.includes("participantes")) {
+      section.classList.add("agendaParticipantsSection");
+      header?.classList.add("agendaAppointmentSectionHeader");
+
+      let description = section.querySelector<HTMLElement>(".agendaParticipantsDescription");
+      if (!description && header) {
+        description = document.createElement("small");
+        description.className =
+          "agendaAppointmentSectionDescription agendaParticipantsDescription";
+        description.textContent =
+          "Adicione outras pessoas envolvidas neste compromisso e registre seus dados de contato.";
+        header.insertAdjacentElement("afterend", description);
+      }
+    }
+
+    if (title.includes("lembretes e confirmacao")) {
+      section.classList.add("agendaRemindersSection");
+      header?.classList.add("agendaAppointmentSectionHeader");
+      const description = Array.from(section.children).find(
+        (child) => child.tagName === "SMALL"
+      ) as HTMLElement | undefined;
+      description?.classList.add("agendaAppointmentSectionDescription");
+    }
   });
 }
 
@@ -705,6 +772,7 @@ export default function AgendaPremiumRuntimeEnhancer() {
     const apply = () => {
       frame = 0;
       decorateReminderCards(document);
+      decorateAppointmentSections(document);
       decorateIntervals(document);
     };
     const schedule = () => {
