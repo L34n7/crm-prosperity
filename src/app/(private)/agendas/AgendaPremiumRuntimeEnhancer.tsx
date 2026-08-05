@@ -4,6 +4,7 @@ import AgendaPremiumRuntimeEnhancerBase from "./AgendaPremiumRuntimeEnhancerBase
 import AgendaCalendarIntegrationScopeEnhancer from "./AgendaCalendarIntegrationScopeEnhancer";
 import AgendaManagementPresentation from "./AgendaManagementPresentation";
 import AgendaSaveFeedback from "./AgendaSaveFeedback";
+import AgendaAvailabilityPresentation from "./AgendaAvailabilityPresentation";
 
 export default function AgendaPremiumRuntimeEnhancer() {
   return (
@@ -12,6 +13,7 @@ export default function AgendaPremiumRuntimeEnhancer() {
       <AgendaCalendarIntegrationScopeEnhancer />
       <AgendaManagementPresentation />
       <AgendaSaveFeedback />
+      <AgendaAvailabilityPresentation />
     </>
   );
 }
