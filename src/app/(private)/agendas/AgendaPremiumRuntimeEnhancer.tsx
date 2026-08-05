@@ -421,6 +421,49 @@ body .a2 .drawer .agendaParticipantsDescription{
 body .a2 .drawer .agendaParticipantsSection>.empty,
 body .a2 .drawer .agendaRemindersSection>.empty{margin-top:0!important}
 
+/* CRM_AGENDA_REMINDER_DESCRIPTION_AND_DAY_PANEL_SPACING_V1 */
+body .a2 .drawer .agendaRemindersSection{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  grid-template-rows:auto auto auto!important;
+  column-gap:12px!important;
+  row-gap:3px!important;
+  align-items:start!important;
+}
+body .a2 .drawer .agendaRemindersSection>.agendaAppointmentSectionHeader{
+  display:contents!important;
+}
+body .a2 .drawer .agendaRemindersSection>.agendaAppointmentSectionHeader h3{
+  grid-column:1!important;
+  grid-row:1!important;
+  min-width:0!important;
+  margin:0!important;
+}
+body .a2 .drawer .agendaRemindersSection>.agendaAppointmentSectionHeader>.btn{
+  grid-column:2!important;
+  grid-row:1/3!important;
+  align-self:center!important;
+  margin-left:0!important;
+}
+body .a2 .drawer .agendaRemindersSection>.agendaAppointmentSectionDescription{
+  grid-column:1!important;
+  grid-row:2!important;
+  min-width:0!important;
+  max-width:100%!important;
+  margin:0 0 9px!important;
+  font-size:12px!important;
+  line-height:1.45!important;
+  overflow-wrap:anywhere!important;
+}
+body .a2 .drawer .agendaRemindersSection>.empty,
+body .a2 .drawer .agendaRemindersSection>.repeat{
+  grid-column:1/-1!important;
+}
+body .a2 .aside>.side:first-child>.empty,
+body .a2 .aside>.side:first-child>.item:first-of-type{
+  margin-top:12px!important;
+}
+
 @media(max-width:720px){
   body .a2 .availability>.avDay.agendaPremiumDayCard>.av{grid-template-columns:32px minmax(0,1fr) 62px 42px!important}
   body .a2 .agendaDayExpand{grid-column:1!important;grid-row:1!important}
