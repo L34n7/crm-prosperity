@@ -387,11 +387,11 @@ body .a2 .agendaPremiumIntervalRow{display:grid!important;grid-template-columns:
 body .a2 .agendaPremiumIntervalEmpty{width:100%!important}
 
 body .a2 .drawer .agendaAppointmentSectionHeader{
-  align-items:flex-start!important;
+  align-items:center!important;
   gap:12px!important;
-  margin-bottom:8px!important;
+  margin-bottom:4px!important;
 }
-body .a2 .drawer .agendaAppointmentSectionHeader h3{margin:4px 0 0!important}
+body .a2 .drawer .agendaAppointmentSectionHeader h3{margin:0!important}
 body .a2 .drawer .agendaAppointmentSectionHeader .btn{flex:0 0 auto!important}
 body .a2 .drawer .agendaAppointmentSectionDescription{
   display:block!important;
@@ -399,6 +399,24 @@ body .a2 .drawer .agendaAppointmentSectionDescription{
   color:var(--crm-text-muted)!important;
   font-size:11px!important;
   line-height:1.5!important;
+}
+body .a2 .drawer .agendaParticipantsHeader{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  grid-template-rows:auto auto!important;
+  column-gap:12px!important;
+  row-gap:3px!important;
+  align-items:center!important;
+  margin-bottom:12px!important;
+}
+body .a2 .drawer .agendaParticipantsHeader h3{grid-column:1!important;grid-row:1!important;margin:0!important}
+body .a2 .drawer .agendaParticipantsHeader>.btn{grid-column:2!important;grid-row:1/3!important;align-self:center!important}
+body .a2 .drawer .agendaParticipantsDescription{
+  grid-column:1!important;
+  grid-row:2!important;
+  margin:0!important;
+  font-size:12px!important;
+  line-height:1.45!important;
 }
 body .a2 .drawer .agendaParticipantsSection>.empty,
 body .a2 .drawer .agendaRemindersSection>.empty{margin-top:0!important}
@@ -488,16 +506,19 @@ function decorateAppointmentSections(root: ParentNode) {
 
     if (title.includes("participantes")) {
       section.classList.add("agendaParticipantsSection");
-      header?.classList.add("agendaAppointmentSectionHeader");
+      if (!header) return;
+      header.classList.add("agendaAppointmentSectionHeader", "agendaParticipantsHeader");
 
       let description = section.querySelector<HTMLElement>(".agendaParticipantsDescription");
-      if (!description && header) {
+      if (!description) {
         description = document.createElement("small");
         description.className =
           "agendaAppointmentSectionDescription agendaParticipantsDescription";
         description.textContent =
           "Adicione outras pessoas envolvidas neste compromisso e registre seus dados de contato.";
-        header.insertAdjacentElement("afterend", description);
+      }
+      if (description.parentElement !== header) {
+        heading.insertAdjacentElement("afterend", description);
       }
     }
 
