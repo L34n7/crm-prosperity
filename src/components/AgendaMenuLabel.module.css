@@ -1,0 +1,17 @@
+.link [data-agenda-menu-label-text="true"] {
+  font-size: 0 !important;
+}
+
+.link [data-agenda-menu-label-text="true"]::after {
+  color: inherit;
+  content: "Agenda";
+  font-size: 13px;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+@media (max-width: 760px) {
+  .link [data-agenda-menu-label-text="true"]::after {
+    font-size: 10px;
+  }
+}
