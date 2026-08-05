@@ -1,8 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  calendarIntegrationIds,
+  flowSupportsCalendar,
+  readIntegrationScope,
+} from "@/lib/agendas/integration-scope";
 import {
   extractTemplateBody,
   extractTemplateQuickReplyButtons,
@@ -26,7 +31,7 @@ function variableMetadata(value: unknown) {
     : {};
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const result = await getUsuarioContexto();
     if (!result.ok) {
@@ -44,7 +49,26 @@ export async function GET() {
       );
     }
 
+    const agendaId = String(
+      new URL(request.url).searchParams.get("agenda_id") || ""
+    ).trim();
     const supabase = getSupabaseAdmin();
+    const agendaResult = agendaId
+      ? await supabase
+          .from("calendarios")
+          .select("id, metadata_json")
+          .eq("empresa_id", companyId)
+          .eq("id", agendaId)
+          .maybeSingle()
+      : { data: null, error: null };
+
+    if (agendaId && (agendaResult.error || !agendaResult.data)) {
+      return NextResponse.json(
+        { ok: false, error: "Calendário não encontrado." },
+        { status: 404 }
+      );
+    }
+
     const [
       integrationsResult,
       templatesResult,
@@ -69,7 +93,7 @@ export async function GET() {
         .order("nome", { ascending: true }),
       supabase
         .from("automacao_fluxos")
-        .select("id, nome, status")
+        .select("id, nome, status, configuracao_json")
         .eq("empresa_id", companyId)
         .eq("status", "ativo")
         .order("nome", { ascending: true }),
@@ -109,7 +133,17 @@ export async function GET() {
         modo_integracao: integration.modo_integracao,
       }));
 
-    const templates = (templatesResult.data || [])
+    const explicitCalendarIds = calendarIntegrationIds(
+      agendaResult.data?.metadata_json
+    );
+    const calendarIds =
+      explicitCalendarIds.length > 0
+        ? explicitCalendarIds.filter((id) =>
+            integrations.some((item: any) => item.id === id)
+          )
+        : integrations.map((item: any) => String(item.id));
+
+    const allTemplates = (templatesResult.data || [])
       .filter((template: any) =>
         ["utility", "marketing"].includes(normalizeText(template.categoria))
       )
@@ -129,6 +163,17 @@ export async function GET() {
         };
       });
 
+    const allFlows = (flowsResult.data || []).map((flow: any) => {
+      const scope = readIntegrationScope(flow.configuracao_json);
+      return {
+        id: flow.id,
+        nome: flow.nome,
+        status: flow.status,
+        modo_integracoes: scope.modo,
+        integracao_whatsapp_ids: scope.ids,
+      };
+    });
+
     const variables = (variablesResult.data || []).map((item: any) => {
       const metadata = variableMetadata(item.metadata_json);
       return {
@@ -146,8 +191,23 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       integracoes: integrations,
-      templates,
-      fluxos: flowsResult.data || [],
+      agenda_integracao_whatsapp_ids: calendarIds,
+      templates: allTemplates.filter((template: any) =>
+        calendarIds.includes(String(template.integracao_whatsapp_id))
+      ),
+      todos_templates: allTemplates,
+      fluxos: allFlows.filter((flow: any) =>
+        flowSupportsCalendar(
+          {
+            integracoes_whatsapp: {
+              modo: flow.modo_integracoes,
+              ids: flow.integracao_whatsapp_ids,
+            },
+          },
+          calendarIds
+        )
+      ),
+      todos_fluxos: allFlows,
       variaveis: variables,
       execucao_automatica_ativa: true,
       total_integracoes: integrations.length,

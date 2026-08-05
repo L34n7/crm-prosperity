@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { normalizeIntegrationIds, withCalendarIntegrationIds } from "@/lib/agendas/integration-scope";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const DIAS_UTEIS_PADRAO = [1, 2, 3, 4, 5];
@@ -9,30 +10,48 @@ const TIMEZONE_PADRAO = "America/Sao_Paulo";
 
 function normalizarInteiro(valor: unknown, padrao: number, minimo: number, maximo: number) {
   const numero = Number(valor);
-
   if (!Number.isFinite(numero)) return padrao;
-
   return Math.max(minimo, Math.min(maximo, Math.round(numero)));
+}
+
+async function validarIntegracoes(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  empresaId: string,
+  value: unknown
+) {
+  const ids = normalizeIntegrationIds(value);
+  if (ids.length === 0) {
+    return { ids, error: "Selecione ao menos uma integração do WhatsApp para o calendário." };
+  }
+  const { data, error } = await supabase
+    .from("integracoes_whatsapp")
+    .select("id, status, coex_status, phone_number_id")
+    .eq("empresa_id", empresaId)
+    .in("id", ids);
+  if (error) return { ids: [], error: `Erro ao validar integrações: ${error.message}` };
+  const active = new Set(
+    (data || [])
+      .filter((item: any) =>
+        Boolean(item.phone_number_id) &&
+        (item.status === "ativa" || item.coex_status === "ativo")
+      )
+      .map((item: any) => String(item.id))
+  );
+  if (ids.some((id) => !active.has(id))) {
+    return { ids: [], error: "Uma integração selecionada não está ativa ou não pertence à empresa." };
+  }
+  return { ids, error: "" };
 }
 
 export async function GET(request: NextRequest) {
   try {
     const resultado = await getUsuarioContexto();
-
     if (!resultado.ok) {
-      return NextResponse.json(
-        { ok: false, error: resultado.error },
-        { status: resultado.status }
-      );
+      return NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status });
     }
-
     const { usuario } = resultado;
-
     if (!usuario.empresa_id) {
-      return NextResponse.json(
-        { ok: false, error: "Usuario sem empresa vinculada." },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "Usuario sem empresa vinculada." }, { status: 400 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -42,32 +61,20 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("calendarios")
-      .select(
-        "id, empresa_id, nome, descricao, timezone, duracao_minutos, intervalo_minutos, antecedencia_minutos, janela_dias, status, metadata_json, created_at, updated_at"
-      )
+      .select("id, empresa_id, nome, descricao, timezone, duracao_minutos, intervalo_minutos, antecedencia_minutos, janela_dias, status, metadata_json, created_at, updated_at")
       .eq("empresa_id", usuario.empresa_id)
       .order("created_at", { ascending: false });
 
-    if (["ativo", "inativo", "arquivado"].includes(status)) {
-      query = query.eq("status", status);
-    }
-
-    if (busca) {
-      query = query.ilike("nome", `%${busca}%`);
-    }
+    if (["ativo", "inativo", "arquivado"].includes(status)) query = query.eq("status", status);
+    if (busca) query = query.ilike("nome", `%${busca}%`);
 
     const { data: agendas, error } = await query;
-
     if (error) {
-      return NextResponse.json(
-        { ok: false, error: `Erro ao buscar agendas: ${error.message}` },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: `Erro ao buscar agendas: ${error.message}` }, { status: 500 });
     }
 
     const agendaIds = (agendas || []).map((agenda: any) => agenda.id);
     const proximosPorAgenda = new Map<string, any>();
-
     if (agendaIds.length > 0) {
       const { data: proximos } = await supabase
         .from("agenda_agendamentos")
@@ -77,7 +84,6 @@ export async function GET(request: NextRequest) {
         .in("status", ["agendado", "confirmado"])
         .gte("inicio_at", new Date().toISOString())
         .order("inicio_at", { ascending: true });
-
       for (const agendamento of proximos || []) {
         if (!proximosPorAgenda.has(agendamento.agenda_id)) {
           proximosPorAgenda.set(agendamento.agenda_id, agendamento);
@@ -85,18 +91,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const prioridadeStatus: Record<string, number> = {
-      ativo: 0,
-      inativo: 1,
-      arquivado: 2,
-    };
+    const prioridadeStatus: Record<string, number> = { ativo: 0, inativo: 1, arquivado: 2 };
     const agendasOrdenadas = [...(agendas || [])].sort((a: any, b: any) => {
-      const prioridade =
-        (prioridadeStatus[a.status] ?? 99) - (prioridadeStatus[b.status] ?? 99);
-
-      if (prioridade !== 0) return prioridade;
-
-      return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+      const prioridade = (prioridadeStatus[a.status] ?? 99) - (prioridadeStatus[b.status] ?? 99);
+      return prioridade || String(b.created_at || "").localeCompare(String(a.created_at || ""));
     });
 
     return NextResponse.json({
@@ -107,43 +105,43 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno ao buscar agendas." },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: error?.message || "Erro interno ao buscar agendas." }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const resultado = await getUsuarioContexto();
-
     if (!resultado.ok) {
-      return NextResponse.json(
-        { ok: false, error: resultado.error },
-        { status: resultado.status }
-      );
+      return NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status });
     }
-
     const { usuario } = resultado;
-
     if (!usuario.empresa_id) {
-      return NextResponse.json(
-        { ok: false, error: "Usuario sem empresa vinculada." },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "Usuario sem empresa vinculada." }, { status: 400 });
     }
 
     const body = await request.json();
     const nome = String(body?.nome || "").trim();
     const descricao = String(body?.descricao || "").trim();
     const supabase = getSupabaseAdmin();
-
     if (!nome) {
-      return NextResponse.json(
-        { ok: false, error: "Nome da agenda e obrigatorio." },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "Nome da agenda e obrigatorio." }, { status: 400 });
+    }
+
+    let integrationIds = normalizeIntegrationIds(body?.integracao_whatsapp_ids);
+    if (integrationIds.length === 0) {
+      const { data: active } = await supabase
+        .from("integracoes_whatsapp")
+        .select("id, status, coex_status, phone_number_id")
+        .eq("empresa_id", usuario.empresa_id)
+        .or("status.eq.ativa,coex_status.eq.ativo");
+      integrationIds = (active || [])
+        .filter((item: any) => Boolean(item.phone_number_id))
+        .map((item: any) => String(item.id));
+    }
+    const validation = await validarIntegracoes(supabase, usuario.empresa_id, integrationIds);
+    if (validation.error) {
+      return NextResponse.json({ ok: false, error: validation.error }, { status: 400 });
     }
 
     const { data: agenda, error } = await supabase
@@ -155,14 +153,10 @@ export async function POST(request: NextRequest) {
         timezone: TIMEZONE_PADRAO,
         duracao_minutos: normalizarInteiro(body?.duracao_minutos, 60, 5, 1440),
         intervalo_minutos: normalizarInteiro(body?.intervalo_minutos, 30, 5, 1440),
-        antecedencia_minutos: normalizarInteiro(
-          body?.antecedencia_minutos,
-          120,
-          0,
-          525600
-        ),
+        antecedencia_minutos: normalizarInteiro(body?.antecedencia_minutos, 120, 0, 525600),
         janela_dias: normalizarInteiro(body?.janela_dias, 14, 1, 180),
         status: body?.status === "inativo" ? "inativo" : "ativo",
+        metadata_json: withCalendarIntegrationIds(body?.metadata_json, validation.ids),
         created_by: usuario.id,
         updated_by: usuario.id,
       })
@@ -170,10 +164,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error || !agenda) {
-      return NextResponse.json(
-        { ok: false, error: `Erro ao criar agenda: ${error?.message}` },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: `Erro ao criar agenda: ${error?.message}` }, { status: 500 });
     }
 
     const disponibilidades = DIAS_UTEIS_PADRAO.map((dia) => ({
@@ -184,29 +175,18 @@ export async function POST(request: NextRequest) {
       hora_fim: "18:00",
       ativo: true,
     }));
-
     const { error: disponibilidadeError } = await supabase
       .from("agenda_disponibilidades")
       .insert(disponibilidades);
-
     if (disponibilidadeError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: `Agenda criada, mas houve erro ao criar horarios: ${disponibilidadeError.message}`,
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({
+        ok: false,
+        error: `Agenda criada, mas houve erro ao criar horarios: ${disponibilidadeError.message}`,
+      }, { status: 500 });
     }
 
-    return NextResponse.json({
-      ok: true,
-      agenda,
-    });
+    return NextResponse.json({ ok: true, agenda });
   } catch (error: any) {
-    return NextResponse.json(
-      { ok: false, error: error?.message || "Erro interno ao criar agenda." },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: error?.message || "Erro interno ao criar agenda." }, { status: 500 });
   }
 }

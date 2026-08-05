@@ -1,16 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  calendarIntegrationIds,
+  flowSupportsCalendar,
+  flowSupportsIntegration,
+} from "./integration-scope";
 import { notifyResponsible, sendEmail, startPostFlow } from "./automation-runtime-actions";
 import { cancelJob, completeJob, failJob, loadContext } from "./automation-runtime-context";
 import { sendWhatsApp } from "./automation-runtime-whatsapp";
-import { AgendaAutomationError, asObject, isApplicable, type Job } from "./automation-runtime-types";
+import { AgendaAutomationError, asObject, isApplicable, type Context, type Job } from "./automation-runtime-types";
 import { processAgendaResponseFlows } from "./agenda-response-runtime";
-import { isIndividualReminder, processIndividualReminder, refreshIndividualReminderStatus } from "./individual-reminder-runtime"; // CRM_AGENDA_INDIVIDUAL_REMINDER_POST_FLOW_V1
+import { isIndividualReminder, processIndividualReminder, refreshIndividualReminderStatus } from "./individual-reminder-runtime";
 
 const supabase = getSupabaseAdmin();
+const DEFAULT_POST_ATTENDANCE_GRACE_MINUTES = 30;
 
-// CRM_AGENDA_POST_ATTENDANCE_TEMPLATE_V1
 async function executionStillCurrent(job: Job) {
   const { data, error } = await supabase
     .from("agenda_automacao_execucoes")
@@ -25,6 +30,55 @@ async function executionStillCurrent(job: Job) {
     data?.status === "processando" &&
     String(data?.regra_id || "") === String(job.regra_id || "")
   );
+}
+
+function postAttendanceExpired(context: Context) {
+  if (context.job.tipo !== "pos_atendimento") return false;
+  const configured = Number(
+    asObject(context.rule?.configuracao_json).tolerancia_atraso_minutos
+  );
+  const graceMinutes = Number.isFinite(configured)
+    ? Math.min(1440, Math.max(5, Math.round(configured)))
+    : DEFAULT_POST_ATTENDANCE_GRACE_MINUTES;
+  const scheduledAt = Date.parse(String(context.job.executar_em || ""));
+  if (!Number.isFinite(scheduledAt)) return true;
+  return Date.now() > scheduledAt + graceMinutes * 60_000;
+}
+
+function integrationScopeProblem(context: Context) {
+  const allowed = calendarIntegrationIds(context.agenda?.metadata_json);
+
+  if (context.job.canal === "whatsapp") {
+    const integrationId = String(context.rule?.integracao_whatsapp_id || "");
+    if (allowed.length > 0 && !allowed.includes(integrationId)) {
+      return "A integração do disparo não pertence às integrações autorizadas neste calendário.";
+    }
+  }
+
+  if (context.job.canal === "fluxo") {
+    if (!flowSupportsCalendar(context.flow?.configuracao_json, allowed)) {
+      return "O fluxo de pós-atendimento não é compatível com as integrações autorizadas neste calendário.";
+    }
+    const conversationIntegrationId = String(
+      context.conversation?.integracao_whatsapp_id || ""
+    );
+    if (!conversationIntegrationId) {
+      return "Não existe conversa com integração do WhatsApp compatível para iniciar o pós-atendimento.";
+    }
+    if (allowed.length > 0 && !allowed.includes(conversationIntegrationId)) {
+      return "A conversa encontrada pertence a uma integração não autorizada neste calendário.";
+    }
+    if (
+      !flowSupportsIntegration(
+        context.flow?.configuracao_json,
+        conversationIntegrationId
+      )
+    ) {
+      return "O fluxo selecionado não permite a integração da conversa encontrada.";
+    }
+  }
+
+  return "";
 }
 
 async function processJob(job: Job) {
@@ -46,6 +100,18 @@ async function processJob(job: Job) {
   const context = await loadContext(job);
   if (!context) {
     await cancelJob(job, "Regra, agenda ou agendamento não encontrado.");
+    return "cancelado" as const;
+  }
+  if (postAttendanceExpired(context)) {
+    await cancelJob(
+      job,
+      "Pós-atendimento cancelado porque ultrapassou a tolerância de 30 minutos após o horário programado."
+    );
+    return "cancelado" as const;
+  }
+  const scopeProblem = integrationScopeProblem(context);
+  if (scopeProblem) {
+    await cancelJob(job, scopeProblem);
     return "cancelado" as const;
   }
   if (!isApplicable(context)) {

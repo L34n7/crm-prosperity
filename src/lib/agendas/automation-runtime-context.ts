@@ -1,12 +1,28 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { calendarIntegrationIds } from "./integration-scope";
 import { asObject, type Context, type Job } from "./automation-runtime-types";
 
 const supabase = getSupabaseAdmin();
-const APPROVED = ["approved", "APPROVED", "aprovado"]; // CRM_AGENDA_POST_ATTENDANCE_TEMPLATE_V1
+const APPROVED = ["approved", "APPROVED", "aprovado"];
 
-async function findConversation(appointment: any, companyId: string) {
+async function findConversation(
+  appointment: any,
+  companyId: string,
+  allowedIntegrationIds: string[],
+  preferredIntegrationId?: string | null
+) {
+  const preferred = String(preferredIntegrationId || "").trim();
+  const integrationAllowed = (id: unknown) => {
+    const value = String(id || "").trim();
+    if (!value) return false;
+    if (allowedIntegrationIds.length > 0 && !allowedIntegrationIds.includes(value)) {
+      return false;
+    }
+    return !preferred || value === preferred;
+  };
+
   const appointmentConversationId = String(appointment.conversa_id || "").trim();
   if (appointmentConversationId) {
     const { data } = await supabase
@@ -17,17 +33,25 @@ async function findConversation(appointment: any, companyId: string) {
       .eq("empresa_id", companyId)
       .eq("id", appointmentConversationId)
       .maybeSingle();
-    if (data) return data;
+    if (data && integrationAllowed(data.integracao_whatsapp_id)) return data;
   }
 
   if (!appointment.contato_id) return null;
-  const { data } = await supabase
+  let query = supabase
     .from("conversas")
     .select(
       "id, empresa_id, contato_id, responsavel_id, integracao_whatsapp_id, status, bot_ativo, aguardando_atendente, last_message_at, last_inbound_message_at, window_expires_at, closed_at"
     )
     .eq("empresa_id", companyId)
-    .eq("contato_id", appointment.contato_id)
+    .eq("contato_id", appointment.contato_id);
+
+  if (preferred) {
+    query = query.eq("integracao_whatsapp_id", preferred);
+  } else if (allowedIntegrationIds.length > 0) {
+    query = query.in("integracao_whatsapp_id", allowedIntegrationIds);
+  }
+
+  const { data } = await query
     .order("last_message_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -64,7 +88,17 @@ export async function loadContext(job: Job): Promise<Context | null> {
   if (!appointmentResult.data || !agendaResult.data || !ruleResult.data) return null;
 
   const appointment = appointmentResult.data;
+  const agenda = agendaResult.data;
   const rule = ruleResult.data;
+  const appointmentMetadata = asObject(appointment.metadata_json);
+  const allowedIntegrationIds = calendarIntegrationIds(agenda.metadata_json);
+  const preferredIntegrationId = String(
+    appointmentMetadata.integracao_whatsapp_id ||
+      appointmentMetadata.whatsapp_integracao_id ||
+      (job.canal === "whatsapp" ? rule.integracao_whatsapp_id : "") ||
+      ""
+  ).trim();
+
   const [contactResult, responsibleResult, conversation] = await Promise.all([
     appointment.contato_id
       ? supabase
@@ -84,7 +118,12 @@ export async function loadContext(job: Job): Promise<Context | null> {
           .eq("id", appointment.responsavel_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
-    findConversation(appointment, job.empresa_id),
+    findConversation(
+      appointment,
+      job.empresa_id,
+      allowedIntegrationIds,
+      preferredIntegrationId || null
+    ),
   ]);
 
   if (contactResult.error) throw new Error(contactResult.error.message);
@@ -177,7 +216,7 @@ export async function loadContext(job: Job): Promise<Context | null> {
   return {
     job,
     rule,
-    agenda: agendaResult.data,
+    agenda,
     appointment,
     contact: contactResult.data || null,
     responsible: responsibleResult.data || null,
