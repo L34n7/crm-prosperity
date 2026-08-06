@@ -30,8 +30,21 @@ import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
 import { createClient } from "@/lib/supabase/client";
 import { solicitarAtualizacaoFeedbackAgendasHeader } from "@/lib/header-summary/events";
-
-import AgendaPremiumRuntimeEnhancer from "./AgendaPremiumRuntimeEnhancer";
+import AgendaAutomationSettings, {
+  automationCardsFromRules,
+  serializeAutomationCards,
+  type AgendaAutomationCardState,
+  type AgendaAutomationOptions,
+  type AgendaAutomationRule,
+} from "./AgendaAutomationSettings";
+import AgendaAvailabilityEditor, {
+  type AgendaAvailabilityDay,
+} from "./AgendaAvailabilityEditor";
+import AgendaCalendarIntegrationScope from "./AgendaCalendarIntegrationScope";
+import AgendaTemplateConfiguration, {
+  defaultTemplateConfiguration,
+  type AgendaTemplateConfigurationValue,
+} from "./AgendaTemplateConfiguration";
 
 import styles from "./page.module.css";
 
@@ -85,20 +98,11 @@ type Lembrete = {
     integracao_whatsapp_id?: string | null;
     whatsapp_template_id?: string | null;
     marketing_aceito?: boolean;
-    template_variaveis?: unknown[];
+    template_variaveis?: AgendaTemplateConfigurationValue["template_variaveis"];
+    template_botoes?: AgendaTemplateConfigurationValue["template_botoes"];
   };
 };
-type ReminderOptions = {
-  integracoes: { id: string; nome_conexao: string }[];
-  templates: {
-    id: string;
-    nome: string;
-    idioma: string;
-    categoria: string;
-    integracao_whatsapp_id: string;
-    variaveis?: number[];
-  }[];
-}; // CRM_AGENDA_INDIVIDUAL_REMINDER_POST_FLOW_V1
+type ReminderOptions = AgendaAutomationOptions;
 type Hist = {
   id: string;
   acao: string;
@@ -165,20 +169,7 @@ type Form = {
   resultado: string;
   observacoes_internas: string;
 };
-type IntervaloDia = {
-  id?: string;
-  nome: string;
-  hora_inicio: string;
-  hora_fim: string;
-  ativo: boolean;
-};
-type Disp = {
-  dia_semana: number;
-  hora_inicio: string;
-  hora_fim: string;
-  ativo: boolean;
-  intervalos: IntervaloDia[];
-};
+type Disp = AgendaAvailabilityDay;
 const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
   diasFull = [
     "Domingo",
@@ -296,6 +287,8 @@ function Page() {
   const [reminderOptions, setReminderOptions] = useState<ReminderOptions>({
     integracoes: [],
     templates: [],
+    fluxos: [],
+    variaveis: [],
   });
   useEffect(() => {
     let active = true;
@@ -306,6 +299,8 @@ function Page() {
           setReminderOptions({
             integracoes: j.integracoes || [],
             templates: j.templates || [],
+            fluxos: j.fluxos || [],
+            variaveis: j.variaveis || [],
           });
       })
       .catch(() => undefined);
@@ -371,6 +366,18 @@ function Page() {
         intervalos: [],
       })),
     );
+  const [configOptions, setConfigOptions] = useState<AgendaAutomationOptions>({
+      integracoes: [],
+      templates: [],
+      fluxos: [],
+      variaveis: [],
+    }),
+    [agendaIntegrationIds, setAgendaIntegrationIds] = useState<string[]>([]),
+    [automationCards, setAutomationCards] = useState<
+      AgendaAutomationCardState[]
+    >(() => automationCardsFromRules([])),
+    [configDetailsLoading, setConfigDetailsLoading] = useState(false),
+    [configDetailsError, setConfigDetailsError] = useState("");
   const [unidadeDuracaoAgenda, setUnidadeDuracaoAgenda] = useState<
       "minutos" | "horas"
     >("minutos"),
@@ -599,6 +606,9 @@ function Page() {
     if (!agendaId) return;
     try {
       setBusy(true);
+      if (configDetailsLoading)
+        throw Error("Aguarde o carregamento das configurações da agenda.");
+      if (configDetailsError) throw Error(configDetailsError);
       await Promise.all([loadData(agendaId), loadFeedback()]);
       setOk("Agenda atualizada.");
     } catch (e: any) {
@@ -813,6 +823,66 @@ function Page() {
       setBusy(false);
     }
   };
+  const loadConfigDetails = async (calendarId?: string) => {
+    setConfigDetailsLoading(true);
+    setConfigDetailsError("");
+    try {
+      const query = calendarId
+        ? `?agenda_id=${encodeURIComponent(calendarId)}`
+        : "";
+      const [optionsResponse, rulesResponse] = await Promise.all([
+        fetch(`/api/agendas/automacoes/opcoes${query}`, {
+          cache: "no-store",
+        }),
+        calendarId
+          ? fetch(`/api/agendas/${calendarId}/automacoes`, {
+              cache: "no-store",
+            })
+          : Promise.resolve(null),
+      ]);
+      const optionsData = await optionsResponse.json();
+      if (!optionsResponse.ok || !optionsData?.ok)
+        throw Error(
+          optionsData?.error || "Não foi possível carregar as integrações.",
+        );
+
+      let rules: AgendaAutomationRule[] = [];
+      if (rulesResponse) {
+        const rulesData = await rulesResponse.json();
+        if (!rulesResponse.ok || !rulesData?.ok)
+          throw Error(
+            rulesData?.error || "Não foi possível carregar as automações.",
+          );
+        rules = Array.isArray(rulesData.regras) ? rulesData.regras : [];
+      }
+
+      const options: AgendaAutomationOptions = {
+        integracoes: optionsData.integracoes || [],
+        templates: optionsData.todos_templates || optionsData.templates || [],
+        fluxos: optionsData.todos_fluxos || optionsData.fluxos || [],
+        variaveis: optionsData.variaveis || [],
+      };
+      const selected = Array.isArray(optionsData.agenda_integracao_whatsapp_ids)
+        ? optionsData.agenda_integracao_whatsapp_ids
+        : options.integracoes.map((item) => item.id);
+
+      setConfigOptions(options);
+      setAgendaIntegrationIds(
+        selected.length > 0
+          ? selected
+          : options.integracoes.map((item) => item.id),
+      );
+      setAutomationCards(automationCardsFromRules(rules));
+    } catch (error) {
+      setConfigDetailsError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar as configurações da agenda.",
+      );
+    } finally {
+      setConfigDetailsLoading(false);
+    }
+  };
   const openConfig = async (isNew: boolean) => {
     setConfigNew(isNew);
     setUnidadeDuracaoAgenda("minutos");
@@ -837,6 +907,7 @@ function Page() {
           intervalos: [],
         })),
       );
+      void loadConfigDetails();
     } else if (agenda) {
       setAf({
         nome: agenda.nome,
@@ -874,12 +945,43 @@ function Page() {
           ),
         );
       }
+      void loadConfigDetails(agenda.id);
     }
     setConfig(true);
   };
   const saveConfig = async () => {
     try {
       setBusy(true);
+      if (
+        configOptions.integracoes.length > 0 &&
+        agendaIntegrationIds.length === 0
+      )
+        throw Error("Selecione ao menos uma integração para o calendário.");
+
+      for (const card of automationCards.filter((item) => item.ativo)) {
+        if (card.canais.length === 0)
+          throw Error("Selecione um canal para cada automação ativa.");
+        if (
+          card.canais.includes("whatsapp") &&
+          (!card.integracaoId || !card.templateId)
+        )
+          throw Error(
+            "Selecione a integração e o template em todas as automações ativas do WhatsApp.",
+          );
+        const template = configOptions.templates.find(
+          (item) => item.id === card.templateId,
+        );
+        if (
+          template?.categoria.toUpperCase() === "MARKETING" &&
+          !card.templateConfig.marketing_aceito
+        )
+          throw Error(
+            "Confirme a ciência sobre o template de Marketing antes de salvar.",
+          );
+        if (card.canais.includes("fluxo") && !card.fluxoId)
+          throw Error("Selecione o fluxo da automação de pós-atendimento.");
+      }
+
       let id = agendaId;
       const payload = {
         ...af,
@@ -887,6 +989,7 @@ function Page() {
         intervalo_minutos: Number(af.intervalo_minutos),
         antecedencia_minutos: Number(af.antecedencia_minutos),
         janela_dias: Number(af.janela_dias),
+        integracao_whatsapp_ids: agendaIntegrationIds,
       };
       const r = await fetch(configNew ? "/api/agendas" : `/api/agendas/${id}`, {
           method: configNew ? "POST" : "PATCH",
@@ -903,6 +1006,19 @@ function Page() {
         }),
         aj = await ar.json();
       if (!ar.ok || !aj.ok) throw Error(aj.error);
+      const automationResponse = await fetch(`/api/agendas/${id}/automacoes`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            regras: serializeAutomationCards(automationCards),
+            integracao_whatsapp_ids: agendaIntegrationIds,
+          }),
+        }),
+        automationData = await automationResponse.json();
+      if (!automationResponse.ok || !automationData?.ok)
+        throw Error(
+          automationData?.error || "Não foi possível salvar as automações.",
+        );
       setConfig(false);
       await loadAgendas(id);
       setAgendaId(id);
@@ -972,12 +1088,26 @@ function Page() {
       />
       <main className="wrap">
         <div className="head">
-          <div>
-            <h1>Agendamentos</h1>
-            <p>
-              Clientes, responsáveis, registros do nicho, lembretes, resultados
-              e histórico em um só lugar.
-            </p>
+          <div className="agendaGoogleHeaderSlot">
+            <div className="agendaGoogleHeaderSummary">
+              <span
+                className={`agendaGoogleStatusDot ${
+                  google.conectado ? "isConnected" : ""
+                }`}
+                aria-hidden="true"
+              />
+              <div className="agendaGoogleHeaderText">
+                <strong>
+                  {google.conectado
+                    ? "Google Calendar conectado"
+                    : "Agenda sem Google Calendar"}
+                </strong>
+                <small>
+                  {google.email ||
+                    "Conecte um calendário para sincronização bidirecional."}
+                </small>
+              </div>
+            </div>
           </div>
           <div className="actions">
             <select
@@ -2042,6 +2172,23 @@ function Page() {
                       item.integracao_whatsapp_id ===
                         reminderMetadata.integracao_whatsapp_id,
                   );
+                  const fallbackConfiguration =
+                    defaultTemplateConfiguration(selectedTemplate);
+                  const templateConfiguration: AgendaTemplateConfigurationValue =
+                    {
+                      template_variaveis: Array.isArray(
+                        reminderMetadata.template_variaveis,
+                      )
+                        ? reminderMetadata.template_variaveis
+                        : fallbackConfiguration.template_variaveis,
+                      template_botoes: Array.isArray(
+                        reminderMetadata.template_botoes,
+                      )
+                        ? reminderMetadata.template_botoes
+                        : fallbackConfiguration.template_botoes,
+                      marketing_aceito:
+                        reminderMetadata.marketing_aceito === true,
+                    };
                   return (
                     <div className="repeat" key={r.id || i}>
                       <div className="rem">
@@ -2180,6 +2327,8 @@ function Page() {
                                               e.target.value || null,
                                             whatsapp_template_id: null,
                                             marketing_aceito: false,
+                                            template_variaveis: [],
+                                            template_botoes: [],
                                           },
                                         }
                                       : x,
@@ -2202,21 +2351,30 @@ function Page() {
                                 reminderMetadata.whatsapp_template_id || ""
                               }
                               onChange={(e) =>
-                                setForm({
-                                  ...form,
-                                  lembretes: form.lembretes.map((x, n) =>
-                                    n === i
-                                      ? {
-                                          ...x,
-                                          metadata_json: {
-                                            ...(x.metadata_json || {}),
-                                            whatsapp_template_id:
-                                              e.target.value || null,
-                                            marketing_aceito: false,
-                                          },
-                                        }
-                                      : x,
-                                  ),
+                                setForm((current) => {
+                                  const templateId = e.target.value;
+                                  const template =
+                                    reminderOptions.templates.find(
+                                      (item) => item.id === templateId,
+                                    );
+                                  const configuration =
+                                    defaultTemplateConfiguration(template);
+                                  return {
+                                    ...current,
+                                    lembretes: current.lembretes.map((x, n) =>
+                                      n === i
+                                        ? {
+                                            ...x,
+                                            metadata_json: {
+                                              ...(x.metadata_json || {}),
+                                              whatsapp_template_id:
+                                                templateId || null,
+                                              ...configuration,
+                                            },
+                                          }
+                                        : x,
+                                    ),
+                                  };
                                 })
                               }
                             >
@@ -2228,44 +2386,29 @@ function Page() {
                               ))}
                             </select>
                           </div>
-                          {selectedTemplate?.categoria?.toUpperCase() ===
-                            "MARKETING" && (
-                            <label className="remMarketing">
-                              <input
-                                type="checkbox"
-                                checked={
-                                  reminderMetadata.marketing_aceito === true
-                                }
-                                onChange={(e) =>
-                                  setForm({
-                                    ...form,
-                                    lembretes: form.lembretes.map((x, n) =>
-                                      n === i
-                                        ? {
-                                            ...x,
-                                            metadata_json: {
-                                              ...(x.metadata_json || {}),
-                                              marketing_aceito:
-                                                e.target.checked,
-                                            },
-                                          }
-                                        : x,
-                                    ),
-                                  })
-                                }
-                              />
-                              <span>
-                                Confirmo o uso deste template classificado como
-                                Marketing e os riscos aplicáveis às diretrizes
-                                da Meta.
-                              </span>
-                            </label>
-                          )}
-                          <div className="remWhatsappNote">
-                            As variáveis mais comuns do template serão
-                            preenchidas automaticamente com nome, data, horário,
-                            título, calendário e local do compromisso.
-                          </div>
+                          <AgendaTemplateConfiguration
+                            template={selectedTemplate}
+                            flows={reminderOptions.fluxos}
+                            customVariables={reminderOptions.variaveis}
+                            value={templateConfiguration}
+                            onChange={(configuration) =>
+                              setForm((current) => ({
+                                ...current,
+                                lembretes: current.lembretes.map(
+                                  (item, position) =>
+                                    position === i
+                                      ? {
+                                          ...item,
+                                          metadata_json: {
+                                            ...(item.metadata_json || {}),
+                                            ...configuration,
+                                          },
+                                        }
+                                      : item,
+                                ),
+                              }))
+                            }
+                          />
                         </div>
                       )}
                       {r.erro && (
@@ -2609,9 +2752,9 @@ function Page() {
                     <div>
                       <h3>Configurações de agendamento</h3>
                       <p>
-                        Defina a duração dos atendimentos, o espaço entre horários,
-                        a antecedência mínima e o período disponível para novos
-                        agendamentos.
+                        Defina a duração dos atendimentos, o espaço entre
+                        horários, a antecedência mínima e o período disponível
+                        para novos agendamentos.
                       </p>
                     </div>
                   </div>
@@ -2660,7 +2803,9 @@ function Page() {
                         <input
                           type="number"
                           min="0"
-                          step={unidadeIntervaloAgenda === "horas" ? "0.25" : "1"}
+                          step={
+                            unidadeIntervaloAgenda === "horas" ? "0.25" : "1"
+                          }
                           value={valorTempoAgenda(
                             af.intervalo_minutos,
                             unidadeIntervaloAgenda,
@@ -2741,6 +2886,70 @@ function Page() {
                   </div>
                 </section>
               </div>
+              <section className="agendaGoogleBindingCard agendaGoogleConfigCard">
+                <h3 className="agendaGoogleBindingTitle">Google Calendar</h3>
+                <div className="mini agendaGoogleState">
+                  <span className={`pill ${google.conectado ? "on" : ""}`}>
+                    {google.conectado ? "Conectado" : "Não conectado"}
+                  </span>
+                  <span className="agendaGoogleBindingStatus">
+                    {configNew
+                      ? "Salve a agenda para habilitar a conexão individual."
+                      : google.email ||
+                        "Vincule somente esta agenda ao calendário desejado."}
+                  </span>
+                </div>
+                <div className="mini agendaGoogleCardActions">
+                  {!configNew && google.conectado ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => void googleAction("sync")}
+                        disabled={busy}
+                      >
+                        <RefreshCw size={14} />
+                        Sincronizar agora
+                      </button>
+                      <button
+                        type="button"
+                        className="btn danger"
+                        onClick={() => void googleAction("disconnect")}
+                        disabled={busy}
+                      >
+                        <Unlink size={14} />
+                        Desvincular
+                      </button>
+                    </>
+                  ) : !configNew ? (
+                    <button
+                      type="button"
+                      className="btn primary"
+                      onClick={() =>
+                        (location.href = `/api/agendas/${agendaId}/google-calendar?acao=conectar`)
+                      }
+                    >
+                      <Link2 size={14} />
+                      Conectar
+                    </button>
+                  ) : null}
+                </div>
+              </section>
+              <AgendaCalendarIntegrationScope
+                integrations={configOptions.integracoes}
+                selectedIds={agendaIntegrationIds}
+                onChange={setAgendaIntegrationIds}
+                loading={configDetailsLoading}
+                error={configDetailsError}
+              />
+              <AgendaAutomationSettings
+                options={configOptions}
+                selectedIntegrationIds={agendaIntegrationIds}
+                cards={automationCards}
+                onChange={setAutomationCards}
+                loading={configDetailsLoading}
+                error={configDetailsError}
+              />
               <h3 className={styles.availabilitySectionTitle}>
                 Disponibilidade semanal
               </h3>
@@ -2749,195 +2958,11 @@ function Page() {
                 que não poderão receber agendamentos, como almoço, café ou
                 compromissos internos.
               </p>
-              <div className="availability">
-                {disp.map((d, i) => (
-                  <div className="avDay" key={d.dia_semana}>
-                    <div className="av">
-                      <b style={{ fontSize: 10 }}>{diasFull[d.dia_semana]}</b>
-                      <input
-                        type="time"
-                        value={d.hora_inicio.slice(0, 5)}
-                        disabled={!d.ativo}
-                        onChange={(e) =>
-                          setDisp((x) =>
-                            x.map((v, n) =>
-                              n === i
-                                ? { ...v, hora_inicio: e.target.value }
-                                : v,
-                            ),
-                          )
-                        }
-                      />
-                      <input
-                        type="time"
-                        value={d.hora_fim.slice(0, 5)}
-                        disabled={!d.ativo}
-                        onChange={(e) =>
-                          setDisp((x) =>
-                            x.map((v, n) =>
-                              n === i ? { ...v, hora_fim: e.target.value } : v,
-                            ),
-                          )
-                        }
-                      />
-                      <button
-                        type="button"
-                        className={`toggle ${d.ativo ? "y" : ""}`}
-                        aria-label={d.ativo ? "Desativar dia" : "Ativar dia"}
-                        onClick={() =>
-                          setDisp((x) =>
-                            x.map((v, n) =>
-                              n === i ? { ...v, ativo: !v.ativo } : v,
-                            ),
-                          )
-                        }
-                      />
-                    </div>
-                    {d.ativo && (
-                      <div className="avBreaks">
-                        <div className="avBreakHead">
-                          <span>
-                            Intervalos do dia · {d.intervalos.length}/5
-                          </span>
-                          <button
-                            type="button"
-                            className="btn avAddBreak"
-                            disabled={d.intervalos.length >= 5}
-                            onClick={() =>
-                              setDisp((x) =>
-                                x.map((v, n) =>
-                                  n === i
-                                    ? {
-                                        ...v,
-                                        intervalos: [
-                                          ...v.intervalos,
-                                          {
-                                            nome: `Intervalo ${v.intervalos.length + 1}`,
-                                            hora_inicio: "12:00",
-                                            hora_fim: "13:00",
-                                            ativo: true,
-                                          },
-                                        ],
-                                      }
-                                    : v,
-                                ),
-                              )
-                            }
-                          >
-                            <Plus size={16} />
-                            Adicionar intervalo
-                          </button>
-                        </div>
-                        {d.intervalos.map((intervalo, k) => (
-                          <div className="avBreak" key={intervalo.id || k}>
-                            <input
-                              value={intervalo.nome}
-                              placeholder="Ex.: Almoço"
-                              maxLength={80}
-                              onChange={(e) =>
-                                setDisp((x) =>
-                                  x.map((v, n) =>
-                                    n === i
-                                      ? {
-                                          ...v,
-                                          intervalos: v.intervalos.map(
-                                            (item, pos) =>
-                                              pos === k
-                                                ? {
-                                                    ...item,
-                                                    nome: e.target.value,
-                                                  }
-                                                : item,
-                                          ),
-                                        }
-                                      : v,
-                                  ),
-                                )
-                              }
-                            />
-                            <input
-                              type="time"
-                              value={intervalo.hora_inicio.slice(0, 5)}
-                              aria-label="Início do intervalo"
-                              onChange={(e) =>
-                                setDisp((x) =>
-                                  x.map((v, n) =>
-                                    n === i
-                                      ? {
-                                          ...v,
-                                          intervalos: v.intervalos.map(
-                                            (item, pos) =>
-                                              pos === k
-                                                ? {
-                                                    ...item,
-                                                    hora_inicio: e.target.value,
-                                                  }
-                                                : item,
-                                          ),
-                                        }
-                                      : v,
-                                  ),
-                                )
-                              }
-                            />
-                            <input
-                              type="time"
-                              value={intervalo.hora_fim.slice(0, 5)}
-                              aria-label="Fim do intervalo"
-                              onChange={(e) =>
-                                setDisp((x) =>
-                                  x.map((v, n) =>
-                                    n === i
-                                      ? {
-                                          ...v,
-                                          intervalos: v.intervalos.map(
-                                            (item, pos) =>
-                                              pos === k
-                                                ? {
-                                                    ...item,
-                                                    hora_fim: e.target.value,
-                                                  }
-                                                : item,
-                                          ),
-                                        }
-                                      : v,
-                                  ),
-                                )
-                              }
-                            />
-                            <button
-                              type="button"
-                              className="remove"
-                              aria-label="Remover intervalo"
-                              onClick={() =>
-                                setDisp((x) =>
-                                  x.map((v, n) =>
-                                    n === i
-                                      ? {
-                                          ...v,
-                                          intervalos: v.intervalos.filter(
-                                            (_, pos) => pos !== k,
-                                          ),
-                                        }
-                                      : v,
-                                  ),
-                                )
-                              }
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
-                        {d.intervalos.length === 0 && (
-                          <div className="avBreakEmpty">
-                            Nenhum intervalo configurado para este dia.
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <AgendaAvailabilityEditor
+                days={disp}
+                dayNames={diasFull}
+                onChange={setDisp}
+              />
             </div>
             <div className="foot">
               <div className="mini">
@@ -2965,7 +2990,7 @@ function Page() {
                 <button
                   className="btn primary"
                   onClick={saveConfig}
-                  disabled={busy}
+                  disabled={busy || configDetailsLoading}
                 >
                   <Check size={14} />
                   Salvar
@@ -2985,7 +3010,6 @@ export default function AgendasPage() {
         <Suspense fallback={<div>Carregando...</div>}>
           <Page />
         </Suspense>
-        <AgendaPremiumRuntimeEnhancer />
       </div>
     </div>
   );
