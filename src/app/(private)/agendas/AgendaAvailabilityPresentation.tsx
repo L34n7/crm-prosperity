@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  type ChangeEvent,
   type CSSProperties,
   useCallback,
   useEffect,
@@ -8,7 +9,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import styles from "./AgendaAvailabilityPresentation.module.css";
 
 type IntervalSnapshot = {
@@ -21,7 +22,12 @@ type DaySnapshot = {
   key: string;
   card: HTMLElement;
   host: HTMLElement;
+  row: HTMLElement;
   breaks: HTMLElement | null;
+  toggle: HTMLButtonElement;
+  startInput: HTMLInputElement | null;
+  endInput: HTMLInputElement | null;
+  addIntervalButton: HTMLButtonElement | null;
   title: string;
   active: boolean;
   start: string;
@@ -126,9 +132,24 @@ function snapshotSignature(days: DaySnapshot[]) {
     .join("||");
 }
 
+function setNativeInputValue(input: HTMLInputElement | null, value: string) {
+  if (!input) return;
+
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set;
+
+  if (setter) setter.call(input, value);
+  else input.value = value;
+
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 function applyExistingElementClasses(day: DaySnapshot) {
   day.card.classList.add(styles.dayCard);
-  day.card.querySelector<HTMLElement>(".av")?.classList.add(styles.dayRow);
+  day.row.classList.add(styles.dayRow);
 
   const breaks = day.breaks;
   if (!breaks) return;
@@ -158,7 +179,7 @@ function applyExistingElementClasses(day: DaySnapshot) {
 
 function removeExistingElementClasses(day: DaySnapshot) {
   day.card.classList.remove(styles.dayCard, styles.expandedDay);
-  day.card.querySelector<HTMLElement>(".av")?.classList.remove(styles.dayRow);
+  day.row.classList.remove(styles.dayRow);
 
   const breaks = day.breaks;
   if (!breaks) return;
@@ -190,37 +211,44 @@ function removeExistingElementClasses(day: DaySnapshot) {
 function DayPresentation({
   day,
   expanded,
-  onToggle,
+  onToggleActive,
+  onStartChange,
+  onEndChange,
+  onAddInterval,
+  onToggleExpand,
 }: {
   day: DaySnapshot;
   expanded: boolean;
-  onToggle: () => void;
+  onToggleActive: () => void;
+  onStartChange: (value: string) => void;
+  onEndChange: (value: string) => void;
+  onAddInterval: () => void;
+  onToggleExpand: () => void;
 }) {
   const timeline = buildTimeline(day);
-  const intervalCount = day.intervals.length;
+  const canAddInterval =
+    day.active &&
+    day.intervals.length < 5 &&
+    Boolean(day.addIntervalButton) &&
+    !day.addIntervalButton?.disabled;
 
   return (
     <section className={styles.presentation}>
       <div className={styles.summary}>
         <button
           type="button"
-          className={styles.expandButton}
-          aria-expanded={expanded}
-          aria-label={
-            expanded ? "Recolher opções do dia" : "Expandir opções do dia"
-          }
-          onClick={onToggle}
-          disabled={!day.active}
+          role="switch"
+          aria-checked={day.active}
+          aria-label={day.active ? "Desativar dia" : "Ativar dia"}
+          className={`${styles.toggleButton} ${
+            day.active ? styles.toggleButtonActive : ""
+          }`}
+          onClick={onToggleActive}
         >
-          <ChevronRight size={18} aria-hidden="true" />
+          <span aria-hidden="true" />
         </button>
 
-        <div className={styles.summaryText}>
-          <strong>{day.title}</strong>
-          <span>
-            {day.start || "--:--"} – {day.end || "--:--"}
-          </span>
-        </div>
+        <strong className={styles.dayName}>{day.title}</strong>
 
         <span
           className={`${styles.status} ${
@@ -230,20 +258,70 @@ function DayPresentation({
           {day.active ? "Ativo" : "Inativo"}
         </span>
 
-        <span className={styles.intervalCount}>
-          {intervalCount} {intervalCount === 1 ? "intervalo" : "intervalos"}
-        </span>
+        <label className={styles.timeControl}>
+          <span>Início</span>
+          <input
+            type="time"
+            value={day.start}
+            disabled={!day.active || !day.startInput}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onStartChange(event.target.value)
+            }
+          />
+        </label>
+
+        <label className={styles.timeControl}>
+          <span>Fim</span>
+          <input
+            type="time"
+            value={day.end}
+            disabled={!day.active || !day.endInput}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onEndChange(event.target.value)
+            }
+          />
+        </label>
+
+        <button
+          type="button"
+          className={styles.quickAddButton}
+          disabled={!canAddInterval}
+          onClick={onAddInterval}
+          aria-label="Adicionar intervalo e expandir o dia"
+        >
+          <Plus size={14} aria-hidden="true" />
+          Intervalos
+        </button>
+
+        <button
+          type="button"
+          className={styles.expandButton}
+          aria-expanded={expanded}
+          aria-label={
+            expanded ? "Recolher opções do dia" : "Expandir opções do dia"
+          }
+          onClick={onToggleExpand}
+          disabled={!day.active}
+        >
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
       </div>
 
       {day.active ? (
-        <div className={styles.timeline}>
-          <div className={styles.timelineHeader}>
-            <strong>Linha do dia</strong>
-            <div className={styles.legend}>
-              <span className={styles.availableLegend}>Disponível</span>
-              <span className={styles.intervalLegend}>Intervalo</span>
+        <div
+          className={`${styles.timeline} ${
+            expanded ? styles.timelineExpanded : styles.timelineCompact
+          }`}
+        >
+          {expanded ? (
+            <div className={styles.timelineHeader}>
+              <strong>Linha do dia</strong>
+              <div className={styles.legend}>
+                <span className={styles.availableLegend}>Disponível</span>
+                <span className={styles.intervalLegend}>Intervalo</span>
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {timeline.valid ? (
             <>
@@ -292,7 +370,6 @@ export default function AgendaAvailabilityPresentation() {
   const [, setRevision] = useState(0);
   const daysRef = useRef<DaySnapshot[]>([]);
   const expandedDaysRef = useRef(new Set<string>());
-  const initializedDaysRef = useRef(new Set<string>());
   const signatureRef = useRef("");
 
   const discoverDays = useCallback(() => {
@@ -322,6 +399,8 @@ export default function AgendaAvailabilityPresentation() {
         row.querySelectorAll<HTMLInputElement>('input[type="time"]'),
       );
       const breaks = card.querySelector<HTMLElement>(".avBreaks");
+      const addIntervalButton =
+        breaks?.querySelector<HTMLButtonElement>(".avAddBreak") || null;
       const intervals = breaks
         ? Array.from(breaks.querySelectorAll<HTMLElement>(".avBreak")).map(
             (intervalRow) => {
@@ -346,15 +425,16 @@ export default function AgendaAvailabilityPresentation() {
       const key = `${normalize(title)}-${index}`;
       const active = toggle.classList.contains("y");
 
-      if (!initializedDaysRef.current.has(key)) {
-        initializedDaysRef.current.add(key);
-      }
-
       const snapshot: DaySnapshot = {
         key,
         card,
         host,
+        row,
         breaks,
+        toggle,
+        startInput: timeInputs[0] || null,
+        endInput: timeInputs[1] || null,
+        addIntervalButton,
         title,
         active,
         start: timeInputs[0]?.value || "",
@@ -373,7 +453,12 @@ export default function AgendaAvailabilityPresentation() {
     const nextSignature = snapshotSignature(nextDays);
     const nodesChanged = nextDays.some((day, index) => {
       const current = daysRef.current[index];
-      return !current || current.card !== day.card || current.host !== day.host;
+      return (
+        !current ||
+        current.card !== day.card ||
+        current.host !== day.host ||
+        current.row !== day.row
+      );
     });
 
     if (
@@ -403,7 +488,7 @@ export default function AgendaAvailabilityPresentation() {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["class"],
+      attributeFilter: ["class", "disabled"],
     });
     document.addEventListener("input", schedule, true);
     document.addEventListener("change", schedule, true);
@@ -437,6 +522,34 @@ export default function AgendaAvailabilityPresentation() {
     setRevision((current) => current + 1);
   }, []);
 
+  const toggleActive = useCallback((day: DaySnapshot) => {
+    if (day.active) {
+      expandedDaysRef.current.delete(day.key);
+      day.card.classList.remove(styles.expandedDay);
+      if (day.breaks) day.breaks.hidden = true;
+    }
+
+    day.toggle.click();
+    setRevision((current) => current + 1);
+  }, []);
+
+  const addInterval = useCallback((day: DaySnapshot) => {
+    if (
+      !day.active ||
+      !day.addIntervalButton ||
+      day.addIntervalButton.disabled ||
+      day.intervals.length >= 5
+    ) {
+      return;
+    }
+
+    expandedDaysRef.current.add(day.key);
+    day.card.classList.add(styles.expandedDay);
+    if (day.breaks) day.breaks.hidden = false;
+    day.addIntervalButton.click();
+    setRevision((current) => current + 1);
+  }, []);
+
   return (
     <>
       {days.map((day) =>
@@ -444,7 +557,13 @@ export default function AgendaAvailabilityPresentation() {
           <DayPresentation
             day={day}
             expanded={day.active && expandedDaysRef.current.has(day.key)}
-            onToggle={() => toggleDay(day)}
+            onToggleActive={() => toggleActive(day)}
+            onStartChange={(value) =>
+              setNativeInputValue(day.startInput, value)
+            }
+            onEndChange={(value) => setNativeInputValue(day.endInput, value)}
+            onAddInterval={() => addInterval(day)}
+            onToggleExpand={() => toggleDay(day)}
           />,
           day.host,
           day.key,
