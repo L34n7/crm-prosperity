@@ -38,3 +38,30 @@
 .hiddenBadge {
   display: none !important;
 }
+
+:global(.agendaTemplateShell .agendaAutomationFlowNotice) {
+  margin-top: 14px !important;
+  padding: 16px !important;
+  border: 1px solid var(--crm-warning-border) !important;
+  border-radius: 12px !important;
+  background: var(--crm-warning-bg) !important;
+  color: var(--crm-warning-text) !important;
+}
+
+:global(.agendaTemplateShell .agendaAutomationFlowNotice strong) {
+  display: block !important;
+  margin-bottom: 6px !important;
+  color: var(--crm-warning-text) !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  line-height: 1.35 !important;
+}
+
+:global(.agendaTemplateShell .agendaAutomationFlowNotice) {
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+:global(.agendaTemplateShell .agendaAutomationSection) {
+  margin-top: 40px !important;
+}

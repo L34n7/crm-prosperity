@@ -75,12 +75,12 @@
 .summary {
   display: grid;
   grid-template-columns:
-    38px minmax(105px, 1fr) minmax(110px, 124px)
-    minmax(110px, 124px) auto 32px;
+    38px minmax(105px, 1fr) minmax(130px, 134px)
+    minmax(110px, 115px) auto 32px;
   align-items: center;
   gap: 9px;
   min-width: 0;
-  padding: 8px 11px;
+  padding: 18px 16px;
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--crm-primary-soft) 22%, var(--crm-surface)),
@@ -137,7 +137,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -160,7 +160,7 @@
 .timeControl span {
   padding: 0;
   color: var(--crm-text-muted);
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 850;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -210,8 +210,8 @@
   border-radius: 9px;
   background: var(--crm-surface);
   color: var(--crm-primary-text);
-  font-size: 10px;
-  font-weight: 900;
+  font-size: 13px !important;
+  font-weight: 700 !important;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -304,7 +304,7 @@
 }
 
 .timelineHeader strong {
-  color: var(--crm-text-strong);
+  color: var(--crm-text-muted);
   font-size: 12px;
   font-weight: 900;
 }
@@ -320,7 +320,7 @@
   align-items: center;
   gap: 5px;
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -422,7 +422,7 @@
   display: flex;
   justify-content: space-between;
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 750;
   transition:
     font-size 0.24s ease,
@@ -430,9 +430,10 @@
 }
 
 .timelineCompact .scale {
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
+  margin-top: 3px;
 }
 
 .invalidTimeline {

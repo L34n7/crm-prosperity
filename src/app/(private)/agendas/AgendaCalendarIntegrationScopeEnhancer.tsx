@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import styles from "./AgendaCalendarIntegrationScopeEnhancer.module.css";
+import { Link2 } from "lucide-react";
 
 type Integration = {
   id: string;
@@ -275,7 +276,16 @@ export default function AgendaCalendarIntegrationScopeEnhancer() {
       const host = document.createElement("div");
       host.className = styles.portalHost;
       host.dataset.agendaCalendarIntegrationHost = "true";
-      automationSection.insertAdjacentElement("beforebegin", host);
+
+      const googleIntegrationCard = modal.querySelector<HTMLElement>(
+        ".agendaGoogleBindingCard",
+      );
+
+      if (googleIntegrationCard) {
+        googleIntegrationCard.insertAdjacentElement("afterend", host);
+      } else {
+        automationSection.insertAdjacentElement("beforebegin", host);
+      }
 
       setView({
         target: host,
@@ -347,7 +357,26 @@ export default function AgendaCalendarIntegrationScopeEnhancer() {
         return;
       }
 
-      if (currentModalRef.current === modal) return;
+      if (currentModalRef.current === modal) {
+        const host = modal.querySelector<HTMLElement>(
+          '[data-agenda-calendar-integration-host="true"]',
+        );
+
+        const googleIntegrationCard = modal.querySelector<HTMLElement>(
+          ".agendaGoogleBindingCard",
+        );
+
+        if (
+          host &&
+          googleIntegrationCard &&
+          googleIntegrationCard.nextElementSibling !== host
+        ) {
+          googleIntegrationCard.insertAdjacentElement("afterend", host);
+        }
+
+        return;
+      }
+
       void bindModal(modal);
     };
 
@@ -393,13 +422,20 @@ export default function AgendaCalendarIntegrationScopeEnhancer() {
   return createPortal(
     <section className={styles.scope} aria-label="Integrações do calendário">
       <div className={styles.header}>
-        <div>
-          <h4>Integrações do calendário</h4>
-          <p>
-            Escolha quais números do WhatsApp poderão executar fluxos,
-            confirmações, lembretes e pós-atendimento neste calendário.
-          </p>
+        <div className={styles.titleGroup}>
+          <span className={styles.icon} aria-hidden="true">
+            <Link2 size={20} strokeWidth={2.2} />
+          </span>
+
+          <div>
+            <h4>Integrações do calendário</h4>
+            <p>
+              Escolha quais números do WhatsApp poderão executar fluxos,
+              confirmações, lembretes e pós-atendimento neste calendário.
+            </p>
+          </div>
         </div>
+
         <span className={styles.count}>
           {selectedIds.length} selecionada{selectedIds.length === 1 ? "" : "s"}
         </span>

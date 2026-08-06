@@ -2588,14 +2588,15 @@ function Page() {
             <div className="body">
               <div className="form">
                 <div className="field full">
-                  <label>Nome*</label>
+                  <label className={styles.configMainLabel}>Nome*</label>
                   <input
                     value={af.nome}
                     onChange={(e) => setAf({ ...af, nome: e.target.value })}
                   />
                 </div>
+
                 <div className="field full">
-                  <label>Descrição</label>
+                  <label className={styles.configMainLabel}>Descrição</label>
                   <textarea
                     value={af.descricao}
                     onChange={(e) =>
@@ -2603,119 +2604,144 @@ function Page() {
                     }
                   />
                 </div>
-                <div className="field">
-                  <label>Duração padrão</label>
-                  <div className="agendaTimeUnitControl">
-                    <input
-                      type="number"
-                      min={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
-                      step={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
-                      value={valorTempoAgenda(
-                        af.duracao_minutos,
-                        unidadeDuracaoAgenda,
-                      )}
-                      onChange={(e) =>
-                        atualizarTempoAgenda(
-                          "duracao_minutos",
-                          e.target.value,
-                          unidadeDuracaoAgenda,
-                        )
-                      }
-                    />
-                    <select
-                      value={unidadeDuracaoAgenda}
-                      onChange={(e) =>
-                        setUnidadeDuracaoAgenda(
-                          e.target.value as "minutos" | "horas",
-                        )
-                      }
-                      aria-label="Unidade da duração padrão"
-                    >
-                      <option value="minutos">minutos</option>
-                      <option value="horas">horas</option>
-                    </select>
+                <section className={styles.settingsCard}>
+                  <div className={styles.settingsHeader}>
+                    <div>
+                      <h3>Configurações de agendamento</h3>
+                      <p>
+                        Defina a duração dos atendimentos, o espaço entre horários,
+                        a antecedência mínima e o período disponível para novos
+                        agendamentos.
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="field">
-                  <label>Espaço entre horários</label>
-                  <div className="agendaTimeUnitControl">
-                    <input
-                      type="number"
-                      min="0"
-                      step={unidadeIntervaloAgenda === "horas" ? "0.25" : "1"}
-                      value={valorTempoAgenda(
-                        af.intervalo_minutos,
-                        unidadeIntervaloAgenda,
-                      )}
-                      onChange={(e) =>
-                        atualizarTempoAgenda(
-                          "intervalo_minutos",
-                          e.target.value,
-                          unidadeIntervaloAgenda,
-                        )
-                      }
-                    />
-                    <select
-                      value={unidadeIntervaloAgenda}
-                      onChange={(e) =>
-                        setUnidadeIntervaloAgenda(
-                          e.target.value as "minutos" | "horas",
-                        )
-                      }
-                      aria-label="Unidade do intervalo"
-                    >
-                      <option value="minutos">minutos</option>
-                      <option value="horas">horas</option>
-                    </select>
+
+                  <div className={styles.settingsGrid}>
+                    <div className="field">
+                      <label>Duração padrão</label>
+
+                      <div className="agendaTimeUnitControl">
+                        <input
+                          type="number"
+                          min={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
+                          step={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
+                          value={valorTempoAgenda(
+                            af.duracao_minutos,
+                            unidadeDuracaoAgenda,
+                          )}
+                          onChange={(e) =>
+                            atualizarTempoAgenda(
+                              "duracao_minutos",
+                              e.target.value,
+                              unidadeDuracaoAgenda,
+                            )
+                          }
+                        />
+
+                        <select
+                          value={unidadeDuracaoAgenda}
+                          onChange={(e) =>
+                            setUnidadeDuracaoAgenda(
+                              e.target.value as "minutos" | "horas",
+                            )
+                          }
+                          aria-label="Unidade da duração padrão"
+                        >
+                          <option value="minutos">minutos</option>
+                          <option value="horas">horas</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="field">
+                      <label>Espaço entre horários</label>
+
+                      <div className="agendaTimeUnitControl">
+                        <input
+                          type="number"
+                          min="0"
+                          step={unidadeIntervaloAgenda === "horas" ? "0.25" : "1"}
+                          value={valorTempoAgenda(
+                            af.intervalo_minutos,
+                            unidadeIntervaloAgenda,
+                          )}
+                          onChange={(e) =>
+                            atualizarTempoAgenda(
+                              "intervalo_minutos",
+                              e.target.value,
+                              unidadeIntervaloAgenda,
+                            )
+                          }
+                        />
+
+                        <select
+                          value={unidadeIntervaloAgenda}
+                          onChange={(e) =>
+                            setUnidadeIntervaloAgenda(
+                              e.target.value as "minutos" | "horas",
+                            )
+                          }
+                          aria-label="Unidade do intervalo"
+                        >
+                          <option value="minutos">minutos</option>
+                          <option value="horas">horas</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="field">
+                      <label>Antecedência mínima</label>
+
+                      <div className="agendaTimeUnitControl">
+                        <input
+                          type="number"
+                          min="0"
+                          step={
+                            unidadeAntecedenciaAgenda === "horas" ? "0.25" : "1"
+                          }
+                          value={valorTempoAgenda(
+                            af.antecedencia_minutos,
+                            unidadeAntecedenciaAgenda,
+                          )}
+                          onChange={(e) =>
+                            atualizarTempoAgenda(
+                              "antecedencia_minutos",
+                              e.target.value,
+                              unidadeAntecedenciaAgenda,
+                            )
+                          }
+                        />
+
+                        <select
+                          value={unidadeAntecedenciaAgenda}
+                          onChange={(e) =>
+                            setUnidadeAntecedenciaAgenda(
+                              e.target.value as "minutos" | "horas",
+                            )
+                          }
+                          aria-label="Unidade da antecedência mínima"
+                        >
+                          <option value="minutos">minutos</option>
+                          <option value="horas">horas</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="field">
+                      <label>Janela em dias</label>
+
+                      <input
+                        type="number"
+                        value={af.janela_dias}
+                        onChange={(e) =>
+                          setAf({ ...af, janela_dias: e.target.value })
+                        }
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="field">
-                  <label>Antecedência mínima</label>
-                  <div className="agendaTimeUnitControl">
-                    <input
-                      type="number"
-                      min="0"
-                      step={
-                        unidadeAntecedenciaAgenda === "horas" ? "0.25" : "1"
-                      }
-                      value={valorTempoAgenda(
-                        af.antecedencia_minutos,
-                        unidadeAntecedenciaAgenda,
-                      )}
-                      onChange={(e) =>
-                        atualizarTempoAgenda(
-                          "antecedencia_minutos",
-                          e.target.value,
-                          unidadeAntecedenciaAgenda,
-                        )
-                      }
-                    />
-                    <select
-                      value={unidadeAntecedenciaAgenda}
-                      onChange={(e) =>
-                        setUnidadeAntecedenciaAgenda(
-                          e.target.value as "minutos" | "horas",
-                        )
-                      }
-                      aria-label="Unidade da antecedência mínima"
-                    >
-                      <option value="minutos">minutos</option>
-                      <option value="horas">horas</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="field">
-                  <label>Janela em dias</label>
-                  <input
-                    type="number"
-                    value={af.janela_dias}
-                    onChange={(e) =>
-                      setAf({ ...af, janela_dias: e.target.value })
-                    }
-                  />
-                </div>
+                </section>
               </div>
-              <h3 style={{ fontSize: 13, marginTop: 16 }}>
+              <h3 className={styles.availabilitySectionTitle}>
                 Disponibilidade semanal
               </h3>
               <p className="availabilityHint">
