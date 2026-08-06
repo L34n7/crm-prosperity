@@ -206,7 +206,9 @@ function DayPresentation({
           type="button"
           className={styles.expandButton}
           aria-expanded={expanded}
-          aria-label={expanded ? "Recolher opções do dia" : "Expandir opções do dia"}
+          aria-label={
+            expanded ? "Recolher opções do dia" : "Expandir opções do dia"
+          }
           onClick={onToggle}
           disabled={!day.active}
         >
@@ -233,7 +235,7 @@ function DayPresentation({
         </span>
       </div>
 
-      {day.active && expanded ? (
+      {day.active ? (
         <div className={styles.timeline}>
           <div className={styles.timelineHeader}>
             <strong>Linha do dia</strong>
@@ -345,7 +347,6 @@ export default function AgendaAvailabilityPresentation() {
       const active = toggle.classList.contains("y");
 
       if (!initializedDaysRef.current.has(key)) {
-        if (active && intervals.length > 0) expandedDaysRef.current.add(key);
         initializedDaysRef.current.add(key);
       }
 
