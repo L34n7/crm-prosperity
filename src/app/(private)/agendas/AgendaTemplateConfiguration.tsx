@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   TEMPLATE_FORMAT_OPTIONS,
   TEMPLATE_SOURCE_OPTIONS,
@@ -112,10 +112,29 @@ export default function AgendaTemplateConfiguration({
   onChange,
   showButtonMappings = false,
 }: Props) {
+  const [createdVariables, setCreatedVariables] = useState<
+    AgendaCustomVariableOption[]
+  >([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [variableDraft, setVariableDraft] = useState({
+    chave: "",
+    valor: "",
+    descricao: "",
+  });
+  const [variableFeedback, setVariableFeedback] = useState("");
+  const [variableSaving, setVariableSaving] = useState(false);
+  const allCustomVariables = useMemo(() => {
+    const variables = [...createdVariables, ...customVariables];
+    return variables.filter(
+      (item, index) =>
+        variables.findIndex((candidate) => candidate.chave === item.chave) ===
+        index,
+    );
+  }, [createdVariables, customVariables]);
   const sourceOptions = useMemo(
     () => [
       ...TEMPLATE_SOURCE_OPTIONS,
-      ...customVariables.map((item) => ({
+      ...allCustomVariables.map((item) => ({
         value: customTemplateSource(item.chave),
         variable: `{{${item.chave}}}`,
         label: item.chave,
@@ -124,7 +143,7 @@ export default function AgendaTemplateConfiguration({
         category: "Fixa" as const,
       })),
     ],
-    [customVariables],
+    [allCustomVariables],
   );
 
   if (!template) return null;
@@ -156,19 +175,102 @@ export default function AgendaTemplateConfiguration({
     );
   });
 
+  const createVariable = async () => {
+    const chave = variableDraft.chave
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    if (!chave || !variableDraft.valor.trim()) {
+      setVariableFeedback("Informe o nome e o valor da variável.");
+      return;
+    }
+    try {
+      setVariableSaving(true);
+      setVariableFeedback("");
+      const response = await fetch("/api/variaveis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chave,
+          valor: variableDraft.valor.trim(),
+          descricao: variableDraft.descricao.trim(),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Erro ao salvar variável.");
+      }
+      setCreatedVariables((current) => [
+        {
+          id: data.variavel?.id || `local-${chave}`,
+          chave,
+          valor: variableDraft.valor.trim(),
+          descricao: variableDraft.descricao.trim(),
+        },
+        ...current,
+      ]);
+      setVariableDraft({ chave: "", valor: "", descricao: "" });
+      setVariableFeedback("Variável criada com sucesso.");
+    } catch (error) {
+      setVariableFeedback(
+        error instanceof Error ? error.message : "Erro ao salvar variável.",
+      );
+    } finally {
+      setVariableSaving(false);
+    }
+  };
+
   return (
     <section className={styles.panel} aria-label="Configuração do template">
       <div className={styles.heading}>
         <div>
-          <h4>Variáveis e prévia do template</h4>
-          <p>Defina de onde virá cada valor antes do disparo.</p>
+          <h4>Mapeamento do template</h4>
+          <p>
+            Variáveis personalizadas aparecem primeiro. Depois vêm nome e
+            número, dados do calendário e variáveis fixas do sistema.
+          </p>
         </div>
-        <span className={styles.category}>{template.categoria}</span>
+        <div className={styles.headingActions}>
+          <button
+            type="button"
+            className={styles.createVariableButton}
+            onClick={() => setCreateOpen(true)}
+          >
+            + Criar variável
+          </button>
+          <span
+            className={`${styles.category} ${
+              template.categoria.toUpperCase() === "MARKETING"
+                ? styles.marketingCategory
+                : ""
+            }`}
+          >
+            {template.categoria}
+          </span>
+        </div>
       </div>
+
+      {template.categoria.toUpperCase() === "MARKETING" ? (
+        <label className={styles.marketing}>
+          <input
+            type="checkbox"
+            checked={value.marketing_aceito}
+            onChange={(event) =>
+              onChange({ ...value, marketing_aceito: event.target.checked })
+            }
+          />
+          <span>
+            A Meta classificou este template como Marketing. Estou ciente de que
+            o envio seguirá as regras e cobranças dessa categoria.
+          </span>
+        </label>
+      ) : null}
 
       {(template.variaveis || []).length > 0 ? (
         <div className={styles.section}>
-          <h5>Mapeamento das variáveis</h5>
+          <h5>Variáveis do corpo</h5>
           {(template.variaveis || []).map((position) => {
             const mapping = value.template_variaveis.find(
               (item) => item.posicao === position,
@@ -186,7 +288,7 @@ export default function AgendaTemplateConfiguration({
               <div className={styles.mappingRow} key={position}>
                 <span className={styles.token}>{`{{${position}}}`}</span>
                 <label className={styles.field}>
-                  <span>Variável do CRM</span>
+                  <span>Informação do CRM</span>
                   <select
                     value={mapping.fonte}
                     onChange={(event) => {
@@ -204,7 +306,7 @@ export default function AgendaTemplateConfiguration({
                   >
                     {sourceOptions.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {option.label}
+                        {option.variable} · {option.label}
                       </option>
                     ))}
                   </select>
@@ -313,20 +415,82 @@ export default function AgendaTemplateConfiguration({
         </div>
       </div>
 
-      {template.categoria.toUpperCase() === "MARKETING" ? (
-        <label className={styles.marketing}>
-          <input
-            type="checkbox"
-            checked={value.marketing_aceito}
-            onChange={(event) =>
-              onChange({ ...value, marketing_aceito: event.target.checked })
-            }
-          />
-          <span>
-            A Meta classificou este template como Marketing. Estou ciente de que
-            o envio seguirá as regras e cobranças dessa categoria.
-          </span>
-        </label>
+      {createOpen ? (
+        <div
+          className={styles.variableBackdrop}
+          onMouseDown={(event) =>
+            event.target === event.currentTarget && setCreateOpen(false)
+          }
+        >
+          <div className={styles.variableModal} role="dialog" aria-modal="true">
+            <div className={styles.variableModalHead}>
+              <div>
+                <h3>Criar variável</h3>
+                <p>Cadastre um valor global para reutilizar nos templates.</p>
+              </div>
+              <button type="button" onClick={() => setCreateOpen(false)}>
+                ×
+              </button>
+            </div>
+            <div className={styles.variableModalBody}>
+              <label>
+                <span>Nome da variável</span>
+                <input
+                  value={variableDraft.chave}
+                  placeholder="ex.: nome_empresa"
+                  onChange={(event) =>
+                    setVariableDraft({
+                      ...variableDraft,
+                      chave: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                <span>Valor</span>
+                <input
+                  value={variableDraft.valor}
+                  onChange={(event) =>
+                    setVariableDraft({
+                      ...variableDraft,
+                      valor: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label className={styles.variableFullField}>
+                <span>Descrição</span>
+                <input
+                  value={variableDraft.descricao}
+                  onChange={(event) =>
+                    setVariableDraft({
+                      ...variableDraft,
+                      descricao: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              {variableFeedback ? (
+                <div className={styles.variableFeedback}>
+                  {variableFeedback}
+                </div>
+              ) : null}
+              <div className={styles.variableActions}>
+                <button type="button" onClick={() => setCreateOpen(false)}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className={styles.variablePrimary}
+                  disabled={variableSaving}
+                  onClick={() => void createVariable()}
+                >
+                  {variableSaving ? "Salvando..." : "Salvar variável"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
     </section>
   );

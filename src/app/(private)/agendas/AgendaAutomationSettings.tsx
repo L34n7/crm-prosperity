@@ -90,6 +90,20 @@ function emptyTemplateConfig(): AgendaTemplateConfigurationValue {
   };
 }
 
+function normalized(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function confirmationTemplateIsCompatible(template?: AgendaTemplateOption) {
+  const buttons = (template?.botoes || []).map(normalized);
+  return ["confirmar", "cancelar", "reagendar"].every((action) =>
+    buttons.some((button) => button.includes(action)),
+  );
+}
+
 export function automationCardsFromRules(
   rules: AgendaAutomationRule[],
 ): AgendaAutomationCardState[] {
@@ -200,28 +214,27 @@ export default function AgendaAutomationSettings({
   );
 
   return (
-    <section className={styles.section} aria-label="Automação da agenda">
+    <section className={styles.section} aria-label="Automação do calendário">
       <div className={styles.head}>
         <div className={styles.title}>
           <span className={styles.icon} aria-hidden="true">
             <Zap size={19} />
           </span>
           <div>
-            <h3>Automação da agenda</h3>
+            <h3>Automação do calendário</h3>
             <p>
               Defina os padrões de confirmação, lembretes, avisos e
-              pós-atendimento desta agenda.
+              pós-atendimento deste calendário.
             </p>
           </div>
         </div>
-        <span className={styles.stage}>Execução automática ativa</span>
+        <span className={styles.stage}>Automação ativa</span>
       </div>
 
       <div className={styles.notice}>
-        <strong>
-          Ao salvar uma alteração, disparos pendentes serão replanejados.
-        </strong>{" "}
-        Execuções concluídas permanecem no histórico.
+        <strong>Execução automática habilitada. </strong>
+        As ações ativas serão planejadas no horário configurado e poderão ser
+        acompanhadas e canceladas em <strong>Disparos agendados</strong>.
       </div>
 
       {loading ? (
@@ -454,8 +467,15 @@ export default function AgendaAutomationSettings({
                           </select>
                         </label>
                         <span className={styles.compatibility}>
-                          Selecione o template e confira variáveis, prévia e
-                          botões.
+                          {card.tipo === "confirmacao" && template
+                            ? confirmationTemplateIsCompatible(template)
+                              ? "Template compatível com os três caminhos planejados."
+                              : `Botões encontrados: ${(template.botoes || []).join(", ") || "nenhum"}. A compatibilidade será validada antes da ativação.`
+                            : card.tipo === "pos_atendimento" && template
+                              ? "Template aprovado e disponível para o disparo de pós-atendimento, inclusive fora da janela de 24 horas."
+                              : template
+                                ? "Template aprovado e disponível para esta integração."
+                                : "Selecione o template e confira variáveis, prévia e botões."}
                         </span>
                       </div>
 

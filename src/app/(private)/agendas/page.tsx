@@ -146,6 +146,17 @@ type GEvent = {
   fim_at: string;
   dia_inteiro: boolean;
 };
+type AgendaNiche = {
+  codigo: string;
+  nome: string;
+  grupo?: string;
+};
+type RelatedPresentation = {
+  tipos: string[];
+  titulo: string;
+  dica: string;
+  botao: string;
+};
 type Form = {
   id: string | null;
   titulo: string;
@@ -187,6 +198,62 @@ const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
     realizado: "Realizado",
     faltou: "Não compareceu",
   };
+const allRelatedTypes = [
+  "imovel",
+  "veiculo",
+  "procedimento",
+  "oportunidade",
+  "ordem_servico",
+  "processo",
+  "outro",
+];
+const relatedByNiche: Record<string, RelatedPresentation> = {
+  imobiliaria: {
+    tipos: ["imovel"],
+    titulo: "Imóvel relacionado",
+    dica: "Vincule o imóvel que será apresentado, visitado ou negociado neste agendamento.",
+    botao: "Adicionar imóvel",
+  },
+  medicina: {
+    tipos: ["procedimento"],
+    titulo: "Procedimento relacionado",
+    dica: "Vincule o procedimento ou atendimento clínico relacionado ao compromisso.",
+    botao: "Adicionar procedimento",
+  },
+  odontologia: {
+    tipos: ["procedimento"],
+    titulo: "Procedimento relacionado",
+    dica: "Vincule o procedimento odontológico relacionado ao compromisso.",
+    botao: "Adicionar procedimento",
+  },
+  comercio: {
+    tipos: ["oportunidade", "ordem_servico", "outro"],
+    titulo: "Registro relacionado",
+    dica: "Vincule a oportunidade, ordem de serviço ou outro registro associado.",
+    botao: "Adicionar registro",
+  },
+  outro: {
+    tipos: allRelatedTypes,
+    titulo: "Registros relacionados",
+    dica: "Vincule qualquer registro relacionado a este compromisso.",
+    botao: "Adicionar",
+  },
+};
+const relatedTypeLabels: Record<string, string> = {
+  imovel: "Imóvel",
+  veiculo: "Veículo",
+  procedimento: "Procedimento",
+  oportunidade: "Oportunidade",
+  ordem_servico: "Ordem de serviço",
+  processo: "Processo",
+  outro: "Outro",
+};
+const calendarLabel = (value: string) =>
+  value
+    .replace(/\bAgendas\b/g, "Calendários")
+    .replace(/\bagendas\b/g, "calendários")
+    .replace(/\bAgenda\b/g, "Calendário")
+    .replace(/\bagenda\b/g, "calendário");
 const p = (n: number) => String(n).padStart(2, "0"),
   key = (d: Date) =>
     `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
@@ -319,10 +386,14 @@ function Page() {
   const [google, setGoogle] = useState<{
       conectado: boolean;
       email?: string;
+      bidirecional_ativa?: boolean;
+      sync_status?: string | null;
+      ultimo_erro?: string | null;
       ultima_sincronizacao_em?: string;
     }>({ conectado: false }),
     [gevents, setGevents] = useState<GEvent[]>([]),
     [feedbacks, setFeedbacks] = useState<any[]>([]);
+  const [niche, setNiche] = useState<AgendaNiche | null>(null);
   const [month, setMonth] = useState(new Date()),
     [day, setDay] = useState(key(new Date())),
     [load, setLoad] = useState(true),
@@ -388,7 +459,9 @@ function Page() {
       "minutos" | "horas"
     >("minutos");
   const agenda = agendas.find((a) => a.id === agendaId),
-    days = useMemo(() => cal(month), [month]);
+    days = useMemo(() => cal(month), [month]),
+    relatedPresentation =
+      relatedByNiche[niche?.codigo || "outro"] || relatedByNiche.outro;
   const visible = useMemo(
     () =>
       ags.filter((a) => {
@@ -533,6 +606,20 @@ function Page() {
       .finally(() => setLoad(false));
   }, [loadAgendas, loadFeedback]);
   useEffect(() => {
+    let active = true;
+    fetch("/api/agendas/contexto", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (active && response.ok && data?.ok && data?.nicho?.codigo) {
+          setNiche(data.nicho as AgendaNiche);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
     if (!agendaId) return;
     setLoad(true);
     loadData(agendaId)
@@ -602,21 +689,6 @@ function Page() {
             ),
     }));
   };
-  const refresh = async () => {
-    if (!agendaId) return;
-    try {
-      setBusy(true);
-      if (configDetailsLoading)
-        throw Error("Aguarde o carregamento das configurações da agenda.");
-      if (configDetailsError) throw Error(configDetailsError);
-      await Promise.all([loadData(agendaId), loadFeedback()]);
-      setOk("Agenda atualizada.");
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
   const newAg = (d = day) => {
     if (!agenda) return;
     setForm(blank(d, agenda.duracao_minutos, userId));
@@ -661,7 +733,7 @@ function Page() {
       vinculos: [
         ...f.vinculos,
         {
-          entidade_tipo: "outro",
+          entidade_tipo: relatedPresentation.tipos[0] || "outro",
           entidade_id: "",
           papel: "",
           titulo: "",
@@ -1087,70 +1159,81 @@ function Page() {
         onErrorDismiss={() => setErr("")}
       />
       <main className="wrap">
-        <div className="head">
-          <div className="agendaGoogleHeaderSlot">
-            <div className="agendaGoogleHeaderSummary">
-              <span
-                className={`agendaGoogleStatusDot ${
-                  google.conectado ? "isConnected" : ""
-                }`}
-                aria-hidden="true"
-              />
-              <div className="agendaGoogleHeaderText">
-                <strong>
-                  {google.conectado
-                    ? "Google Calendar conectado"
-                    : "Agenda sem Google Calendar"}
-                </strong>
+        <div className={`head ${styles.calendarManagementBar}`}>
+          <select
+            className={`select ${styles.calendarSelect}`}
+            value={agendaId}
+            onChange={(event) => setAgendaId(event.target.value)}
+          >
+            {agendas.length === 0 ? (
+              <option value="">Nenhum calendário</option>
+            ) : null}
+            {agendas.map((item) => (
+              <option key={item.id} value={item.id}>
+                {calendarLabel(item.nome)}
+                {item.status === "arquivado" ? " (arquivado)" : ""}
+              </option>
+            ))}
+          </select>
+
+          <button
+            className="btn"
+            onClick={() => openConfig(false)}
+            disabled={!agenda}
+          >
+            <Settings2 size={15} />
+            Configuração
+          </button>
+
+          <button
+            className={`btn ${styles.calendarSyncButton}`}
+            onClick={() =>
+              google.conectado
+                ? void googleAction("sync")
+                : (location.href = `/api/agendas/${agendaId}/google-calendar?acao=conectar`)
+            }
+            disabled={!agendaId || busy}
+          >
+            <RefreshCw size={15} className={busy ? "spin" : ""} />
+            {google.conectado ? "Sincronizar" : "Conectar Google"}
+          </button>
+
+          {google.conectado ? (
+            <div
+              className={`${styles.googleHeaderSummary} ${
+                google.sync_status === "erro" ? styles.googleHeaderError : ""
+              }`}
+              title={google.ultimo_erro || undefined}
+            >
+              <span className={styles.googleCalendarMark} aria-hidden="true" />
+              <div>
+                <strong>Google Calendar</strong>
                 <small>
-                  {google.email ||
-                    "Conecte um calendário para sincronização bidirecional."}
+                  {google.sync_status === "erro"
+                    ? `Sincronização requer atenção${google.email ? ` · ${google.email}` : ""}`
+                    : google.bidirecional_ativa
+                      ? `Bidirecional ativa${google.email ? ` · ${google.email}` : ""}`
+                      : `Conectado${google.email ? ` · ${google.email}` : ""}`}
                 </small>
               </div>
             </div>
-          </div>
-          <div className="actions">
-            <select
-              className="select"
-              value={agendaId}
-              onChange={(e) => setAgendaId(e.target.value)}
-            >
-              {agendas.length === 0 && <option value="">Nenhuma agenda</option>}
-              {agendas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.nome}
-                  {a.status === "arquivado" ? " (arquivada)" : ""}
-                </option>
-              ))}
-            </select>
-            <button
-              className="btn"
-              onClick={refresh}
-              disabled={!agendaId || busy}
-            >
-              <RefreshCw size={15} className={busy ? "spin" : ""} />
-            </button>
-            <button
-              className="btn"
-              onClick={() => openConfig(false)}
-              disabled={!agenda}
-            >
-              <Settings2 size={15} />
-              Configurar
-            </button>
-            <button className="btn" onClick={() => openConfig(true)}>
-              <Plus size={15} />
-              Nova agenda
-            </button>
-            <button
-              className="btn primary"
-              onClick={() => newAg()}
-              disabled={!agenda || agenda.status === "arquivado"}
-            >
-              <CalendarPlus size={16} />
-              Novo agendamento
-            </button>
-          </div>
+          ) : null}
+
+          <button
+            className={`btn ${styles.calendarNewButton}`}
+            onClick={() => openConfig(true)}
+          >
+            <Plus size={15} />
+            Novo calendário
+          </button>
+          <button
+            className="btn primary"
+            onClick={() => newAg()}
+            disabled={!agenda || agenda.status === "arquivado"}
+          >
+            <CalendarPlus size={16} />
+            Novo agendamento
+          </button>
         </div>
         {feedbacks.length > 0 &&
           (() => {
@@ -1453,11 +1536,11 @@ function Page() {
                         </button>
                       ),
                     )}
-                    {aa.length + gg.length > 3 && (
+                    {aa.length + gg.length > 3 ? (
                       <span className="pill">
-                        +{aa.length + gg.length - 3} eventos
+                        Mais {aa.length + gg.length - 3}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                 );
               })}
@@ -1939,28 +2022,32 @@ function Page() {
                   <div className="empty">Nenhum participante adicional.</div>
                 )}
               </section>
-              <section className="section">
+              <section className={`section ${styles.relatedSection}`}>
                 <div
                   className="row"
                   style={{ justifyContent: "space-between" }}
                 >
-                  <h3>
-                    <Link2 size={15} />
-                    Registros relacionados
-                  </h3>
+                  <div className={styles.relatedTitleGroup}>
+                    <h3>
+                      <Link2 size={15} />
+                      {relatedPresentation.titulo}
+                    </h3>
+                    {niche?.nome ? (
+                      <span className={styles.relatedNicheBadge}>
+                        {niche.nome}
+                      </span>
+                    ) : null}
+                  </div>
                   <button
                     className="btn"
                     style={{ height: 30 }}
                     onClick={addLink}
                   >
                     <Plus size={13} />
-                    Adicionar
+                    {relatedPresentation.botao}
                   </button>
                 </div>
-                <small>
-                  Imóvel, veículo, procedimento, oportunidade, ordem de serviço
-                  ou qualquer outro registro do nicho.
-                </small>
+                <small>{relatedPresentation.dica}</small>
                 {form.vinculos.map((v, i) => (
                   <div className="repeat" key={i}>
                     <div className="row">
@@ -1993,15 +2080,11 @@ function Page() {
                             })
                           }
                         >
-                          <option value="imovel">Imóvel</option>
-                          <option value="veiculo">Veículo</option>
-                          <option value="procedimento">Procedimento</option>
-                          <option value="oportunidade">Oportunidade</option>
-                          <option value="ordem_servico">
-                            Ordem de serviço
-                          </option>
-                          <option value="processo">Processo</option>
-                          <option value="outro">Outro</option>
+                          {relatedPresentation.tipos.map((type) => (
+                            <option key={type} value={type}>
+                              {relatedTypeLabels[type] || type}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div className="field">
@@ -2721,7 +2804,9 @@ function Page() {
             <div className="dhead">
               <Settings2 size={18} />
               <div>
-                <h2>{configNew ? "Nova agenda" : "Configurar agenda"}</h2>
+                <h2>
+                  {configNew ? "Novo calendário" : "Configurar calendário"}
+                </h2>
                 <p>Defina regras e disponibilidade semanal.</p>
               </div>
               <button className="btn" onClick={() => setConfig(false)}>
@@ -2747,164 +2832,39 @@ function Page() {
                     }
                   />
                 </div>
-                <section className={styles.settingsCard}>
-                  <div className={styles.settingsHeader}>
-                    <div>
-                      <h3>Configurações de agendamento</h3>
-                      <p>
-                        Defina a duração dos atendimentos, o espaço entre
-                        horários, a antecedência mínima e o período disponível
-                        para novos agendamentos.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className={styles.settingsGrid}>
-                    <div className="field">
-                      <label>Duração padrão</label>
-
-                      <div className="agendaTimeUnitControl">
-                        <input
-                          type="number"
-                          min={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
-                          step={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
-                          value={valorTempoAgenda(
-                            af.duracao_minutos,
-                            unidadeDuracaoAgenda,
-                          )}
-                          onChange={(e) =>
-                            atualizarTempoAgenda(
-                              "duracao_minutos",
-                              e.target.value,
-                              unidadeDuracaoAgenda,
-                            )
-                          }
-                        />
-
-                        <select
-                          value={unidadeDuracaoAgenda}
-                          onChange={(e) =>
-                            setUnidadeDuracaoAgenda(
-                              e.target.value as "minutos" | "horas",
-                            )
-                          }
-                          aria-label="Unidade da duração padrão"
-                        >
-                          <option value="minutos">minutos</option>
-                          <option value="horas">horas</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="field">
-                      <label>Espaço entre horários</label>
-
-                      <div className="agendaTimeUnitControl">
-                        <input
-                          type="number"
-                          min="0"
-                          step={
-                            unidadeIntervaloAgenda === "horas" ? "0.25" : "1"
-                          }
-                          value={valorTempoAgenda(
-                            af.intervalo_minutos,
-                            unidadeIntervaloAgenda,
-                          )}
-                          onChange={(e) =>
-                            atualizarTempoAgenda(
-                              "intervalo_minutos",
-                              e.target.value,
-                              unidadeIntervaloAgenda,
-                            )
-                          }
-                        />
-
-                        <select
-                          value={unidadeIntervaloAgenda}
-                          onChange={(e) =>
-                            setUnidadeIntervaloAgenda(
-                              e.target.value as "minutos" | "horas",
-                            )
-                          }
-                          aria-label="Unidade do intervalo"
-                        >
-                          <option value="minutos">minutos</option>
-                          <option value="horas">horas</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="field">
-                      <label>Antecedência mínima</label>
-
-                      <div className="agendaTimeUnitControl">
-                        <input
-                          type="number"
-                          min="0"
-                          step={
-                            unidadeAntecedenciaAgenda === "horas" ? "0.25" : "1"
-                          }
-                          value={valorTempoAgenda(
-                            af.antecedencia_minutos,
-                            unidadeAntecedenciaAgenda,
-                          )}
-                          onChange={(e) =>
-                            atualizarTempoAgenda(
-                              "antecedencia_minutos",
-                              e.target.value,
-                              unidadeAntecedenciaAgenda,
-                            )
-                          }
-                        />
-
-                        <select
-                          value={unidadeAntecedenciaAgenda}
-                          onChange={(e) =>
-                            setUnidadeAntecedenciaAgenda(
-                              e.target.value as "minutos" | "horas",
-                            )
-                          }
-                          aria-label="Unidade da antecedência mínima"
-                        >
-                          <option value="minutos">minutos</option>
-                          <option value="horas">horas</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="field">
-                      <label>Janela em dias</label>
-
-                      <input
-                        type="number"
-                        value={af.janela_dias}
-                        onChange={(e) =>
-                          setAf({ ...af, janela_dias: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                </section>
               </div>
-              <section className="agendaGoogleBindingCard agendaGoogleConfigCard">
-                <h3 className="agendaGoogleBindingTitle">Google Calendar</h3>
-                <div className="mini agendaGoogleState">
+              <section className={styles.googleConfigCard}>
+                <span className={styles.googleConfigMark} aria-hidden="true" />
+                <h3>Google Calendar</h3>
+                <p className={styles.googleConfigSubtitle}>
+                  Vincule somente este calendário e mantenha criação, alterações
+                  e cancelamentos sincronizados.
+                </p>
+                <div className={`mini ${styles.googleConfigState}`}>
                   <span className={`pill ${google.conectado ? "on" : ""}`}>
                     {google.conectado ? "Conectado" : "Não conectado"}
                   </span>
-                  <span className="agendaGoogleBindingStatus">
+                  <span className={styles.googleConfigStatus}>
                     {configNew
-                      ? "Salve a agenda para habilitar a conexão individual."
+                      ? "Salve o calendário para habilitar a conexão individual."
                       : google.email ||
-                        "Vincule somente esta agenda ao calendário desejado."}
+                        "Este calendário ainda não está vinculado ao Google Calendar."}
                   </span>
+                  <span className={styles.googleOfficialBadge}>
+                    Integração oficial
+                  </span>
+                  {google.conectado && google.bidirecional_ativa ? (
+                    <span className={styles.googleBidirectionalBadge}>
+                      Bidirecional ativa
+                    </span>
+                  ) : null}
                 </div>
-                <div className="mini agendaGoogleCardActions">
+                <div className={`mini ${styles.googleConfigActions}`}>
                   {!configNew && google.conectado ? (
                     <>
                       <button
                         type="button"
-                        className="btn"
+                        className={`btn ${styles.googleConfigSync}`}
                         onClick={() => void googleAction("sync")}
                         disabled={busy}
                       >
@@ -2913,7 +2873,7 @@ function Page() {
                       </button>
                       <button
                         type="button"
-                        className="btn danger"
+                        className={`btn danger ${styles.googleConfigDisconnect}`}
                         onClick={() => void googleAction("disconnect")}
                         disabled={busy}
                       >
@@ -2924,13 +2884,13 @@ function Page() {
                   ) : !configNew ? (
                     <button
                       type="button"
-                      className="btn primary"
+                      className={`btn ${styles.googleConfigSync}`}
                       onClick={() =>
                         (location.href = `/api/agendas/${agendaId}/google-calendar?acao=conectar`)
                       }
                     >
                       <Link2 size={14} />
-                      Conectar
+                      Conectar este calendário
                     </button>
                   ) : null}
                 </div>
@@ -2950,6 +2910,133 @@ function Page() {
                 loading={configDetailsLoading}
                 error={configDetailsError}
               />
+              <section className={styles.settingsCard}>
+                <div className={styles.settingsHeader}>
+                  <h3>Configurações de agendamento</h3>
+                  <p>
+                    Defina a duração dos atendimentos, o espaço entre horários,
+                    a antecedência mínima e o período disponível para novos
+                    agendamentos.
+                  </p>
+                </div>
+
+                <div className={styles.settingsGrid}>
+                  <div className="field">
+                    <label>Duração padrão</label>
+                    <div className="agendaTimeUnitControl">
+                      <input
+                        type="number"
+                        min={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
+                        step={unidadeDuracaoAgenda === "horas" ? "0.25" : "1"}
+                        value={valorTempoAgenda(
+                          af.duracao_minutos,
+                          unidadeDuracaoAgenda,
+                        )}
+                        onChange={(event) =>
+                          atualizarTempoAgenda(
+                            "duracao_minutos",
+                            event.target.value,
+                            unidadeDuracaoAgenda,
+                          )
+                        }
+                      />
+                      <select
+                        value={unidadeDuracaoAgenda}
+                        onChange={(event) =>
+                          setUnidadeDuracaoAgenda(
+                            event.target.value as "minutos" | "horas",
+                          )
+                        }
+                        aria-label="Unidade da duração padrão"
+                      >
+                        <option value="minutos">minutos</option>
+                        <option value="horas">horas</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <label>Espaço entre horários</label>
+                    <div className="agendaTimeUnitControl">
+                      <input
+                        type="number"
+                        min="0"
+                        step={unidadeIntervaloAgenda === "horas" ? "0.25" : "1"}
+                        value={valorTempoAgenda(
+                          af.intervalo_minutos,
+                          unidadeIntervaloAgenda,
+                        )}
+                        onChange={(event) =>
+                          atualizarTempoAgenda(
+                            "intervalo_minutos",
+                            event.target.value,
+                            unidadeIntervaloAgenda,
+                          )
+                        }
+                      />
+                      <select
+                        value={unidadeIntervaloAgenda}
+                        onChange={(event) =>
+                          setUnidadeIntervaloAgenda(
+                            event.target.value as "minutos" | "horas",
+                          )
+                        }
+                        aria-label="Unidade do intervalo"
+                      >
+                        <option value="minutos">minutos</option>
+                        <option value="horas">horas</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <label>Antecedência mínima</label>
+                    <div className="agendaTimeUnitControl">
+                      <input
+                        type="number"
+                        min="0"
+                        step={
+                          unidadeAntecedenciaAgenda === "horas" ? "0.25" : "1"
+                        }
+                        value={valorTempoAgenda(
+                          af.antecedencia_minutos,
+                          unidadeAntecedenciaAgenda,
+                        )}
+                        onChange={(event) =>
+                          atualizarTempoAgenda(
+                            "antecedencia_minutos",
+                            event.target.value,
+                            unidadeAntecedenciaAgenda,
+                          )
+                        }
+                      />
+                      <select
+                        value={unidadeAntecedenciaAgenda}
+                        onChange={(event) =>
+                          setUnidadeAntecedenciaAgenda(
+                            event.target.value as "minutos" | "horas",
+                          )
+                        }
+                        aria-label="Unidade da antecedência mínima"
+                      >
+                        <option value="minutos">minutos</option>
+                        <option value="horas">horas</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <label>Janela em dias</label>
+                    <input
+                      type="number"
+                      value={af.janela_dias}
+                      onChange={(event) =>
+                        setAf({ ...af, janela_dias: event.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              </section>
               <h3 className={styles.availabilitySectionTitle}>
                 Disponibilidade semanal
               </h3>

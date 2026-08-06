@@ -7,7 +7,7 @@ export default function AgendasTemplate({ children }: { children: ReactNode }) {
     <>
       <Header
         title="Agendamentos"
-        subtitle="Organize compromissos, clientes, responsáveis e lembretes em uma agenda completa."
+        subtitle="Organize compromissos, clientes, responsáveis e lembretes em um calendário completo."
       />
       <div className="agendaTemplateShell">{children}</div>
     </>
