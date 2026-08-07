@@ -249,7 +249,13 @@ export default function AgendaRelatedRecords({
             : ""),
       },
     };
-    if (!selectedKeys.has(linkKey(next))) onChange([...value, next]);
+    if (!selectedKeys.has(linkKey(next))) {
+      onChange([...value, next]);
+      setOpen(false);
+      setSearch("");
+      setOrigin("todos");
+      setPage(1);
+    }
   };
 
   const addHealthRecord = (record: AgendaRelatedLink) => {
