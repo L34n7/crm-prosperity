@@ -1920,24 +1920,30 @@ function Page() {
                   )}
                 </div>
               </section>
-              <section className="section">
-                <div
-                  className="row"
-                  style={{ justifyContent: "space-between" }}
-                >
-                  <h3>
-                    <UsersRound size={15} />
-                    Participantes
-                  </h3>
-                  <button
-                    className="btn"
-                    style={{ height: 30 }}
-                    onClick={addPart}
-                  >
-                    <Plus size={13} />
-                    Adicionar
-                  </button>
-                </div>
+                <section className="section">
+                  <div className={styles.cardHeader}>
+                    <div className={styles.cardHeading}>
+                      <h3 className={styles.cardTitle}>
+                        <UsersRound size={15} />
+                        Participantes
+                      </h3>
+
+                      <p className={styles.cardDescription}>
+                        Inclua acompanhantes, responsáveis ou membros da equipe que também
+                        participarão deste compromisso.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ height: 30 }}
+                      onClick={addPart}
+                    >
+                      <Plus size={13} />
+                      Adicionar
+                    </button>
+                  </div>
                 {form.participantes.map((p, i) => (
                   <div className="repeat" key={i}>
                     <div className="row">
@@ -2022,32 +2028,37 @@ function Page() {
                   <div className="empty">Nenhum participante adicional.</div>
                 )}
               </section>
-              <section className={`section ${styles.relatedSection}`}>
-                <div
-                  className="row"
-                  style={{ justifyContent: "space-between" }}
-                >
-                  <div className={styles.relatedTitleGroup}>
-                    <h3>
-                      <Link2 size={15} />
-                      {relatedPresentation.titulo}
-                    </h3>
-                    {niche?.nome ? (
-                      <span className={styles.relatedNicheBadge}>
-                        {niche.nome}
-                      </span>
-                    ) : null}
+                <section className={`section ${styles.relatedSection}`}>
+                  <div className={styles.cardHeader}>
+                    <div className={styles.cardHeading}>
+                      <div className={styles.relatedTitleGroup}>
+                        <h3 className={styles.cardTitle}>
+                          <Link2 size={15} />
+                          {relatedPresentation.titulo}
+                        </h3>
+
+                        {niche?.nome ? (
+                          <span className={styles.relatedNicheBadge}>
+                            {niche.nome}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <p className={styles.cardDescription}>
+                        {relatedPresentation.dica}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ height: 30 }}
+                      onClick={addLink}
+                    >
+                      <Plus size={13} />
+                      {relatedPresentation.botao}
+                    </button>
                   </div>
-                  <button
-                    className="btn"
-                    style={{ height: 30 }}
-                    onClick={addLink}
-                  >
-                    <Plus size={13} />
-                    {relatedPresentation.botao}
-                  </button>
-                </div>
-                <small>{relatedPresentation.dica}</small>
                 {form.vinculos.map((v, i) => (
                   <div className="repeat" key={i}>
                     <div className="row">
@@ -2216,28 +2227,28 @@ function Page() {
                 )}
               </section>
               <section className="section">
-                <div
-                  className="row"
-                  style={{ justifyContent: "space-between" }}
-                >
-                  <h3>
-                    <Bell size={15} />
-                    Lembretes e confirmação
-                  </h3>
+                <div className={styles.reminderHeader}>
+                  <div className={styles.reminderHeading}>
+                    <h3 className={styles.reminderTitle}>
+                      <Bell size={15} />
+                      Lembretes e confirmação
+                    </h3>
+
+                    <p className={styles.reminderDescription}>
+                      Crie avisos extras somente para este compromisso. Eles serão
+                      processados e exibidos junto das automações em Disparos agendados.
+                    </p>
+                  </div>
+
                   <button
-                    className="btn"
-                    style={{ height: 30 }}
+                    type="button"
+                    className={`btn ${styles.reminderButton}`}
                     onClick={addRem}
                   >
                     <Plus size={13} />
                     Lembrete
                   </button>
                 </div>
-                <small>
-                  Crie avisos extras somente para este compromisso. Eles serão
-                  processados e exibidos junto das automações em Disparos
-                  agendados.
-                </small>
                 {form.lembretes.length === 0 && (
                   <div className="empty">
                     Nenhum lembrete adicional. Clique em Lembrete para
@@ -2895,21 +2906,15 @@ function Page() {
                   ) : null}
                 </div>
               </section>
-              <AgendaCalendarIntegrationScope
-                integrations={configOptions.integracoes}
-                selectedIds={agendaIntegrationIds}
-                onChange={setAgendaIntegrationIds}
-                loading={configDetailsLoading}
-                error={configDetailsError}
-              />
-              <AgendaAutomationSettings
-                options={configOptions}
-                selectedIntegrationIds={agendaIntegrationIds}
-                cards={automationCards}
-                onChange={setAutomationCards}
-                loading={configDetailsLoading}
-                error={configDetailsError}
-              />
+              {configOptions.integracoes.length > 1 && (
+                <AgendaCalendarIntegrationScope
+                  integrations={configOptions.integracoes}
+                  selectedIds={agendaIntegrationIds}
+                  onChange={setAgendaIntegrationIds}
+                  loading={configDetailsLoading}
+                  error={configDetailsError}
+                />
+              )}
               <section className={styles.settingsCard}>
                 <div className={styles.settingsHeader}>
                   <h3>Configurações de agendamento</h3>
@@ -3049,6 +3054,15 @@ function Page() {
                 days={disp}
                 dayNames={diasFull}
                 onChange={setDisp}
+              />
+
+              <AgendaAutomationSettings
+                options={configOptions}
+                selectedIntegrationIds={agendaIntegrationIds}
+                cards={automationCards}
+                onChange={setAutomationCards}
+                loading={configDetailsLoading}
+                error={configDetailsError}
               />
             </div>
             <div className="foot">

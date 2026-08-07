@@ -14,7 +14,7 @@
 .scope :global(.a2 input),
 .scope :global(.a2 select),
 .scope :global(.a2 textarea) {
-  font: inherit;
+  font-family: inherit;
 }
 .scope :global(.wrap) {
   max-width: 1650px;
@@ -267,8 +267,9 @@
 .scope :global(.empty) {
   text-align: center;
   color: var(--crm-ui-private-content-hex-8a96a8);
-  font-size: 11px;
-  padding: 18px;
+  font-size: 14px !important;
+  padding: 18px !important;
+  margin-top: 13px !important;
 }
 .scope :global(.pill) {
   font-size: 9px;
@@ -444,11 +445,36 @@
 }
 .scope :global(.remWhatsapp) {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  min-width: 0;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed var(--crm-ui-private-border-hex-d8e0ea);
+}
+.scope :global(.rem),
+.scope :global(.remWhatsapp),
+.scope :global(.repeat) {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.scope :global(.rem > .field),
+.scope :global(.remWhatsapp > .field) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.scope :global(.rem select),
+.scope :global(.remWhatsapp select) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .scope :global(.remWhatsappNote) {
   grid-column: 1/-1;
@@ -831,7 +857,7 @@
 
 .googleHeaderSummary {
   min-width: 230px;
-  max-width: 340px;
+  max-width: 400px;
   height: 36px;
   padding: 0 11px 0 8px;
   border: 1px solid var(--crm-success-border);
@@ -863,10 +889,10 @@
 }
 
 .googleHeaderSummary small {
-  max-width: 260px;
+  max-width: 400px;
   overflow: hidden;
   color: var(--crm-text-muted);
-  font-size: 9.5px;
+  font-size: 11px;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -938,7 +964,7 @@
   gap: 2px 12px;
   width: 100%;
   min-height: 126px;
-  margin: 6px 0 14px;
+  margin: 20px 0 14px;
   padding: 16px;
   border: 1px solid
     color-mix(in srgb, var(--crm-primary-border) 72%, var(--crm-border));
@@ -1091,24 +1117,63 @@
   color: var(--crm-danger-text) !important;
 }
 
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.cardHeading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.scope :global(.section) .cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.cardTitle svg {
+  flex: 0 0 auto;
+  color: var(--crm-primary-text);
+}
+
+.cardDescription {
+  max-width: 540px;
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
 .relatedTitleGroup {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
 }
 
 .relatedNicheBadge {
-  min-height: 23px;
-  padding: 0 9px;
+  min-height: 22px;
+  padding: 0 10px;
   border: 1px solid var(--crm-primary-border);
   border-radius: 999px;
   background: var(--crm-primary-soft);
   color: var(--crm-primary-text);
   display: inline-flex;
   align-items: center;
-  font-size: 10px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 800;
   line-height: 1;
   white-space: nowrap;
 }
@@ -1228,7 +1293,7 @@
   font-size: 10px;
 }
 .scope :global(.avBreakEmpty) {
-  font-size: 9px;
+  font-size: 19px;
   color: var(--crm-text-muted);
 }
 .scope :global(.avAddBreak) {
@@ -1287,14 +1352,14 @@
   flex-wrap: wrap;
 }
 .scope :global(.feedbackHeadLabel) {
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--crm-ui-private-content-hex-9a6700);
 }
 .scope :global(.feedbackCounter) {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   border-radius: 99px;
   padding: 3px 7px;
@@ -1304,7 +1369,7 @@
 }
 .scope :global(.feedbackTitle) {
   display: block;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.25;
   color: var(--crm-ui-private-content-hex-172033);
   overflow: hidden;
@@ -1316,7 +1381,7 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--crm-ui-private-content-hex-405066);
 }
 .scope :global(.feedbackClient b),
@@ -1337,7 +1402,7 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: 10px;
+  font-size: 13px;
   color: var(--crm-ui-private-content-hex-667085);
 }
 .scope :global(.feedbackMetaItem svg) {
@@ -1356,7 +1421,8 @@
 }
 .scope :global(.feedbackActions .btn) {
   height: 32px;
-  font-size: 11px;
+  font-size: 14px;
+  font-weight: 600;
   white-space: nowrap;
 }
 .scope :global(.feedbackOpen) {
@@ -1381,7 +1447,7 @@
 
   width: 100%;
   min-width: 0;
-  margin: 12px 0 16px;
+  margin: 35px 0 16px;
   padding: 17px;
 
   overflow: hidden;
@@ -1486,7 +1552,7 @@
 }
 
 .availabilitySectionTitle {
-  margin: 22px 0 8px;
+  margin: 35px 0 8px;
   color: var(--crm-text-strong);
   font-size: 20px !important;
   font-weight: 700 !important;
@@ -1590,6 +1656,56 @@
   font-weight: 900 !important;
 }
 
+.reminderHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.reminderHeading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.reminderTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 !important;
+  color: var(--crm-text-strong);
+  font-size: 16px !important;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.reminderTitle svg {
+  flex: 0 0 auto;
+  color: var(--crm-primary-text);
+}
+
+.reminderDescription {
+  max-width: 520px;
+  margin: 6px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.reminderButton {
+  flex: 0 0 auto;
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 0 14px !important;
+  white-space: nowrap;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+
+
+
 @media (max-width: 760px) {
   .settingsCard {
     padding: 15px;
@@ -1639,6 +1755,31 @@
   }
   .scope :global(.feedbackOpen) {
     flex-basis: 100% !important;
+  }
+  .reminderHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reminderButton {
+    align-self: flex-start;
+  }
+
+  .scope :global(.remWhatsapp) {
+    grid-template-columns: 1fr;
+  }
+
+  .cardHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cardHeader > button {
+    align-self: flex-start;
+  }
+
+  .cardDescription {
+    max-width: none;
   }
 }
 @media (max-width: 1100px) {

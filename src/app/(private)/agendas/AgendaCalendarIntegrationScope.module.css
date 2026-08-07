@@ -9,7 +9,7 @@
 
 .scope {
   position: relative;
-  margin: 8px 0 14px;
+  margin: 35px 0 14px;
   padding: 16px;
   border: 1px solid
     color-mix(in srgb, var(--crm-primary-border) 70%, var(--crm-border));
@@ -127,7 +127,7 @@
 .optionText {
   min-width: 0;
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1.4;
   overflow-wrap: anywhere;

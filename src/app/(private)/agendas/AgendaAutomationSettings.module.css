@@ -1,7 +1,7 @@
 .section {
   grid-column: 1 / -1;
   position: relative;
-  margin: 8px 0 2px;
+  margin: 35px 0 2px;
   padding: 19px;
   border: 1px solid
     color-mix(in srgb, var(--crm-success-border) 78%, var(--crm-border));
