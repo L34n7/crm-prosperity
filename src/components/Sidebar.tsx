@@ -28,6 +28,7 @@ import {
   MousePointerClick,
   CreditCard,
   MoreHorizontal,
+  PackageSearch,
   UserCircle,
   HelpCircle,
   Moon,
@@ -113,6 +114,12 @@ const menuItems: MenuItem[] = [
   { label: "Automações", href: "/automacoes-api", icon: Workflow },
   { label: "Contatos", href: "/contatos", icon: Contact },
   { label: "Kanban", href: "/kanban", icon: Layers3 },
+  {
+    label: "Estoque",
+    href: "/estoque",
+    icon: PackageSearch,
+    permissao: "estoque.visualizar",
+  },
   {
     label: "Rastreamento de leads",
     href: "/rastreamento",

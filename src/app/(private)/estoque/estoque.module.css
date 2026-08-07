@@ -1,0 +1,902 @@
+.page {
+  width: min(1320px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 20px 0 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hero,
+.workspace,
+.metricCard,
+.inventoryCard,
+.catalogCard,
+.modal {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-xs);
+}
+
+.hero {
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  background:
+    radial-gradient(circle at 92% 8%, var(--crm-primary-soft), transparent 34%),
+    var(--crm-surface);
+}
+
+.hero h1,
+.hero p,
+.modalHeader h2,
+.sectionHeading h3,
+.inventoryCard h3,
+.catalogCard h3 {
+  margin: 0;
+}
+
+.hero h1 {
+  color: var(--crm-text-strong);
+  font-size: clamp(22px, 3vw, 30px);
+  letter-spacing: -0.025em;
+}
+
+.hero p {
+  margin-top: 7px;
+  color: var(--crm-text-muted);
+  font-size: 14px;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.heroActions,
+.cardActions,
+.catalogActions,
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.primaryButton,
+.secondaryButton,
+.iconButton,
+.cardActions button {
+  min-height: 42px;
+  border-radius: 13px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.primaryButton {
+  border: 1px solid transparent;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+}
+
+.secondaryButton,
+.iconButton,
+.cardActions button {
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+}
+
+.primaryButton:hover,
+.secondaryButton:hover,
+.iconButton:hover,
+.cardActions button:hover {
+  transform: translateY(-1px);
+}
+
+.secondaryButton:hover,
+.iconButton:hover,
+.cardActions button:hover {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
+.iconButton {
+  width: 42px;
+  padding: 0;
+  flex: 0 0 42px;
+}
+
+.dangerIcon {
+  border-color: var(--crm-danger-border) !important;
+  color: var(--crm-danger-text) !important;
+}
+
+.dangerIcon:hover {
+  background: var(--crm-danger-bg) !important;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metricCard {
+  border-radius: 19px;
+  min-height: 104px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.metricIcon,
+.productIcon,
+.catalogIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.metricIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.metricCard div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metricCard strong {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 21px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metricCard span:last-child {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metricWarning .metricIcon {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+}
+
+.error {
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace {
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.tabs {
+  padding: 10px 18px 0;
+  display: flex;
+  gap: 5px;
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.tabs button {
+  min-height: 48px;
+  padding: 0 15px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--crm-text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tabs button:hover,
+.tabs .tabActive {
+  border-bottom-color: var(--crm-primary);
+  color: var(--crm-primary-text);
+}
+
+.toolbar {
+  padding: 17px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: var(--crm-surface-soft);
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.searchBox {
+  width: min(520px, 100%);
+  height: 44px;
+  padding: 0 13px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 13px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-muted);
+}
+
+.searchBox:focus-within {
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
+  background: var(--crm-surface);
+}
+
+.searchBox input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 13px;
+}
+
+.inventoryGrid {
+  padding: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.inventoryCard {
+  min-width: 0;
+  border-radius: 19px;
+  padding: 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.inventoryCard:hover,
+.catalogCard:hover {
+  border-color: var(--crm-primary-border);
+}
+
+.lowCard {
+  border-color: var(--crm-warning-border);
+}
+
+.cardTop,
+.catalogHeading,
+.sectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.typeBadge,
+.lowBadge,
+.mutedBadge,
+.movementBadge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.typeBadge {
+  border: 1px solid var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.lowBadge {
+  border: 1px solid var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+}
+
+.mutedBadge {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-muted);
+}
+
+.itemTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.productIcon,
+.catalogIcon {
+  width: 43px;
+  height: 43px;
+  flex: 0 0 43px;
+  border-radius: 13px;
+}
+
+.itemTitle div:last-child {
+  min-width: 0;
+}
+
+.inventoryCard h3,
+.catalogCard h3 {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemTitle p,
+.catalogHeading p,
+.sectionHeading p {
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.stockLine {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stockLine div,
+.costLine {
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--crm-surface-soft);
+}
+
+.stockLine div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stockLine span,
+.costLine span {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.stockLine strong,
+.costLine strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.costLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cardActions {
+  margin-top: auto;
+  padding-top: 2px;
+}
+
+.cardActions button:not(.iconButton) {
+  min-height: 38px;
+  padding: 0 11px;
+  flex: 1;
+  font-size: 11px;
+}
+
+.cardActions .iconButton {
+  width: 38px;
+  min-height: 38px;
+  flex: 0 0 38px;
+  padding: 0;
+}
+
+.catalogList {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.catalogCard {
+  border-radius: 17px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 15px;
+}
+
+.catalogMain {
+  min-width: 0;
+}
+
+.catalogHeading > div {
+  min-width: 0;
+}
+
+.catalogHeading h3 {
+  margin-top: 7px;
+}
+
+.catalogHeading > strong {
+  color: var(--crm-text-strong);
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.compositionLine {
+  margin-top: 11px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.compositionLine > span:not(.mutedBadge) {
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.catalogActions .primaryButton {
+  min-height: 39px;
+  padding: 0 12px;
+  font-size: 11px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--crm-text);
+  font-size: 12px;
+}
+
+.table th,
+.table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--crm-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table th {
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.table td strong,
+.table td small {
+  display: block;
+}
+
+.table td strong {
+  color: var(--crm-text-strong);
+}
+
+.table td small {
+  max-width: 260px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--crm-text-muted);
+  text-overflow: ellipsis;
+}
+
+.movementBadge {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-muted);
+}
+
+.movement_entrada {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+}
+
+.movement_saida,
+.movement_venda,
+.movement_execucao {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+}
+
+.movement_ajuste {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.empty {
+  min-height: 210px;
+  padding: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--crm-overlay);
+  backdrop-filter: blur(7px);
+}
+
+.modal {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 44px);
+  border-radius: 22px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader,
+.modalFooter {
+  padding: 18px 20px;
+  background: var(--crm-surface);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.modalHeader h2 {
+  color: var(--crm-text-strong);
+  font-size: 19px;
+}
+
+.modalBody {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.modalFooter {
+  border-top: 1px solid var(--crm-border);
+}
+
+.modalError {
+  margin: 0 20px 15px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field > span {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.field input,
+.field select,
+.field textarea,
+.componentRow input,
+.componentRow select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 12px;
+  outline: 0;
+  padding: 10px 12px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 13px;
+}
+
+.field textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.componentRow input:focus,
+.componentRow select:focus {
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
+  background: var(--crm-surface);
+}
+
+.fullField {
+  grid-column: 1 / -1;
+}
+
+.compositionEditor {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--crm-border);
+}
+
+.sectionHeading h3 {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+}
+
+.componentRow {
+  margin-top: 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px 42px;
+  gap: 9px;
+  align-items: center;
+}
+
+.compositionEmpty,
+.infoBox {
+  border: 1px dashed var(--crm-border-strong);
+  border-radius: 13px;
+  padding: 13px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.compositionEmpty {
+  margin-top: 12px;
+}
+
+.infoBox {
+  margin-top: 14px;
+}
+
+.saleSummary {
+  margin-bottom: 18px;
+  padding: 13px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.saleSummary div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.saleSummary strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.saleSummary div span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 1050px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventoryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalogCard {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .catalogActions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .page {
+    width: min(100% - 22px, 1320px);
+    padding-top: 12px;
+  }
+
+  .hero,
+  .toolbar,
+  .sectionHeading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hero {
+    padding: 19px;
+  }
+
+  .heroActions,
+  .heroActions button,
+  .toolbar > button,
+  .sectionHeading button {
+    width: 100%;
+  }
+
+  .metrics,
+  .inventoryGrid,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .metricCard {
+    min-height: 88px;
+  }
+
+  .tabs {
+    padding: 7px 10px 0;
+    overflow-x: auto;
+  }
+
+  .tabs button {
+    padding: 0 10px;
+  }
+
+  .toolbar {
+    display: flex;
+    padding: 13px;
+  }
+
+  .searchBox {
+    width: 100%;
+  }
+
+  .inventoryGrid,
+  .catalogList {
+    padding: 12px;
+  }
+
+  .catalogCard {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogIcon {
+    display: none;
+  }
+
+  .catalogHeading {
+    flex-direction: column;
+  }
+
+  .catalogActions {
+    justify-content: stretch;
+  }
+
+  .catalogActions .primaryButton {
+    flex: 1;
+  }
+
+  .modalOverlay {
+    padding: 8px;
+    align-items: flex-end;
+  }
+
+  .modal {
+    max-height: calc(100vh - 16px);
+    border-radius: 19px 19px 12px 12px;
+  }
+
+  .modalHeader,
+  .modalBody,
+  .modalFooter {
+    padding: 16px;
+  }
+
+  .modalFooter {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fullField {
+    grid-column: auto;
+  }
+
+  .componentRow {
+    grid-template-columns: minmax(0, 1fr) 90px 42px;
+  }
+}
+
+@media (max-width: 440px) {
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .cardActions {
+    flex-wrap: wrap;
+  }
+
+  .cardActions button:not(.iconButton) {
+    flex-basis: calc(50% - 5px);
+  }
+}
