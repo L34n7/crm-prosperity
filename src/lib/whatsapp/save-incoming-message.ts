@@ -12,6 +12,8 @@ type SaveIncomingMessageParams = {
   metadataJson?: Record<string, unknown> | null;
 };
 
+const JANELA_DEDUPLICACAO_LOGICA_SEGUNDOS = 4;
+
 function getConteudoPadraoPorTipo(tipoMensagem: string) {
   switch (tipoMensagem) {
     case "imagem":
@@ -35,6 +37,14 @@ function getConteudoPadraoPorTipo(tipoMensagem: string) {
     default:
       return "Mensagem recebida";
   }
+}
+
+function normalizarConteudoParaDeduplicacao(conteudo: string) {
+  return conteudo
+    .normalize("NFKC")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("pt-BR");
 }
 
 function agendaActionPayload(metadataJson: Record<string, unknown> | null) {
@@ -171,6 +181,65 @@ export async function saveIncomingWhatsAppMessage({
     throw new Error("Erro ao inserir mensagem: sem retorno do banco");
   }
 
+  let repeticaoLogicaRapida = false;
+  const deveAplicarDeduplicacaoLogica =
+    !!mensagemExternaId &&
+    ["texto", "botao", "audio"].includes(tipoMensagem) &&
+    textoNormalizado.length > 0 &&
+    !agendaActionPayload(metadataJson);
+
+  if (deveAplicarDeduplicacaoLogica) {
+    const conteudoDeduplicacao = `${tipoMensagem}:${normalizarConteudoParaDeduplicacao(
+      textoNormalizado
+    )}`;
+
+    const { data: claimData, error: claimError } = await supabaseAdmin.rpc(
+      "claim_automacao_entrada_logica",
+      {
+        p_empresa_id: empresaId,
+        p_conversa_id: conversaId,
+        p_mensagem_id: insertedMessage.id,
+        p_conteudo_normalizado: conteudoDeduplicacao,
+        p_mensagem_em: createdAt,
+        p_janela_segundos: JANELA_DEDUPLICACAO_LOGICA_SEGUNDOS,
+      }
+    );
+
+    if (claimError) {
+      // Fail-open: uma indisponibilidade da trava nunca deve parar o atendimento.
+      console.error(
+        "[WHATSAPP] Falha ao aplicar deduplicação lógica; seguindo com o motor:",
+        {
+          conversaId,
+          mensagemId: insertedMessage.id,
+          erro: claimError.message,
+        }
+      );
+    } else {
+      const claim = (claimData || {}) as {
+        claimed?: boolean;
+        reason?: string;
+        execucao_id?: string | null;
+        no_id?: string | null;
+      };
+
+      repeticaoLogicaRapida = claim.claimed === false;
+
+      if (repeticaoLogicaRapida) {
+        console.warn(
+          "[WHATSAPP] Entrada lógica repetida rapidamente. Motor ignorado.",
+          {
+            conversaId,
+            mensagemId: insertedMessage.id,
+            execucaoId: claim.execucao_id || null,
+            noId: claim.no_id || null,
+            motivo: claim.reason || "repeticao_rapida_sem_resposta_intermediaria",
+          }
+        );
+      }
+    }
+  }
+
   const { error: updateConversationError } = await supabaseAdmin
     .from("conversas")
     .update({
@@ -188,11 +257,13 @@ export async function saveIncomingWhatsAppMessage({
    * O webhook consulta novamente mensagens marcadas como duplicadas antes de
    * chamar o motor de fluxos. Para respostas rápidas da agenda, a trigger do
    * banco já processou a ação e marcou automacao_processada durante o INSERT.
-   * Recarregar essa mensagem impede que Confirmar/Cancelar/Reagendar também
-   * iniciem um fluxo padrão por engano.
+   * A deduplicação lógica usa o mesmo caminho: a segunda mensagem continua no
+   * histórico, mas já retorna marcada como processada para não executar o motor.
    */
   return {
-    duplicated: agendaActionPayload(metadataJson),
+    duplicated:
+      agendaActionPayload(metadataJson) || repeticaoLogicaRapida,
+    logicalDuplicate: repeticaoLogicaRapida,
     messageId: insertedMessage.id,
   };
 }
