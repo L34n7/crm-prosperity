@@ -45,6 +45,7 @@ import AgendaTemplateConfiguration, {
   defaultTemplateConfiguration,
   type AgendaTemplateConfigurationValue,
 } from "./AgendaTemplateConfiguration";
+import AgendaRelatedRecords from "./AgendaRelatedRecords";
 
 import styles from "./page.module.css";
 
@@ -215,16 +216,16 @@ const relatedByNiche: Record<string, RelatedPresentation> = {
     botao: "Adicionar imóvel",
   },
   medicina: {
-    tipos: ["procedimento"],
-    titulo: "Procedimento relacionado",
-    dica: "Vincule o procedimento ou atendimento clínico relacionado ao compromisso.",
-    botao: "Adicionar procedimento",
+    tipos: ["prontuario"],
+    titulo: "Prontuário relacionado",
+    dica: "Vincule o prontuário do paciente a este agendamento.",
+    botao: "Vincular prontuário",
   },
   odontologia: {
-    tipos: ["procedimento"],
-    titulo: "Procedimento relacionado",
-    dica: "Vincule o procedimento odontológico relacionado ao compromisso.",
-    botao: "Adicionar procedimento",
+    tipos: ["prontuario", "odontograma"],
+    titulo: "Atendimento relacionado",
+    dica: "Vincule o prontuário e o odontograma do paciente a este agendamento.",
+    botao: "Vincular atendimento",
   },
   comercio: {
     tipos: ["oportunidade", "ordem_servico", "outro"],
@@ -243,6 +244,8 @@ const relatedTypeLabels: Record<string, string> = {
   imovel: "Imóvel",
   veiculo: "Veículo",
   procedimento: "Procedimento",
+  prontuario: "Prontuário",
+  odontograma: "Odontograma",
   oportunidade: "Oportunidade",
   ordem_servico: "Ordem de serviço",
   processo: "Processo",
@@ -708,6 +711,18 @@ function Page() {
       nome_cliente: c.nome || "",
       telefone_cliente: c.telefone || "",
       email_cliente: c.email || "",
+      vinculos:
+        f.contato_id && f.contato_id !== c.id
+          ? f.vinculos.filter(
+              (vinculo) =>
+                !(
+                  vinculo.dados_json?.origem === "sistema" &&
+                  ["prontuario", "odontograma"].includes(
+                    vinculo.entidade_tipo,
+                  )
+                ),
+            )
+          : f.vinculos,
     }));
     setCq("");
     setContacts([]);
@@ -724,23 +739,6 @@ function Page() {
           papel: "",
           tipo: "convidado",
           status: "pendente",
-        },
-      ],
-    }));
-  const addLink = () =>
-    setForm((f) => ({
-      ...f,
-      vinculos: [
-        ...f.vinculos,
-        {
-          entidade_tipo: relatedPresentation.tipos[0] || "outro",
-          entidade_id: "",
-          papel: "",
-          titulo: "",
-          subtitulo: "",
-          imagem_url: "",
-          principal: f.vinculos.length === 0,
-          dados_json: {},
         },
       ],
     }));
@@ -1823,13 +1821,22 @@ function Page() {
                       style={{ height: 30 }}
                       onClick={() => {
                         setContact(null);
-                        setForm({
-                          ...form,
+                        setForm((current) => ({
+                          ...current,
                           contato_id: "",
                           nome_cliente: "",
                           telefone_cliente: "",
                           email_cliente: "",
-                        });
+                          vinculos: current.vinculos.filter(
+                            (vinculo) =>
+                              !(
+                                vinculo.dados_json?.origem === "sistema" &&
+                                ["prontuario", "odontograma"].includes(
+                                  vinculo.entidade_tipo,
+                                )
+                              ),
+                          ),
+                        }));
                       }}
                     >
                       Trocar
@@ -2028,204 +2035,16 @@ function Page() {
                   <div className="empty">Nenhum participante adicional.</div>
                 )}
               </section>
-                <section className={`section ${styles.relatedSection}`}>
-                  <div className={styles.cardHeader}>
-                    <div className={styles.cardHeading}>
-                      <div className={styles.relatedTitleGroup}>
-                        <h3 className={styles.cardTitle}>
-                          <Link2 size={15} />
-                          {relatedPresentation.titulo}
-                        </h3>
-
-                        {niche?.nome ? (
-                          <span className={styles.relatedNicheBadge}>
-                            {niche.nome}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <p className={styles.cardDescription}>
-                        {relatedPresentation.dica}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ height: 30 }}
-                      onClick={addLink}
-                    >
-                      <Plus size={13} />
-                      {relatedPresentation.botao}
-                    </button>
-                  </div>
-                {form.vinculos.map((v, i) => (
-                  <div className="repeat" key={i}>
-                    <div className="row">
-                      <b>Registro {i + 1}</b>
-                      <button
-                        className="remove"
-                        onClick={() =>
-                          setForm({
-                            ...form,
-                            vinculos: form.vinculos.filter((_, x) => x !== i),
-                          })
-                        }
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <div className="form">
-                      <div className="field">
-                        <label>Tipo</label>
-                        <select
-                          value={v.entidade_tipo}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              vinculos: form.vinculos.map((x, n) =>
-                                n === i
-                                  ? { ...x, entidade_tipo: e.target.value }
-                                  : x,
-                              ),
-                            })
-                          }
-                        >
-                          {relatedPresentation.tipos.map((type) => (
-                            <option key={type} value={type}>
-                              {relatedTypeLabels[type] || type}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="field">
-                        <label>Código / ID</label>
-                        <input
-                          value={v.entidade_id}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              vinculos: form.vinculos.map((x, n) =>
-                                n === i
-                                  ? { ...x, entidade_id: e.target.value }
-                                  : x,
-                              ),
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="field full">
-                        <label>Título*</label>
-                        <input
-                          value={v.titulo}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              vinculos: form.vinculos.map((x, n) =>
-                                n === i ? { ...x, titulo: e.target.value } : x,
-                              ),
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="field">
-                        <label>Papel</label>
-                        <input
-                          value={v.papel}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              vinculos: form.vinculos.map((x, n) =>
-                                n === i ? { ...x, papel: e.target.value } : x,
-                              ),
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="field">
-                        <label>Resumo</label>
-                        <input
-                          value={v.subtitulo}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              vinculos: form.vinculos.map((x, n) =>
-                                n === i
-                                  ? { ...x, subtitulo: e.target.value }
-                                  : x,
-                              ),
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="field full">
-                        <label>URL da imagem</label>
-                        <input
-                          value={v.imagem_url}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              vinculos: form.vinculos.map((x, n) =>
-                                n === i
-                                  ? { ...x, imagem_url: e.target.value }
-                                  : x,
-                              ),
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="field">
-                        <label>Campo adicional</label>
-                        <input
-                          value={Object.keys(v.dados_json)[0] || ""}
-                          onChange={(e) => {
-                            const val = Object.values(v.dados_json)[0] || "";
-                            setForm({
-                              ...form,
-                              vinculos: form.vinculos.map((x, n) =>
-                                n === i
-                                  ? {
-                                      ...x,
-                                      dados_json: e.target.value
-                                        ? { [e.target.value]: val }
-                                        : {},
-                                    }
-                                  : x,
-                              ),
-                            });
-                          }}
-                        />
-                      </div>
-                      <div className="field">
-                        <label>Valor</label>
-                        <input
-                          value={Object.values(v.dados_json)[0] || ""}
-                          onChange={(e) => {
-                            const k =
-                              Object.keys(v.dados_json)[0] || "Informação";
-                            setForm({
-                              ...form,
-                              vinculos: form.vinculos.map((x, n) =>
-                                n === i
-                                  ? {
-                                      ...x,
-                                      dados_json: e.target.value
-                                        ? { [k]: e.target.value }
-                                        : {},
-                                    }
-                                  : x,
-                              ),
-                            });
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {form.vinculos.length === 0 && (
-                  <div className="empty">Nenhum registro relacionado.</div>
-                )}
-              </section>
+              <AgendaRelatedRecords
+                nicheCode={niche?.codigo || "outro"}
+                nicheName={niche?.nome}
+                contactId={form.contato_id}
+                contactName={form.nome_cliente}
+                presentation={relatedPresentation}
+                value={form.vinculos}
+                typeLabels={relatedTypeLabels}
+                onChange={(vinculos) => setForm((current) => ({ ...current, vinculos }))}
+              />
               <section className="section">
                 <div className={styles.reminderHeader}>
                   <div className={styles.reminderHeading}>

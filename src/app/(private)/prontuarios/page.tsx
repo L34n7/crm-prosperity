@@ -112,8 +112,14 @@ export default function ProntuariosPage() {
       try {
         const params = new URLSearchParams();
 
+        const pacienteSolicitado =
+          pacienteId ||
+          new URLSearchParams(window.location.search).get("paciente_id") ||
+          "";
+
         if (buscaAplicada) params.set("busca", buscaAplicada);
-        if (pacienteId) params.set("paciente_id", pacienteId);
+        if (pacienteSolicitado)
+          params.set("paciente_id", pacienteSolicitado);
 
         const response = await fetch(`/api/prontuarios?${params}`, {
           cache: "no-store",

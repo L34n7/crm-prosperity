@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
+import { obterAcessoImoveis } from "@/lib/imoveis/acesso";
 import { normalizarUrlHttp } from "@/lib/imoveis/webhook";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -51,37 +50,18 @@ function sanitizarBusca(valor: string) {
 }
 
 export async function GET(request: Request) {
-  const contexto = await getUsuarioContexto();
+  const acesso = await obterAcessoImoveis("imoveis.visualizar");
 
-  if (!contexto.ok) {
+  if (!acesso.ok) {
     return NextResponse.json(
-      { ok: false, error: contexto.error },
-      { status: contexto.status }
+      { ok: false, error: acesso.error },
+      { status: acesso.status }
     );
   }
 
-  const empresaId = contexto.usuario.empresa_id;
-
-  if (!empresaId) {
-    return NextResponse.json(
-      { ok: false, error: "Usuario sem empresa vinculada." },
-      { status: 400 }
-    );
-  }
+  const empresaId = acesso.usuario.empresa_id;
 
   try {
-    const nicho = await buscarNichoEmpresa(empresaId);
-
-    if (nicho.codigo !== "imobiliaria") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "O catalogo de imoveis e exclusivo do nicho imobiliario.",
-        },
-        { status: 403 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const pagina = getInteiro(searchParams.get("pagina"), 1, 1, 1_000_000);
     const limite = getInteiro(searchParams.get("limite"), 24, 1, 100);
@@ -96,7 +76,8 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from("catalogo_imoveis_global")
-      .select("*", { count: "exact" });
+      .select("*", { count: "exact" })
+      .eq("empresa_id", empresaId);
 
     if (origem) {
       query = query.eq("origem_tipo", origem);
