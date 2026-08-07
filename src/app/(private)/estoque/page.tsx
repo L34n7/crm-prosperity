@@ -15,6 +15,10 @@ import {
   Pencil,
   Plus,
   Search,
+  Settings,
+  Warehouse,
+  Tags,
+  ShieldCheck,
   ShoppingBag,
   Trash2,
   Wrench,
@@ -25,7 +29,7 @@ import FeedbackToast from "@/components/FeedbackToast";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
 
-type Aba = "estoque" | "catalogo" | "movimentacoes";
+type Aba = "estoque" | "catalogo" | "movimentacoes" | "depositos" | "lotes" | "reservas" | "configuracoes";
 type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | null;
 
 type EstoqueItem = {
@@ -78,6 +82,11 @@ type Resumo = {
   valor_total: number;
   catalogo_ativo: number;
 };
+
+type Deposito = { id: string; codigo: string; nome: string; descricao: string | null; principal: boolean };
+type Saldo = { id: string; estoque_item_id: string; deposito_id: string; lote_id: string | null; saldo_fisico: number | string; saldo_reservado: number | string; saldo_transito: number | string; custo_medio: number | string };
+type Lote = { id: string; estoque_item_id: string; codigo: string; validade: string | null; fabricante: string | null; bloqueado: boolean };
+type Reserva = { id: string; estoque_item_id: string; deposito_id: string; quantidade: number | string; consumida: number | string; origem_tipo: string; origem_id: string; expira_em: string | null };
 
 type ItemForm = {
   id: string;
@@ -185,6 +194,12 @@ export default function EstoquePage() {
   const [catalogo, setCatalogo] = useState<CatalogoItem[]>([]);
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
   const [resumo, setResumo] = useState<Resumo>(RESUMO_INICIAL);
+  const [depositos, setDepositos] = useState<Deposito[]>([]);
+  const [saldos, setSaldos] = useState<Saldo[]>([]);
+  const [lotes, setLotes] = useState<Lote[]>([]);
+  const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [depositoOrigemId, setDepositoOrigemId] = useState("");
+  const [depositoDestinoId, setDepositoDestinoId] = useState("");
   const [busca, setBusca] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -219,6 +234,10 @@ export default function EstoquePage() {
       setCatalogo(data.catalogo ?? []);
       setMovimentacoes(data.movimentacoes ?? []);
       setResumo(data.resumo ?? RESUMO_INICIAL);
+      setDepositos(data.depositos ?? []);
+      setSaldos(data.saldos ?? []);
+      setLotes(data.lotes ?? []);
+      setReservas(data.reservas ?? []);
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao carregar estoque.");
     } finally {
@@ -318,6 +337,9 @@ export default function EstoquePage() {
     setMovimentoTipo(tipo);
     setMovimentoQuantidade(tipo === "ajuste" && item ? String(item.saldo) : "1");
     setObservacao("");
+    const principal = depositos.find((deposito) => deposito.principal) ?? depositos[0];
+    setDepositoOrigemId(tipo === "entrada" ? "" : principal?.id ?? "");
+    setDepositoDestinoId(tipo === "entrada" ? principal?.id ?? "" : "");
     setErro("");
     setModal("movimentacao");
   }
@@ -445,6 +467,10 @@ export default function EstoquePage() {
             <button className={aba === "movimentacoes" ? styles.tabActive : ""} onClick={() => setAba("movimentacoes")}>
               <History size={17} /> Histórico
             </button>
+            <button className={aba === "depositos" ? styles.tabActive : ""} onClick={() => setAba("depositos")}><Warehouse size={17} /> Depósitos</button>
+            <button className={aba === "lotes" ? styles.tabActive : ""} onClick={() => setAba("lotes")}><Tags size={17} /> Lotes e validade</button>
+            <button className={aba === "reservas" ? styles.tabActive : ""} onClick={() => setAba("reservas")}><ShieldCheck size={17} /> Reservas</button>
+            <button className={aba === "configuracoes" ? styles.tabActive : ""} onClick={() => setAba("configuracoes")}><Settings size={17} /> Configurações</button>
           </div>
 
           <div className={styles.toolbar}>
@@ -550,6 +576,23 @@ export default function EstoquePage() {
               </div>
             ) : <div className={styles.empty}>Nenhuma movimentação encontrada.</div>
           ) : null}
+
+          {!carregando && aba === "depositos" ? (
+            <div className={styles.catalogList}>{depositos.map((deposito) => {
+              const saldosDeposito = saldos.filter((saldo) => saldo.deposito_id === deposito.id);
+              return <article className={styles.catalogCard} key={deposito.id}><div className={styles.catalogIcon}><Warehouse size={22} /></div><div className={styles.catalogMain}><div className={styles.catalogHeading}><div><span className={styles.typeBadge}>{deposito.principal ? "Principal" : deposito.codigo}</span><h3>{deposito.nome}</h3><p>{deposito.descricao || `${saldosDeposito.length} posições com saldo`}</p></div><strong>{quantidade(saldosDeposito.reduce((total, saldo) => total + Number(saldo.saldo_fisico), 0))}</strong></div></div></article>;
+            })}</div>
+          ) : null}
+
+          {!carregando && aba === "lotes" ? (
+            lotes.length ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Lote</th><th>Item</th><th>Fabricante</th><th>Validade</th><th>Situação</th></tr></thead><tbody>{lotes.map((lote) => <tr key={lote.id}><td><strong>{lote.codigo}</strong></td><td>{itens.find((item) => item.id === lote.estoque_item_id)?.nome || "Item arquivado"}</td><td>{lote.fabricante || "—"}</td><td>{lote.validade ? new Date(`${lote.validade}T12:00:00`).toLocaleDateString("pt-BR") : "Sem validade"}</td><td><span className={lote.bloqueado ? styles.lowBadge : styles.typeBadge}>{lote.bloqueado ? "Bloqueado" : "Disponível"}</span></td></tr>)}</tbody></table></div> : <div className={styles.empty}>Nenhum lote cadastrado.</div>
+          ) : null}
+
+          {!carregando && aba === "reservas" ? (
+            reservas.length ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Item</th><th>Depósito</th><th>Quantidade</th><th>Origem</th><th>Expira em</th></tr></thead><tbody>{reservas.map((reserva) => <tr key={reserva.id}><td><strong>{itens.find((item) => item.id === reserva.estoque_item_id)?.nome || "Item"}</strong></td><td>{depositos.find((deposito) => deposito.id === reserva.deposito_id)?.nome || "—"}</td><td>{quantidade(Number(reserva.quantidade) - Number(reserva.consumida))}</td><td>{reserva.origem_tipo} · {reserva.origem_id.slice(0, 8)}</td><td>{reserva.expira_em ? dataHora(reserva.expira_em) : "Sem expiração"}</td></tr>)}</tbody></table></div> : <div className={styles.empty}>Nenhuma reserva ativa.</div>
+          ) : null}
+
+          {!carregando && aba === "configuracoes" ? <div className={styles.infoBox}><strong>Fundação ERP ativa</strong><br />Saldo por depósito e lote, razão imutável, documentos idempotentes, custo médio, reservas, transferências e estornos controlados. O modo avançado poderá ser habilitado conforme a operação da empresa.</div> : null}
         </section>
       </main>
 
@@ -610,6 +653,8 @@ export default function EstoquePage() {
                 <div className={styles.formGrid}>
                   <label className={`${styles.field} ${styles.fullField}`}><span>Item *</span><select value={itemSelecionadoId} onChange={(event) => setItemSelecionadoId(event.target.value)}><option value="">Selecione</option>{itens.map((item) => <option key={item.id} value={item.id}>{item.nome} · saldo {quantidade(item.saldo, item.unidade)}</option>)}</select></label>
                   <label className={styles.field}><span>Movimento</span><select value={movimentoTipo} onChange={(event) => setMovimentoTipo(event.target.value as "entrada" | "saida" | "ajuste")}><option value="entrada">Entrada</option><option value="saida">Saída manual</option><option value="ajuste">Ajuste de inventário</option></select></label>
+                  {movimentoTipo !== "entrada" ? <label className={styles.field}><span>Depósito de origem</span><select value={depositoOrigemId} onChange={(event) => setDepositoOrigemId(event.target.value)}><option value="">Selecione</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}</option>)}</select></label> : null}
+                  {movimentoTipo === "entrada" ? <label className={styles.field}><span>Depósito de destino</span><select value={depositoDestinoId} onChange={(event) => setDepositoDestinoId(event.target.value)}><option value="">Selecione</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}</option>)}</select></label> : null}
                   <label className={styles.field}><span>{movimentoTipo === "ajuste" ? "Novo saldo" : "Quantidade"}</span><input type="number" min="0" step="0.001" value={movimentoQuantidade} onChange={(event) => setMovimentoQuantidade(event.target.value)} /></label>
                   <label className={`${styles.field} ${styles.fullField}`}><span>Observação</span><textarea value={observacao} onChange={(event) => setObservacao(event.target.value)} placeholder="Ex.: Compra NF 1234 ou ajuste da contagem física" /></label>
                 </div>
@@ -635,7 +680,7 @@ export default function EstoquePage() {
               <button className={styles.secondaryButton} disabled={salvando} onClick={() => setModal(null)}>Cancelar</button>
               {modal === "item" ? <button className={styles.primaryButton} disabled={salvando || !itemForm.nome.trim()} onClick={() => void enviar({ acao: "salvar_item", ...itemForm })}>{salvando ? "Salvando..." : "Salvar item"}</button> : null}
               {modal === "catalogo" ? <button className={styles.primaryButton} disabled={salvando || !catalogoForm.nome.trim()} onClick={() => void enviar({ acao: "salvar_catalogo", ...catalogoForm })}>{salvando ? "Salvando..." : "Salvar catálogo"}</button> : null}
-              {modal === "movimentacao" ? <button className={styles.primaryButton} disabled={salvando || !itemSelecionadoId} onClick={() => void enviar({ acao: "movimentar", estoque_item_id: itemSelecionadoId, tipo: movimentoTipo, quantidade: movimentoQuantidade, observacao })}>{salvando ? "Registrando..." : "Registrar movimento"}</button> : null}
+              {modal === "movimentacao" ? <button className={styles.primaryButton} disabled={salvando || !itemSelecionadoId} onClick={() => void enviar({ acao: "movimentar_documento", estoque_item_id: itemSelecionadoId, tipo: movimentoTipo, quantidade: movimentoQuantidade, deposito_origem_id: depositoOrigemId, deposito_destino_id: depositoDestinoId, observacao })}>{salvando ? "Registrando..." : "Registrar movimento"}</button> : null}
               {modal === "baixa" ? <button className={styles.primaryButton} disabled={salvando || !catalogoSelecionadoId} onClick={() => void enviar({ acao: "registrar_baixa", catalogo_servico_id: catalogoSelecionadoId, quantidade: baixaQuantidade, origem_id: origemId, observacao })}>{salvando ? "Registrando..." : "Confirmar baixa"}</button> : null}
             </footer>
           </section>
