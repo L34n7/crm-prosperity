@@ -181,22 +181,24 @@ export async function GET(request: Request) {
         throw new Error(`Erro ao carregar o odontograma: ${odontogramaError.message}`);
       }
 
-      registros.push({
-        entidade_tipo: "odontograma",
-        entidade_id: paciente.id,
-        papel: "paciente",
-        titulo: `Odontograma de ${nomePaciente}`,
-        subtitulo: `${paciente.numero_prontuario || "Paciente cadastrado"} · ${count ?? 0} dente(s) registrado(s)`,
-        imagem_url: "",
-        principal: registros.length === 0,
-        dados_json: {
-          origem: "sistema",
-          paciente_id: paciente.id,
-          pessoa_id: paciente.pessoa_id,
-          numero_prontuario: paciente.numero_prontuario ?? "",
-          href: `/odontograma?paciente_id=${paciente.id}`,
-        },
-      });
+      if ((count ?? 0) > 0) {
+        registros.push({
+          entidade_tipo: "odontograma",
+          entidade_id: paciente.id,
+          papel: "paciente",
+          titulo: `Odontograma de ${nomePaciente}`,
+          subtitulo: `${paciente.numero_prontuario || "Paciente cadastrado"} · ${count} dente(s) registrado(s)`,
+          imagem_url: "",
+          principal: registros.length === 0,
+          dados_json: {
+            origem: "sistema",
+            paciente_id: paciente.id,
+            pessoa_id: paciente.pessoa_id,
+            numero_prontuario: paciente.numero_prontuario ?? "",
+            href: `/odontograma?paciente_id=${paciente.id}`,
+          },
+        });
+      }
     }
 
     return NextResponse.json({

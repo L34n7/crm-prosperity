@@ -225,7 +225,7 @@ const relatedByNiche: Record<string, RelatedPresentation> = {
     tipos: ["prontuario", "odontograma"],
     titulo: "Atendimento relacionado",
     dica: "Vincule o prontuário e o odontograma do paciente a este agendamento.",
-    botao: "Vincular atendimento",
+    botao: "Vincular prontuário",
   },
   comercio: {
     tipos: ["oportunidade", "ordem_servico", "outro"],
@@ -463,6 +463,11 @@ function Page() {
     >("minutos");
   const agenda = agendas.find((a) => a.id === agendaId),
     days = useMemo(() => cal(month), [month]),
+    isHealthNiche = ["medicina", "odontologia"].includes(
+      niche?.codigo || "",
+    ),
+    customerLabel = isHealthNiche ? "Paciente" : "Cliente",
+    customerLabelLower = isHealthNiche ? "paciente" : "cliente",
     relatedPresentation =
       relatedByNiche[niche?.codigo || "outro"] || relatedByNiche.outro;
   const visible = useMemo(
@@ -703,7 +708,7 @@ function Page() {
     setContact(a.contato);
     setOpen(true);
   };
-  const choose = (c: Contato) => {
+  const choose = async (c: Contato) => {
     setContact(c);
     setForm((f) => ({
       ...f,
@@ -726,6 +731,60 @@ function Page() {
     }));
     setCq("");
     setContacts([]);
+
+    if (!isHealthNiche) return;
+
+    try {
+      const params = new URLSearchParams({ contato_id: c.id });
+      const response = await fetch(
+        `/api/agendas/registros-relacionados?${params}`,
+        { cache: "no-store" },
+      );
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        throw new Error(
+          data?.error || "Erro ao localizar os registros clínicos do paciente.",
+        );
+      }
+
+      const automaticLinks = Array.isArray(data.registros)
+        ? (data.registros as Vinculo[])
+        : [];
+      if (automaticLinks.length === 0) return;
+
+      setForm((current) => {
+        if (current.contato_id !== c.id) return current;
+        const existingKeys = new Set(
+          current.vinculos.map(
+            (vinculo) => `${vinculo.entidade_tipo}:${vinculo.entidade_id}`,
+          ),
+        );
+        const newLinks = automaticLinks.filter(
+          (vinculo) =>
+            !existingKeys.has(
+              `${vinculo.entidade_tipo}:${vinculo.entidade_id}`,
+            ),
+        );
+        if (newLinks.length === 0) return current;
+
+        return {
+          ...current,
+          vinculos: [
+            ...current.vinculos,
+            ...newLinks.map((vinculo, index) => ({
+              ...vinculo,
+              principal: current.vinculos.length === 0 && index === 0,
+            })),
+          ],
+        };
+      });
+    } catch (cause) {
+      setErr(
+        cause instanceof Error
+          ? cause.message
+          : "Erro ao vincular os registros clínicos do paciente.",
+      );
+    }
   };
   const addPart = () =>
     setForm((f) => ({
@@ -1241,7 +1300,7 @@ function Page() {
               nomeCliente =
                 feedback.nome_cliente ||
                 contato?.nome ||
-                "Cliente não informado",
+                `${customerLabel} não informado`,
               telefone = feedback.telefone_cliente || contato?.telefone || "";
             const abrirDetalhes = () => {
               const agendamento = ags.find((a) => a.id === feedback.id);
@@ -1407,7 +1466,7 @@ function Page() {
                 <div className="search">
                   <Search size={14} />
                   <input
-                    placeholder="Buscar cliente, local..."
+                    placeholder={`Buscar ${customerLabelLower}, local...`}
                     value={filter.q}
                     onChange={(e) =>
                       setFilter({ ...filter, q: e.target.value })
@@ -1567,7 +1626,7 @@ function Page() {
                   <div>
                     {a.nome_cliente ||
                       a.contato?.nome ||
-                      "Cliente não informado"}
+                      `${customerLabel} não informado`}
                     {a.responsavel?.nome ? ` · ${a.responsavel.nome}` : ""}
                   </div>
                 </div>
@@ -1804,13 +1863,13 @@ function Page() {
               <section className="section">
                 <h3>
                   <UserRound size={15} />
-                  Cliente
+                  {customerLabel}
                 </h3>
                 {contact ? (
                   <div className="contact">
                     <UserRound size={18} />
                     <div>
-                      <b>{contact.nome || "Contato sem nome"}</b>
+                      <b>{contact.nome || `${customerLabel} sem nome`}</b>
                       <small>
                         {contact.telefone}
                         {contact.email ? ` · ${contact.email}` : ""}
@@ -1848,7 +1907,7 @@ function Page() {
                       <Search size={14} />
                       <input
                         style={{ width: "100%" }}
-                        placeholder="Buscar contato"
+                        placeholder={`Buscar ${customerLabelLower}`}
                         value={cq}
                         onChange={(e) => setCq(e.target.value)}
                       />
@@ -1859,7 +1918,7 @@ function Page() {
                           <button
                             className="result"
                             key={c.id}
-                            onClick={() => choose(c)}
+                            onClick={() => void choose(c)}
                           >
                             <b>{c.nome || "Sem nome"}</b>
                             <div>
@@ -1922,7 +1981,7 @@ function Page() {
                       href={`/contatos?contato=${form.contato_id}`}
                     >
                       <ExternalLink size={13} />
-                      Abrir contato
+                      Abrir {customerLabelLower}
                     </a>
                   )}
                 </div>
@@ -2203,7 +2262,7 @@ function Page() {
                             }}
                           >
                             <option value="responsavel">Responsável</option>
-                            <option value="cliente">Cliente</option>
+                            <option value="cliente">{customerLabel}</option>
                             <option value="participantes">Participantes</option>
                           </select>
                         </div>
@@ -2341,6 +2400,7 @@ function Page() {
                   );
                 })}
               </section>
+              {form.id && (
               <section className="section">
                 <h3>
                   <Check size={15} />
@@ -2386,6 +2446,7 @@ function Page() {
                   </div>
                 </div>
               </section>
+              )}
               {form.id && (
                 <section className="section">
                   <h3>
@@ -2475,7 +2536,7 @@ function Page() {
                   <span>
                     {form.nome_cliente ||
                       contact?.nome ||
-                      "Cliente não informado"}
+                      `${customerLabel} não informado`}
                   </span>
                 </div>
               </div>

@@ -349,7 +349,7 @@ export default function AgendaRelatedRecords({
               <Stethoscope size={17} />
               {contactId
                 ? `Registros clínicos de ${contactName || "paciente selecionado"}`
-                : "Selecione o paciente no campo Cliente"}
+                : "Selecione primeiro o paciente do agendamento"}
             </div>
           )}
 
