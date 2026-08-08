@@ -566,11 +566,19 @@ function extrairErroMeta(metaData: unknown) {
   const errorData = objeto(erro.error_data);
   const codigo = Number(erro.code || 0);
   const codigoMeta = Number.isFinite(codigo) && codigo > 0 ? codigo : null;
-  const mensagem =
+  const mensagemOriginal =
     texto(erro.error_user_msg) ||
     texto(errorData.details) ||
     texto(erro.message) ||
     "Erro ao enviar mensagem.";
+  const descricaoCompleta = `${mensagemOriginal} ${texto(
+    errorData.details
+  )} ${texto(erro.message)}`.toLowerCase();
+  const parametroInvalido =
+    codigoMeta === 100 && descricaoCompleta.includes("invalid parameter");
+  const mensagem = parametroInvalido
+    ? "A Meta rejeitou os dados enviados para este contato. Verifique se o número possui WhatsApp e se está cadastrado corretamente. Se o problema persistir, revise os parâmetros do template."
+    : mensagemOriginal;
 
   return {
     erro,
