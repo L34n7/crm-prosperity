@@ -361,6 +361,32 @@
   grid-template-columns: 1fr 1fr;
   gap: 9px;
 }
+
+.primaryInfoCard,
+.primaryInfoForm,
+.primaryInfoForm :global(.field),
+.primaryInfoForm :global(.row) {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.primaryInfoForm :global(input),
+.primaryInfoForm :global(select),
+.primaryInfoForm :global(textarea) {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.primaryInfoForm :global(.row > select) {
+  width: 0;
+  flex: 1 1 0 !important;
+}
+
+.primaryInfoForm :global(.row > button) {
+  flex: 0 0 auto;
+}
 .scope :global(.field) {
   display: grid;
   gap: 4px;
@@ -1228,6 +1254,17 @@
   .scope :global(.head).calendarManagementBar {
     display: flex !important;
     align-items: center !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+  }
+
+  .calendarSelect {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none;
+    height: 40px !important;
+    min-height: 40px !important;
+    flex: 1 1 100%;
   }
 }
 .scope :global(.availability) {

@@ -513,11 +513,8 @@ export default function AgendaRelatedRecords({
                 {link.dados_json.href ? (
                   <Link
                     href={link.dados_json.href}
-                    target={
-                      link.dados_json.href.startsWith("http")
-                        ? "_blank"
-                        : undefined
-                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
                     <ExternalLink size={14} /> Abrir
                   </Link>

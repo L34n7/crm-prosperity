@@ -225,7 +225,7 @@ const relatedByNiche: Record<string, RelatedPresentation> = {
     tipos: ["prontuario", "odontograma"],
     titulo: "Atendimento relacionado",
     dica: "Vincule o prontuário e o odontograma do paciente a este agendamento.",
-    botao: "Vincular prontuário",
+    botao: "Vincular atendimento",
   },
   comercio: {
     tipos: ["oportunidade", "ordem_servico", "outro"],
@@ -1728,12 +1728,12 @@ function Page() {
               </button>
             </div>
             <div className="body">
-              <section className="section">
+              <section className={`section ${styles.primaryInfoCard}`}>
                 <h3>
                   <CalendarDays size={15} />
                   Informações principais
                 </h3>
-                <div className="form">
+                <div className={`form ${styles.primaryInfoForm}`}>
                   <div className="field full">
                     <label>Título*</label>
                     <input
