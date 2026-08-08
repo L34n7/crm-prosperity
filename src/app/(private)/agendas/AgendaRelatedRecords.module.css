@@ -4,6 +4,7 @@
   border-radius: 12px;
   background: var(--crm-surface);
   min-width: 0;
+  margin-bottom: 15px;
 }
 
 .header {

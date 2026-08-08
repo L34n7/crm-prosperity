@@ -1927,6 +1927,17 @@ function Page() {
                   )}
                 </div>
               </section>
+              <AgendaRelatedRecords
+                nicheCode={niche?.codigo || "outro"}
+                nicheName={niche?.nome}
+                contactId={form.contato_id}
+                contactName={form.nome_cliente}
+                presentation={relatedPresentation}
+                value={form.vinculos}
+                typeLabels={relatedTypeLabels}
+                onChange={(vinculos) => setForm((current) => ({ ...current, vinculos }))}
+              />
+
                 <section className="section">
                   <div className={styles.cardHeader}>
                     <div className={styles.cardHeading}>
@@ -2035,16 +2046,7 @@ function Page() {
                   <div className="empty">Nenhum participante adicional.</div>
                 )}
               </section>
-              <AgendaRelatedRecords
-                nicheCode={niche?.codigo || "outro"}
-                nicheName={niche?.nome}
-                contactId={form.contato_id}
-                contactName={form.nome_cliente}
-                presentation={relatedPresentation}
-                value={form.vinculos}
-                typeLabels={relatedTypeLabels}
-                onChange={(vinculos) => setForm((current) => ({ ...current, vinculos }))}
-              />
+
               <section className="section">
                 <div className={styles.reminderHeader}>
                   <div className={styles.reminderHeading}>
