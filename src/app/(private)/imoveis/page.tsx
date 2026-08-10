@@ -227,6 +227,27 @@ function enderecoDoImovel(imovel: CatalogoImovel) {
   );
 }
 
+function tituloDoImovel(imovel: CatalogoImovel) {
+  const titulo = imovel.titulo?.replace(/\s+/g, " ").trim() ?? "";
+  const descricao = imovel.descricao?.replace(/\s+/g, " ").trim() ?? "";
+  const tituloPareceDescricao =
+    titulo.length > 90 ||
+    titulo.split(" ").filter(Boolean).length > 14 ||
+    Boolean(descricao && titulo.toLocaleLowerCase("pt-BR") === descricao.toLocaleLowerCase("pt-BR"));
+
+  if (titulo && !tituloPareceDescricao) return titulo;
+
+  const tipo =
+    rotuloTipo(imovel.tipo) === "Tipo não informado"
+      ? "Imóvel"
+      : rotuloTipo(imovel.tipo);
+  const local = imovel.bairro || imovel.cidade;
+
+  if (local) return `${tipo} em ${local}`;
+  if (imovel.codigo) return `${tipo} #${imovel.codigo}`;
+  return `${tipo} disponível`;
+}
+
 export default function ImoveisPage() {
   const [imoveis, setImoveis] = useState<CatalogoImovel[]>([]);
   const [pagina, setPagina] = useState(1);
@@ -770,6 +791,7 @@ export default function ImoveisPage() {
             <div className={styles.catalogPremiumGrid}>
               {imoveis.map((imovel) => {
                 const fotos = fotosDoImovel(imovel);
+                const tituloExibicao = tituloDoImovel(imovel);
                 return (
                   <article
                     key={imovel.catalogo_id}
@@ -779,13 +801,13 @@ export default function ImoveisPage() {
                       className={styles.catalogMediaButton}
                       type="button"
                       onClick={() => abrirDetalhes(imovel)}
-                      aria-label={`Ver detalhes de ${imovel.titulo}`}
+                      aria-label={`Ver detalhes de ${tituloExibicao}`}
                     >
                       <div className={styles.catalogPremiumMedia}>
                         {fotos[0] ? (
                           <img
                             src={fotos[0]}
-                            alt={imovel.titulo}
+                            alt={tituloExibicao}
                             loading="lazy"
                             referrerPolicy="no-referrer"
                             onError={(event) => {
@@ -814,14 +836,6 @@ export default function ImoveisPage() {
                     </button>
 
                     <div className={styles.catalogPremiumBody}>
-                      <div className={styles.catalogCompanyRow}>
-                        <Building2 size={15} />
-                        <strong>{imovel.empresa_nome}</strong>
-                        {imovel.pertence_empresa_atual ? (
-                          <span>Minha empresa</span>
-                        ) : null}
-                      </div>
-
                       <div className={styles.catalogPropertyLabels}>
                         <span>{rotuloFinalidade(imovel.finalidade)}</span>
                         <span>{rotuloTipo(imovel.tipo)}</span>
@@ -833,7 +847,7 @@ export default function ImoveisPage() {
                         type="button"
                         onClick={() => abrirDetalhes(imovel)}
                       >
-                        {imovel.titulo}
+                        {tituloExibicao}
                       </button>
 
                       <p className={styles.catalogLocationLine}>
@@ -870,10 +884,21 @@ export default function ImoveisPage() {
                         ) : null}
                       </div>
 
-                      <p className={styles.catalogCardDescription}>
-                        {imovel.descricao?.trim() ||
-                          "Consulte a apresentação completa para ver as informações deste imóvel."}
-                      </p>
+                      <div className={styles.catalogCardSummary}>
+                        <span>Descrição</span>
+                        <p className={styles.catalogCardDescription}>
+                          {imovel.descricao?.trim() ||
+                            "Consulte a apresentação completa para ver as informações deste imóvel."}
+                        </p>
+                      </div>
+
+                      <div className={styles.catalogCompanyRow}>
+                        <Building2 size={15} />
+                        <strong>{imovel.empresa_nome}</strong>
+                        {imovel.pertence_empresa_atual ? (
+                          <span>Minha empresa</span>
+                        ) : null}
+                      </div>
 
                       <div className={styles.catalogCardActions}>
                         <span
@@ -953,7 +978,7 @@ export default function ImoveisPage() {
                   {fotosDetalhe[fotoAtiva] ? (
                     <img
                       src={fotosDetalhe[fotoAtiva]}
-                      alt={`${imovelDetalhe.titulo} — foto ${fotoAtiva + 1}`}
+                      alt={`${tituloDoImovel(imovelDetalhe)} — foto ${fotoAtiva + 1}`}
                       referrerPolicy="no-referrer"
                     />
                   ) : (
@@ -1051,7 +1076,9 @@ export default function ImoveisPage() {
                     </span>
                   </div>
 
-                  <h2 id="titulo-catalogo-imovel">{imovelDetalhe.titulo}</h2>
+                  <h2 id="titulo-catalogo-imovel">
+                    {tituloDoImovel(imovelDetalhe)}
+                  </h2>
                   <p className={styles.catalogDetailLocation}>
                     <MapPin size={17} /> {enderecoDoImovel(imovelDetalhe)}
                   </p>

@@ -179,7 +179,9 @@ export async function GET(request: Request) {
     } else if (ordenacao === "titulo_asc") {
       query = query.order("titulo", { ascending: true });
     } else {
-      query = query.order("updated_at", { ascending: false });
+      query = query
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .order("catalogo_id", { ascending: false });
     }
 
     const { data, error, count } = await query.range(inicio, fim);
