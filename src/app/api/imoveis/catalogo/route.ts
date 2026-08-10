@@ -34,11 +34,31 @@ type CatalogoImovelRow = {
   updated_at: string;
 };
 
+type DetalhesCrmRow = {
+  id: string;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  caracteristicas: Record<string, unknown> | null;
+  fotos: unknown[] | null;
+};
+
+type DetalhesExternoRow = {
+  id: string;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  caracteristicas: Record<string, unknown> | null;
+  imagem_urls: unknown[] | null;
+};
+
 function getInteiro(
   valor: string | null,
   padrao: number,
   minimo: number,
-  maximo: number
+  maximo: number,
 ) {
   const numero = Number(valor ?? padrao);
   if (!Number.isFinite(numero)) return padrao;
@@ -46,7 +66,41 @@ function getInteiro(
 }
 
 function sanitizarBusca(valor: string) {
-  return valor.replace(/[%_,()]/g, " ").trim().slice(0, 120);
+  return valor
+    .replace(/[%_,()]/g, " ")
+    .trim()
+    .slice(0, 120);
+}
+
+function sanitizarCodigoFiltro(valor: string | null) {
+  const codigo = String(valor ?? "")
+    .trim()
+    .toLowerCase();
+  return /^[a-z0-9_-]{1,60}$/.test(codigo) ? codigo : "";
+}
+
+function numeroFiltro(valor: string | null) {
+  if (!valor) return null;
+  const numero = Number(valor);
+  return Number.isFinite(numero) && numero >= 0 ? numero : null;
+}
+
+function normalizarImagens(valor: unknown, capa?: unknown) {
+  const itens = Array.isArray(valor) ? valor : [];
+  const urls = itens
+    .map((foto) => {
+      if (typeof foto === "string") return normalizarUrlHttp(foto);
+      if (!foto || typeof foto !== "object") return null;
+
+      const item = foto as Record<string, unknown>;
+      return normalizarUrlHttp(item.url ?? item.src ?? item.original);
+    })
+    .filter((url): url is string => Boolean(url));
+  const capaNormalizada = normalizarUrlHttp(capa);
+
+  return Array.from(
+    new Set([...(capaNormalizada ? [capaNormalizada] : []), ...urls]),
+  ).slice(0, 50);
 }
 
 export async function GET(request: Request) {
@@ -55,7 +109,7 @@ export async function GET(request: Request) {
   if (!acesso.ok) {
     return NextResponse.json(
       { ok: false, error: acesso.error },
-      { status: acesso.status }
+      { status: acesso.status },
     );
   }
 
@@ -71,6 +125,20 @@ export async function GET(request: Request) {
       origemInformada === "crm" || origemInformada === "externo"
         ? origemInformada
         : null;
+    const tipo = sanitizarCodigoFiltro(searchParams.get("tipo"));
+    const finalidade = sanitizarCodigoFiltro(searchParams.get("finalidade"));
+    const status = sanitizarCodigoFiltro(searchParams.get("status"));
+    const cidade = sanitizarBusca(searchParams.get("cidade") ?? "");
+    const estadoInformado = String(searchParams.get("estado") ?? "")
+      .trim()
+      .toUpperCase();
+    const estado = /^[A-Z]{2}$/.test(estadoInformado) ? estadoInformado : "";
+    const quartosMin = numeroFiltro(searchParams.get("quartos_min"));
+    const valorMin = numeroFiltro(searchParams.get("valor_min"));
+    const valorMax = numeroFiltro(searchParams.get("valor_max"));
+    const areaMin = numeroFiltro(searchParams.get("area_min"));
+    const areaMax = numeroFiltro(searchParams.get("area_max"));
+    const ordenacao = String(searchParams.get("ordenacao") ?? "recentes");
     const inicio = (pagina - 1) * limite;
     const fim = inicio + limite - 1;
 
@@ -83,30 +151,128 @@ export async function GET(request: Request) {
       query = query.eq("origem_tipo", origem);
     }
 
+    if (tipo) query = query.eq("tipo", tipo);
+    if (["venda", "locacao", "venda_locacao"].includes(finalidade)) {
+      query = query.eq("finalidade", finalidade);
+    }
+    if (status) query = query.eq("status", status);
+    if (cidade) query = query.ilike("cidade", `%${cidade}%`);
+    if (estado) query = query.eq("estado", estado);
+    if (quartosMin !== null) query = query.gte("quartos", quartosMin);
+    if (valorMin !== null) query = query.gte("valor", valorMin);
+    if (valorMax !== null) query = query.lte("valor", valorMax);
+    if (areaMin !== null) query = query.gte("area_m2", areaMin);
+    if (areaMax !== null) query = query.lte("area_m2", areaMax);
+
     if (busca) {
       query = query.or(
-        `titulo.ilike.%${busca}%,codigo.ilike.%${busca}%,tipo.ilike.%${busca}%,bairro.ilike.%${busca}%,cidade.ilike.%${busca}%,estado.ilike.%${busca}%,empresa_nome.ilike.%${busca}%`
+        `titulo.ilike.%${busca}%,codigo.ilike.%${busca}%,tipo.ilike.%${busca}%,bairro.ilike.%${busca}%,cidade.ilike.%${busca}%,estado.ilike.%${busca}%,empresa_nome.ilike.%${busca}%`,
       );
     }
 
-    const { data, error, count } = await query
-      .order("updated_at", { ascending: false })
-      .range(inicio, fim);
+    if (ordenacao === "valor_asc") {
+      query = query.order("valor", { ascending: true, nullsFirst: false });
+    } else if (ordenacao === "valor_desc") {
+      query = query.order("valor", { ascending: false, nullsFirst: false });
+    } else if (ordenacao === "area_desc") {
+      query = query.order("area_m2", { ascending: false, nullsFirst: false });
+    } else if (ordenacao === "titulo_asc") {
+      query = query.order("titulo", { ascending: true });
+    } else {
+      query = query.order("updated_at", { ascending: false });
+    }
+
+    const { data, error, count } = await query.range(inicio, fim);
 
     if (error) {
       return NextResponse.json(
         { ok: false, error: error.message },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    const imoveis = ((data ?? []) as CatalogoImovelRow[]).map((imovel) => ({
-      ...imovel,
-      imagem_url: normalizarUrlHttp(imovel.imagem_url),
-      external_url: normalizarUrlHttp(imovel.external_url),
-      pertence_empresa_atual:
-        imovel.origem_tipo === "crm" && imovel.empresa_id === empresaId,
-    }));
+    const catalogo = (data ?? []) as CatalogoImovelRow[];
+    const idsCrm = catalogo
+      .filter((imovel) => imovel.origem_tipo === "crm")
+      .map((imovel) => imovel.origem_id);
+    const idsExternos = catalogo
+      .filter((imovel) => imovel.origem_tipo === "externo")
+      .map((imovel) => imovel.origem_id);
+
+    const [detalhesCrmResultado, detalhesExternosResultado] = await Promise.all(
+      [
+        idsCrm.length > 0
+          ? supabase
+              .from("imoveis")
+              .select(
+                "id,cep,logradouro,numero,complemento,caracteristicas,fotos",
+              )
+              .eq("empresa_id", empresaId)
+              .in("id", idsCrm)
+          : Promise.resolve({ data: [], error: null }),
+        idsExternos.length > 0
+          ? supabase
+              .from("imoveis_externos")
+              .select(
+                "id,cep,logradouro,numero,complemento,caracteristicas,imagem_urls",
+              )
+              .eq("empresa_id", empresaId)
+              .in("id", idsExternos)
+          : Promise.resolve({ data: [], error: null }),
+      ],
+    );
+
+    if (detalhesCrmResultado.error || detalhesExternosResultado.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            detalhesCrmResultado.error?.message ||
+            detalhesExternosResultado.error?.message ||
+            "Erro ao carregar os detalhes dos imóveis.",
+        },
+        { status: 500 },
+      );
+    }
+
+    const detalhesCrm = new Map(
+      ((detalhesCrmResultado.data ?? []) as DetalhesCrmRow[]).map((item) => [
+        item.id,
+        item,
+      ]),
+    );
+    const detalhesExternos = new Map(
+      ((detalhesExternosResultado.data ?? []) as DetalhesExternoRow[]).map(
+        (item) => [item.id, item],
+      ),
+    );
+
+    const imoveis = catalogo.map((imovel) => {
+      const detalhes =
+        imovel.origem_tipo === "crm"
+          ? detalhesCrm.get(imovel.origem_id)
+          : detalhesExternos.get(imovel.origem_id);
+      const imagens = normalizarImagens(
+        imovel.origem_tipo === "crm"
+          ? (detalhes as DetalhesCrmRow | undefined)?.fotos
+          : (detalhes as DetalhesExternoRow | undefined)?.imagem_urls,
+        imovel.imagem_url,
+      );
+
+      return {
+        ...imovel,
+        cep: detalhes?.cep ?? null,
+        logradouro: detalhes?.logradouro ?? null,
+        numero: detalhes?.numero ?? null,
+        complemento: detalhes?.complemento ?? null,
+        caracteristicas: detalhes?.caracteristicas ?? {},
+        imagens,
+        imagem_url: imagens[0] ?? null,
+        external_url: normalizarUrlHttp(imovel.external_url),
+        pertence_empresa_atual:
+          imovel.origem_tipo === "crm" && imovel.empresa_id === empresaId,
+      };
+    });
 
     return NextResponse.json({
       ok: true,
@@ -127,7 +293,7 @@ export async function GET(request: Request) {
             ? error.message
             : "Erro interno ao carregar o catalogo de imoveis.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
