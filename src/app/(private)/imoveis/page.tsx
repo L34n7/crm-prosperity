@@ -828,7 +828,11 @@ export default function ImoveisPage() {
                           </span>
                           {fotos.length > 0 ? (
                             <span className={styles.catalogPhotoCount}>
-                              <Images size={14} /> {fotos.length}
+                              <Images size={14} />
+                              <span>
+                                {fotos.length}{" "}
+                                {fotos.length === 1 ? "imagem" : "imagens"}
+                              </span>
                             </span>
                           ) : null}
                         </div>

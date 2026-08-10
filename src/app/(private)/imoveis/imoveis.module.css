@@ -1423,7 +1423,10 @@
 }
 
 .catalogPhotoCount {
+  flex: 0 0 auto;
+  margin-left: auto;
   background: color-mix(in srgb, #071b22 78%, transparent);
+  white-space: nowrap;
 }
 
 .catalogPremiumBody {
@@ -2303,47 +2306,100 @@
 
   .catalogModalOverlay {
     padding: 0;
+    overflow: hidden;
     background: var(--crm-surface);
+    place-items: stretch;
   }
 
   .catalogDetailModal {
     width: 100%;
-    min-height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow: hidden;
     border: 0;
     border-radius: 0;
     box-shadow: none;
   }
 
+  .catalogDetailClose {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: 10px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .catalogDetailLayout {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .catalogDetailGallery {
-    padding: 0;
+    padding: 0 0 1px;
+    overflow: visible;
   }
 
   .catalogCarouselStage {
-    min-height: 58vw;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 4 / 3;
     border: 0;
     border-radius: 0;
   }
 
   .catalogThumbnailGrid {
     margin: 9px 10px;
+    padding-bottom: 3px;
+    scroll-snap-type: x proximity;
+  }
+
+  .catalogThumbnailGrid button {
+    scroll-snap-align: start;
   }
 
   .catalogDetailContent {
-    padding: 21px 17px;
+    padding: 21px 17px 26px;
+    overflow: visible;
+  }
+
+  .catalogDetailBadges {
+    padding-right: 42px;
+  }
+
+  .catalogDetailCompany {
+    flex-wrap: wrap;
   }
 
   .catalogDetailHeading h2 {
+    overflow-wrap: anywhere;
     font-size: 25px;
   }
 
+  .catalogDetailLocation {
+    overflow-wrap: anywhere;
+  }
+
   .catalogDetailFooter {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 12px 14px max(12px, env(safe-area-inset-bottom));
     align-items: stretch;
     flex-direction: column;
+    background: var(--crm-surface);
+    box-shadow: 0 -8px 24px color-mix(in srgb, #020b0f 10%, transparent);
   }
 
   .catalogDetailFooter > div,
   .catalogDetailFooter a {
     width: 100%;
+  }
+
+  .catalogDetailFooter > div {
+    flex-wrap: wrap;
   }
 
   .catalogDetailFooter a {
@@ -2394,7 +2450,17 @@
   }
 
   .catalogCarouselStage {
-    min-height: 72vw;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+
+  .catalogDetailContent {
+    padding-inline: 14px;
+  }
+
+  .catalogDetailFooter > span {
+    text-align: center;
   }
 
   .catalogCarouselArrow {
