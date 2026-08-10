@@ -14,6 +14,41 @@ function texto(valor: unknown) {
   return String(valor ?? "").trim();
 }
 
+function normalizarUrlHttp(valor: unknown) {
+  const url = texto(valor);
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizarFotos(valor: unknown) {
+  if (!Array.isArray(valor)) return [];
+
+  const urls = valor
+    .map((foto) => {
+      if (typeof foto === "string") return normalizarUrlHttp(foto);
+      if (!foto || typeof foto !== "object") return null;
+
+      const item = foto as Record<string, unknown>;
+      return normalizarUrlHttp(item.url ?? item.src ?? item.original);
+    })
+    .filter((url): url is string => Boolean(url));
+
+  return Array.from(new Set(urls)).slice(0, 50);
+}
+
+function normalizarCaracteristicas(valor: unknown) {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return {};
+  return valor as Record<string, unknown>;
+}
+
 function numeroDecimal(valor: unknown) {
   const entrada = texto(valor).replace(/[^\d,.-]/g, "");
   if (!entrada) return null;
@@ -33,7 +68,10 @@ function numeroInteiro(valor: unknown) {
   return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : null;
 }
 
-function normalizarPayloadImovel(body: Record<string, unknown>) {
+function normalizarPayloadImovel(
+  body: Record<string, unknown>,
+  anterior?: Record<string, unknown> | null
+) {
   const titulo = texto(body?.titulo);
 
   if (!titulo) {
@@ -81,8 +119,14 @@ function normalizarPayloadImovel(body: Record<string, unknown>) {
     vagas: numeroInteiro(body?.vagas),
     area_m2: numeroDecimal(body?.area_m2),
     descricao: texto(body?.descricao) || null,
-    caracteristicas: {},
-    fotos: [],
+    caracteristicas:
+      body.caracteristicas === undefined
+        ? normalizarCaracteristicas(anterior?.caracteristicas)
+        : normalizarCaracteristicas(body.caracteristicas),
+    fotos:
+      body.fotos === undefined
+        ? normalizarFotos(anterior?.fotos)
+        : normalizarFotos(body.fotos),
   };
 }
 
@@ -295,7 +339,10 @@ export async function PUT(
       }
     }
 
-    const payload = normalizarPayloadImovel(body);
+    const payload = normalizarPayloadImovel(
+      body,
+      antes as Record<string, unknown>
+    );
     const { data, error } = await supabase
       .from("imoveis")
       .update({

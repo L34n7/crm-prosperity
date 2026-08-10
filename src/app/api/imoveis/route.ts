@@ -37,6 +37,52 @@ function sanitizarBusca(valor: string) {
   return valor.replace(/[%_,()]/g, " ").trim();
 }
 
+function sanitizarCodigoFiltro(valor: string | null) {
+  return texto(valor)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    .slice(0, 80);
+}
+
+function normalizarUrlHttp(valor: unknown) {
+  const url = texto(valor);
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizarFotos(valor: unknown) {
+  if (!Array.isArray(valor)) return [];
+
+  const urls = valor
+    .map((foto) => {
+      if (typeof foto === "string") return normalizarUrlHttp(foto);
+      if (!foto || typeof foto !== "object") return null;
+
+      const item = foto as Record<string, unknown>;
+      return normalizarUrlHttp(item.url ?? item.src ?? item.original);
+    })
+    .filter((url): url is string => Boolean(url));
+
+  return Array.from(new Set(urls)).slice(0, 50);
+}
+
+function primeiraFoto(valor: unknown) {
+  return normalizarFotos(valor)[0] ?? null;
+}
+
+function normalizarCaracteristicas(valor: unknown) {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return {};
+  return valor as Record<string, unknown>;
+}
+
 function getInteiro(
   valor: string | null,
   padrao: number,
@@ -65,6 +111,12 @@ function numeroInteiro(valor: unknown) {
 
   const numero = Number(entrada);
   return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : null;
+}
+
+function numeroFiltro(valor: string | null) {
+  if (!valor) return null;
+  const numero = Number(valor.replace(",", "."));
+  return Number.isFinite(numero) && numero >= 0 ? numero : null;
 }
 
 function normalizarPayloadImovel(body: Record<string, unknown>) {
@@ -115,8 +167,8 @@ function normalizarPayloadImovel(body: Record<string, unknown>) {
     vagas: numeroInteiro(body?.vagas),
     area_m2: numeroDecimal(body?.area_m2),
     descricao: texto(body?.descricao) || null,
-    caracteristicas: {},
-    fotos: [],
+    caracteristicas: normalizarCaracteristicas(body?.caracteristicas),
+    fotos: normalizarFotos(body?.fotos),
   };
 }
 
@@ -248,6 +300,18 @@ export async function GET(request: Request) {
     const pagina = getInteiro(searchParams.get("pagina"), 1, 1, 1_000_000);
     const limite = getInteiro(searchParams.get("limite"), 24, 1, 100);
     const busca = sanitizarBusca(searchParams.get("busca") ?? "");
+    const tipo = sanitizarCodigoFiltro(searchParams.get("tipo"));
+    const finalidade = sanitizarCodigoFiltro(searchParams.get("finalidade"));
+    const status = sanitizarCodigoFiltro(searchParams.get("status"));
+    const cidade = sanitizarBusca(searchParams.get("cidade") ?? "");
+    const estadoInformado = texto(searchParams.get("estado")).toUpperCase();
+    const estado = /^[A-Z]{2}$/.test(estadoInformado) ? estadoInformado : "";
+    const quartosMin = numeroFiltro(searchParams.get("quartos_min"));
+    const valorMin = numeroFiltro(searchParams.get("valor_min"));
+    const valorMax = numeroFiltro(searchParams.get("valor_max"));
+    const areaMin = numeroFiltro(searchParams.get("area_min"));
+    const areaMax = numeroFiltro(searchParams.get("area_max"));
+    const ordenacao = texto(searchParams.get("ordenacao"));
     const inicio = (pagina - 1) * limite;
     const fim = inicio + limite - 1;
 
@@ -263,8 +327,39 @@ export async function GET(request: Request) {
       );
     }
 
+    if (tipo) query = query.eq("tipo", tipo);
+    if (["venda", "locacao", "venda_locacao"].includes(finalidade)) {
+      query = query.eq("finalidade", finalidade);
+    }
+    if (
+      ["disponivel", "reservado", "vendido", "alugado", "inativo"].includes(
+        status
+      )
+    ) {
+      query = query.eq("status", status);
+    }
+    if (cidade) query = query.ilike("cidade", `%${cidade}%`);
+    if (estado) query = query.eq("estado", estado);
+    if (quartosMin !== null) query = query.gte("quartos", quartosMin);
+    if (valorMin !== null) query = query.gte("valor", valorMin);
+    if (valorMax !== null) query = query.lte("valor", valorMax);
+    if (areaMin !== null) query = query.gte("area_m2", areaMin);
+    if (areaMax !== null) query = query.lte("area_m2", areaMax);
+
+    if (ordenacao === "valor_asc") {
+      query = query.order("valor", { ascending: true, nullsFirst: false });
+    } else if (ordenacao === "valor_desc") {
+      query = query.order("valor", { ascending: false, nullsFirst: false });
+    } else if (ordenacao === "area_desc") {
+      query = query.order("area_m2", { ascending: false, nullsFirst: false });
+    } else if (ordenacao === "titulo_asc") {
+      query = query.order("titulo", { ascending: true });
+    } else {
+      query = query.order("created_at", { ascending: false });
+    }
+
     const [{ data, error, count }, pessoas] = await Promise.all([
-      query.order("created_at", { ascending: false }).range(inicio, fim),
+      query.range(inicio, fim),
       listarPessoasOpcoes(usuario.empresa_id),
     ]);
 
@@ -336,6 +431,7 @@ export async function GET(request: Request) {
       },
       imoveis: imoveisRaw.map((imovel) => ({
         ...imovel,
+        imagem_url: primeiraFoto(imovel.fotos),
         proprietario: imovel.proprietario_pessoa_id
           ? pessoasPorId.get(imovel.proprietario_pessoa_id) ?? null
           : null,
