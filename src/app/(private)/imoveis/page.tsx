@@ -347,6 +347,7 @@ function tituloDoImovel(imovel: CatalogoImovel) {
 }
 
 export default function ImoveisPage() {
+  const [imovelParam, setImovelParam] = useState("");
   const [imoveis, setImoveis] = useState<CatalogoImovel[]>([]);
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
@@ -436,6 +437,31 @@ export default function ImoveisPage() {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  useEffect(() => {
+    setImovelParam(new URLSearchParams(window.location.search).get("imovel") || "");
+  }, []);
+
+  useEffect(() => {
+    if (!imovelParam) return;
+
+    let active = true;
+    fetch(`/api/imoveis/catalogo?imovel=${encodeURIComponent(imovelParam)}&limite=1`, {
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || "Erro ao abrir o imóvel.");
+        if (active) setImovelDetalhe(data.imoveis?.[0] || null);
+      })
+      .catch((error) => {
+        if (active) setErro(error instanceof Error ? error.message : "Erro ao abrir o imóvel.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [imovelParam]);
 
   const fotosDetalhe = useMemo(
     () => (imovelDetalhe ? fotosDoImovel(imovelDetalhe) : []),

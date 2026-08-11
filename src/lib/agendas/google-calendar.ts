@@ -66,6 +66,23 @@ type Agendamento = Record<string, any> & {
   fim_at: string;
   status: string;
   updated_at: string;
+  imovel_vinculado?: ImovelGoogle | null;
+};
+
+type ImovelGoogle = {
+  titulo: string;
+  codigo: string;
+  tipo: string;
+  finalidade: string;
+  valor: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  estado: string;
+  href: string;
 };
 
 class GoogleCalendarHttpError extends Error {
@@ -186,8 +203,42 @@ function hashAgendamento(agendamento: Agendamento) {
       telefone_cliente: agendamento.telefone_cliente || "",
       email_cliente: agendamento.email_cliente || "",
       status: agendamento.status,
+      imovel_vinculado: agendamento.imovel_vinculado || null,
     })
   );
+}
+
+function enderecoImovel(imovel?: ImovelGoogle | null) {
+  if (!imovel) return "";
+  return [
+    [imovel.logradouro, imovel.numero].filter(Boolean).join(", "),
+    imovel.complemento,
+    imovel.bairro,
+    [imovel.cidade, imovel.estado].filter(Boolean).join(" - "),
+    imovel.cep ? `CEP ${imovel.cep}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function detalhesImovelGoogle(imovel?: ImovelGoogle | null) {
+  if (!imovel) return "";
+  const endereco = enderecoImovel(imovel);
+  const valor = Number(imovel.valor);
+  return [
+    "Imóvel vinculado:",
+    imovel.titulo,
+    imovel.codigo && `Código: ${imovel.codigo}`,
+    imovel.tipo && `Tipo: ${imovel.tipo}`,
+    imovel.finalidade && `Finalidade: ${imovel.finalidade}`,
+    endereco && `Endereço: ${endereco}`,
+    Number.isFinite(valor) && valor > 0
+      ? `Valor: ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor)}`
+      : "",
+    imovel.href && `Abrir imóvel no CRM: ${new URL(imovel.href, appUrl()).toString()}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function descricaoGoogle(agendamento: Agendamento) {
@@ -200,6 +251,7 @@ function descricaoGoogle(agendamento: Agendamento) {
 
   return [
     dadosCliente.join("\n"),
+    detalhesImovelGoogle(agendamento.imovel_vinculado),
     `${DESCRICAO_INICIO}${agendamento.observacoes || ""}`,
     `${LINK_CRM_INICIO}${crmLink(agendamento.agenda_id, agendamento.id)}`,
   ]
@@ -223,7 +275,7 @@ function payloadEventoGoogle(agendamento: Agendamento) {
   return {
     summary: agendamento.titulo || "Agendamento",
     description: descricaoGoogle(agendamento),
-    location: agendamento.local || undefined,
+    location: enderecoImovel(agendamento.imovel_vinculado) || agendamento.local || undefined,
     start: { dateTime: agendamento.inicio_at },
     end: { dateTime: agendamento.fim_at },
     source: {
@@ -499,7 +551,8 @@ export async function concluirOAuthGoogleCalendar(params: {
 }
 
 async function buscarAgendamento(empresaId: string, agendamentoId: string) {
-  const { data, error } = await getSupabaseAdmin()
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
     .from("agenda_agendamentos")
     .select("*")
     .eq("empresa_id", empresaId)
@@ -510,7 +563,60 @@ async function buscarAgendamento(empresaId: string, agendamentoId: string) {
     throw new Error(`Erro ao buscar agendamento: ${error.message}`);
   }
 
-  return (data || null) as Agendamento | null;
+  if (!data) return null;
+
+  const { data: vinculo } = await supabase
+    .from("agenda_vinculos")
+    .select("titulo,entidade_id,dados_json")
+    .eq("empresa_id", empresaId)
+    .eq("agendamento_id", agendamentoId)
+    .eq("entidade_tipo", "imovel")
+    .order("principal", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  let imovelVinculado: ImovelGoogle | null = null;
+  if (vinculo) {
+    const snapshot = (vinculo.dados_json || {}) as Record<string, string>;
+    const catalogoId = snapshot.catalogo_id || "";
+    const { data: catalogo } = catalogoId
+      ? await supabase
+          .from("catalogo_imoveis_global")
+          .select("origem_tipo,origem_id,titulo,codigo,tipo,finalidade,valor,bairro,cidade,estado")
+          .eq("empresa_id", empresaId)
+          .eq("catalogo_id", catalogoId)
+          .maybeSingle()
+      : { data: null };
+    const origemTipo = String(catalogo?.origem_tipo || snapshot.origem_tipo || "crm");
+    const origemId = String(catalogo?.origem_id || vinculo.entidade_id || "");
+    const { data: endereco } = origemId
+      ? await supabase
+          .from(origemTipo === "externo" ? "imoveis_externos" : "imoveis")
+          .select("cep,logradouro,numero,complemento")
+          .eq("empresa_id", empresaId)
+          .eq("id", origemId)
+          .maybeSingle()
+      : { data: null };
+
+    imovelVinculado = {
+      titulo: String(catalogo?.titulo || vinculo.titulo || "Imóvel"),
+      codigo: String(catalogo?.codigo || snapshot.codigo || ""),
+      tipo: String(catalogo?.tipo || snapshot.tipo || ""),
+      finalidade: String(catalogo?.finalidade || snapshot.finalidade || ""),
+      valor: String(catalogo?.valor || snapshot.valor || ""),
+      cep: String(endereco?.cep || snapshot.cep || ""),
+      logradouro: String(endereco?.logradouro || snapshot.logradouro || ""),
+      numero: String(endereco?.numero || snapshot.numero || ""),
+      complemento: String(endereco?.complemento || snapshot.complemento || ""),
+      bairro: String(catalogo?.bairro || snapshot.bairro || ""),
+      cidade: String(catalogo?.cidade || snapshot.cidade || ""),
+      estado: String(catalogo?.estado || snapshot.estado || ""),
+      href: String(catalogoId ? `/imoveis?imovel=${encodeURIComponent(catalogoId)}` : snapshot.href || ""),
+    };
+  }
+
+  return { ...(data as Agendamento), imovel_vinculado: imovelVinculado };
 }
 
 async function buscarVinculoPorAgendamento(agendamentoId: string) {

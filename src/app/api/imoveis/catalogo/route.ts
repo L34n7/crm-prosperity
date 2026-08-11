@@ -120,6 +120,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const pagina = getInteiro(searchParams.get("pagina"), 1, 1, 1_000_000);
     const limite = getInteiro(searchParams.get("limite"), 24, 1, 100);
+    const imovelId = String(searchParams.get("imovel") ?? "").trim();
     const busca = sanitizarBusca(searchParams.get("busca") ?? "");
     const origemInformada = searchParams.get("origem");
     const origem =
@@ -151,6 +152,8 @@ export async function GET(request: Request) {
       .from("catalogo_imoveis_global")
       .select("*", { count: "exact" })
       .eq("empresa_id", empresaId);
+
+    if (imovelId) query = query.eq("catalogo_id", imovelId);
 
     if (origem) {
       query = query.eq("origem_tipo", origem);

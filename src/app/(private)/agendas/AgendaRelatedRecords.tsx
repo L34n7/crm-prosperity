@@ -49,6 +49,10 @@ type PropertyResult = {
   bairro: string | null;
   cidade: string | null;
   estado: string | null;
+  cep?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
   quartos: number | null;
   vagas: number | null;
   area_m2: number | string | null;
@@ -241,12 +245,13 @@ export default function AgendaRelatedRecords({
         bairro: property.bairro ?? "",
         cidade: property.cidade ?? "",
         estado: property.estado ?? "",
+        cep: property.cep ?? "",
+        logradouro: property.logradouro ?? "",
+        numero: property.numero ?? "",
+        complemento: property.complemento ?? "",
         empresa_nome: property.empresa_nome ?? "",
-        href:
-          property.external_url ||
-          (property.pertence_empresa_atual
-            ? `/meus-imoveis?imovel=${property.origem_id}`
-            : ""),
+        href: `/imoveis?imovel=${encodeURIComponent(property.catalogo_id)}`,
+        external_url: property.external_url ?? "",
       },
     };
     if (!selectedKeys.has(linkKey(next))) {

@@ -116,6 +116,7 @@ type Ag = {
   id: string;
   agenda_id: string;
   contato_id: string | null;
+  conversa_id: string | null;
   titulo: string;
   nome_cliente: string | null;
   telefone_cliente: string | null;
@@ -395,6 +396,7 @@ function Page() {
       ultimo_erro?: string | null;
       ultima_sincronizacao_em?: string;
     }>({ conectado: false }),
+    [googleLinks, setGoogleLinks] = useState<Record<string, string>>({}),
     [gevents, setGevents] = useState<GEvent[]>([]),
     [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [niche, setNiche] = useState<AgendaNiche | null>(null);
@@ -572,14 +574,33 @@ function Page() {
         setGoogle(r.ok && j.ok ? j.integracao : { conectado: false });
         const rg = range(month),
           q = new URLSearchParams({ inicio_at: rg.start, fim_at: rg.end }),
-          er = await fetch(
-            `/api/agendas/${id}/google-calendar/ocupacoes?${q}`,
-            { cache: "no-store" },
-          ),
-          ej = await er.json();
+          [er, vr] = await Promise.all([
+            fetch(`/api/agendas/${id}/google-calendar/ocupacoes?${q}`, {
+              cache: "no-store",
+            }),
+            fetch(`/api/agendas/${id}/google-calendar/vinculos`, {
+              cache: "no-store",
+            }),
+          ]),
+          [ej, vj] = await Promise.all([er.json(), vr.json()]);
         setGevents(er.ok && ej.ok ? ej.eventos || [] : []);
+        setGoogleLinks(
+          vr.ok && vj.ok
+            ? Object.fromEntries(
+                (vj.vinculos || [])
+                  .filter((item: { agendamento_id?: string; google_html_link?: string }) =>
+                    Boolean(item.agendamento_id && item.google_html_link),
+                  )
+                  .map((item: { agendamento_id: string; google_html_link: string }) => [
+                    item.agendamento_id,
+                    item.google_html_link,
+                  ]),
+              )
+            : {},
+        );
       } catch {
         setGevents([]);
+        setGoogleLinks({});
       }
     },
     [month],
@@ -594,6 +615,81 @@ function Page() {
         });
       if (error) throw Error(error.message);
       const appointments = (data?.agendamentos || []) as Ag[];
+      const propertyIds = Array.from(
+        new Set(
+          appointments.flatMap((appointment) =>
+            appointment.vinculos
+              .filter((link) => link.entidade_tipo === "imovel")
+              .map((link) => link.dados_json?.catalogo_id)
+              .filter(Boolean),
+          ),
+        ),
+      );
+      const propertyDetails = new Map<string, Record<string, string>>();
+      const contactIdsWithoutConversation = Array.from(
+        new Set(
+          appointments
+            .filter((appointment) => !appointment.conversa_id && appointment.contato_id)
+            .map((appointment) => appointment.contato_id as string),
+        ),
+      );
+      const conversationsByContact = new Map<string, string>();
+      await Promise.all([
+        ...contactIdsWithoutConversation.map(async (contactId) => {
+          try {
+            const response = await fetch(
+              `/api/conversas?contato_id=${encodeURIComponent(contactId)}&limit=1`,
+              { cache: "no-store" },
+            );
+            const result = await response.json();
+            const conversationId = result?.conversas?.[0]?.id;
+            if (response.ok && conversationId) {
+              conversationsByContact.set(contactId, conversationId);
+            }
+          } catch {
+            /* O atalho fica oculto quando o usuário não pode acessar conversas. */
+          }
+        }),
+        ...propertyIds.map(async (catalogId) => {
+          try {
+            const response = await fetch(
+              `/api/imoveis/catalogo?imovel=${encodeURIComponent(catalogId)}&limite=1`,
+              { cache: "no-store" },
+            );
+            const result = await response.json();
+            const property = result?.imoveis?.[0];
+            if (!response.ok || !property) return;
+            propertyDetails.set(catalogId, {
+              codigo: property.codigo || "",
+              tipo: property.tipo || "",
+              finalidade: property.finalidade || "",
+              valor: String(property.valor || ""),
+              cep: property.cep || "",
+              logradouro: property.logradouro || "",
+              numero: property.numero || "",
+              complemento: property.complemento || "",
+              bairro: property.bairro || "",
+              cidade: property.cidade || "",
+              estado: property.estado || "",
+              href: `/imoveis?imovel=${encodeURIComponent(catalogId)}`,
+            });
+          } catch {
+            /* Mantém o snapshot do vínculo quando o imóvel não está disponível. */
+          }
+        }),
+      ]);
+      for (const appointment of appointments) {
+        if (!appointment.conversa_id && appointment.contato_id) {
+          appointment.conversa_id =
+            conversationsByContact.get(appointment.contato_id) || null;
+        }
+        appointment.vinculos = appointment.vinculos.map((link) => {
+          const details = propertyDetails.get(link.dados_json?.catalogo_id || "");
+          return details
+            ? { ...link, dados_json: { ...link.dados_json, ...details } }
+            : link;
+        });
+      }
       setAgs(appointments);
       setTipos(data?.tipos || []);
       setResps(data?.responsaveis || []);
@@ -1732,6 +1828,7 @@ function Page() {
           isHealthNiche={isHealthNiche}
           statusLabels={labels}
           relatedTypeLabels={relatedTypeLabels}
+          googleCalendarUrl={googleLinks[viewing.id] || null}
           onClose={() => setViewing(null)}
           onEdit={() => edit(viewing)}
         />

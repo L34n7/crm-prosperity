@@ -58,6 +58,7 @@ type DetailHistory = {
 export type AgendaAppointmentDetail = {
   id: string;
   contato_id: string | null;
+  conversa_id: string | null;
   titulo: string;
   nome_cliente: string | null;
   telefone_cliente: string | null;
@@ -89,6 +90,7 @@ type Props = {
   isHealthNiche: boolean;
   statusLabels: Record<string, string>;
   relatedTypeLabels: Record<string, string>;
+  googleCalendarUrl?: string | null;
   onClose: () => void;
   onEdit: () => void;
 };
@@ -161,6 +163,7 @@ export default function AgendaAppointmentDetails({
   isHealthNiche,
   statusLabels,
   relatedTypeLabels,
+  googleCalendarUrl,
   onClose,
   onEdit,
 }: Props) {
@@ -182,6 +185,9 @@ export default function AgendaAppointmentDetails({
     : appointment.contato_id
       ? `/contatos?contato=${appointment.contato_id}`
       : "";
+  const conversationHref = appointment.conversa_id
+    ? `/conversas?id=${appointment.conversa_id}`
+    : "";
 
   return (
     <div className={styles.overlay} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -244,6 +250,7 @@ export default function AgendaAppointmentDetails({
                 <div className={styles.customerBody}><strong>{customerName}</strong><span>{customerPhone || "Telefone não informado"}{customerEmail ? ` · ${customerEmail}` : ""}</span></div>
               )}
               <div className={styles.inlineActions}>
+                {conversationHref ? <Link href={conversationHref} target="_blank" rel="noopener noreferrer" title="Abrir conversa no CRM"><MessageCircle size={17} /><span>Conversa</span></Link> : null}
                 {customerPhone ? <a href={`https://wa.me/55${customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp"><MessageCircle size={16} /></a> : null}
                 {customerHref ? <Link href={customerHref} target="_blank" rel="noopener noreferrer" title={`Abrir ${customerLabel.toLowerCase()}`}><ExternalLink size={16} /></Link> : null}
               </div>
@@ -255,13 +262,33 @@ export default function AgendaAppointmentDetails({
               <div className={styles.sectionTitle}><Link2 size={17} /><div><h3>Registros relacionados</h3><p>Imóveis, prontuários, odontogramas e outros vínculos.</p></div></div>
               <div className={styles.relatedList}>
                 {appointment.vinculos.map((link, index) => {
+                  const isProperty = link.entidade_tipo === "imovel";
+                  const address = [
+                    [link.dados_json?.logradouro, link.dados_json?.numero].filter(Boolean).join(", "),
+                    link.dados_json?.complemento,
+                    link.dados_json?.bairro,
+                    [link.dados_json?.cidade, link.dados_json?.estado].filter(Boolean).join(" - "),
+                    link.dados_json?.cep ? `CEP ${link.dados_json.cep}` : "",
+                  ].filter(Boolean).join(" · ");
                   const content = <>
-                    <div className={styles.relatedVisual}>{link.imagem_url ? <Image loader={({ src }) => src} unoptimized src={link.imagem_url} alt="" width={68} height={58} /> : <FileText size={21} />}</div>
-                    <div className={styles.relatedBody}><div><span>{relatedTypeLabels[link.entidade_tipo] || link.entidade_tipo}</span>{link.principal ? <span>Principal</span> : null}</div><strong>{link.titulo || "Registro relacionado"}</strong><p>{link.subtitulo || "Sem informações adicionais"}</p></div>
-                    {link.dados_json?.href ? <ExternalLink size={16} /> : null}
+                    <div className={`${styles.relatedVisual} ${isProperty ? styles.propertyVisual : ""}`}>{link.imagem_url ? <Image loader={({ src }) => src} unoptimized src={link.imagem_url} alt="" width={112} height={92} /> : <FileText size={24} />}</div>
+                    <div className={styles.relatedBody}>
+                      <div><span>{relatedTypeLabels[link.entidade_tipo] || link.entidade_tipo}</span>{link.principal ? <span>Principal</span> : null}</div>
+                      <strong>{link.titulo || "Registro relacionado"}</strong>
+                      {isProperty ? <>
+                        <p className={styles.propertyAddress}><MapPin size={15} />{address || link.subtitulo || "Endereço não informado"}</p>
+                        <div className={styles.propertyMeta}>
+                          {link.dados_json?.codigo ? <span>Cód. {link.dados_json.codigo}</span> : null}
+                          {link.dados_json?.tipo ? <span>{link.dados_json.tipo}</span> : null}
+                          {link.dados_json?.finalidade ? <span>{link.dados_json.finalidade}</span> : null}
+                          {link.dados_json?.valor ? <span>{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(Number(link.dados_json.valor))}</span> : null}
+                        </div>
+                      </> : <p>{link.subtitulo || "Sem informações adicionais"}</p>}
+                    </div>
+                    {link.dados_json?.href ? <span className={styles.openRelated}>Abrir <ExternalLink size={15} /></span> : null}
                   </>;
                   return link.dados_json?.href ? (
-                    <Link key={`${link.entidade_tipo}-${link.entidade_id}-${index}`} className={styles.relatedCard} href={link.dados_json.href} target="_blank" rel="noopener noreferrer">{content}</Link>
+                    <Link key={`${link.entidade_tipo}-${link.entidade_id}-${index}`} className={`${styles.relatedCard} ${isProperty ? styles.propertyCard : ""}`} href={link.dados_json.href} target="_blank" rel="noopener noreferrer">{content}</Link>
                   ) : (
                     <article key={`${link.entidade_tipo}-${link.entidade_id}-${index}`} className={styles.relatedCard}>{content}</article>
                   );
@@ -299,7 +326,7 @@ export default function AgendaAppointmentDetails({
 
         <footer className={styles.footer}>
           <span>Última visualização dos dados atuais do calendário.</span>
-          <div><button type="button" className={styles.secondaryButton} onClick={onClose}>Fechar</button><button type="button" className={styles.editButton} onClick={onEdit}><Pencil size={16} /> Editar agendamento</button></div>
+          <div>{googleCalendarUrl ? <a className={styles.googleButton} href={googleCalendarUrl} target="_blank" rel="noopener noreferrer"><CalendarDays size={17} /> Abrir no Google Calendar</a> : null}<button type="button" className={styles.secondaryButton} onClick={onClose}>Fechar</button><button type="button" className={styles.editButton} onClick={onEdit}><Pencil size={16} /> Editar agendamento</button></div>
         </footer>
       </aside>
     </div>

@@ -44,9 +44,9 @@
 .heroIcon { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, white 19%, transparent); border-radius: 14px; background: color-mix(in srgb, white 10%, transparent); }
 .heroCopy { min-width: 0; flex: 1; }
 .heroCopy h2 { margin: 8px 0 4px; font-size: 23px; line-height: 1.25; color: inherit; }
-.heroCopy p { margin: 0; color: color-mix(in srgb, white 72%, transparent); font-size: 12px; }
+.heroCopy p { margin: 0; color: color-mix(in srgb, white 78%, transparent); font-size: 14px; }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; }
-.badges span { min-height: 22px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 999px; font-size: 10px; font-weight: 900; }
+.badges span { min-height: 25px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 900; }
 .statusBadge { color: color-mix(in srgb, var(--crm-primary-strong) 48%, white); background: color-mix(in srgb, var(--crm-primary-strong) 22%, transparent); border: 1px solid color-mix(in srgb, var(--crm-primary-strong) 48%, transparent); }
 .typeBadge { color: white; background: color-mix(in srgb, var(--appointment-color) 28%, transparent); border: 1px solid color-mix(in srgb, var(--appointment-color) 58%, transparent); }
 .closeButton { width: 38px; height: 38px; flex: 0 0 38px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, white 18%, transparent); border-radius: 11px; color: white; background: color-mix(in srgb, white 8%, transparent); cursor: pointer; }
@@ -56,73 +56,81 @@
 .scheduleStrip > div { min-width: 0; display: flex; align-items: center; gap: 9px; padding: 10px 11px; border: 1px solid color-mix(in srgb, white 12%, transparent); border-radius: 11px; background: color-mix(in srgb, white 7%, transparent); }
 .scheduleStrip svg { flex: 0 0 auto; color: color-mix(in srgb, var(--crm-primary-strong) 45%, white); }
 .scheduleStrip span { min-width: 0; display: grid; gap: 2px; }
-.scheduleStrip small { color: color-mix(in srgb, white 55%, transparent); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
-.scheduleStrip strong { overflow: hidden; color: white; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.scheduleStrip small { color: color-mix(in srgb, white 63%, transparent); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.scheduleStrip strong { overflow: hidden; color: white; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 
 .body { flex: 1; overflow: auto; padding: 16px 18px 28px; }
 .section { margin-bottom: 12px; padding: 15px; border: 1px solid var(--crm-border); border-radius: 15px; background: var(--crm-surface); box-shadow: var(--crm-shadow-xs); }
 .sectionTitle { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 13px; }
 .sectionTitle > svg { margin-top: 1px; color: var(--crm-primary-text); }
-.sectionTitle h3 { margin: 0; color: var(--crm-text-strong); font-size: 14px; }
-.sectionTitle p { margin: 3px 0 0; color: var(--crm-text-muted); font-size: 11px; }
+.sectionTitle h3 { margin: 0; color: var(--crm-text-strong); font-size: 17px; }
+.sectionTitle p { margin: 4px 0 0; color: var(--crm-text-muted); font-size: 13px; line-height: 1.4; }
 .detailsGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .detailValue { min-width: 0; display: grid; gap: 3px; padding: 10px 11px; border: 1px solid var(--crm-border); border-radius: 10px; background: var(--crm-surface-soft); }
-.detailValue span, .note span, .internalNote span { color: var(--crm-text-muted); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
-.detailValue strong { overflow-wrap: anywhere; color: var(--crm-text-strong); font-size: 12px; }
+.detailValue span, .note span, .internalNote span { color: var(--crm-text-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.detailValue strong { overflow-wrap: anywhere; color: var(--crm-text-strong); font-size: 14px; }
 .linkRows { display: grid; gap: 7px; margin-top: 9px; }
 .linkRows > div, .linkRows > a { display: flex; align-items: center; gap: 9px; min-height: 45px; padding: 8px 11px; border: 1px solid var(--crm-border); border-radius: 10px; color: var(--crm-text-strong); text-decoration: none; }
 .linkRows svg { flex: 0 0 auto; color: var(--crm-primary-text); }
 .linkRows span { flex: 1; display: grid; gap: 2px; }
-.linkRows small { color: var(--crm-text-muted); font-size: 9px; }
-.linkRows strong { font-size: 11px; }
+.linkRows small { color: var(--crm-text-muted); font-size: 11px; }
+.linkRows strong { font-size: 14px; }
 .note { display: flex; align-items: flex-start; gap: 9px; margin-top: 9px; padding: 11px; border-radius: 10px; background: var(--crm-surface-soft); }
 .note svg { flex: 0 0 auto; color: var(--crm-text-muted); }
-.note p, .internalNote p { margin: 4px 0 0; color: var(--crm-text); font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
+.note p, .internalNote p { margin: 5px 0 0; color: var(--crm-text); font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
 
 .customerCard { display: flex; align-items: center; gap: 11px; padding: 12px; border: 1px solid var(--crm-primary-border); border-radius: 12px; background: linear-gradient(135deg, var(--crm-primary-soft), var(--crm-surface)); }
 .avatar { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border-radius: 13px; color: var(--crm-primary-text); background: var(--crm-surface); box-shadow: var(--crm-shadow-xs); font-size: 13px; font-weight: 900; }
 .customerBody { min-width: 0; flex: 1; display: grid; gap: 3px; }
 a.customerBody { text-decoration: none; }
 a.customerBody:hover strong { color: var(--crm-primary-text); }
-.customerBody strong { overflow: hidden; color: var(--crm-text-strong); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.customerBody span { overflow: hidden; color: var(--crm-text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.customerBody strong { overflow: hidden; color: var(--crm-text-strong); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.customerBody span { overflow: hidden; color: var(--crm-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .inlineActions { display: flex; gap: 6px; }
-.inlineActions a { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--crm-primary-border); border-radius: 10px; color: var(--crm-primary-text); background: var(--crm-surface); }
+.inlineActions a { min-width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border: 1px solid var(--crm-primary-border); border-radius: 10px; color: var(--crm-primary-text); background: var(--crm-surface); text-decoration: none; font-size: 12px; font-weight: 800; }
 
 .relatedList, .compactList { display: grid; gap: 8px; }
 .relatedCard { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px; border: 1px solid var(--crm-border); border-radius: 11px; color: inherit; background: var(--crm-surface-soft); text-decoration: none; }
+.propertyCard { align-items: stretch; min-height: 118px; padding: 12px; gap: 14px; }
 a.relatedCard:hover { border-color: var(--crm-primary-border); background: var(--crm-primary-soft); }
 .relatedVisual { width: 68px; height: 58px; flex: 0 0 68px; display: grid; place-items: center; overflow: hidden; border-radius: 9px; color: var(--crm-primary-text); background: var(--crm-surface); }
 .relatedVisual img { width: 100%; height: 100%; object-fit: cover; }
+.propertyVisual { width: 112px; height: 92px; flex-basis: 112px; align-self: center; }
 .relatedBody { min-width: 0; flex: 1; }
 .relatedBody > div { display: flex; gap: 5px; margin-bottom: 4px; }
 .relatedBody > div span { padding: 2px 6px; border-radius: 999px; color: var(--crm-primary-text); background: var(--crm-primary-soft); font-size: 8px; font-weight: 900; }
 .relatedBody strong, .relatedBody p { overflow: hidden; display: block; text-overflow: ellipsis; white-space: nowrap; }
-.relatedBody strong { color: var(--crm-text-strong); font-size: 11px; }
-.relatedBody p { margin: 3px 0 0; color: var(--crm-text-muted); font-size: 9px; }
+.relatedBody strong { color: var(--crm-text-strong); font-size: 14px; line-height: 1.4; }
+.relatedBody p { margin: 5px 0 0; color: var(--crm-text-muted); font-size: 12px; line-height: 1.45; }
 .relatedCard > svg { color: var(--crm-primary-text); }
+.propertyAddress { display: flex !important; align-items: flex-start; gap: 5px; overflow: visible !important; white-space: normal !important; }
+.propertyAddress svg { flex: 0 0 auto; margin-top: 1px; color: var(--crm-primary-text); }
+.propertyMeta { display: flex; flex-wrap: wrap; gap: 6px !important; margin-top: 8px; }
+.propertyMeta span { padding: 4px 7px !important; color: var(--crm-text) !important; background: var(--crm-surface) !important; font-size: 10px !important; }
+.openRelated { align-self: center; display: inline-flex; align-items: center; gap: 5px; color: var(--crm-primary-text); font-size: 12px; font-weight: 900; white-space: nowrap; }
 
 .compactList > div { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid var(--crm-border); border-radius: 10px; }
 .smallAvatar { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; border-radius: 9px; color: var(--crm-primary-text); background: var(--crm-primary-soft); }
 .compactList span { min-width: 0; flex: 1; display: grid; gap: 2px; }
-.compactList strong { color: var(--crm-text-strong); font-size: 11px; }
-.compactList small { overflow: hidden; color: var(--crm-text-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.compactList em { padding: 3px 7px; border-radius: 999px; color: var(--crm-primary-text); background: var(--crm-primary-soft); font-size: 8px; font-style: normal; font-weight: 900; }
+.compactList strong { color: var(--crm-text-strong); font-size: 14px; }
+.compactList small { overflow: hidden; color: var(--crm-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.compactList em { padding: 4px 8px; border-radius: 999px; color: var(--crm-primary-text); background: var(--crm-primary-soft); font-size: 10px; font-style: normal; font-weight: 900; }
 .internalGrid { display: grid; gap: 8px; }
 .internalNote { padding: 11px; border: 1px solid var(--crm-border); border-radius: 10px; background: var(--crm-surface-soft); }
 .timeline { position: relative; display: grid; gap: 13px; margin-left: 5px; padding-left: 17px; border-left: 1px solid var(--crm-border-strong); }
 .timeline > div { position: relative; }
 .timeline > div > span { position: absolute; left: -22px; top: 3px; width: 9px; height: 9px; border: 2px solid var(--crm-surface); border-radius: 50%; background: var(--crm-primary-strong); box-shadow: 0 0 0 1px var(--crm-primary-border); }
-.timeline strong { color: var(--crm-text-strong); font-size: 10px; text-transform: capitalize; }
-.timeline p { margin: 3px 0; color: var(--crm-text-muted); font-size: 9px; }
-.timeline small { color: var(--crm-text-subtle); font-size: 8px; }
-.empty { padding: 14px; border: 1px dashed var(--crm-border-strong); border-radius: 10px; color: var(--crm-text-muted); text-align: center; font-size: 10px; }
+.timeline strong { color: var(--crm-text-strong); font-size: 13px; text-transform: capitalize; }
+.timeline p { margin: 4px 0; color: var(--crm-text-muted); font-size: 12px; }
+.timeline small { color: var(--crm-text-subtle); font-size: 11px; }
+.empty { padding: 14px; border: 1px dashed var(--crm-border-strong); border-radius: 10px; color: var(--crm-text-muted); text-align: center; font-size: 13px; }
 
 .footer { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--crm-border); background: var(--crm-surface); box-shadow: 0 -8px 24px color-mix(in srgb, var(--crm-text-strong) 5%, transparent); }
-.footer > span { color: var(--crm-text-muted); font-size: 9px; }
+.footer > span { color: var(--crm-text-muted); font-size: 11px; }
 .footer > div { display: flex; gap: 8px; }
-.secondaryButton, .editButton { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 15px; border-radius: 10px; font-family: inherit; font-size: 11px; font-weight: 900; cursor: pointer; }
+.secondaryButton, .editButton, .googleButton { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 15px; border-radius: 10px; font-family: inherit; font-size: 13px; font-weight: 900; cursor: pointer; text-decoration: none; }
 .secondaryButton { border: 1px solid var(--crm-border-strong); color: var(--crm-text); background: var(--crm-surface); }
+.googleButton { border: 1px solid var(--crm-primary-border); color: var(--crm-primary-text); background: var(--crm-primary-soft); }
 .editButton { border: 1px solid var(--crm-primary-strong); color: var(--crm-text-inverse); background: linear-gradient(135deg, var(--crm-primary-strong), color-mix(in srgb, var(--crm-primary-strong) 70%, var(--crm-text-strong))); box-shadow: 0 8px 20px color-mix(in srgb, var(--crm-primary-strong) 22%, transparent); }
 
 @media (max-width: 620px) {
@@ -137,7 +145,13 @@ a.relatedCard:hover { border-color: var(--crm-primary-border); background: var(-
   .footer { align-items: stretch; flex-direction: column; padding: 10px; }
   .footer > span { display: none; }
   .footer > div { width: 100%; }
+  .footer > div { flex-wrap: wrap; }
+  .googleButton { width: 100%; }
   .secondaryButton { flex: 0 0 auto; }
   .editButton { flex: 1; }
   .relatedVisual { width: 56px; height: 52px; flex-basis: 56px; }
+  .propertyCard { flex-wrap: wrap; }
+  .propertyVisual { width: 92px; height: 78px; flex-basis: 92px; }
+  .openRelated { width: 100%; justify-content: flex-end; }
+  .inlineActions a span { display: none; }
 }
