@@ -1306,16 +1306,6 @@ export default function ImoveisPage() {
                       </div>
                     </dl>
                   </section>
-                </div>
-
-                <aside className={styles.catalogDetailAside}>
-                  <section className={styles.catalogDetailSection}>
-                    <h3>Sobre o imóvel</h3>
-                    <p>
-                      {imovelDetalhe.descricao?.trim() ||
-                        "Nenhuma descrição foi informada para este imóvel."}
-                    </p>
-                  </section>
 
                   {caracteristicasDetalhe.length > 0 ? (
                     <section className={styles.catalogDetailSection}>
@@ -1327,6 +1317,34 @@ export default function ImoveisPage() {
                       </div>
                     </section>
                   ) : null}
+
+                  <section className={styles.catalogDates}>
+                    <CalendarDays size={18} />
+                    <div>
+                      <span>
+                        Criado em{" "}
+                        <strong>
+                          {formatarDataImovel(imovelDetalhe.created_at)}
+                        </strong>
+                      </span>
+                      <span>
+                        Atualizado em{" "}
+                        <strong>
+                          {formatarDataImovel(imovelDetalhe.updated_at)}
+                        </strong>
+                      </span>
+                    </div>
+                  </section>
+                </div>
+
+                <aside className={styles.catalogDetailAside}>
+                  <section className={styles.catalogDetailSection}>
+                    <h3>Sobre o imóvel</h3>
+                    <p>
+                      {imovelDetalhe.descricao?.trim() ||
+                        "Nenhuma descrição foi informada para este imóvel."}
+                    </p>
+                  </section>
 
                   {urlMapaDetalhe ? (
                     <section className={styles.catalogDetailSection}>
@@ -1352,24 +1370,6 @@ export default function ImoveisPage() {
                       </div>
                     </section>
                   ) : null}
-
-                  <section className={styles.catalogDates}>
-                    <CalendarDays size={17} />
-                    <div>
-                      <span>
-                        Criado em{" "}
-                        <strong>
-                          {formatarDataImovel(imovelDetalhe.created_at)}
-                        </strong>
-                      </span>
-                      <span>
-                        Atualizado em{" "}
-                        <strong>
-                          {formatarDataImovel(imovelDetalhe.updated_at)}
-                        </strong>
-                      </span>
-                    </div>
-                  </section>
                 </aside>
               </div>
             </div>
