@@ -561,31 +561,6 @@ export default function ImoveisPage() {
       />
 
       <main className={styles.page}>
-        <section className={styles.catalogOverview}>
-          <div className={styles.catalogOverviewCopy}>
-            <span className={styles.eyebrow}>Ecossistema imobiliário</span>
-            <h2>Encontre oportunidades com uma busca completa.</h2>
-            <p>
-              Compare imóveis próprios e de parceiros, abra a apresentação com
-              fotos grandes e consulte todos os detalhes sem sair do CRM.
-            </p>
-          </div>
-          <div className={styles.catalogOverviewStats}>
-            <div>
-              <strong>{total}</strong>
-              <span>resultados</span>
-            </div>
-            <div>
-              <strong>{imoveis.length}</strong>
-              <span>nesta página</span>
-            </div>
-            <div>
-              <strong>{quantidadeFiltrosAtivos}</strong>
-              <span>filtros ativos</span>
-            </div>
-          </div>
-        </section>
-
         <section className={`${styles.toolbar} ${styles.catalogSearchPanel}`}>
           <form
             className={styles.catalogSearchForm}
@@ -1179,16 +1154,20 @@ export default function ImoveisPage() {
                   <div className={styles.catalogDetailHeading}>
                     <div className={styles.catalogDetailBadges}>
                       <span
-                        className={`${styles.catalogStatusBadge} ${statusImovelClass(
+                        className={`${styles.catalogDetailBadge} ${styles.catalogStatusBadge} ${statusImovelClass(
                           imovelDetalhe.status,
                         )}`}
                       >
                         {rotuloStatus(imovelDetalhe.status)}
                       </span>
-                      <span className={styles.badge}>
+                      <span
+                        className={`${styles.catalogDetailBadge} ${styles.badge}`}
+                      >
                         {rotuloFinalidade(imovelDetalhe.finalidade)}
                       </span>
-                      <span className={styles.catalogNeutralBadge}>
+                      <span
+                        className={`${styles.catalogDetailBadge} ${styles.catalogNeutralBadge}`}
+                      >
                         {rotuloTipo(imovelDetalhe.tipo)}
                       </span>
                     </div>
@@ -1273,9 +1252,10 @@ export default function ImoveisPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         referrerPolicy="no-referrer"
-                        className={styles.primaryButton}
+                        className={styles.catalogSourceLink}
+                        aria-label="Abrir este imóvel no portal da Rede Inova"
                       >
-                        Abrir no portal de origem <ExternalLink size={16} />
+                        Abrir <ExternalLink size={14} />
                       </a>
                     ) : imovelDetalhe.pertence_empresa_atual ? (
                       <Link
