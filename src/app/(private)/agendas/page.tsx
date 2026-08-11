@@ -107,9 +107,11 @@ type Lembrete = {
 type ReminderOptions = AgendaAutomationOptions;
 type Hist = {
   id: string;
+  usuario_id?: string | null;
   acao: string;
   descricao?: string;
   usuario_nome?: string;
+  status_novo?: string;
   created_at: string;
 };
 type Ag = {
@@ -134,6 +136,9 @@ type Ag = {
   confirmacao_status: string;
   resultado: string | null;
   observacoes_internas: string | null;
+  metadata_json?: {
+    confirmacao_whatsapp?: { respondido_em?: string | null } | null;
+  } | null;
   contato: Contato | null;
   responsavel: Resp | null;
   tipo: Tipo | null;
@@ -991,7 +996,14 @@ function Page() {
         participantes: form.participantes.filter((p) => p.nome.trim()),
         vinculos: form.vinculos.filter((v) => v.titulo.trim()),
         lembretes: form.lembretes.filter((r) => r.ativo),
-        metadata_json: { agenda_enriquecida: true },
+        metadata_json: {
+          agenda_enriquecida: true,
+          ...(form.id &&
+          viewing?.id === form.id &&
+          (status || form.status) !== viewing.status
+            ? { confirmacao_whatsapp: null }
+            : {}),
+        },
       };
       const { error } = await sb.rpc("agenda_etapa1_salvar_agendamento", {
         p_agenda_id: agendaId,

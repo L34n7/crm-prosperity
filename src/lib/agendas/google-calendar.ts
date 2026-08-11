@@ -66,6 +66,7 @@ type Agendamento = Record<string, any> & {
   fim_at: string;
   status: string;
   updated_at: string;
+  timezone?: string | null;
   imovel_vinculado?: ImovelGoogle | null;
 };
 
@@ -208,6 +209,46 @@ function hashAgendamento(agendamento: Agendamento) {
   );
 }
 
+function confirmacaoAutomatica(agendamento: Agendamento) {
+  const confirmacao = agendamento.metadata_json?.confirmacao_whatsapp;
+  const respondidoEm = String(confirmacao?.respondido_em || "").trim();
+
+  if (agendamento.status !== "confirmado" || !respondidoEm) return null;
+
+  return {
+    respondidoEm,
+    nome: String(agendamento.nome_cliente || "Contato").trim() || "Contato",
+  };
+}
+
+function tituloGoogle(agendamento: Agendamento) {
+  const titulo = String(agendamento.titulo || "Agendamento").trim();
+  if (!confirmacaoAutomatica(agendamento) || /\s-\sconfirmado$/i.test(titulo)) {
+    return titulo;
+  }
+  return `${titulo} - Confirmado`;
+}
+
+function removerSufixoConfirmado(titulo: string) {
+  return titulo.replace(/\s-\sconfirmado$/i, "").trim();
+}
+
+function descricaoConfirmacao(agendamento: Agendamento) {
+  const confirmacao = confirmacaoAutomatica(agendamento);
+  if (!confirmacao) return "";
+
+  const data = new Date(confirmacao.respondidoEm);
+  const dataFormatada = Number.isNaN(data.getTime())
+    ? confirmacao.respondidoEm
+    : new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: agendamento.timezone || "America/Sao_Paulo",
+      }).format(data);
+
+  return `${confirmacao.nome} confirmou o agendamento. ${dataFormatada}`;
+}
+
 function enderecoImovel(imovel?: ImovelGoogle | null) {
   if (!imovel) return "";
   return [
@@ -251,6 +292,7 @@ function descricaoGoogle(agendamento: Agendamento) {
 
   return [
     dadosCliente.join("\n"),
+    descricaoConfirmacao(agendamento),
     detalhesImovelGoogle(agendamento.imovel_vinculado),
     `${DESCRICAO_INICIO}${agendamento.observacoes || ""}`,
     `${LINK_CRM_INICIO}${crmLink(agendamento.agenda_id, agendamento.id)}`,
@@ -272,8 +314,9 @@ function extrairObservacoesGoogle(descricao?: string | null) {
 }
 
 function payloadEventoGoogle(agendamento: Agendamento) {
+  const confirmadoPeloContato = Boolean(confirmacaoAutomatica(agendamento));
   return {
-    summary: agendamento.titulo || "Agendamento",
+    summary: tituloGoogle(agendamento),
     description: descricaoGoogle(agendamento),
     location: enderecoImovel(agendamento.imovel_vinculado) || agendamento.local || undefined,
     start: { dateTime: agendamento.inicio_at },
@@ -287,6 +330,7 @@ function payloadEventoGoogle(agendamento: Agendamento) {
         crm_agendamento_id: agendamento.id,
         crm_agenda_id: agendamento.agenda_id,
         crm_empresa_id: agendamento.empresa_id,
+        crm_confirmacao_automatica: confirmadoPeloContato ? "true" : "false",
       },
     },
   };
@@ -565,6 +609,13 @@ async function buscarAgendamento(empresaId: string, agendamentoId: string) {
 
   if (!data) return null;
 
+  const { data: agenda } = await supabase
+    .from("agenda_calendarios")
+    .select("timezone")
+    .eq("empresa_id", empresaId)
+    .eq("id", data.agenda_id)
+    .maybeSingle();
+
   const { data: vinculo } = await supabase
     .from("agenda_vinculos")
     .select("titulo,entidade_id,dados_json")
@@ -616,7 +667,11 @@ async function buscarAgendamento(empresaId: string, agendamentoId: string) {
     };
   }
 
-  return { ...(data as Agendamento), imovel_vinculado: imovelVinculado };
+  return {
+    ...(data as Agendamento),
+    timezone: agenda?.timezone || "America/Sao_Paulo",
+    imovel_vinculado: imovelVinculado,
+  };
 }
 
 async function buscarVinculoPorAgendamento(agendamentoId: string) {
@@ -716,6 +771,9 @@ async function aplicarEventoGoogleNoCrm(params: {
 
   const observacoes = extrairObservacoesGoogle(params.evento.description);
   const agora = new Date().toISOString();
+  const confirmacaoGerenciadaPeloCrm =
+    params.evento?.extendedProperties?.private?.crm_confirmacao_automatica ===
+    "true";
   const metadata = {
     ...(params.agendamento.metadata_json || {}),
     google_calendar: {
@@ -726,7 +784,11 @@ async function aplicarEventoGoogleNoCrm(params: {
     },
   };
   const atualizacao: Record<string, unknown> = {
-    titulo: params.evento.summary || params.agendamento.titulo || "Agendamento",
+    titulo: confirmacaoGerenciadaPeloCrm
+      ? removerSufixoConfirmado(
+          params.evento.summary || params.agendamento.titulo || "Agendamento"
+        )
+      : params.evento.summary || params.agendamento.titulo || "Agendamento",
     inicio_at: inicioAt,
     fim_at: fimAt,
     local: params.evento.location || null,

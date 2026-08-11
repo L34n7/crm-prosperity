@@ -49,9 +49,11 @@ type DetailReminder = {
 
 type DetailHistory = {
   id: string;
+  usuario_id?: string | null;
   acao: string;
   descricao?: string;
   usuario_nome?: string;
+  status_novo?: string;
   created_at: string;
 };
 
@@ -74,6 +76,9 @@ export type AgendaAppointmentDetail = {
   confirmacao_status: string;
   resultado: string | null;
   observacoes_internas: string | null;
+  metadata_json?: {
+    confirmacao_whatsapp?: { respondido_em?: string | null } | null;
+  } | null;
   contato: { nome: string | null; telefone: string | null; email: string | null } | null;
   responsavel: { nome: string; email: string | null } | null;
   tipo: { nome: string; cor: string } | null;
@@ -108,6 +113,28 @@ const time = (value: string) =>
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+
+function autorHistorico(
+  item: DetailHistory,
+  appointment: AgendaAppointmentDetail
+) {
+  const respondidoEm =
+    appointment.metadata_json?.confirmacao_whatsapp?.respondido_em;
+  const diferencaConfirmacao = respondidoEm
+    ? Math.abs(
+        new Date(item.created_at).getTime() - new Date(respondidoEm).getTime()
+      )
+    : Number.POSITIVE_INFINITY;
+  const confirmadoPeloContato =
+    item.acao === "status_alterado" &&
+    item.status_novo === "confirmado" &&
+    (item.usuario_id == null || diferencaConfirmacao <= 5 * 60 * 1000);
+
+  if (!confirmadoPeloContato) return item.usuario_nome || "Sistema";
+
+  const nome = appointment.contato?.nome || appointment.nome_cliente;
+  return nome ? `${nome} (contato)` : "Contato";
+}
 
 const duration = (start: string, end: string) => {
   const minutes = Math.max(
@@ -320,7 +347,7 @@ export default function AgendaAppointmentDetails({
 
           <section className={styles.section}>
             <div className={styles.sectionTitle}><History size={17} /><div><h3>Histórico</h3><p>Movimentações registradas neste agendamento.</p></div></div>
-            {appointment.historico.length > 0 ? <div className={styles.timeline}>{appointment.historico.map((item) => <div key={item.id}><span /><div><strong>{item.acao.replaceAll("_", " ")}</strong><p>{item.descricao || "Alteração registrada."}</p><small>{item.usuario_nome || "Sistema"} · {dateTime(item.created_at)}</small></div></div>)}</div> : <div className={styles.empty}>Sem alterações registradas.</div>}
+            {appointment.historico.length > 0 ? <div className={styles.timeline}>{appointment.historico.map((item) => <div key={item.id}><span /><div><strong>{item.acao.replaceAll("_", " ")}</strong><p>{item.descricao || "Alteração registrada."}</p><small>{autorHistorico(item, appointment)} · {dateTime(item.created_at)}</small></div></div>)}</div> : <div className={styles.empty}>Sem alterações registradas.</div>}
           </section>
         </div>
 

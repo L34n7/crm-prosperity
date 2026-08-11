@@ -36,6 +36,8 @@ export async function PATCH(
       updated_by: usuario.id,
     };
 
+    const supabase = getSupabaseAdmin();
+
     if (status) {
       if (!["agendado", "confirmado", "cancelado", "realizado", "faltou"].includes(status)) {
         return NextResponse.json(
@@ -45,14 +47,27 @@ export async function PATCH(
       }
 
       atualizacao.status = status;
+
+      const { data: atual } = await supabase
+        .from("agenda_agendamentos")
+        .select("status,metadata_json")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("agenda_id", id)
+        .eq("id", agendamentoId)
+        .maybeSingle();
+
+      if (atual && atual.status !== status) {
+        atualizacao.metadata_json = {
+          ...(atual.metadata_json || {}),
+          confirmacao_whatsapp: null,
+        };
+      }
     }
 
     if (body?.observacoes !== undefined) {
       const observacoes = String(body.observacoes || "").trim();
       atualizacao.observacoes = observacoes || null;
     }
-
-    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("agenda_agendamentos")
