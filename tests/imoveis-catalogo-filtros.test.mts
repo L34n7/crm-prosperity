@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   montarOpcoesFiltrosCatalogo,
   normalizarIntervalo,
+  obterOrdenacaoCatalogo,
   sanitizarTextoFiltro,
 } from "../src/lib/imoveis/catalogo-filtros.ts";
 
@@ -53,5 +54,19 @@ test("monta opções apenas com valores existentes e suas quantidades", () => {
   assert.deepEqual(opcoes.status, [
     { valor: "disponivel", total: 1 },
     { valor: "indisponivel", total: 1 },
+  ]);
+});
+
+test("ordena maior área no banco antes da paginação", () => {
+  assert.deepEqual(obterOrdenacaoCatalogo("area_desc"), [
+    { campo: "area_m2", ascending: false, nullsFirst: false },
+    { campo: "catalogo_id", ascending: true },
+  ]);
+});
+
+test("ordena A–Z pela chave de título sem formatação inicial", () => {
+  assert.deepEqual(obterOrdenacaoCatalogo("titulo_asc"), [
+    { campo: "titulo_ordenacao", ascending: true },
+    { campo: "catalogo_id", ascending: true },
   ]);
 });

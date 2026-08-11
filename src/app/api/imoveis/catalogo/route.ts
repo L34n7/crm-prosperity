@@ -4,6 +4,7 @@ import { normalizarUrlHttp } from "@/lib/imoveis/webhook";
 import {
   montarOpcoesFiltrosCatalogo,
   normalizarIntervalo,
+  obterOrdenacaoCatalogo,
   sanitizarTextoFiltro,
   type FacetaCatalogoRow,
 } from "@/lib/imoveis/catalogo-filtros";
@@ -38,6 +39,7 @@ type CatalogoImovelRow = {
   external_url: string | null;
   created_at: string;
   updated_at: string;
+  titulo_ordenacao: string;
 };
 
 type DetalhesCrmRow = {
@@ -179,18 +181,13 @@ export async function GET(request: Request) {
       );
     }
 
-    if (ordenacao === "valor_asc") {
-      query = query.order("valor", { ascending: true, nullsFirst: false });
-    } else if (ordenacao === "valor_desc") {
-      query = query.order("valor", { ascending: false, nullsFirst: false });
-    } else if (ordenacao === "area_desc") {
-      query = query.order("area_m2", { ascending: false, nullsFirst: false });
-    } else if (ordenacao === "titulo_asc") {
-      query = query.order("titulo", { ascending: true });
-    } else {
-      query = query
-        .order("created_at", { ascending: false, nullsFirst: false })
-        .order("catalogo_id", { ascending: false });
+    for (const ordem of obterOrdenacaoCatalogo(ordenacao)) {
+      query = query.order(ordem.campo, {
+        ascending: ordem.ascending,
+        ...(ordem.nullsFirst === undefined
+          ? {}
+          : { nullsFirst: ordem.nullsFirst }),
+      });
     }
 
     const [catalogoResultado, facetasResultado] = await Promise.all([

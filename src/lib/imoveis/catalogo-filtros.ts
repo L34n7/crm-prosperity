@@ -21,6 +21,49 @@ export type OpcoesFiltrosCatalogo = {
   estados: OpcaoFiltroCatalogo[];
 };
 
+export type CampoOrdenacaoCatalogo = {
+  campo:
+    | "valor"
+    | "area_m2"
+    | "titulo_ordenacao"
+    | "created_at"
+    | "catalogo_id";
+  ascending: boolean;
+  nullsFirst?: boolean;
+};
+
+export function obterOrdenacaoCatalogo(valor: string) {
+  const desempate: CampoOrdenacaoCatalogo = {
+    campo: "catalogo_id",
+    ascending: true,
+  };
+
+  const ordenacoes: Record<string, CampoOrdenacaoCatalogo[]> = {
+    valor_asc: [
+      { campo: "valor", ascending: true, nullsFirst: false },
+      desempate,
+    ],
+    valor_desc: [
+      { campo: "valor", ascending: false, nullsFirst: false },
+      desempate,
+    ],
+    area_desc: [
+      { campo: "area_m2", ascending: false, nullsFirst: false },
+      desempate,
+    ],
+    titulo_asc: [
+      { campo: "titulo_ordenacao", ascending: true },
+      desempate,
+    ],
+    recentes: [
+      { campo: "created_at", ascending: false, nullsFirst: false },
+      { campo: "catalogo_id", ascending: false },
+    ],
+  };
+
+  return ordenacoes[valor] ?? ordenacoes.recentes;
+}
+
 export function sanitizarTextoFiltro(valor: string | null, limite = 80) {
   return String(valor ?? "")
     .replace(/[%_(),]/g, " ")
