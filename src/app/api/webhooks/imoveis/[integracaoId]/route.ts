@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -28,15 +29,37 @@ type IntegracaoWebhook = {
   status: "ativo" | "inativo";
 };
 
+type DisponibilidadeOrigem =
+  | "disponivel"
+  | "indisponivel"
+  | "desconhecido";
+
+type ArquivadoPor = "origem" | "usuario" | null;
+
 type ImovelExternoExistente = Record<string, unknown> & {
   id: string;
   status: string;
+  status_origem?: string | null;
+  disponibilidade_origem?: DisponibilidadeOrigem | null;
+  arquivado_por?: ArquivadoPor;
+  snapshot_hash?: string | null;
+  atualizado_origem_em?: string | null;
 };
 
 type EventoWebhook = {
   id: string;
   status: "recebido" | "processado" | "ignorado" | "erro";
   recebido_em: string;
+};
+
+type ResultadoUpsert = {
+  imovel: ImovelExternoExistente;
+  resultado: "created" | "updated" | "unchanged" | "ignored_stale";
+};
+
+type ResultadoDelete = {
+  imovel: ImovelExternoExistente | null;
+  resultado: "archived" | "unchanged" | "ignored_stale" | "not_found";
 };
 
 function jsonErro(error: string, status: number) {
@@ -57,12 +80,146 @@ function valorExistente(
   return existente?.[campo] ?? null;
 }
 
+function numeroExistente(
+  novoValor: number | null,
+  existente: Record<string, unknown> | null,
+  campo: string
+) {
+  const valor = valorExistente(novoValor, existente, campo);
+  if (valor === null || valor === undefined || valor === "") return null;
+
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : null;
+}
+
 function coordenadaValida(
   valor: number | null,
   minimo: number,
   maximo: number
 ) {
   return valor !== null && valor >= minimo && valor <= maximo ? valor : null;
+}
+
+function normalizarMarcador(valor: unknown) {
+  return String(valor ?? "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function normalizarDisponibilidadeOrigem(
+  statusOrigem: unknown
+): DisponibilidadeOrigem {
+  const status = normalizarMarcador(statusOrigem);
+
+  if (
+    [
+      "disponivel",
+      "ativo",
+      "active",
+      "available",
+      "publicado",
+      "published",
+    ].includes(status)
+  ) {
+    return "disponivel";
+  }
+
+  if (
+    [
+      "indisponivel",
+      "inativo",
+      "inactive",
+      "unavailable",
+      "vendido",
+      "sold",
+      "alugado",
+      "rented",
+      "locado",
+      "removed",
+      "removido",
+      "arquivado",
+      "archived",
+      "excluido",
+      "deleted",
+      "off_market",
+    ].includes(status)
+  ) {
+    return "indisponivel";
+  }
+
+  return "desconhecido";
+}
+
+function eventoMaisAntigo(
+  occurredAt: string | null,
+  existente: ImovelExternoExistente | null
+) {
+  const atual = String(existente?.atualizado_origem_em ?? "").trim();
+  if (!occurredAt || !atual) return false;
+
+  const recebido = Date.parse(occurredAt);
+  const armazenado = Date.parse(atual);
+
+  return (
+    Number.isFinite(recebido) &&
+    Number.isFinite(armazenado) &&
+    recebido < armazenado
+  );
+}
+
+function canonicalizarSnapshot(valor: unknown): unknown {
+  if (Array.isArray(valor)) {
+    return valor.map(canonicalizarSnapshot);
+  }
+
+  if (valor && typeof valor === "object") {
+    return Object.fromEntries(
+      Object.entries(valor as Record<string, unknown>)
+        .sort(([chaveA], [chaveB]) => chaveA.localeCompare(chaveB))
+        .map(([chave, item]) => [chave, canonicalizarSnapshot(item)])
+    );
+  }
+
+  return valor;
+}
+
+function calcularSnapshotHash(dados: Record<string, unknown>) {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalizarSnapshot(dados)))
+    .digest("hex");
+}
+
+function estadoInternoAposOrigem(
+  existente: ImovelExternoExistente | null,
+  disponibilidade: DisponibilidadeOrigem
+) {
+  const statusAtual = String(existente?.status ?? "novo").trim() || "novo";
+  const arquivadoPor =
+    existente?.arquivado_por === "origem" ||
+    existente?.arquivado_por === "usuario"
+      ? existente.arquivado_por
+      : null;
+
+  if (disponibilidade === "indisponivel") {
+    return {
+      status: "arquivado",
+      arquivadoPor:
+        statusAtual === "arquivado" ? arquivadoPor : ("origem" as const),
+    };
+  }
+
+  if (
+    disponibilidade === "disponivel" &&
+    statusAtual === "arquivado" &&
+    arquivadoPor === "origem"
+  ) {
+    return { status: "novo", arquivadoPor: null };
+  }
+
+  return { status: statusAtual, arquivadoPor };
 }
 
 async function buscarIntegracao(integracaoId: string) {
@@ -192,8 +349,7 @@ async function buscarImovelExterno(
   const { data, error } = await supabase
     .from("imoveis_externos")
     .select("*")
-    .eq("empresa_id", integracao.empresa_id)
-    .eq("canal_codigo", integracao.canal_codigo)
+    .eq("integracao_id", integracao.id)
     .eq("external_id", externalId)
     .maybeSingle<ImovelExternoExistente>();
 
@@ -208,41 +364,75 @@ async function arquivarImovelExterno(params: {
   integracao: IntegracaoWebhook;
   normalizado: ImovelWebhookNormalizado;
   payload: Record<string, unknown>;
-}) {
+}): Promise<ResultadoDelete> {
   const existente = await buscarImovelExterno(
     params.integracao,
     params.normalizado.externalId
   );
 
-  if (!existente) return null;
+  if (!existente) {
+    return { imovel: null, resultado: "not_found" };
+  }
+
+  if (eventoMaisAntigo(params.normalizado.occurredAt, existente)) {
+    return { imovel: existente, resultado: "ignored_stale" };
+  }
+
+  const statusOrigem =
+    params.normalizado.imovel.statusOrigem ?? "removido_na_origem";
+  const snapshotHash = calcularSnapshotHash({
+    external_id: params.normalizado.externalId,
+    status_origem: statusOrigem,
+    disponibilidade_origem: "indisponivel",
+  });
+  const arquivadoPor: ArquivadoPor =
+    existente.status === "arquivado"
+      ? existente.arquivado_por === "origem" ||
+        existente.arquivado_por === "usuario"
+        ? existente.arquivado_por
+        : null
+      : "origem";
+
+  if (
+    existente.snapshot_hash === snapshotHash &&
+    existente.status === "arquivado" &&
+    existente.disponibilidade_origem === "indisponivel"
+  ) {
+    return { imovel: existente, resultado: "unchanged" };
+  }
 
   const { data, error } = await supabase
     .from("imoveis_externos")
     .update({
       status: "arquivado",
-      status_origem:
-        params.normalizado.imovel.statusOrigem ?? "removido_na_origem",
+      status_origem: statusOrigem,
+      disponibilidade_origem: "indisponivel",
+      arquivado_por: arquivadoPor,
+      snapshot_hash: snapshotHash,
       payload: params.payload,
-      atualizado_origem_em: params.normalizado.occurredAt,
+      atualizado_origem_em:
+        params.normalizado.occurredAt ??
+        existente.atualizado_origem_em ??
+        null,
       recebido_em: new Date().toISOString(),
     })
-    .eq("empresa_id", params.integracao.empresa_id)
+    .eq("integracao_id", params.integracao.id)
     .eq("id", existente.id)
-    .select("id")
-    .single<{ id: string }>();
+    .select("*")
+    .single<ImovelExternoExistente>();
 
   if (error) {
     throw new Error(`Erro ao arquivar imovel externo: ${error.message}`);
   }
 
-  return data;
+  return { imovel: data, resultado: "archived" };
 }
 
 async function salvarImovelExterno(params: {
   integracao: IntegracaoWebhook;
   normalizado: ImovelWebhookNormalizado;
   payload: Record<string, unknown>;
-}) {
+}): Promise<ResultadoUpsert> {
   const { integracao, normalizado, payload } = params;
   const imovel = normalizado.imovel;
   const existente = await buscarImovelExterno(
@@ -250,14 +440,32 @@ async function salvarImovelExterno(params: {
     normalizado.externalId
   );
 
+  if (eventoMaisAntigo(normalizado.occurredAt, existente)) {
+    return {
+      imovel: existente as ImovelExternoExistente,
+      resultado: "ignored_stale",
+    };
+  }
+
   const imagemUrls =
     imovel.imagemUrls.length > 0
       ? imovel.imagemUrls
       : Array.isArray(existente?.imagem_urls)
-        ? existente.imagem_urls
+        ? (existente.imagem_urls as string[])
         : [];
+  const statusOrigem = valorExistente(
+    imovel.statusOrigem,
+    existente,
+    "status_origem"
+  );
+  const disponibilidadeOrigem =
+    normalizarDisponibilidadeOrigem(statusOrigem);
+  const estadoInterno = estadoInternoAposOrigem(
+    existente,
+    disponibilidadeOrigem
+  );
 
-  const dados = {
+  const dadosOrigem = {
     empresa_id: integracao.empresa_id,
     integracao_id: integracao.id,
     canal_codigo: integracao.canal_codigo,
@@ -276,28 +484,25 @@ async function salvarImovelExterno(params: {
       existente,
       "finalidade"
     ),
-    status_origem: valorExistente(
-      imovel.statusOrigem,
-      existente,
-      "status_origem"
-    ),
-    valor: valorExistente(imovel.valor, existente, "valor"),
-    valor_venda: valorExistente(
+    status_origem: statusOrigem,
+    disponibilidade_origem: disponibilidadeOrigem,
+    valor: numeroExistente(imovel.valor, existente, "valor"),
+    valor_venda: numeroExistente(
       imovel.valorVenda,
       existente,
       "valor_venda"
     ),
-    valor_locacao: valorExistente(
+    valor_locacao: numeroExistente(
       imovel.valorLocacao,
       existente,
       "valor_locacao"
     ),
-    valor_condominio: valorExistente(
+    valor_condominio: numeroExistente(
       imovel.valorCondominio,
       existente,
       "valor_condominio"
     ),
-    valor_iptu: valorExistente(
+    valor_iptu: numeroExistente(
       imovel.valorIptu,
       existente,
       "valor_iptu"
@@ -317,36 +522,36 @@ async function salvarImovelExterno(params: {
     bairro: valorExistente(imovel.bairro, existente, "bairro"),
     cidade: valorExistente(imovel.cidade, existente, "cidade"),
     estado: valorExistente(imovel.estado, existente, "estado"),
-    quartos: valorExistente(imovel.quartos, existente, "quartos"),
-    suites: valorExistente(imovel.suites, existente, "suites"),
-    banheiros: valorExistente(
+    quartos: numeroExistente(imovel.quartos, existente, "quartos"),
+    suites: numeroExistente(imovel.suites, existente, "suites"),
+    banheiros: numeroExistente(
       imovel.banheiros,
       existente,
       "banheiros"
     ),
-    vagas: valorExistente(imovel.vagas, existente, "vagas"),
-    area_m2: valorExistente(imovel.areaM2, existente, "area_m2"),
-    area_util_m2: valorExistente(
+    vagas: numeroExistente(imovel.vagas, existente, "vagas"),
+    area_m2: numeroExistente(imovel.areaM2, existente, "area_m2"),
+    area_util_m2: numeroExistente(
       imovel.areaUtilM2,
       existente,
       "area_util_m2"
     ),
-    area_total_m2: valorExistente(
+    area_total_m2: numeroExistente(
       imovel.areaTotalM2,
       existente,
       "area_total_m2"
     ),
-    area_terreno_m2: valorExistente(
+    area_terreno_m2: numeroExistente(
       imovel.areaTerrenoM2,
       existente,
       "area_terreno_m2"
     ),
-    latitude: valorExistente(
+    latitude: numeroExistente(
       coordenadaValida(imovel.latitude, -90, 90),
       existente,
       "latitude"
     ),
-    longitude: valorExistente(
+    longitude: numeroExistente(
       coordenadaValida(imovel.longitude, -180, 180),
       existente,
       "longitude"
@@ -365,20 +570,34 @@ async function salvarImovelExterno(params: {
       String(existente?.imagem_url ?? "").trim() ||
       null,
     imagem_urls: imagemUrls,
-    status:
-      existente?.status && existente.status !== "arquivado"
-        ? existente.status
-        : "novo",
+  };
+
+  const snapshotHash = calcularSnapshotHash(dadosOrigem);
+  const dados = {
+    ...dadosOrigem,
+    status: estadoInterno.status,
+    arquivado_por: estadoInterno.arquivadoPor,
+    snapshot_hash: snapshotHash,
     payload,
-    atualizado_origem_em: normalizado.occurredAt,
+    atualizado_origem_em:
+      normalizado.occurredAt ?? existente?.atualizado_origem_em ?? null,
     recebido_em: new Date().toISOString(),
   };
+
+  if (
+    existente &&
+    existente.snapshot_hash === snapshotHash &&
+    existente.status === estadoInterno.status &&
+    (existente.arquivado_por ?? null) === estadoInterno.arquivadoPor
+  ) {
+    return { imovel: existente, resultado: "unchanged" };
+  }
 
   if (existente) {
     const { data, error } = await supabase
       .from("imoveis_externos")
       .update(dados)
-      .eq("empresa_id", integracao.empresa_id)
+      .eq("integracao_id", integracao.id)
       .eq("id", existente.id)
       .select("*")
       .single<ImovelExternoExistente>();
@@ -387,7 +606,7 @@ async function salvarImovelExterno(params: {
       throw new Error(`Erro ao atualizar imovel externo: ${error.message}`);
     }
 
-    return data;
+    return { imovel: data, resultado: "updated" };
   }
 
   const { data, error } = await supabase
@@ -403,10 +622,14 @@ async function salvarImovelExterno(params: {
     );
 
     if (concorrente) {
+      if (eventoMaisAntigo(normalizado.occurredAt, concorrente)) {
+        return { imovel: concorrente, resultado: "ignored_stale" };
+      }
+
       const { data: atualizado, error: updateError } = await supabase
         .from("imoveis_externos")
         .update(dados)
-        .eq("empresa_id", integracao.empresa_id)
+        .eq("integracao_id", integracao.id)
         .eq("id", concorrente.id)
         .select("*")
         .single<ImovelExternoExistente>();
@@ -417,7 +640,7 @@ async function salvarImovelExterno(params: {
         );
       }
 
-      return atualizado;
+      return { imovel: atualizado, resultado: "updated" };
     }
   }
 
@@ -425,7 +648,7 @@ async function salvarImovelExterno(params: {
     throw new Error(`Erro ao criar imovel externo: ${error.message}`);
   }
 
-  return data;
+  return { imovel: data, resultado: "created" };
 }
 
 export async function GET() {
@@ -525,23 +748,40 @@ export async function POST(
     const evento = registroEvento.evento;
 
     try {
-      let imovelExterno: { id: string } | null = null;
+      let imovelExterno: ImovelExternoExistente | null = null;
       let statusEvento: "processado" | "ignorado" = "processado";
+      let resultadoProcessamento:
+        | ResultadoUpsert["resultado"]
+        | ResultadoDelete["resultado"] = "updated";
+      let deveAuditar = false;
 
       if (normalizado.action === "delete") {
-        imovelExterno = await arquivarImovelExterno({
+        const resultado = await arquivarImovelExterno({
           integracao,
           normalizado,
           payload,
         });
 
-        if (!imovelExterno) statusEvento = "ignorado";
+        imovelExterno = resultado.imovel;
+        resultadoProcessamento = resultado.resultado;
+        statusEvento =
+          resultado.resultado === "archived" ? "processado" : "ignorado";
+        deveAuditar = resultado.resultado === "archived";
       } else {
-        imovelExterno = await salvarImovelExterno({
+        const resultado = await salvarImovelExterno({
           integracao,
           normalizado,
           payload,
         });
+
+        imovelExterno = resultado.imovel;
+        resultadoProcessamento = resultado.resultado;
+        statusEvento =
+          resultado.resultado === "created" || resultado.resultado === "updated"
+            ? "processado"
+            : "ignorado";
+        deveAuditar =
+          resultado.resultado === "created" || resultado.resultado === "updated";
       }
 
       await Promise.all([
@@ -552,7 +792,7 @@ export async function POST(
           .eq("id", integracao.id),
       ]);
 
-      if (imovelExterno) {
+      if (imovelExterno && deveAuditar) {
         const auditMeta = getRequestAuditMetadata(request);
 
         await registrarLogAuditoriaSeguro({
@@ -569,6 +809,7 @@ export async function POST(
             integracao_id: integracao.id,
             event_id: normalizado.eventId,
             external_id: normalizado.externalId,
+            resultado: resultadoProcessamento,
           },
           ip: auditMeta.ip,
           user_agent: auditMeta.user_agent,
@@ -580,10 +821,11 @@ export async function POST(
         duplicated: false,
         action:
           normalizado.action === "delete"
-            ? imovelExterno
+            ? resultadoProcessamento === "archived"
               ? "archived"
               : "ignored"
             : "upserted",
+        processing_result: resultadoProcessamento,
         event_id: normalizado.eventId,
         external_id: normalizado.externalId,
         imovel_externo_id: imovelExterno?.id ?? null,
