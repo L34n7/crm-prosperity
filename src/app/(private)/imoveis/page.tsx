@@ -821,18 +821,10 @@ export default function ImoveisPage() {
                           </div>
                         )}
                         <div className={styles.catalogMediaTopbar}>
-                          <span className={styles.catalogOriginBadge}>
-                            {imovel.origem_tipo === "externo"
-                              ? "Parceiro externo"
-                              : "Imóvel do CRM"}
-                          </span>
                           {fotos.length > 0 ? (
                             <span className={styles.catalogPhotoCount}>
                               <Images size={14} />
-                              <span>
-                                {fotos.length}{" "}
-                                {fotos.length === 1 ? "imagem" : "imagens"}
-                              </span>
+                              <span>1 / {fotos.length}</span>
                             </span>
                           ) : null}
                         </div>
@@ -896,12 +888,30 @@ export default function ImoveisPage() {
                         </p>
                       </div>
 
-                      <div className={styles.catalogCompanyRow}>
-                        <Building2 size={15} />
-                        <strong>{imovel.empresa_nome}</strong>
-                        {imovel.pertence_empresa_atual ? (
-                          <span>Minha empresa</span>
-                        ) : null}
+                      <div
+                        className={`${styles.catalogCompanyRow} ${
+                          imovel.origem_tipo === "externo"
+                            ? styles.catalogPartnerRow
+                            : ""
+                        }`}
+                      >
+                        {imovel.origem_tipo === "externo" ? (
+                          <>
+                            <img
+                              src="/images/partners/rede-inova.png"
+                              alt="Logo Rede Inova"
+                            />
+                            <strong>Rede Inova</strong>
+                          </>
+                        ) : (
+                          <>
+                            <Building2 size={15} />
+                            <strong>{imovel.empresa_nome}</strong>
+                            {imovel.pertence_empresa_atual ? (
+                              <span>Minha empresa</span>
+                            ) : null}
+                          </>
+                        )}
                       </div>
 
                       <div className={styles.catalogCardActions}>
@@ -977,79 +987,102 @@ export default function ImoveisPage() {
             </button>
 
             <div className={styles.catalogDetailLayout}>
-              <div className={styles.catalogDetailGallery}>
-                <div className={styles.catalogCarouselStage}>
-                  {fotosDetalhe[fotoAtiva] ? (
-                    <img
-                      src={fotosDetalhe[fotoAtiva]}
-                      alt={`${tituloDoImovel(imovelDetalhe)} — foto ${fotoAtiva + 1}`}
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className={styles.catalogDetailPlaceholder}>
-                      <Building2 size={55} />
-                      <strong>Este imóvel ainda não possui fotos</strong>
-                      <span>As informações disponíveis estão ao lado.</span>
-                    </div>
-                  )}
+              <div className={styles.catalogDetailVisualColumn}>
+                <div className={styles.catalogDetailGallery}>
+                  <div className={styles.catalogCarouselStage}>
+                    {fotosDetalhe[fotoAtiva] ? (
+                      <img
+                        src={fotosDetalhe[fotoAtiva]}
+                        alt={`${tituloDoImovel(imovelDetalhe)} — foto ${fotoAtiva + 1}`}
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className={styles.catalogDetailPlaceholder}>
+                        <Building2 size={55} />
+                        <strong>Este imóvel ainda não possui fotos</strong>
+                        <span>As informações disponíveis estão ao lado.</span>
+                      </div>
+                    )}
+
+                    {fotosDetalhe.length > 1 ? (
+                      <>
+                        <button
+                          className={`${styles.catalogCarouselArrow} ${styles.catalogCarouselArrowLeft}`}
+                          type="button"
+                          onClick={() =>
+                            setFotoAtiva((atual) =>
+                              atual === 0 ? fotosDetalhe.length - 1 : atual - 1,
+                            )
+                          }
+                          aria-label="Foto anterior"
+                        >
+                          <ChevronLeft size={22} />
+                        </button>
+                        <button
+                          className={`${styles.catalogCarouselArrow} ${styles.catalogCarouselArrowRight}`}
+                          type="button"
+                          onClick={() =>
+                            setFotoAtiva(
+                              (atual) => (atual + 1) % fotosDetalhe.length,
+                            )
+                          }
+                          aria-label="Próxima foto"
+                        >
+                          <ChevronRight size={22} />
+                        </button>
+                        <span className={styles.catalogCarouselCounter}>
+                          <Images size={14} /> {fotoAtiva + 1} /{" "}
+                          {fotosDetalhe.length}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
 
                   {fotosDetalhe.length > 1 ? (
-                    <>
-                      <button
-                        className={`${styles.catalogCarouselArrow} ${styles.catalogCarouselArrowLeft}`}
-                        type="button"
-                        onClick={() =>
-                          setFotoAtiva((atual) =>
-                            atual === 0 ? fotosDetalhe.length - 1 : atual - 1,
-                          )
-                        }
-                        aria-label="Foto anterior"
-                      >
-                        <ChevronLeft size={22} />
-                      </button>
-                      <button
-                        className={`${styles.catalogCarouselArrow} ${styles.catalogCarouselArrowRight}`}
-                        type="button"
-                        onClick={() =>
-                          setFotoAtiva(
-                            (atual) => (atual + 1) % fotosDetalhe.length,
-                          )
-                        }
-                        aria-label="Próxima foto"
-                      >
-                        <ChevronRight size={22} />
-                      </button>
-                      <span className={styles.catalogCarouselCounter}>
-                        <Images size={14} /> {fotoAtiva + 1} /{" "}
-                        {fotosDetalhe.length}
-                      </span>
-                    </>
+                    <div
+                      className={styles.catalogThumbnailGrid}
+                      aria-label="Miniaturas das fotos"
+                    >
+                      {fotosDetalhe.map((foto, indice) => (
+                        <button
+                          className={
+                            indice === fotoAtiva
+                              ? styles.catalogThumbnailActive
+                              : ""
+                          }
+                          type="button"
+                          key={`${foto}-${indice}`}
+                          onClick={() => setFotoAtiva(indice)}
+                          aria-label={`Abrir foto ${indice + 1}`}
+                          aria-current={indice === fotoAtiva}
+                        >
+                          <img src={foto} alt="" referrerPolicy="no-referrer" />
+                        </button>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
 
-                {fotosDetalhe.length > 1 ? (
-                  <div
-                    className={styles.catalogThumbnailGrid}
-                    aria-label="Miniaturas das fotos"
-                  >
-                    {fotosDetalhe.map((foto, indice) => (
-                      <button
-                        className={
-                          indice === fotoAtiva
-                            ? styles.catalogThumbnailActive
-                            : ""
-                        }
-                        type="button"
-                        key={`${foto}-${indice}`}
-                        onClick={() => setFotoAtiva(indice)}
-                        aria-label={`Abrir foto ${indice + 1}`}
-                        aria-current={indice === fotoAtiva}
-                      >
-                        <img src={foto} alt="" referrerPolicy="no-referrer" />
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+                <div className={styles.catalogDetailVisualInfo}>
+                  <section className={styles.catalogDetailSection}>
+                    <h3>Sobre o imóvel</h3>
+                    <p>
+                      {imovelDetalhe.descricao?.trim() ||
+                        "Nenhuma descrição foi informada para este imóvel."}
+                    </p>
+                  </section>
+
+                  {caracteristicasDetalhe.length > 0 ? (
+                    <section className={styles.catalogDetailSection}>
+                      <h3>Características e comodidades</h3>
+                      <div className={styles.catalogAmenitiesGrid}>
+                        {caracteristicasDetalhe.map((caracteristica) => (
+                          <span key={caracteristica}>{caracteristica}</span>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                </div>
               </div>
 
               <div className={styles.catalogDetailContent}>
@@ -1070,14 +1103,28 @@ export default function ImoveisPage() {
                     </span>
                   </div>
 
-                  <div className={styles.catalogDetailCompany}>
-                    <Building2 size={16} />
-                    <strong>{imovelDetalhe.empresa_nome}</strong>
-                    <span>
-                      {imovelDetalhe.origem_tipo === "externo"
-                        ? "Parceiro externo"
-                        : "Empresa do CRM"}
-                    </span>
+                  <div
+                    className={`${styles.catalogDetailCompany} ${
+                      imovelDetalhe.origem_tipo === "externo"
+                        ? styles.catalogDetailPartner
+                        : ""
+                    }`}
+                  >
+                    {imovelDetalhe.origem_tipo === "externo" ? (
+                      <>
+                        <img
+                          src="/images/partners/rede-inova.png"
+                          alt="Logo Rede Inova"
+                        />
+                        <strong>Rede Inova</strong>
+                      </>
+                    ) : (
+                      <>
+                        <Building2 size={16} />
+                        <strong>{imovelDetalhe.empresa_nome}</strong>
+                        <span>Empresa do CRM</span>
+                      </>
+                    )}
                   </div>
 
                   <h2 id="titulo-catalogo-imovel">
@@ -1131,25 +1178,6 @@ export default function ImoveisPage() {
                 </div>
 
                 <section className={styles.catalogDetailSection}>
-                  <h3>Sobre o imóvel</h3>
-                  <p>
-                    {imovelDetalhe.descricao?.trim() ||
-                      "Nenhuma descrição foi informada para este imóvel."}
-                  </p>
-                </section>
-
-                {caracteristicasDetalhe.length > 0 ? (
-                  <section className={styles.catalogDetailSection}>
-                    <h3>Características e comodidades</h3>
-                    <div className={styles.catalogAmenitiesGrid}>
-                      {caracteristicasDetalhe.map((caracteristica) => (
-                        <span key={caracteristica}>{caracteristica}</span>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-
-                <section className={styles.catalogDetailSection}>
                   <h3>Valores adicionais</h3>
                   <dl className={styles.catalogValueList}>
                     <div>
@@ -1173,7 +1201,7 @@ export default function ImoveisPage() {
               <span>
                 {imovelDetalhe.pertence_empresa_atual
                   ? "Imóvel da sua carteira"
-                  : "Imóvel recebido de parceiro"}
+                  : "Imóvel disponibilizado pela Rede Inova"}
               </span>
               <div>
                 {imovelDetalhe.pertence_empresa_atual ? (

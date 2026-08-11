@@ -1402,7 +1402,7 @@
   inset: 12px 12px auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -1452,6 +1452,23 @@
 
 .catalogCompanyRow svg {
   flex: 0 0 auto;
+}
+
+.catalogCompanyRow > img {
+  width: 46px;
+  height: 22px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.catalogPartnerRow {
+  border-color: color-mix(in srgb, #f2b51d 42%, var(--crm-border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, #f2b51d 9%, var(--crm-surface)),
+    color-mix(in srgb, #00658b 7%, var(--crm-surface))
+  );
+  color: var(--crm-text-strong);
 }
 
 .catalogCompanyRow strong {
@@ -1795,19 +1812,29 @@
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(380px, 0.85fr);
+  overflow: hidden;
+}
+
+.catalogDetailVisualColumn {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--crm-border);
+  background: var(--crm-surface);
 }
 
 .catalogDetailGallery {
   min-width: 0;
   padding: 18px;
-  overflow: auto;
-  border-right: 1px solid var(--crm-border);
-  background: #07191e;
+  background:
+    radial-gradient(circle at 50% 0%, #0b2b32, transparent 56%),
+    #07191e;
 }
 
 .catalogCarouselStage {
   position: relative;
-  min-height: 510px;
+  height: clamp(390px, 57vh, 590px);
+  min-height: 0;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, white 11%, transparent);
   border-radius: 20px;
@@ -1939,13 +1966,26 @@
   opacity: 1;
 }
 
-.catalogDetailContent {
-  min-width: 0;
-  padding: 28px;
-  overflow-y: auto;
+.catalogDetailVisualInfo {
+  padding: 22px 24px 26px;
+  background: var(--crm-surface);
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.catalogDetailVisualInfo .catalogDetailSection:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.catalogDetailContent {
+  min-width: 0;
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .catalogDetailHeading {
@@ -1985,6 +2025,23 @@
   color: var(--crm-text-muted);
 }
 
+.catalogDetailCompany > img {
+  width: 50px;
+  height: 23px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.catalogDetailPartner {
+  border-color: color-mix(in srgb, #f2b51d 42%, var(--crm-border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, #f2b51d 9%, var(--crm-surface)),
+    color-mix(in srgb, #00658b 7%, var(--crm-surface))
+  );
+  color: var(--crm-text-strong);
+}
+
 .catalogDetailHeading h2 {
   margin: 0;
   color: var(--crm-text-strong);
@@ -2016,7 +2073,7 @@
 }
 
 .catalogDetailPrice {
-  padding: 17px;
+  padding: 14px 16px;
   border: 1px solid var(--crm-primary-border);
   border-radius: 17px;
   background: linear-gradient(
@@ -2051,7 +2108,7 @@
 
 .catalogDetailSpecs > div {
   min-width: 0;
-  padding: 11px 7px;
+  padding: 9px 6px;
   border: 1px solid var(--crm-border);
   border-radius: 13px;
   background: var(--crm-surface-soft);
@@ -2198,7 +2255,7 @@
   }
 
   .catalogCarouselStage {
-    min-height: 450px;
+    height: clamp(370px, 52vh, 500px);
   }
 
   .catalogDetailSpecs {
@@ -2230,14 +2287,20 @@
 
   .catalogDetailLayout {
     display: block;
+    overflow: visible;
+  }
+
+  .catalogDetailVisualColumn {
+    overflow: visible;
+    border-right: 0;
   }
 
   .catalogDetailGallery {
-    border-right: 0;
     border-bottom: 1px solid var(--crm-border);
   }
 
   .catalogCarouselStage {
+    height: auto;
     min-height: min(58vw, 520px);
   }
 
@@ -2340,6 +2403,14 @@
   .catalogDetailGallery {
     padding: 0 0 1px;
     overflow: visible;
+  }
+
+  .catalogDetailVisualColumn {
+    overflow: visible;
+  }
+
+  .catalogDetailVisualInfo {
+    padding: 20px 17px 4px;
   }
 
   .catalogCarouselStage {
