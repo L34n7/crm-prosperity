@@ -8,6 +8,7 @@ import {
   Bath,
   BedDouble,
   Building2,
+  CalendarDays,
   CarFront,
   ChevronLeft,
   ChevronRight,
@@ -55,6 +56,8 @@ type CatalogoImovel = {
   imagens?: string[] | null;
   imagem_url: string | null;
   external_url: string | null;
+  created_at: string;
+  updated_at: string;
   pertence_empresa_atual: boolean;
 };
 
@@ -227,6 +230,75 @@ function enderecoDoImovel(imovel: CatalogoImovel) {
   );
 }
 
+function enderecoParaMapa(imovel: CatalogoImovel) {
+  return [
+    [imovel.logradouro, imovel.numero].filter(Boolean).join(", "),
+    imovel.bairro,
+    imovel.cidade,
+    imovel.estado,
+    imovel.cep,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function urlMapaDoImovel(imovel: CatalogoImovel) {
+  const endereco = enderecoParaMapa(imovel);
+  return endereco
+    ? `https://www.google.com/maps?q=${encodeURIComponent(endereco)}&output=embed`
+    : null;
+}
+
+function extrairArea(valor: unknown) {
+  if (typeof valor === "number") {
+    return Number.isFinite(valor) && valor > 0 ? String(valor) : null;
+  }
+  if (typeof valor !== "string") return null;
+
+  const texto = valor.trim();
+  const correspondencia = texto.match(
+    /(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:m(?:²|2)|metros?\s+quadrados?)/i,
+  );
+  const numero =
+    correspondencia?.[1] ?? (/^\d+(?:[.,]\d+)?$/.test(texto) ? texto : null);
+  return numero?.replace(".", ",") ?? null;
+}
+
+function areaDoImovel(imovel: CatalogoImovel) {
+  const areaInformada = extrairArea(imovel.area_m2);
+  if (areaInformada) return areaInformada;
+
+  const areaNasCaracteristicas = Object.entries(
+    imovel.caracteristicas ?? {},
+  ).find(([chave, valor]) => {
+    const chaveNormalizada = chave.toLocaleLowerCase("pt-BR");
+    return (
+      /area|área|metragem|m2|m²/.test(chaveNormalizada) &&
+      Boolean(extrairArea(valor) ?? extrairArea(`${String(valor)} m²`))
+    );
+  });
+  if (areaNasCaracteristicas) {
+    return (
+      extrairArea(areaNasCaracteristicas[1]) ??
+      extrairArea(`${String(areaNasCaracteristicas[1])} m²`)
+    );
+  }
+
+  return extrairArea(
+    [imovel.titulo, imovel.descricao].filter(Boolean).join(" "),
+  );
+}
+
+function formatarDataImovel(valor: string | null | undefined) {
+  if (!valor) return "Não informada";
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "Não informada";
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(data);
+}
+
 function tituloDoImovel(imovel: CatalogoImovel) {
   const titulo = imovel.titulo?.replace(/\s+/g, " ").trim() ?? "";
   const descricao = imovel.descricao?.replace(/\s+/g, " ").trim() ?? "";
@@ -346,6 +418,16 @@ export default function ImoveisPage() {
 
   const caracteristicasDetalhe = useMemo(
     () => (imovelDetalhe ? caracteristicasDoImovel(imovelDetalhe) : []),
+    [imovelDetalhe],
+  );
+
+  const areaDetalhe = useMemo(
+    () => (imovelDetalhe ? areaDoImovel(imovelDetalhe) : null),
+    [imovelDetalhe],
+  );
+
+  const urlMapaDetalhe = useMemo(
+    () => (imovelDetalhe ? urlMapaDoImovel(imovelDetalhe) : null),
     [imovelDetalhe],
   );
 
@@ -819,6 +901,7 @@ export default function ImoveisPage() {
               {imoveis.map((imovel) => {
                 const fotos = fotosDoImovel(imovel);
                 const tituloExibicao = tituloDoImovel(imovel);
+                const areaExibicao = areaDoImovel(imovel);
                 return (
                   <article
                     key={imovel.catalogo_id}
@@ -900,9 +983,9 @@ export default function ImoveisPage() {
                             <CarFront size={17} /> {imovel.vagas}
                           </span>
                         ) : null}
-                        {imovel.area_m2 ? (
+                        {areaExibicao ? (
                           <span title="Área">
-                            <Ruler size={17} /> {String(imovel.area_m2)} m²
+                            <Ruler size={17} /> {areaExibicao} m²
                           </span>
                         ) : null}
                       </div>
@@ -1110,30 +1193,6 @@ export default function ImoveisPage() {
                       </span>
                     </div>
 
-                    <div
-                      className={`${styles.catalogDetailCompany} ${
-                        imovelDetalhe.origem_tipo === "externo"
-                          ? styles.catalogDetailPartner
-                          : ""
-                      }`}
-                    >
-                      {imovelDetalhe.origem_tipo === "externo" ? (
-                        <>
-                          <img
-                            src="/images/partners/rede-inova.png"
-                            alt="Logo Rede Inova"
-                          />
-                          <strong>Rede Inova</strong>
-                        </>
-                      ) : (
-                        <>
-                          <Building2 size={16} />
-                          <strong>{imovelDetalhe.empresa_nome}</strong>
-                          <span>Empresa do CRM</span>
-                        </>
-                      )}
-                    </div>
-
                     <h2 id="titulo-catalogo-imovel">
                       {tituloDoImovel(imovelDetalhe)}
                     </h2>
@@ -1175,13 +1234,57 @@ export default function ImoveisPage() {
                     </div>
                     <div>
                       <Ruler size={20} />
-                      <strong>
-                        {imovelDetalhe.area_m2
-                          ? `${String(imovelDetalhe.area_m2)} m²`
-                          : "—"}
-                      </strong>
+                      <strong>{areaDetalhe ? `${areaDetalhe} m²` : "—"}</strong>
                       <span>Área</span>
                     </div>
+                  </div>
+
+                  <div
+                    className={`${styles.catalogSourceBar} ${
+                      imovelDetalhe.origem_tipo === "externo"
+                        ? styles.catalogSourcePartner
+                        : ""
+                    }`}
+                  >
+                    <div className={styles.catalogSourceIdentity}>
+                      {imovelDetalhe.origem_tipo === "externo" ? (
+                        <img
+                          src="/images/partners/rede-inova.png"
+                          alt="Logo Rede Inova"
+                        />
+                      ) : (
+                        <span className={styles.catalogSourceIcon}>
+                          <Building2 size={18} />
+                        </span>
+                      )}
+                      <span>
+                        <small>Portal de origem</small>
+                        <strong>
+                          {imovelDetalhe.origem_tipo === "externo"
+                            ? "Rede Inova"
+                            : imovelDetalhe.empresa_nome}
+                        </strong>
+                      </span>
+                    </div>
+
+                    {imovelDetalhe.external_url ? (
+                      <a
+                        href={imovelDetalhe.external_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        referrerPolicy="no-referrer"
+                        className={styles.primaryButton}
+                      >
+                        Abrir no portal de origem <ExternalLink size={16} />
+                      </a>
+                    ) : imovelDetalhe.pertence_empresa_atual ? (
+                      <Link
+                        href="/meus-imoveis"
+                        className={styles.secondaryButton}
+                      >
+                        <House size={16} /> Gerenciar imóvel
+                      </Link>
+                    ) : null}
                   </div>
 
                   <section className={styles.catalogDetailSection}>
@@ -1224,35 +1327,52 @@ export default function ImoveisPage() {
                       </div>
                     </section>
                   ) : null}
+
+                  {urlMapaDetalhe ? (
+                    <section className={styles.catalogDetailSection}>
+                      <div className={styles.catalogSectionHeading}>
+                        <h3>Localização</h3>
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                            enderecoParaMapa(imovelDetalhe),
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Abrir no Maps <ExternalLink size={13} />
+                        </a>
+                      </div>
+                      <div className={styles.catalogMapCard}>
+                        <iframe
+                          src={urlMapaDetalhe}
+                          title={`Mapa de ${tituloDoImovel(imovelDetalhe)}`}
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                        />
+                      </div>
+                    </section>
+                  ) : null}
+
+                  <section className={styles.catalogDates}>
+                    <CalendarDays size={17} />
+                    <div>
+                      <span>
+                        Criado em{" "}
+                        <strong>
+                          {formatarDataImovel(imovelDetalhe.created_at)}
+                        </strong>
+                      </span>
+                      <span>
+                        Atualizado em{" "}
+                        <strong>
+                          {formatarDataImovel(imovelDetalhe.updated_at)}
+                        </strong>
+                      </span>
+                    </div>
+                  </section>
                 </aside>
               </div>
             </div>
-
-            <footer className={styles.catalogDetailFooter}>
-              <span>
-                {imovelDetalhe.pertence_empresa_atual
-                  ? "Imóvel da sua carteira"
-                  : "Imóvel disponibilizado pela Rede Inova"}
-              </span>
-              <div>
-                {imovelDetalhe.pertence_empresa_atual ? (
-                  <Link href="/meus-imoveis" className={styles.secondaryButton}>
-                    <House size={16} /> Gerenciar imóvel
-                  </Link>
-                ) : null}
-                {imovelDetalhe.external_url ? (
-                  <a
-                    href={imovelDetalhe.external_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    referrerPolicy="no-referrer"
-                    className={styles.primaryButton}
-                  >
-                    Ver anúncio original <ExternalLink size={16} />
-                  </a>
-                ) : null}
-              </div>
-            </footer>
           </section>
         </div>
       ) : null}
@@ -1263,7 +1383,11 @@ export default function ImoveisPage() {
           role="dialog"
           aria-modal="true"
           aria-label="Galeria de fotos do imóvel"
-          onMouseDown={() => setGaleriaAberta(false)}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setGaleriaAberta(false);
+            }
+          }}
         >
           <button
             className={styles.catalogLightboxClose}
