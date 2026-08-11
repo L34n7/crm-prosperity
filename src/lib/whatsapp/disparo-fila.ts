@@ -453,11 +453,31 @@ export async function cancelarCampanhaDisparo(params: {
   empresaId: string;
   usuarioId: string | null;
   motivo?: string | null;
+  automatico?: boolean;
+  erroCodigoMeta?: number | null;
+  ocorrenciasErroMeta?: number | null;
 }) {
   const agora = new Date().toISOString();
   const motivo =
     String(params.motivo || "").trim() ||
     "Disparo em massa cancelado pelo usuario.";
+  const cancelamentoAutomatico = params.automatico === true;
+  const metadadosCancelamento = cancelamentoAutomatico
+    ? {
+        cancelamento_automatico: true,
+        cancelamento_manual: false,
+        cancelado_em: agora,
+        motivo_cancelamento: motivo,
+        erro_codigo_meta: params.erroCodigoMeta || null,
+        ocorrencias_erro_meta: params.ocorrenciasErroMeta || null,
+        criterio_cancelamento: "tres_falhas_meta_criticas",
+      }
+    : {
+        cancelamento_manual: true,
+        cancelado_em: agora,
+        cancelado_por_usuario_id: params.usuarioId,
+        motivo_cancelamento: motivo,
+      };
   const { data: campanhaAtual, error: campanhaError } = await supabaseAdmin
     .from("whatsapp_disparo_campanhas")
     .select(
@@ -512,15 +532,12 @@ export async function cancelarCampanhaDisparo(params: {
         .update({
           status: "cancelada",
           pausa_motivo: motivo,
-          erro: null,
+          erro: cancelamentoAutomatico ? motivo : null,
           finished_at: agora,
           updated_at: agora,
           metadata_json: {
             ...metadataCampanha,
-            cancelamento_manual: true,
-            cancelado_em: agora,
-            cancelado_por_usuario_id: params.usuarioId,
-            motivo_cancelamento: motivo,
+            ...metadadosCancelamento,
           },
         })
         .eq("id", params.campanhaId)
@@ -558,10 +575,7 @@ export async function cancelarCampanhaDisparo(params: {
         processed_at: agora,
         updated_at: agora,
         metadata_json: {
-          cancelamento_manual: true,
-          cancelado_em: agora,
-          cancelado_por_usuario_id: params.usuarioId,
-          motivo_cancelamento: motivo,
+          ...metadadosCancelamento,
         },
       })
       .in("id", idsAbertos)
@@ -597,8 +611,7 @@ export async function cancelarCampanhaDisparo(params: {
         updated_at: agora,
         metadata_json: {
           campanha_disparo_id: params.campanhaId,
-          cancelamento_manual: true,
-          motivo_cancelamento: motivo,
+          ...metadadosCancelamento,
         },
       })
       .in("id", reservaIds)
@@ -855,6 +868,32 @@ async function pausarCampanha(params: {
   });
 }
 
+async function contarFalhasMetaCampanha(
+  campanhaId: string,
+  erroCodigoMeta: number
+) {
+  const { count, error } = await supabaseAdmin
+    .from("whatsapp_disparo_itens")
+    .select("id", { count: "exact", head: true })
+    .eq("campanha_id", campanhaId)
+    .eq("status", "falha")
+    .eq("erro_codigo_meta", erroCodigoMeta);
+
+  if (error) {
+    console.error(
+      "[WHATSAPP DISPARO FILA] Erro ao contar falhas Meta da campanha:",
+      {
+        campanhaId,
+        erroCodigoMeta,
+        erro: error,
+      }
+    );
+    return null;
+  }
+
+  return Number(count || 0);
+}
+
 async function avaliarCircuitBreakerCampanha(params: {
   campanhaId: string;
   empresaId: string;
@@ -879,12 +918,51 @@ async function avaliarCircuitBreakerCampanha(params: {
   }
 
   if (erroCodigo === 131042 || erroCodigo === 368) {
+    const falhasCriticas = await contarFalhasMetaCampanha(
+      params.campanhaId,
+      erroCodigo
+    );
+
+    if (falhasCriticas === null || falhasCriticas < 3) {
+      return;
+    }
+
+    const descricaoErro =
+      erroCodigo === 131042
+        ? "pendencia de pagamento na conta WhatsApp Business"
+        : "restricao ou bloqueio informado pela Meta";
+
+    await cancelarCampanhaDisparo({
+      campanhaId: params.campanhaId,
+      empresaId: params.empresaId,
+      usuarioId: null,
+      motivo:
+        `Campanha cancelada automaticamente ao atingir 3 falhas Meta ${erroCodigo} (${descricaoErro}). ` +
+        `Ultima falha: ${mensagem}`,
+      automatico: true,
+      erroCodigoMeta: erroCodigo,
+      ocorrenciasErroMeta: falhasCriticas,
+    });
+    return;
+  }
+
+  if (erroCodigo === 131048) {
+    const falhasRateLimit = await contarFalhasMetaCampanha(
+      params.campanhaId,
+      erroCodigo
+    );
+
+    if (falhasRateLimit === null || falhasRateLimit <= 3) {
+      return;
+    }
+
     await pausarCampanha({
       campanhaId: params.campanhaId,
       empresaId: params.empresaId,
       integracaoWhatsappId: params.integracaoWhatsappId,
       status: "pausada_por_erro_meta",
-      motivo: mensagem,
+      motivo:
+        "Campanha pausada automaticamente apos mais de 3 falhas de rate limit Meta 131048.",
       erroCodigoMeta: erroCodigo,
     });
     return;
