@@ -76,11 +76,27 @@ export async function GET(request: Request) {
     const pagina = getInteiro(searchParams.get("pagina"), 1, 1, 1_000_000);
     const limite = getInteiro(searchParams.get("limite"), 25, 1, 100);
     const busca = sanitizarBusca(searchParams.get("busca") ?? "");
+    let pessoaId = String(searchParams.get("pessoa_id") ?? "").trim();
+    const contatoId = String(searchParams.get("contato_id") ?? "").trim();
     const exibirArquivados =
       searchParams.get("status")?.toLowerCase() === "arquivados";
     const inicio = (pagina - 1) * limite;
     const fim = inicio + limite - 1;
     const nicho = await buscarNichoEmpresa(usuario.empresa_id);
+
+    if (!pessoaId && contatoId) {
+      const { data: contato, error: contatoError } = await supabase
+        .from("contatos")
+        .select("pessoa_id")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("id", contatoId)
+        .maybeSingle();
+
+      if (contatoError) throw contatoError;
+      pessoaId =
+        String(contato?.pessoa_id ?? "").trim() ||
+        "00000000-0000-0000-0000-000000000000";
+    }
     const relacaoPaciente =
       nicho.grupo === "saude"
         ? `
@@ -143,6 +159,10 @@ export async function GET(request: Request) {
     query = exibirArquivados
       ? query.eq("status", "arquivado")
       : query.neq("status", "arquivado");
+
+    if (pessoaId) {
+      query = query.eq("id", pessoaId);
+    }
 
     if (busca) {
       query = query.or(

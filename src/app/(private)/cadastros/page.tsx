@@ -218,6 +218,21 @@ export default function CadastrosPage() {
         limite: "25",
         status: "arquivados",
       });
+      const pessoaIdSolicitada = new URLSearchParams(
+        window.location.search
+      ).get("pessoa_id");
+      const contatoIdSolicitado = new URLSearchParams(
+        window.location.search
+      ).get("contato_id");
+
+      if (pessoaIdSolicitada) {
+        paramsAtivos.set("pessoa_id", pessoaIdSolicitada);
+        paramsArquivados.set("pessoa_id", pessoaIdSolicitada);
+      }
+      if (contatoIdSolicitado) {
+        paramsAtivos.set("contato_id", contatoIdSolicitado);
+        paramsArquivados.set("contato_id", contatoIdSolicitado);
+      }
 
       if (buscaAplicada) {
         paramsAtivos.set("busca", buscaAplicada);

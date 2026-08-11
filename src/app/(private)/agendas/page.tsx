@@ -46,6 +46,7 @@ import AgendaTemplateConfiguration, {
   type AgendaTemplateConfigurationValue,
 } from "./AgendaTemplateConfiguration";
 import AgendaRelatedRecords from "./AgendaRelatedRecords";
+import AgendaAppointmentDetails from "./AgendaAppointmentDetails";
 
 import styles from "./page.module.css";
 
@@ -411,6 +412,7 @@ function Page() {
       origem: "todos",
     }),
     [open, setOpen] = useState(false),
+    [viewing, setViewing] = useState<Ag | null>(null),
     [form, setForm] = useState<Form>(() => blank(key(new Date()))),
     [contact, setContact] = useState<Contato | null>(null),
     [cq, setCq] = useState(""),
@@ -591,11 +593,13 @@ function Page() {
           p_fim: rg.end,
         });
       if (error) throw Error(error.message);
-      setAgs(data?.agendamentos || []);
+      const appointments = (data?.agendamentos || []) as Ag[];
+      setAgs(appointments);
       setTipos(data?.tipos || []);
       setResps(data?.responsaveis || []);
       setUserId(data?.usuario_atual_id || "");
       await loadGoogle(id);
+      return appointments;
     },
     [loadGoogle, month, sb],
   );
@@ -699,6 +703,7 @@ function Page() {
   };
   const newAg = (d = day) => {
     if (!agenda) return;
+    setViewing(null);
     setForm(blank(d, agenda.duracao_minutos, userId));
     setContact(null);
     setOpen(true);
@@ -708,6 +713,11 @@ function Page() {
     setContact(a.contato);
     setOpen(true);
   };
+  const view = (appointment: Ag) => {
+    setOpen(false);
+    setViewing(appointment);
+  };
+  const closeEditor = () => setOpen(false);
   const choose = async (c: Contato) => {
     setContact(c);
     setForm((f) => ({
@@ -897,8 +907,14 @@ function Page() {
         await fetch(`/api/agendas/${agendaId}/google-calendar`, {
           method: "POST",
         }).catch(() => undefined);
+      const appointments = await loadData(agendaId);
       setOpen(false);
-      await loadData(agendaId);
+      if (form.id) {
+        setViewing(
+          appointments.find((appointment) => appointment.id === form.id) ||
+            viewing,
+        );
+      }
       setOk(
         status === "cancelado"
           ? "Agendamento cancelado."
@@ -1305,7 +1321,7 @@ function Page() {
             const abrirDetalhes = () => {
               const agendamento = ags.find((a) => a.id === feedback.id);
               if (agendamento) {
-                edit(agendamento);
+                view(agendamento);
                 return;
               }
               const data = new Date(feedback.inicio_at);
@@ -1578,7 +1594,7 @@ function Page() {
                           key={it.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            edit(it);
+                            view(it);
                           }}
                         >
                           <b>
@@ -1613,7 +1629,7 @@ function Page() {
                 }).format(new Date(`${day}T12:00`))}
               </h3>
               {(byDay.get(day) || []).map((a) => (
-                <div className="item" key={a.id} onClick={() => edit(a)}>
+                <div className="item" key={a.id} onClick={() => view(a)}>
                   <span
                     className={`pill agendaSideBadge agendaSideBadge-${a.status} ${["confirmado", "realizado"].includes(a.status) ? "on" : ""}`}
                   >
@@ -1705,11 +1721,26 @@ function Page() {
           </aside>
         </div>
       </main>
+      {viewing && !open && (
+        <AgendaAppointmentDetails
+          appointment={viewing}
+          calendarName={
+            agendas.find((calendar) => calendar.id === viewing.agenda_id)?.nome ||
+            agenda?.nome
+          }
+          customerLabel={customerLabel}
+          isHealthNiche={isHealthNiche}
+          statusLabels={labels}
+          relatedTypeLabels={relatedTypeLabels}
+          onClose={() => setViewing(null)}
+          onEdit={() => edit(viewing)}
+        />
+      )}
       {open && (
         <div
           className="overlay"
           onMouseDown={(e) =>
-            e.target === e.currentTarget && !busy && setOpen(false)
+            e.target === e.currentTarget && !busy && closeEditor()
           }
         >
           <aside className="drawer">
@@ -1723,7 +1754,7 @@ function Page() {
                     : "Cadastre todas as informações do compromisso."}
                 </p>
               </div>
-              <button className="btn" onClick={() => setOpen(false)}>
+              <button className="btn" onClick={closeEditor}>
                 <X size={16} />
               </button>
             </div>
@@ -2486,8 +2517,8 @@ function Page() {
                 )}
               </div>
               <div className="mini">
-                <button className="btn" onClick={() => setOpen(false)}>
-                  Fechar
+                <button className="btn" onClick={closeEditor}>
+                  {form.id ? "Cancelar" : "Fechar"}
                 </button>
                 <button
                   className="btn primary"
