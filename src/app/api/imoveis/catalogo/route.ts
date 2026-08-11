@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { obterAcessoImoveis } from "@/lib/imoveis/acesso";
 import { normalizarUrlHttp } from "@/lib/imoveis/webhook";
+import {
+  montarOpcoesFiltrosCatalogo,
+  normalizarIntervalo,
+  sanitizarTextoFiltro,
+  type FacetaCatalogoRow,
+} from "@/lib/imoveis/catalogo-filtros";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabase = getSupabaseAdmin();
@@ -72,13 +78,6 @@ function sanitizarBusca(valor: string) {
     .slice(0, 120);
 }
 
-function sanitizarCodigoFiltro(valor: string | null) {
-  const codigo = String(valor ?? "")
-    .trim()
-    .toLowerCase();
-  return /^[a-z0-9_-]{1,60}$/.test(codigo) ? codigo : "";
-}
-
 function numeroFiltro(valor: string | null) {
   if (!valor) return null;
   const numero = Number(valor);
@@ -125,19 +124,23 @@ export async function GET(request: Request) {
       origemInformada === "crm" || origemInformada === "externo"
         ? origemInformada
         : null;
-    const tipo = sanitizarCodigoFiltro(searchParams.get("tipo"));
-    const finalidade = sanitizarCodigoFiltro(searchParams.get("finalidade"));
-    const status = sanitizarCodigoFiltro(searchParams.get("status"));
+    const tipo = sanitizarTextoFiltro(searchParams.get("tipo"));
+    const finalidade = sanitizarTextoFiltro(searchParams.get("finalidade"));
+    const status = sanitizarTextoFiltro(searchParams.get("status"));
     const cidade = sanitizarBusca(searchParams.get("cidade") ?? "");
     const estadoInformado = String(searchParams.get("estado") ?? "")
       .trim()
       .toUpperCase();
     const estado = /^[A-Z]{2}$/.test(estadoInformado) ? estadoInformado : "";
     const quartosMin = numeroFiltro(searchParams.get("quartos_min"));
-    const valorMin = numeroFiltro(searchParams.get("valor_min"));
-    const valorMax = numeroFiltro(searchParams.get("valor_max"));
-    const areaMin = numeroFiltro(searchParams.get("area_min"));
-    const areaMax = numeroFiltro(searchParams.get("area_max"));
+    const intervaloValor = normalizarIntervalo(
+      numeroFiltro(searchParams.get("valor_min")),
+      numeroFiltro(searchParams.get("valor_max")),
+    );
+    const intervaloArea = normalizarIntervalo(
+      numeroFiltro(searchParams.get("area_min")),
+      numeroFiltro(searchParams.get("area_max")),
+    );
     const ordenacao = String(searchParams.get("ordenacao") ?? "recentes");
     const inicio = (pagina - 1) * limite;
     const fim = inicio + limite - 1;
@@ -151,18 +154,24 @@ export async function GET(request: Request) {
       query = query.eq("origem_tipo", origem);
     }
 
-    if (tipo) query = query.eq("tipo", tipo);
-    if (["venda", "locacao", "venda_locacao"].includes(finalidade)) {
-      query = query.eq("finalidade", finalidade);
-    }
-    if (status) query = query.eq("status", status);
+    if (tipo) query = query.ilike("tipo", tipo);
+    if (finalidade) query = query.ilike("finalidade", finalidade);
+    if (status) query = query.ilike("status", status);
     if (cidade) query = query.ilike("cidade", `%${cidade}%`);
     if (estado) query = query.eq("estado", estado);
     if (quartosMin !== null) query = query.gte("quartos", quartosMin);
-    if (valorMin !== null) query = query.gte("valor", valorMin);
-    if (valorMax !== null) query = query.lte("valor", valorMax);
-    if (areaMin !== null) query = query.gte("area_m2", areaMin);
-    if (areaMax !== null) query = query.lte("area_m2", areaMax);
+    if (intervaloValor.minimo !== null) {
+      query = query.gte("valor", intervaloValor.minimo);
+    }
+    if (intervaloValor.maximo !== null) {
+      query = query.lte("valor", intervaloValor.maximo);
+    }
+    if (intervaloArea.minimo !== null) {
+      query = query.gte("area_m2", intervaloArea.minimo);
+    }
+    if (intervaloArea.maximo !== null) {
+      query = query.lte("area_m2", intervaloArea.maximo);
+    }
 
     if (busca) {
       query = query.or(
@@ -184,11 +193,22 @@ export async function GET(request: Request) {
         .order("catalogo_id", { ascending: false });
     }
 
-    const { data, error, count } = await query.range(inicio, fim);
+    const [catalogoResultado, facetasResultado] = await Promise.all([
+      query.range(inicio, fim),
+      supabase
+        .from("catalogo_imoveis_global")
+        .select("origem_tipo,tipo,finalidade,status,cidade,estado")
+        .eq("empresa_id", empresaId)
+        .range(0, 4_999),
+    ]);
+    const { data, error, count } = catalogoResultado;
 
-    if (error) {
+    if (error || facetasResultado.error) {
       return NextResponse.json(
-        { ok: false, error: error.message },
+        {
+          ok: false,
+          error: error?.message || facetasResultado.error?.message,
+        },
         { status: 500 },
       );
     }
@@ -279,6 +299,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       imoveis,
+      opcoes_filtros: montarOpcoesFiltrosCatalogo(
+        (facetasResultado.data ?? []) as FacetaCatalogoRow[],
+      ),
       paginacao: {
         pagina,
         limite,

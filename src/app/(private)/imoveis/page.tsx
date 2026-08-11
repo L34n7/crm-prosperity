@@ -23,6 +23,11 @@ import {
   X,
 } from "lucide-react";
 import Header from "@/components/Header";
+import {
+  normalizarIntervalo,
+  type OpcaoFiltroCatalogo,
+  type OpcoesFiltrosCatalogo,
+} from "@/lib/imoveis/catalogo-filtros";
 import styles from "./imoveis.module.css";
 
 type CatalogoImovel = {
@@ -91,14 +96,14 @@ const FILTROS_INICIAIS: FiltrosCatalogo = {
   ordenacao: "recentes",
 };
 
-const TIPOS_IMOVEL = [
-  ["apartamento", "Apartamento"],
-  ["casa", "Casa"],
-  ["terreno", "Terreno"],
-  ["sala_comercial", "Sala comercial"],
-  ["galpao", "Galpão"],
-  ["outro", "Outro"],
-] as const;
+const OPCOES_FILTROS_INICIAIS: OpcoesFiltrosCatalogo = {
+  origens: [],
+  tipos: [],
+  finalidades: [],
+  status: [],
+  cidades: [],
+  estados: [],
+};
 
 function formatarMoeda(valor: number | string | null) {
   const numero = Number(valor ?? 0);
@@ -151,7 +156,7 @@ function rotuloStatus(valor: string | null) {
         reservado: "Reservado",
         vendido: "Vendido",
         alugado: "Alugado",
-        inativo: "Inativo",
+        indisponivel: "Indisponível",
         novo: "Novo",
       } as Record<string, string>
     )[valor.toLowerCase()] ??
@@ -161,10 +166,27 @@ function rotuloStatus(valor: string | null) {
 
 function rotuloTipo(valor: string | null) {
   if (!valor) return "Tipo não informado";
-  return (
-    TIPOS_IMOVEL.find(([codigo]) => codigo === valor)?.[1] ??
-    valor.replace(/_/g, " ").replace(/^\w/, (letra) => letra.toUpperCase())
+  return valor
+    .replace(/_/g, " ")
+    .replace(/^\w/, (letra) => letra.toUpperCase());
+}
+
+function rotuloOpcaoComTotal(
+  opcao: OpcaoFiltroCatalogo,
+  rotulo: (valor: string) => string = (valor) => valor,
+) {
+  return `${rotulo(opcao.valor)} (${opcao.total})`;
+}
+
+function normalizarFaixaFormulario(minimo: string, maximo: string) {
+  const faixa = normalizarIntervalo(
+    minimo ? Number(minimo) : null,
+    maximo ? Number(maximo) : null,
   );
+  return {
+    minimo: faixa.minimo === null ? "" : String(faixa.minimo),
+    maximo: faixa.maximo === null ? "" : String(faixa.maximo),
+  };
 }
 
 function rotuloOrigem(valor: string) {
@@ -334,6 +356,9 @@ export default function ImoveisPage() {
   const [filtros, setFiltros] = useState<FiltrosCatalogo>(FILTROS_INICIAIS);
   const [filtrosAplicados, setFiltrosAplicados] =
     useState<FiltrosCatalogo>(FILTROS_INICIAIS);
+  const [opcoesFiltros, setOpcoesFiltros] = useState<OpcoesFiltrosCatalogo>(
+    OPCOES_FILTROS_INICIAIS,
+  );
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -394,6 +419,7 @@ export default function ImoveisPage() {
       }
 
       setImoveis(data.imoveis ?? []);
+      setOpcoesFiltros(data.opcoes_filtros ?? OPCOES_FILTROS_INICIAIS);
       setTotal(data.paginacao?.total ?? 0);
       setTotalPaginas(data.paginacao?.total_paginas ?? 1);
     } catch (error) {
@@ -515,13 +541,28 @@ export default function ImoveisPage() {
   }
 
   function aplicarFiltros() {
-    setPagina(1);
-    setBuscaAplicada(busca.trim());
-    setFiltrosAplicados({
+    const faixaValor = normalizarFaixaFormulario(
+      filtros.valorMin,
+      filtros.valorMax,
+    );
+    const faixaArea = normalizarFaixaFormulario(
+      filtros.areaMin,
+      filtros.areaMax,
+    );
+    const filtrosNormalizados = {
       ...filtros,
       cidade: filtros.cidade.trim(),
       estado: filtros.estado.trim().toUpperCase(),
-    });
+      valorMin: faixaValor.minimo,
+      valorMax: faixaValor.maximo,
+      areaMin: faixaArea.minimo,
+      areaMax: faixaArea.maximo,
+    };
+
+    setPagina(1);
+    setBuscaAplicada(busca.trim());
+    setFiltros(filtrosNormalizados);
+    setFiltrosAplicados(filtrosNormalizados);
   }
 
   function limparFiltros() {
@@ -630,8 +671,11 @@ export default function ImoveisPage() {
                     }
                   >
                     <option value="todos">Todas as origens</option>
-                    <option value="crm">Imóveis do CRM</option>
-                    <option value="externo">Parceiros externos</option>
+                    {opcoesFiltros.origens.map((opcao) => (
+                      <option key={opcao.valor} value={opcao.valor}>
+                        {rotuloOpcaoComTotal(opcao, rotuloOrigem)}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className={styles.catalogField}>
@@ -643,9 +687,11 @@ export default function ImoveisPage() {
                     }
                   >
                     <option value="">Todas</option>
-                    <option value="venda">Venda</option>
-                    <option value="locacao">Locação</option>
-                    <option value="venda_locacao">Venda ou locação</option>
+                    {opcoesFiltros.finalidades.map((opcao) => (
+                      <option key={opcao.valor} value={opcao.valor}>
+                        {rotuloOpcaoComTotal(opcao, rotuloFinalidade)}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className={styles.catalogField}>
@@ -657,9 +703,9 @@ export default function ImoveisPage() {
                     }
                   >
                     <option value="">Todos</option>
-                    {TIPOS_IMOVEL.map(([codigo, label]) => (
-                      <option key={codigo} value={codigo}>
-                        {label}
+                    {opcoesFiltros.tipos.map((opcao) => (
+                      <option key={opcao.valor} value={opcao.valor}>
+                        {rotuloOpcaoComTotal(opcao, rotuloTipo)}
                       </option>
                     ))}
                   </select>
@@ -673,33 +719,44 @@ export default function ImoveisPage() {
                     }
                   >
                     <option value="">Todos</option>
-                    <option value="disponivel">Disponível</option>
-                    <option value="reservado">Reservado</option>
-                    <option value="vendido">Vendido</option>
-                    <option value="alugado">Alugado</option>
-                    <option value="inativo">Inativo</option>
+                    {opcoesFiltros.status.map((opcao) => (
+                      <option key={opcao.valor} value={opcao.valor}>
+                        {rotuloOpcaoComTotal(opcao, rotuloStatus)}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className={styles.catalogField}>
                   <span>Cidade</span>
-                  <input
+                  <select
                     value={filtros.cidade}
                     onChange={(event) =>
                       atualizarFiltro("cidade", event.target.value)
                     }
-                    placeholder="Ex.: Belo Horizonte"
-                  />
+                  >
+                    <option value="">Todas</option>
+                    {opcoesFiltros.cidades.map((opcao) => (
+                      <option key={opcao.valor} value={opcao.valor}>
+                        {rotuloOpcaoComTotal(opcao)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className={styles.catalogField}>
                   <span>UF</span>
-                  <input
+                  <select
                     value={filtros.estado}
                     onChange={(event) =>
-                      atualizarFiltro("estado", event.target.value.slice(0, 2))
+                      atualizarFiltro("estado", event.target.value)
                     }
-                    maxLength={2}
-                    placeholder="MG"
-                  />
+                  >
+                    <option value="">Todas</option>
+                    {opcoesFiltros.estados.map((opcao) => (
+                      <option key={opcao.valor} value={opcao.valor}>
+                        {rotuloOpcaoComTotal(opcao)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className={styles.catalogField}>
                   <span>Quartos (mín.)</span>
