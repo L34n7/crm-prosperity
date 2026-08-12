@@ -71,6 +71,183 @@ function normalizarIntegracaoId(valor: string) {
   return UUID_REGEX.test(integracaoId) ? integracaoId : null;
 }
 
+function objetoJson(valor: unknown): Record<string, unknown> | null {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) {
+    return null;
+  }
+
+  return valor as Record<string, unknown>;
+}
+
+function textoCurto(valor: unknown, limite = 300) {
+  if (
+    typeof valor !== "string" &&
+    typeof valor !== "number" &&
+    typeof valor !== "boolean"
+  ) {
+    return null;
+  }
+
+  const resultado = String(valor).trim();
+  return resultado ? resultado.slice(0, limite) : null;
+}
+
+function primeiroTextoDireto(
+  registro: Record<string, unknown> | null,
+  chaves: string[],
+  limite = 300
+) {
+  if (!registro) return null;
+
+  for (const chave of chaves) {
+    const valor = textoCurto(registro[chave], limite);
+    if (valor) return valor;
+  }
+
+  return null;
+}
+
+function extrairMetadadosEventoRejeitado(
+  payloadDesconhecido: unknown,
+  payloadBruto: string,
+  eventTypePadrao: string
+) {
+  const envelope = objetoJson(payloadDesconhecido);
+  const data = objetoJson(envelope?.data);
+  const imovel =
+    objetoJson(envelope?.property) ??
+    objetoJson(envelope?.imovel) ??
+    objetoJson(envelope?.listing) ??
+    objetoJson(envelope?.anuncio) ??
+    objetoJson(data?.property) ??
+    objetoJson(data?.imovel) ??
+    objetoJson(data?.listing) ??
+    objetoJson(data?.anuncio) ??
+    data;
+
+  const eventIdInformado = primeiroTextoDireto(envelope, [
+    "event_id",
+    "eventId",
+    "evento_id",
+    "notification_id",
+    "webhook_id",
+  ]);
+  const eventType =
+    primeiroTextoDireto(
+      envelope,
+      ["event_type", "eventType", "evento", "event", "action", "acao", "topic"],
+      200
+    ) ?? eventTypePadrao;
+  const externalId = primeiroTextoDireto(imovel, [
+    "external_id",
+    "externalId",
+    "listing_id",
+    "property_id",
+    "imovel_id",
+    "id",
+    "codigo",
+    "code",
+  ]);
+  const hashBase = payloadBruto || JSON.stringify(payloadDesconhecido ?? null);
+  const hash = createHash("sha256").update(hashBase).digest("hex");
+  const prefixo = eventIdInformado
+    ? `${eventIdInformado.replace(/\s+/g, "_").slice(0, 120)}_`
+    : "";
+
+  return {
+    eventId: `rejected_${prefixo}${hash.slice(0, 32)}`,
+    eventType,
+    externalId,
+    hash,
+  };
+}
+
+function payloadRejeitadoParaPersistencia(
+  payloadDesconhecido: unknown,
+  payloadBruto: string,
+  hash: string
+): Record<string, unknown> {
+  const objeto = objetoJson(payloadDesconhecido);
+  if (objeto) {
+    return sanitizarPayloadSemMidia(objeto);
+  }
+
+  if (payloadDesconhecido !== undefined && payloadDesconhecido !== null) {
+    return {
+      _payload_recebido: payloadDesconhecido,
+      _payload_sha256: hash,
+    };
+  }
+
+  return {
+    _raw_body_preview: payloadBruto.slice(0, 100_000),
+    _raw_body_bytes: Buffer.byteLength(payloadBruto, "utf8"),
+    _raw_body_sha256: hash,
+  };
+}
+
+async function registrarEventoRejeitadoSeguro(params: {
+  integracao: IntegracaoWebhook;
+  payloadDesconhecido: unknown;
+  payloadBruto: string;
+  mensagem: string;
+  httpStatus: number;
+  eventTypePadrao: string;
+}) {
+  try {
+    const metadata = extrairMetadadosEventoRejeitado(
+      params.payloadDesconhecido,
+      params.payloadBruto,
+      params.eventTypePadrao
+    );
+    const agora = new Date().toISOString();
+    const payload = payloadRejeitadoParaPersistencia(
+      params.payloadDesconhecido,
+      params.payloadBruto,
+      metadata.hash
+    );
+
+    const { error } = await supabase
+      .from("imobiliario_webhook_eventos")
+      .upsert(
+        {
+          empresa_id: params.integracao.empresa_id,
+          integracao_id: params.integracao.id,
+          event_id: metadata.eventId,
+          event_type: metadata.eventType,
+          external_id: metadata.externalId,
+          status: "erro",
+          payload,
+          erro: `HTTP ${params.httpStatus}: ${params.mensagem}`.slice(0, 5000),
+          recebido_em: agora,
+          processado_em: agora,
+        },
+        { onConflict: "integracao_id,event_id" }
+      );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const { error: integracaoError } = await supabase
+      .from("imobiliario_integracoes_webhook")
+      .update({ ultimo_evento_em: agora })
+      .eq("id", params.integracao.id);
+
+    if (integracaoError) {
+      console.error(
+        "[WEBHOOK IMOVEIS] Falha ao atualizar ultimo evento apos rejeicao:",
+        integracaoError
+      );
+    }
+  } catch (error) {
+    console.error(
+      "[WEBHOOK IMOVEIS] Falha ao persistir payload rejeitado:",
+      error
+    );
+  }
+}
+
 function valorExistente(
   novoValor: unknown,
   existente: Record<string, unknown> | null,
@@ -689,29 +866,96 @@ export async function POST(
     }
 
     const contentType = request.headers.get("content-type") ?? "";
-    if (!contentType.toLowerCase().includes("application/json")) {
-      return jsonErro("Use Content-Type application/json.", 415);
-    }
-
     const contentLength = Number(request.headers.get("content-length") ?? 0);
+
     if (
       Number.isFinite(contentLength) &&
       contentLength > LIMITE_WEBHOOK_IMOVEIS_BYTES
     ) {
-      return jsonErro("Payload excede o limite de 1 MB.", 413);
+      const mensagem = "Payload excede o limite de 1 MB.";
+      const metadata = {
+        _request_rejected: true,
+        content_type: contentType || null,
+        content_length: contentLength,
+        captured_at: new Date().toISOString(),
+      };
+
+      await registrarEventoRejeitadoSeguro({
+        integracao,
+        payloadDesconhecido: metadata,
+        payloadBruto: JSON.stringify(metadata),
+        mensagem,
+        httpStatus: 413,
+        eventTypePadrao: "payload.too_large",
+      });
+
+      return jsonErro(mensagem, 413);
     }
 
     const payloadBruto = await request.text();
-    if (Buffer.byteLength(payloadBruto, "utf8") > LIMITE_WEBHOOK_IMOVEIS_BYTES) {
-      return jsonErro("Payload excede o limite de 1 MB.", 413);
+    const payloadBytes = Buffer.byteLength(payloadBruto, "utf8");
+
+    if (payloadBytes > LIMITE_WEBHOOK_IMOVEIS_BYTES) {
+      const mensagem = "Payload excede o limite de 1 MB.";
+      const metadata = {
+        _request_rejected: true,
+        content_type: contentType || null,
+        content_length: contentLength || null,
+        actual_body_bytes: payloadBytes,
+        body_sha256: createHash("sha256").update(payloadBruto).digest("hex"),
+        body_preview: payloadBruto.slice(0, 100_000),
+      };
+
+      await registrarEventoRejeitadoSeguro({
+        integracao,
+        payloadDesconhecido: metadata,
+        payloadBruto,
+        mensagem,
+        httpStatus: 413,
+        eventTypePadrao: "payload.too_large",
+      });
+
+      return jsonErro(mensagem, 413);
     }
 
     let payloadDesconhecido: unknown;
+    let jsonValido = true;
 
     try {
       payloadDesconhecido = JSON.parse(payloadBruto);
     } catch {
-      return jsonErro("JSON invalido.", 400);
+      jsonValido = false;
+      payloadDesconhecido = undefined;
+    }
+
+    if (!contentType.toLowerCase().includes("application/json")) {
+      const mensagem = "Use Content-Type application/json.";
+
+      await registrarEventoRejeitadoSeguro({
+        integracao,
+        payloadDesconhecido,
+        payloadBruto,
+        mensagem,
+        httpStatus: 415,
+        eventTypePadrao: "payload.invalid_content_type",
+      });
+
+      return jsonErro(mensagem, 415);
+    }
+
+    if (!jsonValido) {
+      const mensagem = "JSON invalido.";
+
+      await registrarEventoRejeitadoSeguro({
+        integracao,
+        payloadDesconhecido,
+        payloadBruto,
+        mensagem,
+        httpStatus: 400,
+        eventTypePadrao: "payload.invalid_json",
+      });
+
+      return jsonErro(mensagem, 400);
     }
 
     let normalizado: ImovelWebhookNormalizado;
@@ -722,10 +966,19 @@ export async function POST(
         payloadBruto
       );
     } catch (error) {
-      return jsonErro(
-        error instanceof Error ? error.message : "Payload invalido.",
-        422
-      );
+      const mensagem =
+        error instanceof Error ? error.message : "Payload invalido.";
+
+      await registrarEventoRejeitadoSeguro({
+        integracao,
+        payloadDesconhecido,
+        payloadBruto,
+        mensagem,
+        httpStatus: 422,
+        eventTypePadrao: "payload.rejected",
+      });
+
+      return jsonErro(mensagem, 422);
     }
 
     const payloadObjeto = payloadDesconhecido as Record<string, unknown>;
