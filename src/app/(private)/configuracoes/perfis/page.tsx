@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import PermanentDeleteModal from "@/components/PermanentDeleteModal";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./perfis.module.css";
 
@@ -82,6 +83,8 @@ export default function PerfisPage() {
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const [perfilParaExcluir, setPerfilParaExcluir] = useState<Perfil | null>(null);
+  const [erroExclusao, setErroExclusao] = useState("");
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [busca, setBusca] = useState("");
@@ -341,24 +344,34 @@ export default function PerfisPage() {
     }
   }
 
-  async function excluirPerfil(perfil: Perfil) {
+  function abrirConfirmacaoExclusao(perfil: Perfil) {
     if (perfil.ativo) {
       setErro("Arquive o perfil antes de excluí-lo definitivamente.");
       return;
     }
 
-    const confirmado = window.confirm(
-      `Excluir definitivamente o perfil “${perfil.nome}”? Esta ação não pode ser desfeita.`
-    );
+    setErro("");
+    setSucesso("");
+    setErroExclusao("");
+    setPerfilParaExcluir(perfil);
+  }
 
-    if (!confirmado) return;
+  function fecharConfirmacaoExclusao() {
+    if (excluindoId) return;
+    setPerfilParaExcluir(null);
+    setErroExclusao("");
+  }
+
+  async function excluirPerfil() {
+    if (!perfilParaExcluir) return;
 
     try {
-      setExcluindoId(perfil.id);
+      setExcluindoId(perfilParaExcluir.id);
       setErro("");
       setSucesso("");
+      setErroExclusao("");
 
-      const res = await fetch(`/api/perfis/${perfil.id}`, {
+      const res = await fetch(`/api/perfis/${perfilParaExcluir.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -368,9 +381,10 @@ export default function PerfisPage() {
       }
 
       setSucesso(data.message || "Perfil excluído definitivamente.");
+      setPerfilParaExcluir(null);
       await carregarPerfis();
     } catch (error) {
-      setErro(
+      setErroExclusao(
         error instanceof Error ? error.message : "Erro ao excluir perfil."
       );
     } finally {
@@ -525,7 +539,7 @@ export default function PerfisPage() {
                         {podeExcluirPerfis && !perfil.ativo && (
                           <button
                             className={styles.dangerButton}
-                            onClick={() => void excluirPerfil(perfil)}
+                            onClick={() => abrirConfirmacaoExclusao(perfil)}
                             disabled={excluindoId === perfil.id}
                           >
                             {excluindoId === perfil.id
@@ -792,6 +806,21 @@ export default function PerfisPage() {
           </div>
         </div>
       )}
+
+      <PermanentDeleteModal
+        open={!!perfilParaExcluir}
+        itemType="perfil"
+        itemName={perfilParaExcluir?.nome || ""}
+        loading={excluindoId === perfilParaExcluir?.id}
+        error={erroExclusao}
+        requirements={[
+          "O perfil deve permanecer arquivado.",
+          "Nenhum usuário pode estar vinculado a este perfil.",
+          "Os registros de auditoria serão preservados.",
+        ]}
+        onCancel={fecharConfirmacaoExclusao}
+        onConfirm={() => void excluirPerfil()}
+      />
     </>
   );
 }

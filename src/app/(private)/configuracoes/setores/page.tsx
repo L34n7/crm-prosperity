@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import PermanentDeleteModal from "@/components/PermanentDeleteModal";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./setores.module.css";
 
@@ -61,6 +62,8 @@ export default function SetoresPage() {
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const [setorParaExcluir, setSetorParaExcluir] = useState<Setor | null>(null);
+  const [erroExclusao, setErroExclusao] = useState("");
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [busca, setBusca] = useState("");
@@ -193,24 +196,34 @@ export default function SetoresPage() {
     }
   }
 
-  async function excluirSetor(setor: Setor) {
+  function abrirConfirmacaoExclusao(setor: Setor) {
     if (setor.ativo) {
       setErro("Arquive o setor antes de excluí-lo definitivamente.");
       return;
     }
 
-    const confirmado = window.confirm(
-      `Excluir definitivamente o setor “${setor.nome}”? Esta ação não pode ser desfeita.`
-    );
+    setErro("");
+    setSucesso("");
+    setErroExclusao("");
+    setSetorParaExcluir(setor);
+  }
 
-    if (!confirmado) return;
+  function fecharConfirmacaoExclusao() {
+    if (excluindoId) return;
+    setSetorParaExcluir(null);
+    setErroExclusao("");
+  }
+
+  async function excluirSetor() {
+    if (!setorParaExcluir) return;
 
     try {
-      setExcluindoId(setor.id);
+      setExcluindoId(setorParaExcluir.id);
       setErro("");
       setSucesso("");
+      setErroExclusao("");
 
-      const res = await fetch(`/api/setores/${setor.id}`, {
+      const res = await fetch(`/api/setores/${setorParaExcluir.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -220,9 +233,10 @@ export default function SetoresPage() {
       }
 
       setSucesso(data.message || "Setor excluído definitivamente.");
+      setSetorParaExcluir(null);
       await carregarSetores();
     } catch (error) {
-      setErro(
+      setErroExclusao(
         error instanceof Error ? error.message : "Erro ao excluir setor."
       );
     } finally {
@@ -356,7 +370,7 @@ export default function SetoresPage() {
                         {podeExcluirSetores && !setor.ativo && (
                           <button
                             className={styles.dangerButton}
-                            onClick={() => void excluirSetor(setor)}
+                            onClick={() => abrirConfirmacaoExclusao(setor)}
                             disabled={excluindoId === setor.id}
                           >
                             {excluindoId === setor.id
@@ -505,6 +519,22 @@ export default function SetoresPage() {
           </div>
         </div>
       )}
+
+      <PermanentDeleteModal
+        open={!!setorParaExcluir}
+        itemType="setor"
+        itemName={setorParaExcluir?.nome || ""}
+        loading={excluindoId === setorParaExcluir?.id}
+        error={erroExclusao}
+        requirements={[
+          "O setor deve permanecer arquivado.",
+          "Não pode haver usuários, conversas ou protocolos vinculados.",
+          "O setor não pode estar em uso por nenhuma automação.",
+          "Os registros de auditoria serão preservados.",
+        ]}
+        onCancel={fecharConfirmacaoExclusao}
+        onConfirm={() => void excluirSetor()}
+      />
     </>
   );
 }
