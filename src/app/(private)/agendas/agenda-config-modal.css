@@ -1,0 +1,19 @@
+/*
+ * O modal de configuracao usa flex em coluna (cabecalho, conteudo e rodape).
+ * Para o item flex rolavel receber espaco calculavel, o container precisa de
+ * uma altura definida. Apenas max-height deixa o eixo principal indefinido e
+ * pode reduzir o fieldset a zero quando ele usa flex-grow.
+ */
+body .a2 .modal {
+  height: min(920px, calc(100dvh - 44px));
+}
+
+body .a2 .modal > fieldset {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 820px) {
+  body .a2 .modal {
+    height: min(920px, calc(100dvh - 20px));
+  }
+}
