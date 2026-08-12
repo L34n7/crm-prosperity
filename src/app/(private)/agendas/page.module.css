@@ -1773,6 +1773,36 @@
     padding-top: 10px;
   }
 }
+.configReadOnlyFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.configReadOnlyFieldset:disabled {
+  opacity: 1;
+}
+
+.configReadOnlyFieldset:disabled :global(input),
+.configReadOnlyFieldset:disabled :global(textarea),
+.configReadOnlyFieldset:disabled :global(select),
+.configReadOnlyFieldset:disabled :global(button) {
+  cursor: not-allowed;
+}
+
+.configReadOnlyNotice {
+  margin: 14px 18px 0;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--crm-ui-private-content-hex-109b75) 28%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--crm-ui-private-content-hex-109b75) 8%, white);
+  color: var(--crm-ui-private-content-hex-173042);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 @media (max-width: 620px) {
   .scope :global(.feedbackCard) {
     grid-template-columns: 1fr;

@@ -403,7 +403,12 @@ export default function RastreamentoPage() {
         fetch("/api/rastreamento/eventos?limite=200", { cache: "no-store" }).then(
           lerResposta
         ),
-        fetch("/api/integracoes-whatsapp/listar", { cache: "no-store" }).then(lerResposta),
+        fetch("/api/integracoes-whatsapp/listar", { cache: "no-store" }).then(
+          async (response) => {
+            if (response.status === 403) return { data: [] };
+            return lerResposta(response);
+          }
+        ),
         fetch("/api/contatos?limite=500", { cache: "no-store" })
           .then(async (response) => {
             if (response.status === 403) return { contatos: [] };

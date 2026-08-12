@@ -1169,12 +1169,8 @@ function Page() {
     }
   };
   const openConfig = async (isNew: boolean) => {
-    if (isNew ? !podeCriarAgenda : !podeEditarAgenda) {
-      setErr(
-        isNew
-          ? "Você não tem permissão para criar agendas."
-          : "Você não tem permissão para editar agendas."
-      );
+    if (isNew && !podeCriarAgenda) {
+      setErr("Você não tem permissão para criar agendas.");
       return;
     }
     setConfigNew(isNew);
@@ -1413,16 +1409,14 @@ function Page() {
             ))}
           </select>
 
-          {podeEditarAgenda ? (
-            <button
-              className="btn"
-              onClick={() => openConfig(false)}
-              disabled={!agenda}
-            >
-              <Settings2 size={15} />
-              Configuração
-            </button>
-          ) : null}
+          <button
+            className="btn"
+            onClick={() => openConfig(false)}
+            disabled={!agenda}
+          >
+            <Settings2 size={15} />
+            Configuração
+          </button>
 
           {podeEditarAgenda ? <button
             className={`btn ${styles.calendarSyncButton}`}
@@ -2904,7 +2898,17 @@ function Page() {
                 <X size={15} />
               </button>
             </div>
-            <div className="body">
+            <fieldset
+              className={styles.configReadOnlyFieldset}
+              disabled={!configNew && !podeEditarAgenda}
+            >
+              {!configNew && !podeEditarAgenda ? (
+                <div className={styles.configReadOnlyNotice} role="status">
+                  Modo somente leitura. Você pode consultar todas as configurações,
+                  mas não alterá-las.
+                </div>
+              ) : null}
+              <div className="body">
               <div className="form">
                 <div className="field full">
                   <label className={styles.configMainLabel}>Nome*</label>
@@ -3144,11 +3148,16 @@ function Page() {
                 loading={configDetailsLoading}
                 error={configDetailsError}
               />
-            </div>
+              </div>
+            </fieldset>
             <div className="foot">
               <div className="mini">
                 {!configNew && (
-                  <button className="btn" onClick={archive}>
+                  <button
+                    className="btn"
+                    onClick={archive}
+                    disabled={!podeArquivarAgenda}
+                  >
                     {agenda?.status === "arquivado" ? (
                       <ArchiveRestore size={14} />
                     ) : (
@@ -3158,7 +3167,11 @@ function Page() {
                   </button>
                 )}
                 {!configNew && agenda?.status === "arquivado" && (
-                  <button className="btn danger" onClick={delAgenda}>
+                  <button
+                    className="btn danger"
+                    onClick={delAgenda}
+                    disabled={!podeArquivarAgenda}
+                  >
                     <Trash2 size={14} />
                     Excluir
                   </button>
@@ -3171,7 +3184,11 @@ function Page() {
                 <button
                   className="btn primary"
                   onClick={saveConfig}
-                  disabled={busy || configDetailsLoading}
+                  disabled={
+                    busy ||
+                    configDetailsLoading ||
+                    (!configNew && !podeEditarAgenda)
+                  }
                 >
                   <Check size={14} />
                   Salvar
