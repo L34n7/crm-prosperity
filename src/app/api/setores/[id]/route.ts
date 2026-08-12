@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
-import { registrarLogAuditoria } from "@/lib/auditoria/logs";
+import {
+  registrarLogAuditoria,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -46,7 +49,7 @@ export async function PUT(
 
     const { data: setorAtual, error: setorAtualError } = await supabaseAdmin
       .from("setores")
-      .select("id, empresa_id, ativo")
+      .select("id, empresa_id, ativo, archived_at")
       .eq("id", id)
       .maybeSingle();
 
@@ -127,21 +130,31 @@ export async function PUT(
       .update({
         nome,
         descricao,
+        status: ativo ? "ativo" : "inativo",
         ativo,
+        archived_at:
+          setorAtual.ativo !== ativo
+            ? ativo
+              ? null
+              : new Date().toISOString()
+            : setorAtual.archived_at,
         updated_at: new Date().toISOString(),
         updated_by: usuario.id,
       })
       .eq("id", id)
-      .select(`
+      .select(
+        `
         id,
         nome,
         descricao,
         ativo,
+        archived_at,
         created_at,
         updated_at,
         created_by,
         updated_by
-      `)
+      `
+      )
       .single();
 
     if (error) {
@@ -178,6 +191,119 @@ export async function PUT(
 
     return NextResponse.json(
       { ok: false, error: "Erro interno ao atualizar setor" },
+      { status: 500 }
+    );
+  }
+}
+
+const errosExclusaoSetor: Record<string, { status: number; mensagem: string }> =
+  {
+    SETOR_NAO_ENCONTRADO: {
+      status: 404,
+      mensagem: "Setor não encontrado.",
+    },
+    SETOR_NAO_ARQUIVADO: {
+      status: 409,
+      mensagem: "Arquive o setor antes de excluí-lo definitivamente.",
+    },
+    SETOR_COM_USUARIOS: {
+      status: 409,
+      mensagem:
+        "Este setor possui usuários vinculados e não pode ser excluído.",
+    },
+    SETOR_COM_HISTORICO_CONVERSAS: {
+      status: 409,
+      mensagem:
+        "Este setor possui conversas ou protocolos no histórico e não pode ser excluído.",
+    },
+    SETOR_EM_USO_AUTOMACAO: {
+      status: 409,
+      mensagem:
+        "Este setor está sendo usado em uma automação. Remova a referência antes de excluí-lo.",
+    },
+  };
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const resultado = await getUsuarioContexto();
+
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status }
+      );
+    }
+
+    const { usuario } = resultado;
+
+    if (!can(usuario.permissoes, "setores.remover")) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão para excluir setores" },
+        { status: 403 }
+      );
+    }
+
+    if (!usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabaseAdmin.rpc(
+      "excluir_setor_definitivamente",
+      {
+        p_empresa_id: usuario.empresa_id,
+        p_setor_id: id,
+      }
+    );
+
+    if (error) {
+      const erroConhecido = Object.entries(errosExclusaoSetor).find(
+        ([codigo]) => error.message.includes(codigo)
+      )?.[1];
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            erroConhecido?.mensagem ||
+            "Não foi possível excluir o setor definitivamente.",
+        },
+        { status: erroConhecido?.status || 500 }
+      );
+    }
+
+    const setorExcluido = data as {
+      id: string;
+      nome: string;
+      descricao?: string | null;
+      archived_at?: string | null;
+    };
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      entidade: "setor",
+      entidade_id: id,
+      acao: "excluido_definitivamente",
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      detalhes: { setor: setorExcluido },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Setor excluído definitivamente.",
+    });
+  } catch (error) {
+    console.error("Erro ao excluir setor:", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Erro interno ao excluir setor" },
       { status: 500 }
     );
   }

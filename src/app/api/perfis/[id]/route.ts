@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
-import { registrarLogAuditoria } from "@/lib/auditoria/logs";
+import {
+  registrarLogAuditoria,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -46,7 +49,7 @@ export async function PUT(
 
     const { data: perfilAtual, error: perfilAtualError } = await supabaseAdmin
       .from("perfis_empresa")
-      .select("id, empresa_id, ativo")
+      .select("id, empresa_id, ativo, archived_at")
       .eq("id", id)
       .maybeSingle();
 
@@ -128,20 +131,29 @@ export async function PUT(
         nome,
         descricao,
         ativo,
+        archived_at:
+          perfilAtual.ativo !== ativo
+            ? ativo
+              ? null
+              : new Date().toISOString()
+            : perfilAtual.archived_at,
         updated_at: new Date().toISOString(),
         updated_by: usuario.id,
       })
       .eq("id", id)
-      .select(`
+      .select(
+        `
         id,
         nome,
         descricao,
         ativo,
+        archived_at,
         created_at,
         updated_at,
         created_by,
         updated_by
-      `)
+      `
+      )
       .single();
 
     if (error) {
@@ -150,7 +162,7 @@ export async function PUT(
         { status: 500 }
       );
     }
-    
+
     await registrarLogAuditoria({
       empresa_id: usuario.empresa_id,
       entidade: "perfil",
@@ -178,6 +190,110 @@ export async function PUT(
 
     return NextResponse.json(
       { ok: false, error: "Erro interno ao atualizar perfil" },
+      { status: 500 }
+    );
+  }
+}
+
+const errosExclusaoPerfil: Record<
+  string,
+  { status: number; mensagem: string }
+> = {
+  PERFIL_NAO_ENCONTRADO: {
+    status: 404,
+    mensagem: "Perfil não encontrado.",
+  },
+  PERFIL_NAO_ARQUIVADO: {
+    status: 409,
+    mensagem: "Arquive o perfil antes de excluí-lo definitivamente.",
+  },
+  PERFIL_COM_USUARIOS: {
+    status: 409,
+    mensagem: "Este perfil possui usuários vinculados e não pode ser excluído.",
+  },
+};
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const resultado = await getUsuarioContexto();
+
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status }
+      );
+    }
+
+    const { usuario } = resultado;
+
+    if (!can(usuario.permissoes, "perfis.remover")) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão para excluir perfis" },
+        { status: 403 }
+      );
+    }
+
+    if (!usuario.empresa_id) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabaseAdmin.rpc(
+      "excluir_perfil_empresa_definitivamente",
+      {
+        p_empresa_id: usuario.empresa_id,
+        p_perfil_id: id,
+      }
+    );
+
+    if (error) {
+      const erroConhecido = Object.entries(errosExclusaoPerfil).find(
+        ([codigo]) => error.message.includes(codigo)
+      )?.[1];
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            erroConhecido?.mensagem ||
+            "Não foi possível excluir o perfil definitivamente.",
+        },
+        { status: erroConhecido?.status || 500 }
+      );
+    }
+
+    const perfilExcluido = data as {
+      id: string;
+      nome: string;
+      descricao?: string | null;
+      archived_at?: string | null;
+    };
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      entidade: "perfil",
+      entidade_id: id,
+      acao: "excluido_definitivamente",
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      detalhes: { perfil: perfilExcluido },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Perfil excluído definitivamente.",
+    });
+  } catch (error) {
+    console.error("Erro ao excluir perfil:", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Erro interno ao excluir perfil" },
       { status: 500 }
     );
   }

@@ -12,6 +12,33 @@ type PerfilPayload = {
   ativo?: boolean;
 };
 
+type PerfilListaRow = {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  ativo: boolean;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+  usuarios_perfis: Array<{ id: string }> | null;
+  criado_por:
+    | { id: string; nome: string | null }
+    | Array<{
+        id: string;
+        nome: string | null;
+      }>
+    | null;
+  atualizado_por:
+    | { id: string; nome: string | null }
+    | Array<{
+        id: string;
+        nome: string | null;
+      }>
+    | null;
+};
+
 export async function GET() {
   try {
     const resultado = await getUsuarioContexto();
@@ -41,11 +68,13 @@ export async function GET() {
 
     const { data: perfis, error } = await supabaseAdmin
       .from("perfis_empresa")
-      .select(`
+      .select(
+        `
         id,
         nome,
         descricao,
         ativo,
+        archived_at,
         created_at,
         updated_at,
         created_by,
@@ -61,7 +90,8 @@ export async function GET() {
           id,
           nome
         )
-      `)
+      `
+      )
       .eq("empresa_id", usuario.empresa_id)
       .order("nome", { ascending: true });
 
@@ -72,25 +102,28 @@ export async function GET() {
       );
     }
 
-    const perfisFormatados = (perfis || []).map((perfil: any) => ({
-      id: perfil.id,
-      nome: perfil.nome,
-      descricao: perfil.descricao,
-      ativo: perfil.ativo,
-      created_at: perfil.created_at,
-      updated_at: perfil.updated_at,
-      created_by: perfil.created_by,
-      updated_by: perfil.updated_by,
-      criado_por: Array.isArray(perfil.criado_por)
-        ? perfil.criado_por[0] || null
-        : perfil.criado_por || null,
-      atualizado_por: Array.isArray(perfil.atualizado_por)
-        ? perfil.atualizado_por[0] || null
-        : perfil.atualizado_por || null,
-      total_usuarios: Array.isArray(perfil.usuarios_perfis)
-        ? perfil.usuarios_perfis.length
-        : 0,
-    }));
+    const perfisFormatados = ((perfis || []) as PerfilListaRow[]).map(
+      (perfil) => ({
+        id: perfil.id,
+        nome: perfil.nome,
+        descricao: perfil.descricao,
+        ativo: perfil.ativo,
+        archived_at: perfil.archived_at,
+        created_at: perfil.created_at,
+        updated_at: perfil.updated_at,
+        created_by: perfil.created_by,
+        updated_by: perfil.updated_by,
+        criado_por: Array.isArray(perfil.criado_por)
+          ? perfil.criado_por[0] || null
+          : perfil.criado_por || null,
+        atualizado_por: Array.isArray(perfil.atualizado_por)
+          ? perfil.atualizado_por[0] || null
+          : perfil.atualizado_por || null,
+        total_usuarios: Array.isArray(perfil.usuarios_perfis)
+          ? perfil.usuarios_perfis.length
+          : 0,
+      })
+    );
 
     return NextResponse.json({
       ok: true,
@@ -175,20 +208,24 @@ export async function POST(request: Request) {
           nome,
           descricao,
           ativo,
+          archived_at: ativo ? null : new Date().toISOString(),
           created_by: usuario.id,
           updated_by: usuario.id,
         },
       ])
-      .select(`
+      .select(
+        `
         id,
         nome,
         descricao,
         ativo,
+        archived_at,
         created_at,
         updated_at,
         created_by,
         updated_by
-      `)
+      `
+      )
       .single();
 
     if (error) {
@@ -197,7 +234,7 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
-    
+
     await registrarLogAuditoria({
       empresa_id: usuario.empresa_id,
       entidade: "perfil",

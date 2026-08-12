@@ -53,7 +53,8 @@
 .primaryButton,
 .secondaryButton,
 .ghostButton,
-.closeButton {
+.closeButton,
+.dangerButton {
   border-radius: 14px;
   padding: 12px 16px;
   font-size: 14px;
@@ -80,6 +81,16 @@
   color: var(--crm-text-strong);
 }
 
+.dangerButton {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.dangerButton:hover {
+  filter: brightness(0.97);
+}
+
 .secondaryButton:hover,
 .closeButton:hover {
   background: var(--crm-surface-soft);
@@ -103,6 +114,11 @@
   opacity: 0.65;
   cursor: not-allowed;
   transform: none;
+}
+
+.dangerButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .errorAlert,
@@ -244,7 +260,11 @@
   width: 52px;
   height: 52px;
   border-radius: 16px;
-  background: linear-gradient(135deg, var(--crm-primary-strong), var(--crm-primary-strong-hover));
+  background: linear-gradient(
+    135deg,
+    var(--crm-primary-strong),
+    var(--crm-primary-strong-hover)
+  );
   color: var(--crm-text-inverse);
   display: flex;
   align-items: center;
@@ -510,7 +530,6 @@
   .detailsGrid {
     grid-template-columns: 1fr;
   }
-
 }
 
 @media (max-width: 640px) {

@@ -11,6 +11,7 @@ type Setor = {
   nome: string;
   descricao: string | null;
   ativo: boolean;
+  archived_at?: string | null;
   created_at?: string;
   updated_at?: string;
   total_usuarios?: number;
@@ -55,9 +56,11 @@ export default function SetoresPage() {
   const podeAlterarStatusSetores = permissoes.includes(
     "setores.alterar_status"
   );
+  const podeExcluirSetores = permissoes.includes("setores.remover");
   const [setores, setSetores] = useState<Setor[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [busca, setBusca] = useState("");
@@ -190,6 +193,43 @@ export default function SetoresPage() {
     }
   }
 
+  async function excluirSetor(setor: Setor) {
+    if (setor.ativo) {
+      setErro("Arquive o setor antes de excluí-lo definitivamente.");
+      return;
+    }
+
+    const confirmado = window.confirm(
+      `Excluir definitivamente o setor “${setor.nome}”? Esta ação não pode ser desfeita.`
+    );
+
+    if (!confirmado) return;
+
+    try {
+      setExcluindoId(setor.id);
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch(`/api/setores/${setor.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Erro ao excluir setor.");
+      }
+
+      setSucesso(data.message || "Setor excluído definitivamente.");
+      await carregarSetores();
+    } catch (error) {
+      setErro(
+        error instanceof Error ? error.message : "Erro ao excluir setor."
+      );
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
   return (
     <>
       <Header
@@ -204,7 +244,8 @@ export default function SetoresPage() {
               <p className={styles.eyebrow}>Gestão</p>
               <h2 className={styles.cardTitle}>Setores da empresa</h2>
               <p className={styles.cardDescription}>
-                Crie, edite, ative ou inative setores conforme a operação da empresa.
+                Crie, edite, ative ou inative setores conforme a operação da
+                empresa.
               </p>
             </div>
 
@@ -215,9 +256,9 @@ export default function SetoresPage() {
             )}
           </div>
 
-            {erro && !modalAberto && (
-              <div className={styles.errorAlert}>{erro}</div>
-            )}
+          {erro && !modalAberto && (
+            <div className={styles.errorAlert}>{erro}</div>
+          )}
           <FeedbackToast
             success={sucesso}
             onSuccessDismiss={() => setSucesso("")}
@@ -261,10 +302,12 @@ export default function SetoresPage() {
                             <h3 className={styles.itemTitle}>{setor.nome}</h3>
                             <span
                               className={`${styles.statusBadge} ${
-                                setor.ativo ? styles.statusActive : styles.statusInactive
+                                setor.ativo
+                                  ? styles.statusActive
+                                  : styles.statusInactive
                               }`}
                             >
-                              {setor.ativo ? "Ativo" : "Inativo"}
+                              {setor.ativo ? "Ativo" : "Arquivado"}
                             </span>
                           </div>
 
@@ -309,6 +352,18 @@ export default function SetoresPage() {
                             Editar
                           </button>
                         )}
+
+                        {podeExcluirSetores && !setor.ativo && (
+                          <button
+                            className={styles.dangerButton}
+                            onClick={() => void excluirSetor(setor)}
+                            disabled={excluindoId === setor.id}
+                          >
+                            {excluindoId === setor.id
+                              ? "Excluindo..."
+                              : "Excluir definitivamente"}
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -326,7 +381,9 @@ export default function SetoresPage() {
                           </div>
 
                           <div className={styles.infoBlock}>
-                            <span className={styles.infoLabel}>Atualizado por</span>
+                            <span className={styles.infoLabel}>
+                              Atualizado por
+                            </span>
                             <span className={styles.infoValue}>
                               {setor.atualizado_por?.nome || "Não identificado"}
                             </span>
@@ -366,11 +423,7 @@ export default function SetoresPage() {
               </button>
             </div>
 
-            {erro && (
-              <div className={styles.errorAlert}>
-                {erro}
-              </div>
-            )}
+            {erro && <div className={styles.errorAlert}>{erro}</div>}
 
             <div className={styles.formGrid}>
               <label className={styles.field}>
@@ -405,7 +458,8 @@ export default function SetoresPage() {
                 <div>
                   <span className={styles.label}>Setor ativo</span>
                   <p className={styles.switchHint}>
-                    Setores inativos deixam de aparecer para uso operacional.
+                    Ao desativar, o setor será arquivado e deixará de aparecer
+                    para uso operacional.
                   </p>
                 </div>
 

@@ -12,6 +12,7 @@ type Perfil = {
   nome: string;
   descricao: string | null;
   ativo: boolean;
+  archived_at?: string | null;
   created_at?: string;
   updated_at?: string;
   total_usuarios?: number;
@@ -63,9 +64,7 @@ function rotuloIntegracaoWhatsapp(integracao: IntegracaoWhatsappPerfil) {
     ? `Numero ${integracao.posicao}`
     : "Numero";
   const nome =
-    integracao.nome_conexao?.trim() ||
-    integracao.numero?.trim() ||
-    "WhatsApp";
+    integracao.nome_conexao?.trim() || integracao.numero?.trim() || "WhatsApp";
 
   return `${posicao} - ${nome}`;
 }
@@ -75,12 +74,14 @@ export default function PerfisPage() {
   const podeCriarPerfis = permissoes.includes("perfis.criar");
   const podeEditarPerfis = permissoes.includes("perfis.editar");
   const podeAlterarStatusPerfis = permissoes.includes("perfis.alterar_status");
+  const podeExcluirPerfis = permissoes.includes("perfis.remover");
   const podeAlterarPermissoesPerfis = permissoes.includes(
     "perfis.alterar_permissoes"
   );
   const [perfis, setPerfis] = useState<Perfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [busca, setBusca] = useState("");
@@ -185,10 +186,9 @@ export default function PerfisPage() {
       setIdsIntegracoesPerfil([]);
       setAcessoLivreIntegracoes(true);
 
-      const res = await fetch(
-        `/api/perfis/${perfil.id}/integracoes-whatsapp`,
-        { cache: "no-store" }
-      );
+      const res = await fetch(`/api/perfis/${perfil.id}/integracoes-whatsapp`, {
+        cache: "no-store",
+      });
       const data = await res.json();
 
       if (!res.ok || !data.ok) {
@@ -341,6 +341,43 @@ export default function PerfisPage() {
     }
   }
 
+  async function excluirPerfil(perfil: Perfil) {
+    if (perfil.ativo) {
+      setErro("Arquive o perfil antes de excluí-lo definitivamente.");
+      return;
+    }
+
+    const confirmado = window.confirm(
+      `Excluir definitivamente o perfil “${perfil.nome}”? Esta ação não pode ser desfeita.`
+    );
+
+    if (!confirmado) return;
+
+    try {
+      setExcluindoId(perfil.id);
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch(`/api/perfis/${perfil.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Erro ao excluir perfil.");
+      }
+
+      setSucesso(data.message || "Perfil excluído definitivamente.");
+      await carregarPerfis();
+    } catch (error) {
+      setErro(
+        error instanceof Error ? error.message : "Erro ao excluir perfil."
+      );
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
   return (
     <>
       <Header
@@ -361,7 +398,10 @@ export default function PerfisPage() {
             </div>
 
             {podeCriarPerfis && (
-              <button className={styles.primaryButton} onClick={abrirNovoPerfil}>
+              <button
+                className={styles.primaryButton}
+                onClick={abrirNovoPerfil}
+              >
                 Novo perfil
               </button>
             )}
@@ -413,10 +453,12 @@ export default function PerfisPage() {
                             <h3 className={styles.itemTitle}>{perfil.nome}</h3>
                             <span
                               className={`${styles.statusBadge} ${
-                                perfil.ativo ? styles.statusActive : styles.statusInactive
+                                perfil.ativo
+                                  ? styles.statusActive
+                                  : styles.statusInactive
                               }`}
                             >
-                              {perfil.ativo ? "Ativo" : "Inativo"}
+                              {perfil.ativo ? "Ativo" : "Arquivado"}
                             </span>
                           </div>
 
@@ -462,12 +504,14 @@ export default function PerfisPage() {
                           </button>
                         )}
 
-                        {podeAlterarPermissoesPerfis && <Link
-                          href={`/configuracoes/perfis/${perfil.id}/permissoes`}
-                          className={styles.linkButton}
-                        >
-                          Permissões
-                        </Link>}
+                        {podeAlterarPermissoesPerfis && (
+                          <Link
+                            href={`/configuracoes/perfis/${perfil.id}/permissoes`}
+                            className={styles.linkButton}
+                          >
+                            Permissões
+                          </Link>
+                        )}
 
                         {podeAlterarPermissoesPerfis && (
                           <button
@@ -475,6 +519,18 @@ export default function PerfisPage() {
                             onClick={() => abrirIntegracoesPerfil(perfil)}
                           >
                             Integracoes
+                          </button>
+                        )}
+
+                        {podeExcluirPerfis && !perfil.ativo && (
+                          <button
+                            className={styles.dangerButton}
+                            onClick={() => void excluirPerfil(perfil)}
+                            disabled={excluindoId === perfil.id}
+                          >
+                            {excluindoId === perfil.id
+                              ? "Excluindo..."
+                              : "Excluir definitivamente"}
                           </button>
                         )}
                       </div>
@@ -494,9 +550,12 @@ export default function PerfisPage() {
                           </div>
 
                           <div className={styles.infoBlock}>
-                            <span className={styles.infoLabel}>Atualizado por</span>
+                            <span className={styles.infoLabel}>
+                              Atualizado por
+                            </span>
                             <span className={styles.infoValue}>
-                              {perfil.atualizado_por?.nome || "Não identificado"}
+                              {perfil.atualizado_por?.nome ||
+                                "Não identificado"}
                             </span>
                             <span className={styles.infoDate}>
                               {formatarData(perfil.updated_at)}
@@ -525,7 +584,8 @@ export default function PerfisPage() {
                   {perfilEditando ? "Editar perfil" : "Novo perfil"}
                 </h2>
                 <p className={styles.modalSubtitle}>
-                  Dê um nome claro para o papel e explique quando ele deve ser usado.
+                  Dê um nome claro para o papel e explique quando ele deve ser
+                  usado.
                 </p>
               </div>
 
@@ -534,11 +594,7 @@ export default function PerfisPage() {
               </button>
             </div>
 
-            {erro && (
-              <div className={styles.errorAlert}>
-                {erro}
-              </div>
-            )}
+            {erro && <div className={styles.errorAlert}>{erro}</div>}
 
             <div className={styles.formGrid}>
               <label className={styles.field}>
@@ -573,7 +629,8 @@ export default function PerfisPage() {
                 <div>
                   <span className={styles.label}>Perfil ativo</span>
                   <p className={styles.switchHint}>
-                    Perfis inativos deixam de ser usados em novas configurações.
+                    Ao desativar, o perfil será arquivado e deixará de ser usado
+                    em novas configurações.
                   </p>
                 </div>
 

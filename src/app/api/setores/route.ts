@@ -12,6 +12,33 @@ type SetorPayload = {
   ativo?: boolean;
 };
 
+type SetorListaRow = {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  ativo: boolean;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+  usuarios_setores: Array<{ id: string }> | null;
+  criado_por:
+    | { id: string; nome: string | null }
+    | Array<{
+        id: string;
+        nome: string | null;
+      }>
+    | null;
+  atualizado_por:
+    | { id: string; nome: string | null }
+    | Array<{
+        id: string;
+        nome: string | null;
+      }>
+    | null;
+};
+
 export async function GET() {
   try {
     const resultado = await getUsuarioContexto();
@@ -41,11 +68,13 @@ export async function GET() {
 
     const { data: setores, error } = await supabaseAdmin
       .from("setores")
-      .select(`
+      .select(
+        `
         id,
         nome,
         descricao,
         ativo,
+        archived_at,
         created_at,
         updated_at,
         created_by,
@@ -61,7 +90,8 @@ export async function GET() {
           id,
           nome
         )
-      `)
+      `
+      )
       .eq("empresa_id", usuario.empresa_id)
       .order("nome", { ascending: true });
 
@@ -72,25 +102,28 @@ export async function GET() {
       );
     }
 
-    const setoresFormatados = (setores || []).map((setor: any) => ({
-      id: setor.id,
-      nome: setor.nome,
-      descricao: setor.descricao,
-      ativo: setor.ativo,
-      created_at: setor.created_at,
-      updated_at: setor.updated_at,
-      created_by: setor.created_by,
-      updated_by: setor.updated_by,
-      criado_por: Array.isArray(setor.criado_por)
-        ? setor.criado_por[0] || null
-        : setor.criado_por || null,
-      atualizado_por: Array.isArray(setor.atualizado_por)
-        ? setor.atualizado_por[0] || null
-        : setor.atualizado_por || null,
-      total_usuarios: Array.isArray(setor.usuarios_setores)
-        ? setor.usuarios_setores.length
-        : 0,
-    }));
+    const setoresFormatados = ((setores || []) as SetorListaRow[]).map(
+      (setor) => ({
+        id: setor.id,
+        nome: setor.nome,
+        descricao: setor.descricao,
+        ativo: setor.ativo,
+        archived_at: setor.archived_at,
+        created_at: setor.created_at,
+        updated_at: setor.updated_at,
+        created_by: setor.created_by,
+        updated_by: setor.updated_by,
+        criado_por: Array.isArray(setor.criado_por)
+          ? setor.criado_por[0] || null
+          : setor.criado_por || null,
+        atualizado_por: Array.isArray(setor.atualizado_por)
+          ? setor.atualizado_por[0] || null
+          : setor.atualizado_por || null,
+        total_usuarios: Array.isArray(setor.usuarios_setores)
+          ? setor.usuarios_setores.length
+          : 0,
+      })
+    );
 
     return NextResponse.json({
       ok: true,
@@ -174,21 +207,26 @@ export async function POST(request: Request) {
           empresa_id: usuario.empresa_id,
           nome,
           descricao,
+          status: ativo ? "ativo" : "inativo",
           ativo,
+          archived_at: ativo ? null : new Date().toISOString(),
           created_by: usuario.id,
           updated_by: usuario.id,
         },
       ])
-      .select(`
+      .select(
+        `
         id,
         nome,
         descricao,
         ativo,
+        archived_at,
         created_at,
         updated_at,
         created_by,
         updated_by
-      `)
+      `
+      )
       .single();
 
     if (error) {
