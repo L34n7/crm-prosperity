@@ -285,7 +285,6 @@ const p = (n: number) => String(n).padStart(2, "0"),
           timeStyle: "short",
         }).format(new Date(s))
       : "-";
-// CRM_AGENDA_FEEDBACK_DETAILS_V1
 const relationOne = (value: any) =>
   Array.isArray(value) ? value[0] || null : value || null;
 const feedbackOriginLabel = (value?: string | null) => {
@@ -308,7 +307,6 @@ const cal = (m: Date) => {
     return { d, k: key(d), ok: d.getMonth() === m.getMonth() };
   });
 };
-// CRM_AGENDA_REMINDERS_PREMIUM_RULES_V3
 const blank = (day: string, dur = 60, user = ""): Form => {
   const i = `${day}T09:00`,
     d = new Date(i);
@@ -660,7 +658,6 @@ function Page() {
               conversationsByContact.set(contactId, conversationId);
             }
           } catch {
-            /* O atalho fica oculto quando o usuário não pode acessar conversas. */
           }
         }),
         ...propertyIds.map(async (catalogId) => {
@@ -687,7 +684,6 @@ function Page() {
               href: `/imoveis?imovel=${encodeURIComponent(catalogId)}`,
             });
           } catch {
-            /* Mantém o snapshot do vínculo quando o imóvel não está disponível. */
           }
         }),
       ]);
@@ -718,7 +714,6 @@ function Page() {
         j = await r.json();
       if (r.ok && j.ok) setFeedbacks(j.pendencias || []);
     } catch {
-      /* feedback não bloqueia a agenda */
     }
   }, []);
   useEffect(() => {
@@ -2980,9 +2975,24 @@ function Page() {
                     <button
                       type="button"
                       className={`btn ${styles.googleConfigSync}`}
-                      onClick={() =>
-                        (location.href = `/api/agendas/${agendaId}/google-calendar?acao=conectar`)
-                      }
+                      onClick={() => {
+                        const width = Math.min(680, Math.max(360, window.screen.availWidth - 40));
+                        const height = Math.min(760, Math.max(520, window.screen.availHeight - 80));
+                        const left = Math.max(
+                          0,
+                          Math.round(window.screenX + (window.outerWidth - width) / 2),
+                        );
+                        const top = Math.max(
+                          0,
+                          Math.round(window.screenY + (window.outerHeight - height) / 2),
+                        );
+                        const popup = window.open(
+                          `/api/agendas/${agendaId}/google-calendar?acao=conectar`,
+                          `google-calendar-${agendaId}`,
+                          `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`,
+                        );
+                        popup?.focus();
+                      }}
                     >
                       <Link2 size={14} />
                       Conectar este calendário
