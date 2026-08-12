@@ -6214,7 +6214,7 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
   const mensagemOpcoes = [
     mensagemListar,
     "",
-    ...slots.map((slot) => `${slot.indice}. ${slot.hora_label}`),
+    ...slots.map((slot) => `${slot.indice}  -  ${slot.hora_label}`),
   ].join("\n");
 
   await enviarMensagemAutomacao({
