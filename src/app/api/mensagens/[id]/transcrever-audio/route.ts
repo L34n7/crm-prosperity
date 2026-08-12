@@ -4,6 +4,7 @@ import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
 import { baixarAudioWhatsApp } from "@/lib/whatsapp/baixar-audio-whatsapp";
 import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { podeTranscreverAudio } from "@/lib/auth/authorization";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -62,6 +63,13 @@ export async function POST(
         transcricao: transcricaoExistente,
         jaExistia: true,
       });
+    }
+
+    if (!(await podeTranscreverAudio(contexto.usuario))) {
+      return NextResponse.json(
+        { error: "Sem permissão para gerar transcrição de áudio." },
+        { status: 403 }
+      );
     }
 
     const mediaId = mensagem.metadata_json?.media_id;

@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { podeVisualizarConversas } from "@/lib/auth/authorization";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import { usuarioPodeVisualizarConversa } from "@/lib/conversas/visibilidade";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -53,7 +54,7 @@ export async function GET(
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, integracao_whatsapp_id")
+    .select("id, empresa_id, setor_id, responsavel_id, status, escopo_fila, integracao_whatsapp_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -72,6 +73,13 @@ export async function GET(
   }
 
   if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
+    return NextResponse.json(
+      { ok: false, error: "Você não pode acessar esta conversa" },
+      { status: 403 }
+    );
+  }
+
+  if (!(await usuarioPodeVisualizarConversa(usuario, conversa))) {
     return NextResponse.json(
       { ok: false, error: "Você não pode acessar esta conversa" },
       { status: 403 }

@@ -4,7 +4,10 @@ import {
   podeVisualizarConversas,
 } from "@/lib/auth/authorization";
 import { contarConversasNaoLidas } from "@/lib/conversas/nao-lidas";
-import { podeVisualizarConversasAtribuidasDoSetor } from "@/lib/conversas/visibilidade";
+import {
+  podeVisualizarConversasAtribuidasDoSetor,
+  podeVisualizarConversasEncerradasDoSetorEfetivo,
+} from "@/lib/conversas/visibilidade";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -73,6 +76,7 @@ async function buscarResumoConversasNaoLidas(params: {
   isAdmin: boolean;
   setoresIds: string[];
   usuarioPodeAtribuir: boolean;
+  usuarioPodeVisualizarEncerradasSetor: boolean;
 }) {
   try {
     const quantidade = await contarConversasNaoLidas(params);
@@ -168,9 +172,15 @@ export async function GET() {
   }
 
   const podeVerConversas = await podeVisualizarConversas(usuario);
-  const usuarioPodeVisualizarAtribuidasDoSetor = podeVerConversas
-    ? await podeVisualizarConversasAtribuidasDoSetor(usuario)
-    : false;
+  const [
+    usuarioPodeVisualizarAtribuidasDoSetor,
+    usuarioPodeVisualizarEncerradasDoSetor,
+  ] = podeVerConversas
+    ? await Promise.all([
+        podeVisualizarConversasAtribuidasDoSetor(usuario),
+        podeVisualizarConversasEncerradasDoSetorEfetivo(usuario),
+      ])
+    : [false, false];
   const podeVerTokensIa = usuario.permissoes.includes(
     "ia.tokens.exibir_header"
   );
@@ -190,6 +200,8 @@ export async function GET() {
           isAdmin: usuario.is_admin,
           setoresIds: usuario.setores_ids ?? [],
           usuarioPodeAtribuir: usuarioPodeVisualizarAtribuidasDoSetor,
+          usuarioPodeVisualizarEncerradasSetor:
+            usuarioPodeVisualizarEncerradasDoSetor,
         })
       : Promise.resolve(
           blocoErro("Sem permissao para visualizar conversas.", "sem_permissao")

@@ -5,7 +5,10 @@ import {
 } from "@/lib/auth/authorization";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { obterContadoresConversas } from "@/lib/conversas/contadores";
-import { podeVisualizarConversasAtribuidasDoSetor } from "@/lib/conversas/visibilidade";
+import {
+  podeVisualizarConversasAtribuidasDoSetor,
+  podeVisualizarConversasEncerradasDoSetorEfetivo,
+} from "@/lib/conversas/visibilidade";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listarIntegracoesWhatsappPermitidas } from "@/lib/whatsapp/integracoes-multiplas";
 
@@ -231,8 +234,13 @@ export async function GET(request: Request) {
     );
   }
 
-  const usuarioPodeVisualizarAtribuidasDoSetor =
-    await podeVisualizarConversasAtribuidasDoSetor(usuario);
+  const [
+    usuarioPodeVisualizarAtribuidasDoSetor,
+    usuarioPodeVisualizarEncerradasDoSetor,
+  ] = await Promise.all([
+    podeVisualizarConversasAtribuidasDoSetor(usuario),
+    podeVisualizarConversasEncerradasDoSetorEfetivo(usuario),
+  ]);
   const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
     usuario,
     empresaId: usuario.empresa_id,
@@ -270,12 +278,14 @@ export async function GET(request: Request) {
   };
 
   try {
-    const listaPromise = supabaseAdmin.rpc("listar_conversas_resumo", {
+    const listaPromise = supabaseAdmin.rpc("listar_conversas_resumo_v2", {
       p_empresa_id: usuario.empresa_id,
       p_usuario_id: usuario.id,
       p_is_admin: isAdministrador(usuario),
       p_setores_ids: usuario.setores_ids ?? [],
       p_usuario_pode_atribuir: usuarioPodeVisualizarAtribuidasDoSetor,
+      p_usuario_pode_visualizar_encerradas_setor:
+        usuarioPodeVisualizarEncerradasDoSetor,
       p_status: status,
       p_prioridade: prioridade,
       p_contato_id: contatoId,
@@ -295,6 +305,8 @@ export async function GET(request: Request) {
       ? obterContadoresConversas({
           usuario,
           usuarioPodeAtribuir: usuarioPodeVisualizarAtribuidasDoSetor,
+          usuarioPodeVisualizarEncerradasSetor:
+            usuarioPodeVisualizarEncerradasDoSetor,
           filtros: filtrosComuns,
         })
       : Promise.resolve(null);

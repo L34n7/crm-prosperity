@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { usuarioPertenceAoSetor } from "@/lib/usuarios/setores";
 import {
   getUsuarioContexto,
-  type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
 import {
-  isAdministrador,
-  podeAtribuirConversas,
+  podeEnviarMidia,
   podeEnviarMensagens,
 } from "@/lib/auth/authorization";
+import { usuarioPodeVisualizarConversa as usuarioPodeAcessarConversa } from "@/lib/conversas/visibilidade";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { uploadWhatsAppMedia } from "@/lib/whatsapp/upload-media";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
@@ -22,7 +20,6 @@ import {
   CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
   isConversaHistoricoImportado,
 } from "@/lib/conversas/historico-importado";
-import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -38,6 +35,7 @@ type ConversaAcesso = {
   id: string;
   empresa_id: string;
   setor_id: string | null;
+  escopo_fila?: string | null;
   responsavel_id: string | null;
   status?: string | null;
   origem_atendimento?: string | null;
@@ -45,52 +43,6 @@ type ConversaAcesso = {
   contato_id?: string | null;
   integracao_whatsapp_id?: string | null;
 };
-
-async function usuarioPodeAcessarConversa(
-  usuario: UsuarioContexto,
-  conversa: ConversaAcesso
-) {
-  if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
-    return false;
-  }
-
-  if (
-    !(await usuarioPodeAcessarIntegracaoWhatsapp({
-      usuario,
-      empresaId: conversa.empresa_id,
-      integracaoId: conversa.integracao_whatsapp_id,
-    }))
-  ) {
-    return false;
-  }
-
-  if (isAdministrador(usuario)) return true;
-
-  const podeAtribuir = await podeAtribuirConversas(usuario);
-
-  if (podeAtribuir) {
-    return await usuarioPertenceAoSetor(usuario.id, conversa.setor_id);
-  }
-
-  if (conversa.responsavel_id === usuario.id) {
-    return true;
-  }
-
-  const pertenceAoSetorDaConversa = await usuarioPertenceAoSetor(
-    usuario.id,
-    conversa.setor_id
-  );
-
-  if (
-    pertenceAoSetorDaConversa &&
-    conversa.responsavel_id === null &&
-    conversa.status === "fila"
-  ) {
-    return true;
-  }
-
-  return false;
-}
 
 function detectarTipoMensagemPorMime(mimeType: string) {
   if (mimeType.startsWith("image/")) return "imagem";
@@ -258,6 +210,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!(await podeEnviarMidia(usuario))) {
+    return NextResponse.json(
+      { ok: false, error: "Sem permissão para enviar mídias e arquivos" },
+      { status: 403 }
+    );
+  }
+
   try {
     const formData = await request.formData();
 
@@ -299,7 +258,7 @@ export async function POST(request: Request) {
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
       .select(
-        "id, empresa_id, setor_id, responsavel_id, status, origem_atendimento, historico_importado, contato_id, integracao_whatsapp_id"
+        "id, empresa_id, setor_id, escopo_fila, responsavel_id, status, origem_atendimento, historico_importado, contato_id, integracao_whatsapp_id"
       )
       .eq("id", conversaId)
       .maybeSingle<ConversaAcesso>();

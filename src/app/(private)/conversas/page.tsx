@@ -2011,11 +2011,13 @@ function TranscricaoAudioBox({
   mensagemId,
   textoInicial,
   isOutgoing,
+  podeGerar,
   onTranscricaoSalva,
 }: {
   mensagemId: string;
   textoInicial: string;
   isOutgoing: boolean;
+  podeGerar: boolean;
   onTranscricaoSalva: (mensagemId: string, transcricao: string) => void;
 }) {
   const [aberta, setAberta] = useState(false);
@@ -2024,6 +2026,8 @@ function TranscricaoAudioBox({
   const [erro, setErro] = useState("");
 
   const textoGrande = texto.length > 120;
+
+  if (!texto.trim() && !podeGerar) return null;
 
   async function abrirOuGerarTranscricao() {
     setErro("");
@@ -3401,6 +3405,11 @@ function ConversasPageContent() {
   }
 
   async function abrirCamera() {
+    if (!podeEnviarMidia) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -3612,6 +3621,7 @@ function ConversasPageContent() {
             mensagemId={msg.id}
             textoInicial={transcricaoAudio}
             isOutgoing={msg.origem === "enviada"}
+            podeGerar={podeTranscreverAudioPermissao}
             onTranscricaoSalva={atualizarTranscricaoMensagem}
           />
         </div>
@@ -3907,6 +3917,12 @@ function ConversasPageContent() {
 
 
   function capturarFoto() {
+    if (!podeEnviarMidia) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      fecharCamera();
+      return;
+    }
+
     if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
@@ -3944,6 +3960,11 @@ function ConversasPageContent() {
   }
 
   async function iniciarGravacaoAudio() {
+    if (!podeEnviarMidia) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      return;
+    }
+
     try {
       setErro("");
       setMensagemSucesso("");
@@ -4131,6 +4152,12 @@ function ConversasPageContent() {
     file: File | null,
     input?: HTMLInputElement | null
   ) {
+    if (file && !podeEnviarMidia) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      if (input) input.value = "";
+      return;
+    }
+
     if (arquivoEnvioPreviewUrl) {
       URL.revokeObjectURL(arquivoEnvioPreviewUrl);
     }
@@ -4528,8 +4555,18 @@ function ConversasPageContent() {
       return;
     }
 
+    if (!podeEnviarMensagemPermissao) {
+      setErro("Você não tem permissão para enviar mensagens nesta conversa.");
+      return;
+    }
+
+    if (!podeEnviarMidiaPermissao) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      return;
+    }
+
     if (!podeEnviarMensagem) {
-      setErro("Você não pode enviar mensagem nesta conversa.");
+      setErro("Assuma a conversa antes de enviar mídias e arquivos.");
       return;
     }
 
@@ -4577,9 +4614,10 @@ function ConversasPageContent() {
 
   async function carregarIntegracoesWhatsapp() {
     try {
-      const res = await fetch("/api/integracoes-whatsapp/listar", {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        "/api/integracoes-whatsapp/listar?contexto=conversas",
+        { cache: "no-store" }
+      );
       const data = await res.json();
 
       if (!res.ok || !data.ok) return;
@@ -7523,6 +7561,14 @@ async function baixarConversaPDF() {
   const podeEncerrarPermissao = can(permissoes, "conversas.encerrar");
   const podeReabrirPermissao = can(permissoes, "conversas.reabrir");
   const podeEnviarMensagemPermissao = can(permissoes, "mensagens.enviar");
+  const podeEnviarMidiaPermissao = can(
+    permissoes,
+    "mensagens.enviar_midia"
+  );
+  const podeTranscreverAudioPermissao = can(
+    permissoes,
+    "mensagens.transcrever_audio"
+  );
   const podeExportarConversa = can(permissoes, "conversas.exportar");
   const podeEditarContatoConversa = can(
     permissoes,
@@ -7642,6 +7688,8 @@ async function baixarConversaPDF() {
     podeEnviarMensagemPermissao &&
     conversaEhMinha &&
     !conversaNaFila;
+
+  const podeEnviarMidia = podeEnviarMensagem && podeEnviarMidiaPermissao;
 
   const setoresDisponiveisParaTransferencia = useMemo(() => {
     if (ehAdministrador) {
@@ -8958,8 +9006,7 @@ const templateFooterTexto = useMemo(() => {
                           )}
 
                           {integracoesWhatsapp.length > 1 &&
-                            integracaoConversa &&
-                            posicaoIntegracao !== 1 && (
+                            integracaoConversa && (
                               <span
                                 className={styles.integrationMiniBadge}
                                 title={nomeIntegracao}
@@ -9780,43 +9827,48 @@ const templateFooterTexto = useMemo(() => {
                             !conversaComBotAtivo &&
                             janela24hAberta && (
                               <div className={styles.timelineInfoSmall}>
-                                Você só poderá responder quando a conversa estiver sob sua
-                                responsabilidade.
+                                {!podeEnviarMensagemPermissao
+                                  ? "Você não tem permissão para enviar mensagens nesta conversa."
+                                  : "Você só poderá responder quando a conversa estiver sob sua responsabilidade."}
                               </div>
                             )}
 
-                          <input
-                            ref={documentoInputRef}
-                            type="file"
-                            className={styles.hiddenFileInput}
-                            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar,.ppt,.pptx"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null;
-                              selecionarArquivo(file, e.currentTarget);
-                            }}
-                          />
+                          {podeEnviarMidia && (
+                            <>
+                              <input
+                                ref={documentoInputRef}
+                                type="file"
+                                className={styles.hiddenFileInput}
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar,.ppt,.pptx"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  selecionarArquivo(file, e.currentTarget);
+                                }}
+                              />
 
-                          <input
-                            ref={midiaInputRef}
-                            type="file"
-                            className={styles.hiddenFileInput}
-                            accept="image/*,video/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null;
-                              selecionarArquivo(file, e.currentTarget);
-                            }}
-                          />
+                              <input
+                                ref={midiaInputRef}
+                                type="file"
+                                className={styles.hiddenFileInput}
+                                accept="image/*,video/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  selecionarArquivo(file, e.currentTarget);
+                                }}
+                              />
 
-                          <input
-                            ref={audioInputRef}
-                            type="file"
-                            className={styles.hiddenFileInput}
-                            accept="audio/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null;
-                              selecionarArquivo(file, e.currentTarget);
-                            }}
-                          />
+                              <input
+                                ref={audioInputRef}
+                                type="file"
+                                className={styles.hiddenFileInput}
+                                accept="audio/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  selecionarArquivo(file, e.currentTarget);
+                                }}
+                              />
+                            </>
+                          )}
 
                           {!conversaEncerrada && arquivoEnvio && (
                             <div
@@ -10372,19 +10424,20 @@ const templateFooterTexto = useMemo(() => {
                               <div className={styles.composerRow}>
                                 {/* ESQUERDA */}
                                 <div className={styles.composerLeft}>
-                                  <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
-                                    <button
-                                      type="button"
-                                      className={styles.toolButton}
-                                      onClick={() => {
-                                        setMacroCardAberto(false);
-                                        setEmojiAberto(false);
-                                        setMenuAnexoAberto((prev) => !prev);
-                                      }}
-                                      title="Anexos"
-                                    >
-                                      ＋
-                                    </button>
+                                  {podeEnviarMidia && (
+                                    <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
+                                      <button
+                                        type="button"
+                                        className={styles.toolButton}
+                                        onClick={() => {
+                                          setMacroCardAberto(false);
+                                          setEmojiAberto(false);
+                                          setMenuAnexoAberto((prev) => !prev);
+                                        }}
+                                        title="Anexos"
+                                      >
+                                        ＋
+                                      </button>
 
                                     {menuAnexoAberto && (
                                       <div className={styles.attachmentMenuDropdown}>
@@ -10425,7 +10478,8 @@ const templateFooterTexto = useMemo(() => {
                                         </button>
                                       </div>
                                     )}
-                                  </div>
+                                    </div>
+                                  )}
 
                                   <div className={styles.emojiPickerWrap}>
                                     <button
@@ -10539,7 +10593,11 @@ const templateFooterTexto = useMemo(() => {
                                   <div
                                     ref={arquivoEnvio ? legendaEditorRef : editorRef}
                                     className={styles.messageEditor}
-                                    contentEditable={podeEnviarMensagem && !enviando && !gravandoAudio}
+                                    contentEditable={
+                                      (arquivoEnvio ? podeEnviarMidia : podeEnviarMensagem) &&
+                                      !enviando &&
+                                      !gravandoAudio
+                                    }
                                     suppressContentEditableWarning
                                     data-placeholder={
                                       !podeEnviarMensagem
@@ -10565,7 +10623,11 @@ const templateFooterTexto = useMemo(() => {
                                       if (e.key === "Enter" && !e.shiftKey) {
                                         e.preventDefault();
 
-                                        if (enviando || !podeEnviarMensagem || gravandoAudio) return;
+                                        if (
+                                          enviando ||
+                                          !(arquivoEnvio ? podeEnviarMidia : podeEnviarMensagem) ||
+                                          gravandoAudio
+                                        ) return;
 
                                         if (arquivoEnvio) {
                                           enviarMidia();
@@ -10584,31 +10646,36 @@ const templateFooterTexto = useMemo(() => {
 
                                 {/* DIREITA */}
                                 <div className={styles.composerRight}>
-                                  <button
-                                    type="button"
-                                    onClick={abrirCamera}
-                                    className={styles.toolButton}
-                                    title="Câmera"
-                                  >
-                                    📷
-                                  </button>
+                                  {podeEnviarMidia && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={abrirCamera}
+                                        disabled={!podeEnviarMidia || enviando}
+                                        className={styles.toolButton}
+                                        title="Câmera"
+                                      >
+                                        📷
+                                      </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (gravandoAudio) {
-                                        pararGravacaoAudio();
-                                        return;
-                                      }
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (gravandoAudio) {
+                                            pararGravacaoAudio();
+                                            return;
+                                          }
 
-                                      iniciarGravacaoAudio();
-                                    }}
-                                    disabled={!podeEnviarMensagem || enviando}
-                                    className={styles.toolButton}
-                                    title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
-                                  >
-                                    {gravandoAudio ? "⏹" : "🎤"}
-                                  </button>
+                                          iniciarGravacaoAudio();
+                                        }}
+                                        disabled={!podeEnviarMidia || enviando}
+                                        className={styles.toolButton}
+                                        title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
+                                      >
+                                        {gravandoAudio ? "⏹" : "🎤"}
+                                      </button>
+                                    </>
+                                  )}
 
                                   <button
                                     onClick={() => {
@@ -10621,7 +10688,7 @@ const templateFooterTexto = useMemo(() => {
                                     }}
                                     disabled={
                                       enviando ||
-                                      !podeEnviarMensagem ||
+                                      (arquivoEnvio ? !podeEnviarMidia : !podeEnviarMensagem) ||
                                       gravandoAudio ||
                                       (!arquivoEnvio && !conteudo.trim())
                                     }

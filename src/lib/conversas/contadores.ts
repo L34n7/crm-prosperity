@@ -48,10 +48,12 @@ function numeroSeguro(valor: number | string | null | undefined) {
 export async function obterContadoresConversas({
   usuario,
   usuarioPodeAtribuir,
+  usuarioPodeVisualizarEncerradasSetor,
   filtros,
 }: {
   usuario: UsuarioContexto;
   usuarioPodeAtribuir: boolean;
+  usuarioPodeVisualizarEncerradasSetor: boolean;
   filtros: FiltrosContadoresConversas;
 }): Promise<TotaisChipsRapidos> {
   if (!usuario.empresa_id) {
@@ -72,6 +74,7 @@ export async function obterContadoresConversas({
     usuario.id,
     admin,
     usuarioPodeAtribuir,
+    usuarioPodeVisualizarEncerradasSetor,
     setoresIds.join(","),
     filtros.status,
     filtros.prioridade,
@@ -95,6 +98,8 @@ export async function obterContadoresConversas({
         p_is_admin: admin,
         p_setores_ids: setoresIds,
         p_usuario_pode_atribuir: usuarioPodeAtribuir,
+        p_usuario_pode_visualizar_encerradas_setor:
+          usuarioPodeVisualizarEncerradasSetor,
         p_status: filtros.status,
         p_prioridade: filtros.prioridade,
         p_contato_id: filtros.contatoId,
@@ -108,13 +113,14 @@ export async function obterContadoresConversas({
       };
 
       const [agregadosResult, naoLidas] = await Promise.all([
-        supabaseAdmin.rpc("obter_contadores_conversas", parametrosComuns),
+        supabaseAdmin.rpc("obter_contadores_conversas_v2", parametrosComuns),
         contarConversasNaoLidas({
           empresaId: usuario.empresa_id!,
           usuarioId: usuario.id,
           isAdmin: admin,
           setoresIds,
           usuarioPodeAtribuir,
+          usuarioPodeVisualizarEncerradasSetor,
           status: filtros.status,
           prioridade: filtros.prioridade,
           contatoId: filtros.contatoId,

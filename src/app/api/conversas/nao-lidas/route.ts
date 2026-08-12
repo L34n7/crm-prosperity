@@ -4,7 +4,10 @@ import {
   podeVisualizarConversas,
 } from "@/lib/auth/authorization";
 import { contarConversasNaoLidas } from "@/lib/conversas/nao-lidas";
-import { podeVisualizarConversasAtribuidasDoSetor } from "@/lib/conversas/visibilidade";
+import {
+  podeVisualizarConversasAtribuidasDoSetor,
+  podeVisualizarConversasEncerradasDoSetorEfetivo,
+} from "@/lib/conversas/visibilidade";
 
 const POLLING_HEADERS = {
   "Cache-Control": "private, max-age=20, stale-while-revalidate=40",
@@ -37,8 +40,13 @@ export async function GET() {
   }
 
   try {
-    const usuarioPodeVisualizarAtribuidasDoSetor =
-      await podeVisualizarConversasAtribuidasDoSetor(usuario);
+    const [
+      usuarioPodeVisualizarAtribuidasDoSetor,
+      usuarioPodeVisualizarEncerradasDoSetor,
+    ] = await Promise.all([
+      podeVisualizarConversasAtribuidasDoSetor(usuario),
+      podeVisualizarConversasEncerradasDoSetorEfetivo(usuario),
+    ]);
 
     const quantidade = await contarConversasNaoLidas({
       empresaId: usuario.empresa_id,
@@ -46,6 +54,8 @@ export async function GET() {
       isAdmin: usuario.is_admin,
       setoresIds: usuario.setores_ids ?? [],
       usuarioPodeAtribuir: usuarioPodeVisualizarAtribuidasDoSetor,
+      usuarioPodeVisualizarEncerradasSetor:
+        usuarioPodeVisualizarEncerradasDoSetor,
     });
 
     return NextResponse.json(

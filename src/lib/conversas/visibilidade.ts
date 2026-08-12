@@ -1,24 +1,84 @@
 import type { UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
   isAdministrador,
-  podeAtribuirConversas,
+  podeVisualizarConversasDoSetor,
+  podeVisualizarConversasEncerradasDoSetor,
 } from "@/lib/auth/authorization";
-import { getPoliticaAtendimentoDoUsuario } from "@/lib/configuracoes/politicas-atendimento";
+import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
-/**
- * A permissão de atribuir libera a ação, mas não deve, sozinha, ampliar a
- * listagem para conversas já atribuídas a outras pessoas do setor. Essa visão
- * ampliada é necessária apenas para quem também pode reatribuir atendimentos.
- */
+const STATUS_ENCERRADOS = new Set([
+  "encerrado_manual",
+  "encerrado_24h",
+  "encerrado_aut",
+]);
+
+export type ConversaParaVerificarVisibilidade = {
+  empresa_id: string;
+  setor_id: string | null;
+  responsavel_id: string | null;
+  status?: string | null;
+  escopo_fila?: string | null;
+  integracao_whatsapp_id?: string | null;
+};
+
+/** Ações de atribuição não ampliam implicitamente a leitura do setor. */
 export async function podeVisualizarConversasAtribuidasDoSetor(
   usuario: UsuarioContexto
 ) {
   if (isAdministrador(usuario)) return true;
 
-  const [podeAtribuir, politica] = await Promise.all([
-    podeAtribuirConversas(usuario),
-    getPoliticaAtendimentoDoUsuario(usuario),
-  ]);
+  return await podeVisualizarConversasDoSetor(usuario);
+}
 
-  return podeAtribuir && politica.pode_reatribuir;
+export async function podeVisualizarConversasEncerradasDoSetorEfetivo(
+  usuario: UsuarioContexto
+) {
+  if (isAdministrador(usuario)) return true;
+
+  return await podeVisualizarConversasEncerradasDoSetor(usuario);
+}
+
+export async function usuarioPodeVisualizarConversa(
+  usuario: UsuarioContexto,
+  conversa: ConversaParaVerificarVisibilidade
+) {
+  if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
+    return false;
+  }
+
+  if (
+    !(await usuarioPodeAcessarIntegracaoWhatsapp({
+      usuario,
+      empresaId: conversa.empresa_id,
+      integracaoId: conversa.integracao_whatsapp_id ?? null,
+    }))
+  ) {
+    return false;
+  }
+
+  if (isAdministrador(usuario)) return true;
+
+  if (conversa.responsavel_id === usuario.id) return true;
+
+  if (
+    conversa.escopo_fila === "geral" &&
+    conversa.status === "fila" &&
+    !conversa.responsavel_id
+  ) {
+    return true;
+  }
+
+  if (!conversa.setor_id || !usuario.setores_ids.includes(conversa.setor_id)) {
+    return false;
+  }
+
+  if (conversa.status && STATUS_ENCERRADOS.has(conversa.status)) {
+    return await podeVisualizarConversasEncerradasDoSetorEfetivo(usuario);
+  }
+
+  if (!conversa.responsavel_id && conversa.status === "fila") {
+    return true;
+  }
+
+  return await podeVisualizarConversasAtribuidasDoSetor(usuario);
 }

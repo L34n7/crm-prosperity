@@ -7,7 +7,13 @@ type UsuarioAuth = Pick<
 > &
   Partial<Pick<UsuarioContexto, "permissoes">>;
 
-async function temPermissao(usuario: UsuarioAuth, permissaoCodigo: string) {
+type UsuarioPermissao = Pick<UsuarioContexto, "id"> &
+  Partial<Pick<UsuarioContexto, "permissoes">>;
+
+async function temPermissao(
+  usuario: UsuarioPermissao,
+  permissaoCodigo: string
+) {
   if (Array.isArray(usuario.permissoes)) {
     return usuario.permissoes.includes(permissaoCodigo);
   }
@@ -45,6 +51,22 @@ export async function podeRemoverUsuarios(usuario: UsuarioAuth) {
 
 export async function podeVisualizarConversas(usuario: UsuarioAuth) {
   return await temPermissao(usuario, "conversas.visualizar");
+}
+
+export async function podeVisualizarConversasDoSetor(usuario: UsuarioAuth) {
+  return await temPermissao(
+    usuario,
+    "conversas.visualizar_conversas_setor"
+  );
+}
+
+export async function podeVisualizarConversasEncerradasDoSetor(
+  usuario: UsuarioAuth
+) {
+  return await temPermissao(
+    usuario,
+    "conversas.visualizar_encerradas_setor"
+  );
 }
 
 export async function podeAssumirConversas(usuario: UsuarioAuth) {
@@ -89,6 +111,14 @@ export async function podeVisualizarMensagens(usuario: UsuarioAuth) {
 
 export async function podeEnviarMensagens(usuario: UsuarioAuth) {
   return await temPermissao(usuario, "mensagens.enviar");
+}
+
+export async function podeEnviarMidia(usuario: UsuarioPermissao) {
+  return await temPermissao(usuario, "mensagens.enviar_midia");
+}
+
+export async function podeTranscreverAudio(usuario: UsuarioPermissao) {
+  return await temPermissao(usuario, "mensagens.transcrever_audio");
 }
 
 export async function podeOperarComoSupervisor(usuario: UsuarioAuth) {

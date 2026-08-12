@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { usuarioPertenceAoSetor } from "@/lib/usuarios/setores";
-import { getUsuarioContexto, type UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
-  isAdministrador,
-  podeAtribuirConversas,
   podeEnviarMensagens,
   podeVisualizarMensagens,
 } from "@/lib/auth/authorization";
+import { usuarioPodeVisualizarConversa as usuarioPodeAcessarConversa } from "@/lib/conversas/visibilidade";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -15,45 +13,10 @@ type ConversaAcesso = {
   id: string;
   empresa_id: string;
   setor_id: string | null;
+  escopo_fila?: string | null;
   responsavel_id: string | null;
   status?: string | null;
 };
-
-async function usuarioPodeAcessarConversa(
-  usuario: UsuarioContexto,
-  conversa: ConversaAcesso
-) {
-  if (!usuario.empresa_id || conversa.empresa_id !== usuario.empresa_id) {
-    return isAdministrador(usuario);
-  }
-
-  if (isAdministrador(usuario)) return true;
-
-  const podeAtribuir = await podeAtribuirConversas(usuario);
-
-  if (podeAtribuir) {
-    return await usuarioPertenceAoSetor(usuario.id, conversa.setor_id);
-  }
-
-  if (conversa.responsavel_id === usuario.id) {
-    return true;
-  }
-
-  const pertenceAoSetorDaConversa = await usuarioPertenceAoSetor(
-    usuario.id,
-    conversa.setor_id
-  );
-
-  if (
-    pertenceAoSetorDaConversa &&
-    conversa.responsavel_id === null &&
-    conversa.status === "fila"
-  ) {
-    return true;
-  }
-
-  return false;
-}
 
 export async function GET(request: Request) {
   const resultado = await getUsuarioContexto();
@@ -86,7 +49,7 @@ export async function GET(request: Request) {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id, status")
+    .select("id, empresa_id, setor_id, escopo_fila, responsavel_id, status")
     .eq("id", conversaId)
     .maybeSingle<ConversaAcesso>();
 
@@ -214,7 +177,7 @@ export async function POST(request: Request) {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id, status")
+    .select("id, empresa_id, setor_id, escopo_fila, responsavel_id, status")
     .eq("id", conversa_id)
     .maybeSingle<ConversaAcesso>();
 

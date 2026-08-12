@@ -3,6 +3,7 @@ import { podeVisualizarConversas } from "@/lib/auth/authorization";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import { usuarioPodeVisualizarConversa } from "@/lib/conversas/visibilidade";
 
 export async function GET(
   _: Request,
@@ -37,7 +38,7 @@ export async function GET(
   const supabase = getSupabaseAdmin();
   const { data: conversa, error: conversaError } = await supabase
     .from("conversas")
-    .select("id, contato_id, integracao_whatsapp_id")
+    .select("id, empresa_id, contato_id, setor_id, responsavel_id, status, escopo_fila, integracao_whatsapp_id")
     .eq("id", id)
     .eq("empresa_id", usuario.empresa_id)
     .maybeSingle();
@@ -53,6 +54,13 @@ export async function GET(
     return NextResponse.json(
       { ok: false, error: "Conversa ou contato não encontrado" },
       { status: 404 }
+    );
+  }
+
+  if (!(await usuarioPodeVisualizarConversa(usuario, conversa))) {
+    return NextResponse.json(
+      { ok: false, error: "Sem permissão para visualizar esta conversa" },
+      { status: 403 }
     );
   }
 
