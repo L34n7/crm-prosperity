@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
-  podeAtribuirConversas,
   podeVisualizarConversas,
 } from "@/lib/auth/authorization";
 import { contarConversasNaoLidas } from "@/lib/conversas/nao-lidas";
+import { podeVisualizarConversasAtribuidasDoSetor } from "@/lib/conversas/visibilidade";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -168,8 +168,8 @@ export async function GET() {
   }
 
   const podeVerConversas = await podeVisualizarConversas(usuario);
-  const usuarioPodeAtribuir = podeVerConversas
-    ? await podeAtribuirConversas(usuario)
+  const usuarioPodeVisualizarAtribuidasDoSetor = podeVerConversas
+    ? await podeVisualizarConversasAtribuidasDoSetor(usuario)
     : false;
   const podeVerTokensIa = usuario.permissoes.includes(
     "ia.tokens.exibir_header"
@@ -189,7 +189,7 @@ export async function GET() {
           usuarioId: usuario.id,
           isAdmin: usuario.is_admin,
           setoresIds: usuario.setores_ids ?? [],
-          usuarioPodeAtribuir,
+          usuarioPodeAtribuir: usuarioPodeVisualizarAtribuidasDoSetor,
         })
       : Promise.resolve(
           blocoErro("Sem permissao para visualizar conversas.", "sem_permissao")

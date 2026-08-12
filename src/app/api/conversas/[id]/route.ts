@@ -6,6 +6,7 @@ import {
   isAdministrador,
   podeAtribuirConversas,
   podeEncerrarConversas,
+  podeReabrirConversas,
   podeTransferirConversas,
 } from "@/lib/auth/authorization";
 import {
@@ -688,6 +689,13 @@ export async function PUT(
     !novoStatusEhEncerrado && conversaAtualEstaEncerrada;
 
   if (estaReabrindo) {
+    if (!(await podeReabrirConversas(usuario))) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão para reabrir conversa" },
+        { status: 403 }
+      );
+    }
+
     if (conversaAtual.status === "encerrado_24h") {
       return NextResponse.json(
         {

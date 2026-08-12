@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
-  podeAtribuirConversas,
   podeVisualizarConversas,
 } from "@/lib/auth/authorization";
 import { contarConversasNaoLidas } from "@/lib/conversas/nao-lidas";
+import { podeVisualizarConversasAtribuidasDoSetor } from "@/lib/conversas/visibilidade";
 
 const POLLING_HEADERS = {
   "Cache-Control": "private, max-age=20, stale-while-revalidate=40",
@@ -37,14 +37,15 @@ export async function GET() {
   }
 
   try {
-    const usuarioPodeAtribuir = await podeAtribuirConversas(usuario);
+    const usuarioPodeVisualizarAtribuidasDoSetor =
+      await podeVisualizarConversasAtribuidasDoSetor(usuario);
 
     const quantidade = await contarConversasNaoLidas({
       empresaId: usuario.empresa_id,
       usuarioId: usuario.id,
       isAdmin: usuario.is_admin,
       setoresIds: usuario.setores_ids ?? [],
-      usuarioPodeAtribuir,
+      usuarioPodeAtribuir: usuarioPodeVisualizarAtribuidasDoSetor,
     });
 
     return NextResponse.json(

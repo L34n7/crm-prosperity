@@ -5,6 +5,7 @@ import { usuarioPertenceAoSetor } from "@/lib/usuarios/setores";
 import {
   isAdministrador,
   podeAssumirConversas,
+  podeReabrirConversas,
 } from "@/lib/auth/authorization";
 import { getPoliticaAtendimentoDoUsuario } from "@/lib/configuracoes/politicas-atendimento";
 import { verificarEEncerrarConversaSe24hExpirada } from "@/lib/whatsapp/verificar-expiracao-conversas";
@@ -284,6 +285,16 @@ export async function POST(
     const conversaEncerradaReabrivel = STATUS_REABRIVEIS.includes(statusAtual);
     const conversaEncerrada24h =
       STATUS_NAO_REABRIR_MANUALMENTE.includes(statusAtual);
+
+    if (
+      conversaEncerradaReabrivel &&
+      !(await podeReabrirConversas(usuario))
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão para reabrir conversa" },
+        { status: 403 }
+      );
+    }
 
     if (conversaEncerrada24h) {
       return NextResponse.json(

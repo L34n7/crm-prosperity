@@ -6884,6 +6884,11 @@ async function baixarConversaPDF() {
 
       if (!conversaEstaSelecionada(idConversa)) return;
 
+      if (res.status === 401 || res.status === 403) {
+        setEventosRastreamentoConversa([]);
+        return;
+      }
+
       if (!res.ok || !data.ok) {
         setErro(data.error || "Erro ao carregar eventos comerciais");
         setEventosRastreamentoConversa([]);
@@ -7516,6 +7521,7 @@ async function baixarConversaPDF() {
   const podeTransferirPermissao = can(permissoes, "conversas.transferir");
   const podeAtribuirPermissao = can(permissoes, "conversas.atribuir");
   const podeEncerrarPermissao = can(permissoes, "conversas.encerrar");
+  const podeReabrirPermissao = can(permissoes, "conversas.reabrir");
   const podeEnviarMensagemPermissao = can(permissoes, "mensagens.enviar");
   const podeExportarConversa = can(permissoes, "conversas.exportar");
   const podeEditarContatoConversa = can(
@@ -7562,6 +7568,7 @@ async function baixarConversaPDF() {
     isConversaHistoricoImportadoUi(conversaSelecionada);
 
   const podeReabrirConversa =
+    podeReabrirPermissao &&
     !conversaHistoricoImportado &&
     (conversaSelecionada?.status === "encerrado_manual" ||
       conversaSelecionada?.status === "encerrado_aut");

@@ -63,6 +63,10 @@ export async function podeEncerrarConversas(usuario: UsuarioAuth) {
   return await temPermissao(usuario, "conversas.encerrar");
 }
 
+export async function podeReabrirConversas(usuario: UsuarioAuth) {
+  return await temPermissao(usuario, "conversas.reabrir");
+}
+
 export async function podeExportarConversas(usuario: UsuarioAuth) {
   return await temPermissao(usuario, "conversas.exportar");
 }
