@@ -4,8 +4,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { qstash } from "@/lib/qstash/client";
 import {
   getUsuarioContexto,
-  type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 import {
   getRequestAuditMetadata,
@@ -37,18 +37,6 @@ type ResultadoLote = {
   ignorada?: boolean;
   erro?: string;
 };
-
-function podeGerenciarContatos(usuario: UsuarioContexto) {
-  const nomesPerfis = (usuario.perfis_dinamicos ?? []).map(
-    (perfil) => perfil.nome
-  );
-
-  return (
-    nomesPerfis.includes("Administrador") ||
-    nomesPerfis.includes("Supervisor") ||
-    nomesPerfis.includes("Atendente")
-  );
-}
 
 function telefoneImportacaoValido(telefone: string) {
   return telefone.length >= 8;
@@ -173,12 +161,12 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarContatos(usuario)) {
-    return NextResponse.json(
-      { ok: false, error: "Sem permissão para importar contatos" },
-      { status: 403 }
-    );
-  }
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "contatos.importar",
+    "Sem permissão para importar contatos",
+  );
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(

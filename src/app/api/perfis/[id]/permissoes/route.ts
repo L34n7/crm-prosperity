@@ -7,7 +7,7 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { empresaManteraAdminGerenciador } from "@/lib/permissoes/garantir-admin-gerenciador";
-import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
+import { isPermissaoOcultaNaTela } from "@/lib/permissoes/internas";
 import { invalidarCachePermissoesPerfis } from "@/lib/permissoes/can";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -118,7 +118,7 @@ export async function GET(
     );
 
     const lista = ((permissoes || []) as PermissaoCatalogoRow[])
-      .filter((item) => !isPermissaoInternaOculta(item.codigo))
+      .filter((item) => !isPermissaoOcultaNaTela(item.codigo))
       .map((item) => ({
         codigo: item.codigo,
         descricao: item.descricao,
@@ -233,7 +233,7 @@ export async function PUT(
     const codigosValidos = new Set(
       ((catalogoPermissoes || []) as PermissaoCatalogoRow[]).map(
         (item) => item.codigo
-      ).filter((codigo) => !isPermissaoInternaOculta(codigo))
+      ).filter((codigo) => !isPermissaoOcultaNaTela(codigo))
     );
 
     const perfilEhAdministrador =
@@ -281,7 +281,7 @@ export async function PUT(
       (permissoesAtuais || []) as PerfilPermissaoRow[]
     ).map((item) => item.permissao_codigo);
     const permissoesInternasPreservadas = permissoesAntes.filter(
-      isPermissaoInternaOculta
+      isPermissaoOcultaNaTela
     );
 
     const { error: deleteError } = await supabaseAdmin

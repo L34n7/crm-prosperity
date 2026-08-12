@@ -97,7 +97,7 @@ type Props = {
   relatedTypeLabels: Record<string, string>;
   googleCalendarUrl?: string | null;
   onClose: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
 };
 
 const dateTime = (value?: string | null) =>
@@ -353,7 +353,7 @@ export default function AgendaAppointmentDetails({
 
         <footer className={styles.footer}>
           <span>Última visualização dos dados atuais do calendário.</span>
-          <div>{googleCalendarUrl ? <a className={styles.googleButton} href={googleCalendarUrl} target="_blank" rel="noopener noreferrer"><CalendarDays size={17} /> Abrir no Google Calendar</a> : null}<button type="button" className={styles.secondaryButton} onClick={onClose}>Fechar</button><button type="button" className={styles.editButton} onClick={onEdit}><Pencil size={16} /> Editar agendamento</button></div>
+          <div>{googleCalendarUrl ? <a className={styles.googleButton} href={googleCalendarUrl} target="_blank" rel="noopener noreferrer"><CalendarDays size={17} /> Abrir no Google Calendar</a> : null}<button type="button" className={styles.secondaryButton} onClick={onClose}>Fechar</button>{onEdit ? <button type="button" className={styles.editButton} onClick={onEdit}><Pencil size={16} /> Editar agendamento</button> : null}</div>
         </footer>
       </aside>
     </div>

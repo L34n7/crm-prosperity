@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   getUsuarioContexto,
-  type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getRequestAuditMetadata,
@@ -15,16 +15,6 @@ import {
 } from "@/lib/leads/classificacao";
 
 const MAX_CONTATOS_POR_LOTE = 500;
-
-function podeGerenciarContatos(usuario: UsuarioContexto) {
-  const perfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
-
-  return (
-    perfis.includes("Administrador") ||
-    perfis.includes("Supervisor") ||
-    perfis.includes("Atendente")
-  );
-}
 
 function obterRelacaoUnica<T>(relacao: T | T[] | null | undefined): T | null {
   return Array.isArray(relacao) ? relacao[0] ?? null : relacao ?? null;
@@ -42,12 +32,12 @@ export async function PATCH(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarContatos(usuario)) {
-    return NextResponse.json(
-      { ok: false, error: "Sem permissão para editar contatos." },
-      { status: 403 }
-    );
-  }
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "contatos.editar",
+    "Sem permissão para editar contatos.",
+  );
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(

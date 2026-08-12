@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./templates-whatsapp.module.css";
 import { obterFooterOptOut } from "@/lib/whatsapp/opt-out-policy";
 
@@ -192,6 +193,10 @@ function formatarStatusIntegracao(status?: string | null) {
 }
 
 export default function TemplatesWhatsAppPage() {
+  const headerUser = useHeaderUser();
+  const podeCriarTemplate = headerUser.permissoes.includes(
+    "whatsapp_templates.criar"
+  );
   const [integracoes, setIntegracoes] = useState<IntegracaoWhatsApp[]>([]);
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
 
@@ -388,6 +393,11 @@ export default function TemplatesWhatsAppPage() {
     setMensagem("");
     setErro("");
 
+    if (!podeCriarTemplate) {
+      setErro("Você não tem permissão para criar templates.");
+      return;
+    }
+
     if (!integracaoId) {
       setErro("Selecione uma integração WhatsApp.");
       return;
@@ -573,6 +583,10 @@ export default function TemplatesWhatsAppPage() {
             </div>
 
             <form onSubmit={handleSubmit} className={styles.form}>
+              <fieldset
+                disabled={!podeCriarTemplate}
+                className={styles.creatorFieldset}
+              >
               <div className={styles.creatorGrid}>
                   <div className={styles.formFields}>
                       <div className={styles.topGrid}>
@@ -873,6 +887,7 @@ export default function TemplatesWhatsAppPage() {
                     </button>
                   </div>
                 </div>
+              </fieldset>
             </form>
           </div>
 

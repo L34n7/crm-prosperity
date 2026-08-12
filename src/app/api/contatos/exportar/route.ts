@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getUsuarioContexto,
-  type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 import {
   CLASSIFICACOES_LEAD,
@@ -28,16 +28,6 @@ function dataIsoValida(valor: string) {
   );
 }
 
-function podeGerenciarContatos(usuario: UsuarioContexto) {
-  const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
-
-  return (
-    nomesPerfis.includes("Administrador") ||
-    nomesPerfis.includes("Supervisor") ||
-    nomesPerfis.includes("Atendente")
-  );
-}
-
 function csvEscape(value: unknown) {
   const text = String(value ?? "");
   if (text.includes(",") || text.includes('"') || text.includes("\n")) {
@@ -58,12 +48,12 @@ export async function GET(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarContatos(usuario)) {
-    return NextResponse.json(
-      { ok: false, error: "Sem permissão para exportar contatos" },
-      { status: 403 }
-    );
-  }
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "contatos.exportar",
+    "Sem permissão para exportar contatos",
+  );
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(

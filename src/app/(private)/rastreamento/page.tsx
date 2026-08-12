@@ -404,7 +404,11 @@ export default function RastreamentoPage() {
           lerResposta
         ),
         fetch("/api/integracoes-whatsapp/listar", { cache: "no-store" }).then(lerResposta),
-        fetch("/api/contatos?limite=500", { cache: "no-store" }).then(lerResposta),
+        fetch("/api/contatos?limite=500", { cache: "no-store" })
+          .then(async (response) => {
+            if (response.status === 403) return { contatos: [] };
+            return lerResposta(response);
+          }),
       ]);
 
       setOrigens(origensResponse.origens || []);

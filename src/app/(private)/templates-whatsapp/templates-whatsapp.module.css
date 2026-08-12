@@ -822,3 +822,13 @@
     width: 100%;
   }
 }
+.creatorFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.creatorFieldset:disabled {
+  opacity: 0.72;
+}

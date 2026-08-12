@@ -8,7 +8,7 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { empresaManteraAdminGerenciador } from "@/lib/permissoes/garantir-admin-gerenciador";
-import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
+import { isPermissaoOcultaNaTela } from "@/lib/permissoes/internas";
 import { invalidarCachePermissoesUsuario } from "@/lib/permissoes/can";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -183,7 +183,7 @@ export async function PUT(
       const codigosValidos = new Set(
         ((catalogoPermissoes || []) as CatalogoPermissaoRow[]).map(
           (item) => item.codigo
-        ).filter((codigo) => !isPermissaoInternaOculta(codigo))
+        ).filter((codigo) => !isPermissaoOcultaNaTela(codigo))
       );
 
       const contemCodigoInvalido = overridesValidos.some(
@@ -252,7 +252,7 @@ export async function PUT(
 
     const permissoesInternasPreservadas = (
       (permissoesAntesRaw || []) as PermissaoUsuarioInput[]
-    ).filter((item) => isPermissaoInternaOculta(item.permissao_codigo));
+    ).filter((item) => isPermissaoOcultaNaTela(item.permissao_codigo));
 
     const { error: deletePermissoesError } = await supabaseAdmin
       .from("usuario_permissoes")

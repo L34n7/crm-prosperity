@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { getUsuarioContexto, type UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 import {
   getRequestAuditMetadata,
@@ -35,16 +36,6 @@ function dataIsoValida(valor: string) {
     data.getUTCFullYear() === ano &&
     data.getUTCMonth() === mes - 1 &&
     data.getUTCDate() === dia
-  );
-}
-
-function podeGerenciarContatos(usuario: UsuarioContexto) {
-  const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
-
-  return (
-    nomesPerfis.includes("Administrador") ||
-    nomesPerfis.includes("Supervisor") ||
-    nomesPerfis.includes("Atendente")
   );
 }
 
@@ -97,12 +88,12 @@ export async function GET(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarContatos(usuario)) {
-    return NextResponse.json(
-      { ok: false, error: "Sem permissão para listar contatos" },
-      { status: 403 }
-    );
-  }
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "contatos.visualizar",
+    "Sem permissão para listar contatos",
+  );
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(
@@ -501,12 +492,12 @@ export async function POST(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarContatos(usuario)) {
-    return NextResponse.json(
-      { ok: false, error: "Sem permissão para criar contato" },
-      { status: 403 }
-    );
-  }
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "contatos.criar",
+    "Sem permissão para criar contato",
+  );
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(

@@ -1179,9 +1179,11 @@ function DisparosAgendadosPageContent() {
 
   useEffect(() => {
     carregarDisparos();
-    carregarIntegracoes();
-    carregarOpcoesContatos();
-  }, []);
+    if (podeRealizarDisparos) {
+      carregarIntegracoes();
+      carregarOpcoesContatos();
+    }
+  }, [podeRealizarDisparos]);
 
 
   useEffect(() => {

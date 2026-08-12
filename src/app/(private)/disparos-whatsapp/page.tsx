@@ -4374,12 +4374,7 @@ export default function DisparosWhatsAppPage() {
               {loadingUsuario || loadingIntegracoes ? (
                 <div className={styles.emptyState}>Carregando dados...</div>
               ) : !podeDisparar ? (
-                <div className={styles.inlineBlock}>
-                  <div className={styles.errorAlert}>
-                    Você pode acompanhar os disparos, mas não possui permissão
-                    para enviar ou agendar novas campanhas.
-                  </div>
-                </div> 
+                null
               ) : (
               <form onSubmit={handleSubmit} className={styles.form}>
                     <div className={styles.setupColumn}>

@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { usuarioTemPermissao } from "@/lib/permissoes/servidor";
 import { upsertConfiguracaoEmpresa } from "@/lib/configuracoes/configuracoes-empresa";
-import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
+import { isPermissaoOcultaNaTela } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -250,7 +250,7 @@ export async function GET() {
       (configuracoesUsuario || []).map((item) => [item.usuario_id, item])
     );
     const catalogoPermissoesVisiveis = (catalogoPermissoes || []).filter(
-      (permissao) => !isPermissaoInternaOculta(permissao.codigo)
+      (permissao) => !isPermissaoOcultaNaTela(permissao.codigo)
     );
 
     const usuariosFormatados = usuariosRows.map((item) => ({
@@ -294,7 +294,7 @@ export async function GET() {
             : (item.usuarios_perfis || []).flatMap(
                 (p) => permissoesPorPerfil.get(p.perfil_empresa_id) || []
               )
-          ).filter((codigo) => !isPermissaoInternaOculta(codigo))
+          ).filter((codigo) => !isPermissaoOcultaNaTela(codigo))
             .filter(Boolean)
         )
       ),
@@ -302,7 +302,7 @@ export async function GET() {
         ? []
         : (overridesPorUsuario.get(item.id) || []).filter(
             (permissao) =>
-              !isPermissaoInternaOculta(permissao.permissao_codigo)
+              !isPermissaoOcultaNaTela(permissao.permissao_codigo)
           ),
     }));
 

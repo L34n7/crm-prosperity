@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
+import { useHeaderUser } from "@/components/header-user-context";
 import { createClient } from "@/lib/supabase/client";
 import { solicitarAtualizacaoFeedbackAgendasHeader } from "@/lib/header-summary/events";
 import AgendaAutomationSettings, {
@@ -361,6 +362,13 @@ const toForm = (a: Ag): Form => ({
 });
 
 function Page() {
+  const headerUser = useHeaderUser();
+  const podeCriarAgenda = headerUser.permissoes.includes("agendas.criar");
+  const podeEditarAgenda = headerUser.permissoes.includes("agendas.editar");
+  const podeArquivarAgenda = headerUser.permissoes.includes("agendas.arquivar");
+  const podeGerenciarAgendamentos = headerUser.permissoes.includes(
+    "agendas.gerenciar_agendamentos"
+  );
   const [reminderOptions, setReminderOptions] = useState<ReminderOptions>({
     integracoes: [],
     templates: [],
@@ -803,6 +811,10 @@ function Page() {
     }));
   };
   const newAg = (d = day) => {
+    if (!podeEditarAgenda) {
+      setErr("Você não tem permissão para editar agendas.");
+      return;
+    }
     if (!agenda) return;
     setViewing(null);
     setForm(blank(d, agenda.duracao_minutos, userId));
@@ -810,6 +822,10 @@ function Page() {
     setOpen(true);
   };
   const edit = (a: Ag) => {
+    if (!podeEditarAgenda) {
+      setErr("Você não tem permissão para editar agendas.");
+      return;
+    }
     setForm(toForm(a));
     setContact(a.contato);
     setOpen(true);
@@ -932,6 +948,10 @@ function Page() {
     setTypeModal(true);
   };
   const saveCustomType = async () => {
+    if (!podeEditarAgenda) {
+      setTypeError("Você não tem permissão para editar agendas.");
+      return;
+    }
     const nome = typeDraft.nome.trim();
     const cor = /^#[0-9a-fA-F]{6}$/.test(typeDraft.cor)
       ? typeDraft.cor
@@ -963,6 +983,10 @@ function Page() {
     }
   };
   const save = async (status?: string) => {
+    if (!podeEditarAgenda) {
+      setErr("Você não tem permissão para editar agendas.");
+      return;
+    }
     if (!agendaId) return;
     try {
       setBusy(true);
@@ -1038,6 +1062,10 @@ function Page() {
     }
   };
   const answer = async (id: string, resposta: string) => {
+    if (!podeGerenciarAgendamentos) {
+      setErr("Você não tem permissão para gerenciar agendamentos.");
+      return;
+    }
     try {
       const r = await fetch("/api/agendas/feedback", {
           method: "PATCH",
@@ -1056,6 +1084,10 @@ function Page() {
     }
   };
   const googleAction = async (action: "sync" | "disconnect") => {
+    if (!podeEditarAgenda) {
+      setErr("Você não tem permissão para editar agendas.");
+      return;
+    }
     if (!agendaId) return;
     if (action === "disconnect" && !confirm("Desvincular o Google Calendar?"))
       return;
@@ -1137,6 +1169,14 @@ function Page() {
     }
   };
   const openConfig = async (isNew: boolean) => {
+    if (isNew ? !podeCriarAgenda : !podeEditarAgenda) {
+      setErr(
+        isNew
+          ? "Você não tem permissão para criar agendas."
+          : "Você não tem permissão para editar agendas."
+      );
+      return;
+    }
     setConfigNew(isNew);
     setUnidadeDuracaoAgenda("minutos");
     setUnidadeIntervaloAgenda("minutos");
@@ -1203,6 +1243,14 @@ function Page() {
     setConfig(true);
   };
   const saveConfig = async () => {
+    if (configNew ? !podeCriarAgenda : !podeEditarAgenda) {
+      setErr(
+        configNew
+          ? "Você não tem permissão para criar agendas."
+          : "Você não tem permissão para editar agendas."
+      );
+      return;
+    }
     try {
       setBusy(true);
       if (
@@ -1283,6 +1331,10 @@ function Page() {
     }
   };
   const archive = async () => {
+    if (!podeArquivarAgenda) {
+      setErr("Você não tem permissão para arquivar agendas.");
+      return;
+    }
     if (!agenda) return;
     const status = agenda.status === "arquivado" ? "ativo" : "arquivado";
     if (status === "arquivado" && !confirm("Arquivar esta agenda?")) return;
@@ -1305,6 +1357,10 @@ function Page() {
     }
   };
   const delAgenda = async () => {
+    if (!podeArquivarAgenda) {
+      setErr("Você não tem permissão para excluir agendas.");
+      return;
+    }
     if (!agenda || !confirm("Excluir esta agenda permanentemente?")) return;
     try {
       setBusy(true);
@@ -1357,16 +1413,18 @@ function Page() {
             ))}
           </select>
 
-          <button
-            className="btn"
-            onClick={() => openConfig(false)}
-            disabled={!agenda}
-          >
-            <Settings2 size={15} />
-            Configuração
-          </button>
+          {podeEditarAgenda ? (
+            <button
+              className="btn"
+              onClick={() => openConfig(false)}
+              disabled={!agenda}
+            >
+              <Settings2 size={15} />
+              Configuração
+            </button>
+          ) : null}
 
-          <button
+          {podeEditarAgenda ? <button
             className={`btn ${styles.calendarSyncButton}`}
             onClick={() =>
               google.conectado
@@ -1377,7 +1435,7 @@ function Page() {
           >
             <RefreshCw size={15} className={busy ? "spin" : ""} />
             {google.conectado ? "Sincronizar" : "Conectar Google"}
-          </button>
+          </button> : null}
 
           {google.conectado ? (
             <div
@@ -1400,21 +1458,21 @@ function Page() {
             </div>
           ) : null}
 
-          <button
+          {podeCriarAgenda ? <button
             className={`btn ${styles.calendarNewButton}`}
             onClick={() => openConfig(true)}
           >
             <Plus size={15} />
             Novo calendário
-          </button>
-          <button
+          </button> : null}
+          {podeEditarAgenda ? <button
             className="btn primary"
             onClick={() => newAg()}
             disabled={!agenda || agenda.status === "arquivado"}
           >
             <CalendarPlus size={16} />
             Novo agendamento
-          </button>
+          </button> : null}
         </div>
         {feedbacks.length > 0 &&
           (() => {
@@ -1506,20 +1564,20 @@ function Page() {
                     <ExternalLink size={13} />
                     Detalhes
                   </button>
-                  <button
+                  {podeGerenciarAgendamentos ? <button
                     className="btn feedbackSuccess"
                     onClick={() => answer(feedback.id, "realizado")}
                   >
                     <Check size={13} />
                     Realizado
-                  </button>
-                  <button
+                  </button> : null}
+                  {podeGerenciarAgendamentos ? <button
                     className="btn feedbackMissed"
                     onClick={() => answer(feedback.id, "faltou")}
                   >
                     <X size={13} />
                     Não compareceu
-                  </button>
+                  </button> : null}
                 </div>
               </section>
             );
@@ -1671,7 +1729,7 @@ function Page() {
                   >
                     <div className="dh">
                       <span className="num">{x.d.getDate()}</span>
-                      <button
+                      {podeEditarAgenda ? <button
                         className="add"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1679,7 +1737,7 @@ function Page() {
                         }}
                       >
                         <Plus size={13} />
-                      </button>
+                      </button> : null}
                     </div>
                     {items.map((it) =>
                       "dia_inteiro" in it ? (
@@ -1792,7 +1850,7 @@ function Page() {
                   {google.email}
                 </span>
               </div>
-              <div className="mini" style={{ marginTop: 9 }}>
+              {podeEditarAgenda ? <div className="mini" style={{ marginTop: 9 }}>
                 {google.conectado ? (
                   <>
                     <button
@@ -1824,7 +1882,7 @@ function Page() {
                     Conectar
                   </button>
                 )}
-              </div>
+              </div> : null}
             </div>
           </aside>
         </div>
@@ -1842,7 +1900,7 @@ function Page() {
           relatedTypeLabels={relatedTypeLabels}
           googleCalendarUrl={googleLinks[viewing.id] || null}
           onClose={() => setViewing(null)}
-          onEdit={() => edit(viewing)}
+          onEdit={podeEditarAgenda ? () => edit(viewing) : undefined}
         />
       )}
       {open && (
