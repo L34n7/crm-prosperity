@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import {
-  getUsuarioContexto,
-  type UsuarioContexto,
-} from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   aplicarClassificacaoLeadContato,
   CLASSIFICACAO_LEAD_LABEL,
@@ -38,16 +36,6 @@ type ContatoKanban = {
   updated_at: string | null;
 };
 
-function podeGerenciarKanban(usuario: UsuarioContexto) {
-  const perfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
-
-  return (
-    perfis.includes("Administrador") ||
-    perfis.includes("Supervisor") ||
-    perfis.includes("Atendente")
-  );
-}
-
 function montarColunasVazias() {
   return CLASSIFICACOES_KANBAN.map((classificacao) => ({
     id: classificacao,
@@ -73,12 +61,12 @@ export async function GET(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarKanban(usuario)) {
-    return NextResponse.json(
-      { ok: false, error: "Sem permissão para visualizar o Kanban." },
-      { status: 403 }
-    );
-  }
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "kanban.visualizar",
+    "Sem permissão para visualizar o Kanban.",
+  );
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(
@@ -183,12 +171,12 @@ export async function PATCH(request: Request) {
 
   const { usuario } = resultado;
 
-  if (!podeGerenciarKanban(usuario)) {
-    return NextResponse.json(
-      { ok: false, error: "Sem permissão para mover leads no Kanban." },
-      { status: 403 }
-    );
-  }
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "kanban.mover",
+    "Sem permissão para mover leads no Kanban.",
+  );
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(

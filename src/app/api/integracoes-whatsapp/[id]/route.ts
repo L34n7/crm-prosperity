@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -113,6 +114,12 @@ export async function DELETE(
     }
 
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "whatsapp.integracao.configurar",
+      "Você não tem permissão para remover integrações WhatsApp.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(

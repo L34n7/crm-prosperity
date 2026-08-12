@@ -4,6 +4,7 @@ import {
   getUsuarioContexto,
   type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -678,6 +679,13 @@ export async function GET() {
 
     const { usuario } = resultadoContexto;
 
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.visualizar",
+      "Você não tem permissão para visualizar fluxos.",
+    );
+    if (bloqueio) return bloqueio;
+
     if (!usuario?.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },
@@ -803,6 +811,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.criar",
+      "Você não tem permissão para criar fluxos.",
+    );
+    if (bloqueio) return bloqueio;
     const body = await req.json();
 
     if (!usuario?.empresa_id) {
@@ -1106,6 +1120,32 @@ export async function PATCH(req: NextRequest) {
     const { usuario } = resultadoContexto;
     const body = await req.json();
 
+    const camposEdicao = Object.keys(body || {}).filter(
+      (campo) => !["id", "status"].includes(campo),
+    );
+    if (camposEdicao.length > 0) {
+      const bloqueioEdicao = bloquearSemPermissao(
+        usuario,
+        "fluxos.editar",
+        "Você não tem permissão para editar fluxos.",
+      );
+      if (bloqueioEdicao) return bloqueioEdicao;
+    }
+
+    if (body?.status !== undefined) {
+      const statusSolicitado = String(body.status || "").trim();
+      const permissaoStatus =
+        statusSolicitado === "arquivado" ? "fluxos.arquivar" : "fluxos.ativar";
+      const bloqueioStatus = bloquearSemPermissao(
+        usuario,
+        permissaoStatus,
+        statusSolicitado === "arquivado"
+          ? "Você não tem permissão para arquivar fluxos."
+          : "Você não tem permissão para ativar ou pausar fluxos.",
+      );
+      if (bloqueioStatus) return bloqueioStatus;
+    }
+
     if (!usuario?.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },
@@ -1408,6 +1448,16 @@ export async function DELETE(req: NextRequest) {
     const id = String(body?.id || "").trim();
     const definitivo = Boolean(body?.definitivo);
 
+    const permissaoExclusao = definitivo ? "fluxos.excluir" : "fluxos.arquivar";
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      permissaoExclusao,
+      definitivo
+        ? "Você não tem permissão para excluir fluxos."
+        : "Você não tem permissão para arquivar fluxos.",
+    );
+    if (bloqueio) return bloqueio;
+
     if (!id) {
       return NextResponse.json(
         { ok: false, error: "ID do fluxo é obrigatório." },
@@ -1592,6 +1642,13 @@ export async function PUT(req: NextRequest) {
 
     const { usuario } = resultadoContexto;
     const body = await req.json();
+
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.criar",
+      "Você não tem permissão para duplicar fluxos.",
+    );
+    if (bloqueio) return bloqueio;
 
     const id = String(body?.id || "").trim();
 

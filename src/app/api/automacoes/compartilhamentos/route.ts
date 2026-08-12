@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getRequestAuditMetadata,
@@ -211,6 +212,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.visualizar",
+      "Você não tem permissão para compartilhar fluxos.",
+    );
+    if (bloqueio) return bloqueio;
     const body = await req.json();
 
     if (!usuario?.empresa_id) {
@@ -301,6 +308,12 @@ export async function PUT(req: NextRequest) {
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.criar",
+      "Você não tem permissão para importar fluxos.",
+    );
+    if (bloqueio) return bloqueio;
     const body = await req.json();
 
     if (!usuario?.empresa_id) {

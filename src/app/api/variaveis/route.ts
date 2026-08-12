@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -70,6 +71,13 @@ export async function GET() {
 
     const { usuario } = resultadoContexto;
 
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.visualizar",
+      "Você não tem permissão para visualizar variáveis de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
+
     if (!usuario?.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },
@@ -137,6 +145,13 @@ export async function POST(req: NextRequest) {
 
     const { usuario } = resultadoContexto;
     const body = await req.json();
+
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.editar",
+      "Você não tem permissão para gerenciar variáveis de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
@@ -283,6 +298,13 @@ export async function DELETE(req: NextRequest) {
 
     const { usuario } = resultadoContexto;
     const body = await req.json();
+
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.editar",
+      "Você não tem permissão para gerenciar variáveis de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(

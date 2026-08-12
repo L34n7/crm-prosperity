@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listarIntegracoesWhatsappPermitidas } from "@/lib/whatsapp/integracoes-multiplas";
 
@@ -15,6 +16,8 @@ export async function GET() {
     }
 
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(usuario, "contatos.visualizar");
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(

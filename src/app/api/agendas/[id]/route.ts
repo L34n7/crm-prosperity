@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { excluirEventosVinculadosGoogleCalendar } from "@/lib/agendas/google-calendar";
 import { normalizeIntegrationIds, withCalendarIntegrationIds } from "@/lib/agendas/integration-scope";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -54,6 +55,8 @@ export async function GET(
       return NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status });
     }
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(usuario, "agendas.visualizar");
+    if (bloqueio) return bloqueio;
     if (!usuario.empresa_id) {
       return NextResponse.json({ ok: false, error: "Usuario sem empresa vinculada." }, { status: 400 });
     }
@@ -93,6 +96,12 @@ export async function PATCH(
       return NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status });
     }
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "agendas.editar",
+      "Você não tem permissão para editar agendas.",
+    );
+    if (bloqueio) return bloqueio;
     if (!usuario.empresa_id) {
       return NextResponse.json({ ok: false, error: "Usuario sem empresa vinculada." }, { status: 400 });
     }
@@ -185,6 +194,12 @@ export async function DELETE(
       return NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status });
     }
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "agendas.arquivar",
+      "Você não tem permissão para excluir agendas.",
+    );
+    if (bloqueio) return bloqueio;
     if (!usuario.empresa_id) {
       return NextResponse.json({ ok: false, error: "Usuario sem empresa vinculada." }, { status: 400 });
     }

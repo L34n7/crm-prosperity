@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -295,6 +296,12 @@ export async function GET(
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.visualizar",
+      "Você não tem permissão para visualizar fluxos.",
+    );
+    if (bloqueio) return bloqueio;
     const { data: fluxo, error: fluxoError } = await supabaseAdmin
       .from("automacao_fluxos")
       .select("*")
@@ -374,6 +381,12 @@ export async function PUT(
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.editar",
+      "Você não tem permissão para editar blocos e conexões do fluxo.",
+    );
+    if (bloqueio) return bloqueio;
     const body = await req.json();
     const nos: RegistroEstrutura[] = Array.isArray(body?.nos) ? body.nos : [];
     const conexoes: RegistroEstrutura[] = Array.isArray(body?.conexoes)
@@ -587,6 +600,12 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.arquivar",
+      "Você não tem permissão para arquivar fluxos.",
+    );
+    if (bloqueio) return bloqueio;
     const body = await req.json();
 
     if (!usuario?.empresa_id) {

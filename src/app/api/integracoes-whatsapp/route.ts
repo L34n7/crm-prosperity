@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { usuarioTemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   sanitizeWhatsAppIntegrationForClient,
@@ -14,41 +15,21 @@ import {
   obterLimiteIntegracoesWhatsapp,
 } from "@/lib/whatsapp/integracoes-multiplas";
 
-type UsuarioSistema = {
-  id: string;
-  empresa_id: string | null;
-  status: "ativo" | "inativo" | "bloqueado";
-  nome: string | null;
-  email: string | null;
-};
+async function getUsuarioLogado(permissao: string) {
+  const contexto = await getUsuarioContexto();
 
-async function getUsuarioLogado() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { error: "Não autenticado", status: 401 as const };
+  if (!contexto.ok) {
+    return { error: contexto.error, status: contexto.status };
   }
 
-  const { data: usuario, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, status, nome, email")
-    .eq("auth_user_id", user.id)
-    .single<UsuarioSistema>();
-
-  if (usuarioError || !usuario) {
-    return { error: "Usuário do sistema não encontrado.", status: 404 as const };
+  if (!usuarioTemPermissao(contexto.usuario, permissao)) {
+    return {
+      error: "Você não tem permissão para acessar integrações WhatsApp.",
+      status: 403 as const,
+    };
   }
 
-  if (usuario.status !== "ativo") {
-    return { error: "Usuário inativo.", status: 403 as const };
-  }
-
-  return { usuario };
+  return { usuario: contexto.usuario };
 }
 
 function montarNomeConexaoPadrao(nomeEmpresa?: string | null) {
@@ -89,7 +70,7 @@ function respostaIntegracao(integracao: Record<string, unknown>) {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await getUsuarioLogado();
+    const auth = await getUsuarioLogado("whatsapp.integracao.visualizar");
 
     if ("error" in auth) {
       return NextResponse.json(
@@ -291,7 +272,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST() {
   try {
-    const auth = await getUsuarioLogado();
+    const auth = await getUsuarioLogado("whatsapp.integracao.configurar");
 
     if ("error" in auth) {
       return NextResponse.json(
@@ -406,7 +387,7 @@ type PatchIntegrationPayload = {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const auth = await getUsuarioLogado();
+    const auth = await getUsuarioLogado("whatsapp.integracao.configurar");
 
     if ("error" in auth) {
       return NextResponse.json(

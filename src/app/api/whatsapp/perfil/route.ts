@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -614,6 +615,13 @@ export async function GET(req: NextRequest) {
     const contexto = await getUsuarioContexto();
     if (!contexto.ok) return jsonErro(contexto.error, contexto.status);
 
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "whatsapp.perfil.visualizar",
+      "Você não tem permissão para visualizar o perfil WhatsApp.",
+    );
+    if (bloqueio) return bloqueio;
+
     const empresaId = contexto.usuario.empresa_id;
     if (!empresaId) return jsonErro("Usuário sem empresa vinculada.", 403);
 
@@ -1045,6 +1053,13 @@ export async function PATCH(req: NextRequest) {
   try {
     const contexto = await getUsuarioContexto();
     if (!contexto.ok) return jsonErro(contexto.error, contexto.status);
+
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "whatsapp.perfil.editar",
+      "Você não tem permissão para editar o perfil WhatsApp.",
+    );
+    if (bloqueio) return bloqueio;
 
     const empresaId = contexto.usuario.empresa_id;
     if (!empresaId) return jsonErro("Usuário sem empresa vinculada.", 403);

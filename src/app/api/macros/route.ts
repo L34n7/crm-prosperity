@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -50,6 +51,15 @@ async function validarContexto() {
   }
 
   const { usuario } = resultado;
+
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "conversas.visualizar",
+    "Você não tem permissão para acessar macros de conversa.",
+  );
+  if (bloqueio) {
+    return { ok: false as const, response: bloqueio };
+  }
 
   if (!usuario.empresa_id) {
     return {

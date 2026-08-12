@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import type {
   AssistenteMidia,
   AssistenteSetor,
@@ -1165,6 +1166,20 @@ export async function POST(request: Request) {
   const sessaoId = txt(body.sessao_id || body.sessaoId, 120);
   const perguntaId = txt(body.pergunta_id, 240);
   const contextoUsuario = await getUsuarioContexto();
+  if (!contextoUsuario.ok) {
+    return NextResponse.json(
+      { ok: false, error: contextoUsuario.error },
+      { status: contextoUsuario.status },
+    );
+  }
+
+  const bloqueioPermissao = bloquearSemPermissao(
+    contextoUsuario.usuario,
+    "fluxos.criar",
+    "Você não tem permissão para criar fluxos com IA.",
+  );
+  if (bloqueioPermissao) return bloqueioPermissao;
+
   const empresaId = contextoUsuario.ok
     ? contextoUsuario.usuario.empresa_id
     : null;

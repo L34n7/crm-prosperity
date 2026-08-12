@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 import {
   WHATSAPP_TEMPLATE_PRICING,
@@ -108,6 +109,13 @@ export async function POST(request: Request) {
     }
 
     const { usuario } = resultado;
+
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "whatsapp.disparos.visualizar",
+      "Você não tem permissão para visualizar disparos.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(

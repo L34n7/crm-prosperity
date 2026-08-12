@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const db = getSupabaseAdmin();
@@ -58,6 +59,9 @@ export async function POST(request: Request) {
       { status: contextoUsuario.status }
     );
   }
+
+  const bloqueio = bloquearSemPermissao(contextoUsuario.usuario, "fluxos.criar");
+  if (bloqueio) return bloqueio;
 
   const empresaId = contextoUsuario.usuario.empresa_id;
   const usuarioId = contextoUsuario.usuario.id;

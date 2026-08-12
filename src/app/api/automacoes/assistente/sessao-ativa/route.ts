@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -114,6 +115,9 @@ export async function GET() {
       { status: 401 }
     );
   }
+
+  const bloqueio = bloquearSemPermissao(contexto.usuario, "fluxos.criar");
+  if (bloqueio) return bloqueio;
 
   const desde = new Date(Date.now() - JANELA_RETOMADA_MS).toISOString();
   const empresaId = String(contexto.usuario.empresa_id || "").trim();

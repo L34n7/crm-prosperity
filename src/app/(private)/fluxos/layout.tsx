@@ -1,5 +1,6 @@
 import Script from "next/script";
 import { Suspense, type ReactNode } from "react";
+import { garantirPermissaoPagina } from "@/lib/permissoes/servidor";
 
 import AssistenteConfirmacaoAnterior from "./AssistenteConfirmacaoAnterior";
 import AssistenteFluxosClientGuard from "./AssistenteFluxosClientGuard";
@@ -270,7 +271,9 @@ const SCRIPT_ESTIMATIVA_TOKENS = `
 })();
 `;
 
-export default function FluxosLayout({ children }: { children: ReactNode }) {
+export default async function FluxosLayout({ children }: { children: ReactNode }) {
+  await garantirPermissaoPagina("fluxos.visualizar");
+
   return (
     <>
       {children}

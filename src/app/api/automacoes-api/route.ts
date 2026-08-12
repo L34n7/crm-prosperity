@@ -4,6 +4,10 @@ import { isIP } from "node:net";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import {
+  bloquearSemPermissao,
+  usuarioTemPermissao,
+} from "@/lib/permissoes/servidor";
 
 const supabase = getSupabaseAdmin();
 
@@ -168,6 +172,13 @@ export async function GET() {
     );
   }
 
+  const bloqueio = bloquearSemPermissao(
+    ctx.usuario,
+    "automacoes_api.visualizar",
+    "Sem permissão para visualizar automações por API.",
+  );
+  if (bloqueio) return bloqueio;
+
   const [integracoesResult, rotinasResult, execucoesResult, templatesResult] =
     await Promise.all([
       supabase
@@ -214,7 +225,10 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    pode_gerenciar: ctx.usuario.is_admin,
+    pode_gerenciar: usuarioTemPermissao(
+      ctx.usuario,
+      "automacoes_api.gerenciar",
+    ),
     integracoes: integracoesResult.data || [],
     rotinas: rotinasResult.data || [],
     templates: templatesResult.data || [],
@@ -243,6 +257,13 @@ export async function POST(request: NextRequest) {
       { status: ctx.status },
     );
   }
+
+  const bloqueio = bloquearSemPermissao(
+    ctx.usuario,
+    "automacoes_api.gerenciar",
+    "Sem permissão para gerenciar automações por API.",
+  );
+  if (bloqueio) return bloqueio;
 
   const body = await request.json();
   const acao = String(body?.acao || "");
@@ -436,6 +457,13 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
+  const bloqueio = bloquearSemPermissao(
+    ctx.usuario,
+    "automacoes_api.gerenciar",
+    "Sem permissão para gerenciar automações por API.",
+  );
+  if (bloqueio) return bloqueio;
+
   const body = await request.json();
   const entidade = String(body?.entidade || "rotina");
   const id = String(body?.id || "");
@@ -449,13 +477,6 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (entidade === "integracao") {
-    if (!ctx.usuario.is_admin) {
-      return NextResponse.json(
-        { ok: false, error: "Apenas administradores podem arquivar conexões." },
-        { status: 403 },
-      );
-    }
-
     if (!["inativa", "nao_testada"].includes(status)) {
       return NextResponse.json(
         { ok: false, error: "Status de conexão inválido." },
@@ -536,12 +557,12 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  if (!ctx.usuario.is_admin) {
-    return NextResponse.json(
-      { ok: false, error: "Apenas administradores podem excluir conexões." },
-      { status: 403 },
-    );
-  }
+  const bloqueio = bloquearSemPermissao(
+    ctx.usuario,
+    "automacoes_api.gerenciar",
+    "Sem permissão para excluir conexões de automações por API.",
+  );
+  if (bloqueio) return bloqueio;
 
   const body = await request.json();
   const id = String(body?.id || "");

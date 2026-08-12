@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { normalizeIntegrationIds, withCalendarIntegrationIds } from "@/lib/agendas/integration-scope";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -50,6 +51,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status });
     }
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(usuario, "agendas.visualizar");
+    if (bloqueio) return bloqueio;
     if (!usuario.empresa_id) {
       return NextResponse.json({ ok: false, error: "Usuario sem empresa vinculada." }, { status: 400 });
     }
@@ -116,6 +119,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status });
     }
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "agendas.criar",
+      "Você não tem permissão para criar agendas.",
+    );
+    if (bloqueio) return bloqueio;
     if (!usuario.empresa_id) {
       return NextResponse.json({ ok: false, error: "Usuario sem empresa vinculada." }, { status: 400 });
     }

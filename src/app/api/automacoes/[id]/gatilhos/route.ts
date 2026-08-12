@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -183,6 +184,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(usuario, "fluxos.visualizar");
+    if (bloqueio) return bloqueio;
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
@@ -246,6 +249,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.gerenciar_gatilhos",
+      "Você não tem permissão para gerenciar gatilhos de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
     const body = await req.json();
 
     if (!usuario?.empresa_id) {
@@ -388,6 +397,12 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.gerenciar_gatilhos",
+      "Você não tem permissão para gerenciar gatilhos de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
     const body = await req.json();
 
     if (!usuario?.empresa_id) {
@@ -568,6 +583,12 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.gerenciar_gatilhos",
+      "Você não tem permissão para gerenciar gatilhos de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
     const body = await req.json();
 
     if (!usuario?.empresa_id) {

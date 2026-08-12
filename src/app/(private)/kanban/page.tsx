@@ -10,6 +10,7 @@ import {
 import { Search, X } from "lucide-react";
 import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
+import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./kanban.module.css";
 
 type ClassificacaoLead = "novo" | "qualificado" | "convertido" | "perdido";
@@ -125,6 +126,8 @@ function moverContatoEntreColunas(
 }
 
 export default function KanbanPage() {
+  const { permissoes } = useHeaderUser();
+  const podeMover = permissoes.includes("kanban.mover");
   const [colunas, setColunas] = useState<ColunaKanban[]>(criarColunasVazias);
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
@@ -181,6 +184,14 @@ export default function KanbanPage() {
     contatoId: string,
     classificacao: ClassificacaoLead
   ) {
+    if (!podeMover) {
+      setFeedback({
+        success: "",
+        error: "Você não tem permissão para mover leads no Kanban.",
+      });
+      return;
+    }
+
     const contatoAtual = colunas
       .flatMap((coluna) => coluna.contatos)
       .find((contato) => contato.id === contatoId);
@@ -320,6 +331,7 @@ export default function KanbanPage() {
                 dragOverColuna === coluna.id ? styles.columnDragOver : ""
               }`}
               onDragOver={(event) => {
+                if (!podeMover) return;
                 event.preventDefault();
                 setDragOverColuna(coluna.id);
               }}
@@ -351,7 +363,7 @@ export default function KanbanPage() {
                       className={`${styles.leadCard} ${
                         movendoContatoId === contato.id ? styles.cardMoving : ""
                       } ${styles[`card_${coluna.id}`]}`}
-                      draggable={movendoContatoId !== contato.id}
+                      draggable={podeMover && movendoContatoId !== contato.id}
                       onDragStart={() => setDragContatoId(contato.id)}
                       onDragEnd={() => {
                         setDragContatoId(null);
@@ -386,7 +398,7 @@ export default function KanbanPage() {
                           className={styles.stageSelect}
                           aria-label="Mover lead para outra classificação"
                           value={contato.classificacao || coluna.id}
-                          disabled={movendoContatoId === contato.id}
+                          disabled={!podeMover || movendoContatoId === contato.id}
                           onChange={(event) =>
                             moverContato(
                               contato.id,

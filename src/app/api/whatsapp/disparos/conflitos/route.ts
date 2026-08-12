@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 
@@ -85,6 +86,13 @@ export async function POST(req: NextRequest) {
     }
 
     const { usuario } = resultadoContexto;
+
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "whatsapp.disparos.visualizar",
+      "Você não tem permissão para visualizar disparos.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(

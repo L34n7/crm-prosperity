@@ -90,8 +90,18 @@ const mobileLabelByHref: Record<string, string> = {
 };
 
 const menuItems: MenuItem[] = [
-  { label: "Painel", href: "/painel", icon: LayoutDashboard },
-  { label: "Conversas", href: "/conversas", icon: MessageSquare },
+  {
+    label: "Painel",
+    href: "/painel",
+    icon: LayoutDashboard,
+    permissao: "dashboard.visualizar",
+  },
+  {
+    label: "Conversas",
+    href: "/conversas",
+    icon: MessageSquare,
+    permissao: "conversas.visualizar",
+  },
   {
     label: "Disparos",
     href: "/disparos-whatsapp",
@@ -104,16 +114,42 @@ const menuItems: MenuItem[] = [
     icon: CalendarClock,
     permissao: PERMISSAO_VISUALIZAR_DISPAROS,
   },
-  { label: "Agendas", href: "/agendas", icon: CalendarCheck },
+  {
+    label: "Agendas",
+    href: "/agendas",
+    icon: CalendarCheck,
+    permissao: "agendas.visualizar",
+  },
   {
     label: "Templates",
     href: "/templates-whatsapp",
     icon: FileText,
+    permissao: "whatsapp_templates.visualizar",
   },
-  { label: "Fluxos", href: "/fluxos", icon: GitBranch },
-  { label: "Automações", href: "/automacoes-api", icon: Workflow },
-  { label: "Contatos", href: "/contatos", icon: Contact },
-  { label: "Kanban", href: "/kanban", icon: Layers3 },
+  {
+    label: "Fluxos",
+    href: "/fluxos",
+    icon: GitBranch,
+    permissao: "fluxos.visualizar",
+  },
+  {
+    label: "Automações",
+    href: "/automacoes-api",
+    icon: Workflow,
+    permissao: "automacoes_api.visualizar",
+  },
+  {
+    label: "Contatos",
+    href: "/contatos",
+    icon: Contact,
+    permissao: "contatos.visualizar",
+  },
+  {
+    label: "Kanban",
+    href: "/kanban",
+    icon: Layers3,
+    permissao: "kanban.visualizar",
+  },
   {
     label: "Estoque",
     href: "/estoque",
@@ -130,6 +166,7 @@ const menuItems: MenuItem[] = [
     label: "Usuários",
     href: "/configuracoes/usuarios",
     icon: Users,
+    permissao: "usuarios.visualizar",
   },
   {
     label: "Empresas",
@@ -153,6 +190,7 @@ const menuItems: MenuItem[] = [
     label: "Configuração de permissões",
     href: "/configuracoes/permissoes",
     icon: ShieldCheck,
+    permissao: "permissoes.visualizar",
   },
   {
     label: "Auditoria",
@@ -170,6 +208,7 @@ const menuItems: MenuItem[] = [
     label: "Perfil WhatsApp",
     href: "/perfil-whatsapp",
     icon: Settings2,
+    permissao: "whatsapp.perfil.visualizar",
   },
 ];
 
@@ -270,6 +309,7 @@ export default function Sidebar({
             label: "Imóveis",
             href: "/imoveis",
             icon: Building2,
+            permissao: "imoveis.visualizar",
           },
           {
             label: "Meus imóveis",

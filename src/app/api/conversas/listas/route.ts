@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -15,6 +16,8 @@ export async function GET() {
   }
 
   const { usuario } = resultado;
+  const bloqueio = bloquearSemPermissao(usuario, "conversas.visualizar");
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(
@@ -53,6 +56,8 @@ export async function POST(request: Request) {
   }
 
   const { usuario } = resultado;
+  const bloqueio = bloquearSemPermissao(usuario, "conversas.gerenciar_listas");
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(
@@ -105,6 +110,8 @@ export async function PUT(request: Request) {
   }
 
   const { usuario } = resultado;
+  const bloqueio = bloquearSemPermissao(usuario, "conversas.gerenciar_listas");
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(
@@ -187,6 +194,8 @@ export async function DELETE(request: Request) {
   }
 
   const { usuario } = resultado;
+  const bloqueio = bloquearSemPermissao(usuario, "conversas.gerenciar_listas");
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(

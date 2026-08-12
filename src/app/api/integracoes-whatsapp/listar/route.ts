@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   calcularProximaPosicaoLivre,
   listarIntegracoesWhatsappDaEmpresa,
@@ -19,6 +20,11 @@ export async function GET() {
     }
 
     const { usuario } = auth;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "whatsapp.integracao.visualizar",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(

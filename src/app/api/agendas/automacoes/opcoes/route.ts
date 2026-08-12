@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   calendarIntegrationIds,
@@ -40,6 +41,8 @@ export async function GET(request: NextRequest) {
         { status: result.status }
       );
     }
+    const bloqueio = bloquearSemPermissao(result.usuario, "agendas.visualizar");
+    if (bloqueio) return bloqueio;
 
     const companyId = result.usuario.empresa_id;
     if (!companyId) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { encryptText } from "@/lib/security/crypto";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
@@ -18,6 +19,13 @@ async function registerNumber(request: NextRequest) {
         { status: contexto.status }
       );
     }
+
+
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "whatsapp.integracao.configurar",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!contexto.usuario.empresa_id) {
       return NextResponse.json(

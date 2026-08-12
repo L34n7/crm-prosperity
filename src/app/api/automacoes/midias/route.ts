@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 
 const BUCKET_MIDIAS = "midias";
 const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 50 * 1024 * 1024; // 50 MB
@@ -229,31 +230,20 @@ async function removerMidiaDosFluxos(params: {
 }
 
 async function obterContextoUsuario() {
-  const supabase = await createClient();
   const supabaseAdmin = getSupabaseAdmin();
+  const contexto = await getUsuarioContexto();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!contexto.ok) {
     return {
       ok: false as const,
       response: NextResponse.json(
-        { ok: false, error: "Não autenticado." },
-        { status: 401 }
+        { ok: false, error: contexto.error },
+        { status: contexto.status },
       ),
     };
   }
 
-  const { data: usuarioSistema, error: usuarioError } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, empresa_id")
-    .eq("auth_user_id", user.id)
-    .single();
-
-  if (usuarioError || !usuarioSistema?.empresa_id) {
+  if (!contexto.usuario.empresa_id) {
     return {
       ok: false as const,
       response: NextResponse.json(
@@ -266,7 +256,11 @@ async function obterContextoUsuario() {
   return {
     ok: true as const,
     supabaseAdmin,
-    usuarioSistema,
+    usuario: contexto.usuario,
+    usuarioSistema: {
+      id: contexto.usuario.id,
+      empresa_id: contexto.usuario.empresa_id,
+    },
   };
 }
 
@@ -302,6 +296,13 @@ export async function GET(req: NextRequest) {
     if (!contexto.ok) {
       return contexto.response;
     }
+
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "fluxos.visualizar",
+      "Você não tem permissão para visualizar mídias de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
 
     const tipo = req.nextUrl.searchParams.get("tipo");
 
@@ -354,6 +355,13 @@ export async function DELETE(req: NextRequest) {
     if (!contexto.ok) {
       return contexto.response;
     }
+
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "fluxos.gerenciar_midias",
+      "Você não tem permissão para excluir mídias de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
 
     const body = await req.json().catch(() => null);
     const id = String(body?.id || "").trim();

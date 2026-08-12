@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { isAdministrador } from "@/lib/auth/authorization";
+import { usuarioTemPermissao } from "@/lib/permissoes/servidor";
 import { upsertConfiguracaoEmpresa } from "@/lib/configuracoes/configuracoes-empresa";
 import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
 
@@ -89,9 +89,9 @@ export async function GET() {
 
     const { usuario } = resultado;
 
-    if (!isAdministrador(usuario)) {
+    if (!usuarioTemPermissao(usuario, "permissoes.visualizar")) {
       return NextResponse.json(
-        { ok: false, error: "Apenas administradores podem acessar esta página" },
+        { ok: false, error: "Sem permissão para visualizar configurações de permissões" },
         { status: 403 }
       );
     }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   extrairUsoTokensIa,
   registrarUsoTokensIa,
@@ -111,6 +112,12 @@ export async function POST(request: Request) {
     }
 
     const { usuario } = resultadoContexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.editar",
+      "Você não tem permissão para editar conexões de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(

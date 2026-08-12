@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { isAdministrador } from "@/lib/auth/authorization";
+import { usuarioTemPermissao } from "@/lib/permissoes/servidor";
 import { upsertConfiguracaoEmpresa } from "@/lib/configuracoes/configuracoes-empresa";
 import {
   getRequestAuditMetadata,
@@ -20,9 +20,9 @@ export async function PUT(request: Request) {
 
     const { usuario } = resultado;
 
-    if (!isAdministrador(usuario)) {
+    if (!usuarioTemPermissao(usuario, "permissoes.editar_empresa")) {
       return NextResponse.json(
-        { ok: false, error: "Apenas administradores podem alterar essa configuração" },
+        { ok: false, error: "Sem permissão para alterar regras da empresa" },
         { status: 403 }
       );
     }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -15,6 +16,13 @@ export async function GET() {
   }
 
   const { usuario } = resultado;
+
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "perfis.visualizar",
+    "Você não tem permissão para visualizar perfis.",
+  );
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(

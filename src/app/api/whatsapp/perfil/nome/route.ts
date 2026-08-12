@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -123,6 +124,13 @@ export async function POST(req: NextRequest) {
     if (!contexto.ok) {
       return jsonErro(contexto.error, contexto.status);
     }
+
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "whatsapp.perfil.editar",
+      "Você não tem permissão para editar o perfil WhatsApp.",
+    );
+    if (bloqueio) return bloqueio;
 
     const empresaId = contexto.usuario.empresa_id;
 

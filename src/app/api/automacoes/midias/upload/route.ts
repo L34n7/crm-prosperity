@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -381,31 +382,20 @@ function validarMetadadosArquivo(params: {
 }
 
 async function obterUsuarioSistema() {
-  const supabase = await createClient();
   const supabaseAdmin = getSupabaseAdmin();
+  const contexto = await getUsuarioContexto();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!contexto.ok) {
     return {
       ok: false as const,
       response: NextResponse.json(
-        { ok: false, error: "Não autenticado." },
-        { status: 401 }
+        { ok: false, error: contexto.error },
+        { status: contexto.status },
       ),
     };
   }
 
-  const { data: usuarioSistema, error: usuarioError } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, empresa_id")
-    .eq("auth_user_id", user.id)
-    .single();
-
-  if (usuarioError || !usuarioSistema?.empresa_id) {
+  if (!contexto.usuario.empresa_id) {
     return {
       ok: false as const,
       response: NextResponse.json(
@@ -418,7 +408,11 @@ async function obterUsuarioSistema() {
   return {
     ok: true as const,
     supabaseAdmin,
-    usuarioSistema: usuarioSistema as UsuarioSistema,
+    usuario: contexto.usuario,
+    usuarioSistema: {
+      id: contexto.usuario.id,
+      empresa_id: contexto.usuario.empresa_id,
+    } as UsuarioSistema,
   };
 }
 
@@ -536,6 +530,13 @@ async function prepararUploadDireto(body: unknown) {
     return contexto.response;
   }
 
+  const bloqueio = bloquearSemPermissao(
+    contexto.usuario,
+    "fluxos.gerenciar_midias",
+    "Você não tem permissão para enviar mídias de fluxos.",
+  );
+  if (bloqueio) return bloqueio;
+
   const validacao = validarMetadadosArquivo({
     nome: String(obterCampoJson(body, "nome") || ""),
     mimeType: String(obterCampoJson(body, "mimeType") || ""),
@@ -595,6 +596,13 @@ async function concluirUploadDireto(body: unknown) {
   if (!contexto.ok) {
     return contexto.response;
   }
+
+  const bloqueio = bloquearSemPermissao(
+    contexto.usuario,
+    "fluxos.gerenciar_midias",
+    "Você não tem permissão para enviar mídias de fluxos.",
+  );
+  if (bloqueio) return bloqueio;
 
   const nome = String(obterCampoJson(body, "nome") || "");
   const mimeType = String(obterCampoJson(body, "mimeType") || "");

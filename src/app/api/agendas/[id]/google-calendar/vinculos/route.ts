@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,12 @@ export async function GET(
         { status: contexto.status }
       );
     }
+
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "agendas.visualizar",
+    );
+    if (bloqueio) return bloqueio;
 
     const empresaId = contexto.usuario.empresa_id;
     if (!empresaId) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -29,6 +30,12 @@ export async function POST(
     }
 
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "mensagens.favoritar",
+      "Você não tem permissão para favoritar mensagens.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(
@@ -121,6 +128,12 @@ export async function DELETE(
     }
 
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "mensagens.favoritar",
+      "Você não tem permissão para remover mensagens dos favoritos.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(

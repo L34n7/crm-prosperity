@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET() {
@@ -16,6 +17,8 @@ export async function GET() {
     }
 
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(usuario, "agendas.visualizar");
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(

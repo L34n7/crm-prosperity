@@ -2295,6 +2295,23 @@ function FluxosPageContent() {
   const mobileDetailActive = Boolean(fluxoParam);
 
   const headerUser = useHeaderUser();
+  const podeCriarFluxos = headerUser.permissoes.includes("fluxos.criar");
+  const podeEditarFluxos = headerUser.permissoes.includes("fluxos.editar");
+  const podeAtivarFluxos = headerUser.permissoes.includes("fluxos.ativar");
+  const podeArquivarFluxos = headerUser.permissoes.includes("fluxos.arquivar");
+  const podeExcluirFluxos = headerUser.permissoes.includes("fluxos.excluir");
+  const podeGerenciarGatilhos = headerUser.permissoes.includes(
+    "fluxos.gerenciar_gatilhos"
+  );
+  const podeGerenciarMidias = headerUser.permissoes.includes(
+    "fluxos.gerenciar_midias"
+  );
+  const possuiAcaoFluxo =
+    podeCriarFluxos ||
+    podeEditarFluxos ||
+    podeAtivarFluxos ||
+    podeArquivarFluxos ||
+    podeExcluirFluxos;
   const [fluxos, setFluxos] = useState<Fluxo[]>([]);
   const [fluxoSelecionado, setFluxoSelecionado] = useState<Fluxo | null>(null);
   const [abrirCriacao, setAbrirCriacao] = useState(false);
@@ -3583,6 +3600,11 @@ function FluxosPageContent() {
 
 
   async function enviarNovaMidia(arquivo: File) {
+    if (!podeGerenciarMidias) {
+      setErro("Você não tem permissão para enviar mídias de fluxos.");
+      return;
+    }
+
     try {
       setEnviandoMidia(true);
       setErro("");
@@ -3732,6 +3754,11 @@ function FluxosPageContent() {
   }
 
     async function excluirMidiaDefinitivamente(midia: MidiaOpcao) {
+      if (!podeGerenciarMidias) {
+        setErro("Você não tem permissão para excluir mídias de fluxos.");
+        return;
+      }
+
       try {
         setErro("");
         setSucesso("");
@@ -6508,6 +6535,11 @@ async function carregarGatilhosFluxo(fluxoId: string) {
 }
 
 async function criarGatilhoFluxo() {
+  if (!podeGerenciarGatilhos) {
+    setErroEdicaoFluxo("Você não tem permissão para gerenciar gatilhos.");
+    return;
+  }
+
   const fluxoParaEditar = obterFluxoAlvoEdicao();
 
   if (!fluxoParaEditar) return;
@@ -6554,6 +6586,11 @@ async function criarGatilhoFluxo() {
 }
 
 async function removerGatilhoFluxo(gatilhoId: string) {
+  if (!podeGerenciarGatilhos) {
+    setErroEdicaoFluxo("Você não tem permissão para gerenciar gatilhos.");
+    return;
+  }
+
   const fluxoParaEditar = obterFluxoAlvoEdicao();
 
   if (!fluxoParaEditar) return;
@@ -6592,6 +6629,11 @@ async function removerGatilhoFluxo(gatilhoId: string) {
 }
 
 async function alternarGatilhoFluxo(gatilho: GatilhoFluxo) {
+  if (!podeGerenciarGatilhos) {
+    setErroEdicaoFluxo("Você não tem permissão para gerenciar gatilhos.");
+    return;
+  }
+
   const fluxoParaEditar = obterFluxoAlvoEdicao();
 
   if (!fluxoParaEditar) return;
@@ -7900,7 +7942,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               <option value="arquivado">Arquivados</option>
             </select>
 
-            <button
+            {podeCriarFluxos && <button
               type="button"
               className={styles.newFlowButton}
               title="Criar fluxo"
@@ -7917,9 +7959,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               }}
             >
               +
-            </button>
+            </button>}
 
-            <button
+            {podeCriarFluxos && <button
               type="button"
               className={styles.importFlowButton}
               title="Importar por codigo"
@@ -7930,7 +7972,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               }}
             >
               <CopyPlus size={18} strokeWidth={2.4} />
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -8045,7 +8087,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   </div>
 
-                  <div className={styles.flowMenuWrapper}>
+                  {possuiAcaoFluxo && <div className={styles.flowMenuWrapper}>
                     <button
                       type="button"
                       className={styles.flowMenuButton}
@@ -8071,7 +8113,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     >
                       ⋮
                     </button>
-                  </div>
+                  </div>}
                 </div>
 
               </div>
@@ -8104,60 +8146,60 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             <div className={styles.headerActionsButtons}>
               {fluxoSelecionado?.status === "arquivado" ? (
                 <>
-                  <button
+                  {podeAtivarFluxos && <button
                     type="button"
                     className={styles.secondaryButton}
                     onClick={() => restaurarFluxo(fluxoSelecionado)}
                   >
                     Restaurar
-                  </button>
+                  </button>}
 
-                  <button
+                  {podeExcluirFluxos && <button
                     type="button"
                     className={styles.dangerButton}
                     onClick={() => abrirModalApagarDefinitivo(fluxoSelecionado)}
                   >
                     Apagar definitivo
-                  </button>
+                  </button>}
                 </>
               ) : (
               <>
-                <button
+                {podeCriarFluxos && <button
                   type="button"
                   className={`${styles.secondaryButton} ${styles.aiHeaderButton}`}
                   onClick={() => setAssistenteFluxosAberto(true)}
                 >
                   ✨ Assistente IA
-                </button>
+                </button>}
 
-                <button
+                {podeEditarFluxos && <button
                   type="button"
                   className={styles.secondaryButton}
                   onClick={() => adicionarNo("enviar_texto")}
                   disabled={!fluxoSelecionado}
                 >
                   + Bloco
-                </button>
+                </button>}
 
-                <button
+                {podeEditarFluxos && <button
                   type="button"
                   className={styles.secondaryButton}
                   onClick={() => abrirEdicaoFluxo()}
                   disabled={!fluxoSelecionado}
                 >
                   Editar fluxo
-                </button>
+                </button>}
 
-                <button
+                {podeEditarFluxos && <button
                   type="button"
                   className={styles.primaryButton}
                   onClick={() => salvarEstrutura()}
                   disabled={!fluxoSelecionado || salvando}
                 >
                   {salvando ? "Salvando..." : "Salvar fluxo"}
-                </button>
+                </button>}
 
-                {fluxo &&
+                {podeAtivarFluxos && fluxo &&
                   fluxo.status !== "ativo" &&
                   fluxo.status !== "arquivado" && (
                     <button
@@ -8171,7 +8213,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </button>
                 )}
 
-                <div className={styles.headerMenuWrapper}>
+                {podeEditarFluxos && <div className={styles.headerMenuWrapper}>
                   <button
                     type="button"
                     className={styles.headerMenuButton}
@@ -8417,7 +8459,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                       <div className={styles.headerDropdownDivider} />
 
-                      <button
+                      {podeCriarFluxos && <button
                         type="button"
                         className={styles.headerDropdownItem}
                         onClick={() => {
@@ -8426,7 +8468,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         }}
                       >
                         Clonar fluxo
-                      </button>
+                      </button>}
 
                       <button
                         type="button"
@@ -8439,7 +8481,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         Compartilhar fluxo
                       </button>
 
-                      <button
+                      {podeAtivarFluxos && <button
                         type="button"
                         className={styles.headerDropdownItem}
                         disabled={fluxoEhSistemaCalendario(fluxoSelecionado)}
@@ -8459,9 +8501,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         {fluxoSelecionado.status === "ativo"
                           ? "Pausar fluxo"
                           : "Ativar fluxo"}
-                      </button>
+                      </button>}
 
-                      <button
+                      {podeArquivarFluxos && <button
                         type="button"
                         className={`${styles.headerDropdownItem} ${styles.headerDropdownDanger}`}
                         disabled={fluxoEhSistemaCalendario(fluxoSelecionado)}
@@ -8476,10 +8518,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         }}
                       >
                         Apagar fluxo
-                      </button>
+                      </button>}
                     </div>
                   )}
-                </div>
+                </div>}
               </>
             )}
               </div>
@@ -8524,7 +8566,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
-                connectOnClick={true}
+                connectOnClick={podeEditarFluxos}
+                nodesDraggable={podeEditarFluxos}
+                nodesConnectable={podeEditarFluxos}
+                edgesReconnectable={podeEditarFluxos}
+                deleteKeyCode={null}
                 onNodeDragStart={() => {
                   ignorarCliqueNodeAposArrasteRef.current = true;
                 }}
@@ -8534,6 +8580,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   }, 120);
                 }}
                 onNodeClick={(_, node) => {
+                  if (!podeEditarFluxos) return;
                   if (ignorarCliqueNodeAposArrasteRef.current) {
                     return;
                   }
@@ -8541,6 +8588,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   abrirEdicaoNo(node);
                 }}
                 onEdgeClick={(_, edge) => {
+                  if (!podeEditarFluxos) return;
                   abrirEdicaoConexao(edge);
 
                   setEdges((atuais) =>
@@ -9401,7 +9449,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                   ))}
                               </select>
 
-                              <label
+                              {podeGerenciarMidias && <label
                                 className={`${styles.secondaryButton} ${
                                   limiteStorageMidiasAtingido ? styles.disabledButton : ""
                                 }`}
@@ -9483,7 +9531,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                     e.target.value = "";
                                   }}
                                 />
-                              </label>
+                              </label>}
 
                               <span className={styles.help}>
                                 {tipoNodeEdicao === "enviar_imagem"
@@ -11780,7 +11828,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         Baixar
                       </a>
 
-                      {confirmandoExclusaoMidiaId === midia.id ? (
+                      {podeGerenciarMidias && (confirmandoExclusaoMidiaId === midia.id ? (
                         <button
                           type="button"
                           className={styles.dangerSmallButton}
@@ -11797,7 +11845,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         >
                           Excluir
                         </button>
-                      )}
+                      ))}
                     </div>
                   </div>
                 ))
@@ -12170,7 +12218,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         </p>
                     </div>
 
-                    <div className={styles.gatilhoCreateRow}>
+                    {podeGerenciarGatilhos && <div className={styles.gatilhoCreateRow}>
                         <input
                         className={styles.input}
                         value={novoGatilhoValor}
@@ -12200,7 +12248,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               Adicionar
                           </button>
                         </div>
-                    </div>
+                    </div>}
 
                     {gatilhosFluxo.length === 0 ? (
                         <div className={styles.emptyMini}>
@@ -12218,7 +12266,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                       </p>
                                   </div>
 
-                                  <div className={styles.gatilhoActions}>
+                                  {podeGerenciarGatilhos && <div className={styles.gatilhoActions}>
                                       <button
                                       type="button"
                                       className={styles.secondaryButton}
@@ -12234,7 +12282,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                       >
                                       ×
                                       </button>
-                                  </div>
+                                  </div>}
                                 </div>
                             ))}
                           </div>
@@ -12332,13 +12380,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 Cancelar
                 </button>
 
-                <button
+                {podeEditarFluxos && <button
                 type="button"
                 className={styles.primaryButton}
                 onClick={salvarEdicaoFluxo}
                 >
                 Salvar alterações
-                </button>
+                </button>}
             </div>
             </div>
         </div>
@@ -12388,13 +12436,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 Cancelar
                 </button>
 
-                <button
+                {podeArquivarFluxos && <button
                 type="button"
                 className={styles.dangerButton}
                 onClick={confirmarArquivarFluxo}
                 >
                 Arquivar fluxo
-                </button>
+                </button>}
             </div>
             </div>
         </div>
@@ -12451,7 +12499,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 Cancelar
                 </button>
 
-                <button
+                {podeExcluirFluxos && <button
                 type="button"
                 className={styles.dangerButton}
                 onClick={confirmarApagarDefinitivo}
@@ -12470,7 +12518,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                 ) : (
                     "Apagar definitivamente"
                 )}
-                </button>
+                </button>}
             </div>
             </div>
         </div>
@@ -12633,14 +12681,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   Cancelar
                 </button>
 
-                <button
+                {podeCriarFluxos && <button
                   type="button"
                   className={styles.primaryButton}
                   onClick={importarFluxoCompartilhado}
                   disabled={importandoFluxo}
                 >
                   {importandoFluxo ? "Importando..." : "Importar fluxo"}
-                </button>
+                </button>}
               </div>
             </div>
           </div>
@@ -13012,7 +13060,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
           >
             {menuFluxo.fluxo.status === "arquivado" ? (
               <>
-                <button
+                {podeAtivarFluxos && <button
                   className={styles.flowDropdownItem}
                   onClick={() => {
                     restaurarFluxo(menuFluxo.fluxo!);
@@ -13020,9 +13068,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   }}
                 >
                   Restaurar
-                </button>
+                </button>}
 
-                <button
+                {podeExcluirFluxos && <button
                   className={`${styles.flowDropdownItem} ${styles.flowDropdownDanger}`}
                   onClick={() => {
                     abrirModalApagarDefinitivo(menuFluxo.fluxo!);
@@ -13030,11 +13078,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   }}
                 >
                   Apagar definitivo
-                </button>
+                </button>}
               </>
             ) : (
               <>
-                <button
+                {podeAtivarFluxos && <button
                   className={styles.flowDropdownItem}
                   disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
                   title={
@@ -13051,9 +13099,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   }}
                 >
                   {menuFluxo.fluxo.status === "ativo" ? "Pausar" : "Ativar"}
-                </button>
+                </button>}
 
-                <button
+                {podeEditarFluxos && <button
                   type="button"
                   className={styles.flowDropdownItem}
                   onClick={() => {
@@ -13062,9 +13110,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   }}
                 >
                   Editar fluxo
-                </button>
+                </button>}
 
-                <button
+                {podeCriarFluxos && <button
                   className={styles.flowDropdownItem}
                   onClick={() => {
                     duplicarFluxo(menuFluxo.fluxo!);
@@ -13072,9 +13120,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   }}
                 >
                   Clonar
-                </button>
+                </button>}
 
-                <button
+                {podeEditarFluxos && <button
                   className={styles.flowDropdownItem}
                   onClick={() => {
                     abrirCompartilhamentoFluxo(menuFluxo.fluxo!);
@@ -13082,9 +13130,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   }}
                 >
                   Compartilhar
-                </button>
+                </button>}
 
-                <button
+                {podeArquivarFluxos && <button
                   className={`${styles.flowDropdownItem} ${styles.flowDropdownDanger}`}
                   disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
                   title={
@@ -13098,7 +13146,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   }}
                 >
                   Apagar
-                </button>
+                </button>}
               </>
             )}
           </div>

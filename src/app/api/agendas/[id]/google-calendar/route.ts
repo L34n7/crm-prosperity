@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   criarStateGoogleCalendar,
   criarUrlAutorizacaoGoogleCalendar,
@@ -42,6 +43,15 @@ export async function GET(
     if (!contexto.ok) {
       return NextResponse.json({ ok: false, error: contexto.error }, { status: contexto.status });
     }
+
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      new URL(request.url).searchParams.get("acao") === "conectar"
+        ? "agendas.editar"
+        : "agendas.visualizar",
+      "Você não tem permissão para configurar o Google Calendar desta agenda.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (new URL(request.url).searchParams.get("acao") === "conectar") {
       const state = criarStateGoogleCalendar({
@@ -124,6 +134,13 @@ export async function POST(
       return NextResponse.json({ ok: false, error: contexto.error }, { status: contexto.status });
     }
 
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "agendas.editar",
+      "Você não tem permissão para sincronizar esta agenda.",
+    );
+    if (bloqueio) return bloqueio;
+
     await sincronizarAgendaGoogleCalendar({
       empresaId: contexto.usuario.empresa_id!,
       agendaId: id,
@@ -149,6 +166,13 @@ export async function DELETE(
     if (!contexto.ok) {
       return NextResponse.json({ ok: false, error: contexto.error }, { status: contexto.status });
     }
+
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "agendas.editar",
+      "Você não tem permissão para desvincular o Google Calendar.",
+    );
+    if (bloqueio) return bloqueio;
 
     await desvincularGoogleCalendar({
       empresaId: contexto.usuario.empresa_id!,

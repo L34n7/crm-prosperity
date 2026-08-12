@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { isAdministrador } from "@/lib/auth/authorization";
+import { usuarioTemPermissao } from "@/lib/permissoes/servidor";
 import { upsertConfiguracaoUsuario } from "@/lib/configuracoes/configuracoes-usuario";
 import {
   getRequestAuditMetadata,
@@ -53,9 +53,9 @@ export async function PUT(
 
     const { usuario } = resultado;
 
-    if (!isAdministrador(usuario)) {
+    if (!usuarioTemPermissao(usuario, "permissoes.editar_usuario")) {
       return NextResponse.json(
-        { ok: false, error: "Apenas administradores podem alterar exceções" },
+        { ok: false, error: "Sem permissão para alterar exceções por usuário" },
         { status: 403 }
       );
     }

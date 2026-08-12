@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { existeConflitoAgenda } from "@/lib/agendas/agenda-service";
 import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
@@ -26,6 +27,8 @@ export async function GET(
     }
 
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(usuario, "agendas.visualizar");
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(
@@ -114,6 +117,12 @@ export async function POST(
     }
 
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "agendas.gerenciar_agendamentos",
+      "Você não tem permissão para criar agendamentos.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(

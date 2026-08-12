@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   getWhatsAppAccessToken,
   sanitizeWhatsAppIntegrationForClient,
@@ -20,6 +21,12 @@ export async function GET() {
         { status: contexto.status }
       );
     }
+
+    const bloqueio = bloquearSemPermissao(
+      contexto.usuario,
+      "whatsapp.integracao.configurar",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!contexto.usuario.empresa_id) {
       return NextResponse.json(

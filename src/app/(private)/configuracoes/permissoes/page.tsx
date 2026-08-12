@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./permissoes.module.css";
 
 type ConfiguracaoEmpresa = {
@@ -105,6 +106,8 @@ const getGrupoFromCodigo = (codigo: string) => {
       return "Mensagens";
     case "contatos":
       return "Contatos";
+    case "pessoas":
+      return "Clientes e pacientes";
     case "usuarios":
       return "Usuarios";
     case "empresas":
@@ -120,8 +123,22 @@ const getGrupoFromCodigo = (codigo: string) => {
       return "WhatsApp";
     case "agendas":
       return "Agendas";
+    case "estoque":
+      return "Estoque";
+    case "rastreamento":
+      return "Rastreamento de leads";
+    case "prontuarios":
+      return "Prontuários";
+    case "odontograma":
+      return "Odontograma";
+    case "imoveis":
+      return "Imóveis";
     case "fluxos":
       return "Fluxos";
+    case "kanban":
+      return "Kanban";
+    case "automacoes_api":
+      return "Automações por API";
     case "ia":
       return "Tokens de IA";
     case "auditoria":
@@ -201,6 +218,9 @@ function getIniciais(nome?: string | null) {
 }
 
 export default function PermissoesPage() {
+  const { permissoes } = useHeaderUser();
+  const podeEditarEmpresa = permissoes.includes("permissoes.editar_empresa");
+  const podeEditarUsuarios = permissoes.includes("permissoes.editar_usuario");
   const [loading, setLoading] = useState(true);
   const [salvandoEmpresa, setSalvandoEmpresa] = useState(false);
   const [salvandoUsuarioId, setSalvandoUsuarioId] = useState<string | null>(null);
@@ -487,13 +507,13 @@ export default function PermissoesPage() {
             </p>
           </div>
 
-          <button
+          {podeEditarEmpresa && <button
             className={styles.primaryButton}
             onClick={salvarEmpresa}
             disabled={salvandoEmpresa}
           >
             {salvandoEmpresa ? "Salvando..." : "Salvar política da empresa"}
-          </button>
+          </button>}
         </section>
 
         <section className={styles.explainGrid}>
@@ -514,6 +534,10 @@ export default function PermissoesPage() {
           </div>
         </section>
 
+        <fieldset
+          disabled={!podeEditarEmpresa}
+          style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+        >
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
             <div>
@@ -712,6 +736,8 @@ export default function PermissoesPage() {
           </div>
         </section>
 
+        </fieldset>
+
         <section className={styles.section}>
           <div className={styles.userSectionHeader}>
             <div>
@@ -772,13 +798,13 @@ export default function PermissoesPage() {
                       </div>
 
                       <div className={styles.userRight}>
-                        <button
+                        {podeEditarUsuarios && <button
                           type="button"
                           className={styles.secondaryButton}
                           onClick={() => abrirEdicao(usuario.id)}
                         >
                           Editar
-                        </button>
+                        </button>}
                       </div>
                     </div>
 

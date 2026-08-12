@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { usuarioTemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   ALLOWED_TEMPLATE_FORMATS,
@@ -51,9 +52,16 @@ function uuidOrNull(value: unknown) {
     : null;
 }
 
-async function agendaContext(id: string) {
+async function agendaContext(id: string, permissao: string) {
   const result = await getUsuarioContexto();
   if (!result.ok) return result;
+  if (!usuarioTemPermissao(result.usuario, permissao)) {
+    return {
+      ok: false as const,
+      error: "Você não tem permissão para configurar automações da agenda.",
+      status: 403,
+    };
+  }
   if (!result.usuario.empresa_id) {
     return {
       ok: false as const,
@@ -158,7 +166,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const context = await agendaContext(id);
+    const context = await agendaContext(id, "agendas.visualizar");
     if (!context.ok) {
       return NextResponse.json(
         { ok: false, error: context.error },
@@ -204,7 +212,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const context = await agendaContext(id);
+    const context = await agendaContext(id, "agendas.editar");
     if (!context.ok) {
       return NextResponse.json(
         { ok: false, error: context.error },

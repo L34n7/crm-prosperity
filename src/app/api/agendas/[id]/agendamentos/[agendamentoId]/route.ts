@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
 
@@ -21,6 +22,12 @@ export async function PATCH(
     }
 
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "agendas.gerenciar_agendamentos",
+      "Você não tem permissão para alterar agendamentos.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(

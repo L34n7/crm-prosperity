@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -22,6 +23,13 @@ export async function POST(req: NextRequest) {
 
     const { usuario } = resultadoContexto;
     const body = await req.json();
+
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "conversas.visualizar",
+      "Você não tem permissão para visualizar protocolos de conversas.",
+    );
+    if (bloqueio) return bloqueio;
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(

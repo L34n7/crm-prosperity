@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { garantirPermissaoPagina } from "@/lib/permissoes/servidor";
 
 const CONTACT_CAPTURE_GRID_STYLES = `
   [class*="captureInfoList"] {
@@ -78,7 +79,9 @@ const CONTACT_CAPTURE_GRID_STYLES = `
   }
 `;
 
-export default function ContatosLayout({ children }: { children: ReactNode }) {
+export default async function ContatosLayout({ children }: { children: ReactNode }) {
+  await garantirPermissaoPagina("contatos.visualizar");
+
   return (
     <>
       {children}

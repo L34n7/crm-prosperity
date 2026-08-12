@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   listarEventosExternosGoogleCalendar,
   reconciliarExclusoesGoogleCalendar,
@@ -22,6 +23,12 @@ export async function GET(
         { status: resultado.status }
       );
     }
+
+    const bloqueio = bloquearSemPermissao(
+      resultado.usuario,
+      "agendas.visualizar",
+    );
+    if (bloqueio) return bloqueio;
 
     const empresaId = resultado.usuario.empresa_id;
 

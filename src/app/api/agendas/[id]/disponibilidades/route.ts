@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const FEATURE_MARKER = "CRM_AGENDA_DAY_BREAKS_REOPEN_LAST_PROTOCOL_V1";
@@ -154,6 +155,11 @@ export async function GET(
         { status: resultado.status }
       );
     }
+    const bloqueio = bloquearSemPermissao(
+      resultado.usuario,
+      "agendas.visualizar",
+    );
+    if (bloqueio) return bloqueio;
     if (!resultado.usuario.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },
@@ -190,6 +196,12 @@ export async function PUT(
       );
     }
     const { usuario } = resultado;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "agendas.editar",
+      "Você não tem permissão para editar a disponibilidade da agenda.",
+    );
+    if (bloqueio) return bloqueio;
     if (!usuario.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },

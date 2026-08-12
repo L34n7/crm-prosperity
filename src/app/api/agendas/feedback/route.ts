@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 // CRM_AGENDA_FEEDBACK_DETAILS_V1
@@ -24,6 +25,8 @@ export async function GET() {
   }
 
   const { usuario } = resultado;
+  const bloqueio = bloquearSemPermissao(usuario, "agendas.visualizar");
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(
@@ -100,6 +103,12 @@ export async function PATCH(request: Request) {
   }
 
   const { usuario } = resultado;
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "agendas.gerenciar_agendamentos",
+    "Você não tem permissão para gerenciar agendamentos.",
+  );
+  if (bloqueio) return bloqueio;
 
   if (!usuario.empresa_id) {
     return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -46,6 +47,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const { usuario } = contexto;
+    const bloqueio = bloquearSemPermissao(
+      usuario,
+      "fluxos.gerenciar_gatilhos",
+      "Você não tem permissão para gerenciar gatilhos de fluxos.",
+    );
+    if (bloqueio) return bloqueio;
     if (!usuario?.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },
