@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { contarGruposDisparosPendentes } from "@/lib/disparos-agendados/pendentes";
 import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 
 const POLLING_HEADERS = {
@@ -37,26 +37,12 @@ export async function GET() {
       );
     }
 
-    const supabase = getSupabaseAdmin();
-
-    const { count, error } = await supabase
-      .from("automacao_agendamentos")
-      .select("id", { count: "exact", head: true })
-      .eq("empresa_id", usuario.empresa_id)
-      .eq("tipo_agendamento", "disparo_template")
-      .eq("status", "pendente");
-
-    if (error) {
-      return NextResponse.json(
-        { ok: false, error: "Erro ao contar disparos pendentes." },
-        { status: 500 }
-      );
-    }
+    const quantidade = await contarGruposDisparosPendentes(usuario.empresa_id);
 
     return NextResponse.json(
       {
         ok: true,
-        quantidade: count || 0,
+        quantidade,
       },
       { headers: POLLING_HEADERS }
     );

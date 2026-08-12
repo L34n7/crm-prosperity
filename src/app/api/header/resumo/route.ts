@@ -8,6 +8,7 @@ import {
   podeVisualizarConversasAtribuidasDoSetor,
   podeVisualizarConversasEncerradasDoSetorEfetivo,
 } from "@/lib/conversas/visibilidade";
+import { contarGruposDisparosPendentes } from "@/lib/disparos-agendados/pendentes";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -93,19 +94,10 @@ async function buscarResumoConversasNaoLidas(params: {
 
 async function buscarResumoDisparosPendentes(empresaId: string) {
   try {
-    const { count, error } = await supabaseAdmin
-      .from("automacao_agendamentos")
-      .select("id", { count: "exact", head: true })
-      .eq("empresa_id", empresaId)
-      .eq("tipo_agendamento", "disparo_template")
-      .eq("status", "pendente");
-
-    if (error) {
-      return blocoErro(error.message);
-    }
+    const quantidade = await contarGruposDisparosPendentes(empresaId);
 
     return blocoOk({
-      quantidade: count || 0,
+      quantidade,
     });
   } catch (error) {
     return blocoErro(
