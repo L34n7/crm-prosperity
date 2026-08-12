@@ -63,6 +63,22 @@ export async function podeEncerrarConversas(usuario: UsuarioAuth) {
   return await temPermissao(usuario, "conversas.encerrar");
 }
 
+export async function podeExportarConversas(usuario: UsuarioAuth) {
+  return await temPermissao(usuario, "conversas.exportar");
+}
+
+export async function podeEditarContatoPelaConversa(usuario: UsuarioAuth) {
+  return await temPermissao(usuario, "conversas.editar_contato");
+}
+
+export async function podeGerenciarEtiquetasConversas(usuario: UsuarioAuth) {
+  return await temPermissao(usuario, "conversas.gerenciar_etiquetas");
+}
+
+export async function podeGerenciarNotasConversas(usuario: UsuarioAuth) {
+  return await temPermissao(usuario, "conversas.gerenciar_notas");
+}
+
 export async function podeVisualizarMensagens(usuario: UsuarioAuth) {
   return await temPermissao(usuario, "mensagens.visualizar");
 }

@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 120409)
+Total output lines: 13659
+
 "use client";
 
 import React, {
@@ -1803,6 +1806,7 @@ function CampoContatoEditavel({
   onCancelar,
   onSalvar,
   onExcluir,
+  podeEditar = true,
 }: {
   label: string;
   valorInicial: string;
@@ -1812,6 +1816,7 @@ function CampoContatoEditavel({
   onCancelar: () => void;
   onSalvar: (valor: string) => void;
   onExcluir?: () => void;
+  podeEditar?: boolean;
 }) {
   const [valor, setValor] = useState(valorInicial);
 
@@ -1884,13 +1889,15 @@ function CampoContatoEditavel({
             {valorInicial || "Não informado"}
           </span>
 
-          <button
-            type="button"
-            className={styles.editIconButton}
-            onClick={onEditar}
-          >
-            ✎
-          </button>
+          {podeEditar && (
+            <button
+              type="button"
+              className={styles.editIconButton}
+              onClick={onEditar}
+            >
+              ✎
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -1905,6 +1912,7 @@ function CampanhaContatoEditavel({
   onEditar,
   onCancelar,
   onSalvar,
+  podeEditar = true,
 }: {
   valorInicial: string;
   campanhaIdInicial: string;
@@ -1913,6 +1921,7 @@ function CampanhaContatoEditavel({
   onEditar: () => void;
   onCancelar: () => void;
   onSalvar: (campanhaId: string) => void;
+  podeEditar?: boolean;
 }) {
   const valorLegado = "__campanha_legada__";
   const campanhaSelectInicial =
@@ -1986,13 +1995,15 @@ function CampanhaContatoEditavel({
             {valorInicial || "Não informado"}
           </span>
 
-          <button
-            type="button"
-            className={styles.editIconButton}
-            onClick={onEditar}
-          >
-            ✎
-          </button>
+          {podeEditar && (
+            <button
+              type="button"
+              className={styles.editIconButton}
+              onClick={onEditar}
+            >
+              ✎
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -2526,6 +2537,11 @@ function ConversasPageContent() {
     informacao: InformacaoCapturaConversa,
     valor: string
   ) {
+    if (!podeEditarContatoConversa) {
+      setErro("Sem permissão para editar o contato pela conversa.");
+      return;
+    }
+
     const contatoId =
       contatoCapturaId || String(conversaSelecionada?.contatos?.id || "").trim();
     const conversaId = conversaSelecionada?.id || "";
@@ -2544,7 +2560,10 @@ function ConversasPageContent() {
         )}/informacoes-captura`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Origem-Modulo": "conversas",
+          },
           body: JSON.stringify({ id: informacao.id, valor: valorLimpo }),
         }
       );
@@ -2740,6 +2759,11 @@ function ConversasPageContent() {
   async function excluirInformacaoCaptura(
     informacao: InformacaoCapturaConversa
   ) {
+    if (!podeEditarContatoConversa) {
+      setErro("Sem permissão para editar o contato pela conversa.");
+      return;
+    }
+
     const contatoId =
       contatoCapturaId || String(conversaSelecionada?.contatos?.id || "").trim();
     const conversaId = conversaSelecionada?.id || "";
@@ -2760,7 +2784,10 @@ function ConversasPageContent() {
         `/api/contatos/${encodeURIComponent(
           contatoId
         )}/informacoes-captura/${encodeURIComponent(informacao.id)}`,
-        { method: "DELETE" }
+        {
+          method: "DELETE",
+          headers: { "X-Origem-Modulo": "conversas" },
+        }
       );
       const data = await response.json().catch(() => ({}));
 
@@ -6178,6 +6205,11 @@ async function buscarTodasMensagensDaConversa(conversaId: string) {
 }
 
 async function baixarConversaPDF() {
+  if (!podeExportarConversa) {
+    setErro("Sem permissão para exportar conversas.");
+    return;
+  }
+
   if (!conversaSelecionada?.id) {
     alert("Nenhuma conversa selecionada.");
     return;
@@ -6355,6 +6387,10 @@ async function baixarConversaPDF() {
 
   async function definirEtiquetaDaConversa(etiquetaId: string | null) {
     if (!conversaSelecionada?.id) return;
+    if (!podeGerenciarEtiquetas) {
+      setErro("Sem permissão para gerenciar etiquetas da conversa.");
+      return;
+    }
 
     try {
       setSalvandoEtiqueta(true);
@@ -6397,6 +6433,11 @@ async function baixarConversaPDF() {
   }
 
   async function carregarNotasDaConversa() {
+    if (!podeGerenciarNotas) {
+      setNotasConversa([]);
+      return;
+    }
+
     if (!conversaSelecionada?.id) return;
 
     const conversaId = conversaSelecionada.id;
@@ -6425,6 +6466,10 @@ async function baixarConversaPDF() {
 
   async function salvarNovaNota() {
     if (!conversaSelecionada?.id) return;
+    if (!podeGerenciarNotas) {
+      setErro("Sem permissão para gerenciar notas da conversa.");
+      return;
+    }
 
     const conteudoNota = notaInterna.trim();
 
@@ -6472,6 +6517,10 @@ async function baixarConversaPDF() {
 
   async function atualizarNota(notaId: string) {
     if (!conversaSelecionada?.id) return;
+    if (!podeGerenciarNotas) {
+      setErro("Sem permissão para gerenciar notas da conversa.");
+      return;
+    }
 
     const conteudoNota = notaEditandoTexto.trim();
 
@@ -6518,6 +6567,10 @@ async function baixarConversaPDF() {
 
   async function excluirNota(notaId: string) {
     if (!conversaSelecionada?.id) return;
+    if (!podeGerenciarNotas) {
+      setErro("Sem permissão para gerenciar notas da conversa.");
+      return;
+    }
 
     try {
       setErro("");
@@ -6643,6 +6696,11 @@ async function baixarConversaPDF() {
   ) {
     if (!conversaSelecionada?.contatos?.id) return;
 
+    if (!podeEditarContatoConversa) {
+      setErro("Sem permissão para editar o contato pela conversa.");
+      return;
+    }
+
     try {
       setErro("");
       setMensagemSucesso("");
@@ -6651,6 +6709,7 @@ async function baixarConversaPDF() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          "X-Origem-Modulo": "conversas",
         },
         body: JSON.stringify({
           [campo]: valor,
@@ -6688,6 +6747,11 @@ async function baixarConversaPDF() {
   async function salvarContatoCampanha(campanhaId: string) {
     if (!conversaSelecionada?.contatos?.id) return;
 
+    if (!podeEditarContatoConversa) {
+      setErro("Sem permissão para editar o contato pela conversa.");
+      return;
+    }
+
     try {
       setErro("");
       setMensagemSucesso("");
@@ -6696,6 +6760,7 @@ async function baixarConversaPDF() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          "X-Origem-Modulo": "conversas",
         },
         body: JSON.stringify({
           rastreamento_campanha_id: campanhaId || null,
@@ -6795,6 +6860,11 @@ async function baixarConversaPDF() {
   }
 
   async function carregarEventosRastreamentoDaConversa(conversaId?: string) {
+    if (!podeVisualizarRastreamento) {
+      setEventosRastreamentoConversa([]);
+      return;
+    }
+
     const idConversa = conversaId || conversaSelecionada?.id;
     if (!idConversa) return;
 
@@ -7450,6 +7520,24 @@ async function baixarConversaPDF() {
   const podeAtribuirPermissao = can(permissoes, "conversas.atribuir");
   const podeEncerrarPermissao = can(permissoes, "conversas.encerrar");
   const podeEnviarMensagemPermissao = can(permissoes, "mensagens.enviar");
+  const podeExportarConversa = can(permissoes, "conversas.exportar");
+  const podeEditarContatoConversa = can(
+    permissoes,
+    "conversas.editar_contato"
+  );
+  const podeGerenciarEtiquetas = can(
+    permissoes,
+    "conversas.gerenciar_etiquetas"
+  );
+  const podeGerenciarNotas = can(permissoes, "conversas.gerenciar_notas");
+  const podeVisualizarRastreamento = can(
+    permissoes,
+    "rastreamento.visualizar"
+  );
+  const podeGerenciarRastreamento = can(
+    permissoes,
+    "rastreamento.gerenciar"
+  );
 
   const conversaEhMinha = !!usuarioId && conversaResponsavelId === usuarioId;
   const conversaEhDeUmDosMeusSetores =
@@ -7547,9 +7635,9 @@ async function baixarConversaPDF() {
     !!usuarioLogado &&
     !conversaHistoricoImportado &&
     !conversaEncerrada &&
-    (ehAdministrador ||
-      (podeEnviarMensagemPermissao &&
-        (conversaEhDeUmDosMeusSetores || conversaEhMinha)));
+    podeEnviarMensagemPermissao &&
+    conversaEhMinha &&
+    !conversaNaFila;
 
   const setoresDisponiveisParaTransferencia = useMemo(() => {
     if (ehAdministrador) {
@@ -8611,47 +8699,7 @@ const templateFooterTexto = useMemo(() => {
                       <option value="whatsapp">WhatsApp</option>
                       <option value="instagram">Instagram</option>
                       <option value="facebook">Facebook</option>
-                      <option value="site">Site</option>
-                      <option value="email">E-mail</option>
-                    </select>
-
-                    <select
-                      value={setorFiltro}
-                      onChange={(e) => setSetorFiltro(e.target.value)}
-                      className={styles.filterSelect}
-                    >
-                      <option value="todos">Todos os setores</option>
-                      {setoresUnicos.map((setor) => (
-                        <option key={setor.id} value={setor.id}>
-                          {setor.nome}
-                        </option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={responsavelFiltro}
-                      onChange={(e) => setResponsavelFiltro(e.target.value)}
-                      className={styles.filterSelect}
-                    >
-                      <option value="todos">Todos os responsáveis</option>
-                      {responsaveisUnicos.map((responsavel) => (
-                        <option key={responsavel.id} value={responsavel.id}>
-                          {responsavel.nome}
-                        </option>
-                      ))}
-                    </select>
-
-                    <button
-                      className={`${styles.quickChip} ${
-                        chipRapido === "fila" ? styles.quickChipActive : ""
-                      }`}
-                      onClick={() => setChipRapido("fila")}
-                    >
-                      Fila
-                    </button>
-
-                    <button
-                      className={`${styles.quickChip} ${
+                 …409 tokens truncated…={`${styles.quickChip} ${
                         chipRapido === "nao_lidas" ? styles.quickChipActive : ""
                       }`}
                       onClick={() => setChipRapido("nao_lidas")}
@@ -9048,7 +9096,7 @@ const templateFooterTexto = useMemo(() => {
                         ) : conversaEncerrada ? null : (
                         <>
 
-                          {conversaTemNotas && (
+                          {conversaTemNotas && podeGerenciarNotas && (
                             <button
                               type="button"
                               className={styles.noteShortcutButton}
@@ -9123,18 +9171,20 @@ const templateFooterTexto = useMemo(() => {
                                   Adicionar à lista
                                 </button>
 
-                                <button
-                                  type="button"
-                                  className={styles.headerDropdownItem}
-                                  onClick={async () => {
-                                    setPainelDireitoAberto(true);
-                                    setAbaPainelDireito("etiquetas");
-                                    setMenuContatoAberto(false);
-                                    await carregarEtiquetasEmpresa();
-                                  }}
-                                >
-                                  Etiquetas
-                                </button>
+                                {podeGerenciarEtiquetas && (
+                                  <button
+                                    type="button"
+                                    className={styles.headerDropdownItem}
+                                    onClick={async () => {
+                                      setPainelDireitoAberto(true);
+                                      setAbaPainelDireito("etiquetas");
+                                      setMenuContatoAberto(false);
+                                      await carregarEtiquetasEmpresa();
+                                    }}
+                                  >
+                                    Etiquetas
+                                  </button>
+                                )}
 
                                 <div className={styles.headerDropdownDivider} />
 
@@ -9165,25 +9215,27 @@ const templateFooterTexto = useMemo(() => {
                                   Histórico
                                 </button>
 
-                                <button
-                                  type="button"
-                                  className={styles.headerDropdownItem}
-                                  onClick={async () => {
-                                    setAbaPainelDireito("notas");
-                                    setPainelDireitoAberto(true);
-                                    setMenuContatoAberto(false);
-                                    await carregarNotasDaConversa();
-                                  }}
-                                >
-                                  <span className={styles.dropdownItemContent}>
-                                    <span>Notas</span>
-                                    {quantidadeNotas > 0 && (
-                                      <span className={styles.dropdownBadge}>
-                                        {quantidadeNotas}
-                                      </span>
-                                    )}
-                                  </span>
-                                </button>
+                                {podeGerenciarNotas && (
+                                  <button
+                                    type="button"
+                                    className={styles.headerDropdownItem}
+                                    onClick={async () => {
+                                      setAbaPainelDireito("notas");
+                                      setPainelDireitoAberto(true);
+                                      setMenuContatoAberto(false);
+                                      await carregarNotasDaConversa();
+                                    }}
+                                  >
+                                    <span className={styles.dropdownItemContent}>
+                                      <span>Notas</span>
+                                      {quantidadeNotas > 0 && (
+                                        <span className={styles.dropdownBadge}>
+                                          {quantidadeNotas}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </button>
+                                )}
 
                                 <button
                                   type="button"
@@ -10682,6 +10734,7 @@ const templateFooterTexto = useMemo(() => {
                             </div>
                           </div>
 
+                          {podeVisualizarRastreamento && (
                           <div className={styles.trackingResultCard}>
                             <div className={styles.trackingResultHeader}>
                               <div>
@@ -10691,6 +10744,7 @@ const templateFooterTexto = useMemo(() => {
                                 </strong>
                               </div>
 
+                              {podeGerenciarRastreamento && (
                               <button
                                 type="button"
                                 className={styles.secondaryButton}
@@ -10698,6 +10752,7 @@ const templateFooterTexto = useMemo(() => {
                               >
                                 Registrar resultado
                               </button>
+                              )}
                             </div>
 
                             {carregandoEventosRastreamento ? (
@@ -10735,6 +10790,7 @@ const templateFooterTexto = useMemo(() => {
                                         <b>{formatarValorRastreamento(evento.valor)}</b>
                                       )}
 
+                                      {podeGerenciarRastreamento && (
                                       <div className={styles.listaActions}>
                                         <button
                                           type="button"
@@ -10758,12 +10814,14 @@ const templateFooterTexto = useMemo(() => {
                                           X
                                         </button>
                                       </div>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
                               </div>
                             )}
                           </div>
+                          )}
                          </div>
                       )}
 
@@ -10811,18 +10869,20 @@ const templateFooterTexto = useMemo(() => {
                                   {conversaSelecionada.contatos?.nome || "Sem nome"}
                                 </h4>
 
-                                <button
-                                  type="button"
-                                  className={styles.whatsContactNameEditButton}
-                                  onClick={() => {
-                                    setNomeContatoEditando(conversaSelecionada.contatos?.nome || "");
-                                    setEditandoCampo("nome");
-                                  }}
-                                  title="Editar nome"
-                                  aria-label="Editar nome do contato"
-                                >
-                                  <Pencil size={14} strokeWidth={2} />
-                                </button>
+                                {podeEditarContatoConversa && (
+                                  <button
+                                    type="button"
+                                    className={styles.whatsContactNameEditButton}
+                                    onClick={() => {
+                                      setNomeContatoEditando(conversaSelecionada.contatos?.nome || "");
+                                      setEditandoCampo("nome");
+                                    }}
+                                    title="Editar nome"
+                                    aria-label="Editar nome do contato"
+                                  >
+                                    <Pencil size={14} strokeWidth={2} />
+                                  </button>
+                                )}
                               </div>
                             )}
 
@@ -10843,14 +10903,16 @@ const templateFooterTexto = useMemo(() => {
                                 <span className={styles.whatsContactActionText}>Detalhes</span>
                               </button>
 
-                              <button 
-                                type="button" 
-                                className={styles.whatsContactActionButton}
-                                onClick={baixarConversaPDF}
+                              {podeExportarConversa && (
+                                <button
+                                  type="button"
+                                  className={styles.whatsContactActionButton}
+                                  onClick={baixarConversaPDF}
                                 >
-                                <span className={styles.whatsContactActionIcon}>↗</span>
-                                <span className={styles.whatsContactActionText}>Compartilhar</span>
-                              </button>
+                                  <span className={styles.whatsContactActionIcon}>↗</span>
+                                  <span className={styles.whatsContactActionText}>Compartilhar</span>
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -10907,6 +10969,7 @@ const templateFooterTexto = useMemo(() => {
                                 onEditar={() => setEditandoCampo("email")}
                                 onCancelar={() => setEditandoCampo(null)}
                                 onSalvar={(valor) => salvarContatoCampo("email", valor)}
+                                podeEditar={podeEditarContatoConversa}
                               />
 
                               <CampoContatoEditavel
@@ -10916,6 +10979,7 @@ const templateFooterTexto = useMemo(() => {
                                 onEditar={() => setEditandoCampo("empresa")}
                                 onCancelar={() => setEditandoCampo(null)}
                                 onSalvar={(valor) => salvarContatoCampo("empresa", valor)}
+                                podeEditar={podeEditarContatoConversa}
                               />
 
                               <div className={styles.whatsInfoRow}>
@@ -10940,6 +11004,7 @@ const templateFooterTexto = useMemo(() => {
                                 onEditar={() => setEditandoCampo("campanha")}
                                 onCancelar={() => setEditandoCampo(null)}
                                 onSalvar={salvarContatoCampanha}
+                                podeEditar={podeEditarContatoConversa}
                               />
 
                               <CampoContatoEditavel
@@ -10950,6 +11015,7 @@ const templateFooterTexto = useMemo(() => {
                                 onEditar={() => setEditandoCampo("observacoes")}
                                 onCancelar={() => setEditandoCampo(null)}
                                 onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}
+                                podeEditar={podeEditarContatoConversa}
                               />
 
                               {informacoesCapturaResumo.map((informacao) => (
@@ -10973,6 +11039,7 @@ const templateFooterTexto = useMemo(() => {
                                   onExcluir={() =>
                                     void excluirInformacaoCaptura(informacao)
                                   }
+                                  podeEditar={podeEditarContatoConversa}
                                 />
                               ))}
 
@@ -11075,6 +11142,7 @@ const templateFooterTexto = useMemo(() => {
                             </button>
 
                             {/* Notas */}
+                            {podeGerenciarNotas && (
                             <button
                               type="button"
                               className={styles.whatsListActionButton}
@@ -11095,7 +11163,9 @@ const templateFooterTexto = useMemo(() => {
                                 </span>
                               )}
                             </button>
+                            )}
 
+                            {podeGerenciarEtiquetas && (
                             <button
                               type="button"
                               className={styles.whatsListActionButton}
@@ -11120,6 +11190,7 @@ const templateFooterTexto = useMemo(() => {
                                 <span className={styles.whatsListActionRight}>Não</span>
                               )}
                             </button>
+                            )}
                           </div>
 
                           <div className={styles.whatsContactSection}>
@@ -11234,6 +11305,7 @@ const templateFooterTexto = useMemo(() => {
                                           informacao
                                         )
                                       }
+                                      podeEditar={podeEditarContatoConversa}
                                     />
                                   )
                                 )}
@@ -11436,7 +11508,7 @@ const templateFooterTexto = useMemo(() => {
                         </div>
                       )}
 
-                      {abaPainelDireito === "notas" && (
+                      {abaPainelDireito === "notas" && podeGerenciarNotas && (
                         <div className={styles.panelSectionStack}>
                           <div className={styles.noteComposer}>
                             <div className={styles.noteComposerHeader}>
@@ -11655,7 +11727,7 @@ const templateFooterTexto = useMemo(() => {
                         </div>
                       )}
 
-                      {abaPainelDireito === "etiquetas" && (
+                      {abaPainelDireito === "etiquetas" && podeGerenciarEtiquetas && (
                         <div className={styles.panelSectionStack}>
                           <div className={styles.etiquetaAtualCard}>
                             <div className={styles.etiquetaAtualLabel}>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import { podeGerenciarEtiquetasConversas } from "@/lib/auth/authorization";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -19,6 +20,13 @@ export async function PUT(
   }
 
   const { usuario } = resultado;
+
+  if (!(await podeGerenciarEtiquetasConversas(usuario))) {
+    return NextResponse.json(
+      { ok: false, error: "Sem permissão para gerenciar etiquetas da conversa" },
+      { status: 403 }
+    );
+  }
 
   if (!usuario.empresa_id) {
     return NextResponse.json(

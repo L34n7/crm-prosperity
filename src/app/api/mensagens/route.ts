@@ -9,6 +9,7 @@ import {
   isAdministrador,
   podeAtribuirConversas,
   podeEnviarMensagens,
+  podeExportarConversas,
   podeVisualizarMensagens,
 } from "@/lib/auth/authorization";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
@@ -417,6 +418,13 @@ export async function GET(request: Request) {
       );
     }
 
+    if (exportar && !(await podeExportarConversas(usuario))) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão para exportar conversas" },
+        { status: 403 }
+      );
+    }
+
     if (!(await usuarioPodeAcessarConversa(usuario, conversa))) {
       return NextResponse.json(
         { ok: false, error: "Você não pode acessar as mensagens desta conversa" },
@@ -783,6 +791,16 @@ export async function POST(request: Request) {
   if (!(await usuarioPodeAcessarConversa(usuario, conversa))) {
     return NextResponse.json(
       { ok: false, error: "Você não pode enviar mensagem nesta conversa" },
+      { status: 403 }
+    );
+  }
+
+  if (
+    conversa.status === "fila" ||
+    conversa.responsavel_id !== usuario.id
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Assuma a conversa antes de enviar mensagens" },
       { status: 403 }
     );
   }

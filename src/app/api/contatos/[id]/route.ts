@@ -14,18 +14,13 @@ import {
   normalizarClassificacaoLead,
   statusLeadLegadoDaClassificacao,
 } from "@/lib/leads/classificacao";
+import { podeEditarContatoPelaConversa } from "@/lib/auth/authorization";
 
 
 const supabaseAdmin = getSupabaseAdmin();
 
-function podeGerenciarContatos(usuario: UsuarioContexto) {
-  const nomesPerfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
-
-  return (
-    nomesPerfis.includes("Administrador") ||
-    nomesPerfis.includes("Supervisor") ||
-    nomesPerfis.includes("Atendente")
-  );
+function podeEditarContatos(usuario: UsuarioContexto) {
+  return usuario.permissoes.includes("contatos.editar");
 }
 
 function normalizarTelefone(telefone: string) {
@@ -97,10 +92,20 @@ export async function PUT(
   }
 
   const { usuario } = resultado;
+  const origemConversa = request.headers.get("x-origem-modulo") === "conversas";
 
-  if (!podeGerenciarContatos(usuario)) {
+  const podeEditar = origemConversa
+    ? await podeEditarContatoPelaConversa(usuario)
+    : podeEditarContatos(usuario);
+
+  if (!podeEditar) {
     return NextResponse.json(
-      { ok: false, error: "Sem permissão para editar contato" },
+      {
+        ok: false,
+        error: origemConversa
+          ? "Sem permissão para editar o contato pela conversa"
+          : "Sem permissão para editar contato",
+      },
       { status: 403 }
     );
   }

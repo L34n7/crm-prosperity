@@ -105,6 +105,31 @@ export async function PUT(
       );
     }
 
+    const { data: vinculosAdministrador, error: vinculosAdministradorError } =
+      await supabaseAdmin
+        .from("usuarios_perfis")
+        .select("perfis_empresa!inner(nome, ativo)")
+        .eq("usuario_id", id)
+        .eq("perfis_empresa.ativo", true);
+
+    if (vinculosAdministradorError) {
+      return NextResponse.json(
+        { ok: false, error: vinculosAdministradorError.message },
+        { status: 500 }
+      );
+    }
+
+    const usuarioAlvoEhAdministrador = (vinculosAdministrador || []).some(
+      (vinculo) => {
+        const perfil = Array.isArray(vinculo.perfis_empresa)
+          ? vinculo.perfis_empresa[0]
+          : vinculo.perfis_empresa;
+        return (
+          perfil?.nome?.trim().toLocaleLowerCase("pt-BR") === "administrador"
+        );
+      }
+    );
+
     const body = await request.json();
     const auditMeta = getRequestAuditMetadata(request);
 
@@ -140,6 +165,9 @@ export async function PUT(
           .filter(([codigo]) => Boolean(codigo))
       ).values()
     ) as PermissaoUsuarioInput[];
+    const overridesEfetivos = usuarioAlvoEhAdministrador
+      ? []
+      : overridesValidos;
 
     if (overridesValidos.length > 0) {
       const { data: catalogoPermissoes, error: catalogoError } =
@@ -174,7 +202,7 @@ export async function PUT(
       empresaId: usuario.empresa_id,
       usuarioAlterado: {
         usuarioId: id,
-        permissoes: overridesValidos,
+        permissoes: overridesEfetivos,
       },
     });
 
@@ -240,7 +268,7 @@ export async function PUT(
     }
 
     const permissoesParaSalvar = [
-      ...overridesValidos,
+      ...overridesEfetivos,
       ...permissoesInternasPreservadas,
     ];
 
@@ -284,7 +312,7 @@ export async function PUT(
       },
       depois: {
         politica: data,
-        permissoes_usuario: overridesValidos,
+        permissoes_usuario: overridesEfetivos,
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,

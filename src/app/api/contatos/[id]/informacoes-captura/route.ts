@@ -3,16 +3,22 @@ import { getUsuarioContexto, type UsuarioContexto } from "@/lib/auth/get-usuario
 import { validarCaptura } from "@/lib/automacoes/captura-normalizacao";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-function podeGerenciarContatos(usuario: UsuarioContexto) {
-  const perfis = (usuario.perfis_dinamicos ?? []).map((perfil) => perfil.nome);
-  return perfis.includes("Administrador") || perfis.includes("Supervisor") || perfis.includes("Atendente");
+function temPermissao(
+  usuario: UsuarioContexto,
+  codigo: "contatos.visualizar" | "contatos.editar" | "conversas.visualizar" | "conversas.editar_contato"
+) {
+  return usuario.permissoes.includes(codigo);
 }
 
-async function contextoContato(id: string) {
+async function contextoContato(id: string, request: Request, editar = false) {
   const resultado = await getUsuarioContexto();
   if (!resultado.ok) return { erro: NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status }) };
   if (!resultado.usuario.empresa_id) return { erro: NextResponse.json({ ok: false, error: "Usuário sem empresa vinculada" }, { status: 400 }) };
-  if (!podeGerenciarContatos(resultado.usuario)) return { erro: NextResponse.json({ ok: false, error: "Sem permissão para gerenciar informações de captura" }, { status: 403 }) };
+  const origemConversa = request.headers.get("x-origem-modulo") === "conversas";
+  const permissao = origemConversa
+    ? editar ? "conversas.editar_contato" : "conversas.visualizar"
+    : editar ? "contatos.editar" : "contatos.visualizar";
+  if (!temPermissao(resultado.usuario, permissao)) return { erro: NextResponse.json({ ok: false, error: "Sem permissão para gerenciar informações de captura" }, { status: 403 }) };
 
   const supabase = getSupabaseAdmin();
   const { data: contato, error } = await supabase.from("contatos").select("id").eq("id", id).eq("empresa_id", resultado.usuario.empresa_id).maybeSingle();
@@ -21,9 +27,9 @@ async function contextoContato(id: string) {
   return { supabase, usuario: resultado.usuario };
 }
 
-export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const acesso = await contextoContato(id);
+  const acesso = await contextoContato(id, request);
   if ("erro" in acesso) return acesso.erro;
 
   const { data, error } = await acesso.supabase
@@ -40,7 +46,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const acesso = await contextoContato(id);
+  const acesso = await contextoContato(id, request, true);
   if ("erro" in acesso) return acesso.erro;
   const body = await request.json();
   const informacaoId = String(body?.id || "").trim();

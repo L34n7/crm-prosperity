@@ -5,6 +5,7 @@ import {
   type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import { podeGerenciarNotasConversas } from "@/lib/auth/authorization";
 
 const supabaseAdmin = getSupabaseAdmin();
 const LIMITE_CARACTERES_NOTA = 600;
@@ -97,6 +98,15 @@ function selectNotaComAutor() {
   `;
 }
 
+async function bloquearSemPermissaoNotas(usuario: UsuarioContexto) {
+  if (await podeGerenciarNotasConversas(usuario)) return null;
+
+  return NextResponse.json(
+    { ok: false, error: "Sem permissão para gerenciar notas da conversa" },
+    { status: 403 }
+  );
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> }
@@ -111,6 +121,9 @@ export async function GET(
       { status: resultado.status }
     );
   }
+
+  const bloqueio = await bloquearSemPermissaoNotas(resultado.usuario);
+  if (bloqueio) return bloqueio;
 
   const conversaPermitida = await buscarConversaPermitida(
     id,
@@ -157,6 +170,9 @@ export async function POST(
       { status: resultado.status }
     );
   }
+
+  const bloqueio = await bloquearSemPermissaoNotas(resultado.usuario);
+  if (bloqueio) return bloqueio;
 
   const body = await request.json();
   const conteudo = String(body?.conteudo || "").trim();
@@ -228,6 +244,9 @@ export async function PUT(
       { status: resultado.status }
     );
   }
+
+  const bloqueio = await bloquearSemPermissaoNotas(resultado.usuario);
+  if (bloqueio) return bloqueio;
 
   const body = await request.json();
   const notaId = body?.nota_id;
@@ -329,6 +348,9 @@ export async function DELETE(
       { status: resultado.status }
     );
   }
+
+  const bloqueio = await bloquearSemPermissaoNotas(resultado.usuario);
+  if (bloqueio) return bloqueio;
 
   const body = await request.json();
   const notaId = body?.nota_id;

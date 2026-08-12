@@ -276,7 +276,10 @@ export default function CaptureInfoPanel() {
   async function carregarPorContatoId(contatoId: string) {
     const response = await fetch(
       `/api/contatos/${encodeURIComponent(contatoId)}/informacoes-captura`,
-      { cache: "no-store" }
+      {
+        cache: "no-store",
+        headers: { "X-Origem-Modulo": "conversas" },
+      }
     );
     const data = await lerJson(response);
 

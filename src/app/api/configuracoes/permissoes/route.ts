@@ -44,6 +44,14 @@ type PermissaoOverride = {
   efeito: "permitir" | "bloquear";
 };
 
+function usuarioEhAdministrador(usuario: UsuarioPermissoesRow) {
+  return (usuario.usuarios_perfis || []).some(
+    (vinculo) =>
+      vinculo.perfis_empresa?.nome?.trim().toLocaleLowerCase("pt-BR") ===
+      "administrador"
+  );
+}
+
 function defaultEmpresa(empresaId: string) {
   return {
     empresa_id: empresaId,
@@ -281,16 +289,21 @@ export async function GET() {
       },
       permissoes_herdadas: Array.from(
         new Set(
-          (item.usuarios_perfis || [])
-            .flatMap((p) => permissoesPorPerfil.get(p.perfil_empresa_id) || [])
-            .filter((codigo) => !isPermissaoInternaOculta(codigo))
+          (usuarioEhAdministrador(item)
+            ? catalogoPermissoesVisiveis.map((permissao) => permissao.codigo)
+            : (item.usuarios_perfis || []).flatMap(
+                (p) => permissoesPorPerfil.get(p.perfil_empresa_id) || []
+              )
+          ).filter((codigo) => !isPermissaoInternaOculta(codigo))
             .filter(Boolean)
         )
       ),
-      permissoes_usuario: (overridesPorUsuario.get(item.id) || []).filter(
-        (permissao) =>
-          !isPermissaoInternaOculta(permissao.permissao_codigo)
-      ),
+      permissoes_usuario: usuarioEhAdministrador(item)
+        ? []
+        : (overridesPorUsuario.get(item.id) || []).filter(
+            (permissao) =>
+              !isPermissaoInternaOculta(permissao.permissao_codigo)
+          ),
     }));
 
     return NextResponse.json({

@@ -239,6 +239,16 @@ export async function POST(request: Request) {
     );
   }
 
+  if (
+    conversa.status === "fila" ||
+    conversa.responsavel_id !== usuario.id
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Assuma a conversa antes de enviar mensagens" },
+      { status: 403 }
+    );
+  }
+
   const { data, error } = await supabaseAdmin
     .from("mensagens")
     .insert([

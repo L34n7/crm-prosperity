@@ -123,7 +123,9 @@ export async function GET(
         codigo: item.codigo,
         descricao: item.descricao,
         grupo: getGrupoFromCodigo(item.codigo),
-        marcada: marcadas.has(item.codigo),
+        marcada:
+          perfil.nome?.trim().toLocaleLowerCase("pt-BR") === "administrador" ||
+          marcadas.has(item.codigo),
       }));
 
     return NextResponse.json({
@@ -234,6 +236,12 @@ export async function PUT(
       ).filter((codigo) => !isPermissaoInternaOculta(codigo))
     );
 
+    const perfilEhAdministrador =
+      perfil.nome?.trim().toLocaleLowerCase("pt-BR") === "administrador";
+    const permissoesEfetivas = perfilEhAdministrador
+      ? Array.from(codigosValidos)
+      : permissoesValidas;
+
     const contemCodigoInvalido = permissoesValidas.some(
       (codigo) => !codigosValidos.has(codigo)
     );
@@ -249,7 +257,7 @@ export async function PUT(
       empresaId: usuario.empresa_id,
       perfilAlterado: {
         perfilEmpresaId: id,
-        permissoes: permissoesValidas,
+        permissoes: permissoesEfetivas,
       },
     });
 
@@ -289,7 +297,7 @@ export async function PUT(
     }
 
     const permissoesParaSalvar = Array.from(
-      new Set([...permissoesValidas, ...permissoesInternasPreservadas])
+      new Set([...permissoesEfetivas, ...permissoesInternasPreservadas])
     );
 
     if (permissoesParaSalvar.length > 0) {
@@ -324,7 +332,7 @@ export async function PUT(
       usuario_nome: usuario.nome,
       usuario_email: usuario.email,
       antes: { permissoes: permissoesAntes.sort() },
-      depois: { permissoes: permissoesValidas.sort() },
+      depois: { permissoes: permissoesEfetivas.sort() },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
     });

@@ -10,12 +10,14 @@ import {
   buscarAssinaturaEmpresa,
   filtrarPermissoesPorAssinatura,
 } from "@/lib/assinaturas/status";
+import { isPermissaoInternaOculta } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
 const USUARIO_EMPRESA_CACHE_TTL_MS = 30_000;
 const USUARIO_PERFIS_CACHE_TTL_MS = 30_000;
 const PERFIL_PERMISSOES_CACHE_TTL_MS = 30_000;
 const USUARIO_PERMISSOES_CACHE_TTL_MS = 30_000;
+const CATALOGO_PERMISSOES_CACHE_TTL_MS = 30_000;
 
 type PerfilEmpresaRow = {
   id: string;
@@ -42,6 +44,10 @@ type UsuarioPermissaoRow = {
   efeito: "permitir" | "bloquear";
 };
 
+type PermissaoCatalogoRow = {
+  codigo: string;
+};
+
 type ListarPermissoesOptions = {
   empresaId?: string | null;
   assinatura?: AssinaturaEmpresa | null;
@@ -63,6 +69,32 @@ function normalizarPerfilEmpresa(
   perfil: UsuarioPerfilRow["perfis_empresa"]
 ) {
   return Array.isArray(perfil) ? perfil[0] : perfil;
+}
+
+function perfilEhAdministrador(nome: string | null | undefined) {
+  return nome?.trim().toLocaleLowerCase("pt-BR") === "administrador";
+}
+
+async function listarPermissoesOperacionais() {
+  return await getOrSetTtlCache(
+    getTtlCacheKey("catalogo-permissoes-operacionais"),
+    CATALOGO_PERMISSOES_CACHE_TTL_MS,
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from("permissoes")
+        .select("codigo");
+
+      if (error) {
+        throw new Error(
+          `Erro ao listar catalogo de permissoes: ${error.message}`
+        );
+      }
+
+      return ((data ?? []) as PermissaoCatalogoRow[])
+        .map((item) => item.codigo)
+        .filter((codigo) => !isPermissaoInternaOculta(codigo));
+    }
+  );
 }
 
 async function buscarEmpresaIdDoUsuario(usuarioId: string) {
@@ -200,15 +232,19 @@ export async function listarPermissoesDoUsuario(
   ];
   const isAdmin = vinculos.some((item) => {
     const perfil = normalizarPerfilEmpresa(item.perfis_empresa);
-    return perfil?.nome === "Administrador";
+    return perfilEhAdministrador(perfil?.nome);
   });
 
-  const [perfilPermissoes, usuarioPermissoes] = await Promise.all([
-    listarPermissoesDosPerfis(perfilEmpresaIds),
-    listarPermissoesIndividuaisDoUsuario(usuarioId, empresaId ?? null),
-  ]);
+  const [perfilPermissoes, usuarioPermissoes, permissoesOperacionais] =
+    await Promise.all([
+      listarPermissoesDosPerfis(perfilEmpresaIds),
+      listarPermissoesIndividuaisDoUsuario(usuarioId, empresaId ?? null),
+      isAdmin ? listarPermissoesOperacionais() : Promise.resolve([]),
+    ]);
 
-  const permissoes = new Set<string>();
+  // Administrador herda todo o catalogo operacional. Permissoes internas
+  // continuam dependendo dos vinculos especiais existentes no banco.
+  const permissoes = new Set<string>(permissoesOperacionais);
 
   for (const item of perfilPermissoes) {
     if (item?.permissao_codigo) {
@@ -223,7 +259,10 @@ export async function listarPermissoesDoUsuario(
       permissoes.add(item.permissao_codigo);
     }
 
-    if (item.efeito === "bloquear") {
+    if (
+      item.efeito === "bloquear" &&
+      (!isAdmin || isPermissaoInternaOculta(item.permissao_codigo))
+    ) {
       permissoes.delete(item.permissao_codigo);
     }
   }
