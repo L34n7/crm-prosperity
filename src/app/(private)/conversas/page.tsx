@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 120409)
-Total output lines: 13659
-
 "use client";
 
 import React, {
@@ -8699,7 +8696,47 @@ const templateFooterTexto = useMemo(() => {
                       <option value="whatsapp">WhatsApp</option>
                       <option value="instagram">Instagram</option>
                       <option value="facebook">Facebook</option>
-                 …409 tokens truncated…={`${styles.quickChip} ${
+                      <option value="site">Site</option>
+                      <option value="email">E-mail</option>
+                    </select>
+
+                    <select
+                      value={setorFiltro}
+                      onChange={(e) => setSetorFiltro(e.target.value)}
+                      className={styles.filterSelect}
+                    >
+                      <option value="todos">Todos os setores</option>
+                      {setoresUnicos.map((setor) => (
+                        <option key={setor.id} value={setor.id}>
+                          {setor.nome}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={responsavelFiltro}
+                      onChange={(e) => setResponsavelFiltro(e.target.value)}
+                      className={styles.filterSelect}
+                    >
+                      <option value="todos">Todos os responsáveis</option>
+                      {responsaveisUnicos.map((responsavel) => (
+                        <option key={responsavel.id} value={responsavel.id}>
+                          {responsavel.nome}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      className={`${styles.quickChip} ${
+                        chipRapido === "fila" ? styles.quickChipActive : ""
+                      }`}
+                      onClick={() => setChipRapido("fila")}
+                    >
+                      Fila
+                    </button>
+
+                    <button
+                      className={`${styles.quickChip} ${
                         chipRapido === "nao_lidas" ? styles.quickChipActive : ""
                       }`}
                       onClick={() => setChipRapido("nao_lidas")}
