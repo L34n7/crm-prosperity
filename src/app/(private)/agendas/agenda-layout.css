@@ -843,6 +843,20 @@ body .a2 .modal > .body {
   overflow-y: auto;
 }
 
+body .a2 .modal > fieldset {
+  min-height: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+body .a2 .modal > fieldset > .body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
 body .a2 .availability {
   gap: 8px;
 }
