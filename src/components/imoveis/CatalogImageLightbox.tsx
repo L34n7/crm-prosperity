@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { type CSSProperties, useEffect, useRef } from "react";
 import styles from "@/app/(private)/imoveis/imoveis.module.css";
 import lightboxStyles from "./CatalogImageLightbox.module.css";
 
@@ -26,6 +26,13 @@ export default function CatalogImageLightbox({
 }: Props) {
   const thumbRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const foto = fotos[fotoAtiva];
+  const umaFileira = fotos.length <= 12;
+  const linhasThumb = umaFileira ? 1 : 2;
+  const colunasThumb = umaFileira ? fotos.length : Math.ceil(fotos.length / 2);
+  const thumbGridStyle = {
+    "--thumb-columns": colunasThumb,
+    "--thumb-rows": linhasThumb,
+  } as CSSProperties;
 
   useEffect(() => {
     thumbRefs.current[fotoAtiva]?.scrollIntoView({
@@ -43,7 +50,9 @@ export default function CatalogImageLightbox({
 
   return (
     <div
-      className={`${styles.catalogLightbox} ${lightboxStyles.lightboxWithThumbs}`}
+      className={`${styles.catalogLightbox} ${lightboxStyles.lightboxWithThumbs} ${
+        umaFileira ? lightboxStyles.lightboxSingleThumbRow : ""
+      }`}
       role="dialog"
       aria-modal="true"
       aria-label="Galeria de fotos do imóvel"
@@ -77,7 +86,7 @@ export default function CatalogImageLightbox({
           aria-label="Miniaturas das fotos do imóvel"
           onMouseDown={(event) => event.stopPropagation()}
         >
-          <div className={lightboxStyles.thumbGrid}>
+          <div className={lightboxStyles.thumbGrid} style={thumbGridStyle}>
             {fotos.map((thumb, indice) => (
               <button
                 key={`${thumb}-${indice}`}
