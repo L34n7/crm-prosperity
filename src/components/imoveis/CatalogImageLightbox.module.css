@@ -55,7 +55,8 @@
   z-index: 3;
   top: 10px;
   left: 50%;
-  width: min(980px, calc(100% - 330px));
+  width: fit-content;
+  max-width: min(1116px, calc(100% - 330px));
   min-width: 0;
   padding: 7px 9px;
   overflow-x: auto;
@@ -170,7 +171,8 @@
 
   .thumbMenu {
     top: 62px;
-    width: calc(100% - 36px);
+    width: fit-content;
+    max-width: calc(100% - 36px);
     padding: 6px 8px;
   }
 
@@ -212,7 +214,8 @@
 
   .thumbMenu {
     top: 58px;
-    width: calc(100% - 20px);
+    width: fit-content;
+    max-width: calc(100% - 20px);
     padding: 6px 7px;
     border-radius: 13px;
   }
