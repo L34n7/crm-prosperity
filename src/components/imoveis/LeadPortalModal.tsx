@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, MessageSquareText, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Mail,
+  MessageCircle,
+  MessageSquareText,
+  X,
+} from "lucide-react";
+import { bloquearScrollBody } from "@/lib/ui/body-scroll-lock";
 import styles from "./LeadPortalModal.module.css";
 
 export type LeadPortalModalScope = {
@@ -36,6 +44,35 @@ function formatarData(valor?: string | null) {
     dateStyle: "short",
     timeStyle: "short",
   }).format(data);
+}
+
+function normalizarNumeroWhatsapp(valor?: string | null) {
+  const digitos = String(valor ?? "").replace(/\D/g, "");
+  if (!digitos) return null;
+  if (digitos.startsWith("55")) return digitos;
+  if (digitos.length === 10 || digitos.length === 11) return `55${digitos}`;
+  return digitos;
+}
+
+function formatarTelefone(valor?: string | null) {
+  const whatsapp = normalizarNumeroWhatsapp(valor);
+  if (!whatsapp) return null;
+
+  const nacional = whatsapp.startsWith("55") ? whatsapp.slice(2) : whatsapp;
+  if (nacional.length === 11) {
+    return `+55 (${nacional.slice(0, 2)}) ${nacional.slice(2, 7)}-${nacional.slice(7)}`;
+  }
+  if (nacional.length === 10) {
+    return `+55 (${nacional.slice(0, 2)}) ${nacional.slice(2, 6)}-${nacional.slice(6)}`;
+  }
+
+  return valor?.trim() || `+${whatsapp}`;
+}
+
+function emailReal(valor?: string | null) {
+  const email = String(valor ?? "").trim().toLowerCase();
+  if (!email || email.startsWith("email-nao-informado@")) return null;
+  return email;
 }
 
 export default function LeadPortalModal({ onClose, scope = null }: Props) {
@@ -88,10 +125,9 @@ export default function LeadPortalModal({ onClose, scope = null }: Props) {
     void carregar();
   }, [carregar]);
 
-  useEffect(() => {
-    const overflowAnterior = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+  useEffect(() => bloquearScrollBody(), []);
 
+  useEffect(() => {
     function aoPressionarTecla(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -102,7 +138,6 @@ export default function LeadPortalModal({ onClose, scope = null }: Props) {
 
     document.addEventListener("keydown", aoPressionarTecla, true);
     return () => {
-      document.body.style.overflow = overflowAnterior;
       document.removeEventListener("keydown", aoPressionarTecla, true);
     };
   }, [onClose]);
@@ -162,34 +197,71 @@ export default function LeadPortalModal({ onClose, scope = null }: Props) {
             <div className={styles.empty}>Nenhum lead de portal recebido.</div>
           ) : (
             <div className={styles.leadList}>
-              {leads.map((lead) => (
-                <article key={lead.id} className={styles.leadRow}>
-                  <div>
-                    <strong>{lead.nome}</strong>
-                    <span>
-                      {lead.canal_nome}
-                      {!scope && lead.imovel?.titulo
-                        ? ` · ${lead.imovel.titulo}`
-                        : ""}
-                    </span>
-                    {lead.mensagem ? <p>{lead.mensagem}</p> : null}
-                  </div>
-                  <div className={styles.leadMeta}>
-                    <span>{lead.telefone || lead.email || "Sem contato informado"}</span>
-                    {lead.telefone && lead.email ? <small>{lead.email}</small> : null}
-                    <small>{formatarData(lead.recebido_em)}</small>
-                  </div>
-                </article>
-              ))}
+              {leads.map((lead) => {
+                const whatsapp = normalizarNumeroWhatsapp(lead.telefone);
+                const telefone = formatarTelefone(lead.telefone);
+                const email = emailReal(lead.email);
+
+                return (
+                  <article key={lead.id} className={styles.leadRow}>
+                    <div className={styles.leadInfo}>
+                      <strong>{lead.nome}</strong>
+                      <span className={styles.leadOrigin}>
+                        {lead.canal_nome}
+                        {!scope && lead.imovel?.titulo
+                          ? ` · ${lead.imovel.titulo}`
+                          : ""}
+                      </span>
+                      {lead.mensagem ? <p>{lead.mensagem}</p> : null}
+                    </div>
+
+                    <div className={styles.leadMeta}>
+                      {telefone && whatsapp ? (
+                        <div className={styles.contactRow}>
+                          <span className={styles.contactValue}>{telefone}</span>
+                          <a
+                            className={styles.contactAction}
+                            href={`https://wa.me/${whatsapp}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Enviar WhatsApp para ${lead.nome}`}
+                          >
+                            <MessageCircle size={16} /> WhatsApp
+                          </a>
+                        </div>
+                      ) : null}
+
+                      {email ? (
+                        <div className={styles.contactRow}>
+                          <span className={styles.contactValue}>{email}</span>
+                          <a
+                            className={styles.contactAction}
+                            href={`mailto:${email}`}
+                            aria-label={`Enviar e-mail para ${lead.nome}`}
+                          >
+                            <Mail size={16} /> E-mail
+                          </a>
+                        </div>
+                      ) : null}
+
+                      {!telefone && !email ? (
+                        <span className={styles.noContact}>Sem contato informado</span>
+                      ) : null}
+
+                      <small className={styles.receivedAt}>
+                        Recebido em {formatarData(lead.recebido_em)}
+                      </small>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
 
         {!carregando && !erro && total > 0 ? (
           <footer className={styles.modalFooter}>
-            <span>
-              {total === 1 ? "1 lead" : `${total} leads`}
-            </span>
+            <span>{total === 1 ? "1 lead" : `${total} leads`}</span>
             {totalPaginas > 1 ? (
               <div className={styles.pagination}>
                 <button

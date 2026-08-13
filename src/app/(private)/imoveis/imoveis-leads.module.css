@@ -1,0 +1,62 @@
+.cardActionsWithLead {
+  gap: 8px;
+}
+
+.cardLeadActions {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  gap: 7px;
+}
+
+.cardActionButton {
+  width: 102px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 8px;
+  gap: 6px;
+  font-size: 11px !important;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.detailTitleRow {
+  width: 100%;
+  align-items: center;
+}
+
+.detailLeadButton {
+  min-height: 36px;
+  margin-left: auto;
+  padding: 8px 13px;
+  border-radius: 11px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  box-shadow: var(--crm-shadow-xs);
+  cursor: pointer;
+}
+
+.detailLeadButton:hover {
+  transform: translateY(-1px);
+  border-color: var(--crm-primary);
+  background: color-mix(in srgb, var(--crm-primary-soft) 72%, var(--crm-surface));
+}
+
+@media (max-width: 480px) {
+  .cardActionsWithLead {
+    align-items: stretch;
+  }
+
+  .cardLeadActions {
+    width: 100%;
+  }
+
+  .cardActionButton {
+    width: auto;
+    flex: 1 1 0;
+  }
+
+  .detailTitleRow {
+    align-items: flex-start;
+  }
+}

@@ -30,6 +30,8 @@ import {
   type OpcaoFiltroCatalogo,
   type OpcoesFiltrosCatalogo,
 } from "@/lib/imoveis/catalogo-filtros";
+import { bloquearScrollBody } from "@/lib/ui/body-scroll-lock";
+import leadStyles from "./imoveis-leads.module.css";
 import styles from "./imoveis.module.css";
 
 type CatalogoImovel = {
@@ -489,9 +491,11 @@ export default function ImoveisPage() {
 
   useEffect(() => {
     if (!imovelDetalhe) return;
+    return bloquearScrollBody();
+  }, [imovelDetalhe]);
 
-    const overflowAnterior = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+  useEffect(() => {
+    if (!imovelDetalhe) return;
 
     function aoPressionarTecla(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -519,7 +523,6 @@ export default function ImoveisPage() {
 
     document.addEventListener("keydown", aoPressionarTecla);
     return () => {
-      document.body.style.overflow = overflowAnterior;
       document.removeEventListener("keydown", aoPressionarTecla);
     };
   }, [fotosDetalhe.length, galeriaAberta, imovelDetalhe, imovelLeads]);
@@ -1094,7 +1097,11 @@ export default function ImoveisPage() {
                         )}
                       </div>
 
-                      <div className={styles.catalogCardActions}>
+                      <div
+                        className={`${styles.catalogCardActions} ${
+                          temLeads ? leadStyles.cardActionsWithLead : ""
+                        }`}
+                      >
                         <span
                           className={`${styles.catalogStatusBadge} ${statusImovelClass(
                             imovel.status,
@@ -1102,10 +1109,12 @@ export default function ImoveisPage() {
                         >
                           {rotuloStatus(imovel.status)}
                         </span>
-                        <div className={styles.itemActions}>
+                        <div
+                          className={`${styles.itemActions} ${leadStyles.cardLeadActions}`}
+                        >
                           {temLeads ? (
                             <button
-                              className={styles.secondaryButton}
+                              className={`${styles.secondaryButton} ${leadStyles.cardActionButton}`}
                               type="button"
                               onClick={() => abrirLeads(imovel)}
                               aria-label={`Abrir leads de ${tituloExibicao}`}
@@ -1114,7 +1123,7 @@ export default function ImoveisPage() {
                             </button>
                           ) : null}
                           <button
-                            className={styles.primaryButton}
+                            className={`${styles.primaryButton} ${leadStyles.cardActionButton}`}
                             type="button"
                             onClick={() => abrirDetalhes(imovel)}
                           >
@@ -1259,7 +1268,9 @@ export default function ImoveisPage() {
               <div className={styles.catalogDetailBody}>
                 <div className={styles.catalogDetailContent}>
                   <div className={styles.catalogDetailHeading}>
-                    <div className={styles.catalogTitleRow}>
+                    <div
+                      className={`${styles.catalogTitleRow} ${leadStyles.detailTitleRow}`}
+                    >
                       <div className={styles.catalogDetailBadges}>
                         <span
                           className={`${styles.catalogDetailBadge} ${styles.catalogStatusBadge} ${statusImovelClass(
@@ -1281,12 +1292,12 @@ export default function ImoveisPage() {
                       </div>
                       {imovelDetalhe.total_leads_portal > 0 ? (
                         <button
-                          className={styles.catalogSourceLink}
+                          className={`${styles.catalogSourceLink} ${leadStyles.detailLeadButton}`}
                           type="button"
                           onClick={() => abrirLeads(imovelDetalhe)}
                           aria-label={`Abrir leads de ${tituloDoImovel(imovelDetalhe)}`}
                         >
-                          <MessageSquareText size={13} /> Lead
+                          <MessageSquareText size={15} /> Lead
                         </button>
                       ) : null}
                     </div>

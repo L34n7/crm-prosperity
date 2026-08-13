@@ -20,7 +20,7 @@
 }
 
 .modal {
-  width: min(780px, 100%);
+  width: min(840px, 100%);
   max-height: min(90vh, 920px);
   overflow: hidden;
   border: 1px solid var(--crm-border);
@@ -44,30 +44,33 @@
 }
 
 .modalHeader {
-  padding: 20px 22px;
+  padding: 22px 24px;
   border-bottom: 1px solid var(--crm-border);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
 }
 
 .modalHeader h2 {
   margin: 0;
   color: var(--crm-text-strong);
+  font-size: 24px;
+  line-height: 1.2;
 }
 
 .modalHeader p {
-  margin: 6px 0 0;
+  margin: 7px 0 0;
   color: var(--crm-text-muted);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .eyebrow {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   color: var(--crm-primary-text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -77,15 +80,15 @@
   display: inline-flex;
   width: fit-content;
   max-width: 100%;
-  margin-top: 10px;
-  padding: 6px 9px;
+  margin-top: 11px;
+  padding: 7px 10px;
   overflow: hidden;
   border: 1px solid var(--crm-border);
   border-radius: 999px;
   background: var(--crm-surface-soft);
   color: var(--crm-text);
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -123,7 +126,7 @@
 
 .modalBody {
   min-height: 0;
-  padding: 20px 22px;
+  padding: 22px 24px;
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -133,9 +136,9 @@
 .empty,
 .error {
   min-height: 140px;
-  padding: 16px;
+  padding: 18px;
   border-radius: 16px;
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
   display: grid;
   place-items: center;
@@ -154,13 +157,13 @@
 }
 
 .error button {
-  padding: 7px 10px;
+  padding: 8px 11px;
   border: 1px solid var(--crm-danger-border);
   border-radius: 10px;
   background: var(--crm-surface);
   color: var(--crm-danger-text);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -171,62 +174,124 @@
 }
 
 .leadRow {
-  padding: 14px 0;
+  padding: 18px 0;
   border-top: 1px solid var(--crm-border);
   display: flex;
   justify-content: space-between;
-  gap: 20px;
+  gap: 26px;
 }
 
 .leadRow:first-child {
+  padding-top: 10px;
   border-top: 0;
 }
 
-.leadRow > div:first-child {
+.leadInfo {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
-.leadRow strong,
-.leadRow span,
-.leadRow p {
+.leadInfo > strong,
+.leadOrigin,
+.leadInfo > p {
   display: block;
 }
 
-.leadRow strong {
+.leadInfo > strong {
   color: var(--crm-text-strong);
+  font-size: 17px;
+  line-height: 1.35;
 }
 
-.leadRow span,
-.leadRow p,
-.leadMeta {
-  margin: 4px 0 0;
+.leadOrigin {
+  margin-top: 5px;
+  color: var(--crm-primary-text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.leadInfo > p {
+  margin: 7px 0 0;
   color: var(--crm-text-muted);
-  font-size: 12px;
-}
-
-.leadRow p {
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.6;
   white-space: pre-line;
 }
 
 .leadMeta {
-  flex: 0 0 min(250px, 42%);
+  flex: 0 0 min(340px, 46%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+}
+
+.contactRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.contactValue {
+  min-width: 0;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 10px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.35;
   text-align: right;
 }
 
-.leadMeta span,
-.leadMeta small {
-  display: block;
-  overflow-wrap: anywhere;
+.contactAction {
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+  color: var(--crm-primary-text);
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
 }
 
-.leadMeta small {
-  margin-top: 5px;
+.contactAction:hover {
+  transform: translateY(-1px);
+  border-color: var(--crm-primary);
+  background: var(--crm-primary-soft);
+}
+
+.noContact {
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  text-align: right;
+}
+
+.receivedAt {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
 }
 
 .modalFooter {
-  min-height: 64px;
-  padding: 12px 22px;
+  min-height: 66px;
+  padding: 13px 24px;
   border-top: 1px solid var(--crm-border);
   background: var(--crm-surface);
   display: flex;
@@ -236,9 +301,9 @@
 }
 
 .modalFooter > span {
-  color: var(--crm-text-muted);
-  font-size: 12px;
-  font-weight: 750;
+  color: var(--crm-text);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .pagination {
@@ -257,9 +322,34 @@
 .pagination small {
   min-width: 48px;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   text-align: center;
+}
+
+@media (max-width: 720px) {
+  .leadRow {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .leadMeta {
+    flex: 0 0 auto;
+  }
+
+  .contactRow {
+    justify-content: flex-start;
+  }
+
+  .contactValue {
+    flex: 1 1 auto;
+    text-align: left;
+  }
+
+  .receivedAt,
+  .noContact {
+    text-align: left;
+  }
 }
 
 @media (max-width: 640px) {
@@ -281,18 +371,23 @@
     padding-right: 16px;
   }
 
-  .leadRow {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .leadMeta {
-    flex: 0 0 auto;
-    text-align: left;
+  .modalHeader h2 {
+    font-size: 22px;
   }
 
   .propertyReference {
     white-space: normal;
+  }
+}
+
+@media (max-width: 460px) {
+  .contactRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .contactAction {
+    width: 100%;
   }
 }
 
@@ -302,7 +397,8 @@
     animation: none;
   }
 
-  .iconButton {
+  .iconButton,
+  .contactAction {
     transition: none;
   }
 }
