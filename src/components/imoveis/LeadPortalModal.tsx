@@ -206,6 +206,9 @@ export default function LeadPortalModal({ onClose, scope = null }: Props) {
                           ? `Código ${codigoImovel}`
                           : "Código do imóvel não informado"}
                       </span>
+                      <small className={styles.receivedAt}>
+                        Recebido em {formatarData(lead.recebido_em)}
+                      </small>
                     </div>
 
                     <div className={styles.leadMeta}>
@@ -244,10 +247,6 @@ export default function LeadPortalModal({ onClose, scope = null }: Props) {
                       {!telefone && !email ? (
                         <span className={styles.noContact}>Sem contato informado</span>
                       ) : null}
-
-                      <small className={styles.receivedAt}>
-                        Recebido em {formatarData(lead.recebido_em)}
-                      </small>
                     </div>
                   </article>
                 );
