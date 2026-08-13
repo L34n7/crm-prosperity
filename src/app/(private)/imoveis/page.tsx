@@ -17,12 +17,14 @@ import {
   House,
   Images,
   MapPin,
+  MessageSquareText,
   Ruler,
   Search,
   SlidersHorizontal,
   X,
 } from "lucide-react";
 import Header from "@/components/Header";
+import LeadPortalModal from "@/components/imoveis/LeadPortalModal";
 import {
   normalizarIntervalo,
   type OpcaoFiltroCatalogo,
@@ -64,6 +66,7 @@ type CatalogoImovel = {
   created_at: string;
   updated_at: string;
   pertence_empresa_atual: boolean;
+  total_leads_portal: number;
 };
 
 type FiltrosCatalogo = {
@@ -368,6 +371,7 @@ export default function ImoveisPage() {
   );
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [galeriaAberta, setGaleriaAberta] = useState(false);
+  const [imovelLeads, setImovelLeads] = useState<CatalogoImovel | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -491,6 +495,7 @@ export default function ImoveisPage() {
 
     function aoPressionarTecla(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        if (imovelLeads) return;
         if (galeriaAberta) setGaleriaAberta(false);
         else setImovelDetalhe(null);
       }
@@ -517,7 +522,7 @@ export default function ImoveisPage() {
       document.body.style.overflow = overflowAnterior;
       document.removeEventListener("keydown", aoPressionarTecla);
     };
-  }, [fotosDetalhe.length, galeriaAberta, imovelDetalhe]);
+  }, [fotosDetalhe.length, galeriaAberta, imovelDetalhe, imovelLeads]);
 
   const quantidadeFiltrosAtivos = useMemo(() => {
     const filtrosAtivos = Object.entries(filtrosAplicados).filter(
@@ -606,8 +611,14 @@ export default function ImoveisPage() {
   }
 
   function fecharDetalhes() {
+    setImovelLeads(null);
     setGaleriaAberta(false);
     setImovelDetalhe(null);
+  }
+
+  function abrirLeads(imovel: CatalogoImovel) {
+    if (imovel.total_leads_portal <= 0) return;
+    setImovelLeads(imovel);
   }
 
   function abrirGaleria(indice = 0) {
@@ -960,6 +971,7 @@ export default function ImoveisPage() {
                 const fotos = fotosDoImovel(imovel);
                 const tituloExibicao = tituloDoImovel(imovel);
                 const areaExibicao = areaDoImovel(imovel);
+                const temLeads = imovel.total_leads_portal > 0;
                 return (
                   <article
                     key={imovel.catalogo_id}
@@ -1090,13 +1102,25 @@ export default function ImoveisPage() {
                         >
                           {rotuloStatus(imovel.status)}
                         </span>
-                        <button
-                          className={styles.primaryButton}
-                          type="button"
-                          onClick={() => abrirDetalhes(imovel)}
-                        >
-                          <Eye size={16} /> Ver detalhes
-                        </button>
+                        <div className={styles.itemActions}>
+                          {temLeads ? (
+                            <button
+                              className={styles.secondaryButton}
+                              type="button"
+                              onClick={() => abrirLeads(imovel)}
+                              aria-label={`Abrir leads de ${tituloExibicao}`}
+                            >
+                              <MessageSquareText size={16} /> Lead
+                            </button>
+                          ) : null}
+                          <button
+                            className={styles.primaryButton}
+                            type="button"
+                            onClick={() => abrirDetalhes(imovel)}
+                          >
+                            <Eye size={16} /> Ver detalhes
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </article>
@@ -1235,24 +1259,36 @@ export default function ImoveisPage() {
               <div className={styles.catalogDetailBody}>
                 <div className={styles.catalogDetailContent}>
                   <div className={styles.catalogDetailHeading}>
-                    <div className={styles.catalogDetailBadges}>
-                      <span
-                        className={`${styles.catalogDetailBadge} ${styles.catalogStatusBadge} ${statusImovelClass(
-                          imovelDetalhe.status,
-                        )}`}
-                      >
-                        {rotuloStatus(imovelDetalhe.status)}
-                      </span>
-                      <span
-                        className={`${styles.catalogDetailBadge} ${styles.badge}`}
-                      >
-                        {rotuloFinalidade(imovelDetalhe.finalidade)}
-                      </span>
-                      <span
-                        className={`${styles.catalogDetailBadge} ${styles.catalogNeutralBadge}`}
-                      >
-                        {rotuloTipo(imovelDetalhe.tipo)}
-                      </span>
+                    <div className={styles.catalogTitleRow}>
+                      <div className={styles.catalogDetailBadges}>
+                        <span
+                          className={`${styles.catalogDetailBadge} ${styles.catalogStatusBadge} ${statusImovelClass(
+                            imovelDetalhe.status,
+                          )}`}
+                        >
+                          {rotuloStatus(imovelDetalhe.status)}
+                        </span>
+                        <span
+                          className={`${styles.catalogDetailBadge} ${styles.badge}`}
+                        >
+                          {rotuloFinalidade(imovelDetalhe.finalidade)}
+                        </span>
+                        <span
+                          className={`${styles.catalogDetailBadge} ${styles.catalogNeutralBadge}`}
+                        >
+                          {rotuloTipo(imovelDetalhe.tipo)}
+                        </span>
+                      </div>
+                      {imovelDetalhe.total_leads_portal > 0 ? (
+                        <button
+                          className={styles.catalogSourceLink}
+                          type="button"
+                          onClick={() => abrirLeads(imovelDetalhe)}
+                          aria-label={`Abrir leads de ${tituloDoImovel(imovelDetalhe)}`}
+                        >
+                          <MessageSquareText size={13} /> Lead
+                        </button>
+                      ) : null}
                     </div>
 
                     <h2 id="titulo-catalogo-imovel">
@@ -1506,6 +1542,19 @@ export default function ImoveisPage() {
             {fotoAtiva + 1} / {fotosDetalhe.length}
           </span>
         </div>
+      ) : null}
+
+      {imovelLeads ? (
+        <LeadPortalModal
+          onClose={() => setImovelLeads(null)}
+          scope={{
+            imovelId: imovelLeads.origem_tipo === "crm" ? imovelLeads.origem_id : null,
+            imovelExternoId:
+              imovelLeads.origem_tipo === "externo" ? imovelLeads.origem_id : null,
+            titulo: tituloDoImovel(imovelLeads),
+            codigo: imovelLeads.codigo,
+          }}
+        />
       ) : null}
     </>
   );

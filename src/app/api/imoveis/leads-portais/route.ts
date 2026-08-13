@@ -9,6 +9,8 @@ import {
 } from "@/lib/auditoria/logs";
 
 const supabase = getSupabaseAdmin();
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type LeadPortalRow = Record<string, unknown> & {
   id: string;
@@ -37,6 +39,12 @@ function getInteiro(
   const numero = Number(valor ?? padrao);
   if (!Number.isFinite(numero)) return padrao;
   return Math.min(maximo, Math.max(minimo, Math.trunc(numero)));
+}
+
+function uuidOpcional(valor: string | null) {
+  const id = String(valor ?? "").trim();
+  if (!id) return null;
+  return UUID_REGEX.test(id) ? id : "invalido";
 }
 
 async function buscarImoveisPorIds(empresaId: string, ids: string[]) {
@@ -106,15 +114,44 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
+    const pagina = getInteiro(searchParams.get("pagina"), 1, 1, 1_000_000);
     const limite = getInteiro(searchParams.get("limite"), 12, 1, 100);
+    const imovelId = uuidOpcional(searchParams.get("imovel_id"));
+    const imovelExternoId = uuidOpcional(searchParams.get("imovel_externo_id"));
 
-    const { data, error } = await supabase
+    if (imovelId === "invalido" || imovelExternoId === "invalido") {
+      return NextResponse.json(
+        { ok: false, error: "Identificador do imovel invalido." },
+        { status: 400 }
+      );
+    }
+
+    if (imovelId && imovelExternoId) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Informe apenas um tipo de identificador de imovel por consulta.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const inicio = (pagina - 1) * limite;
+    const fim = inicio + limite - 1;
+    let query = supabase
       .from("imovel_leads_portal")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("empresa_id", acesso.usuario.empresa_id)
-      .neq("status", "arquivado")
+      .neq("status", "arquivado");
+
+    if (imovelId) query = query.eq("imovel_id", imovelId);
+    if (imovelExternoId) {
+      query = query.eq("imovel_externo_id", imovelExternoId);
+    }
+
+    const { data, error, count } = await query
       .order("recebido_em", { ascending: false })
-      .limit(limite);
+      .range(inicio, fim);
 
     if (error) {
       return NextResponse.json(
@@ -140,6 +177,8 @@ export async function GET(request: Request) {
       ),
     ]);
 
+    const total = count ?? 0;
+
     return NextResponse.json({
       ok: true,
       leads: leads.map((lead) => {
@@ -160,6 +199,12 @@ export async function GET(request: Request) {
               : null,
         };
       }),
+      paginacao: {
+        pagina,
+        limite,
+        total,
+        total_paginas: Math.max(1, Math.ceil(total / limite)),
+      },
     });
   } catch (error) {
     return NextResponse.json(

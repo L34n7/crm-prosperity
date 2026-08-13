@@ -62,6 +62,12 @@ type DetalhesExternoRow = {
   imagem_urls: unknown[] | null;
 };
 
+type LeadResumoRow = {
+  imovel_id: string | null;
+  imovel_externo_id: string | null;
+  total_leads: number | string;
+};
+
 function getInteiro(
   valor: string | null,
   padrao: number,
@@ -154,11 +160,7 @@ export async function GET(request: Request) {
       .eq("empresa_id", empresaId);
 
     if (imovelId) query = query.eq("catalogo_id", imovelId);
-
-    if (origem) {
-      query = query.eq("origem_tipo", origem);
-    }
-
+    if (origem) query = query.eq("origem_tipo", origem);
     if (tipo) query = query.ilike("tipo", tipo);
     if (finalidade) query = query.ilike("finalidade", finalidade);
     if (status) query = query.ilike("status", status);
@@ -221,36 +223,56 @@ export async function GET(request: Request) {
       .filter((imovel) => imovel.origem_tipo === "externo")
       .map((imovel) => imovel.origem_id);
 
-    const [detalhesCrmResultado, detalhesExternosResultado] = await Promise.all(
-      [
-        idsCrm.length > 0
-          ? supabase
-              .from("imoveis")
-              .select(
-                "id,cep,logradouro,numero,complemento,caracteristicas,fotos",
-              )
-              .eq("empresa_id", empresaId)
-              .in("id", idsCrm)
-          : Promise.resolve({ data: [], error: null }),
-        idsExternos.length > 0
-          ? supabase
-              .from("imoveis_externos")
-              .select(
-                "id,cep,logradouro,numero,complemento,caracteristicas,imagem_urls",
-              )
-              .eq("empresa_id", empresaId)
-              .in("id", idsExternos)
-          : Promise.resolve({ data: [], error: null }),
-      ],
-    );
+    const [
+      detalhesCrmResultado,
+      detalhesExternosResultado,
+      leadsCrmResultado,
+      leadsExternosResultado,
+    ] = await Promise.all([
+      idsCrm.length > 0
+        ? supabase
+            .from("imoveis")
+            .select("id,cep,logradouro,numero,complemento,caracteristicas,fotos")
+            .eq("empresa_id", empresaId)
+            .in("id", idsCrm)
+        : Promise.resolve({ data: [], error: null }),
+      idsExternos.length > 0
+        ? supabase
+            .from("imoveis_externos")
+            .select("id,cep,logradouro,numero,complemento,caracteristicas,imagem_urls")
+            .eq("empresa_id", empresaId)
+            .in("id", idsExternos)
+        : Promise.resolve({ data: [], error: null }),
+      idsCrm.length > 0
+        ? supabase
+            .from("imovel_leads_portal_resumo")
+            .select("imovel_id,imovel_externo_id,total_leads")
+            .eq("empresa_id", empresaId)
+            .in("imovel_id", idsCrm)
+        : Promise.resolve({ data: [], error: null }),
+      idsExternos.length > 0
+        ? supabase
+            .from("imovel_leads_portal_resumo")
+            .select("imovel_id,imovel_externo_id,total_leads")
+            .eq("empresa_id", empresaId)
+            .in("imovel_externo_id", idsExternos)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
 
-    if (detalhesCrmResultado.error || detalhesExternosResultado.error) {
+    if (
+      detalhesCrmResultado.error ||
+      detalhesExternosResultado.error ||
+      leadsCrmResultado.error ||
+      leadsExternosResultado.error
+    ) {
       return NextResponse.json(
         {
           ok: false,
           error:
             detalhesCrmResultado.error?.message ||
             detalhesExternosResultado.error?.message ||
+            leadsCrmResultado.error?.message ||
+            leadsExternosResultado.error?.message ||
             "Erro ao carregar os detalhes dos imóveis.",
         },
         { status: 500 },
@@ -268,6 +290,19 @@ export async function GET(request: Request) {
         (item) => [item.id, item],
       ),
     );
+    const leadsCrm = new Map(
+      ((leadsCrmResultado.data ?? []) as LeadResumoRow[])
+        .filter((item) => Boolean(item.imovel_id))
+        .map((item) => [item.imovel_id as string, Number(item.total_leads) || 0]),
+    );
+    const leadsExternos = new Map(
+      ((leadsExternosResultado.data ?? []) as LeadResumoRow[])
+        .filter((item) => Boolean(item.imovel_externo_id))
+        .map((item) => [
+          item.imovel_externo_id as string,
+          Number(item.total_leads) || 0,
+        ]),
+    );
 
     const imoveis = catalogo.map((imovel) => {
       const detalhes =
@@ -280,6 +315,10 @@ export async function GET(request: Request) {
           : (detalhes as DetalhesExternoRow | undefined)?.imagem_urls,
         imovel.imagem_url,
       );
+      const totalLeadsPortal =
+        imovel.origem_tipo === "crm"
+          ? leadsCrm.get(imovel.origem_id) ?? 0
+          : leadsExternos.get(imovel.origem_id) ?? 0;
 
       return {
         ...imovel,
@@ -293,6 +332,7 @@ export async function GET(request: Request) {
         external_url: normalizarUrlHttp(imovel.external_url),
         pertence_empresa_atual:
           imovel.origem_tipo === "crm" && imovel.empresa_id === empresaId,
+        total_leads_portal: totalLeadsPortal,
       };
     });
 
