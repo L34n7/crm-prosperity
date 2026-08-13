@@ -1,0 +1,197 @@
+.lightboxWithThumbs {
+  padding-top: 164px;
+}
+
+.downloadButton {
+  position: absolute;
+  z-index: 4;
+  top: 22px;
+  right: 80px;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, white 25%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, #0b2026 76%, transparent);
+  color: white;
+  backdrop-filter: blur(10px);
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.downloadButton:hover {
+  border-color: color-mix(in srgb, var(--crm-primary) 76%, white 10%);
+  background: var(--crm-primary-strong);
+  transform: scale(1.05);
+}
+
+.downloadButton:focus-visible {
+  outline: 3px solid var(--crm-primary);
+  outline-offset: 3px;
+}
+
+.thumbMenu {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  left: 50%;
+  width: min(930px, calc(100% - 310px));
+  min-width: 0;
+  padding: 9px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid color-mix(in srgb, white 16%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, #061519 86%, transparent);
+  backdrop-filter: blur(13px);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, white 28%, transparent) transparent;
+  transform: translateX(-50%);
+}
+
+.thumbMenu::-webkit-scrollbar {
+  height: 5px;
+}
+
+.thumbMenu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thumbMenu::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, white 28%, transparent);
+}
+
+.thumbGrid {
+  width: max-content;
+  min-width: min-content;
+  margin-inline: auto;
+  display: grid;
+  grid-template-rows: repeat(2, 52px);
+  grid-auto-flow: column;
+  grid-auto-columns: 76px;
+  gap: 7px;
+}
+
+.thumbGrid button {
+  position: relative;
+  width: 76px;
+  height: 52px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 9px;
+  background: #0a2026;
+  opacity: 0.68;
+  cursor: pointer;
+  transition:
+    opacity 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.thumbGrid button:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.thumbGrid button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+.thumbGrid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumbGrid span {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #031115 76%, transparent);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.thumbGrid .thumbActive {
+  border-color: var(--crm-primary);
+  opacity: 1;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--crm-primary) 40%, transparent);
+}
+
+@media (max-width: 980px) {
+  .lightboxWithThumbs {
+    padding: 172px 58px 54px;
+  }
+
+  .thumbMenu {
+    top: 68px;
+    width: calc(100% - 36px);
+  }
+
+  .downloadButton {
+    top: 14px;
+    right: 70px;
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 620px) {
+  .lightboxWithThumbs {
+    padding: 164px 16px 48px;
+  }
+
+  .thumbMenu {
+    top: 64px;
+    width: calc(100% - 20px);
+    padding: 7px 8px;
+    border-radius: 13px;
+  }
+
+  .thumbGrid {
+    grid-template-rows: repeat(2, 44px);
+    grid-auto-columns: 64px;
+    gap: 6px;
+  }
+
+  .thumbGrid button {
+    width: 64px;
+    height: 44px;
+    border-radius: 8px;
+  }
+
+  .downloadButton {
+    top: max(10px, env(safe-area-inset-top));
+    right: 62px;
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .downloadButton,
+  .thumbGrid button {
+    transition: none;
+  }
+}
