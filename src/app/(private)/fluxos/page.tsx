@@ -2613,13 +2613,13 @@ function FluxosPageContent() {
   const [agendaQuantidadeOpcoesNode, setAgendaQuantidadeOpcoesNode] = useState("6");
   const [agendaJanelaDiasNode, setAgendaJanelaDiasNode] = useState("14");
   const [agendaMensagemSemHorariosNode, setAgendaMensagemSemHorariosNode] =
-    useState("No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente.");
+    useState("No momento não encontrei horários disponíveis. Vou te encaminhar para um atendente.");
   const [agendaMensagemSemExpedienteNode, setAgendaMensagemSemExpedienteNode] =
     useState("Não há atendimento disponível em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos.");
   const [agendaMensagemDataInvalidaNode, setAgendaMensagemDataInvalidaNode] =
     useState("Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano.");
   const [agendaMensagemListarAgendamentosNode, setAgendaMensagemListarAgendamentosNode] =
-    useState("Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:");
+    useState("Encontrei estes agendamentos. Responda com o número do agendamento que deseja cancelar ou remarcar:");
   const [agendaMensagemListarHorariosNode, setAgendaMensagemListarHorariosNode] =
     useState("Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:");
   const [
@@ -2629,7 +2629,7 @@ function FluxosPageContent() {
     "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\n\nEstas são as opções mais próximas:"
   );
   const [agendaMensagemConflitoNode, setAgendaMensagemConflitoNode] =
-    useState("Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.");
+    useState("Esse horário acabou de ficar indisponível. Vamos escolher outro horário.");
   const [agendaStatusAgendamentoNode, setAgendaStatusAgendamentoNode] =
     useState("agendado");
   const [agendaEnviarEmailNode, setAgendaEnviarEmailNode] = useState(true);
@@ -4410,7 +4410,7 @@ function abrirFluxo(fluxo: Fluxo) {
               mensagem_encontrado:
                 "Encontrei seu agendamento para {{agenda_data}} às {{agenda_hora}}.",
               mensagem_listar_agendamentos:
-                "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:",
+                "Encontrei estes agendamentos. Responda com o número do agendamento que deseja cancelar ou remarcar:",
               mensagem_nao_encontrado:
                 "No momento não encontrei horários disponíveis. Vou te encaminhar para um atendente.",
             }
@@ -4450,9 +4450,9 @@ function abrirFluxo(fluxo: Fluxo) {
               agenda_id: "",
               status_inicial: "agendado",
               mensagem:
-                "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato.",
+                "Agendado! Seu horário ficou marcado para {{agenda_data}} às {{agenda_hora}}. Qualquer dúvida e so entrar em contato.",
               mensagem_conflito:
-                "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.",
+                "Esse horário acabou de ficar indisponível. Vamos escolher outro horário.",
               enviar_email_agendamento: true,
               email_agendamento_origem: "contato",
               email_agendamento_variavel: "email",
@@ -4805,7 +4805,7 @@ function offsetLabelConexao(edgeId: string) {
     setAgendaMensagemSemHorariosNode(
       String(
         configuracaoJson?.mensagem_sem_horarios ||
-          "No momento nao encontrei horarios disponiveis. Vou te encaminhar para um atendente."
+          "No momento não encontrei nenhum horário marcado. Vou te encaminhar para um atendente."
       )
     );
     setAgendaMensagemSemExpedienteNode(
@@ -5460,10 +5460,10 @@ async function aplicarEdicaoNoInterno() {
           agendaStatusAgendamentoNode === "confirmado" ? "confirmado" : "agendado";
         configuracao_json.mensagem =
           mensagemNode.trim() ||
-          "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato.";
+          "Agendado! Seu horário ficou marcado para {{agenda_data}} às {{agenda_hora}}. Qualquer dúvida e so entrar em contato.";
         configuracao_json.mensagem_conflito =
           agendaMensagemConflitoNode.trim() ||
-          "Esse horario acabou de ficar indisponivel. Vamos escolher outro horario.";
+          "Esse horário acabou de ficar indisponível. Vamos escolher outro horário.";
         configuracao_json.enviar_email_agendamento = agendaEnviarEmailNode;
         configuracao_json.email_agendamento_origem =
           agendaEmailOrigemNode === "variavel" ? "variavel" : "contato";
@@ -8049,7 +8049,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           className={`${styles.badge} ${styles.systemFlowBadge}`}
                           data-system-flow-badge="CRM_SYSTEM_FLOW_STRONG_BADGE_V1"
                         >
-                          FLUXO DO SISTEMA
+                          FLUXO FIXO
                         </span>
                       )}
 
@@ -8933,7 +8933,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               setAgendaListarAgendamentosNode(true);
                               setAgendaQuantidadeOpcoesNode("6");
                               setAgendaMensagemListarAgendamentosNode(
-                                "Encontrei estes agendamentos. Responda com o numero do agendamento que deseja cancelar ou remarcar:"
+                                "Encontrei estes agendamentos. Responda com o número do agendamento que deseja cancelar ou remarcar:"
                               );
                             }
 
@@ -8957,7 +8957,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                             if (novoTipo === "agenda_criar_agendamento") {
                               setMensagemNode(
-                                "Agendado! Seu horario ficou marcado para {{agenda_data}} as {{agenda_hora}}. Qualquer duvida e so entrar em contato."
+                                "Agendado! Seu horário ficou marcado para {{agenda_data}} às {{agenda_hora}}. Qualquer dúvida e so entrar em contato."
                               );
                               setAgendaEnviarEmailNode(true);
                               setAgendaEmailOrigemNode("contato");
@@ -8966,13 +8966,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                             if (novoTipo === "agenda_remarcar_agendamento") {
                               setMensagemNode(
-                                "Remarcado! Seu horario agora ficou para {{agenda_data}} as {{agenda_hora}}."
+                                "Remarcado! Seu horário agora ficou para {{agenda_data}} às {{agenda_hora}}."
                               );
                             }
 
                             if (novoTipo === "agenda_cancelar_agendamento") {
                               setMensagemNode(
-                                "Pronto, seu horario de {{agenda_data}} as {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar."
+                                "Pronto, seu horário de {{agenda_data}} às {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar."
                               );
                               setAgendaStatusAgendamentoNode("cancelado");
                               setAgendaEnviarEmailNode(true);

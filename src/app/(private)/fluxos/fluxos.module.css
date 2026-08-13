@@ -40,7 +40,7 @@
 
 .sidebarTitle,
 .editorTitle {
-  margin: 0;
+  margin: 0 0 6px;
   font-size: 24px;
   font-weight: 700;
   color: var(--crm-text-strong);
@@ -442,37 +442,17 @@
   isolation: isolate;
   overflow: hidden;
   gap: 8px;
-  min-height: 27px;
+  min-height: 22px;
   padding: 0 12px 0 10px;
-  border-radius: 9px;
-  background:
-    linear-gradient(
-      115deg,
-      transparent 0 34%,
-      color-mix(in srgb, var(--crm-text-inverse) 12%, transparent) 46%,
-      transparent 58%
-    ),
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--crm-primary-strong) 24%, transparent),
-      transparent 48%
-    ),
-    var(--crm-ui-private-surface-hex-000000);
-  color: var(--crm-text-inverse);
-  border-color: color-mix(
-    in srgb,
-    var(--crm-primary-strong) 58%,
-    var(--crm-border-strong)
-  );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--crm-text-inverse) 18%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--crm-primary-strong) 22%, transparent),
-    0 6px 18px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
+  border-radius: 40px;
+  background: var(--crm-border-input);
+  border-color: var(--crm-ui-private-shadow-hex-cbd5e1);
+  color: var(--crm-sidebar-text-muted);
   font-family: inherit;
   font-size: 9px;
   font-weight: 900;
-  font-style: normal;
-  letter-spacing: 0.14em;
+  font-style: italic;
+  letter-spacing: 0.10em;
   line-height: 1;
   text-transform: uppercase;
 }
