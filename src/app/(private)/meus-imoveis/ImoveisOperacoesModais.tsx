@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, RadioTower, Send, SquareCheckBig, X } from "lucide-react";
-import LeadPortalModal from "@/components/imoveis/LeadPortalModal";
 import {
   CANAIS_IMOBILIARIOS,
   getStatusPublicacaoLabel,
@@ -23,7 +22,7 @@ type ImovelResumo = {
 type Props = {
   imoveis: ImovelResumo[];
   permissoes: string[];
-  modal: "publicacao" | "fila" | "leads" | null;
+  modal: "publicacao" | "fila" | null;
   imovelInicialId?: string | null;
   onClose: () => void;
   onChanged: () => Promise<void>;
@@ -116,10 +115,6 @@ export default function ImoveisOperacoesModais({
   }
 
   if (!modal) return null;
-
-  if (modal === "leads") {
-    return <LeadPortalModal onClose={onClose} />;
-  }
 
   const titulo = modal === "publicacao" ? "Publicar imóvel" : "Fila de publicação";
 

@@ -14,7 +14,6 @@ import {
   Images,
   ListChecks,
   MapPin,
-  MessageSquareText,
   Pencil,
   Plus,
   Ruler,
@@ -336,7 +335,7 @@ export default function MeusImoveisPage() {
   const [form, setForm] = useState<FormImovel>(FORM_INICIAL);
   const [modalCadastro, setModalCadastro] = useState(false);
   const [modalOperacao, setModalOperacao] = useState<
-    "publicacao" | "fila" | "leads" | null
+    "publicacao" | "fila" | null
   >(null);
   const [imovelOperacaoId, setImovelOperacaoId] = useState<string | null>(null);
   const [imovelDetalhe, setImovelDetalhe] = useState<Imovel | null>(null);
@@ -570,7 +569,7 @@ export default function MeusImoveisPage() {
   }
 
   function abrirOperacao(
-    tipo: "publicacao" | "fila" | "leads",
+    tipo: "publicacao" | "fila",
     imovelId?: string
   ) {
     setImovelDetalhe(null);
@@ -690,14 +689,6 @@ export default function MeusImoveisPage() {
             >
               <Cable size={17} />
               Integração API
-            </button>
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={() => abrirOperacao("leads")}
-            >
-              <MessageSquareText size={17} />
-              Leads
             </button>
             <button
               className={styles.secondaryButton}

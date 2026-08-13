@@ -374,6 +374,7 @@ export default function ImoveisPage() {
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [galeriaAberta, setGaleriaAberta] = useState(false);
   const [imovelLeads, setImovelLeads] = useState<CatalogoImovel | null>(null);
+  const [leadsAbertos, setLeadsAbertos] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -662,24 +663,34 @@ export default function ImoveisPage() {
             <button className={styles.catalogSearchButton} type="submit">
               Buscar
             </button>
-            <button
-              className={`${styles.secondaryButton} ${styles.catalogFilterButton} ${
-                filtrosAbertos || quantidadeFiltrosAtivos > 0
-                  ? styles.catalogFilterButtonActive
-                  : ""
-              }`}
-              type="button"
-              onClick={() => setFiltrosAbertos((aberto) => !aberto)}
-              aria-expanded={filtrosAbertos}
-            >
-              <SlidersHorizontal size={17} />
-              Filtros
-              {quantidadeFiltrosAtivos > 0 ? (
-                <span className={styles.catalogFilterCount}>
-                  {quantidadeFiltrosAtivos}
-                </span>
-              ) : null}
-            </button>
+            <div className={styles.itemActions}>
+              <button
+                className={`${styles.secondaryButton} ${styles.catalogFilterButton} ${
+                  filtrosAbertos || quantidadeFiltrosAtivos > 0
+                    ? styles.catalogFilterButtonActive
+                    : ""
+                }`}
+                type="button"
+                onClick={() => setFiltrosAbertos((aberto) => !aberto)}
+                aria-expanded={filtrosAbertos}
+              >
+                <SlidersHorizontal size={17} />
+                Filtros
+                {quantidadeFiltrosAtivos > 0 ? (
+                  <span className={styles.catalogFilterCount}>
+                    {quantidadeFiltrosAtivos}
+                  </span>
+                ) : null}
+              </button>
+              <button
+                className={`${styles.secondaryButton} ${styles.catalogFilterButton}`}
+                type="button"
+                onClick={() => setLeadsAbertos(true)}
+              >
+                <MessageSquareText size={17} />
+                Leads
+              </button>
+            </div>
           </form>
 
           <Link href="/meus-imoveis" className={styles.primaryButton}>
@@ -1553,6 +1564,10 @@ export default function ImoveisPage() {
             {fotoAtiva + 1} / {fotosDetalhe.length}
           </span>
         </div>
+      ) : null}
+
+      {leadsAbertos ? (
+        <LeadPortalModal onClose={() => setLeadsAbertos(false)} />
       ) : null}
 
       {imovelLeads ? (
