@@ -139,9 +139,9 @@ export async function GET(request: Request) {
     const inicio = (pagina - 1) * limite;
     const fim = inicio + limite - 1;
     let query = supabase
-      .from("imovel_leads_portal")
+      .from("imovel_leads_portal_visiveis")
       .select("*", { count: "exact" })
-      .eq("empresa_id", acesso.usuario.empresa_id)
+      .eq("empresa_visualizadora_id", acesso.usuario.empresa_id)
       .neq("status", "arquivado");
 
     if (imovelId) query = query.eq("imovel_id", imovelId);
