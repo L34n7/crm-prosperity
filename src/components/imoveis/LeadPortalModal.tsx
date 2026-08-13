@@ -208,9 +208,7 @@ export default function LeadPortalModal({ onClose, scope = null }: Props) {
                       <strong>{lead.nome}</strong>
                       <span className={styles.leadOrigin}>
                         {lead.canal_nome}
-                        {!scope && lead.imovel?.titulo
-                          ? ` · ${lead.imovel.titulo}`
-                          : ""}
+                        {lead.imovel?.titulo ? ` · ${lead.imovel.titulo}` : ""}
                       </span>
                       {lead.mensagem ? <p>{lead.mensagem}</p> : null}
                     </div>
