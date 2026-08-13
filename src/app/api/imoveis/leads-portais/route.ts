@@ -13,6 +13,7 @@ const supabase = getSupabaseAdmin();
 type LeadPortalRow = Record<string, unknown> & {
   id: string;
   imovel_id: string | null;
+  imovel_externo_id: string | null;
 };
 
 type ImovelResumo = {
@@ -49,6 +50,26 @@ async function buscarImoveisPorIds(empresaId: string, ids: string[]) {
 
   if (error) {
     throw new Error(`Erro ao buscar imoveis dos leads: ${error.message}`);
+  }
+
+  return new Map(
+    ((data ?? []) as ImovelResumo[]).map((imovel) => [imovel.id, imovel])
+  );
+}
+
+async function buscarImoveisExternosPorIds(empresaId: string, ids: string[]) {
+  if (ids.length === 0) return new Map<string, ImovelResumo>();
+
+  const { data, error } = await supabase
+    .from("imoveis_externos")
+    .select("id, titulo, codigo, bairro, cidade")
+    .eq("empresa_id", empresaId)
+    .in("id", ids);
+
+  if (error) {
+    throw new Error(
+      `Erro ao buscar imoveis externos dos leads: ${error.message}`
+    );
   }
 
   return new Map(
@@ -106,17 +127,39 @@ export async function GET(request: Request) {
     const imovelIds = Array.from(
       new Set(leads.map((lead) => lead.imovel_id).filter(Boolean) as string[])
     );
-    const imoveisPorId = await buscarImoveisPorIds(
-      acesso.usuario.empresa_id,
-      imovelIds
+    const imovelExternoIds = Array.from(
+      new Set(
+        leads.map((lead) => lead.imovel_externo_id).filter(Boolean) as string[]
+      )
     );
+    const [imoveisPorId, imoveisExternosPorId] = await Promise.all([
+      buscarImoveisPorIds(acesso.usuario.empresa_id, imovelIds),
+      buscarImoveisExternosPorIds(
+        acesso.usuario.empresa_id,
+        imovelExternoIds
+      ),
+    ]);
 
     return NextResponse.json({
       ok: true,
-      leads: leads.map((lead) => ({
-        ...lead,
-        imovel: lead.imovel_id ? imoveisPorId.get(lead.imovel_id) ?? null : null,
-      })),
+      leads: leads.map((lead) => {
+        const imovelInterno = lead.imovel_id
+          ? imoveisPorId.get(lead.imovel_id) ?? null
+          : null;
+        const imovelExterno = lead.imovel_externo_id
+          ? imoveisExternosPorId.get(lead.imovel_externo_id) ?? null
+          : null;
+
+        return {
+          ...lead,
+          imovel: imovelInterno ?? imovelExterno,
+          imovel_origem: imovelInterno
+            ? "interno"
+            : imovelExterno
+              ? "externo"
+              : null,
+        };
+      }),
     });
   } catch (error) {
     return NextResponse.json(
