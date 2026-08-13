@@ -21,11 +21,9 @@ export type LeadPortalModalScope = {
 
 type LeadPortal = {
   id: string;
-  canal_nome: string;
   nome: string;
   email: string | null;
   telefone: string | null;
-  mensagem: string | null;
   recebido_em: string;
   imovel?: { titulo: string | null; codigo: string | null } | null;
 };
@@ -142,11 +140,7 @@ export default function LeadPortalModal({ onClose, scope = null }: Props) {
     };
   }, [onClose]);
 
-  const identificacaoImovel = scope
-    ? [scope.codigo ? `#${scope.codigo}` : null, scope.titulo]
-        .filter(Boolean)
-        .join(" · ")
-    : "";
+  const identificacaoImovel = scope?.codigo ? `Código ${scope.codigo}` : "";
   const titulo = scope ? "Leads do imóvel" : "Leads dos portais";
 
   return (
@@ -201,22 +195,25 @@ export default function LeadPortalModal({ onClose, scope = null }: Props) {
                 const whatsapp = normalizarNumeroWhatsapp(lead.telefone);
                 const telefone = formatarTelefone(lead.telefone);
                 const email = emailReal(lead.email);
+                const codigoImovel = lead.imovel?.codigo || scope?.codigo || null;
 
                 return (
                   <article key={lead.id} className={styles.leadRow}>
                     <div className={styles.leadInfo}>
                       <strong>{lead.nome}</strong>
-                      <span className={styles.leadOrigin}>
-                        {lead.canal_nome}
-                        {lead.imovel?.titulo ? ` · ${lead.imovel.titulo}` : ""}
+                      <span className={styles.propertyCode}>
+                        {codigoImovel
+                          ? `Código ${codigoImovel}`
+                          : "Código do imóvel não informado"}
                       </span>
-                      {lead.mensagem ? <p>{lead.mensagem}</p> : null}
                     </div>
 
                     <div className={styles.leadMeta}>
                       {telefone && whatsapp ? (
                         <div className={styles.contactRow}>
-                          <span className={styles.contactValue}>{telefone}</span>
+                          <span className={styles.contactValue} title={telefone}>
+                            {telefone}
+                          </span>
                           <a
                             className={styles.contactAction}
                             href={`https://wa.me/${whatsapp}`}
@@ -231,7 +228,9 @@ export default function LeadPortalModal({ onClose, scope = null }: Props) {
 
                       {email ? (
                         <div className={styles.contactRow}>
-                          <span className={styles.contactValue}>{email}</span>
+                          <span className={styles.contactValue} title={email}>
+                            {email}
+                          </span>
                           <a
                             className={styles.contactAction}
                             href={`mailto:${email}`}

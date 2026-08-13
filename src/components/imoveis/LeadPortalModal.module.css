@@ -11,16 +11,12 @@
 }
 
 @keyframes overlayEnter {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .modal {
-  width: min(840px, 100%);
+  width: min(960px, 100%);
   max-height: min(90vh, 920px);
   overflow: hidden;
   border: 1px solid var(--crm-border);
@@ -177,8 +173,9 @@
   padding: 18px 0;
   border-top: 1px solid var(--crm-border);
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 26px;
+  gap: 30px;
 }
 
 .leadRow:first-child {
@@ -189,11 +186,11 @@
 .leadInfo {
   min-width: 0;
   flex: 1 1 auto;
+  padding-top: 3px;
 }
 
 .leadInfo > strong,
-.leadOrigin,
-.leadInfo > p {
+.propertyCode {
   display: block;
 }
 
@@ -203,23 +200,16 @@
   line-height: 1.35;
 }
 
-.leadOrigin {
-  margin-top: 5px;
-  color: var(--crm-primary-text);
-  font-size: 13px;
-  font-weight: 750;
-}
-
-.leadInfo > p {
-  margin: 7px 0 0;
+.propertyCode {
+  margin-top: 7px;
   color: var(--crm-text-muted);
   font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-line;
+  font-weight: 750;
+  line-height: 1.4;
 }
 
 .leadMeta {
-  flex: 0 0 min(340px, 46%);
+  flex: 0 0 min(480px, 56%);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -236,8 +226,9 @@
 
 .contactValue {
   min-width: 0;
-  padding: 8px 10px;
-  overflow-wrap: anywhere;
+  flex: 1 1 auto;
+  padding: 8px 12px;
+  overflow: hidden;
   border: 1px solid var(--crm-primary-border);
   border-radius: 10px;
   background: var(--crm-primary-soft);
@@ -246,9 +237,12 @@
   font-weight: 850;
   line-height: 1.35;
   text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .contactAction {
+  min-width: 104px;
   min-height: 36px;
   padding: 8px 10px;
   border: 1px solid var(--crm-primary-border);
@@ -334,6 +328,7 @@
   }
 
   .leadMeta {
+    width: 100%;
     flex: 0 0 auto;
   }
 
@@ -342,7 +337,6 @@
   }
 
   .contactValue {
-    flex: 1 1 auto;
     text-align: left;
   }
 
@@ -384,6 +378,11 @@
   .contactRow {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .contactValue {
+    width: 100%;
+    white-space: nowrap;
   }
 
   .contactAction {
