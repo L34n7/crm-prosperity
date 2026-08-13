@@ -8,11 +8,9 @@ import {
   Bath,
   BedDouble,
   Building2,
-  CalendarDays,
   CarFront,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
   Eye,
   House,
   Images,
@@ -21,16 +19,15 @@ import {
   Ruler,
   Search,
   SlidersHorizontal,
-  X,
 } from "lucide-react";
 import Header from "@/components/Header";
+import CatalogPropertyModal from "@/components/imoveis/CatalogPropertyModal";
 import LeadPortalModal from "@/components/imoveis/LeadPortalModal";
 import {
   normalizarIntervalo,
   type OpcaoFiltroCatalogo,
   type OpcoesFiltrosCatalogo,
 } from "@/lib/imoveis/catalogo-filtros";
-import { bloquearScrollBody } from "@/lib/ui/body-scroll-lock";
 import leadStyles from "./imoveis-leads.module.css";
 import styles from "./imoveis.module.css";
 
@@ -124,19 +121,6 @@ function formatarMoeda(valor: number | string | null) {
   }).format(numero);
 }
 
-function formatarMoedaDetalhada(valor: number | string | null) {
-  const numero = Number(valor ?? 0);
-
-  if (!Number.isFinite(numero) || numero <= 0) {
-    return "Não informado";
-  }
-
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(numero);
-}
-
 function rotuloFinalidade(valor: string | null) {
   return (
     (
@@ -219,63 +203,6 @@ function fotosDoImovel(imovel: CatalogoImovel) {
   );
 }
 
-function formatarChave(valor: string) {
-  const texto = valor.replace(/[_-]+/g, " ").trim();
-  return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : valor;
-}
-
-function caracteristicasDoImovel(imovel: CatalogoImovel) {
-  if (!imovel.caracteristicas) return [];
-
-  return Object.entries(imovel.caracteristicas).flatMap(([chave, valor]) => {
-    if (
-      valor === false ||
-      valor === null ||
-      valor === undefined ||
-      valor === ""
-    ) {
-      return [];
-    }
-    if (valor === true) return [formatarChave(chave)];
-    if (["string", "number"].includes(typeof valor)) {
-      return [`${formatarChave(chave)}: ${String(valor)}`];
-    }
-    return [];
-  });
-}
-
-function enderecoDoImovel(imovel: CatalogoImovel) {
-  const endereco = [imovel.logradouro, imovel.numero]
-    .filter(Boolean)
-    .join(", ");
-  const localidade = [imovel.bairro, imovel.cidade, imovel.estado]
-    .filter(Boolean)
-    .join(" · ");
-  return (
-    [endereco, localidade].filter(Boolean).join(" — ") ||
-    "Localização não informada"
-  );
-}
-
-function enderecoParaMapa(imovel: CatalogoImovel) {
-  return [
-    [imovel.logradouro, imovel.numero].filter(Boolean).join(", "),
-    imovel.bairro,
-    imovel.cidade,
-    imovel.estado,
-    imovel.cep,
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
-
-function urlMapaDoImovel(imovel: CatalogoImovel) {
-  const endereco = enderecoParaMapa(imovel);
-  return endereco
-    ? `https://www.google.com/maps?q=${encodeURIComponent(endereco)}&output=embed`
-    : null;
-}
-
 function extrairArea(valor: unknown) {
   if (typeof valor === "number") {
     return Number.isFinite(valor) && valor > 0 ? String(valor) : null;
@@ -316,16 +243,6 @@ function areaDoImovel(imovel: CatalogoImovel) {
   );
 }
 
-function formatarDataImovel(valor: string | null | undefined) {
-  if (!valor) return "Não informada";
-  const data = new Date(valor);
-  if (Number.isNaN(data.getTime())) return "Não informada";
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(data);
-}
-
 function tituloDoImovel(imovel: CatalogoImovel) {
   const titulo = imovel.titulo?.replace(/\s+/g, " ").trim() ?? "";
   const descricao = imovel.descricao?.replace(/\s+/g, " ").trim() ?? "";
@@ -334,8 +251,8 @@ function tituloDoImovel(imovel: CatalogoImovel) {
     titulo.split(" ").filter(Boolean).length > 14 ||
     Boolean(
       descricao &&
-      titulo.toLocaleLowerCase("pt-BR") ===
-        descricao.toLocaleLowerCase("pt-BR"),
+        titulo.toLocaleLowerCase("pt-BR") ===
+          descricao.toLocaleLowerCase("pt-BR"),
     );
 
   if (titulo && !tituloPareceDescricao) return titulo;
@@ -352,7 +269,6 @@ function tituloDoImovel(imovel: CatalogoImovel) {
 }
 
 export default function ImoveisPage() {
-  const [imovelParam, setImovelParam] = useState("");
   const [imoveis, setImoveis] = useState<CatalogoImovel[]>([]);
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
@@ -368,11 +284,7 @@ export default function ImoveisPage() {
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
-  const [imovelDetalhe, setImovelDetalhe] = useState<CatalogoImovel | null>(
-    null,
-  );
-  const [fotoAtiva, setFotoAtiva] = useState(0);
-  const [galeriaAberta, setGaleriaAberta] = useState(false);
+  const [catalogoIdDetalhe, setCatalogoIdDetalhe] = useState<string | null>(null);
   const [imovelLeads, setImovelLeads] = useState<CatalogoImovel | null>(null);
   const [leadsAbertos, setLeadsAbertos] = useState(false);
 
@@ -395,12 +307,15 @@ export default function ImoveisPage() {
       if (filtrosAplicados.finalidade) {
         params.set("finalidade", filtrosAplicados.finalidade);
       }
-      if (filtrosAplicados.status)
+      if (filtrosAplicados.status) {
         params.set("status", filtrosAplicados.status);
-      if (filtrosAplicados.cidade)
+      }
+      if (filtrosAplicados.cidade) {
         params.set("cidade", filtrosAplicados.cidade);
-      if (filtrosAplicados.estado)
+      }
+      if (filtrosAplicados.estado) {
         params.set("estado", filtrosAplicados.estado);
+      }
       if (filtrosAplicados.quartosMin) {
         params.set("quartos_min", filtrosAplicados.quartosMin);
       }
@@ -446,87 +361,11 @@ export default function ImoveisPage() {
   }, [carregar]);
 
   useEffect(() => {
-    setImovelParam(new URLSearchParams(window.location.search).get("imovel") || "");
+    const imovelParam = new URLSearchParams(window.location.search)
+      .get("imovel")
+      ?.trim();
+    if (imovelParam) setCatalogoIdDetalhe(imovelParam);
   }, []);
-
-  useEffect(() => {
-    if (!imovelParam) return;
-
-    let active = true;
-    fetch(`/api/imoveis/catalogo?imovel=${encodeURIComponent(imovelParam)}&limite=1`, {
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data?.error || "Erro ao abrir o imóvel.");
-        if (active) setImovelDetalhe(data.imoveis?.[0] || null);
-      })
-      .catch((error) => {
-        if (active) setErro(error instanceof Error ? error.message : "Erro ao abrir o imóvel.");
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [imovelParam]);
-
-  const fotosDetalhe = useMemo(
-    () => (imovelDetalhe ? fotosDoImovel(imovelDetalhe) : []),
-    [imovelDetalhe],
-  );
-
-  const caracteristicasDetalhe = useMemo(
-    () => (imovelDetalhe ? caracteristicasDoImovel(imovelDetalhe) : []),
-    [imovelDetalhe],
-  );
-
-  const areaDetalhe = useMemo(
-    () => (imovelDetalhe ? areaDoImovel(imovelDetalhe) : null),
-    [imovelDetalhe],
-  );
-
-  const urlMapaDetalhe = useMemo(
-    () => (imovelDetalhe ? urlMapaDoImovel(imovelDetalhe) : null),
-    [imovelDetalhe],
-  );
-
-  useEffect(() => {
-    if (!imovelDetalhe) return;
-    return bloquearScrollBody();
-  }, [imovelDetalhe]);
-
-  useEffect(() => {
-    if (!imovelDetalhe) return;
-
-    function aoPressionarTecla(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        if (imovelLeads) return;
-        if (galeriaAberta) setGaleriaAberta(false);
-        else setImovelDetalhe(null);
-      }
-      if (
-        galeriaAberta &&
-        event.key === "ArrowLeft" &&
-        fotosDetalhe.length > 1
-      ) {
-        setFotoAtiva((atual) =>
-          atual === 0 ? fotosDetalhe.length - 1 : atual - 1,
-        );
-      }
-      if (
-        galeriaAberta &&
-        event.key === "ArrowRight" &&
-        fotosDetalhe.length > 1
-      ) {
-        setFotoAtiva((atual) => (atual + 1) % fotosDetalhe.length);
-      }
-    }
-
-    document.addEventListener("keydown", aoPressionarTecla);
-    return () => {
-      document.removeEventListener("keydown", aoPressionarTecla);
-    };
-  }, [fotosDetalhe.length, galeriaAberta, imovelDetalhe, imovelLeads]);
 
   const quantidadeFiltrosAtivos = useMemo(() => {
     const filtrosAtivos = Object.entries(filtrosAplicados).filter(
@@ -563,8 +402,9 @@ export default function ImoveisPage() {
       chips.push(`Até R$ ${filtrosAplicados.valorMax}`);
     }
     if (filtrosAplicados.areaMin) chips.push(`${filtrosAplicados.areaMin}+ m²`);
-    if (filtrosAplicados.areaMax)
+    if (filtrosAplicados.areaMax) {
       chips.push(`Até ${filtrosAplicados.areaMax} m²`);
+    }
     return chips;
   }, [buscaAplicada, filtrosAplicados]);
 
@@ -609,25 +449,12 @@ export default function ImoveisPage() {
   }
 
   function abrirDetalhes(imovel: CatalogoImovel) {
-    setFotoAtiva(0);
-    setGaleriaAberta(false);
-    setImovelDetalhe(imovel);
-  }
-
-  function fecharDetalhes() {
-    setImovelLeads(null);
-    setGaleriaAberta(false);
-    setImovelDetalhe(null);
+    setCatalogoIdDetalhe(imovel.catalogo_id);
   }
 
   function abrirLeads(imovel: CatalogoImovel) {
     if (imovel.total_leads_portal <= 0) return;
     setImovelLeads(imovel);
-  }
-
-  function abrirGaleria(indice = 0) {
-    setFotoAtiva(indice);
-    setGaleriaAberta(true);
   }
 
   function mudarPagina(proximaPagina: number) {
@@ -986,6 +813,7 @@ export default function ImoveisPage() {
                 const tituloExibicao = tituloDoImovel(imovel);
                 const areaExibicao = areaDoImovel(imovel);
                 const temLeads = imovel.total_leads_portal > 0;
+
                 return (
                   <article
                     key={imovel.catalogo_id}
@@ -1175,395 +1003,11 @@ export default function ImoveisPage() {
         </section>
       </main>
 
-      {imovelDetalhe ? (
-        <div
-          className={styles.catalogModalOverlay}
-          role="presentation"
-          onMouseDown={fecharDetalhes}
-        >
-          <section
-            className={styles.catalogDetailModal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="titulo-catalogo-imovel"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button
-              className={styles.catalogDetailClose}
-              type="button"
-              onClick={fecharDetalhes}
-              aria-label="Fechar detalhes do imóvel"
-              autoFocus
-            >
-              <X size={20} />
-            </button>
-
-            <div className={styles.catalogDetailScroll}>
-              <div
-                className={`${styles.catalogAlbum} ${
-                  fotosDetalhe.length <= 1 ? styles.catalogAlbumSingle : ""
-                }`}
-                aria-label="Prévia das fotos do imóvel"
-              >
-                {fotosDetalhe.length > 0 ? (
-                  <>
-                    <button
-                      className={styles.catalogAlbumMain}
-                      type="button"
-                      onClick={() => abrirGaleria(0)}
-                      aria-label="Ampliar foto principal"
-                    >
-                      <img
-                        src={fotosDetalhe[0]}
-                        alt={`${tituloDoImovel(imovelDetalhe)} — foto 1`}
-                        referrerPolicy="no-referrer"
-                      />
-                    </button>
-
-                    {fotosDetalhe.length > 1 ? (
-                      <div
-                        className={styles.catalogAlbumSide}
-                        data-count={Math.min(fotosDetalhe.length - 1, 4)}
-                      >
-                        {fotosDetalhe.slice(1, 5).map((foto, indice) => {
-                          const indiceReal = indice + 1;
-                          const ultimaPrevia =
-                            indiceReal === Math.min(fotosDetalhe.length - 1, 4);
-                          const restantes = Math.max(
-                            fotosDetalhe.length - 5,
-                            0,
-                          );
-
-                          return (
-                            <button
-                              type="button"
-                              key={`${foto}-${indiceReal}`}
-                              onClick={() => abrirGaleria(indiceReal)}
-                              aria-label={`Ampliar foto ${indiceReal + 1}`}
-                            >
-                              <img
-                                src={foto}
-                                alt={`${tituloDoImovel(imovelDetalhe)} — foto ${indiceReal + 1}`}
-                                referrerPolicy="no-referrer"
-                              />
-                              {ultimaPrevia && restantes > 0 ? (
-                                <span className={styles.catalogAlbumMore}>
-                                  <strong>+{restantes}</strong>
-                                  Ver todas
-                                </span>
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-
-                    <button
-                      className={styles.catalogAlbumCount}
-                      type="button"
-                      onClick={() => abrirGaleria(0)}
-                    >
-                      <Images size={15} /> Ver {fotosDetalhe.length}{" "}
-                      {fotosDetalhe.length === 1 ? "foto" : "fotos"}
-                    </button>
-                  </>
-                ) : (
-                  <div className={styles.catalogDetailPlaceholder}>
-                    <Building2 size={55} />
-                    <strong>Este imóvel ainda não possui fotos</strong>
-                    <span>Confira abaixo as informações disponíveis.</span>
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.catalogDetailBody}>
-                <div className={styles.catalogDetailContent}>
-                  <div className={styles.catalogDetailHeading}>
-                    <div
-                      className={`${styles.catalogTitleRow} ${leadStyles.detailTitleRow}`}
-                    >
-                      <div className={styles.catalogDetailBadges}>
-                        <span
-                          className={`${styles.catalogDetailBadge} ${styles.catalogStatusBadge} ${statusImovelClass(
-                            imovelDetalhe.status,
-                          )}`}
-                        >
-                          {rotuloStatus(imovelDetalhe.status)}
-                        </span>
-                        <span
-                          className={`${styles.catalogDetailBadge} ${styles.badge}`}
-                        >
-                          {rotuloFinalidade(imovelDetalhe.finalidade)}
-                        </span>
-                        <span
-                          className={`${styles.catalogDetailBadge} ${styles.catalogNeutralBadge}`}
-                        >
-                          {rotuloTipo(imovelDetalhe.tipo)}
-                        </span>
-                      </div>
-                      {imovelDetalhe.total_leads_portal > 0 ? (
-                        <button
-                          className={`${styles.catalogSourceLink} ${leadStyles.detailLeadButton}`}
-                          type="button"
-                          onClick={() => abrirLeads(imovelDetalhe)}
-                          aria-label={`Abrir leads de ${tituloDoImovel(imovelDetalhe)}`}
-                        >
-                          <MessageSquareText size={15} /> Lead
-                        </button>
-                      ) : null}
-                    </div>
-
-                    <h2 id="titulo-catalogo-imovel">
-                      {tituloDoImovel(imovelDetalhe)}
-                    </h2>
-                    <p className={styles.catalogDetailLocation}>
-                      <MapPin size={17} /> {enderecoDoImovel(imovelDetalhe)}
-                    </p>
-                    {imovelDetalhe.codigo ? (
-                      <span className={styles.catalogPropertyCode}>
-                        Código #{imovelDetalhe.codigo}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div className={styles.catalogDetailPrice}>
-                    <span>Valor do imóvel</span>
-                    <strong>{formatarMoeda(imovelDetalhe.valor)}</strong>
-                  </div>
-
-                  <div className={styles.catalogDetailSpecs}>
-                    <div>
-                      <BedDouble size={20} />
-                      <strong>{imovelDetalhe.quartos ?? "—"}</strong>
-                      <span>Quartos</span>
-                    </div>
-                    <div>
-                      <BedDouble size={20} />
-                      <strong>{imovelDetalhe.suites ?? "—"}</strong>
-                      <span>Suítes</span>
-                    </div>
-                    <div>
-                      <Bath size={20} />
-                      <strong>{imovelDetalhe.banheiros ?? "—"}</strong>
-                      <span>Banheiros</span>
-                    </div>
-                    <div>
-                      <CarFront size={20} />
-                      <strong>{imovelDetalhe.vagas ?? "—"}</strong>
-                      <span>Vagas</span>
-                    </div>
-                    <div>
-                      <Ruler size={20} />
-                      <strong>{areaDetalhe ? `${areaDetalhe} m²` : "—"}</strong>
-                      <span>Área</span>
-                    </div>
-                  </div>
-
-                  <div
-                    className={`${styles.catalogSourceBar} ${
-                      imovelDetalhe.origem_tipo === "externo"
-                        ? styles.catalogSourcePartner
-                        : ""
-                    }`}
-                  >
-                    <div className={styles.catalogSourceIdentity}>
-                      {imovelDetalhe.origem_tipo === "externo" ? (
-                        <img
-                          src="/images/partners/rede-inova.png"
-                          alt="Logo Rede Inova"
-                        />
-                      ) : (
-                        <span className={styles.catalogSourceIcon}>
-                          <Building2 size={18} />
-                        </span>
-                      )}
-                      <span>
-                        <small>Portal de origem</small>
-                        <strong>
-                          {imovelDetalhe.origem_tipo === "externo"
-                            ? "Rede Inova"
-                            : imovelDetalhe.empresa_nome}
-                        </strong>
-                      </span>
-                    </div>
-
-                    {imovelDetalhe.external_url ? (
-                      <a
-                        href={imovelDetalhe.external_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        referrerPolicy="no-referrer"
-                        className={styles.catalogSourceLink}
-                        aria-label="Abrir este imóvel no portal da Rede Inova"
-                      >
-                        Abrir <ExternalLink size={14} />
-                      </a>
-                    ) : imovelDetalhe.pertence_empresa_atual ? (
-                      <Link
-                        href="/meus-imoveis"
-                        className={styles.secondaryButton}
-                      >
-                        <House size={16} /> Gerenciar imóvel
-                      </Link>
-                    ) : null}
-                  </div>
-
-                  <section className={styles.catalogDetailSection}>
-                    <h3>Valores adicionais</h3>
-                    <dl className={styles.catalogValueList}>
-                      <div>
-                        <dt>Condomínio</dt>
-                        <dd>
-                          {formatarMoedaDetalhada(
-                            imovelDetalhe.valor_condominio,
-                          )}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>IPTU</dt>
-                        <dd>
-                          {formatarMoedaDetalhada(imovelDetalhe.valor_iptu)}
-                        </dd>
-                      </div>
-                    </dl>
-                  </section>
-
-                  {caracteristicasDetalhe.length > 0 ? (
-                    <section className={styles.catalogDetailSection}>
-                      <h3>Características e comodidades</h3>
-                      <div className={styles.catalogAmenitiesGrid}>
-                        {caracteristicasDetalhe.map((caracteristica) => (
-                          <span key={caracteristica}>{caracteristica}</span>
-                        ))}
-                      </div>
-                    </section>
-                  ) : null}
-
-                  <section className={styles.catalogDates}>
-                    <CalendarDays size={18} />
-                    <div>
-                      <span>
-                        Criado em{" "}
-                        <strong>
-                          {formatarDataImovel(imovelDetalhe.created_at)}
-                        </strong>
-                      </span>
-                      <span>
-                        Atualizado em{" "}
-                        <strong>
-                          {formatarDataImovel(imovelDetalhe.updated_at)}
-                        </strong>
-                      </span>
-                    </div>
-                  </section>
-                </div>
-
-                <aside className={styles.catalogDetailAside}>
-                  <section className={styles.catalogDetailSection}>
-                    <h3>Sobre o imóvel</h3>
-                    <p>
-                      {imovelDetalhe.descricao?.trim() ||
-                        "Nenhuma descrição foi informada para este imóvel."}
-                    </p>
-                  </section>
-
-                  {urlMapaDetalhe ? (
-                    <section className={styles.catalogDetailSection}>
-                      <div className={styles.catalogSectionHeading}>
-                        <h3>Localização</h3>
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                            enderecoParaMapa(imovelDetalhe),
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Abrir no Maps <ExternalLink size={13} />
-                        </a>
-                      </div>
-                      <div className={styles.catalogMapCard}>
-                        <iframe
-                          src={urlMapaDetalhe}
-                          title={`Mapa de ${tituloDoImovel(imovelDetalhe)}`}
-                          loading="lazy"
-                          referrerPolicy="no-referrer-when-downgrade"
-                        />
-                      </div>
-                    </section>
-                  ) : null}
-                </aside>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {imovelDetalhe && galeriaAberta && fotosDetalhe[fotoAtiva] ? (
-        <div
-          className={styles.catalogLightbox}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Galeria de fotos do imóvel"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setGaleriaAberta(false);
-            }
-          }}
-        >
-          <button
-            className={styles.catalogLightboxClose}
-            type="button"
-            onClick={() => setGaleriaAberta(false)}
-            aria-label="Fechar galeria"
-            autoFocus
-          >
-            <X size={24} />
-          </button>
-
-          <div
-            className={styles.catalogLightboxStage}
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <img
-              src={fotosDetalhe[fotoAtiva]}
-              alt={`${tituloDoImovel(imovelDetalhe)} — foto ${fotoAtiva + 1}`}
-              referrerPolicy="no-referrer"
-            />
-          </div>
-
-          {fotosDetalhe.length > 1 ? (
-            <>
-              <button
-                className={`${styles.catalogLightboxArrow} ${styles.catalogLightboxArrowLeft}`}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setFotoAtiva((atual) =>
-                    atual === 0 ? fotosDetalhe.length - 1 : atual - 1,
-                  );
-                }}
-                aria-label="Foto anterior"
-              >
-                <ChevronLeft size={30} />
-              </button>
-              <button
-                className={`${styles.catalogLightboxArrow} ${styles.catalogLightboxArrowRight}`}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setFotoAtiva((atual) => (atual + 1) % fotosDetalhe.length);
-                }}
-                aria-label="Próxima foto"
-              >
-                <ChevronRight size={30} />
-              </button>
-            </>
-          ) : null}
-
-          <span className={styles.catalogLightboxCounter}>
-            {fotoAtiva + 1} / {fotosDetalhe.length}
-          </span>
-        </div>
+      {catalogoIdDetalhe ? (
+        <CatalogPropertyModal
+          catalogoId={catalogoIdDetalhe}
+          onClose={() => setCatalogoIdDetalhe(null)}
+        />
       ) : null}
 
       {leadsAbertos ? (
@@ -1574,9 +1018,12 @@ export default function ImoveisPage() {
         <LeadPortalModal
           onClose={() => setImovelLeads(null)}
           scope={{
-            imovelId: imovelLeads.origem_tipo === "crm" ? imovelLeads.origem_id : null,
+            imovelId:
+              imovelLeads.origem_tipo === "crm" ? imovelLeads.origem_id : null,
             imovelExternoId:
-              imovelLeads.origem_tipo === "externo" ? imovelLeads.origem_id : null,
+              imovelLeads.origem_tipo === "externo"
+                ? imovelLeads.origem_id
+                : null,
             titulo: tituloDoImovel(imovelLeads),
             codigo: imovelLeads.codigo,
           }}

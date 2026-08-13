@@ -106,7 +106,7 @@ export default function CatalogImageLightbox({
       ) : null}
 
       <div
-        className={styles.catalogLightboxStage}
+        className={`${styles.catalogLightboxStage} ${lightboxStyles.stage}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <img
@@ -145,7 +145,9 @@ export default function CatalogImageLightbox({
         </>
       ) : null}
 
-      <span className={styles.catalogLightboxCounter}>
+      <span
+        className={`${styles.catalogLightboxCounter} ${lightboxStyles.counter}`}
+      >
         {fotoAtiva + 1} / {fotos.length}
       </span>
     </div>
