@@ -1684,9 +1684,11 @@ export async function PUT(req: NextRequest) {
         criado_por: usuario.id,
         atualizado_por: usuario.id,
         fluxo_padrao: false,
-        configuracao_json: normalizarConfiguracaoFluxo(
-          fluxoOriginal.configuracao_json
-        ),
+        configuracao_json: {
+          ...normalizarConfiguracaoFluxo(fluxoOriginal.configuracao_json),
+          fluxo_sistema_calendario: false,
+          protegido_sistema: false,
+        },
       })
       .select("*")
       .single();
