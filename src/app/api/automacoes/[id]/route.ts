@@ -15,6 +15,7 @@ const TIPOS_NO_MIDIA = new Set([
   "enviar_arquivo",
 ]);
 const CODIGO_ESTRUTURA_DESATUALIZADA = "ESTRUTURA_FLUXO_DESATUALIZADA";
+const CODIGO_AGENDA_CONFIGURACAO_INVALIDA = "AGENDA_CONFIGURACAO_INVALIDA";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -81,6 +82,24 @@ function idsUnicos(registros: RegistroEstrutura[]) {
         .map((registro) => String(registro?.id || "").trim())
         .filter(Boolean)
     )
+  );
+}
+
+function configuracaoComoObjeto(valor: unknown): RegistroEstrutura {
+  return valor && typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as RegistroEstrutura)
+    : {};
+}
+
+function configuracaoMarcada(valor: unknown) {
+  return valor === true || valor === "true" || valor === 1 || valor === "1";
+}
+
+function fluxoEhSistemaProtegido(configuracao: unknown) {
+  const config = configuracaoComoObjeto(configuracao);
+  return (
+    configuracaoMarcada(config.fluxo_sistema_calendario) &&
+    configuracaoMarcada(config.protegido_sistema)
   );
 }
 
@@ -264,12 +283,7 @@ function validarMidiasObrigatoriasNos(nos: RegistroEstrutura[]) {
     const tipoNo = String(no?.tipo_no || "").trim();
     if (!TIPOS_NO_MIDIA.has(tipoNo)) continue;
 
-    const configuracao: RegistroEstrutura =
-      no?.configuracao_json &&
-      typeof no.configuracao_json === "object" &&
-      !Array.isArray(no.configuracao_json)
-        ? (no.configuracao_json as RegistroEstrutura)
-        : {};
+    const configuracao = configuracaoComoObjeto(no?.configuracao_json);
 
     if (!String(configuracao.midia_url || "").trim()) {
       const titulo = String(no?.titulo || "Bloco de midia").trim();
@@ -278,6 +292,101 @@ function validarMidiasObrigatoriasNos(nos: RegistroEstrutura[]) {
   }
 
   return "";
+}
+
+async function validarCalendariosEstrutura(params: {
+  empresaId: string;
+  fluxoConfiguracao: unknown;
+  nos: RegistroEstrutura[];
+}) {
+  const fluxoSistemaCalendario = fluxoEhSistemaProtegido(
+    params.fluxoConfiguracao
+  );
+  const temBuscaQualquerCalendario = params.nos.some((no) => {
+    if (String(no?.tipo_no || "").trim() !== "agenda_buscar_agendamento") {
+      return false;
+    }
+
+    const configuracao = configuracaoComoObjeto(no?.configuracao_json);
+    return !String(configuracao.agenda_id || "").trim();
+  });
+  const nosEscolherHorario = params.nos.filter(
+    (no) => String(no?.tipo_no || "").trim() === "agenda_escolher_horario"
+  );
+  const agendaIds = new Set<string>();
+
+  for (const no of nosEscolherHorario) {
+    const configuracao = configuracaoComoObjeto(no?.configuracao_json);
+    const agendaId = String(configuracao.agenda_id || "").trim();
+    const titulo = String(no?.titulo || "Escolher horário").trim();
+    const usarContexto = configuracaoMarcada(
+      configuracao.usar_agenda_contexto
+    );
+
+    if (
+      usarContexto &&
+      !fluxoSistemaCalendario &&
+      !temBuscaQualquerCalendario
+    ) {
+      return {
+        error: `O bloco "${titulo}" usa Calendário do contexto, mas o fluxo não possui um bloco Buscar agendamento configurado como Qualquer calendário.`,
+      };
+    }
+
+    if (!usarContexto && !agendaId) {
+      return {
+        error: `O bloco "${titulo}" precisa selecionar um calendário ativo ou usar Calendário do contexto.`,
+      };
+    }
+
+    if (usarContexto) {
+      configuracao.agenda_id = "";
+      configuracao.usar_agenda_contexto = true;
+      no.configuracao_json = configuracao;
+      continue;
+    }
+
+    configuracao.usar_agenda_contexto = false;
+    no.configuracao_json = configuracao;
+    agendaIds.add(agendaId);
+  }
+
+  if (agendaIds.size === 0) {
+    return { error: "" };
+  }
+
+  const { data: calendariosAtivos, error: calendariosError } =
+    await supabaseAdmin
+      .from("calendarios")
+      .select("id")
+      .eq("empresa_id", params.empresaId)
+      .eq("status", "ativo")
+      .in("id", Array.from(agendaIds));
+
+  if (calendariosError) {
+    throw new Error(
+      `Erro ao validar calendários do fluxo: ${calendariosError.message}`
+    );
+  }
+
+  const idsAtivos = new Set(
+    (calendariosAtivos || []).map((calendario) => String(calendario.id))
+  );
+
+  for (const no of nosEscolherHorario) {
+    const configuracao = configuracaoComoObjeto(no?.configuracao_json);
+    if (configuracaoMarcada(configuracao.usar_agenda_contexto)) continue;
+
+    const agendaId = String(configuracao.agenda_id || "").trim();
+    if (agendaId && !idsAtivos.has(agendaId)) {
+      const titulo = String(no?.titulo || "Escolher horário").trim();
+      return {
+        error: `O bloco "${titulo}" precisa selecionar um calendário ativo.`,
+      };
+    }
+  }
+
+  return { error: "" };
 }
 
 export async function GET(
@@ -395,7 +504,7 @@ export async function PUT(
 
     const { data: fluxo, error: fluxoError } = await supabaseAdmin
       .from("automacao_fluxos")
-      .select("id, empresa_id")
+      .select("id, empresa_id, configuracao_json")
       .eq("id", id)
       .eq("empresa_id", usuario.empresa_id)
       .single();
@@ -443,6 +552,23 @@ export async function PUT(
     if (erroMidiaObrigatoria) {
       return NextResponse.json(
         { ok: false, error: erroMidiaObrigatoria },
+        { status: 400 }
+      );
+    }
+
+    const validacaoCalendarios = await validarCalendariosEstrutura({
+      empresaId: String(usuario.empresa_id),
+      fluxoConfiguracao: fluxo.configuracao_json,
+      nos,
+    });
+
+    if (validacaoCalendarios.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: CODIGO_AGENDA_CONFIGURACAO_INVALIDA,
+          error: validacaoCalendarios.error,
+        },
         { status: 400 }
       );
     }
