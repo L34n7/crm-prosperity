@@ -25,14 +25,14 @@
 }
 
 .detailLeadButton {
-  min-height: 36px;
+  min-height: 32px;
   margin-left: auto;
+  margin-top: -10px;
   padding: 8px 13px;
-  border-radius: 11px;
+  border-radius: 101px;
   background: var(--crm-primary-soft);
   color: var(--crm-primary-text);
   font-size: 11px;
-  box-shadow: var(--crm-shadow-xs);
   cursor: pointer;
 }
 

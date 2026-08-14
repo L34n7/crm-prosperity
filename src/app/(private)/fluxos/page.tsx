@@ -2319,6 +2319,18 @@ function FluxosPageContent() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const fluxoTemBuscaQualquerCalendario = useMemo(() => {
+    return nodes.some((node) => {
+      if (String(node.data?.tipo_no || "") !== "agenda_buscar_agendamento") {
+        return false;
+      }
+
+      const configuracao =
+        (node.data?.configuracao_json || {}) as Record<string, unknown>;
+
+      return !String(configuracao.agenda_id || "").trim();
+    });
+  }, [nodes]);
   const [assistenteFluxosAberto, setAssistenteFluxosAberto] = useState(false);
   const [previaWhatsappRecolhida, setPreviaWhatsappRecolhida] =
     useState(false);
@@ -2608,6 +2620,7 @@ function FluxosPageContent() {
     useState<"horas" | "dias">("horas");
   const [agendarDisparoVariaveisNode, setAgendarDisparoVariaveisNode] = useState("");
   const [agendaIdNode, setAgendaIdNode] = useState("");
+  const [agendaUsarContextoNode, setAgendaUsarContextoNode] = useState(false);
   const [agendaListarAgendamentosNode, setAgendaListarAgendamentosNode] =
     useState(false);
   const [agendaQuantidadeOpcoesNode, setAgendaQuantidadeOpcoesNode] = useState("6");
@@ -4417,6 +4430,7 @@ function abrirFluxo(fluxo: Fluxo) {
           : tipoNo === "agenda_escolher_horario"
           ? {
               agenda_id: "",
+              usar_agenda_contexto: false,
               mensagem:
                 "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.",
               mensagem_listar_horarios:
@@ -4795,6 +4809,10 @@ function offsetLabelConexao(edgeId: string) {
     );
 
     setAgendaIdNode(String(configuracaoJson?.agenda_id || ""));
+    setAgendaUsarContextoNode(
+      configuracaoJson?.usar_agenda_contexto === true ||
+        configuracaoJson?.usar_agenda_contexto === "true"
+    );
     setAgendaListarAgendamentosNode(
       configuracaoJson?.listar_para_escolha === true
     );
@@ -5320,21 +5338,45 @@ async function aplicarEdicaoNoInterno() {
     }
   }
 
-  if (
-    tipoNodeEdicao === "capturar_resposta" &&
-    VARIAVEIS_FIXAS_CONTATO_RESERVADAS.includes(
-      capturaVariavelNode.trim().toLowerCase()
-    )
-  ) {
-    setErro(
-      "Esse nome de variavel e reservado para os dados fixos do contato."
-    );
-    return;
-  }
+    if (
+      tipoNodeEdicao === "capturar_resposta" &&
+      VARIAVEIS_FIXAS_CONTATO_RESERVADAS.includes(
+        capturaVariavelNode.trim().toLowerCase()
+      )
+    ) {
+      setErro(
+        "Esse nome de variavel e reservado para os dados fixos do contato."
+      );
+      return;
+    }
 
-  setErro("");
+    if (tipoNodeEdicao === "agenda_escolher_horario") {
+      const usarCalendarioContexto =
+        fluxoEhSistemaCalendario(fluxoSelecionado) ||
+        agendaUsarContextoNode;
 
-    const nodesAtualizados = nodes.map((node) => {
+      if (
+        usarCalendarioContexto &&
+        !fluxoEhSistemaCalendario(fluxoSelecionado) &&
+        !fluxoTemBuscaQualquerCalendario
+      ) {
+        setErro(
+          'O bloco "Escolher horário" só pode usar Calendário do contexto quando existir um bloco "Buscar agendamento" configurado como "Qualquer calendário".'
+        );
+        return;
+      }
+
+      if (!usarCalendarioContexto && !agendaIdNode.trim()) {
+        setErro(
+          'Selecione um calendário ativo no bloco "Escolher horário".'
+        );
+        return;
+      }
+    }
+
+    setErro("");
+
+      const nodesAtualizados = nodes.map((node) => {
       if (node.id !== editandoNodeId) return node;
 
       const tipoAtual = String(node.data?.tipo_no || "enviar_texto");
@@ -5424,8 +5466,14 @@ async function aplicarEdicaoNoInterno() {
       }
 
       if (tipoFinal === "agenda_escolher_horario") {
-        configuracao_json.agenda_id = fluxoSistemaCalendario ? "" : agendaIdNode;
-        configuracao_json.usar_agenda_contexto = fluxoSistemaCalendario;
+        const usarCalendarioContexto =
+          fluxoSistemaCalendario || agendaUsarContextoNode;
+
+        configuracao_json.agenda_id = usarCalendarioContexto
+          ? ""
+          : agendaIdNode;
+
+        configuracao_json.usar_agenda_contexto = usarCalendarioContexto;
         configuracao_json.mensagem =
           mensagemNode.trim() ||
           "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.";
@@ -7661,6 +7709,16 @@ const nodesParaPreviaWhatsapp = useMemo(() => {
     }
 
     if (tipoFinal === "agenda_escolher_horario") {
+      const usarCalendarioContexto =
+        fluxoEhSistemaCalendario(fluxoSelecionado) ||
+        agendaUsarContextoNode;
+
+      configuracao.agenda_id = usarCalendarioContexto
+        ? ""
+        : agendaIdNode;
+
+      configuracao.usar_agenda_contexto = usarCalendarioContexto;
+
       configuracao.mensagem =
         mensagemNode.trim() ||
         "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira.";
@@ -8928,6 +8986,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             setOpcoesNode([]);
                             setBotoesNode([]);
                             setMidiaUrlNode("");
+                            setAgendaUsarContextoNode(false);
 
                             if (novoTipo === "agenda_buscar_agendamento") {
                               setAgendaListarAgendamentosNode(true);
@@ -10090,8 +10149,27 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                             <select
                               className={styles.input}
-                              value={agendaIdNode}
-                              onChange={(e) => setAgendaIdNode(e.target.value)}
+                              value={
+                                tipoNodeEdicao === "agenda_escolher_horario" &&
+                                agendaUsarContextoNode
+                                  ? "__calendario_contexto__"
+                                  : agendaIdNode
+                              }
+                              onChange={(e) => {
+                                const valor = e.target.value;
+
+                                if (
+                                  tipoNodeEdicao === "agenda_escolher_horario" &&
+                                  valor === "__calendario_contexto__"
+                                ) {
+                                  setAgendaIdNode("");
+                                  setAgendaUsarContextoNode(true);
+                                  return;
+                                }
+
+                                setAgendaUsarContextoNode(false);
+                                setAgendaIdNode(valor);
+                              }}
                               disabled={carregandoAgendasOpcoes}
                             >
                               <option value="">
@@ -10101,6 +10179,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                   ? "Carregando calendários..."
                                   : "Selecione um calendário ativo"}
                               </option>
+
+                              {tipoNodeEdicao === "agenda_escolher_horario" &&
+                                fluxoTemBuscaQualquerCalendario && (
+                                  <option value="__calendario_contexto__">
+                                    Calendário do contexto
+                                  </option>
+                                )}
 
                               {agendasOpcoes.map((agenda) => (
                                 <option key={agenda.id} value={agenda.id}>

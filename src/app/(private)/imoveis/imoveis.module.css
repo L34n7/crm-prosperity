@@ -2206,14 +2206,14 @@
 
 .catalogValueList dt {
   color: var(--crm-text-muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
 }
 
 .catalogValueList dd {
   margin: 4px 0 0;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 850;
 }
 
