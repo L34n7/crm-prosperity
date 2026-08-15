@@ -1,12 +1,6 @@
 .lightboxWithThumbs,
 .lightboxSingleThumbRow {
-  --lightbox-stage-center-offset: 107px;
-  padding: 42px 78px 58px 292px;
-}
-
-.lightboxSingleThumbRow {
-  --lightbox-stage-center-offset: 58px;
-  padding-left: 194px;
+  padding: 42px 78px 58px var(--desktop-stage-padding-left);
 }
 
 .stage,
@@ -17,7 +11,7 @@
 
 .counter {
   top: auto;
-  left: calc(50% + var(--lightbox-stage-center-offset));
+  left: calc(50% + var(--desktop-stage-center-offset));
   right: auto;
   bottom: 20px;
   min-width: 62px;
@@ -61,11 +55,11 @@
   top: 78px;
   bottom: 24px;
   left: 18px;
-  width: fit-content;
-  max-width: 178px;
+  width: var(--desktop-thumb-menu-width);
   min-height: 0;
   padding: 9px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid color-mix(in srgb, white 16%, transparent);
   border-radius: 16px;
   background: color-mix(in srgb, #061519 86%, transparent);
@@ -157,24 +151,15 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--crm-primary) 40%, transparent);
 }
 
-.lightboxWithThumbs > button:nth-of-type(2) {
-  left: 228px;
-}
-
+.lightboxWithThumbs > button:nth-of-type(2),
 .lightboxSingleThumbRow > button:nth-of-type(2) {
-  left: 128px;
+  left: var(--desktop-arrow-left);
 }
 
 @media (max-width: 980px) {
   .lightboxWithThumbs,
   .lightboxSingleThumbRow {
-    --lightbox-stage-center-offset: 95px;
-    padding: 36px 58px 52px 248px;
-  }
-
-  .lightboxSingleThumbRow {
-    --lightbox-stage-center-offset: 57px;
-    padding-left: 172px;
+    padding: 36px 58px 52px var(--tablet-stage-padding-left);
   }
 
   .stage,
@@ -184,6 +169,7 @@
   }
 
   .counter {
+    left: calc(50% + var(--tablet-stage-center-offset));
     bottom: 16px;
   }
 
@@ -191,8 +177,7 @@
     top: 70px;
     bottom: 18px;
     left: 12px;
-    width: fit-content;
-    max-width: 162px;
+    width: var(--tablet-thumb-menu-width);
     padding: 8px;
   }
 
@@ -210,18 +195,16 @@
     height: 52px;
   }
 
-  .lightboxWithThumbs > button:nth-of-type(2) {
+  .lightboxWithThumbs > button:nth-of-type(2),
+  .lightboxSingleThumbRow > button:nth-of-type(2) {
     top: 50%;
     bottom: auto;
-    left: 198px;
+    left: var(--tablet-arrow-left);
     transform: translateY(-50%);
   }
 
-  .lightboxSingleThumbRow > button:nth-of-type(2) {
-    left: 108px;
-  }
-
-  .lightboxWithThumbs > button:nth-of-type(2):hover {
+  .lightboxWithThumbs > button:nth-of-type(2):hover,
+  .lightboxSingleThumbRow > button:nth-of-type(2):hover {
     transform: translateY(-50%) scale(1.05);
   }
 
@@ -235,12 +218,10 @@
 
 @media (max-width: 620px) {
   .lightboxWithThumbs {
-    --lightbox-stage-center-offset: 0px;
     padding: 174px 16px 58px;
   }
 
   .lightboxSingleThumbRow {
-    --lightbox-stage-center-offset: 0px;
     padding: 120px 16px 58px;
   }
 

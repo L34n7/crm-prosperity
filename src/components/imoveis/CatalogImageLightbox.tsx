@@ -29,16 +29,38 @@ export default function CatalogImageLightbox({
   const umaFileira = fotos.length <= 12;
   const linhasThumb = umaFileira ? 1 : 2;
   const colunasThumb = umaFileira ? fotos.length : Math.ceil(fotos.length / 2);
-  const thumbGridStyle = {
+  const colunasLaterais = Math.max(1, Math.ceil(fotos.length / 12));
+
+  const desktopMenuWidth =
+    colunasLaterais * 86 + Math.max(0, colunasLaterais - 1) * 6;
+  const desktopArrowLeft = 18 + desktopMenuWidth + 20 + 28;
+  const desktopStagePaddingLeft = desktopArrowLeft + 52 + 20;
+  const desktopStageCenterOffset = (desktopStagePaddingLeft - 78) / 2;
+
+  const tabletMenuWidth =
+    colunasLaterais * 78 + Math.max(0, colunasLaterais - 1) * 6;
+  const tabletArrowLeft = 12 + tabletMenuWidth + 18 + 24;
+  const tabletStagePaddingLeft = tabletArrowLeft + 52 + 16;
+  const tabletStageCenterOffset = (tabletStagePaddingLeft - 58) / 2;
+
+  const lightboxStyle = {
     "--thumb-columns": colunasThumb,
     "--thumb-rows": linhasThumb,
+    "--desktop-thumb-menu-width": `${desktopMenuWidth}px`,
+    "--desktop-arrow-left": `${desktopArrowLeft}px`,
+    "--desktop-stage-padding-left": `${desktopStagePaddingLeft}px`,
+    "--desktop-stage-center-offset": `${desktopStageCenterOffset}px`,
+    "--tablet-thumb-menu-width": `${tabletMenuWidth}px`,
+    "--tablet-arrow-left": `${tabletArrowLeft}px`,
+    "--tablet-stage-padding-left": `${tabletStagePaddingLeft}px`,
+    "--tablet-stage-center-offset": `${tabletStageCenterOffset}px`,
   } as CSSProperties;
 
   useEffect(() => {
     thumbRefs.current[fotoAtiva]?.scrollIntoView({
       behavior: "smooth",
       block: "nearest",
-      inline: "center",
+      inline: "nearest",
     });
   }, [fotoAtiva]);
 
@@ -53,6 +75,7 @@ export default function CatalogImageLightbox({
       className={`${styles.catalogLightbox} ${lightboxStyles.lightboxWithThumbs} ${
         umaFileira ? lightboxStyles.lightboxSingleThumbRow : ""
       }`}
+      style={lightboxStyle}
       role="dialog"
       aria-modal="true"
       aria-label="Galeria de fotos do imóvel"
@@ -86,7 +109,7 @@ export default function CatalogImageLightbox({
           aria-label="Miniaturas das fotos do imóvel"
           onMouseDown={(event) => event.stopPropagation()}
         >
-          <div className={lightboxStyles.thumbGrid} style={thumbGridStyle}>
+          <div className={lightboxStyles.thumbGrid}>
             {fotos.map((thumb, indice) => (
               <button
                 key={`${thumb}-${indice}`}
