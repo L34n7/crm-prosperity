@@ -39,6 +39,9 @@ function getFileExtensionFromMimeType(mimeType?: string | null) {
   if (normalized.includes("audio/mp4")) return ".m4a";
   if (normalized.includes("video/mp4")) return ".mp4";
   if (normalized.includes("application/pdf")) return ".pdf";
+  if (normalized.includes("text/plain")) return ".txt";
+  if (normalized.includes("text/csv")) return ".csv";
+  if (normalized.includes("application/json")) return ".json";
 
   return "";
 }
@@ -46,6 +49,19 @@ function getFileExtensionFromMimeType(mimeType?: string | null) {
 function buildSafeFilename(mediaId: string, mimeType?: string | null) {
   const ext = getFileExtensionFromMimeType(mimeType);
   return `whatsapp-media-${mediaId}${ext}`;
+}
+
+function deveExibirInline(mimeType?: string | null) {
+  if (!mimeType) return false;
+
+  const normalized = mimeType.toLowerCase().split(";", 1)[0]?.trim() ?? "";
+
+  return (
+    normalized.startsWith("image/") ||
+    normalized.startsWith("audio/") ||
+    normalized.startsWith("video/") ||
+    normalized === "application/pdf"
+  );
 }
 
 async function buscarAccessTokenDaMidia(mediaId: string) {
@@ -89,9 +105,7 @@ async function buscarAccessTokenDaMidia(mediaId: string) {
     throw new Error(integracaoError.message);
   }
 
-  return getWhatsAppAccessToken(
-    integracao as IntegracaoWhatsapp
-  );
+  return getWhatsAppAccessToken(integracao as IntegracaoWhatsapp);
 }
 
 export async function GET(
@@ -191,10 +205,14 @@ export async function GET(
     const contentLength = mediaDownloadResponse.headers.get("content-length");
     const contentRange = mediaDownloadResponse.headers.get("content-range");
     const filename = buildSafeFilename(mediaId, contentType);
+    const disposition = deveExibirInline(contentType) ? "inline" : "attachment";
 
     const responseHeaders = new Headers();
     responseHeaders.set("Content-Type", contentType);
-    responseHeaders.set("Content-Disposition", `inline; filename="${filename}"`);
+    responseHeaders.set(
+      "Content-Disposition",
+      `${disposition}; filename="${filename}"`
+    );
     responseHeaders.set("Cache-Control", "private, no-store, max-age=0");
     responseHeaders.set("Accept-Ranges", "bytes");
 
