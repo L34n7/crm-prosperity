@@ -32,8 +32,8 @@ export default function CatalogImageLightbox({
   const colunasLaterais = Math.max(1, Math.ceil(fotos.length / 12));
 
   const desktopMenuWidth =
-    colunasLaterais * 86 + Math.max(0, colunasLaterais - 1) * 6;
-  const desktopArrowLeft = 18 + desktopMenuWidth + 20 + 28;
+    colunasLaterais * 105 + Math.max(0, colunasLaterais - 1) * -15; 
+  const desktopArrowLeft = 8 + desktopMenuWidth + 3 + 28;
   const desktopStagePaddingLeft = desktopArrowLeft + 52 + 20;
   const desktopStageCenterOffset = (desktopStagePaddingLeft - 78) / 2;
 
