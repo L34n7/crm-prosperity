@@ -1,0 +1,816 @@
+.pageContent {
+  padding: 6px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  align-items: flex-end;
+  padding: 30px;
+  border-radius: 28px;
+  color: var(--crm-text-inverse);
+  background:
+    radial-gradient(circle at 88% 18%, var(--crm-ui-private-surface-rgb-255-255-255-0-1), transparent 30%),
+    linear-gradient(135deg, var(--crm-ui-private-surface-hex-031f2b) 0%, var(--crm-ui-private-surface-hex-113e50) 52%, var(--crm-primary) 100%);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-16);
+  box-shadow: 0 22px 60px var(--crm-ui-private-shadow-rgb-13-38-56-0-28);
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 999px;
+  right: -120px;
+  bottom: -180px;
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-1);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-16);
+}
+
+.heroCopy {
+  position: relative;
+  z-index: 1;
+  max-width: 820px;
+}
+
+.heroEyebrow,
+.sectionEyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.heroEyebrow {
+  color: var(--crm-on-strong-muted);
+}
+
+.hero h2 {
+  margin: 13px 0 12px;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+}
+
+.hero p {
+  margin: 0;
+  max-width: 760px;
+  color: var(--crm-on-strong-soft);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.periodSelector {
+  position: relative;
+  z-index: 2;
+  min-width: 270px;
+  padding: 14px;
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-16);
+  border-radius: 18px;
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-1);
+  backdrop-filter: blur(10px);
+}
+
+.periodSelector > span {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--crm-on-strong-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.periodSelector > div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.periodLink,
+.periodActive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border-radius: 11px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 800;
+  transition: 0.18s ease;
+}
+
+.periodLink {
+  color: var(--crm-text-inverse);
+  background: transparent;
+}
+
+.periodLink:hover {
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-1);
+}
+
+.periodActive {
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.kpiCard,
+.panel,
+.methodNote,
+.alertCard {
+  background: linear-gradient(180deg, var(--crm-surface) 0%, var(--crm-surface-soft) 100%);
+  border: 1px solid var(--crm-border-soft);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.kpiCard {
+  min-width: 0;
+  padding: 18px;
+  border-radius: 20px;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.kpiCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--crm-primary-border);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.kpiTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+}
+
+.kpiIcon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  border: 1px solid var(--crm-primary-border);
+}
+
+.trendPositive,
+.trendNegative {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.trendPositive {
+  color: var(--crm-success-text);
+}
+
+.trendNegative {
+  color: var(--crm-danger-text);
+}
+
+.kpiCard p {
+  margin: 16px 0 7px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kpiCard strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--crm-text-strong);
+  font-size: clamp(25px, 3vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.kpiCard small {
+  display: block;
+  margin-top: 8px;
+  color: var(--crm-text-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.primaryGrid,
+.secondaryGrid {
+  display: grid;
+  gap: 20px;
+}
+
+.primaryGrid {
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.85fr);
+}
+
+.secondaryGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.panel {
+  min-width: 0;
+  padding: 22px;
+  border-radius: 24px;
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.sectionEyebrow {
+  color: var(--crm-primary-text);
+}
+
+.panelHeader h3 {
+  margin: 6px 0 0;
+  color: var(--crm-text-strong);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.panelBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  border: 1px solid var(--crm-primary-border);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.panelIcon {
+  color: var(--crm-primary-text);
+}
+
+.lineChart {
+  position: relative;
+  min-height: 250px;
+  padding-top: 4px;
+}
+
+.lineChart svg {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+}
+
+.chartGrid {
+  position: absolute;
+  inset: 4px 0 30px;
+  border-radius: 16px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(25% - 1px),
+      var(--crm-border-soft) 25%
+    );
+}
+
+.chartLine {
+  fill: none;
+  stroke: var(--crm-primary);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.chartArea {
+  fill: var(--crm-primary-soft);
+  opacity: 0.7;
+}
+
+.chartLabels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+  color: var(--crm-text-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.funnelList {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.funnelItem {
+  min-width: 0;
+}
+
+.funnelMeta,
+.rankingTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.funnelMeta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.funnelMeta span b {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  font-size: 10px;
+}
+
+.funnelMeta strong {
+  color: var(--crm-text-strong);
+  font-size: 16px;
+}
+
+.funnelTrack,
+.progressTrack {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  background: var(--crm-border-soft);
+}
+
+.funnelTrack {
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 999px;
+}
+
+.funnelTrack span,
+.progressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--crm-primary), var(--crm-primary-text));
+}
+
+.funnelItem small {
+  display: block;
+  margin-top: 5px;
+  color: var(--crm-text-soft);
+  font-size: 10px;
+}
+
+.alertGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.alertCard {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+}
+
+.alertIcon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+}
+
+.alertCard strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.alertCard p {
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.alert_critical {
+  border-color: var(--crm-danger-border);
+}
+
+.alert_critical .alertIcon {
+  color: var(--crm-danger-text);
+  background: var(--crm-danger-bg);
+}
+
+.alert_warning {
+  border-color: var(--crm-warning-border);
+}
+
+.alert_warning .alertIcon {
+  color: var(--crm-warning-text);
+  background: var(--crm-warning-bg);
+}
+
+.alert_positive {
+  border-color: var(--crm-success-border);
+}
+
+.alert_positive .alertIcon {
+  color: var(--crm-success-text);
+  background: var(--crm-success-bg);
+}
+
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 16px;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.dataTable th,
+.dataTable td {
+  padding: 13px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--crm-border-soft);
+}
+
+.dataTable th {
+  color: var(--crm-text-soft);
+  background: var(--crm-surface-soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dataTable td {
+  color: var(--crm-text);
+  font-size: 12px;
+}
+
+.dataTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.dataTable tbody tr:hover {
+  background: var(--crm-primary-soft);
+}
+
+.dataTable td:first-child {
+  min-width: 280px;
+}
+
+.dataTable td strong,
+.dataTable td small {
+  display: block;
+}
+
+.dataTable td strong {
+  max-width: 380px;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.dataTable td small {
+  margin-top: 4px;
+  color: var(--crm-text-soft);
+  font-size: 10px;
+}
+
+.metricPill {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  border: 1px solid var(--crm-primary-border);
+  font-weight: 800;
+}
+
+.rankingList,
+.teamList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rankingItem,
+.teamItem {
+  padding: 13px;
+  border-radius: 16px;
+  border: 1px solid var(--crm-border-soft);
+  background: var(--crm-surface);
+}
+
+.rankingTop > div {
+  min-width: 0;
+}
+
+.rankingTop strong,
+.rankingTop small {
+  display: block;
+}
+
+.rankingTop strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.rankingTop small {
+  margin-top: 4px;
+  color: var(--crm-text-soft);
+  font-size: 10px;
+}
+
+.rankingTop > b {
+  color: var(--crm-primary-text);
+  font-size: 12px;
+}
+
+.progressTrack {
+  height: 7px;
+  margin-top: 10px;
+  border-radius: 999px;
+}
+
+.teamItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.avatar {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  color: var(--crm-text-inverse);
+  background: linear-gradient(135deg, var(--crm-ui-private-surface-hex-113e50), var(--crm-primary));
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.teamMain {
+  min-width: 0;
+}
+
+.teamMain strong,
+.teamMain small {
+  display: block;
+}
+
+.teamMain strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.teamMain small {
+  margin-top: 4px;
+  color: var(--crm-text-soft);
+  font-size: 10px;
+}
+
+.teamStats {
+  display: flex;
+  gap: 12px;
+}
+
+.teamStats span {
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  text-align: right;
+}
+
+.teamStats b {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 11px;
+}
+
+.rank {
+  color: var(--crm-text-soft);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.emptyState {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  border: 1px dashed var(--crm-border-strong);
+  border-radius: 16px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+.methodNote {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px 18px;
+  border-radius: 18px;
+}
+
+.methodIcon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  border: 1px solid var(--crm-primary-border);
+}
+
+.methodNote strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.methodNote p {
+  margin: 5px 0 0;
+  max-width: 1100px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+@media (max-width: 1180px) {
+  .kpiGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .primaryGrid,
+  .secondaryGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .periodSelector {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .alertGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .pageContent {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .hero {
+    padding: 22px;
+    border-radius: 22px;
+  }
+
+  .hero h2 {
+    font-size: 30px;
+  }
+
+  .kpiGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .kpiCard {
+    padding: 14px;
+    border-radius: 17px;
+  }
+
+  .kpiTop {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .kpiCard strong {
+    font-size: 27px;
+  }
+
+  .panel {
+    padding: 17px;
+    border-radius: 20px;
+  }
+
+  .panelHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .lineChart {
+    min-height: 220px;
+  }
+
+  .lineChart svg {
+    height: 190px;
+  }
+
+  .teamItem {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .teamStats {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+
+  .rank {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .kpiGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .periodSelector > div {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .hero p {
+    font-size: 14px;
+  }
+
+  .trendPositive,
+  .trendNegative {
+    white-space: normal;
+  }
+}
