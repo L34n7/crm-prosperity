@@ -1,6 +1,12 @@
 .lightboxWithThumbs,
 .lightboxSingleThumbRow {
+  --lightbox-stage-center-offset: 107px;
   padding: 42px 78px 58px 292px;
+}
+
+.lightboxSingleThumbRow {
+  --lightbox-stage-center-offset: 58px;
+  padding-left: 194px;
 }
 
 .stage,
@@ -11,7 +17,7 @@
 
 .counter {
   top: auto;
-  left: 50%;
+  left: calc(50% + var(--lightbox-stage-center-offset));
   right: auto;
   bottom: 20px;
   min-width: 62px;
@@ -55,11 +61,11 @@
   top: 78px;
   bottom: 24px;
   left: 18px;
-  width: 202px;
+  width: fit-content;
+  max-width: 178px;
   min-height: 0;
   padding: 9px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: auto;
   border: 1px solid color-mix(in srgb, white 16%, transparent);
   border-radius: 16px;
   background: color-mix(in srgb, #061519 86%, transparent);
@@ -87,10 +93,11 @@
   min-width: 0;
   margin-inline: auto;
   display: grid;
-  grid-template-columns: repeat(2, 86px);
-  grid-template-rows: none;
-  grid-auto-flow: row;
-  grid-auto-rows: 58px;
+  grid-template-columns: none;
+  grid-template-rows: repeat(12, 58px);
+  grid-auto-flow: column;
+  grid-auto-columns: 86px;
+  grid-auto-rows: unset;
   gap: 6px;
 }
 
@@ -154,10 +161,20 @@
   left: 228px;
 }
 
+.lightboxSingleThumbRow > button:nth-of-type(2) {
+  left: 128px;
+}
+
 @media (max-width: 980px) {
   .lightboxWithThumbs,
   .lightboxSingleThumbRow {
+    --lightbox-stage-center-offset: 95px;
     padding: 36px 58px 52px 248px;
+  }
+
+  .lightboxSingleThumbRow {
+    --lightbox-stage-center-offset: 57px;
+    padding-left: 172px;
   }
 
   .stage,
@@ -174,13 +191,17 @@
     top: 70px;
     bottom: 18px;
     left: 12px;
-    width: 178px;
+    width: fit-content;
+    max-width: 162px;
     padding: 8px;
   }
 
   .thumbGrid {
-    grid-template-columns: repeat(2, 78px);
-    grid-auto-rows: 52px;
+    grid-template-columns: none;
+    grid-template-rows: repeat(12, 52px);
+    grid-auto-flow: column;
+    grid-auto-columns: 78px;
+    grid-auto-rows: unset;
     gap: 6px;
   }
 
@@ -194,6 +215,10 @@
     bottom: auto;
     left: 198px;
     transform: translateY(-50%);
+  }
+
+  .lightboxSingleThumbRow > button:nth-of-type(2) {
+    left: 108px;
   }
 
   .lightboxWithThumbs > button:nth-of-type(2):hover {
@@ -210,10 +235,12 @@
 
 @media (max-width: 620px) {
   .lightboxWithThumbs {
+    --lightbox-stage-center-offset: 0px;
     padding: 174px 16px 58px;
   }
 
   .lightboxSingleThumbRow {
+    --lightbox-stage-center-offset: 0px;
     padding: 120px 16px 58px;
   }
 
@@ -257,6 +284,7 @@
     grid-template-columns: repeat(var(--thumb-columns), 70px);
     grid-template-rows: repeat(var(--thumb-rows), 48px);
     grid-auto-flow: row;
+    grid-auto-columns: unset;
     grid-auto-rows: unset;
     gap: 5px;
   }
@@ -267,7 +295,8 @@
     border-radius: 8px;
   }
 
-  .lightboxWithThumbs > button:nth-of-type(2) {
+  .lightboxWithThumbs > button:nth-of-type(2),
+  .lightboxSingleThumbRow > button:nth-of-type(2) {
     top: 50%;
     bottom: auto;
     left: 10px;
@@ -276,7 +305,8 @@
     transform: translateY(-50%);
   }
 
-  .lightboxWithThumbs > button:nth-of-type(2):hover {
+  .lightboxWithThumbs > button:nth-of-type(2):hover,
+  .lightboxSingleThumbRow > button:nth-of-type(2):hover {
     transform: translateY(-50%) scale(1.04);
   }
 
