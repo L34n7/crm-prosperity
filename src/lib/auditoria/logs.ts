@@ -30,7 +30,7 @@ export type RegistrarLogAuditoriaInput = {
     | "pessoa"
     | "prontuario"
     | "odontograma"
-    | "mapa_podal"
+    | "podograma"
     | "imovel"
     | "empresa"
     | "imovel_publicacao"

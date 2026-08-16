@@ -14,7 +14,7 @@ export const PRONTUARIO_ABA_CODIGOS = [
   "atendimento",
   "evolucoes",
   "odontograma",
-  "mapa_podal",
+  "podograma",
 ] as const;
 
 export type NichoCodigo = (typeof NICHO_CODIGOS)[number];
@@ -76,7 +76,7 @@ export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
     cadastroSingular: "Paciente",
     cadastroPlural: "Pacientes",
     modulos: ["cadastros.pessoas", "saude.prontuarios"],
-    prontuarioAbas: [...ABAS_PRONTUARIO_PADRAO, "mapa_podal"],
+    prontuarioAbas: [...ABAS_PRONTUARIO_PADRAO, "podograma"],
   },
   odontologia: {
     codigo: "odontologia",

@@ -7,7 +7,7 @@ import FeedbackToast from "@/components/FeedbackToast";
 import { useHeaderUser } from "@/components/header-user-context";
 import CadastroPacienteModal from "@/components/pacientes/CadastroPacienteModal";
 import OdontogramaTab from "@/components/prontuarios/OdontogramaTab";
-import MapaPodalTab from "@/components/prontuarios/MapaPodalTab";
+import PodogramaTab from "@/components/prontuarios/PodogramaTab";
 import {
   getNichoConfig,
   isNichoCodigo,
@@ -69,7 +69,7 @@ const ABA_LABELS: Record<ProntuarioAbaCodigo, string> = {
   atendimento: "Novo atendimento",
   evolucoes: "Evoluções",
   odontograma: "Odontograma",
-  mapa_podal: "Mapa podal",
+  podograma: "Podograma",
 };
 
 function dataHoraLocalInicial() {
@@ -539,34 +539,13 @@ export default function PacientesPage() {
                       </div>
                     </div>
                     <dl className={styles.detailList}>
-                      <div>
-                        <dt>Nome</dt>
-                        <dd>{pacienteSelecionado.pessoa?.nome || "Não informado"}</dd>
-                      </div>
-                      <div>
-                        <dt>E-mail</dt>
-                        <dd>{pacienteSelecionado.pessoa?.email || "Não informado"}</dd>
-                      </div>
-                      <div>
-                        <dt>Documento</dt>
-                        <dd>{pacienteSelecionado.pessoa?.cpf_cnpj || "Não informado"}</dd>
-                      </div>
-                      <div>
-                        <dt>Nascimento</dt>
-                        <dd>{formatarData(pacienteSelecionado.pessoa?.data_nascimento)}</dd>
-                      </div>
-                      <div>
-                        <dt>Convênio</dt>
-                        <dd>{pacienteSelecionado.convenio || "Não informado"}</dd>
-                      </div>
-                      <div>
-                        <dt>Responsável</dt>
-                        <dd>{pacienteSelecionado.responsavel_nome || "Não informado"}</dd>
-                      </div>
-                      <div>
-                        <dt>Cadastrado em</dt>
-                        <dd>{formatarDataHora(pacienteSelecionado.created_at)}</dd>
-                      </div>
+                      <div><dt>Nome</dt><dd>{pacienteSelecionado.pessoa?.nome || "Não informado"}</dd></div>
+                      <div><dt>E-mail</dt><dd>{pacienteSelecionado.pessoa?.email || "Não informado"}</dd></div>
+                      <div><dt>Documento</dt><dd>{pacienteSelecionado.pessoa?.cpf_cnpj || "Não informado"}</dd></div>
+                      <div><dt>Nascimento</dt><dd>{formatarData(pacienteSelecionado.pessoa?.data_nascimento)}</dd></div>
+                      <div><dt>Convênio</dt><dd>{pacienteSelecionado.convenio || "Não informado"}</dd></div>
+                      <div><dt>Responsável</dt><dd>{pacienteSelecionado.responsavel_nome || "Não informado"}</dd></div>
+                      <div><dt>Cadastrado em</dt><dd>{formatarDataHora(pacienteSelecionado.created_at)}</dd></div>
                     </dl>
                   </section>
                 </div>
@@ -637,10 +616,7 @@ export default function PacientesPage() {
 
                     <label className={styles.field}>
                       <span>Tipo</span>
-                      <select
-                        value={form.tipo}
-                        onChange={(event) => setForm((atual) => ({ ...atual, tipo: event.target.value }))}
-                      >
+                      <select value={form.tipo} onChange={(event) => setForm((atual) => ({ ...atual, tipo: event.target.value }))}>
                         <option value="consulta">Consulta</option>
                         <option value="retorno">Retorno</option>
                         <option value="procedimento">Procedimento</option>
@@ -732,8 +708,8 @@ export default function PacientesPage() {
                 />
               ) : null}
 
-              {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "mapa_podal" ? (
-                <MapaPodalTab
+              {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "podograma" ? (
+                <PodogramaTab
                   pacienteId={pacienteSelecionado.id}
                   podeEditar={podeEditarProntuario}
                   onFeedback={setMensagem}
