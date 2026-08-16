@@ -1,89 +1,54 @@
 .heroRange {
-  position: relative;
-  z-index: 2;
-  min-width: 290px;
-  max-width: 390px;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 15px 16px;
-  border-radius: 18px;
-  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-16);
-  background: var(--crm-ui-private-surface-rgb-255-255-255-0-1);
-  backdrop-filter: blur(12px);
-}
-
-.heroRange > svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--crm-text-inverse);
-}
-
-.heroRange div {
-  min-width: 0;
-}
-
-.heroRange span {
-  display: block;
-  margin-bottom: 5px;
-  color: var(--crm-on-strong-muted);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.heroRange strong {
-  display: block;
-  color: var(--crm-text-inverse);
-  font-size: 12px;
-  line-height: 1.55;
+  display: none;
 }
 
 .filterPanel {
-  padding: 20px;
-  border-radius: 22px;
-  border: 1px solid var(--crm-border-soft);
-  background: linear-gradient(180deg, var(--crm-surface) 0%, var(--crm-surface-soft) 100%);
-  box-shadow: var(--crm-shadow-sm);
+  position: absolute;
+  top: 24px;
+  right: 44px;
+  z-index: 4;
+  width: clamp(600px, 43vw, 760px);
+  padding: 13px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-16);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-1);
+  box-shadow: none;
+  backdrop-filter: blur(14px);
 }
 
 .filterHeader {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 9px;
 }
 
 .filterEyebrow {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--crm-primary-text);
-  font-size: 11px;
+  color: var(--crm-text-inverse);
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .filterHeader h3 {
-  margin: 6px 0 0;
-  color: var(--crm-text-strong);
-  font-size: 18px;
-  letter-spacing: -0.02em;
+  display: none;
 }
 
 .timezoneBadge {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 6px 10px;
+  min-height: 28px;
+  padding: 5px 9px;
   border-radius: 999px;
-  border: 1px solid var(--crm-primary-border);
-  background: var(--crm-primary-soft);
-  color: var(--crm-primary-text);
-  font-size: 10px;
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-16);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-1);
+  color: var(--crm-text-inverse);
+  font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -91,8 +56,8 @@
 .shortcutGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: 7px;
+  margin-bottom: 9px;
 }
 
 .shortcutLink,
@@ -100,70 +65,68 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
-  padding: 9px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--crm-border);
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 10px;
   text-decoration: none;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .shortcutLink {
-  color: var(--crm-text);
-  background: var(--crm-surface);
+  color: var(--crm-text-inverse);
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-16);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-1);
 }
 
 .shortcutLink:hover {
   transform: translateY(-1px);
-  border-color: var(--crm-primary-border);
-  background: var(--crm-primary-soft);
-  color: var(--crm-primary-text);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-16);
 }
 
 .shortcutActive {
-  color: var(--crm-text-inverse);
-  border-color: var(--crm-primary);
-  background: linear-gradient(135deg, var(--crm-primary), var(--crm-primary-text));
+  color: var(--crm-text-strong);
+  border: 1px solid var(--crm-surface);
+  background: var(--crm-surface);
   box-shadow: var(--crm-shadow-sm);
 }
 
 .customForm {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: end;
-  padding-top: 14px;
-  border-top: 1px solid var(--crm-border-soft);
+  padding-top: 0;
+  border-top: 0;
 }
 
 .field {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
 }
 
 .field span {
-  color: var(--crm-text-muted);
-  font-size: 10px;
+  color: var(--crm-on-strong-muted);
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .field input {
   width: 100%;
-  min-height: 43px;
-  padding: 9px 11px;
+  min-height: 38px;
+  padding: 7px 9px;
   border: 1px solid var(--crm-border);
-  border-radius: 12px;
+  border-radius: 10px;
   outline: none;
   background: var(--crm-surface);
   color: var(--crm-text-strong);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -173,56 +136,74 @@
 }
 
 .applyButton {
-  min-height: 43px;
-  padding: 10px 16px;
-  border: 1px solid var(--crm-primary);
-  border-radius: 12px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--crm-surface);
+  border-radius: 10px;
   cursor: pointer;
-  color: var(--crm-text-inverse);
-  background: linear-gradient(135deg, var(--crm-primary), var(--crm-primary-text));
-  font-size: 12px;
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+  font-size: 13px;
   font-weight: 800;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 .applyButton:hover {
   transform: translateY(-1px);
+  background: var(--crm-primary-soft);
   box-shadow: var(--crm-shadow-sm);
 }
 
 .filterFooter {
   display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: 11px;
-  color: var(--crm-text-soft);
-  font-size: 10px;
-  line-height: 1.45;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--crm-on-strong-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .filterFooter span:first-child {
-  color: var(--crm-primary-text);
+  color: var(--crm-text-inverse);
   font-weight: 800;
 }
 
+.filterFooter span:last-child {
+  display: none;
+}
+
 .filterWarning {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 11px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
   border: 1px solid var(--crm-warning-border);
   background: var(--crm-warning-bg);
   color: var(--crm-warning-text);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
   font-weight: 700;
 }
 
-@media (max-width: 900px) {
-  .heroRange {
-    width: 100%;
-    max-width: none;
+@media (max-width: 1450px) {
+  .filterPanel {
+    right: 32px;
+    width: 610px;
   }
+}
 
+@media (max-width: 1280px) {
+  .filterPanel {
+    position: static;
+    width: 100%;
+    margin-top: -42px;
+    padding: 16px 20px 18px;
+    border-radius: 0 0 24px 24px;
+    background: linear-gradient(135deg, var(--crm-ui-private-surface-hex-113e50), var(--crm-primary));
+  }
+}
+
+@media (max-width: 900px) {
   .customForm {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -234,8 +215,9 @@
 
 @media (max-width: 640px) {
   .filterPanel {
-    padding: 15px;
-    border-radius: 18px;
+    margin-top: -26px;
+    padding: 14px;
+    border-radius: 0 0 18px 18px;
   }
 
   .filterHeader,
@@ -254,9 +236,5 @@
 
   .applyButton {
     grid-column: auto;
-  }
-
-  .heroRange {
-    min-width: 0;
   }
 }

@@ -1,4 +1,5 @@
 .pageContent {
+  position: relative;
   padding: 6px 24px 32px;
   display: flex;
   flex-direction: column;
@@ -11,7 +12,8 @@
   display: flex;
   justify-content: space-between;
   gap: 28px;
-  align-items: flex-end;
+  align-items: center;
+  min-height: 238px;
   padding: 30px;
   border-radius: 28px;
   color: var(--crm-text-inverse);
@@ -37,7 +39,7 @@
 .heroCopy {
   position: relative;
   z-index: 1;
-  max-width: 820px;
+  max-width: 660px;
 }
 
 .heroEyebrow,
@@ -46,9 +48,9 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
@@ -58,17 +60,17 @@
 
 .hero h2 {
   margin: 13px 0 12px;
-  font-size: clamp(30px, 4vw, 46px);
+  font-size: clamp(30px, 4vw, 44px);
   line-height: 1.04;
   letter-spacing: -0.035em;
 }
 
 .hero p {
   margin: 0;
-  max-width: 760px;
+  max-width: 650px;
   color: var(--crm-on-strong-soft);
-  font-size: 15px;
-  line-height: 1.7;
+  font-size: 16px;
+  line-height: 1.65;
 }
 
 .periodSelector {
@@ -86,7 +88,7 @@
   display: block;
   margin-bottom: 9px;
   color: var(--crm-on-strong-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -106,7 +108,7 @@
   min-height: 38px;
   border-radius: 11px;
   text-decoration: none;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   transition: 0.18s ease;
 }
@@ -163,8 +165,8 @@
 }
 
 .kpiIcon {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -178,8 +180,9 @@
 .trendNegative {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 10px;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.35;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -195,7 +198,7 @@
 .kpiCard p {
   margin: 16px 0 7px;
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -204,7 +207,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--crm-text-strong);
-  font-size: clamp(25px, 3vw, 34px);
+  font-size: clamp(27px, 3vw, 35px);
   line-height: 1.05;
   letter-spacing: -0.035em;
 }
@@ -213,7 +216,7 @@
   display: block;
   margin-top: 8px;
   color: var(--crm-text-soft);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -252,7 +255,7 @@
 .panelHeader h3 {
   margin: 6px 0 0;
   color: var(--crm-text-strong);
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: -0.02em;
 }
 
@@ -261,12 +264,12 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  padding: 7px 10px;
+  padding: 7px 11px;
   border-radius: 999px;
   color: var(--crm-primary-text);
   background: var(--crm-primary-soft);
   border: 1px solid var(--crm-primary-border);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -320,9 +323,9 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--crm-text-soft);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -349,25 +352,25 @@
   align-items: center;
   gap: 8px;
   color: var(--crm-text);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .funnelMeta span b {
   display: inline-flex;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
   color: var(--crm-primary-text);
   background: var(--crm-primary-soft);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .funnelMeta strong {
   color: var(--crm-text-strong);
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .funnelTrack,
@@ -394,9 +397,9 @@
 
 .funnelItem small {
   display: block;
-  margin-top: 5px;
+  margin-top: 6px;
   color: var(--crm-text-soft);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .alertGrid {
@@ -415,9 +418,9 @@
 }
 
 .alertIcon {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -427,14 +430,14 @@
 .alertCard strong {
   display: block;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.4;
 }
 
 .alertCard p {
   margin: 5px 0 0;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -488,15 +491,15 @@
 .dataTable th {
   color: var(--crm-text-soft);
   background: var(--crm-surface-soft);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.055em;
   text-transform: uppercase;
 }
 
 .dataTable td {
   color: var(--crm-text);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .dataTable tbody tr:last-child td {
@@ -519,13 +522,13 @@
 .dataTable td strong {
   max-width: 380px;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .dataTable td small {
   margin-top: 4px;
   color: var(--crm-text-soft);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .metricPill {
@@ -567,18 +570,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .rankingTop small {
   margin-top: 4px;
   color: var(--crm-text-soft);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .rankingTop > b {
   color: var(--crm-primary-text);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .progressTrack {
@@ -595,15 +598,15 @@
 }
 
 .avatar {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 13px;
   color: var(--crm-text-inverse);
   background: linear-gradient(135deg, var(--crm-ui-private-surface-hex-113e50), var(--crm-primary));
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -621,13 +624,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .teamMain small {
   margin-top: 4px;
   color: var(--crm-text-soft);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .teamStats {
@@ -637,19 +640,19 @@
 
 .teamStats span {
   color: var(--crm-text-muted);
-  font-size: 9px;
+  font-size: 11px;
   text-align: right;
 }
 
 .teamStats b {
   display: block;
   color: var(--crm-text-strong);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .rank {
   color: var(--crm-text-soft);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -663,7 +666,7 @@
   border-radius: 16px;
   color: var(--crm-text-muted);
   background: var(--crm-surface-soft);
-  font-size: 12px;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -691,14 +694,14 @@
 .methodNote strong {
   display: block;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .methodNote p {
   margin: 5px 0 0;
   max-width: 1100px;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -736,12 +739,17 @@
   }
 
   .hero {
+    min-height: 0;
     padding: 22px;
     border-radius: 22px;
   }
 
   .hero h2 {
     font-size: 30px;
+  }
+
+  .hero p {
+    font-size: 15px;
   }
 
   .kpiGrid {
@@ -760,7 +768,7 @@
   }
 
   .kpiCard strong {
-    font-size: 27px;
+    font-size: 28px;
   }
 
   .panel {
@@ -803,10 +811,6 @@
 
   .periodSelector > div {
     grid-template-columns: 1fr 1fr 1fr;
-  }
-
-  .hero p {
-    font-size: 14px;
   }
 
   .trendPositive,
