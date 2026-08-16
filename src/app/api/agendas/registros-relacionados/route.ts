@@ -161,7 +161,7 @@ export async function GET(request: Request) {
             paciente_id: paciente.id,
             pessoa_id: paciente.pessoa_id,
             numero_prontuario: paciente.numero_prontuario ?? "",
-            href: `/prontuarios?paciente_id=${paciente.id}`,
+            href: `/pacientes?paciente_id=${paciente.id}&aba=prontuario`,
           },
         });
       }
@@ -195,7 +195,7 @@ export async function GET(request: Request) {
             paciente_id: paciente.id,
             pessoa_id: paciente.pessoa_id,
             numero_prontuario: paciente.numero_prontuario ?? "",
-            href: `/odontograma?paciente_id=${paciente.id}`,
+            href: `/pacientes?paciente_id=${paciente.id}&aba=odontograma`,
           },
         });
       }
