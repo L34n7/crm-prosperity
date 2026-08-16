@@ -282,24 +282,26 @@ export default function Sidebar({
   const temaEscuroAtivo = temaVisual === "dark";
   const temaBotaoLabel = temaEscuroAtivo ? "Tema claro" : "Tema escuro";
   const nichoConfig = getNichoConfig(nichoCodigo);
+  const cadastroComercialMenu: MenuItem[] =
+    nichoConfig.grupo === "comercial"
+      ? [
+          {
+            label: "Clientes",
+            href: "/cadastros",
+            icon: Users,
+            permissao: "pessoas.visualizar",
+          },
+        ]
+      : [];
   const modulosNichoMenu: MenuItem[] = [
-    ...(nichoConfig.modulos.includes("saude.prontuarios")
+    ...(nichoConfig.grupo === "saude" &&
+    nichoConfig.modulos.includes("saude.prontuarios")
       ? [
           {
             label: "Prontuários",
             href: "/prontuarios",
             icon: FileText,
             permissao: "prontuarios.visualizar",
-          },
-        ]
-      : []),
-    ...(nichoConfig.modulos.includes("saude.odontograma")
-      ? [
-          {
-            label: "Odontograma",
-            href: "/odontograma",
-            icon: Layers3,
-            permissao: "odontograma.visualizar",
           },
         ]
       : []),
@@ -322,12 +324,7 @@ export default function Sidebar({
   ];
   const menuItemsComCadastro: MenuItem[] = [
     ...menuItems.slice(0, 9),
-    {
-      label: nichoConfig.cadastroPlural,
-      href: "/cadastros",
-      icon: Users,
-      permissao: "pessoas.visualizar",
-    },
+    ...cadastroComercialMenu,
     ...modulosNichoMenu,
     ...menuItems.slice(9),
   ];

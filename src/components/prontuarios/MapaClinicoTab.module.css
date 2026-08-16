@@ -1,0 +1,248 @@
+.wrapper {
+  display: grid;
+  gap: 18px;
+}
+
+.loading,
+.error,
+.empty {
+  padding: 18px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface);
+  color: var(--crm-text-muted);
+  font-size: 14px;
+}
+
+.error {
+  border-color: rgba(220, 38, 38, 0.2);
+  background: rgba(220, 38, 38, 0.06);
+  color: #b42318;
+}
+
+.mapGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mapPanel {
+  padding: 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+}
+
+.mapPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mapPanelHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+}
+
+.mapPanelHeader span {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.regionGrid,
+.toothGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.toothGrid {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.mapButton {
+  min-height: 64px;
+  padding: 9px 8px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 12px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.mapButton:hover {
+  border-color: var(--crm-primary-border);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.mapButtonActive {
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.mapButton strong {
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.mapButton small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.formCard {
+  padding: 18px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+}
+
+.formHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.formHeader div {
+  min-width: 0;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.formHeader h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 17px;
+}
+
+.statusBadge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field span {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  padding: 10px 11px;
+}
+
+.field textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.fullField {
+  grid-column: 1 / -1;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.primaryButton {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.primaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.readOnlyNote {
+  margin: 12px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .mapGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .toothGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .regionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fullField {
+    grid-column: auto;
+  }
+}

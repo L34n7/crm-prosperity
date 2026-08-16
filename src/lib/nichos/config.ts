@@ -2,12 +2,22 @@ export const NICHO_CODIGOS = [
   "comercio",
   "imobiliaria",
   "medicina",
+  "podologia",
   "odontologia",
   "outro",
 ] as const;
 
+export const PRONTUARIO_ABA_CODIGOS = [
+  "resumo",
+  "atendimento",
+  "evolucoes",
+  "odontograma",
+  "mapa_podal",
+] as const;
+
 export type NichoCodigo = (typeof NICHO_CODIGOS)[number];
 export type NichoGrupo = "comercial" | "saude";
+export type ProntuarioAbaCodigo = (typeof PRONTUARIO_ABA_CODIGOS)[number];
 
 export type NichoConfig = {
   codigo: NichoCodigo;
@@ -16,7 +26,14 @@ export type NichoConfig = {
   cadastroSingular: "Cliente" | "Paciente";
   cadastroPlural: "Clientes" | "Pacientes";
   modulos: string[];
+  prontuarioAbas?: ProntuarioAbaCodigo[];
 };
+
+const ABAS_PRONTUARIO_PADRAO: ProntuarioAbaCodigo[] = [
+  "resumo",
+  "atendimento",
+  "evolucoes",
+];
 
 export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
   comercio: {
@@ -50,6 +67,20 @@ export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
       "saude.pacientes",
       "saude.prontuarios",
     ],
+    prontuarioAbas: [...ABAS_PRONTUARIO_PADRAO],
+  },
+  podologia: {
+    codigo: "podologia",
+    nome: "Podologia",
+    grupo: "saude",
+    cadastroSingular: "Paciente",
+    cadastroPlural: "Pacientes",
+    modulos: [
+      "cadastros.pessoas",
+      "saude.pacientes",
+      "saude.prontuarios",
+    ],
+    prontuarioAbas: [...ABAS_PRONTUARIO_PADRAO, "mapa_podal"],
   },
   odontologia: {
     codigo: "odontologia",
@@ -63,6 +94,7 @@ export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
       "saude.prontuarios",
       "saude.odontograma",
     ],
+    prontuarioAbas: [...ABAS_PRONTUARIO_PADRAO, "odontograma"],
   },
   outro: {
     codigo: "outro",
@@ -78,6 +110,15 @@ export function isNichoCodigo(valor: unknown): valor is NichoCodigo {
   return (
     typeof valor === "string" &&
     (NICHO_CODIGOS as readonly string[]).includes(valor)
+  );
+}
+
+export function isProntuarioAbaCodigo(
+  valor: unknown
+): valor is ProntuarioAbaCodigo {
+  return (
+    typeof valor === "string" &&
+    (PRONTUARIO_ABA_CODIGOS as readonly string[]).includes(valor)
   );
 }
 
