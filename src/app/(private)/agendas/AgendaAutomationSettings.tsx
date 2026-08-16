@@ -1,6 +1,7 @@
 "use client";
 
 import { Zap } from "lucide-react";
+import { useEffect } from "react";
 import AgendaTemplateConfiguration, {
   defaultTemplateConfiguration,
   type AgendaCustomVariableOption,
@@ -205,6 +206,33 @@ export default function AgendaAutomationSettings({
   const availableIntegrations = options.integracoes.filter((integration) =>
     selectedIntegrationIds.includes(integration.id),
   );
+  const singleIntegrationId =
+    availableIntegrations.length === 1 ? availableIntegrations[0].id : "";
+
+  useEffect(() => {
+    if (!singleIntegrationId) return;
+
+    let changed = false;
+    const normalizedCards = cards.map((card) => {
+      if (
+        !card.canais.includes("whatsapp") ||
+        card.integracaoId === singleIntegrationId
+      ) {
+        return card;
+      }
+
+      changed = true;
+      return {
+        ...card,
+        integracaoId: singleIntegrationId,
+        templateId: "",
+        templateConfig: emptyTemplateConfig(),
+      };
+    });
+
+    if (changed) onChange(normalizedCards);
+  }, [cards, onChange, singleIntegrationId]);
+
   const availableFlows = options.fluxos.filter(
     (flow) =>
       flow.modo_integracoes !== "selecionadas" ||
@@ -420,7 +448,8 @@ export default function AgendaAutomationSettings({
                         <label className={styles.field}>
                           <span>Integração do WhatsApp</span>
                           <select
-                            value={card.integracaoId}
+                            value={singleIntegrationId || card.integracaoId}
+                            disabled={availableIntegrations.length === 1}
                             onChange={(event) =>
                               updateCard(card.tipo, {
                                 integracaoId: event.target.value,
