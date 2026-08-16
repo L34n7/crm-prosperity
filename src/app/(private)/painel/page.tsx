@@ -54,6 +54,8 @@ type MensagemRow = {
   conversa_protocolo_id: string | null;
   remetente_tipo: "contato" | "bot" | "usuario" | "sistema" | string;
   remetente_id: string | null;
+  origem: string | null;
+  metadata_json: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -76,6 +78,8 @@ type ConversaRow = {
 type CampanhaRow = { id: string; nome: string };
 type FluxoRow = { id: string; nome: string };
 type UsuarioRow = { id: string; nome: string | null };
+type PerfilEmpresaRow = { id: string; nome: string };
+type UsuarioPerfilRow = { usuario_id: string; perfil_empresa_id: string };
 
 type Metricas = {
   entradas: number;
@@ -151,7 +155,7 @@ function normalizarAtalho(valor: string | string[] | undefined): AtalhoPeriodo {
   const recebido = primeiroValor(valor);
   return ATALHOS.some((atalho) => atalho.valor === recebido)
     ? (recebido as AtalhoPeriodo)
-    : "30";
+    : "hoje";
 }
 
 function numero(valor: number | string | null | undefined) {
@@ -464,6 +468,25 @@ function calcularMetricas(
   };
 }
 
+function ehMensagemCoexDoBusinessApp(mensagem: MensagemRow) {
+  const metadata = mensagem.metadata_json;
+  return (
+    mensagem.remetente_tipo === "usuario" &&
+    !mensagem.remetente_id &&
+    mensagem.origem === "enviada" &&
+    metadata?.coex === true &&
+    metadata?.coex_source === "business_app" &&
+    metadata?.coex_direction === "outbound"
+  );
+}
+
+function usuarioHumanoEfetivo(mensagem: MensagemRow, administradorId: string | null) {
+  if (mensagem.remetente_tipo !== "usuario") return null;
+  if (mensagem.remetente_id) return mensagem.remetente_id;
+  if (administradorId && ehMensagemCoexDoBusinessApp(mensagem)) return administradorId;
+  return null;
+}
+
 function Trend({ atual, anterior, inverter = false }: { atual: number; anterior: number; inverter?: boolean }) {
   const valor = variacao(atual, anterior);
   const positivo = inverter ? valor <= 0 : valor >= 0;
@@ -522,9 +545,11 @@ export default async function PainelPage({ searchParams }: PageProps) {
   const mensagensPromise = idsProtocolos.length
     ? supabase
         .from("mensagens")
-        .select("conversa_protocolo_id, remetente_tipo, remetente_id, created_at")
+        .select("conversa_protocolo_id, remetente_tipo, remetente_id, origem, metadata_json, created_at")
         .eq("empresa_id", empresaId)
         .in("conversa_protocolo_id", idsProtocolos)
+        .gte("created_at", intervalo.inicioAnterior.toISOString())
+        .lte("created_at", intervalo.fim.toISOString())
         .order("created_at", { ascending: true })
         .limit(15000)
     : Promise.resolve({ data: [], error: null });
@@ -535,6 +560,8 @@ export default async function PainelPage({ searchParams }: PageProps) {
         .select("id, fluxo_id, conversa_protocolo_id, status, started_at")
         .eq("empresa_id", empresaId)
         .in("conversa_protocolo_id", idsProtocolos)
+        .gte("started_at", intervalo.inicioAnterior.toISOString())
+        .lte("started_at", intervalo.fim.toISOString())
         .limit(10000)
     : Promise.resolve({ data: [], error: null });
 
@@ -554,7 +581,7 @@ export default async function PainelPage({ searchParams }: PageProps) {
       conversasPromise,
       supabase.from("rastreamento_campanhas").select("id, nome").eq("empresa_id", empresaId).limit(2000),
       supabase.from("automacao_fluxos").select("id, nome").eq("empresa_id", empresaId).limit(2000),
-      supabase.from("usuarios").select("id, nome").eq("empresa_id", empresaId).limit(2000),
+      supabase.from("usuarios").select("id, nome").eq("empresa_id", empresaId).eq("status", "ativo").limit(2000),
     ]);
 
   for (const [nome, resposta] of [
@@ -574,6 +601,42 @@ export default async function PainelPage({ searchParams }: PageProps) {
   const campanhas = (campanhasResp.data ?? []) as CampanhaRow[];
   const fluxos = (fluxosResp.data ?? []) as FluxoRow[];
   const usuarios = (usuariosResp.data ?? []) as UsuarioRow[];
+  const idsUsuarios = usuarios.map((usuario) => usuario.id);
+
+  const perfisPromise = supabase
+    .from("perfis_empresa")
+    .select("id, nome")
+    .eq("empresa_id", empresaId)
+    .eq("ativo", true)
+    .is("archived_at", null)
+    .limit(200);
+
+  const usuariosPerfisPromise = idsUsuarios.length
+    ? supabase
+        .from("usuarios_perfis")
+        .select("usuario_id, perfil_empresa_id")
+        .in("usuario_id", idsUsuarios)
+        .limit(2000)
+    : Promise.resolve({ data: [], error: null });
+
+  const [perfisResp, usuariosPerfisResp] = await Promise.all([
+    perfisPromise,
+    usuariosPerfisPromise,
+  ]);
+
+  if (perfisResp.error) console.error("Erro ao carregar perfis do painel:", perfisResp.error);
+  if (usuariosPerfisResp.error) console.error("Erro ao carregar vínculos de perfis do painel:", usuariosPerfisResp.error);
+
+  const perfis = (perfisResp.data ?? []) as PerfilEmpresaRow[];
+  const usuariosPerfis = (usuariosPerfisResp.data ?? []) as UsuarioPerfilRow[];
+  const perfisAdministrador = new Set(
+    perfis
+      .filter((perfil) => perfil.nome.trim().toLocaleLowerCase("pt-BR").includes("administrador"))
+      .map((perfil) => perfil.id),
+  );
+  const administradorId =
+    usuariosPerfis.find((vinculo) => perfisAdministrador.has(vinculo.perfil_empresa_id))?.usuario_id ??
+    (usuarios.length === 1 ? usuarios[0].id : null);
 
   const mensagensPorProtocolo = agruparPorProtocolo(mensagens);
   const execucoesPorProtocolo = agruparPorProtocolo(execucoes);
@@ -660,14 +723,15 @@ export default async function PainelPage({ searchParams }: PageProps) {
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
     const primeiraEntrada = mensagensProtocolo.find((mensagem) => mensagem.remetente_tipo === "contato");
-    const mensagensHumanas = mensagensProtocolo.filter(
-      (mensagem) => mensagem.remetente_tipo === "usuario" && mensagem.remetente_id,
-    );
-    const primeiroHumano = mensagensHumanas[0];
+    const mensagensHumanas = mensagensProtocolo
+      .map((mensagem) => ({
+        mensagem,
+        usuarioId: usuarioHumanoEfetivo(mensagem, administradorId),
+      }))
+      .filter((item): item is { mensagem: MensagemRow; usuarioId: string } => Boolean(item.usuarioId));
 
-    for (const mensagem of mensagensHumanas) {
-      const usuarioId = mensagem.remetente_id as string;
-      const atual = equipeMap.get(usuarioId) ?? {
+    for (const item of mensagensHumanas) {
+      const atual = equipeMap.get(item.usuarioId) ?? {
         protocolos: new Set<string>(),
         mensagens: 0,
         qualificados: new Set<string>(),
@@ -678,20 +742,26 @@ export default async function PainelPage({ searchParams }: PageProps) {
       atual.mensagens += 1;
       if (protocolo.resultado === "qualificado") atual.qualificados.add(protocolo.id);
       if (protocolo.resultado === "convertido") atual.convertidos.add(protocolo.id);
-      equipeMap.set(usuarioId, atual);
+      equipeMap.set(item.usuarioId, atual);
     }
 
-    if (primeiraEntrada && primeiroHumano?.remetente_id) {
-      const diferenca =
-        (new Date(primeiroHumano.created_at).getTime() - new Date(primeiraEntrada.created_at).getTime()) / 60_000;
-      if (diferenca >= 0) equipeMap.get(primeiroHumano.remetente_id)?.tempos.push(diferenca);
+    if (primeiraEntrada) {
+      const entradaMs = new Date(primeiraEntrada.created_at).getTime();
+      const primeiroHumano = mensagensHumanas.find(
+        (item) => new Date(item.mensagem.created_at).getTime() >= entradaMs,
+      );
+      if (primeiroHumano) {
+        const diferenca =
+          (new Date(primeiroHumano.mensagem.created_at).getTime() - entradaMs) / 60_000;
+        if (diferenca >= 0) equipeMap.get(primeiroHumano.usuarioId)?.tempos.push(diferenca);
+      }
     }
   }
 
   const equipeMetrics: EquipeMetric[] = Array.from(equipeMap.entries())
     .map(([id, dados]) => ({
       id,
-      nome: usuariosPorId.get(id) ?? "Usuário não encontrado",
+      nome: usuariosPorId.get(id) ?? "Administrador",
       protocolos: dados.protocolos.size,
       mensagens: dados.mensagens,
       qualificados: dados.qualificados.size,
@@ -780,6 +850,7 @@ export default async function PainelPage({ searchParams }: PageProps) {
   const fimInput = formatarDateTimeLocal(intervalo.fim);
   const labelIntervalo = formatarIntervalo(intervalo.inicio, intervalo.fim);
   const meioSerie = Math.floor(serieVolume.length / 2);
+  const atalhoAtivo = ATALHOS.find((item) => item.valor === intervalo.atalho)?.label ?? "Hoje";
 
   return (
     <>
@@ -831,26 +902,31 @@ export default async function PainelPage({ searchParams }: PageProps) {
             ))}
           </div>
 
-          <form className={styles.customForm} action="/painel" method="get">
+          <form
+            key={`${inicioInput}-${fimInput}`}
+            className={styles.customForm}
+            action="/painel"
+            method="get"
+          >
             <label className={styles.field}>
               <span>Data / hora inicial</span>
-              <input type="datetime-local" name="inicio" defaultValue={inicioInput} max={fimInput} />
+              <input key={`inicio-${inicioInput}`} type="datetime-local" name="inicio" defaultValue={inicioInput} max={fimInput} />
             </label>
             <label className={styles.field}>
               <span>Data / hora final</span>
-              <input type="datetime-local" name="fim" defaultValue={fimInput} min={inicioInput} />
+              <input key={`fim-${fimInput}`} type="datetime-local" name="fim" defaultValue={fimInput} min={inicioInput} />
             </label>
             <button type="submit" className={styles.applyButton}>Aplicar período</button>
           </form>
 
           <div className={styles.filterFooter}>
-            <span>{intervalo.custom ? "Período personalizado ativo" : `Atalho ativo: ${ATALHOS.find((item) => item.valor === intervalo.atalho)?.label ?? "30 dias"}`}</span>
+            <span>{intervalo.custom ? "Período personalizado ativo" : `Atalho ativo: ${atalhoAtivo}`}</span>
             <span>A comparação dos KPIs usa o intervalo imediatamente anterior com a mesma duração.</span>
           </div>
 
           {intervalo.invalido ? (
             <div className={styles.filterWarning}>
-              O intervalo personalizado informado era inválido ou incompleto. O painel voltou para os últimos 30 dias.
+              O intervalo personalizado informado era inválido ou incompleto. O painel voltou para Hoje.
             </div>
           ) : null}
         </section>
@@ -1056,7 +1132,7 @@ export default async function PainelPage({ searchParams }: PageProps) {
             <strong>Como o painel calcula os KPIs</strong>
             <p>
               O painel cruza protocolos, mensagens, execuções de fluxo, campanhas e usuários já existentes no CRM.
-              Não cria dados paralelos nem altera o banco. Conversão e receita dependem do resultado e valor convertido registrados no protocolo.
+              Mensagens enviadas pelo WhatsApp Business em integrações coexistentes são atribuídas ao usuário administrador para fins de atendimento humano. Conversão e receita dependem do resultado e valor convertido registrados no protocolo.
             </p>
           </div>
         </section>
