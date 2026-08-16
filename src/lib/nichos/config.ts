@@ -62,11 +62,7 @@ export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
     grupo: "saude",
     cadastroSingular: "Paciente",
     cadastroPlural: "Pacientes",
-    modulos: [
-      "cadastros.pessoas",
-      "saude.pacientes",
-      "saude.prontuarios",
-    ],
+    modulos: ["cadastros.pessoas", "saude.prontuarios"],
     prontuarioAbas: [...ABAS_PRONTUARIO_PADRAO],
   },
   podologia: {
@@ -75,11 +71,7 @@ export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
     grupo: "saude",
     cadastroSingular: "Paciente",
     cadastroPlural: "Pacientes",
-    modulos: [
-      "cadastros.pessoas",
-      "saude.pacientes",
-      "saude.prontuarios",
-    ],
+    modulos: ["cadastros.pessoas", "saude.prontuarios"],
     prontuarioAbas: [...ABAS_PRONTUARIO_PADRAO, "mapa_podal"],
   },
   odontologia: {
@@ -90,7 +82,6 @@ export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
     cadastroPlural: "Pacientes",
     modulos: [
       "cadastros.pessoas",
-      "saude.pacientes",
       "saude.prontuarios",
       "saude.odontograma",
     ],

@@ -1,5 +1,7 @@
 -- Verticaliza o modulo clinico: prontuario como entrada principal de saude e
 -- recursos especializados (odontograma/mapa podal) embutidos no prontuario.
+-- Paciente permanece como entidade de dominio ligada a pessoa/prontuario,
+-- mas deixa de existir como modulo independente do CRM.
 
 insert into public.nichos (
   id,
@@ -29,10 +31,20 @@ set
   ordem = excluded.ordem,
   updated_at = now();
 
+-- Remove o conceito legado de "Pacientes" como modulo. As tabelas pessoas e
+-- pacientes continuam intactas e sao usadas internamente pelos prontuarios.
+delete from public.empresa_modulos
+where modulo_codigo = 'saude.pacientes';
+
+delete from public.nicho_modulos
+where modulo_codigo = 'saude.pacientes';
+
+delete from public.modulos
+where codigo = 'saude.pacientes';
+
 insert into public.nicho_modulos (nicho_id, modulo_codigo, obrigatorio)
 values
   ('10000000-0000-4000-8000-000000000005', 'cadastros.pessoas', true),
-  ('10000000-0000-4000-8000-000000000005', 'saude.pacientes', true),
   ('10000000-0000-4000-8000-000000000005', 'saude.prontuarios', true)
 on conflict (nicho_id, modulo_codigo) do update
 set obrigatorio = excluded.obrigatorio;
