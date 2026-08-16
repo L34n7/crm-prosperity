@@ -1,0 +1,514 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(7, 18, 25, .58);
+  backdrop-filter: blur(5px);
+}
+
+.modal {
+  width: min(960px, 100%);
+  max-height: min(92vh, 980px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 22px;
+  background: var(--crm-surface);
+  box-shadow: 0 28px 80px rgba(7, 18, 25, .24);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--crm-border);
+  background:
+    radial-gradient(circle at 8% 0%, var(--crm-primary-soft), transparent 34%),
+    var(--crm-surface);
+}
+
+.headerIdentity {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  min-width: 0;
+}
+
+.iconWrap {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  border-radius: 13px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.header h2,
+.sectionTitle h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+}
+
+.header h2 {
+  margin-top: 3px;
+  font-size: 21px;
+}
+
+.header p,
+.sectionTitle p {
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  line-height: 1.5;
+}
+
+.header p { font-size: 12px; }
+.sectionTitle p { font-size: 11px; }
+
+.eyebrow {
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.closeButton {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  cursor: pointer;
+}
+
+.form {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px 24px;
+  scrollbar-width: thin;
+}
+
+.section {
+  padding: 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+}
+
+.linkSection {
+  border-color: var(--crm-primary-border);
+  background:
+    linear-gradient(180deg, var(--crm-primary-soft), transparent 64%),
+    var(--crm-surface);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.sectionTitle > span {
+  min-width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.sectionTitle h3 { font-size: 15px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.field {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.field > span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.field em {
+  color: #dc2626;
+  font-style: normal;
+}
+
+.field input,
+.field select,
+.field textarea,
+.phoneSearch input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  outline: none;
+  font: inherit;
+  font-size: 13px;
+}
+
+.field input,
+.field select { min-height: 42px; padding: 9px 11px; }
+.field textarea { min-height: 88px; padding: 10px 11px; resize: vertical; }
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.phoneSearch:focus-within {
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.fullField { grid-column: 1 / -1; }
+.wideField { grid-column: span 1; }
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.phoneSearch {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 12px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-muted);
+}
+
+.phoneSearch input {
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none !important;
+}
+
+.contactResults {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.contactResults > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.contactResults > button:hover {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.resultIcon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.resultBody {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.resultBody strong {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultBody small {
+  overflow: hidden;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultAction {
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.selectedContact {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(22, 163, 74, .22);
+  border-radius: 12px;
+  background: rgba(22, 163, 74, .055);
+}
+
+.selectedContactTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.selectedContactTitle > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #15803d;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.selectedContactTitle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--crm-text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.selectedContact > strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.contactFacts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.contactFacts span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  background: var(--crm-surface);
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.contactFacts b {
+  color: var(--crm-text-strong);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.contactNote {
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--crm-border);
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.newContactHint,
+.linkWarning,
+.error {
+  margin-top: 9px;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.newContactHint {
+  border: 1px solid var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.linkWarning {
+  border: 1px solid rgba(217, 119, 6, .2);
+  background: rgba(245, 158, 11, .07);
+  color: #9a6700;
+}
+
+.error {
+  margin-top: 0;
+  border: 1px solid rgba(220, 38, 38, .2);
+  background: rgba(220, 38, 38, .06);
+  color: #b42318;
+}
+
+.loadingFields {
+  margin: 10px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 20px;
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+}
+
+.footerStatus {
+  margin-right: auto;
+  min-width: 0;
+}
+
+.footerLinked,
+.footerWarning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.footerLinked { color: #15803d; }
+.footerWarning { color: #9a6700; }
+
+.cancelButton,
+.saveButton {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.cancelButton {
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+}
+
+.saveButton {
+  border: 0;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+}
+
+.cancelButton:disabled,
+.saveButton:disabled,
+.closeButton:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.spinner { animation: spin .85s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 760px) {
+  .overlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: 96dvh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .header { padding: 16px; }
+  .header h2 { font-size: 20px; }
+  .header p { font-size: 11px; }
+  .body { padding: 13px 13px 18px; }
+  .section { padding: 13px; border-radius: 14px; }
+  .grid { grid-template-columns: 1fr; }
+  .fullField,
+  .wideField { grid-column: auto; }
+  .contactFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .footer {
+    position: sticky;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 11px 13px max(11px, env(safe-area-inset-bottom));
+  }
+
+  .footerStatus {
+    grid-column: 1 / -1;
+    margin-right: 0;
+  }
+
+  .cancelButton,
+  .saveButton { width: 100%; }
+}
+
+@media (max-width: 430px) {
+  .contactFacts { grid-template-columns: 1fr; }
+  .selectedContactTitle { align-items: flex-start; }
+  .contactResults > button { grid-template-columns: auto minmax(0, 1fr); }
+  .resultAction { display: none; }
+}
