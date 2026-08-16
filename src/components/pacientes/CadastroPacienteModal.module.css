@@ -1,0 +1,353 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(8px);
+}
+
+.modal {
+  width: min(860px, 100%);
+  max-height: min(900px, calc(100vh - 40px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 20px;
+  background: var(--crm-surface);
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.28);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 21px 17px;
+  border-bottom: 1px solid var(--crm-border);
+  background:
+    radial-gradient(circle at top right, var(--crm-primary-soft), transparent 36%),
+    var(--crm-surface);
+}
+
+.headerIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+}
+
+.iconWrap {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 13px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header h2,
+.sectionTitle h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+}
+
+.header h2 {
+  font-size: clamp(20px, 2.2vw, 26px);
+}
+
+.header p,
+.sectionTitle p,
+.loadingFields {
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.closeButton {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  cursor: pointer;
+}
+
+.closeButton:hover:not(:disabled) {
+  border-color: var(--crm-primary-border);
+  color: var(--crm-primary-text);
+}
+
+.form {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 21px 22px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--crm-border-strong) transparent;
+}
+
+.section + .section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--crm-border);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 13px;
+}
+
+.sectionTitle > span {
+  min-width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.sectionTitle h3 {
+  font-size: 15px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.field > span,
+.checkboxField > span {
+  color: var(--crm-text-muted);
+}
+
+.field em,
+.checkboxField em {
+  color: #dc2626;
+  font-style: normal;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  outline: 0;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.field input,
+.field select {
+  min-height: 42px;
+  padding: 0 11px;
+}
+
+.field textarea {
+  min-height: 88px;
+  padding: 10px 11px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.fullField {
+  grid-column: 1 / -1;
+}
+
+.checkboxField {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.checkboxField input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--crm-primary);
+}
+
+.loadingFields {
+  margin-top: 10px;
+}
+
+.error {
+  margin-bottom: 15px;
+  padding: 12px 13px;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 11px;
+  background: rgba(220, 38, 38, 0.06);
+  color: #b42318;
+  font-size: 12px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 13px 21px;
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+}
+
+.cancelButton,
+.saveButton {
+  min-height: 40px;
+  padding: 0 15px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.cancelButton {
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+}
+
+.saveButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--crm-primary-strong);
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+}
+
+.cancelButton:disabled,
+.saveButton:disabled,
+.closeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (max-width: 720px) {
+  .overlay {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: none;
+    height: 100dvh;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .header {
+    padding: 16px;
+  }
+
+  .iconWrap {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+
+  .body {
+    padding: 16px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fullField {
+    grid-column: auto;
+  }
+
+  .footer {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .cancelButton,
+  .saveButton {
+    flex: 1;
+  }
+}
+
+@media (max-width: 430px) {
+  .headerIdentity {
+    gap: 9px;
+  }
+
+  .header p,
+  .sectionTitle p {
+    font-size: 11px;
+  }
+
+  .footer {
+    gap: 8px;
+  }
+
+  .cancelButton,
+  .saveButton {
+    padding: 0 11px;
+    font-size: 11px;
+  }
+}

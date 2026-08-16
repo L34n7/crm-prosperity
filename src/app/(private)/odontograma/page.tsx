@@ -1,22 +1,19 @@
 import { redirect } from "next/navigation";
 
-type OdontogramaLegacyPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+type PageProps = {
+  searchParams?: Promise<{
+    paciente_id?: string | string[];
+  }>;
 };
 
-export default async function OdontogramaLegacyPage({
-  searchParams,
-}: OdontogramaLegacyPageProps) {
-  const paramsOrigem = await searchParams;
-  const pacienteIdBruto = paramsOrigem.paciente_id;
-  const pacienteId = Array.isArray(pacienteIdBruto)
-    ? pacienteIdBruto[0]
-    : pacienteIdBruto;
-  const paramsDestino = new URLSearchParams({ aba: "odontograma" });
+export default async function OdontogramaLegacyPage({ searchParams }: PageProps) {
+  const params = searchParams ? await searchParams : {};
+  const pacienteId = Array.isArray(params.paciente_id)
+    ? params.paciente_id[0]
+    : params.paciente_id;
 
-  if (pacienteId) {
-    paramsDestino.set("paciente_id", pacienteId);
-  }
+  const query = new URLSearchParams({ aba: "odontograma" });
+  if (pacienteId) query.set("paciente_id", pacienteId);
 
-  redirect(`/prontuarios?${paramsDestino.toString()}`);
+  redirect(`/pacientes?${query.toString()}`);
 }

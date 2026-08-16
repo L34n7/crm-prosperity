@@ -9,6 +9,8 @@ export const NICHO_CODIGOS = [
 
 export const PRONTUARIO_ABA_CODIGOS = [
   "resumo",
+  "dados",
+  "prontuario",
   "atendimento",
   "evolucoes",
   "odontograma",
@@ -31,6 +33,8 @@ export type NichoConfig = {
 
 const ABAS_PRONTUARIO_PADRAO: ProntuarioAbaCodigo[] = [
   "resumo",
+  "dados",
+  "prontuario",
   "atendimento",
   "evolucoes",
 ];

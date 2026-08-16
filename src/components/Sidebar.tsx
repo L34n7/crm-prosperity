@@ -298,9 +298,9 @@ export default function Sidebar({
     nichoConfig.modulos.includes("saude.prontuarios")
       ? [
           {
-            label: "Prontuários",
-            href: "/prontuarios",
-            icon: FileText,
+            label: "Pacientes",
+            href: "/pacientes",
+            icon: Users,
             permissao: "prontuarios.visualizar",
           },
         ]
