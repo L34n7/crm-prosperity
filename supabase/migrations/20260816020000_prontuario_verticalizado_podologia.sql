@@ -4,7 +4,6 @@
 -- mas deixa de existir como modulo independente do CRM.
 
 insert into public.nichos (
-  id,
   codigo,
   nome,
   grupo,
@@ -13,7 +12,6 @@ insert into public.nichos (
   ordem
 )
 values (
-  '10000000-0000-4000-8000-000000000005',
   'podologia',
   'Podologia',
   'saude',
@@ -31,8 +29,8 @@ set
   ordem = excluded.ordem,
   updated_at = now();
 
--- Remove o conceito legado de "Pacientes" como modulo. As tabelas pessoas e
--- pacientes continuam intactas e sao usadas internamente pelos prontuarios.
+-- Remove o conceito legado de "Pacientes" como modulo. A tabela pacientes
+-- permanece como entidade clinica interna dos prontuarios.
 delete from public.empresa_modulos
 where modulo_codigo = 'saude.pacientes';
 
@@ -43,18 +41,23 @@ delete from public.modulos
 where codigo = 'saude.pacientes';
 
 insert into public.nicho_modulos (nicho_id, modulo_codigo, obrigatorio)
-values
-  ('10000000-0000-4000-8000-000000000005', 'cadastros.pessoas', true),
-  ('10000000-0000-4000-8000-000000000005', 'saude.prontuarios', true)
+select nicho.id, modulo.modulo_codigo, true
+from public.nichos nicho
+cross join (
+  values ('cadastros.pessoas'::text), ('saude.prontuarios'::text)
+) as modulo(modulo_codigo)
+where nicho.codigo = 'podologia'
 on conflict (nicho_id, modulo_codigo) do update
 set obrigatorio = excluded.obrigatorio;
 
 insert into public.empresa_modulos (empresa_id, modulo_codigo, habilitado)
 select empresa.id, nicho_modulo.modulo_codigo, true
 from public.empresas empresa
+join public.nichos nicho
+  on nicho.id = empresa.nicho_id
 join public.nicho_modulos nicho_modulo
-  on nicho_modulo.nicho_id = empresa.nicho_id
-where empresa.nicho_id = '10000000-0000-4000-8000-000000000005'
+  on nicho_modulo.nicho_id = nicho.id
+where nicho.codigo = 'podologia'
 on conflict (empresa_id, modulo_codigo) do update
 set
   habilitado = true,
