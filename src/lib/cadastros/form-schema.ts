@@ -71,6 +71,14 @@ const CAMPOS_NICHO: Record<NichoCodigo, CampoCadastro[]> = {
       escopo: "paciente",
     },
   ],
+  podologia: [
+    {
+      chave: "preferencia_atendimento",
+      nome: "Preferência de atendimento",
+      tipo: "texto",
+      escopo: "paciente",
+    },
+  ],
   outro: [
     {
       chave: "profissao",
