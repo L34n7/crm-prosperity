@@ -259,8 +259,16 @@ function SeletorVariavelTemplate({
   }
 
   return (
-    <div className={disparoStyles.variableComboboxField} ref={containerRef}>
-      <label className={disparoStyles.label} htmlFor={inputId}>
+    <div
+      className={disparoStyles.variableComboboxField}
+      ref={containerRef}
+      style={{ width: "100%", minWidth: 0 }}
+    >
+      <label
+        className={disparoStyles.label}
+        htmlFor={inputId}
+        style={{ fontSize: 12, fontWeight: 800 }}
+      >
         {label}
       </label>
 
@@ -268,9 +276,10 @@ function SeletorVariavelTemplate({
         className={`${disparoStyles.variableComboboxControl} ${
           aberto ? disparoStyles.variableComboboxControlOpen : ""
         }`}
+        style={{ width: "100%" }}
       >
         <Search
-          size={16}
+          size={15}
           strokeWidth={2}
           className={disparoStyles.variableComboboxSearchIcon}
           aria-hidden="true"
@@ -296,6 +305,7 @@ function SeletorVariavelTemplate({
           value={aberto ? busca : value}
           placeholder="Selecione uma variável"
           className={disparoStyles.variableComboboxInput}
+          style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35 }}
           onFocus={(event) => {
             abrirLista();
             event.currentTarget.select();
@@ -328,7 +338,7 @@ function SeletorVariavelTemplate({
           }}
         >
           <ChevronDown
-            size={18}
+            size={17}
             aria-hidden="true"
             className={aberto ? disparoStyles.variableComboboxChevronOpen : ""}
           />
@@ -341,6 +351,7 @@ function SeletorVariavelTemplate({
           role="listbox"
           aria-label={`Opções para ${label}`}
           className={disparoStyles.variableComboboxMenu}
+          style={{ width: "100%" }}
         >
           {opcoesFiltradas.map((opcao, index) => {
             const selecionada = opcao.chave === value;
@@ -362,20 +373,25 @@ function SeletorVariavelTemplate({
                 onClick={() => selecionarOpcao(opcao)}
               >
                 <span className={disparoStyles.variableComboboxOptionHeader}>
-                  <strong>{`{{${opcao.chave}}}`}</strong>
-                  <span className={disparoStyles.variableComboboxCategory}>
+                  <strong style={{ fontSize: 12.5 }}>{`{{${opcao.chave}}}`}</strong>
+                  <span
+                    className={disparoStyles.variableComboboxCategory}
+                    style={{ fontSize: 10 }}
+                  >
                     {opcao.categoria}
                   </span>
                   {selecionada ? (
                     <Check
-                      size={16}
+                      size={15}
                       strokeWidth={2.5}
                       aria-hidden="true"
                       className={disparoStyles.variableComboboxCheck}
                     />
                   ) : null}
                 </span>
-                <small>{opcao.descricao}</small>
+                <small style={{ fontSize: 11.5, lineHeight: 1.4 }}>
+                  {opcao.descricao}
+                </small>
               </button>
             );
           })}
@@ -394,7 +410,11 @@ function SeletorVariavelTemplate({
         </div>
       ) : null}
 
-      <p id={descricaoId} className={disparoStyles.variableComboboxDescription}>
+      <p
+        id={descricaoId}
+        className={disparoStyles.variableComboboxDescription}
+        style={{ fontSize: 11.5, lineHeight: 1.4, marginTop: 5 }}
+      >
         {opcaoSelecionada
           ? opcaoSelecionada.descricao
           : "Selecione uma variável disponível para este campo."}
@@ -561,12 +581,14 @@ export default function AutomationTemplateVariables({
 
   return (
     <>
-      <div className={disparoStyles.templateHintRow}>
-        <div className={disparoStyles.templateHint}>
-          Este template usa <strong>{totalVariaveis}</strong> variável(is).
-          Selecione qual dado substituirá cada marcador do template.
-        </div>
-
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          marginBottom: 12,
+        }}
+      >
         <button
           type="button"
           className={disparoStyles.variablesButton}
@@ -579,7 +601,14 @@ export default function AutomationTemplateVariables({
         </button>
       </div>
 
-      <div className={disparoStyles.templateVariablesGrid}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr)",
+          gap: 14,
+          width: "100%",
+        }}
+      >
         {Array.from({ length: totalVariaveis }, (_, posicao) => (
           <SeletorVariavelTemplate
             key={`automacao-variavel-${posicao}`}
