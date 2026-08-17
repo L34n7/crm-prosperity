@@ -4,6 +4,13 @@ import { updateSession } from "@/lib/supabase/middleware";
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  if (pathname === "/painel" && request.nextUrl.searchParams.size === 0) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/painel/ao-vivo";
+
+    return NextResponse.redirect(url);
+  }
+
   if (pathname === "/api/mensagens" && request.method === "GET") {
     const url = request.nextUrl.clone();
     url.pathname = "/api/mensagens-exibicao";

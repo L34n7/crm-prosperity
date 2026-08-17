@@ -4,23 +4,15 @@ import Link from "next/link";
 import { BarChart3, Radio } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import styles from "./layout.module.css";
 
 export default function PainelNavigation() {
   const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const query = searchParams.toString();
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const aoVivo = pathname.startsWith("/painel/ao-vivo");
 
   useEffect(() => {
-    if (pathname === "/painel" && !query) {
-      router.replace("/painel/ao-vivo");
-      return;
-    }
-
     const main = document.querySelector("main");
     const hero = main?.querySelector(":scope > section");
     if (!(hero instanceof HTMLElement)) return;
@@ -43,7 +35,7 @@ export default function PainelNavigation() {
       setPortalHost(null);
       host.remove();
     };
-  }, [pathname, query, router]);
+  }, [pathname]);
 
   if (!portalHost) return null;
 
