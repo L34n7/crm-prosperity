@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 const supabaseAdmin = getSupabaseAdmin();
 
 export type CategoriaAuditoria =
+  | "automacoes"
   | "permissoes"
   | "usuarios"
   | "conversas"
@@ -38,7 +39,9 @@ export type RegistrarLogAuditoriaInput = {
     | "imovel_externo"
     | "disparo"
     | "fluxo"
-    | "integracao_whatsapp";
+    | "integracao_whatsapp"
+    | "rotina_automacao"
+    | "rotina_automacao_job";
   entidade_id: string;
   acao: string;
   descricao?: string | null;

@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Database,
   Filter,
+  ListChecks,
   Loader2,
   Pause,
   Play,
@@ -21,6 +22,8 @@ import {
   Zap,
 } from "lucide-react";
 import AutomationBuilderModal from "./AutomationBuilderModal";
+import AutomationExecutionsModal from "./AutomationExecutionsModal";
+import AutomationLifecycleModal from "./AutomationLifecycleModal";
 import ExternalIntegrations from "./ExternalIntegrations";
 import styles from "./automacoes-api.module.css";
 import {
@@ -39,6 +42,7 @@ import {
 } from "./automation-catalog";
 
 type Aba = "rotinas" | "integracoes";
+type AcaoCiclo = { rotina: Rotina; modo: "pausar" | "arquivar" } | null;
 
 export default function AutomacoesApiPage() {
   const [aba, setAba] = useState<Aba>("rotinas");
@@ -55,10 +59,16 @@ export default function AutomacoesApiPage() {
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
   const [modalAberto, setModalAberto] = useState(false);
   const [form, setForm] = useState<FormRotina>(novoFormulario);
+  const [rotinaExecucoes, setRotinaExecucoes] = useState<Rotina | null>(null);
+  const [acaoCiclo, setAcaoCiclo] = useState<AcaoCiclo>(null);
 
   const mostrarFeedback = useCallback((mensagem: string) => {
     setFeedback(mensagem);
     window.setTimeout(() => setFeedback(""), 3500);
+  }, []);
+
+  const mostrarErro = useCallback((mensagem: string) => {
+    setErro(mensagem);
   }, []);
 
   const carregar = useCallback(async () => {
@@ -200,43 +210,21 @@ export default function AutomacoesApiPage() {
     }
   }
 
-  async function alternarStatus(rotina: Rotina) {
-    const status = rotina.status === "ativa" ? "pausada" : "ativa";
+  async function ativarRotina(rotina: Rotina) {
     setSalvando(true);
     setErro("");
     try {
-      const response = await fetch("/api/rotinas-automacao", {
+      const response = await fetch(`/api/rotinas-automacao/${rotina.id}/estado`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: rotina.id, status }),
+        body: JSON.stringify({ status: "ativa", cancelar_pendentes: false }),
       });
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "Não foi possível alterar o status.");
+      if (!response.ok || !data.ok) throw new Error(data.error || "Não foi possível ativar a automação.");
       await carregar();
-      mostrarFeedback(status === "ativa" ? "Automação ativada." : "Automação pausada.");
+      mostrarFeedback("Automação ativada. As assinaturas de eventos já estão atualizadas.");
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro ao alterar status.");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  async function arquivarRotina(rotina: Rotina) {
-    if (!window.confirm(`Arquivar a automação “${rotina.nome}”?`)) return;
-    setSalvando(true);
-    setErro("");
-    try {
-      const response = await fetch("/api/rotinas-automacao", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: rotina.id }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "Não foi possível arquivar a automação.");
-      await carregar();
-      mostrarFeedback("Automação arquivada.");
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro ao arquivar automação.");
+      setErro(error instanceof Error ? error.message : "Erro ao ativar automação.");
     } finally {
       setSalvando(false);
     }
@@ -288,7 +276,7 @@ export default function AutomacoesApiPage() {
           {aba === "rotinas" ? (
             <>
               <div className={styles.sectionHeader} style={{ marginTop: 20 }}>
-                <div><span className={styles.sectionLabel}>ROTINAS DE AUTOMAÇÃO</span><h2>Automações configuradas</h2><p>Gatilho, condições e ações centralizados no mesmo módulo.</p></div>
+                <div><span className={styles.sectionLabel}>ROTINAS DE AUTOMAÇÃO</span><h2>Automações configuradas</h2><p>Gatilho, condições, ações e execuções centralizados no mesmo módulo.</p></div>
                 <button className={styles.primaryButton} onClick={abrirNovaRotina} disabled={!podeGerenciar}><Plus size={17} /> Criar automação</button>
               </div>
               <div className={styles.toolbar}>
@@ -312,9 +300,16 @@ export default function AutomacoesApiPage() {
                     <div className={styles.routineSchedule}><span>Quando</span><strong>{gatilhoLabel(rotina.gatilhos[0])}</strong><small>{rotina.condicoes.length ? `${rotina.condicoes.length} condição(ões)` : "Sem condição"}</small></div>
                     <div className={styles.routineResult}><span>Execuções</span><strong>{rotina.metricas.execucoes_30_dias} em 30 dias</strong><small>{rotina.metricas.erros_30_dias ? `${rotina.metricas.erros_30_dias} com erro` : "Sem falhas registradas"}</small></div>
                     <div className={styles.routineActions}>
+                      <button title="Ver execuções" onClick={() => setRotinaExecucoes(rotina)}><ListChecks size={17} /></button>
                       <button title="Editar" onClick={() => editarRotina(rotina)} disabled={!podeGerenciar || salvando}><Settings2 size={17} /></button>
-                      <button title={rotina.status === "ativa" ? "Pausar" : "Ativar"} onClick={() => void alternarStatus(rotina)} disabled={!podeGerenciar || salvando}>{rotina.status === "ativa" ? <Pause size={17} /> : <Play size={17} />}</button>
-                      <button title="Arquivar" onClick={() => void arquivarRotina(rotina)} disabled={!podeGerenciar || salvando}><Archive size={17} /></button>
+                      <button
+                        title={rotina.status === "ativa" ? "Pausar" : "Ativar"}
+                        onClick={() => rotina.status === "ativa" ? setAcaoCiclo({ rotina, modo: "pausar" }) : void ativarRotina(rotina)}
+                        disabled={!podeGerenciar || salvando}
+                      >
+                        {rotina.status === "ativa" ? <Pause size={17} /> : <Play size={17} />}
+                      </button>
+                      <button title="Arquivar" onClick={() => setAcaoCiclo({ rotina, modo: "arquivar" })} disabled={!podeGerenciar || salvando}><Archive size={17} /></button>
                     </div>
                   </article>
                 ))}
@@ -332,6 +327,26 @@ export default function AutomacoesApiPage() {
           onChange={setForm}
           onClose={() => setModalAberto(false)}
           onSave={() => void salvarRotina()}
+        />
+      ) : null}
+
+      {rotinaExecucoes ? (
+        <AutomationExecutionsModal
+          rotina={rotinaExecucoes}
+          onClose={() => setRotinaExecucoes(null)}
+          onFeedback={mostrarFeedback}
+          onError={mostrarErro}
+        />
+      ) : null}
+
+      {acaoCiclo ? (
+        <AutomationLifecycleModal
+          rotina={acaoCiclo.rotina}
+          modo={acaoCiclo.modo}
+          onClose={() => setAcaoCiclo(null)}
+          onSuccess={carregar}
+          onFeedback={mostrarFeedback}
+          onError={mostrarErro}
         />
       ) : null}
     </main>

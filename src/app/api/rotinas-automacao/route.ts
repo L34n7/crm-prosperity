@@ -297,26 +297,20 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const { data, error: updateError } = await supabase
-    .from("rotina_automacoes")
-    .update({
-      status,
-      atualizado_por: ctx.usuario.id,
-    })
-    .eq("empresa_id", ctx.empresaId)
-    .eq("id", id)
-    .neq("status", "arquivada")
-    .select("id")
-    .maybeSingle();
+  const { data, error: rpcError } = await supabase.rpc(
+    "rotina_automacao_alterar_estado",
+    {
+      p_empresa_id: ctx.empresaId,
+      p_usuario_id: ctx.usuario.id,
+      p_automacao_id: id,
+      p_status: status,
+      p_cancelar_pendentes: false,
+      p_origem_cancelamento: "api_rotinas_automacao",
+    },
+  );
+  if (rpcError) return erro(new Error(rpcError.message), 400);
 
-  if (updateError) return erro(new Error(updateError.message));
-  if (!data) {
-    return NextResponse.json(
-      { ok: false, error: "Automação não encontrada." },
-      { status: 404 },
-    );
-  }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, resultado: data });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -343,28 +337,18 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  const { error: archiveError } = await supabase
-    .from("rotina_automacoes")
-    .update({
-      status: "arquivada",
-      atualizado_por: ctx.usuario.id,
-    })
-    .eq("empresa_id", ctx.empresaId)
-    .eq("id", id);
-  if (archiveError) return erro(new Error(archiveError.message));
+  const { data, error: rpcError } = await supabase.rpc(
+    "rotina_automacao_alterar_estado",
+    {
+      p_empresa_id: ctx.empresaId,
+      p_usuario_id: ctx.usuario.id,
+      p_automacao_id: id,
+      p_status: "arquivada",
+      p_cancelar_pendentes: true,
+      p_origem_cancelamento: "api_rotinas_automacao",
+    },
+  );
+  if (rpcError) return erro(new Error(rpcError.message), 400);
 
-  const { error: jobsError } = await supabase
-    .from("rotina_automacao_jobs")
-    .update({
-      status: "cancelado",
-      erro: "Job cancelado porque a automação foi arquivada.",
-      bloqueado_em: null,
-      proxima_tentativa_em: null,
-    })
-    .eq("empresa_id", ctx.empresaId)
-    .eq("automacao_id", id)
-    .in("status", ["pendente", "processando"]);
-  if (jobsError) return erro(new Error(jobsError.message));
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, resultado: data });
 }

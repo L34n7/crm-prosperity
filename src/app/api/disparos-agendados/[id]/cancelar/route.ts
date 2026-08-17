@@ -127,47 +127,107 @@ export async function PATCH(
         { status: 500 }
       );
     }
-    if (!execucaoAgenda) {
+
+    if (execucaoAgenda) {
+      if (execucaoAgenda.status !== "pendente") {
+        return NextResponse.json(
+          { ok: false, error: "Apenas execuções pendentes podem ser canceladas." },
+          { status: 400 }
+        );
+      }
+
+      const agora = new Date().toISOString();
+      const { data: cancelada, error: cancelError } = await supabase
+        .from("agenda_automacao_execucoes")
+        .update({
+          status: "cancelado",
+          cancelado_manualmente: true,
+          cancelado_por: usuario.id || null,
+          cancelado_em: agora,
+          proxima_tentativa_em: null,
+          bloqueado_em: null,
+          erro: "Execução cancelada manualmente na página de disparos agendados.",
+          resultado_json: {
+            ...(execucaoAgenda.resultado_json || {}),
+            cancelado_em: agora,
+            cancelado_por: usuario.id || null,
+            origem_cancelamento: "pagina_disparos_agendados",
+          },
+          updated_at: agora,
+        })
+        .eq("id", id)
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("status", "pendente")
+        .select("*")
+        .single();
+
+      if (cancelError) {
+        return NextResponse.json(
+          { ok: false, error: "Erro ao cancelar automação da agenda." },
+          { status: 500 }
+        );
+      }
+
+      await registrarLogAuditoriaSeguro({
+        empresa_id: usuario.empresa_id,
+        categoria: "disparos",
+        entidade: "disparo",
+        entidade_id: id,
+        acao: "agenda_automacao_cancelada",
+        descricao: "Execução automática da agenda cancelada",
+        usuario_id: usuario.id,
+        usuario_nome: usuario.nome,
+        usuario_email: usuario.email,
+        antes: execucaoAgenda,
+        depois: cancelada,
+        ip: auditMeta.ip,
+        user_agent: auditMeta.user_agent,
+      });
+
+      return NextResponse.json({ ok: true, disparo: cancelada, origem: "agenda" });
+    }
+
+    const { data: jobRotina, error: rotinaError } = await supabase
+      .from("rotina_automacao_jobs")
+      .select("id,automacao_id,execucao_id,status,titulo,canal,executar_em,contexto_json,depende_de_job_id")
+      .eq("id", id)
+      .eq("empresa_id", usuario.empresa_id)
+      .in("canal", ["whatsapp", "email"])
+      .maybeSingle();
+
+    if (rotinaError) {
+      return NextResponse.json(
+        { ok: false, error: "Erro ao buscar disparo da automação." },
+        { status: 500 }
+      );
+    }
+    if (!jobRotina) {
       return NextResponse.json(
         { ok: false, error: "Disparo agendado não encontrado." },
         { status: 404 }
       );
     }
-    if (execucaoAgenda.status !== "pendente") {
+    if (jobRotina.status !== "pendente") {
       return NextResponse.json(
-        { ok: false, error: "Apenas execuções pendentes podem ser canceladas." },
+        { ok: false, error: "Apenas disparos pendentes podem ser cancelados." },
         { status: 400 }
       );
     }
 
-    const agora = new Date().toISOString();
-    const { data: cancelada, error: cancelError } = await supabase
-      .from("agenda_automacao_execucoes")
-      .update({
-        status: "cancelado",
-        cancelado_manualmente: true,
-        cancelado_por: usuario.id || null,
-        cancelado_em: agora,
-        proxima_tentativa_em: null,
-        bloqueado_em: null,
-        erro: "Execução cancelada manualmente na página de disparos agendados.",
-        resultado_json: {
-          ...(execucaoAgenda.resultado_json || {}),
-          cancelado_em: agora,
-          cancelado_por: usuario.id || null,
-          origem_cancelamento: "pagina_disparos_agendados",
-        },
-        updated_at: agora,
-      })
-      .eq("id", id)
-      .eq("empresa_id", usuario.empresa_id)
-      .eq("status", "pendente")
-      .select("*")
-      .single();
+    const { data: cancelamento, error: cancelamentoError } = await supabase.rpc(
+      "rotina_automacao_cancelar_job",
+      {
+        p_empresa_id: usuario.empresa_id,
+        p_usuario_id: usuario.id,
+        p_job_id: id,
+        p_cancelar_dependentes: true,
+        p_origem_cancelamento: "pagina_disparos_agendados",
+      }
+    );
 
-    if (cancelError) {
+    if (cancelamentoError) {
       return NextResponse.json(
-        { ok: false, error: "Erro ao cancelar automação da agenda." },
+        { ok: false, error: "Erro ao cancelar disparo da automação." },
         { status: 500 }
       );
     }
@@ -177,18 +237,23 @@ export async function PATCH(
       categoria: "disparos",
       entidade: "disparo",
       entidade_id: id,
-      acao: "agenda_automacao_cancelada",
-      descricao: "Execução automática da agenda cancelada",
+      acao: "rotina_automacao_disparo_cancelado",
+      descricao: "Disparo agendado de uma automação cancelado",
       usuario_id: usuario.id,
       usuario_nome: usuario.nome,
       usuario_email: usuario.email,
-      antes: execucaoAgenda,
-      depois: cancelada,
+      antes: jobRotina,
+      depois: cancelamento,
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
     });
 
-    return NextResponse.json({ ok: true, disparo: cancelada, origem: "agenda" });
+    return NextResponse.json({
+      ok: true,
+      disparo: { ...jobRotina, status: "cancelado" },
+      origem: "automacao",
+      resultado: cancelamento,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || "Erro ao cancelar disparo." },
