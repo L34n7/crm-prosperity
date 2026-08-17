@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import styles from "./automacoes-api.module.css";
+import AutomationTemplateVariables from "./AutomationTemplateVariables";
 import {
   acaoLabel,
   acoesDisponiveis,
@@ -33,7 +34,6 @@ import {
   quantidadeOffset,
   unidadeOffset,
   valorComoTexto,
-  variaveisWhatsappSugeridas,
   type Acao,
   type Categoria,
   type Condicao,
@@ -536,27 +536,11 @@ export default function AutomationBuilderModal({
 
           {template && totalVariaveis > 0 ? (
             <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 12, color: "var(--crm-text-muted)", marginBottom: 8 }}>
-                Este template usa <strong>{totalVariaveis}</strong> variável(is). Informe qual dado substituirá cada marcador.
-              </div>
-              {Array.from({ length: totalVariaveis }, (_, posicao) => (
-                <label className={styles.formField} style={{ marginTop: posicao ? 8 : 0 }} key={`${template.id}-variavel-${posicao}`}>
-                  <span>Variável {posicao + 1} · {`{{${posicao + 1}}}`}</span>
-                  <select
-                    value={variaveis[posicao] || ""}
-                    onChange={(event) => {
-                      const novas = Array.from({ length: totalVariaveis }, (_, itemIndex) => variaveis[itemIndex] || "");
-                      novas[posicao] = event.target.value;
-                      configAcao(index, "variaveis", novas);
-                    }}
-                  >
-                    <option value="">Selecione uma variável</option>
-                    {variaveisWhatsappSugeridas.map((variavel) => (
-                      <option value={variavel} key={variavel}>{`{{${variavel}}}`}</option>
-                    ))}
-                  </select>
-                </label>
-              ))}
+              <AutomationTemplateVariables
+                totalVariaveis={totalVariaveis}
+                variaveis={variaveis}
+                onChange={(novas) => configAcao(index, "variaveis", novas)}
+              />
             </div>
           ) : null}
 
