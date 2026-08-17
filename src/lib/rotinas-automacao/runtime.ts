@@ -159,6 +159,14 @@ export async function processarMensagemRecebidaRotinas(
       const configuracao = gatilho.configuracao_json && typeof gatilho.configuracao_json === "object"
         ? gatilho.configuracao_json as Record<string, unknown>
         : {};
+      const integracoesAlvo = Array.isArray(configuracao.integracao_whatsapp_ids)
+        ? configuracao.integracao_whatsapp_ids
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
+        : [];
+      if (integracoesAlvo.length) {
+        return integracoesAlvo.includes(integracaoConversaId);
+      }
       const integracaoAlvo = String(configuracao.integracao_whatsapp_id || "").trim();
       return !integracaoAlvo || integracaoAlvo === integracaoConversaId;
     });

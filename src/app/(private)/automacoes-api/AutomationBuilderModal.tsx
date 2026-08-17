@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -156,7 +156,75 @@ export default function AutomationBuilderModal({
   const campos = camposPorCategoria[form.categoria];
   const permiteValor = (operador: Operador) => !["existe", "nao_existe"].includes(operador);
   const integracoesAtivas = opcoes.integracoes_whatsapp.filter((item) => item.status === "ativa");
-  const integracaoAutomacaoId = String(form.gatilho.configuracao_json.integracao_whatsapp_id || "");
+  const idsIntegracoesConfiguradas = Array.isArray(form.gatilho.configuracao_json.integracao_whatsapp_ids)
+    ? form.gatilho.configuracao_json.integracao_whatsapp_ids
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    : [];
+  const integracaoAutomacaoIdLegado = String(
+    form.gatilho.configuracao_json.integracao_whatsapp_id || "",
+  ).trim();
+  const idsAlvoConfigurados = idsIntegracoesConfiguradas.length
+    ? idsIntegracoesConfiguradas
+    : integracaoAutomacaoIdLegado
+      ? [integracaoAutomacaoIdLegado]
+      : [];
+  const integracaoAutomacaoIds = integracoesAtivas.length === 1
+    ? [integracoesAtivas[0].id]
+    : idsAlvoConfigurados.length
+      ? idsAlvoConfigurados.filter((id) => integracoesAtivas.some((item) => item.id === id))
+      : integracoesAtivas.map((item) => item.id);
+  const integracoesAutomacaoSelecionadas = integracoesAtivas.filter((item) =>
+    integracaoAutomacaoIds.includes(item.id),
+  );
+  const unicaIntegracaoAtivaId = integracoesAtivas.length === 1 ? integracoesAtivas[0].id : "";
+
+  useEffect(() => {
+    if (!unicaIntegracaoAtivaId) return;
+
+    const configuracaoAtual = form.gatilho.configuracao_json || {};
+    const idsAtuais = Array.isArray(configuracaoAtual.integracao_whatsapp_ids)
+      ? configuracaoAtual.integracao_whatsapp_ids
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      : [];
+    const legadoAtual = String(configuracaoAtual.integracao_whatsapp_id || "").trim();
+    if (
+      idsAtuais.length === 1 &&
+      idsAtuais[0] === unicaIntegracaoAtivaId &&
+      legadoAtual === unicaIntegracaoAtivaId
+    ) {
+      return;
+    }
+
+    const acoes = form.acoes.map((acao) => {
+      if (acao.tipo_acao !== "whatsapp.enviar_template") return acao;
+      const atual = String(acao.configuracao_json.integracao_whatsapp_id || "").trim();
+      if (atual === unicaIntegracaoAtivaId) return acao;
+      return {
+        ...acao,
+        configuracao_json: {
+          ...acao.configuracao_json,
+          integracao_whatsapp_id: unicaIntegracaoAtivaId,
+          template_id: "",
+          variaveis: [],
+        },
+      };
+    });
+
+    onChange({
+      ...form,
+      gatilho: {
+        ...form.gatilho,
+        configuracao_json: {
+          ...configuracaoAtual,
+          integracao_whatsapp_id: unicaIntegracaoAtivaId,
+          integracao_whatsapp_ids: [unicaIntegracaoAtivaId],
+        },
+      },
+      acoes,
+    });
+  }, [form, onChange, unicaIntegracaoAtivaId]);
 
   const resumo = useMemo(
     () =>
@@ -167,7 +235,7 @@ export default function AutomationBuilderModal({
   );
 
   const alertaDisparosMultiIntegracao = useMemo(() => {
-    if (integracaoAutomacaoId || integracoesAtivas.length < 2) return null;
+    if (integracoesAutomacaoSelecionadas.length < 2) return null;
     const acoesDisparo = form.acoes.filter((acao) => acao.tipo_acao === "whatsapp.enviar_template");
     if (!acoesDisparo.length) return null;
     const configuradas = new Set(
@@ -175,14 +243,18 @@ export default function AutomationBuilderModal({
         .map((acao) => String(acao.configuracao_json.integracao_whatsapp_id || "").trim())
         .filter(Boolean),
     );
-    const faltantes = integracoesAtivas.filter((item) => !configuradas.has(item.id));
+    const faltantes = integracoesAutomacaoSelecionadas.filter((item) => !configuradas.has(item.id));
     if (!faltantes.length) return null;
     return faltantes;
-  }, [form.acoes, integracaoAutomacaoId, integracoesAtivas]);
+  }, [form.acoes, integracoesAutomacaoSelecionadas]);
 
   function configuracaoIntegracaoBase() {
-    const id = String(form.gatilho.configuracao_json.integracao_whatsapp_id || "").trim();
-    return id ? { integracao_whatsapp_id: id } : {};
+    if (!integracaoAutomacaoIds.length) return {};
+    return {
+      integracao_whatsapp_id:
+        integracaoAutomacaoIds.length === 1 ? integracaoAutomacaoIds[0] : null,
+      integracao_whatsapp_ids: integracaoAutomacaoIds,
+    };
   }
 
   function mudarEtapa(proximaEtapa: number) {
@@ -214,16 +286,23 @@ export default function AutomationBuilderModal({
     setEtapa(proximaEtapa);
   }
 
-  function selecionarIntegracaoAutomacao(integracaoId: string) {
+  function selecionarIntegracoesAutomacao(integracaoIds: string[]) {
+    const ids = integracoesAtivas
+      .filter((item) => integracaoIds.includes(item.id))
+      .map((item) => item.id);
+    if (!ids.length) return;
+
     const configuracaoAtual = form.gatilho.configuracao_json || {};
+    const integracaoUnicaId = ids.length === 1 ? ids[0] : "";
     const acoes = form.acoes.map((acao) => {
-      if (acao.tipo_acao !== "whatsapp.enviar_template" || !integracaoId) return acao;
-      if (String(acao.configuracao_json.integracao_whatsapp_id || "") === integracaoId) return acao;
+      if (acao.tipo_acao !== "whatsapp.enviar_template") return acao;
+      const atual = String(acao.configuracao_json.integracao_whatsapp_id || "").trim();
+      if (atual && ids.includes(atual)) return acao;
       return {
         ...acao,
         configuracao_json: {
           ...acao.configuracao_json,
-          integracao_whatsapp_id: integracaoId,
+          integracao_whatsapp_id: integracaoUnicaId,
           template_id: "",
           variaveis: [],
         },
@@ -236,7 +315,8 @@ export default function AutomationBuilderModal({
         ...form.gatilho,
         configuracao_json: {
           ...configuracaoAtual,
-          integracao_whatsapp_id: integracaoId || null,
+          integracao_whatsapp_id: integracaoUnicaId || null,
+          integracao_whatsapp_ids: ids,
         },
       },
       acoes,
@@ -355,8 +435,8 @@ export default function AutomationBuilderModal({
 
   function configuracaoAoSelecionarAcao(tipo: string) {
     const base = configuracaoPadraoAcao(tipo);
-    if (tipo === "whatsapp.enviar_template" && integracaoAutomacaoId) {
-      return { ...base, integracao_whatsapp_id: integracaoAutomacaoId };
+    if (tipo === "whatsapp.enviar_template" && integracaoAutomacaoIds.length === 1) {
+      return { ...base, integracao_whatsapp_id: integracaoAutomacaoIds[0] };
     }
     return base;
   }
@@ -401,9 +481,7 @@ export default function AutomationBuilderModal({
 
     if (acao.tipo_acao === "whatsapp.enviar_template") {
       const integracaoId = String(config.integracao_whatsapp_id || "");
-      const integracoesDisponiveis = integracaoAutomacaoId
-        ? integracoesAtivas.filter((item) => item.id === integracaoAutomacaoId)
-        : integracoesAtivas;
+      const integracoesDisponiveis = integracoesAutomacaoSelecionadas;
       const templates = opcoes.templates.filter(
         (item) => integracaoId && item.integracao_whatsapp_id === integracaoId,
       );
@@ -638,6 +716,15 @@ export default function AutomationBuilderModal({
                     type="checkbox"
                     checked={incluirAdministradores}
                     disabled={!setorId || !administradoresAtivos.length}
+                    style={{
+                      width: 17,
+                      height: 17,
+                      minWidth: 17,
+                      flex: "0 0 17px",
+                      margin: "2px 0 0",
+                      padding: 0,
+                      borderRadius: 4,
+                    }}
                     onChange={(event) => {
                       const incluir = event.target.checked;
                       const continuaDisponivel =
@@ -771,18 +858,68 @@ export default function AutomationBuilderModal({
               <div className={styles.stepHeading}><span>ETAPA 1 DE 4</span><h3>O que você quer automatizar?</h3><p>A origem organiza os gatilhos e campos disponíveis, sem limitar as ações que podem ser combinadas.</p></div>
               <label className={styles.formField}><span>Nome da automação *</span><input value={form.nome} onChange={(event) => onChange({ ...form, nome: event.target.value })} placeholder="Ex.: Cobrar confirmação 6h antes" /></label>
               <label className={styles.formField} style={{ marginTop: 12 }}><span>Descrição</span><input value={form.descricao} onChange={(event) => onChange({ ...form, descricao: event.target.value })} placeholder="Explique de forma curta o objetivo da rotina" /></label>
-              <label className={styles.formField} style={{ marginTop: 12 }}>
-                <span>Integração WhatsApp</span>
-                <select value={integracaoAutomacaoId} onChange={(event) => selecionarIntegracaoAutomacao(event.target.value)}>
-                  <option value="">Todas as integrações</option>
-                  {integracoesAtivas.map((item) => <option key={item.id} value={item.id}>{item.nome_conexao}{item.numero ? ` · ${item.numero}` : ""}</option>)}
-                </select>
-                <small style={{ marginTop: 5, color: "var(--crm-text-muted)" }}>
-                  {integracaoAutomacaoId
-                    ? "A rotina só será avaliada para eventos desta integração."
-                    : "A rotina poderá ser avaliada para qualquer integração WhatsApp da empresa."}
-                </small>
-              </label>
+              {integracoesAtivas.length > 1 ? (
+                <div className={styles.formField} style={{ marginTop: 12 }}>
+                  <span>Integrações WhatsApp</span>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: 7,
+                      padding: 9,
+                      border: "1px solid var(--crm-border)",
+                      borderRadius: 12,
+                      background: "var(--crm-surface-soft, rgba(15, 23, 42, 0.025))",
+                    }}
+                  >
+                    {integracoesAtivas.map((item) => {
+                      const selecionada = integracaoAutomacaoIds.includes(item.id);
+                      const ultimaSelecionada = selecionada && integracaoAutomacaoIds.length === 1;
+                      return (
+                        <label
+                          key={item.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 9,
+                            cursor: ultimaSelecionada ? "not-allowed" : "pointer",
+                            minHeight: 28,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selecionada}
+                            disabled={ultimaSelecionada}
+                            style={{
+                              width: 17,
+                              height: 17,
+                              minWidth: 17,
+                              flex: "0 0 17px",
+                              margin: 0,
+                              padding: 0,
+                              borderRadius: 4,
+                            }}
+                            onChange={(event) => {
+                              const proximas = event.target.checked
+                                ? [...integracaoAutomacaoIds, item.id]
+                                : integracaoAutomacaoIds.filter((id) => id !== item.id);
+                              selecionarIntegracoesAutomacao(proximas);
+                            }}
+                          />
+                          <span style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+                            <strong style={{ fontSize: 13 }}>{item.nome_conexao}</strong>
+                            {item.numero ? (
+                              <small style={{ color: "var(--crm-text-muted)" }}>{item.numero}</small>
+                            ) : null}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <small style={{ marginTop: 5, color: "var(--crm-text-muted)" }}>
+                    {integracaoAutomacaoIds.length} de {integracoesAtivas.length} integrações selecionadas. A rotina só será avaliada para os números marcados.
+                  </small>
+                </div>
+              ) : null}
               <div className={styles.querySelection}>{categorias.map((item) => <button key={item.id} className={form.categoria === item.id ? styles.queryOptionActive : ""} onClick={() => selecionarCategoria(item.id)}><div className={styles.queryOptionIcon}><Database size={18} /></div><div><b>{item.nome}</b><small>{item.descricao}</small></div><span className={styles.radio}>{form.categoria === item.id ? <Check size={12} /> : null}</span></button>)}</div>
             </div>
           ) : null}
@@ -812,9 +949,9 @@ export default function AutomationBuilderModal({
                 <div className={styles.infoBox} style={{ marginBottom: 14, borderColor: "rgba(245, 158, 11, .45)", background: "rgba(245, 158, 11, .08)" }}>
                   <AlertTriangle size={19} />
                   <div>
-                    <b>Configure um disparo para cada integração</b>
+                    <b>Configure um disparo para cada integração selecionada</b>
                     <p>
-                      Esta automação funciona em todas as integrações. Adicione uma ação “Enviar disparo WhatsApp” para cada número ativo. Falta configurar: {alertaDisparosMultiIntegracao.map((item) => item.nome_conexao).join(", ")}.
+                      Esta automação funciona em {integracoesAutomacaoSelecionadas.length} integrações selecionadas. Adicione uma ação “Enviar disparo WhatsApp” para cada número. Falta configurar: {alertaDisparosMultiIntegracao.map((item) => item.nome_conexao).join(", ")}.
                     </p>
                   </div>
                 </div>
