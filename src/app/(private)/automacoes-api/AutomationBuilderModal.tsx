@@ -542,21 +542,21 @@ export default function AutomationBuilderModal({
               {Array.from({ length: totalVariaveis }, (_, posicao) => (
                 <label className={styles.formField} style={{ marginTop: posicao ? 8 : 0 }} key={`${template.id}-variavel-${posicao}`}>
                   <span>Variável {posicao + 1} · {`{{${posicao + 1}}}`}</span>
-                  <input
-                    list="rotina-automacao-variaveis-whatsapp"
+                  <select
                     value={variaveis[posicao] || ""}
                     onChange={(event) => {
                       const novas = Array.from({ length: totalVariaveis }, (_, itemIndex) => variaveis[itemIndex] || "");
                       novas[posicao] = event.target.value;
                       configAcao(index, "variaveis", novas);
                     }}
-                    placeholder={VARIAVEIS_PADRAO[posicao] || "nome_da_variavel"}
-                  />
+                  >
+                    <option value="">Selecione uma variável</option>
+                    {variaveisWhatsappSugeridas.map((variavel) => (
+                      <option value={variavel} key={variavel}>{`{{${variavel}}}`}</option>
+                    ))}
+                  </select>
                 </label>
               ))}
-              <datalist id="rotina-automacao-variaveis-whatsapp">
-                {variaveisWhatsappSugeridas.map((variavel) => <option value={variavel} key={variavel} />)}
-              </datalist>
             </div>
           ) : null}
 
@@ -945,8 +945,11 @@ export default function AutomationBuilderModal({
           {etapa === 4 ? (
             <div className={styles.stepContent}>
               <div className={styles.stepHeading}><span>ETAPA 4 DE 4</span><h3>O que o CRM deve fazer?</h3><p>Combine uma ou mais ações. A ordem será preservada pelo motor.</p></div>
+              <div className={styles.reviewGrid}>{form.acoes.map((acao, index) => <div key={`${acao.tipo_acao}-${index}`}><span>AÇÃO {index + 1}</span><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><AcaoIcon tipo={acao.tipo_acao} /><strong>{acaoLabel(acao.tipo_acao)}</strong></div><label className={styles.formField}><span>Tipo de ação</span><select value={acao.tipo_acao} onChange={(event) => atualizarAcao(index, { tipo_acao: event.target.value, configuracao_json: configuracaoAoSelecionarAcao(event.target.value) })}>{acoesDisponiveis.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>{renderConfigAcao(acao, index)}<button className={styles.ghostButton} style={{ marginTop: 10 }} onClick={() => removerAcao(index)} disabled={form.acoes.length === 1}><Trash2 size={15} /> Remover</button></div>)}</div>
+              <button className={styles.secondaryButton} style={{ marginTop: 15 }} onClick={adicionarAcao}><Plus size={16} /> Adicionar ação</button>
+              <div className={styles.scheduleSummary}><Zap size={19} /><div><b>Resumo</b><p>{resumo}.</p></div></div>
               {alertaDisparosMultiIntegracao ? (
-                <div className={styles.infoBox} style={{ marginBottom: 14, borderColor: "rgba(245, 158, 11, .45)", background: "rgba(245, 158, 11, .08)" }}>
+                <div className={styles.infoBox} style={{ marginTop: 12, borderColor: "rgba(245, 158, 11, .45)", background: "rgba(245, 158, 11, .08)" }}>
                   <AlertTriangle size={19} />
                   <div>
                     <b>Configure um disparo para cada integração selecionada</b>
@@ -956,9 +959,6 @@ export default function AutomationBuilderModal({
                   </div>
                 </div>
               ) : null}
-              <div className={styles.reviewGrid}>{form.acoes.map((acao, index) => <div key={`${acao.tipo_acao}-${index}`}><span>AÇÃO {index + 1}</span><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><AcaoIcon tipo={acao.tipo_acao} /><strong>{acaoLabel(acao.tipo_acao)}</strong></div><label className={styles.formField}><span>Tipo de ação</span><select value={acao.tipo_acao} onChange={(event) => atualizarAcao(index, { tipo_acao: event.target.value, configuracao_json: configuracaoAoSelecionarAcao(event.target.value) })}>{acoesDisponiveis.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>{renderConfigAcao(acao, index)}<button className={styles.ghostButton} style={{ marginTop: 10 }} onClick={() => removerAcao(index)} disabled={form.acoes.length === 1}><Trash2 size={15} /> Remover</button></div>)}</div>
-              <button className={styles.secondaryButton} style={{ marginTop: 15 }} onClick={adicionarAcao}><Plus size={16} /> Adicionar ação</button>
-              <div className={styles.scheduleSummary}><Zap size={19} /><div><b>Resumo</b><p>{resumo}.</p></div></div>
             </div>
           ) : null}
         </div>
