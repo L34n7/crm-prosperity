@@ -66,6 +66,11 @@ async function obterJob(params: {
   dependeDeJobId: string | null;
 }) {
   const chave = `${params.execucaoId}:${params.acao.id}`;
+  const canal = params.acao.tipo_acao.startsWith("whatsapp.")
+    ? "whatsapp"
+    : params.acao.tipo_acao === "email.enviar"
+      ? "email"
+      : null;
   const { data, error } = await supabase
     .from("rotina_automacao_jobs")
     .upsert({
@@ -80,7 +85,7 @@ async function obterJob(params: {
       chave_idempotencia: chave,
       ordem: params.acao.ordem,
       titulo: tituloAcaoRotina(params.acao.tipo_acao),
-      canal: null,
+      canal,
       depende_de_job_id: params.dependeDeJobId,
       contexto_json: {
         tipo_acao: params.acao.tipo_acao,
@@ -130,6 +135,51 @@ export async function processarMensagemRecebidaRotinas(
     }
     if (!assinatura) return null;
 
+    const [gatilhosResult, conversaResult] = await Promise.all([
+      supabase
+        .from("rotina_automacao_gatilhos")
+        .select("id,automacao_id,configuracao_json")
+        .eq("empresa_id", input.empresaId)
+        .eq("evento", EVENTO)
+        .eq("ativo", true),
+      supabase
+        .from("conversas")
+        .select("id,status,setor_id,responsavel_id,aguardando_atendente,bot_ativo,integracao_whatsapp_id")
+        .eq("empresa_id", input.empresaId)
+        .eq("id", input.conversaId)
+        .maybeSingle(),
+    ]);
+    if (gatilhosResult.error) throw gatilhosResult.error;
+    if (conversaResult.error) throw conversaResult.error;
+    if (!conversaResult.data) throw new Error("Conversa não encontrada para avaliar a automação.");
+
+    const conversa = conversaResult.data;
+    const integracaoConversaId = String(conversa.integracao_whatsapp_id || "").trim();
+    const gatilhos = (gatilhosResult.data || []).filter((gatilho) => {
+      const configuracao = gatilho.configuracao_json && typeof gatilho.configuracao_json === "object"
+        ? gatilho.configuracao_json as Record<string, unknown>
+        : {};
+      const integracaoAlvo = String(configuracao.integracao_whatsapp_id || "").trim();
+      return !integracaoAlvo || integracaoAlvo === integracaoConversaId;
+    });
+    const automacaoIds = Array.from(new Set(gatilhos.map((item) => item.automacao_id)));
+    if (!automacaoIds.length) {
+      return { executado: false, interromperFluxoAtual: false, execucaoIds: [] };
+    }
+
+    const [automacoesResult, condicoesResult, acoesResult] = await Promise.all([
+      supabase.from("rotina_automacoes").select("id,nome").eq("empresa_id", input.empresaId).eq("status", "ativa").in("id", automacaoIds),
+      supabase.from("rotina_automacao_condicoes").select("automacao_id,grupo,ordem,conjuncao,campo,operador,valor_json").eq("empresa_id", input.empresaId).in("automacao_id", automacaoIds).order("ordem"),
+      supabase.from("rotina_automacao_acoes").select("id,automacao_id,ordem,tipo_acao,configuracao_json,ativo").eq("empresa_id", input.empresaId).eq("ativo", true).in("automacao_id", automacaoIds).order("ordem"),
+    ]);
+    if (automacoesResult.error) throw automacoesResult.error;
+    if (condicoesResult.error) throw condicoesResult.error;
+    if (acoesResult.error) throw acoesResult.error;
+
+    if (!(automacoesResult.data || []).length) {
+      return { executado: false, interromperFluxoAtual: false, execucaoIds: [] };
+    }
+
     const eventoChave = `${EVENTO}:${mensagemId}`;
     const { data: evento, error: eventoError } = await supabase
       .from("rotina_automacao_eventos")
@@ -145,6 +195,7 @@ export async function processarMensagemRecebidaRotinas(
           conversa_id: input.conversaId,
           contato_id: input.contatoId || null,
           mensagem_tipo: input.mensagemTipo || null,
+          integracao_whatsapp_id: integracaoConversaId || null,
         },
         erro: null,
         processado_em: null,
@@ -164,41 +215,6 @@ export async function processarMensagemRecebidaRotinas(
       eventoId = existente?.id || null;
     }
 
-    const [gatilhosResult, conversaResult] = await Promise.all([
-      supabase
-        .from("rotina_automacao_gatilhos")
-        .select("id,automacao_id")
-        .eq("empresa_id", input.empresaId)
-        .eq("evento", EVENTO)
-        .eq("ativo", true),
-      supabase
-        .from("conversas")
-        .select("id,status,setor_id,responsavel_id,aguardando_atendente,bot_ativo")
-        .eq("empresa_id", input.empresaId)
-        .eq("id", input.conversaId)
-        .maybeSingle(),
-    ]);
-    if (gatilhosResult.error) throw gatilhosResult.error;
-    if (conversaResult.error) throw conversaResult.error;
-    if (!conversaResult.data) throw new Error("Conversa não encontrada para avaliar a automação.");
-
-    const gatilhos = gatilhosResult.data || [];
-    const automacaoIds = Array.from(new Set(gatilhos.map((item) => item.automacao_id)));
-    if (!automacaoIds.length) {
-      await marcarEvento(eventoId, input.empresaId, "ignorado");
-      return { executado: false, interromperFluxoAtual: false, execucaoIds: [] };
-    }
-
-    const [automacoesResult, condicoesResult, acoesResult] = await Promise.all([
-      supabase.from("rotina_automacoes").select("id,nome").eq("empresa_id", input.empresaId).eq("status", "ativa").in("id", automacaoIds),
-      supabase.from("rotina_automacao_condicoes").select("automacao_id,grupo,ordem,conjuncao,campo,operador,valor_json").eq("empresa_id", input.empresaId).in("automacao_id", automacaoIds).order("ordem"),
-      supabase.from("rotina_automacao_acoes").select("id,automacao_id,ordem,tipo_acao,configuracao_json,ativo").eq("empresa_id", input.empresaId).eq("ativo", true).in("automacao_id", automacaoIds).order("ordem"),
-    ]);
-    if (automacoesResult.error) throw automacoesResult.error;
-    if (condicoesResult.error) throw condicoesResult.error;
-    if (acoesResult.error) throw acoesResult.error;
-
-    const conversa = conversaResult.data;
     const contexto: ContextoEvento = {
       mensagem: { id: mensagemId, texto: String(input.mensagemTexto || ""), tipo: input.mensagemTipo || null },
       conversa: {
@@ -233,7 +249,13 @@ export async function processarMensagemRecebidaRotinas(
         gatilhoId: gatilho.id,
         eventoChave,
         mensagemId,
-        contextoJson: { evento: EVENTO, mensagem_id: mensagemId, conversa_id: input.conversaId, contato_id: input.contatoId || null },
+        contextoJson: {
+          evento: EVENTO,
+          mensagem_id: mensagemId,
+          conversa_id: input.conversaId,
+          contato_id: input.contatoId || null,
+          integracao_whatsapp_id: integracaoConversaId || null,
+        },
       });
       execucaoIds.push(execucao.id);
 

@@ -71,12 +71,23 @@ export type Rotina = {
 };
 
 export type Opcao = { id: string; nome: string; status?: string; ativo?: boolean };
-export type Template = Opcao & { integracao_whatsapp_id: string };
+export type Template = Opcao & {
+  integracao_whatsapp_id: string;
+  idioma?: string | null;
+  categoria?: string | null;
+  payload?: Record<string, unknown> | null;
+};
 export type IntegracaoWhatsapp = {
   id: string;
   nome_conexao: string;
   numero: string | null;
   status: string;
+};
+export type UsuarioAutomacao = {
+  id: string;
+  nome: string | null;
+  is_administrador: boolean;
+  setor_ids: string[];
 };
 export type IntegracaoApi = {
   id: string;
@@ -96,6 +107,7 @@ export type Opcoes = {
   integracoes_whatsapp: IntegracaoWhatsapp[];
   etiquetas: Opcao[];
   setores: Opcao[];
+  usuarios: UsuarioAutomacao[];
   integracoes_api: IntegracaoApi[];
 };
 
@@ -133,6 +145,7 @@ export const opcoesVazias: Opcoes = {
   integracoes_whatsapp: [],
   etiquetas: [],
   setores: [],
+  usuarios: [],
   integracoes_api: [],
 };
 
@@ -239,7 +252,7 @@ export const acoesDisponiveis = [
   { value: "fluxo.iniciar", label: "Iniciar fluxo" },
   { value: "fluxo.interromper", label: "Interromper fluxo atual" },
   { value: "whatsapp.enviar_mensagem", label: "Enviar mensagem" },
-  { value: "whatsapp.enviar_template", label: "Enviar template WhatsApp" },
+  { value: "whatsapp.enviar_template", label: "Enviar disparo WhatsApp" },
   { value: "email.enviar", label: "Enviar e-mail" },
   { value: "notificacao.responsavel", label: "Notificar responsável" },
   { value: "contato.adicionar_etiqueta", label: "Adicionar etiqueta" },
@@ -247,6 +260,19 @@ export const acoesDisponiveis = [
   { value: "agenda.atualizar_status", label: "Alterar status do agendamento" },
   { value: "integracao.consultar_api", label: "Consultar API externa" },
 ];
+
+export const variaveisWhatsappSugeridas = [
+  "nome_contato",
+  "nome_whatsapp",
+  "email_contato",
+  "numero_contato",
+  "campanha",
+  "origem",
+  "status_lead",
+  "classificacao_lead",
+  "protocolo_atual",
+  "ultimo_protocolo",
+] as const;
 
 export function novoFormulario(): FormRotina {
   return {
@@ -329,6 +355,16 @@ export function quantidadeOffset(gatilho: Gatilho) {
 export function configuracaoPadraoAcao(tipo: string): Record<string, unknown> {
   if (tipo === "agenda.atualizar_status") return { status: "confirmado" };
   if (tipo === "whatsapp.enviar_mensagem") return { mensagem: "" };
-  if (tipo === "conversa.transferir_setor") return { escopo_fila: "setor", setor_id: "" };
+  if (tipo === "whatsapp.enviar_template") {
+    return { integracao_whatsapp_id: "", template_id: "", variaveis: [] };
+  }
+  if (tipo === "conversa.transferir_setor") {
+    return {
+      escopo_fila: "setor",
+      setor_id: "",
+      estrategia_transferencia: "fila_setor",
+      atendente_id: "",
+    };
+  }
   return {};
 }

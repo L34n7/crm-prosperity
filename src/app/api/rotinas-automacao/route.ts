@@ -5,6 +5,7 @@ import {
   bloquearSemPermissao,
   usuarioTemPermissao,
 } from "@/lib/permissoes/servidor";
+import { listarIdsUsuariosAdministradoresDaEmpresa } from "@/lib/usuarios/administradores";
 
 const supabase = getSupabaseAdmin();
 
@@ -130,7 +131,7 @@ export async function GET() {
           .order("nome"),
         supabase
           .from("whatsapp_templates")
-          .select("id,nome,status,integracao_whatsapp_id")
+          .select("id,nome,idioma,categoria,status,integracao_whatsapp_id,payload")
           .eq("empresa_id", ctx.empresaId)
           .eq("status", "APPROVED")
           .order("nome"),
@@ -158,6 +159,12 @@ export async function GET() {
           .eq("empresa_id", ctx.empresaId)
           .neq("status", "inativa")
           .order("nome"),
+        supabase
+          .from("usuarios")
+          .select("id,nome,status")
+          .eq("empresa_id", ctx.empresaId)
+          .eq("status", "ativo")
+          .order("nome"),
       ]),
     ]);
 
@@ -168,6 +175,43 @@ export async function GET() {
     execucoesResult.error ||
     opcoes.find((resultado) => resultado.error)?.error;
   if (primeiroErro) return erro(new Error(primeiroErro.message));
+
+  const usuariosAtivos = opcoes[7].data || [];
+  const usuarioIds = usuariosAtivos.map((usuario) => usuario.id).filter(Boolean);
+  let administradorIds: string[] = [];
+  try {
+    administradorIds = await listarIdsUsuariosAdministradoresDaEmpresa(ctx.empresaId);
+  } catch (adminError) {
+    return erro(adminError);
+  }
+
+  const vinculosUsuariosResult = usuarioIds.length
+    ? await supabase
+        .from("usuarios_setores")
+        .select("usuario_id,setor_id")
+        .in("usuario_id", usuarioIds)
+    : { data: [], error: null };
+  if (vinculosUsuariosResult.error) {
+    return erro(new Error(vinculosUsuariosResult.error.message));
+  }
+
+  const administradores = new Set(administradorIds);
+  const setoresPorUsuario = new Map<string, string[]>();
+  for (const vinculo of vinculosUsuariosResult.data || []) {
+    const usuarioId = String(vinculo.usuario_id || "");
+    const setorId = String(vinculo.setor_id || "");
+    if (!usuarioId || !setorId) continue;
+    const atuais = setoresPorUsuario.get(usuarioId) || [];
+    if (!atuais.includes(setorId)) atuais.push(setorId);
+    setoresPorUsuario.set(usuarioId, atuais);
+  }
+
+  const usuarios = usuariosAtivos.map((usuario) => ({
+    id: usuario.id,
+    nome: usuario.nome,
+    is_administrador: administradores.has(usuario.id),
+    setor_ids: setoresPorUsuario.get(usuario.id) || [],
+  }));
 
   const gatilhos = agruparPorAutomacao(gatilhosResult.data || []);
   const condicoes = agruparPorAutomacao(condicoesResult.data || []);
@@ -226,6 +270,7 @@ export async function GET() {
       etiquetas: opcoes[4].data || [],
       setores: opcoes[5].data || [],
       integracoes_api: opcoes[6].data || [],
+      usuarios,
     },
   });
 }
