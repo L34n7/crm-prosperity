@@ -2,26 +2,73 @@
 
 import Link from "next/link";
 import { BarChart3, Radio } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { createPortal } from "react-dom";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import styles from "./layout.module.css";
 
 export default function PainelNavigation() {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const aoVivo = pathname.startsWith("/painel/ao-vivo");
 
-  return (
-    <div className={styles.navigationWrap}>
-      <nav className={styles.navigation} aria-label="Visões do painel">
-        <Link href="/painel" className={!aoVivo ? styles.activeTab : styles.tab}>
-          <BarChart3 size={16} />
+  useEffect(() => {
+    if (pathname === "/painel" && !query) {
+      router.replace("/painel/ao-vivo");
+      return;
+    }
+
+    const main = document.querySelector("main");
+    if (!main) return;
+
+    const host = document.createElement("div");
+    host.dataset.painelNavigationHost = "true";
+    main.prepend(host);
+    setPortalHost(host);
+
+    return () => {
+      setPortalHost(null);
+      host.remove();
+    };
+  }, [pathname, query, router]);
+
+  if (!portalHost) return null;
+
+  const tabStyle = {
+    minHeight: 28,
+    padding: "5px 9px",
+    gap: 6,
+    borderRadius: 8,
+    fontSize: 11.5,
+    lineHeight: 1,
+    flex: "0 0 auto",
+    whiteSpace: "nowrap" as const,
+  };
+
+  return createPortal(
+    <div
+      className={styles.navigationWrap}
+      style={{ display: "flex", alignItems: "center", width: "fit-content", maxWidth: "100%", padding: 0, margin: "0 0 8px" }}
+    >
+      <nav
+        className={styles.navigation}
+        aria-label="Visões do painel"
+        style={{ width: "fit-content", maxWidth: "100%", gap: 2, padding: 2, borderRadius: 10, boxShadow: "none" }}
+      >
+        <Link href="/painel/ao-vivo" className={aoVivo ? styles.activeTab : styles.tab} style={tabStyle}>
+          <Radio size={13} />
+          <span>Ao vivo / Hoje</span>
+          <i className={styles.liveDot} aria-hidden="true" style={{ width: 5, height: 5, boxShadow: "0 0 0 2px var(--crm-success-bg)" }} />
+        </Link>
+        <Link href="/painel?visao=analitica" className={!aoVivo ? styles.activeTab : styles.tab} style={tabStyle}>
+          <BarChart3 size={13} />
           <span>Visão analítica</span>
         </Link>
-        <Link href="/painel/ao-vivo" className={aoVivo ? styles.activeTab : styles.tab}>
-          <Radio size={16} />
-          <span>Ao vivo / Hoje</span>
-          <i className={styles.liveDot} aria-hidden="true" />
-        </Link>
       </nav>
-    </div>
+    </div>,
+    portalHost,
   );
 }
