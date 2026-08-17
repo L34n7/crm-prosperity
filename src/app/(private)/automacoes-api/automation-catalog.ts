@@ -159,6 +159,7 @@ export const gatilhosPorCategoria: Record<
     { evento: "agenda.depois_fim", nome: "Depois do fim do agendamento", tipo: "data_relativa" },
   ],
   conversas: [
+    { evento: "mensagem.recebida", nome: "Mensagem recebida", tipo: "evento" },
     { evento: "conversa.criada", nome: "Conversa criada", tipo: "evento" },
     { evento: "conversa.assumida", nome: "Conversa assumida", tipo: "evento" },
     { evento: "conversa.transferida", nome: "Conversa transferida", tipo: "evento" },
@@ -191,6 +192,8 @@ export const camposPorCategoria: Record<Categoria, Array<{ value: string; label:
     { value: "contato.telefone", label: "Telefone do contato" },
   ],
   conversas: [
+    { value: "mensagem.texto", label: "Texto da mensagem" },
+    { value: "mensagem.tipo", label: "Tipo da mensagem" },
     { value: "conversa.status", label: "Status da conversa" },
     { value: "conversa.setor_id", label: "Setor" },
     { value: "conversa.responsavel_id", label: "Responsável" },
@@ -234,6 +237,7 @@ export const operadores: Array<{ value: Operador; label: string }> = [
 
 export const acoesDisponiveis = [
   { value: "fluxo.iniciar", label: "Iniciar fluxo" },
+  { value: "fluxo.interromper", label: "Interromper fluxo atual" },
   { value: "whatsapp.enviar_template", label: "Enviar template WhatsApp" },
   { value: "email.enviar", label: "Enviar e-mail" },
   { value: "notificacao.responsavel", label: "Notificar responsável" },

@@ -1,4 +1,5 @@
 import { interpretarDataHorarioAgenda } from "@/lib/agendas/agenda-service";
+import { processarMensagemRecebidaRotinas } from "@/lib/rotinas-automacao/runtime";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   executarNo as executarNoCore,
@@ -243,6 +244,26 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
 
   if (resultadoTemporal) {
     return resultadoTemporal;
+  }
+
+  const resultadoRotinas = await processarMensagemRecebidaRotinas({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    contatoId: input.contatoId || null,
+    mensagemId: input.mensagemId || null,
+    mensagemTexto: input.mensagemTexto || "",
+    mensagemTipo: input.mensagemTipo || null,
+  });
+
+  if (resultadoRotinas?.interromperFluxoAtual) {
+    return {
+      ok: !resultadoRotinas.erro,
+      status: resultadoRotinas.erro
+        ? "rotina_automacao_interrompeu_com_erro"
+        : "rotina_automacao_interrompeu_fluxo",
+      execucaoId: resultadoRotinas.execucaoIds[0] || undefined,
+      error: resultadoRotinas.erro || undefined,
+    };
   }
 
   const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(input);
