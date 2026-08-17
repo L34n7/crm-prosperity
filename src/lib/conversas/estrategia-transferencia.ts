@@ -46,6 +46,7 @@ export function selecionarAtendenteTransferencia(params: {
   estrategia: EstrategiaTransferenciaAtendente;
   candidatos: CandidatoTransferenciaAtendente[];
   atendenteId?: string | null;
+  incluirAdministradores?: boolean;
   random?: () => number;
 }): CandidatoTransferenciaAtendente | null {
   const candidatosValidos = params.candidatos.filter((item) => Boolean(item?.id));
@@ -60,9 +61,9 @@ export function selecionarAtendenteTransferencia(params: {
     return candidatosValidos.find((item) => item.id === atendenteId) || null;
   }
 
-  const candidatos = candidatosValidos.filter(
-    (item) => item.isAdministrador !== true
-  );
+  const candidatos = params.incluirAdministradores === true
+    ? candidatosValidos
+    : candidatosValidos.filter((item) => item.isAdministrador !== true);
 
   if (candidatos.length === 0) {
     return null;

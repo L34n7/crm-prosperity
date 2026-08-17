@@ -21,6 +21,10 @@ const STATUS_CONVERSAS_EM_CARGA = [
 
 export type EscopoFila = "setor" | "geral";
 
+function configuracaoAtiva(valor: unknown) {
+  return valor === true || valor === "true" || valor === 1 || valor === "1";
+}
+
 // CRM_QUEUE_SCOPE_V1
 export type ResultadoAtribuicaoTransferencia = {
   setorId: string | null;
@@ -56,6 +60,7 @@ export async function resolverAtribuicaoTransferencia(params: {
   escopoFila?: unknown;
   estrategia?: unknown;
   atendenteId?: unknown;
+  incluirAdministradores?: unknown;
 }): Promise<ResultadoAtribuicaoTransferencia> {
   const escopoFila: EscopoFila =
     String(params.escopoFila || "").trim() === "geral"
@@ -69,6 +74,9 @@ export async function resolverAtribuicaoTransferencia(params: {
   const estrategia = normalizarEstrategiaTransferenciaAtendente(
     params.estrategia,
     atendenteId
+  );
+  const incluirAdministradores = configuracaoAtiva(
+    params.incluirAdministradores
   );
 
   if (escopoFila === "geral") {
@@ -167,7 +175,7 @@ export async function resolverAtribuicaoTransferencia(params: {
       throw vinculosError;
     }
 
-    const usuarioIds = Array.from(
+    const usuarioIdsVinculados = Array.from(
       new Set(
         (vinculos || [])
           .map((item) => String(item.usuario_id || "").trim())
@@ -175,19 +183,18 @@ export async function resolverAtribuicaoTransferencia(params: {
       )
     );
 
-    if (usuarioIds.length === 0) {
-      return resultadoFila({
-        setorId,
-        estrategia,
-        motivo: "setor_sem_atendentes",
-      });
-    }
-
     const administradores = new Set(
       await listarIdsUsuariosAdministradoresDaEmpresa(params.empresaId)
     );
-    const usuarioIdsDistribuicao = usuarioIds.filter(
+    const usuarioIdsNormaisDoSetor = usuarioIdsVinculados.filter(
       (usuarioId) => !administradores.has(usuarioId)
+    );
+    const usuarioIdsDistribuicao = Array.from(
+      new Set(
+        incluirAdministradores
+          ? [...usuarioIdsNormaisDoSetor, ...administradores]
+          : usuarioIdsNormaisDoSetor
+      )
     );
 
     if (usuarioIdsDistribuicao.length === 0) {
@@ -235,13 +242,14 @@ export async function resolverAtribuicaoTransferencia(params: {
       id: usuario.id,
       nome: usuario.nome,
       cargaAtual: cargas.get(usuario.id) || 0,
-      isAdministrador: false,
+      isAdministrador: administradores.has(usuario.id),
     }));
 
     const selecionado = selecionarAtendenteTransferencia({
       estrategia,
       candidatos,
       atendenteId,
+      incluirAdministradores,
     });
 
     if (!selecionado) {

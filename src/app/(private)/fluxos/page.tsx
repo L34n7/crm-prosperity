@@ -135,6 +135,7 @@ type AtendenteOpcao = {
   nome: string;
   email?: string | null;
   setor_ids: string[];
+  is_administrador?: boolean;
 };
 
 function normalizarEstrategiaTransferenciaNode(
@@ -2469,6 +2470,10 @@ function FluxosPageContent() {
   const [estrategiaTransferenciaNode, setEstrategiaTransferenciaNode] =
     useState<EstrategiaTransferenciaNode>("fila_setor");
   const [atendenteDestinoNode, setAtendenteDestinoNode] = useState("");
+  const [
+    incluirAdministradoresTransferenciaNode,
+    setIncluirAdministradoresTransferenciaNode,
+  ] = useState(false);
   const fluxo = fluxoSelecionado;
   // CRM_SYSTEM_CALENDAR_FLOW_EDITOR_V1
   const fluxoSistemaCalendario = Boolean(
@@ -2497,6 +2502,47 @@ function FluxosPageContent() {
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [atendentes, setAtendentes] = useState<AtendenteOpcao[]>([]);
   const [carregandoSetores, setCarregandoSetores] = useState(false);
+  const possuiAdministradorAtivo = atendentes.some(
+    (atendente) => atendente.is_administrador === true
+  );
+
+  function permiteDistribuicaoAutomaticaNoSetor(
+    setorId: string,
+    incluirAdministradores: boolean
+  ) {
+    if (!setorId) return false;
+
+    const possuiUsuarioComum = atendentes.some(
+      (atendente) =>
+        atendente.is_administrador !== true &&
+        atendente.setor_ids.includes(setorId)
+    );
+
+    return (
+      possuiUsuarioComum ||
+      (incluirAdministradores && possuiAdministradorAtivo)
+    );
+  }
+
+  function estrategiaDistribuicaoDisponivel(
+    estrategia: EstrategiaTransferenciaNode,
+    setorId: string,
+    incluirAdministradores: boolean
+  ): EstrategiaTransferenciaNode {
+    if (
+      (estrategia === "rodizio_aleatorio" ||
+        estrategia === "menos_conversas") &&
+      !permiteDistribuicaoAutomaticaNoSetor(
+        setorId,
+        incluirAdministradores
+      )
+    ) {
+      return "fila_setor";
+    }
+
+    return estrategia;
+  }
+
   const [menuHeaderAberto, setMenuHeaderAberto] = useState(false);
   const [menuFluxo, setMenuFluxo] = useState<{
     fluxo: Fluxo | null;
@@ -2590,6 +2636,10 @@ function FluxosPageContent() {
     useState<EstrategiaTransferenciaNode>("fila_setor");
   const [atendenteExcessoTentativasNode, setAtendenteExcessoTentativasNode] =
     useState("");
+  const [
+    incluirAdministradoresExcessoTentativasNode,
+    setIncluirAdministradoresExcessoTentativasNode,
+  ] = useState(false);
   const [mensagemExcessoTentativasNode, setMensagemExcessoTentativasNode] =
     useState("Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.");
   const [notificarExcessoTentativasNode, setNotificarExcessoTentativasNode] =
@@ -4331,6 +4381,7 @@ function abrirFluxo(fluxo: Fluxo) {
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
+              incluir_administradores_excesso_tentativas: false,
               mensagem_excesso_tentativas:
                 "Nao consegui continuar o atendimento automatico. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
@@ -4353,6 +4404,7 @@ function abrirFluxo(fluxo: Fluxo) {
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
+              incluir_administradores_excesso_tentativas: false,
               mensagem_excesso_tentativas:
                 "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
@@ -4375,6 +4427,7 @@ function abrirFluxo(fluxo: Fluxo) {
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
+              incluir_administradores_excesso_tentativas: false,
               mensagem_excesso_tentativas:
                 "Não consegui continuar o atendimento automático. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
@@ -4454,6 +4507,7 @@ function abrirFluxo(fluxo: Fluxo) {
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
+              incluir_administradores_excesso_tentativas: false,
               mensagem_excesso_tentativas:
                 "Nao consegui continuar o agendamento automatico. Vou te encaminhar para um atendente.",
               notificar_excesso_tentativas: true,
@@ -4506,6 +4560,7 @@ function abrirFluxo(fluxo: Fluxo) {
               setor_id: "",
               estrategia_transferencia: "fila_setor",
               atendente_id: null,
+              incluir_administradores_distribuicao: false,
             }
           : tipoNo === "encerrar"
           ? {
@@ -4713,6 +4768,11 @@ function offsetLabelConexao(edgeId: string) {
       )
     );
     setAtendenteDestinoNode(String(configuracaoJson?.atendente_id || ""));
+    setIncluirAdministradoresTransferenciaNode(
+      configuracaoMarcada(
+        configuracaoJson?.incluir_administradores_distribuicao
+      )
+    );
     setConfirmandoExclusaoNo(false);
     
     setCapturaVariavelNode(String(configuracaoJson?.variavel || "nome"));
@@ -4753,6 +4813,11 @@ function offsetLabelConexao(edgeId: string) {
     );
     setAtendenteExcessoTentativasNode(
       String(configuracaoJson?.atendente_excesso_tentativas || "")
+    );
+    setIncluirAdministradoresExcessoTentativasNode(
+      configuracaoMarcada(
+        configuracaoJson?.incluir_administradores_excesso_tentativas
+      )
     );
 
     setMensagemExcessoTentativasNode(
@@ -5125,7 +5190,8 @@ async function aplicarEdicaoNoInterno() {
         const atendenteValido = atendentes.some(
           (atendente) =>
             atendente.id === atendenteDestinoNode &&
-            atendente.setor_ids.includes(setorDestino)
+            (atendente.is_administrador === true ||
+              atendente.setor_ids.includes(setorDestino))
         );
 
         if (!atendenteValido) {
@@ -5163,7 +5229,8 @@ async function aplicarEdicaoNoInterno() {
         const atendenteValido = atendentes.some(
           (atendente) =>
             atendente.id === atendenteExcessoTentativasNode &&
-            atendente.setor_ids.includes(setorExcessoTentativasNode)
+            (atendente.is_administrador === true ||
+              atendente.setor_ids.includes(setorExcessoTentativasNode))
         );
 
         if (!atendenteValido) {
@@ -5614,7 +5681,15 @@ async function aplicarEdicaoNoInterno() {
             ? setorExcessoTentativasNode || null
             : null;
         configuracao_json.estrategia_excesso_tentativas =
-          estrategiaExcessoTentativasNode;
+          estrategiaDistribuicaoDisponivel(
+            estrategiaExcessoTentativasNode,
+            setorExcessoTentativasNode,
+            incluirAdministradoresExcessoTentativasNode
+          );
+        configuracao_json.incluir_administradores_excesso_tentativas =
+          escopoFilaExcessoTentativasNode === "setor"
+            ? incluirAdministradoresExcessoTentativasNode
+            : false;
         configuracao_json.atendente_excesso_tentativas =
           escopoFilaExcessoTentativasNode === "setor" &&
           estrategiaExcessoTentativasNode === "atendente_especifico"
@@ -5636,7 +5711,15 @@ async function aplicarEdicaoNoInterno() {
         configuracao_json.setor_id =
           escopoFilaTransferenciaNode === "setor" ? setorDestino : null;
         configuracao_json.estrategia_transferencia =
-          estrategiaTransferenciaNode;
+          estrategiaDistribuicaoDisponivel(
+            estrategiaTransferenciaNode,
+            setorDestino,
+            incluirAdministradoresTransferenciaNode
+          );
+        configuracao_json.incluir_administradores_distribuicao =
+          escopoFilaTransferenciaNode === "setor"
+            ? incluirAdministradoresTransferenciaNode
+            : false;
         configuracao_json.atendente_id =
           escopoFilaTransferenciaNode === "setor" &&
           estrategiaTransferenciaNode === "atendente_especifico"
@@ -10997,6 +11080,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               setSetorDestino("");
                               setAtendenteDestinoNode("");
                               setEstrategiaTransferenciaNode("fila_setor");
+                              setIncluirAdministradoresTransferenciaNode(false);
                             }
                           }}
                         >
@@ -11010,13 +11094,13 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                       <label className={styles.field}>
                         <span className={styles.label}>Setor destino</span>
-
                         <select
                           className={styles.input}
                           value={setorDestino}
                           onChange={(e) => {
                             setSetorDestino(e.target.value);
                             setAtendenteDestinoNode("");
+                            setEstrategiaTransferenciaNode("fila_setor");
                           }}
                           disabled={
                             escopoFilaTransferenciaNode === "geral" ||
@@ -11026,7 +11110,6 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           <option value="">
                             {carregandoSetores ? "Carregando setores..." : "Selecione um setor"}
                           </option>
-
                           {setores.map((setor) => (
                             <option key={setor.id} value={setor.id}>
                               {setor.nome}
@@ -11035,11 +11118,40 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                         </select>
                       </label>
 
+                      <label className={styles.switchField}>
+                        <input
+                          type="checkbox"
+                          checked={incluirAdministradoresTransferenciaNode}
+                          disabled={!setorDestino || !possuiAdministradorAtivo}
+                          onChange={(e) => {
+                            const incluir = e.target.checked;
+                            setIncluirAdministradoresTransferenciaNode(incluir);
+                            if (
+                              !permiteDistribuicaoAutomaticaNoSetor(setorDestino, incluir) &&
+                              (estrategiaTransferenciaNode === "rodizio_aleatorio" ||
+                                estrategiaTransferenciaNode === "menos_conversas")
+                            ) {
+                              setEstrategiaTransferenciaNode("fila_setor");
+                            }
+                          }}
+                        />
+                        <div>
+                          <strong>Incluir administradores na distribuição</strong>
+                          <p>
+                            Quando marcado, administradores participam do rodízio e da distribuição por menor carga mesmo sem vínculo com o setor.
+                          </p>
+                        </div>
+                      </label>
+
                       <label className={styles.field}>
                         <span className={styles.label}>Distribuição do atendimento</span>
                         <select
                           className={styles.input}
-                          value={estrategiaTransferenciaNode}
+                          value={estrategiaDistribuicaoDisponivel(
+                            estrategiaTransferenciaNode,
+                            setorDestino,
+                            incluirAdministradoresTransferenciaNode
+                          )}
                           onChange={(e) => {
                             const estrategia = e.target.value as EstrategiaTransferenciaNode;
                             setEstrategiaTransferenciaNode(estrategia);
@@ -11047,16 +11159,29 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               setAtendenteDestinoNode("");
                             }
                           }}
-                          disabled={
-                            escopoFilaTransferenciaNode === "geral" ||
-                            !setorDestino
-                          }
+                          disabled={escopoFilaTransferenciaNode === "geral" || !setorDestino}
                         >
                           <option value="fila_setor">Somente fila do setor</option>
                           <option value="atendente_especifico">Atendente específico</option>
-                          <option value="rodizio_aleatorio">Rodízio aleatório</option>
-                          <option value="menos_conversas">Atendente com menos conversas</option>
+                          {permiteDistribuicaoAutomaticaNoSetor(
+                            setorDestino,
+                            incluirAdministradoresTransferenciaNode
+                          ) && (
+                            <>
+                              <option value="rodizio_aleatorio">Rodízio aleatório</option>
+                              <option value="menos_conversas">Atendente com menos conversas</option>
+                            </>
+                          )}
                         </select>
+                        {setorDestino &&
+                          !permiteDistribuicaoAutomaticaNoSetor(
+                            setorDestino,
+                            incluirAdministradoresTransferenciaNode
+                          ) && (
+                            <span className={styles.help}>
+                              O setor não possui usuário comum ativo para distribuição automática. Marque “Incluir administradores” para liberar rodízio e menor carga quando houver administrador ativo.
+                            </span>
+                          )}
                       </label>
 
                       {estrategiaTransferenciaNode === "atendente_especifico" && (
@@ -11070,12 +11195,15 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                           >
                             <option value="">Selecione um atendente</option>
                             {atendentes
-                              .filter((atendente) =>
-                                atendente.setor_ids.includes(setorDestino)
+                              .filter(
+                                (atendente) =>
+                                  atendente.is_administrador === true ||
+                                  atendente.setor_ids.includes(setorDestino)
                               )
                               .map((atendente) => (
                                 <option key={atendente.id} value={atendente.id}>
                                   {atendente.nome}
+                                  {atendente.is_administrador ? " — Administrador" : ""}
                                   {atendente.email ? ` — ${atendente.email}` : ""}
                                 </option>
                               ))}
@@ -11084,7 +11212,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       )}
 
                       <p className={styles.help}>
-                        No rodízio aleatório o sistema escolhe um usuário ativo do setor. Em menos conversas, considera os atendimentos ainda abertos atribuídos a cada usuário.
+                        No rodízio aleatório o sistema escolhe entre os usuários elegíveis. Em menos conversas, considera os atendimentos ainda abertos atribuídos a cada usuário. Administradores só entram na distribuição automática quando a opção acima estiver marcada.
                       </p>
                     </div>
                   )}
@@ -11286,6 +11414,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                   setSetorExcessoTentativasNode("");
                                   setAtendenteExcessoTentativasNode("");
                                   setEstrategiaExcessoTentativasNode("fila_setor");
+                                  setIncluirAdministradoresExcessoTentativasNode(false);
                                 }
                               }}
                             >
@@ -11302,11 +11431,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               onChange={(e) => {
                                 setSetorExcessoTentativasNode(e.target.value);
                                 setAtendenteExcessoTentativasNode("");
+                                setEstrategiaExcessoTentativasNode("fila_setor");
                               }}
-                              disabled={
-                                escopoFilaExcessoTentativasNode === "geral" ||
-                                carregandoSetores
-                              }
+                              disabled={escopoFilaExcessoTentativasNode === "geral" || carregandoSetores}
                             >
                               <option value="">Selecione um setor</option>
                               {setores.map((setor) => (
@@ -11317,11 +11444,43 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             </select>
                           </label>
 
+                          <label className={styles.switchField}>
+                            <input
+                              type="checkbox"
+                              checked={incluirAdministradoresExcessoTentativasNode}
+                              disabled={!setorExcessoTentativasNode || !possuiAdministradorAtivo}
+                              onChange={(e) => {
+                                const incluir = e.target.checked;
+                                setIncluirAdministradoresExcessoTentativasNode(incluir);
+                                if (
+                                  !permiteDistribuicaoAutomaticaNoSetor(
+                                    setorExcessoTentativasNode,
+                                    incluir
+                                  ) &&
+                                  (estrategiaExcessoTentativasNode === "rodizio_aleatorio" ||
+                                    estrategiaExcessoTentativasNode === "menos_conversas")
+                                ) {
+                                  setEstrategiaExcessoTentativasNode("fila_setor");
+                                }
+                              }}
+                            />
+                            <div>
+                              <strong>Incluir administradores na distribuição</strong>
+                              <p>
+                                Quando marcado, administradores participam do rodízio e da distribuição por menor carga mesmo sem vínculo com o setor.
+                              </p>
+                            </div>
+                          </label>
+
                           <label className={styles.field}>
                             <span className={styles.label}>Distribuição do atendimento</span>
                             <select
                               className={styles.input}
-                              value={estrategiaExcessoTentativasNode}
+                              value={estrategiaDistribuicaoDisponivel(
+                                estrategiaExcessoTentativasNode,
+                                setorExcessoTentativasNode,
+                                incluirAdministradoresExcessoTentativasNode
+                              )}
                               onChange={(e) => {
                                 const estrategia = e.target.value as EstrategiaTransferenciaNode;
                                 setEstrategiaExcessoTentativasNode(estrategia);
@@ -11329,16 +11488,29 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                                   setAtendenteExcessoTentativasNode("");
                                 }
                               }}
-                              disabled={
-                                escopoFilaExcessoTentativasNode === "geral" ||
-                                !setorExcessoTentativasNode
-                              }
+                              disabled={escopoFilaExcessoTentativasNode === "geral" || !setorExcessoTentativasNode}
                             >
                               <option value="fila_setor">Somente fila do setor</option>
                               <option value="atendente_especifico">Atendente específico</option>
-                              <option value="rodizio_aleatorio">Rodízio aleatório</option>
-                              <option value="menos_conversas">Atendente com menos conversas</option>
+                              {permiteDistribuicaoAutomaticaNoSetor(
+                                setorExcessoTentativasNode,
+                                incluirAdministradoresExcessoTentativasNode
+                              ) && (
+                                <>
+                                  <option value="rodizio_aleatorio">Rodízio aleatório</option>
+                                  <option value="menos_conversas">Atendente com menos conversas</option>
+                                </>
+                              )}
                             </select>
+                            {setorExcessoTentativasNode &&
+                              !permiteDistribuicaoAutomaticaNoSetor(
+                                setorExcessoTentativasNode,
+                                incluirAdministradoresExcessoTentativasNode
+                              ) && (
+                                <span className={styles.help}>
+                                  O setor não possui usuário comum ativo para distribuição automática. Marque “Incluir administradores” para liberar rodízio e menor carga quando houver administrador ativo.
+                                </span>
+                              )}
                           </label>
 
                           {estrategiaExcessoTentativasNode === "atendente_especifico" && (
@@ -11347,21 +11519,20 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                               <select
                                 className={styles.input}
                                 value={atendenteExcessoTentativasNode}
-                                onChange={(e) =>
-                                  setAtendenteExcessoTentativasNode(e.target.value)
-                                }
+                                onChange={(e) => setAtendenteExcessoTentativasNode(e.target.value)}
                                 disabled={!setorExcessoTentativasNode || carregandoSetores}
                               >
                                 <option value="">Selecione um atendente</option>
                                 {atendentes
-                                  .filter((atendente) =>
-                                    atendente.setor_ids.includes(
-                                      setorExcessoTentativasNode
-                                    )
+                                  .filter(
+                                    (atendente) =>
+                                      atendente.is_administrador === true ||
+                                      atendente.setor_ids.includes(setorExcessoTentativasNode)
                                   )
                                   .map((atendente) => (
                                     <option key={atendente.id} value={atendente.id}>
                                       {atendente.nome}
+                                      {atendente.is_administrador ? " — Administrador" : ""}
                                       {atendente.email ? ` — ${atendente.email}` : ""}
                                     </option>
                                   ))}

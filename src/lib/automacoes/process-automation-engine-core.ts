@@ -4582,6 +4582,8 @@ export async function executarNo(params: {
     escopoFila: escopoFilaTransferencia,
     estrategia: configTransferencia.estrategia_transferencia,
     atendenteId: configTransferencia.atendente_id,
+    incluirAdministradores:
+      configTransferencia.incluir_administradores_distribuicao,
   });
   const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
     empresaId,
@@ -8349,6 +8351,8 @@ export async function executarAcaoExcessoTentativas(params: {
     escopoFila: escopoFilaExcessoTentativas,
     estrategia: config.estrategia_excesso_tentativas,
     atendenteId: config.atendente_excesso_tentativas,
+    incluirAdministradores:
+      config.incluir_administradores_excesso_tentativas,
   });
   const agora = new Date().toISOString();
 

@@ -120,6 +120,8 @@ async function transferir(params: {
     escopoFila,
     estrategia: params.config.estrategia_transferencia,
     atendenteId: params.config.atendente_id,
+    incluirAdministradores:
+      params.config.incluir_administradores_distribuicao,
   });
 
   const { data: conversa, error: conversaError } = await supabase
@@ -161,6 +163,8 @@ async function transferir(params: {
       estrategia_solicitada: atribuicao.estrategiaSolicitada,
       estrategia_aplicada: atribuicao.estrategiaAplicada,
       fallback_motivo: atribuicao.fallbackMotivo,
+      incluir_administradores_distribuicao:
+        params.config.incluir_administradores_distribuicao === true,
       atendente_id: atribuicao.responsavelId,
     },
   });

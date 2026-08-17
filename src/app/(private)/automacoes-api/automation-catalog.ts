@@ -364,6 +364,7 @@ export function configuracaoPadraoAcao(tipo: string): Record<string, unknown> {
       setor_id: "",
       estrategia_transferencia: "fila_setor",
       atendente_id: "",
+      incluir_administradores_distribuicao: false,
     };
   }
   return {};

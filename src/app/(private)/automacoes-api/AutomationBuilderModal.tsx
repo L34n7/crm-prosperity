@@ -100,6 +100,10 @@ function variaveisPadrao(total: number) {
   return Array.from({ length: total }, (_, index) => VARIAVEIS_PADRAO[index] || "");
 }
 
+function configuracaoMarcada(valor: unknown) {
+  return valor === true || valor === "true" || valor === 1 || valor === "1";
+}
+
 function substituirPreviewSequencial(texto: unknown, variaveis: string[], offset: number) {
   return String(texto || "").replace(/\{\{(\d+)\}\}/g, (_, numero) => {
     const index = offset + Number(numero) - 1;
@@ -535,10 +539,33 @@ export default function AutomationBuilderModal({
     if (acao.tipo_acao === "conversa.transferir_setor") {
       const filaGeral = String(config.escopo_fila || "") === "geral";
       const setorId = filaGeral ? "" : String(config.setor_id || "");
-      const estrategia = String(config.estrategia_transferencia || "fila_setor");
+      const incluirAdministradores = configuracaoMarcada(
+        config.incluir_administradores_distribuicao,
+      );
+      const usuariosComunsDoSetor = setorId
+        ? opcoes.usuarios.filter(
+            (usuario) =>
+              !usuario.is_administrador && usuario.setor_ids.includes(setorId),
+          )
+        : [];
+      const administradoresAtivos = opcoes.usuarios.filter(
+        (usuario) => usuario.is_administrador,
+      );
+      const permiteDistribuicaoAutomatica = Boolean(setorId) &&
+        (usuariosComunsDoSetor.length > 0 ||
+          (incluirAdministradores && administradoresAtivos.length > 0));
+      const estrategiaConfigurada = String(
+        config.estrategia_transferencia || "fila_setor",
+      );
+      const estrategia =
+        ["rodizio_aleatorio", "menos_conversas"].includes(estrategiaConfigurada) &&
+        !permiteDistribuicaoAutomatica
+          ? "fila_setor"
+          : estrategiaConfigurada;
       const usuariosElegiveis = setorId
         ? opcoes.usuarios.filter(
-            (usuario) => usuario.is_administrador || usuario.setor_ids.includes(setorId),
+            (usuario) =>
+              usuario.is_administrador || usuario.setor_ids.includes(setorId),
           )
         : [];
 
@@ -558,6 +585,7 @@ export default function AutomationBuilderModal({
                         setor_id: "__fila_geral__",
                         estrategia_transferencia: "fila_setor",
                         atendente_id: "",
+                        incluir_administradores_distribuicao: false,
                       }
                     : {
                         ...config,
@@ -565,6 +593,7 @@ export default function AutomationBuilderModal({
                         setor_id: "",
                         estrategia_transferencia: "fila_setor",
                         atendente_id: "",
+                        incluir_administradores_distribuicao: false,
                       },
                 });
               }}
@@ -595,6 +624,49 @@ export default function AutomationBuilderModal({
                 </select>
               </label>
 
+              <div className={styles.formField} style={{ marginTop: 8 }}>
+                <span>Administradores na distribuição automática</span>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 9,
+                    cursor: setorId && administradoresAtivos.length ? "pointer" : "not-allowed",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={incluirAdministradores}
+                    disabled={!setorId || !administradoresAtivos.length}
+                    onChange={(event) => {
+                      const incluir = event.target.checked;
+                      const continuaDisponivel =
+                        usuariosComunsDoSetor.length > 0 ||
+                        (incluir && administradoresAtivos.length > 0);
+                      const automatica = ["rodizio_aleatorio", "menos_conversas"].includes(
+                        estrategia,
+                      );
+                      atualizarAcao(index, {
+                        configuracao_json: {
+                          ...config,
+                          incluir_administradores_distribuicao: incluir,
+                          estrategia_transferencia:
+                            automatica && !continuaDisponivel ? "fila_setor" : estrategia,
+                          atendente_id:
+                            automatica && !continuaDisponivel ? "" : config.atendente_id,
+                        },
+                      });
+                    }}
+                  />
+                  <span style={{ fontSize: 13, lineHeight: 1.45 }}>
+                    Incluir administradores no rodízio e na distribuição por menor carga
+                  </span>
+                </label>
+                <small style={{ marginTop: 5, color: "var(--crm-text-muted)" }}>
+                  Administradores são usuários coringa e podem participar da distribuição mesmo sem vínculo com o setor.
+                </small>
+              </div>
+
               <label className={styles.formField} style={{ marginTop: 8 }}>
                 <span>Distribuição</span>
                 <select
@@ -616,9 +688,18 @@ export default function AutomationBuilderModal({
                 >
                   <option value="fila_setor">Somente fila do setor</option>
                   <option value="atendente_especifico">Atendente específico</option>
-                  <option value="rodizio_aleatorio">Rodízio aleatório</option>
-                  <option value="menos_conversas">Atendente com menos conversas</option>
+                  {permiteDistribuicaoAutomatica ? (
+                    <>
+                      <option value="rodizio_aleatorio">Rodízio aleatório</option>
+                      <option value="menos_conversas">Atendente com menos conversas</option>
+                    </>
+                  ) : null}
                 </select>
+                {setorId && !permiteDistribuicaoAutomatica ? (
+                  <small style={{ marginTop: 5, color: "var(--crm-text-muted)" }}>
+                    Este setor não possui usuário comum ativo para distribuição automática. Marque a opção de incluir administradores para habilitar rodízio e menor carga quando houver administrador ativo.
+                  </small>
+                ) : null}
               </label>
 
               {estrategia === "atendente_especifico" ? (
