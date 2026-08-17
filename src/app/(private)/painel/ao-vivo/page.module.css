@@ -1,0 +1,593 @@
+.liveHero {
+  align-items: center;
+}
+
+.liveHeroStatus {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  min-width: 240px;
+  color: var(--crm-on-strong-soft);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.refreshButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--crm-ui-private-border-rgb-255-255-255-0-16);
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--crm-text-inverse);
+  background: var(--crm-ui-private-surface-rgb-255-255-255-0-1);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  backdrop-filter: blur(12px);
+}
+
+.refreshButton:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.livePulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--crm-success-text);
+  box-shadow: 0 0 0 5px var(--crm-ui-private-surface-rgb-255-255-255-0-1);
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.stateLabel,
+.todayLabel {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.stateLabel {
+  color: var(--crm-success-text);
+  background: var(--crm-success-bg);
+  border: 1px solid var(--crm-success-border);
+}
+
+.todayLabel {
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  border: 1px solid var(--crm-primary-border);
+}
+
+.kpiAttention {
+  border-color: var(--crm-danger-border) !important;
+}
+
+.kpiWarning {
+  border-color: var(--crm-warning-border) !important;
+}
+
+.livePrimaryGrid,
+.liveSecondaryGrid,
+.outcomeGrid {
+  display: grid;
+  gap: 20px;
+}
+
+.livePrimaryGrid {
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.75fr);
+}
+
+.liveSecondaryGrid,
+.outcomeGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hourChartWrap {
+  width: 100%;
+  overflow-x: auto;
+  padding: 8px 0 2px;
+}
+
+.hourChart {
+  min-width: 720px;
+  height: 250px;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 8px 0;
+  border-radius: 16px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(25% - 1px),
+      var(--crm-border-soft) 25%
+    );
+}
+
+.hourColumn {
+  flex: 1 0 34px;
+  min-width: 34px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.barGroup {
+  height: 205px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+}
+
+.hourBar {
+  width: 7px;
+  min-height: 3px;
+  border-radius: 7px 7px 2px 2px;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.hourBar:hover {
+  opacity: 0.78;
+  transform: translateY(-2px);
+}
+
+.barEntry,
+.legendEntry {
+  background: var(--crm-primary);
+}
+
+.barHuman,
+.legendHuman {
+  background: var(--crm-success-text);
+}
+
+.barClosed,
+.legendClosed {
+  background: var(--crm-text-soft);
+}
+
+.hourLabel {
+  color: var(--crm-text-soft);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.chartLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chartLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.chartLegend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.slaSummary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.slaSummary > div {
+  padding: 14px;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 15px;
+  background: var(--crm-surface-soft);
+}
+
+.slaSummary span,
+.slaSummary strong {
+  display: block;
+}
+
+.slaSummary span {
+  color: var(--crm-text-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.slaSummary strong {
+  margin-top: 5px;
+  color: var(--crm-text-strong);
+  font-size: 22px;
+}
+
+.slaList {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.slaRow > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.slaRow b {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.slaTrack {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--crm-border-soft);
+}
+
+.slaTrack span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--crm-primary), var(--crm-success-text));
+}
+
+.slaRisk .slaTrack span {
+  background: var(--crm-danger-text);
+}
+
+.queueList,
+.teamLiveList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.queueItem,
+.teamLiveItem {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 15px;
+  background: var(--crm-surface);
+}
+
+.queueItem {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.queueAvatar,
+.teamAvatar {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--crm-text-inverse);
+  background: linear-gradient(135deg, var(--crm-ui-private-surface-hex-113e50), var(--crm-primary));
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.queueMain,
+.teamIdentity {
+  min-width: 0;
+}
+
+.queueMain strong,
+.queueMain small,
+.teamIdentity strong,
+.teamIdentity small {
+  display: block;
+}
+
+.queueMain strong,
+.teamIdentity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.queueMain small,
+.teamIdentity small {
+  margin-top: 4px;
+  color: var(--crm-text-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.queueTime {
+  min-width: 86px;
+  text-align: right;
+}
+
+.queueTime span,
+.queueTime small {
+  display: block;
+}
+
+.queueTime span {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.queueTime small {
+  margin-top: 3px;
+  color: var(--crm-text-soft);
+  font-size: 10px;
+}
+
+.timeRisk {
+  color: var(--crm-danger-text) !important;
+}
+
+.warningBadge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 999px;
+  color: var(--crm-warning-text);
+  background: var(--crm-warning-bg);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.teamLiveItem {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.teamMetric {
+  min-width: 70px;
+  text-align: right;
+}
+
+.teamMetric b,
+.teamMetric span {
+  display: block;
+}
+
+.teamMetric b {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.teamMetric span {
+  margin-top: 2px;
+  color: var(--crm-text-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.outcomeCards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.outcomeCard {
+  padding: 14px;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 15px;
+  background: var(--crm-surface-soft);
+}
+
+.outcomeCard span,
+.outcomeCard strong,
+.outcomeCard small {
+  display: block;
+}
+
+.outcomeCard span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.outcomeCard strong {
+  margin-top: 9px;
+  color: var(--crm-text-strong);
+  font-size: 25px;
+  line-height: 1;
+}
+
+.outcomeCard small {
+  margin-top: 6px;
+  color: var(--crm-text-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.outcomeDanger {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+
+.outcomeWarning {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+}
+
+.liveStateList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.liveStateList > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--crm-border-soft);
+}
+
+.liveStateList > div:last-child {
+  border-bottom: 0;
+}
+
+.liveStateList span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.liveStateList strong {
+  color: var(--crm-text-strong);
+  font-size: 16px;
+}
+
+.liveStateList i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.stateQueue { background: var(--crm-warning-text); }
+.stateHuman { background: var(--crm-success-text); }
+.stateBot { background: var(--crm-primary); }
+.stateOther { background: var(--crm-text-soft); }
+
+.operationalAlert,
+.operationalHealthy {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.operationalAlert {
+  color: var(--crm-warning-text);
+  border: 1px solid var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+}
+
+.operationalHealthy {
+  color: var(--crm-success-text);
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-success-bg);
+}
+
+.operationalAlert strong,
+.operationalAlert span,
+.operationalHealthy strong,
+.operationalHealthy span {
+  display: block;
+}
+
+.operationalAlert strong,
+.operationalHealthy strong {
+  font-size: 12px;
+}
+
+.operationalAlert span,
+.operationalHealthy span {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1180px) {
+  .livePrimaryGrid,
+  .liveSecondaryGrid,
+  .outcomeGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .liveHero {
+    align-items: stretch;
+  }
+
+  .liveHeroStatus {
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  .outcomeCards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teamLiveItem {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .teamMetric:last-child {
+    grid-column: 2 / -1;
+    text-align: left;
+  }
+}
+
+@media (max-width: 520px) {
+  .slaSummary,
+  .outcomeCards {
+    grid-template-columns: 1fr;
+  }
+
+  .queueItem {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .queueTime {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .teamLiveItem {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .teamMetric,
+  .teamMetric:last-child {
+    grid-column: 2;
+    text-align: left;
+  }
+}
