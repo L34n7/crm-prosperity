@@ -38,11 +38,11 @@ export default function PainelNavigation() {
   if (!portalHost) return null;
 
   const tabStyle = {
-    minHeight: 28,
-    padding: "5px 9px",
-    gap: 6,
-    borderRadius: 8,
-    fontSize: 11.5,
+    minHeight: 26,
+    padding: "4px 8px",
+    gap: 5,
+    borderRadius: 7,
+    fontSize: 11,
     lineHeight: 1,
     flex: "0 0 auto",
     whiteSpace: "nowrap" as const,
@@ -51,21 +51,50 @@ export default function PainelNavigation() {
   return createPortal(
     <div
       className={styles.navigationWrap}
-      style={{ display: "flex", alignItems: "center", width: "fit-content", maxWidth: "100%", padding: 0, margin: "0 0 8px" }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        maxWidth: "100%",
+        padding: 0,
+        margin: "0 0 4px",
+      }}
     >
       <nav
         className={styles.navigation}
         aria-label="Visões do painel"
-        style={{ width: "fit-content", maxWidth: "100%", gap: 2, padding: 2, borderRadius: 10, boxShadow: "none" }}
+        style={{
+          width: "fit-content",
+          maxWidth: "100%",
+          gap: 2,
+          padding: 2,
+          borderRadius: 9,
+          boxShadow: "none",
+        }}
       >
-        <Link href="/painel/ao-vivo" className={aoVivo ? styles.activeTab : styles.tab} style={tabStyle}>
-          <Radio size={13} />
-          <span>Ao vivo / Hoje</span>
-          <i className={styles.liveDot} aria-hidden="true" style={{ width: 5, height: 5, boxShadow: "0 0 0 2px var(--crm-success-bg)" }} />
+        <Link
+          href="/painel/ao-vivo"
+          className={aoVivo ? styles.activeTab : styles.tab}
+          style={tabStyle}
+          title="Ao vivo / Hoje"
+        >
+          <Radio size={12} />
+          <span>Ao vivo</span>
+          <i
+            className={styles.liveDot}
+            aria-hidden="true"
+            style={{ width: 4, height: 4, boxShadow: "0 0 0 2px var(--crm-success-bg)" }}
+          />
         </Link>
-        <Link href="/painel?visao=analitica" className={!aoVivo ? styles.activeTab : styles.tab} style={tabStyle}>
-          <BarChart3 size={13} />
-          <span>Visão analítica</span>
+        <Link
+          href="/painel?visao=analitica"
+          className={!aoVivo ? styles.activeTab : styles.tab}
+          style={tabStyle}
+          title="Visão analítica"
+        >
+          <BarChart3 size={12} />
+          <span>Analítica</span>
         </Link>
       </nav>
     </div>,

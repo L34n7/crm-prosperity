@@ -4,8 +4,8 @@
 
 .filterPanel {
   position: absolute;
-  top: 24px;
-  right: 44px;
+  top: 78px;
+  right: 42px;
   z-index: 4;
   width: clamp(600px, 43vw, 760px);
   padding: 13px 14px;
